@@ -11,7 +11,7 @@
 // DECISION_NEEDED.md.)
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly } from "./live";
+import { freshWorkspaceUrl, liveOnly, pageErrors, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -42,13 +42,11 @@ async function seedWorkingSetFromSearch(page: Page): Promise<void> {
 }
 
 async function nodeCount(page: Page): Promise<number> {
-  const text = (await page.getByRole("status").first().textContent()) ?? "";
-  return Number(/(\d+)\s*nodes/.exec(text)?.[1] ?? 0);
+  return (await workingSetCounts(page)).nodes;
 }
 
 async function edgeCount(page: Page): Promise<number> {
-  const text = (await page.getByRole("status").first().textContent()) ?? "";
-  return Number(/(\d+)\s*edges/.exec(text)?.[1] ?? 0);
+  return (await workingSetCounts(page)).edges;
 }
 
 /** Expands the canvas's focused node by a *named* edge type.
@@ -72,13 +70,22 @@ async function edgeCount(page: Page): Promise<number> {
 async function expandFromTheSelectedNode(
   page: Page,
   edgeType: string,
+  errors: readonly string[] = [],
 ): Promise<void> {
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await canvas.focus();
   await page.keyboard.press("\\");
 
   const menu = page.locator(".radial-menu__list[role='menu']");
-  await expect(menu).toBeVisible();
+  // Said with what the page holds when it does not open: a guess at why cost a run (14 November 2026).
+  const opened = await menu.waitFor({ state: "visible", timeout: 30_000 }).then(() => true, () => false);
+  if (!opened) {
+    throw new Error(
+      `\\ on the canvas opened no menu. Focused: ${await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 200))}\n` +
+        `The page: ${await page.locator("body").ariaSnapshot()}\n` +
+        `The page's errors:\n${errors.join("\n") || "(none)"}`,
+    );
+  }
   const expandItem = menu
     .getByRole("menuitem")
     .filter({ hasText: new RegExp(`^${edgeType}\\b`) })
@@ -111,6 +118,7 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
   // `08_ACCEPTANCE_SCENARIOS.md` A12, and `DEMO_GUIDE.md` §4's own "the Clique Metric that ranks
   // the insular subgroup". Built in Phase 7 as `POST /v1/investigations/{id}/compute/
   // clique_metric` with its own `MetricsPanel` option; never before driven from the browser.
+  const errors = pageErrors(page);
   await page.goto(await freshWorkspaceUrl(request));
   // **The working set really is empty before this test does anything.** Not ceremony: the
   // working set is server-side and the Glass loads it on open, so a shared investigation hands
@@ -131,16 +139,15 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
   await expect
     .poll(() => nodeCount(page), { timeout: 30_000 })
     .toBeGreaterThan(0);
-  expect(
-    await edgeCount(page),
-    "a single search result should arrive with no edges",
-  ).toBe(0);
+  // Not "a single search result arrives with no edges" any more: a chosen suggestion is drawn with
+  // the links around it (`search/drawSearchResult.ts`, SEARCH_DRAW_DEPTH), so its edges depend on
+  // when that expansion lands. A12's own expansion by a named type follows, and is what is checked.
 
   // A search result arrives as one isolated node. The Clique Metric measures how tightly a
   // node's neighbours interconnect, so on a single unconnected node it correctly computes
   // nothing. Expanding first is part of the step, not setup around it: A12 follows A1's "seed a
   // working set [...] and expand into their associations".
-  await expandFromTheSelectedNode(page, "ASSOCIATE_OF");
+  await expandFromTheSelectedNode(page, "ASSOCIATE_OF", errors);
   await expect
     .poll(() => edgeCount(page), {
       message:
@@ -197,7 +204,9 @@ test("A13–A15 — a judgement is recorded against the investigation", async ({
 
   // The composer is open and offers all three assessment kinds — the trio A13–A15 names,
   // asserted together because the panel builds them from one control.
-  const dialog = page.getByRole("dialog");
+  // By its name: the keys panel the Glass shows by itself on a first visit is a dialog too
+  // ("Welcome back"), so a bare `getByRole("dialog")` matched two (14 November 2026).
+  const dialog = page.getByRole("dialog", { name: "Record an assessment" });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText(/judgement/i);
 });
@@ -216,10 +225,9 @@ test("A15 — export names what it blocked, and takes a justification", async ({
     .toBeGreaterThan(0);
 
   await page.getByRole("button", { name: /^Export/ }).click();
-  const drawer = page
-    .getByRole("dialog")
-    .or(page.getByRole("complementary"))
-    .first();
+  // By its name (`ExportPanel`'s drawer, "Export"): `.first()` over every dialog could take the keys
+  // panel the Glass shows by itself on a first visit and pass without the drawer at all.
+  const drawer = page.getByRole("dialog", { name: "Export" });
   await expect(drawer).toBeVisible();
 
   // The export kinds Phase 8 built, all three present.

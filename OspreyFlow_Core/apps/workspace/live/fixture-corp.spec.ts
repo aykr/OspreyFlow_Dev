@@ -23,7 +23,7 @@
 // `family_name`/`given_names`/`date_of_birth` only.
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly } from "./live";
+import { freshWorkspaceUrl, liveOnly, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -43,11 +43,17 @@ const RING_B = { nino: "QQ435286A", id: "corp-ring0-member1" };
 /** Seeds the working set by typing an identifier into the search box, exactly as
  * `DEMO_GUIDE.md` §6 tells a presenter to.
  *
- * **Clears the box first and waits for the option naming `expectedId`.** A second search issued
- * straight after a first would otherwise be matched against the combobox's still-current option
- * list — `GlobalSearch` keeps `results` until its next response lands — so a generic
- * `/^Person: corp-/` matcher happily clicked the *previous* result again and the working set
- * stayed at one node. Found exactly that way, building this round's two-node selection. */
+ * **Clears the box first and chooses the option for `expectedId` from the box's own answer.** A
+ * second search issued straight after a first would otherwise be matched against the combobox's
+ * still-current option list — `GlobalSearch` keeps `results` until its next response lands — so a
+ * generic `/^Person: corp-/` matcher happily clicked the *previous* result again and the working
+ * set stayed at one node. Found exactly that way, building this round's two-node selection.
+ *
+ * **By position in that answer, not by the option's name** (14 November 2026). An option is named
+ * as the canvas names the record (`searchOptions.ts`'s `displayValue`: "Person: Mikhail Volkov"),
+ * no longer by its id, and this fixture's resolution pairs share their names on purpose: a name
+ * cannot tell `corp-res-identical-1` from `-2`. The box draws the suggestion route's nodes in the
+ * order it returns them, so the option at the record's index in that response is the record. */
 async function seedFromSearch(
   page: Page,
   identifier: string,
@@ -56,7 +62,6 @@ async function seedFromSearch(
   const search = page
     .getByRole("combobox", { name: "Search entities, identifiers, documents" })
     .first();
-  const option = page.getByRole("option", { name: `Person: ${expectedId}` });
 
   // **Retried, deliberately, and bounded.** `GlobalSearch` fires its query on each change and
   // keeps the previous `results` until the next response lands, so a second search issued
@@ -66,7 +71,22 @@ async function seedFromSearch(
   // there, all three fail and the message below is the right one.
   for (let attempt = 0; attempt < 3; attempt++) {
     await search.fill("");
+    const answered = page
+      .waitForResponse(
+        (r) =>
+          r.request().method() === "POST" &&
+          new URL(r.url()).pathname.endsWith("/suggest") &&
+          (r.request().postDataJSON() as { query?: string } | null)?.query === identifier,
+        { timeout: 10_000 },
+      )
+      .catch(() => null);
     await search.pressSequentially(identifier, { delay: 15 });
+    const response = await answered;
+    if (!response?.ok()) continue;
+    const ids = ((await response.json()) as { nodes: { id: string }[] }).nodes.map((n) => n.id);
+    const at = ids.indexOf(expectedId);
+    if (at < 0) continue;
+    const option = page.getByRole("option").nth(at);
     try {
       await option.waitFor({ state: "visible", timeout: 5_000 });
       await option.click();
@@ -77,20 +97,18 @@ async function seedFromSearch(
   }
   throw new Error(
     `no search result for ${identifier} (${expectedId}) after three attempts. The identifier ` +
-      "resolves through POST /v1/search — if it does here too, this is the Glass, not the data; " +
-      "before owner ruling R4 it returned nothing for every Fixture Corp entity, because the " +
+      "resolves through the case's POST /suggest — if it does here too, this is the Glass, not the " +
+      "data; before owner ruling R4 it returned nothing for every Fixture Corp entity, because the " +
       "fixture carried no identifier search could match.",
   );
 }
 
 async function edgeCountOf(page: Page): Promise<number> {
-  const text = (await page.getByRole("status").first().textContent()) ?? "";
-  return Number(/(\d+)\s*edges/.exec(text)?.[1] ?? 0);
+  return (await workingSetCounts(page)).edges;
 }
 
 async function nodeCount(page: Page): Promise<number> {
-  const text = (await page.getByRole("status").first().textContent()) ?? "";
-  return Number(/(\d+)\s*nodes/.exec(text)?.[1] ?? 0);
+  return (await workingSetCounts(page)).nodes;
 }
 
 async function selectBothByKeyboard(
@@ -128,6 +146,11 @@ async function pairByKeyboard(page: Page): Promise<void> {
 }
 
 async function addPersonVariable(page: Page): Promise<void> {
+  // The query builder is one of the side panels, folded until shown (`layout/SidePanelStack.tsx`'s
+  // DEFAULT_FOLDED: every panel but the Inspector). Its header's button unfolds it.
+  const header = page.getByRole("button", { name: "Query builder", exact: true });
+  await expect(header, "the graph has no Query builder panel").toBeVisible();
+  if ((await header.getAttribute("aria-expanded")) === "false") await header.click();
   await page
     .getByRole("combobox", { name: "Entity type" })
     .selectOption("Person");
@@ -170,13 +193,14 @@ test("moving the resolution threshold live reports what merged and what split", 
   await slider.focus();
   await slider.press("End"); // Broad — the loosest, so the one most likely to merge something
 
-  // The commit's own summary, in the words `ThresholdControl.tsx` emits. Asserting the three
+  // The commit's own summary, in the words `ThresholdControl.tsx` emits ("Match strictness: …"
+  // since ADR-097 step 3 named the control so; "Resolution threshold: …" before). Asserting the three
   // counts are present rather than asserting particular numbers: the exact merge count is a
   // property of the fixture and of the threshold moved from, so pinning it here would make this
   // fail for a fixture change rather than for a regression in the control.
   await expect(
     page.getByText(
-      /Resolution threshold: .* — \d+ merged, \d+ split, \d+ affected/,
+      /Match strictness: .* — \d+ merged, \d+ split, \d+ affected/,
     ),
   ).toBeVisible();
 
@@ -271,7 +295,9 @@ test("explain on a merged cluster names the pair's real resolution score", async
   await expect(explain).toBeVisible();
   await explain.click();
 
-  const dialog = page.getByRole("dialog");
+  // The canvas's popover, picked by its own heading: it has no name, and the keys panel the Glass
+  // shows by itself on a first visit is a dialog too ("Welcome back").
+  const dialog = page.getByRole("dialog").filter({ hasText: "Cluster explanation" });
   await expect(dialog).toBeVisible();
   // The per-comparison evidence `01_DOMAIN_MODEL.md` §4 calls the "full comparison vector" —
   // every gamma level, not a bare verdict.
@@ -310,7 +336,10 @@ test("the pathfinder finds a path between two ring members, and reports its leng
   await expect(findPaths).toBeVisible();
   await findPaths.click();
 
-  const dialog = page.getByRole("dialog");
+  // The pathfinder's popover, picked by its own close button, for the reason the explain case gives.
+  const dialog = page
+    .getByRole("dialog")
+    .filter({ has: page.getByRole("button", { name: /^Close pathfinder (result|error)$/ }) });
   await expect(dialog).toBeVisible();
   await expect(dialog).not.toContainText(/no path/i);
   // Two members of one fully-interconnected ring are one hop apart. Asserting the reported

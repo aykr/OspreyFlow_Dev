@@ -189,7 +189,7 @@ if [ "$code" -ne 0 ]; then
   echo "== Vite's log"
   grep -vE '^\s*$' "$W/vite.log" | mask | tail -30
   for f in test-results/*/error-context.md; do
-    [ -f "$f" ] && { echo "== $f"; head -80 "$f" | mask; }
+    [ -f "$f" ] && { echo "== $f"; sed '/# Test source/,$d' "$f" | head -400 | mask; }
   done
   echo "== the last of the Conduit's log"
   tail -40 "$W/conduit.second.log" | mask

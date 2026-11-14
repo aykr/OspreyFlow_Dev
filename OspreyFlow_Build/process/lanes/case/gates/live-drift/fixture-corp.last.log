@@ -1,0 +1,815 @@
+Running on ospreyflow-test (stack g, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T091052Z-43ac0feb/log: env LIVE_SPECS=live/fixture-corp.spec.ts bash OspreyFlow_Build/process/lanes/case/live/run_search_results_live.sh
+# step: the graph database made fresh
+# step: a token and its JWKS (analyst-1, unit-1, OFFICIAL, role analyst)
+# step: scripts.seed_fixture_corp into a case the seed makes
+If this is not the desired behaviour, either: 
+ - assign a value for `probability_two_random_records_match` in your settings dictionary, or 
+ - estimate with the `linker.estimate_probability_two_random_records_match` function.
+Case 'Live search check 20261114T091053Z' is 01M7CN5X059E7E8ZSF63J6WE38.
+  check: no id stored more than once (whole shared graph)
+Seeded 10 resolution Person nodes and 17 real SAME_AS edges.
+Seeded 21 community-ring nodes and 63 edges across 3 rings.
+Seeded the path-spoke hub 'corp-path-hub' with spokes of length [1, 2, 3, 4, 5, 6, 7, 8], including a SECRET shortcut on the length-3 spoke.
+case: 01M7CN5X059E7E8ZSF63J6WE38
+# step: the search index rebuilt from the graph
+search index rebuilt: 68 documents from 68 nodes, alias ospreyflow-default -> ospreyflow-default-20261114t091059154176
+# step: the Conduit up, and the worker beside it to drain the index's outbox
+# step: the outbox drained; the spec
+# load: 1.90 2.64 6.23
+[warm-up +0.8 s] loaded
+[warm-up +1.1 s] console warning: [.WebGL-0x4cc08115200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x4cc04703e00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] console warning: [.WebGL-0x4cc0811dc00]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels
+[warm-up +1.1 s] search box drawn
+[warm-up +1.2 s] console error: [ECharts] Component toolbox is used but not imported.
+import { ToolboxComponent } from 'echarts/components';
+echarts.use([ToolboxComponent]);
+[warm-up +1.3 s] console warning: [.WebGL-0x4cc08115200]GL Driver Message (OpenGL, Performance, GL_CLOSE_PATH_NV, High): GPU stall due to ReadPixels (this message will no longer repeat)
+# warm-up: the Glass drew its search box after 7 s
+
+Running 5 tests using 1 worker
+
+[1/5] live/fixture-corp.spec.ts:163:1 › the query builder finds Fixture Corp entities and reports how many matched
+  1) live/fixture-corp.spec.ts:163:1 › the query builder finds Fixture Corp entities and reports how many matched 
+
+    Test timeout of 120000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 120000ms exceeded.
+    Call log:
+      - waiting for getByRole('combobox', { name: 'Entity type' })
+
+
+      154 |   await page
+      155 |     .getByRole("combobox", { name: "Entity type" })
+    > 156 |     .selectOption("Person");
+          |      ^
+      157 |   await page.getByRole("button", { name: "Add variable" }).click();
+      158 |   await expect(
+      159 |     page.getByRole("list", { name: "Pattern nodes" }).getByRole("listitem"),
+        at addPersonVariable (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:156:6)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:172:3
+
+    Error Context: test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[2/5] live/fixture-corp.spec.ts:178:1 › moving the resolution threshold live reports what merged and what split
+[3/5] live/fixture-corp.spec.ts:212:1 › a Fixture Corp entity is reachable from the search box by its nino
+[4/5] live/fixture-corp.spec.ts:233:1 › explain on a merged cluster names the pair's real resolution score
+  2) live/fixture-corp.spec.ts:233:1 › explain on a merged cluster names the pair's real resolution score 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: 6
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+      254 |   await seedFromSearch(page, PAIR_A.nino, PAIR_A.id);
+      255 |   await seedFromSearch(page, PAIR_B.nino, PAIR_B.id);
+    > 256 |   await expect.poll(() => nodeCount(page), { timeout: 30_000 }).toBe(2);
+          |                                                                 ^
+      257 |
+      258 |   // Expand SAME_AS from the canvas, by keyboard — the step that was unreachable until 12e.
+      259 |   const canvas = page.getByRole("application", { name: "Network canvas" });
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:256:65
+
+    Error Context: test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/5] live/fixture-corp.spec.ts:322:1 › the pathfinder finds a path between two ring members, and reports its length
+  3) live/fixture-corp.spec.ts:322:1 › the pathfinder finds a path between two ring members, and reports its length 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: 2
+    Received: 7
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+      117 | ): Promise<void> {
+      118 |   await seedFromSearch(page, second.nino, second.id);
+    > 119 |   await expect.poll(() => nodeCount(page), { timeout: 30_000 }).toBe(2);
+          |                                                                 ^
+      120 |   await pairByKeyboard(page);
+      121 | }
+      122 |
+        at selectBothByKeyboard (/root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:119:65)
+        at /root/osprey-runs/case/OspreyFlow_Core/apps/workspace/live/fixture-corp.spec.ts:332:3
+
+    Error Context: test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  3 failed
+    live/fixture-corp.spec.ts:163:1 › the query builder finds Fixture Corp entities and reports how many matched 
+    live/fixture-corp.spec.ts:233:1 › explain on a merged cluster names the pair's real resolution score 
+    live/fixture-corp.spec.ts:322:1 › the pathfinder finds a path between two ring members, and reports its length 
+  2 passed (3.6m)
+# playwright exit 1
+== Vite's log
+  VITE v8.3.4  ready in 136 ms
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+== test-results/fixture-corp-explain-on-a--4b023-air-s-real-resolution-score/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> explain on a merged cluster names the pair's real resolution score
+- Location: live/fixture-corp.spec.ts:233:1
+
+# Error details
+
+```
+Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 2
+Received: 6
+
+Call Log:
+- Timeout 30000ms exceeded while waiting on the predicate
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: OFFICIAL
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - combobox "Search entities, identifiers, documents" [ref=e23]: QQ843781D
+        - button "Add many from a list" [ref=e24] [cursor=pointer]
+        - button "Filters" [ref=e27] [cursor=pointer]
+      - group "View" [ref=e30]:
+        - button "Graph" [pressed] [ref=e31] [cursor=pointer]
+        - button "Map" [ref=e32] [cursor=pointer]
+        - button "Drawing board" [ref=e33] [cursor=pointer]
+        - button "Reports" [ref=e34] [cursor=pointer]
+      - button "More views" [ref=e36] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e38]: ▾
+      - button "Export" [ref=e39] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e41] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e42]: ☀
+    - region [ref=e43]:
+      - heading "You are in the Glass" [level=2] [ref=e44]
+      - generic [aria-hidden] [ref=e45]: ·
+      - generic [aria-hidden] [ref=e46]: Case
+      - 'button "Case: Untitled case" [ref=e48] [cursor=pointer]':
+        - generic [ref=e49]:
+          - generic [ref=e50]: "Case:"
+          - generic [ref=e51]: Untitled case
+        - generic [aria-hidden] [ref=e52]: ▾
+      - generic [aria-hidden] [ref=e53]: ·
+      - button "Views in this case" [ref=e54] [cursor=pointer]
+      - generic [aria-hidden] [ref=e55]: ·
+      - generic [ref=e56]: reads Fixture Corp
+    - generic [ref=e57]:
+      - navigation "Workspace" [ref=e58]:
+        - button "Explore" [ref=e59] [cursor=pointer]
+        - button "Ask & Chat" [ref=e62] [cursor=pointer]
+        - button "History" [ref=e65] [cursor=pointer]
+        - button "Help" [ref=e68] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e69]: "?"
+        - button "Show names" [ref=e70] [cursor=pointer]
+      - generic [ref=e74]:
+        - toolbar "Graph view" [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Match strictness
+            - generic [ref=e78]: Balanced
+            - slider "Match strictness" [ref=e79]: "1"
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - dialog [ref=e82]:
+              - generic [ref=e83]:
+                - heading "Welcome back" [level=2] [ref=e84]
+                - button "Close the welcome panel" [ref=e85] [cursor=pointer]: ×
+              - paragraph [ref=e86]: The canvas shows the 6 entities you were working on last.
+              - paragraph [ref=e87]:
+                - link "Read the user guide (PDF)" [ref=e88] [cursor=pointer]:
+                  - /url: http://127.0.0.1:59861/v1/guides/user
+              - heading "Keys worth knowing" [level=3] [ref=e89]
+              - list "Keys worth knowing" [ref=e90]:
+                - listitem [ref=e91]:
+                  - generic [ref=e92]: /
+                  - generic [ref=e93]: Search entities, identifiers, documents
+                - listitem [ref=e94]:
+                  - generic [ref=e95]: ←→
+                  - generic [ref=e96]: Move between nodes on the canvas
+                - listitem [ref=e97]:
+                  - generic [ref=e98]: Enter
+                  - generic [ref=e99]: Expand the focused node by one hop
+                - listitem [ref=e100]:
+                  - generic [ref=e101]: F
+                  - generic [ref=e102]: Fit the graph to the window
+                - listitem [ref=e103]:
+                  - generic [ref=e104]: Esc
+                  - generic [ref=e105]: Clear the selection
+                - listitem [ref=e106]:
+                  - generic [ref=e107]: "?"
+                  - generic [ref=e108]: Open or close this panel
+            - application "Network canvas" [ref=e109]:
+              - dialog [ref=e117]:
+                - generic [ref=e119]:
+                  - status [ref=e120]: "Nothing new: everything linked to this node is already in view."
+                  - button "Close message" [ref=e121] [cursor=pointer]: ×
+          - region "Inspector" [ref=e122]:
+            - separator "Resize the side panel" [ref=e123]
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - button "Open the inspector to the full width" [ref=e126] [cursor=pointer]: Full width
+                - button "Hide the inspector" [expanded] [ref=e127] [cursor=pointer]: Hide
+              - generic [ref=e128]:
+                - generic [ref=e129]:
+                  - toolbar "Inspector position" [ref=e130]:
+                    - button "Inspector" [expanded] [ref=e131] [cursor=pointer]
+                    - button "Arrange the inspector" [ref=e134] [cursor=pointer]: ⋯
+                  - generic [ref=e137]:
+                    - heading "Person Volkov, Mikhail Marking" [level=3] [ref=e138]:
+                      - generic [ref=e139]: Person
+                      - generic [ref=e141]: Volkov, Mikhail
+                      - generic "Marking" [ref=e142]: OFFICIAL
+                    - generic [ref=e143]:
+                      - heading [level=3] [ref=e144]:
+                        - button "Properties" [expanded] [ref=e145] [cursor=pointer]
+                      - generic [ref=e149]:
+                        - generic [ref=e150]:
+                          - term [ref=e151]: Type
+                          - definition [ref=e152]: Person
+                        - generic [ref=e153]:
+                          - term [ref=e154]: Nino
+                          - definition [ref=e155]: QQ843781D
+                        - generic [ref=e156]:
+                          - term [ref=e157]: Family name
+                          - definition [ref=e158]: Volkov
+                        - generic [ref=e159]:
+                          - term [ref=e160]: Given names
+                          - definition [ref=e161]: Mikhail
+                        - generic [ref=e162]:
+                          - term [ref=e163]: Date of birth
+                          - definition [ref=e164]: 1975-03-12
+                    - heading [level=3] [ref=e166]:
+                      - button "Picture" [ref=e167] [cursor=pointer]
+                    - heading [level=3] [ref=e171]:
+                      - button "Relationships" [ref=e172] [cursor=pointer]
+                    - heading [level=3] [ref=e176]:
+                      - button "Shares contacts" [ref=e177] [cursor=pointer]
+                    - heading [level=3] [ref=e181]:
+                      - button "Neighbourhood risk" [ref=e182] [cursor=pointer]
+                    - heading [level=3] [ref=e186]:
+                      - button "Provenance" [ref=e187] [cursor=pointer]
+                    - heading [level=3] [ref=e191]:
+                      - button "Source" [ref=e192] [cursor=pointer]
+                    - heading [level=3] [ref=e196]:
+                      - button "Judgements" [ref=e197] [cursor=pointer]
+                  - separator "Resize the inspector" [ref=e200]
+                - toolbar "Metrics position" [ref=e202]:
+                  - button "Metrics" [ref=e203] [cursor=pointer]
+                  - button "Arrange the metrics" [ref=e206] [cursor=pointer]: ⋯
+                - toolbar "Query builder position" [ref=e208]:
+                  - button "Query builder" [ref=e209] [cursor=pointer]
+                  - button "Arrange the query builder" [ref=e212] [cursor=pointer]: ⋯
+                - toolbar "Find connections position" [ref=e214]:
+                  - button "Find connections" [ref=e215] [cursor=pointer]
+                  - button "Arrange the find connections" [ref=e218] [cursor=pointer]: ⋯
+        - region "Timeline" [ref=e219]:
+          - generic [ref=e220]:
+            - button "Show the timeline" [ref=e221] [cursor=pointer]: ▸
+            - generic [ref=e222]: Timeline
+          - generic [ref=e225]:
+            - generic [ref=e226]:
+              - group [ref=e227]:
+                - button [pressed] [ref=e228] [cursor=pointer]: Density
+                - button [ref=e229] [cursor=pointer]: Cyclical
+              - button [ref=e231] [cursor=pointer]: ⋯
+            - status [ref=e232]: No dated events in this case. The timeline, its brush and playback need events with a date, which this case’s data does not carry.
+    - generic [ref=e233]:
+      - status [ref=e234]:
+        - generic [ref=e235]:
+          - generic [ref=e236]: "6"
+          - text: nodes
+        - generic [ref=e237]:
+          - generic [ref=e238]: "15"
+          - text: edges
+        - generic [ref=e239]:
+          - generic [ref=e240]: "0"
+          - text: dimmed by filter
+      - region "Tip" [ref=e241]:
+        - generic [ref=e243]: Press / to search entities, identifiers and documents.
+        - button "Next tip" [ref=e244] [cursor=pointer]
+```
+
+== test-results/fixture-corp-the-pathfinde-acccc-bers-and-reports-its-length/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> the pathfinder finds a path between two ring members, and reports its length
+- Location: live/fixture-corp.spec.ts:322:1
+
+# Error details
+
+```
+Error: expect(received).toBe(expected) // Object.is equality
+
+Expected: 2
+Received: 7
+
+Call Log:
+- Timeout 30000ms exceeded while waiting on the predicate
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: OFFICIAL
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - combobox "Search entities, identifiers, documents" [ref=e23]: QQ435286A
+        - button "Add many from a list" [ref=e24] [cursor=pointer]
+        - button "Filters" [ref=e27] [cursor=pointer]
+      - group "View" [ref=e30]:
+        - button "Graph" [pressed] [ref=e31] [cursor=pointer]
+        - button "Map" [ref=e32] [cursor=pointer]
+        - button "Drawing board" [ref=e33] [cursor=pointer]
+        - button "Reports" [ref=e34] [cursor=pointer]
+      - button "More views" [ref=e36] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e38]: ▾
+      - button "Export" [ref=e39] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e41] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e42]: ☀
+    - region [ref=e43]:
+      - heading "You are in the Glass" [level=2] [ref=e44]
+      - generic [aria-hidden] [ref=e45]: ·
+      - generic [aria-hidden] [ref=e46]: Case
+      - 'button "Case: Untitled case" [ref=e48] [cursor=pointer]':
+        - generic [ref=e49]:
+          - generic [ref=e50]: "Case:"
+          - generic [ref=e51]: Untitled case
+        - generic [aria-hidden] [ref=e52]: ▾
+      - generic [aria-hidden] [ref=e53]: ·
+      - button "Views in this case" [ref=e54] [cursor=pointer]
+      - generic [aria-hidden] [ref=e55]: ·
+      - generic [ref=e56]: reads Fixture Corp
+    - generic [ref=e57]:
+      - navigation "Workspace" [ref=e58]:
+        - button "Explore" [ref=e59] [cursor=pointer]
+        - button "Ask & Chat" [ref=e62] [cursor=pointer]
+        - button "History" [ref=e65] [cursor=pointer]
+        - button "Help" [ref=e68] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e69]: "?"
+        - button "Show names" [ref=e70] [cursor=pointer]
+      - generic [ref=e74]:
+        - toolbar "Graph view" [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Match strictness
+            - generic [ref=e78]: Balanced
+            - slider "Match strictness" [ref=e79]: "1"
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - dialog [ref=e82]:
+              - generic [ref=e83]:
+                - heading "Welcome back" [level=2] [ref=e84]
+                - button "Close the welcome panel" [ref=e85] [cursor=pointer]: ×
+              - paragraph [ref=e86]: The canvas shows the 7 entities you were working on last.
+              - paragraph [ref=e87]:
+                - link "Read the user guide (PDF)" [ref=e88] [cursor=pointer]:
+                  - /url: http://127.0.0.1:59861/v1/guides/user
+              - heading "Keys worth knowing" [level=3] [ref=e89]
+              - list "Keys worth knowing" [ref=e90]:
+                - listitem [ref=e91]:
+                  - generic [ref=e92]: /
+                  - generic [ref=e93]: Search entities, identifiers, documents
+                - listitem [ref=e94]:
+                  - generic [ref=e95]: ←→
+                  - generic [ref=e96]: Move between nodes on the canvas
+                - listitem [ref=e97]:
+                  - generic [ref=e98]: Enter
+                  - generic [ref=e99]: Expand the focused node by one hop
+                - listitem [ref=e100]:
+                  - generic [ref=e101]: F
+                  - generic [ref=e102]: Fit the graph to the window
+                - listitem [ref=e103]:
+                  - generic [ref=e104]: Esc
+                  - generic [ref=e105]: Clear the selection
+                - listitem [ref=e106]:
+                  - generic [ref=e107]: "?"
+                  - generic [ref=e108]: Open or close this panel
+            - application "Network canvas" [ref=e109]:
+              - dialog [ref=e117]:
+                - generic [ref=e119]:
+                  - status [ref=e120]: "Nothing new: everything linked to this node is already in view."
+                  - button "Close message" [ref=e121] [cursor=pointer]: ×
+          - region "Inspector" [ref=e122]:
+            - separator "Resize the side panel" [ref=e123]
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - button "Open the inspector to the full width" [ref=e126] [cursor=pointer]: Full width
+                - button "Hide the inspector" [expanded] [ref=e127] [cursor=pointer]: Hide
+              - generic [ref=e128]:
+                - generic [ref=e129]:
+                  - toolbar "Inspector position" [ref=e130]:
+                    - button "Inspector" [expanded] [ref=e131] [cursor=pointer]
+                    - button "Arrange the inspector" [ref=e134] [cursor=pointer]: ⋯
+                  - generic [ref=e137]:
+                    - heading "Person Ring0Member1, Test Marking" [level=3] [ref=e138]:
+                      - generic [ref=e139]: Person
+                      - generic [ref=e141]: Ring0Member1, Test
+                      - generic "Marking" [ref=e142]: OFFICIAL
+                    - generic [ref=e143]:
+                      - heading [level=3] [ref=e144]:
+                        - button "Properties" [expanded] [ref=e145] [cursor=pointer]
+                      - generic [ref=e149]:
+                        - generic [ref=e150]:
+                          - term [ref=e151]: Type
+                          - definition [ref=e152]: Person
+                        - generic [ref=e153]:
+                          - term [ref=e154]: Nino
+                          - definition [ref=e155]: QQ435286A
+                        - generic [ref=e156]:
+                          - term [ref=e157]: Family name
+                          - definition [ref=e158]: Ring0Member1
+                        - generic [ref=e159]:
+                          - term [ref=e160]: Given names
+                          - definition [ref=e161]: Test
+                        - generic [ref=e162]:
+                          - term [ref=e163]: Date of birth
+                          - definition [ref=e164]: 1980-01-01
+                    - heading [level=3] [ref=e166]:
+                      - button "Picture" [ref=e167] [cursor=pointer]
+                    - heading [level=3] [ref=e171]:
+                      - button "Relationships" [ref=e172] [cursor=pointer]
+                    - heading [level=3] [ref=e176]:
+                      - button "Shares contacts" [ref=e177] [cursor=pointer]
+                    - heading [level=3] [ref=e181]:
+                      - button "Neighbourhood risk" [ref=e182] [cursor=pointer]
+                    - heading [level=3] [ref=e186]:
+                      - button "Provenance" [ref=e187] [cursor=pointer]
+                    - heading [level=3] [ref=e191]:
+                      - button "Source" [ref=e192] [cursor=pointer]
+                    - heading [level=3] [ref=e196]:
+                      - button "Judgements" [ref=e197] [cursor=pointer]
+                  - separator "Resize the inspector" [ref=e200]
+                - toolbar "Metrics position" [ref=e202]:
+                  - button "Metrics" [ref=e203] [cursor=pointer]
+                  - button "Arrange the metrics" [ref=e206] [cursor=pointer]: ⋯
+                - toolbar "Query builder position" [ref=e208]:
+                  - button "Query builder" [ref=e209] [cursor=pointer]
+                  - button "Arrange the query builder" [ref=e212] [cursor=pointer]: ⋯
+                - toolbar "Find connections position" [ref=e214]:
+                  - button "Find connections" [ref=e215] [cursor=pointer]
+                  - button "Arrange the find connections" [ref=e218] [cursor=pointer]: ⋯
+        - region "Timeline" [ref=e219]:
+          - generic [ref=e220]:
+            - button "Show the timeline" [ref=e221] [cursor=pointer]: ▸
+            - generic [ref=e222]: Timeline
+          - generic [ref=e225]:
+            - generic [ref=e226]:
+              - group [ref=e227]:
+                - button [pressed] [ref=e228] [cursor=pointer]: Density
+                - button [ref=e229] [cursor=pointer]: Cyclical
+              - button [ref=e231] [cursor=pointer]: ⋯
+            - status [ref=e232]: No dated events in this case. The timeline, its brush and playback need events with a date, which this case’s data does not carry.
+    - generic [ref=e233]:
+      - status [ref=e234]:
+        - generic [ref=e235]:
+          - generic [ref=e236]: "7"
+          - text: nodes
+        - generic [ref=e237]:
+          - generic [ref=e238]: "21"
+          - text: edges
+        - generic [ref=e239]:
+          - generic [ref=e240]: "0"
+          - text: dimmed by filter
+      - region "Tip" [ref=e241]:
+        - generic [ref=e243]: Press / to search entities, identifiers and documents.
+        - button "Next tip" [ref=e244] [cursor=pointer]
+```
+
+== test-results/fixture-corp-the-query-bui-994cc-nd-reports-how-many-matched/error-context.md
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: fixture-corp.spec.ts >> the query builder finds Fixture Corp entities and reports how many matched
+- Location: live/fixture-corp.spec.ts:163:1
+
+# Error details
+
+```
+Test timeout of 120000ms exceeded.
+```
+
+```
+Error: locator.selectOption: Test timeout of 120000ms exceeded.
+Call log:
+  - waiting for getByRole('combobox', { name: 'Entity type' })
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e5]:
+    - note "Protective marking" [ref=e6]: PUBLIC
+    - banner [ref=e7]:
+      - button "Osprey, go to Home" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: Osprey
+      - navigation "Places" [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - button "The Glass" [ref=e16] [cursor=pointer]
+          - listitem [ref=e17]:
+            - button "Rules and Monitoring" [ref=e18] [cursor=pointer]
+      - generic [ref=e21]:
+        - combobox "Search entities, identifiers, documents" [ref=e23]
+        - button "Add many from a list" [ref=e24] [cursor=pointer]
+        - button "Filters" [ref=e27] [cursor=pointer]
+      - group "View" [ref=e30]:
+        - button "Graph" [pressed] [ref=e31] [cursor=pointer]
+        - button "Map" [ref=e32] [cursor=pointer]
+        - button "Drawing board" [ref=e33] [cursor=pointer]
+        - button "Reports" [ref=e34] [cursor=pointer]
+      - button "More views" [ref=e36] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e38]: ▾
+      - button "Export" [ref=e39] [cursor=pointer]: Export ▾
+      - button "Switch to the light theme" [ref=e41] [cursor=pointer]:
+        - generic [aria-hidden] [ref=e42]: ☀
+    - region [ref=e43]:
+      - heading "You are in the Glass" [level=2] [ref=e44]
+      - generic [aria-hidden] [ref=e45]: ·
+      - generic [aria-hidden] [ref=e46]: Case
+      - 'button "Case: Untitled case" [ref=e48] [cursor=pointer]':
+        - generic [ref=e49]:
+          - generic [ref=e50]: "Case:"
+          - generic [ref=e51]: Untitled case
+        - generic [aria-hidden] [ref=e52]: ▾
+      - generic [aria-hidden] [ref=e53]: ·
+      - button "Views in this case" [ref=e54] [cursor=pointer]
+      - generic [aria-hidden] [ref=e55]: ·
+      - generic [ref=e56]: reads Fixture Corp
+    - generic [ref=e57]:
+      - navigation "Workspace" [ref=e58]:
+        - button "Explore" [ref=e59] [cursor=pointer]
+        - button "Ask & Chat" [ref=e62] [cursor=pointer]
+        - button "History" [ref=e65] [cursor=pointer]
+        - button "Help" [ref=e68] [cursor=pointer]:
+          - generic [aria-hidden] [ref=e69]: "?"
+        - button "Show names" [ref=e70] [cursor=pointer]
+      - generic [ref=e74]:
+        - toolbar "Graph view" [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: Match strictness
+            - generic [ref=e78]: Balanced
+            - slider "Match strictness" [ref=e79]: "1"
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - dialog [ref=e82]:
+              - generic [ref=e83]:
+                - heading "Welcome back" [level=2] [ref=e84]
+                - button "Close the welcome panel" [ref=e85] [cursor=pointer]: ×
+              - paragraph [ref=e86]: The canvas is empty. Search, or open Explore to find where to start.
+              - paragraph [ref=e87]:
+                - link "Read the user guide (PDF)" [ref=e88] [cursor=pointer]:
+                  - /url: http://127.0.0.1:59861/v1/guides/user
+              - heading "Keys worth knowing" [level=3] [ref=e89]
+              - list "Keys worth knowing" [ref=e90]:
+                - listitem [ref=e91]:
+                  - generic [ref=e92]: /
+                  - generic [ref=e93]: Search entities, identifiers, documents
+                - listitem [ref=e94]:
+                  - generic [ref=e95]: ←→
+                  - generic [ref=e96]: Move between nodes on the canvas
+                - listitem [ref=e97]:
+                  - generic [ref=e98]: Enter
+                  - generic [ref=e99]: Expand the focused node by one hop
+                - listitem [ref=e100]:
+                  - generic [ref=e101]: F
+                  - generic [ref=e102]: Fit the graph to the window
+                - listitem [ref=e103]:
+                  - generic [ref=e104]: Esc
+                  - generic [ref=e105]: Clear the selection
+                - listitem [ref=e106]:
+                  - generic [ref=e107]: "?"
+                  - generic [ref=e108]: Open or close this panel
+            - application "Network canvas" [ref=e109]
+            - generic [ref=e117]:
+              - heading "Where to start" [level=2] [ref=e118]
+              - paragraph [ref=e119]: Search above, or start from what this case holds.
+              - generic [ref=e120]:
+                - generic [ref=e121]:
+                  - heading [level=3] [ref=e122]:
+                    - button "What this case holds" [expanded] [ref=e123] [cursor=pointer]
+                  - region "What this case holds" [ref=e127]:
+                    - paragraph [ref=e128]: 68 entities and 116 links
+                    - paragraph [ref=e129]: Counted at 09:11 UTC, and again after any change.
+                    - list [ref=e130]:
+                      - listitem [ref=e131]: Person · 65
+                      - listitem [ref=e132]: Organisation · 3
+                      - listitem [ref=e133]: Associate of · 81
+                      - listitem [ref=e134]: Member of · 18
+                      - listitem [ref=e135]: Same as · 17
+                - heading [level=3] [ref=e137]:
+                  - button "Add many from a list" [ref=e138] [cursor=pointer]
+                - heading [level=3] [ref=e142]:
+                  - button "Most connected" [ref=e143] [cursor=pointer]
+                - heading [level=3] [ref=e147]:
+                  - button "By entity type" [ref=e148] [cursor=pointer]
+                - heading [level=3] [ref=e152]:
+                  - button "Busiest links" [ref=e153] [cursor=pointer]
+                - heading [level=3] [ref=e157]:
+                  - button "Groups and bridges" [ref=e158] [cursor=pointer]
+                - heading [level=3] [ref=e162]:
+                  - button "What's new" [ref=e163] [cursor=pointer]
+                - heading [level=3] [ref=e167]:
+                  - button "Starter questions" [ref=e168] [cursor=pointer]
+                - heading [level=3] [ref=e172]:
+                  - button "Busiest days" [ref=e173] [cursor=pointer]
+          - region "Inspector" [ref=e176]:
+            - separator "Resize the side panel" [ref=e177]
+            - generic [ref=e178]:
+              - generic [ref=e179]:
+                - button "Open the inspector to the full width" [ref=e180] [cursor=pointer]: Full width
+                - button "Hide the inspector" [expanded] [ref=e181] [cursor=pointer]: Hide
+              - generic [ref=e182]:
+                - generic [ref=e183]:
+                  - toolbar "Inspector position" [ref=e184]:
+                    - button "Inspector" [expanded] [ref=e185] [cursor=pointer]
+                    - button "Arrange the inspector" [ref=e188] [cursor=pointer]: ⋯
+                  - generic [ref=e191]:
+                    - paragraph [ref=e192]: Select a node, or press / to search.
+                    - generic [ref=e193]:
+                      - heading [level=3] [ref=e194]:
+                        - button "Judgements" [expanded] [ref=e195] [cursor=pointer]
+                      - generic [ref=e199]:
+                        - table [ref=e200]:
+                          - rowgroup [ref=e201]:
+                            - row [ref=e202]:
+                              - columnheader "Statement" [ref=e203]
+                              - columnheader "Band" [ref=e204]
+                              - columnheader "Evidence" [ref=e205]
+                              - columnheader [ref=e206]
+                          - rowgroup
+                        - button "Add judgement, gap or assumption" [ref=e207] [cursor=pointer]
+                  - separator "Resize the inspector" [ref=e208]
+                - toolbar "Metrics position" [ref=e210]:
+                  - button "Metrics" [ref=e211] [cursor=pointer]
+                  - button "Arrange the metrics" [ref=e214] [cursor=pointer]: ⋯
+                - generic [ref=e215]:
+                  - toolbar "Query builder position" [ref=e216]:
+                    - button "Query builder" [expanded] [active] [ref=e217] [cursor=pointer]
+                    - button "Arrange the query builder" [ref=e220] [cursor=pointer]: ⋯
+                  - generic [ref=e224]:
+                    - generic [ref=e225]:
+                      - heading [level=3] [ref=e226]:
+                        - button "Pattern" [expanded] [ref=e227] [cursor=pointer]
+                      - generic [ref=e231]:
+                        - group "Ask to search" [ref=e232]:
+                          - textbox "Ask to search" [ref=e233]:
+                            - /placeholder: Ask in words, e.g. who shares a visitor with the principal?
+                          - button "Ask" [disabled] [ref=e234]
+                        - paragraph [ref=e235]: "No pattern yet: open Add to the pattern to start one."
+                        - list "Pattern nodes"
+                        - generic [ref=e236]:
+                          - button "Preview" [disabled] [ref=e237]
+                          - button "Run" [disabled] [ref=e238]
+                    - heading [level=3] [ref=e240]:
+                      - button "Add to the pattern" [ref=e241] [cursor=pointer]
+                    - heading [level=3] [ref=e245]:
+                      - button "Save and load" [ref=e246] [cursor=pointer]
+                  - separator "Resize the query builder" [ref=e249]
+                - toolbar "Find connections position" [ref=e251]:
+                  - button "Find connections" [ref=e252] [cursor=pointer]
+                  - button "Arrange the find connections" [ref=e255] [cursor=pointer]: ⋯
+        - region "Timeline" [ref=e256]:
+          - generic [ref=e257]:
+            - button "Show the timeline" [ref=e258] [cursor=pointer]: ▸
+            - generic [ref=e259]: Timeline
+          - generic [ref=e262]:
+            - generic [ref=e263]:
+              - group [ref=e264]:
+                - button [pressed] [ref=e265] [cursor=pointer]: Density
+                - button [ref=e266] [cursor=pointer]: Cyclical
+              - button [ref=e268] [cursor=pointer]: ⋯
+            - status [ref=e269]: No dated events in this case. The timeline, its brush and playback need events with a date, which this case’s data does not carry.
+    - generic [ref=e270]:
+      - status [ref=e271]:
+        - generic [ref=e272]:
+          - generic [ref=e273]: "0"
+          - text: nodes
+        - generic [ref=e274]:
+          - generic [ref=e275]: "0"
+          - text: edges
+        - generic [ref=e276]:
+          - generic [ref=e277]: "0"
+          - text: dimmed by filter
+      - region "Tip" [ref=e278]:
+        - generic [ref=e280]: Press / to search entities, identifiers and documents.
+        - button "Next tip" [ref=e281] [cursor=pointer]
+```
+
+== the last of the Conduit's log
+INFO:     127.0.0.1:43450 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43456 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/starter-questions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/busiest-days?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43436 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43436 - "OPTIONS /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43456 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/most-connected?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/patterns HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43436 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/busiest-links?limit=10&offset=0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/models/engines HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43462 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43436 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43456 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/alert-queue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/whats-new HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43454 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/explore/groups HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/events/holders HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "OPTIONS /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "OPTIONS /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/seed HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "OPTIONS /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "OPTIONS /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/expand/preview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/expand/preview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "OPTIONS /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/expand HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/expand HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43450 - "GET /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/pictures HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43472 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49938 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/suggest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49938 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49938 - "GET /v1/handling-scheme HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49948 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/expand/preview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49948 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/expand HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49948 - "POST /v1/investigations/01M7CNBQ13F3WFGTT4KXDFBK2W/pictures HTTP/1.1" 200 OK
+Reaped 1 process(es) the run left behind (/root/osprey-runs/case.meta/runs/20261114T091052Z-43ac0feb).
+Wall time: 240 s, exit 1 (stack g, the lease case took at 2026-11-14T08:47:53Z; set-up before it 11 s)
