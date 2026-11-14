@@ -946,3 +946,18 @@ def test_a_filtered_view_has_no_first_item(world: _World) -> None:
     assert response.status_code == 201, response.json()
     (view,) = _listed("alice")
     assert view["first_item"] is None
+
+
+def test_a_views_first_item_is_read_within_its_bound(world: _World) -> None:
+    """One bounded read whatever the view holds: a view of many chosen ids is read for its first item no further
+    than `FIRST_ITEM_READ`, so a long view costs a list what a short one does."""
+    from services.api.case_views import FIRST_ITEM_READ
+
+    _with_people(world)
+    many = ["zed", *(f"absent-{i}" for i in range(FIRST_ITEM_READ + 20))]
+    _saved(shared=True, node_ids=many, name="Selection of many nodes")
+    before = len(world.graph.get_nodes_requests)
+    (view,) = _listed("bob")
+    asked = [ids for ids, _ in world.graph.get_nodes_requests[before:]]
+    assert view["first_item"] == "Tarbuck, Kyle"
+    assert asked and all(len(ids) <= FIRST_ITEM_READ for ids in asked)
