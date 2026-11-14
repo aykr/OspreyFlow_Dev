@@ -147,6 +147,18 @@ Main's own CI will meet the same finding at its next image scan.
 
 ## Done overnight
 
+- **B's load was interrupted at 04:40Z by the test server running out of memory** (59 of 62 GB used). Two lanes'
+  `make test` runs had run at the same time, beside about 15 orphaned test-IdP Keycloak containers, and the kernel
+  killed stack d's ArcadeDB in B's links stage. osprey-small was untouched. Nodes were complete (650,000).
+  - Fixed: I removed the nine orphaned IdPs (older than every live run, under your standing word on orphaned test
+    leftovers).
+  - From now on one server test run at a time, which I schedule.
+  - B's ArcadeDB is recreated at the poc's own heap (9 GiB, from the manifest's 12 Gi limit × 0.75), keeping its
+    data, so step 4 measures the client's sizing.
+  - B resumed from links. Admin is making the IdP fixture label and clean up its containers.
+  - Case-b's CPU load rounds (03:14–03:54Z) contended with B's calibration; rules has marked those rates as
+    contended, and step 4 won't use them.
+
 - **v0.5.1's rehearsal found a missing CHANGELOG step**, and that held the publish. On v0.5.0, `ospreyflow`
   itself cannot start ("No module named httpx"), so `ospreyflow update` couldn't be reached. Platform-b proved a
   one-line repair (`uv tool install --force --editable --with httpx ./cli`). The CHANGELOG now gives it, on
