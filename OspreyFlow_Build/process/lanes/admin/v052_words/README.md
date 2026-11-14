@@ -20,7 +20,7 @@ The orchestrator's order, 14 November 2026 (v0.5.2, from docs' sweep):
   - a route's OpenAPI description (`app.py`'s sign-in route);
   - the runbook;
   - the short "in People" refusals and the Glass's own words for them;
-  - both guides (admin 2.12, user 1.61; versions set at merge) and spec/10.
+  - both guides (admin 2.13, user 1.62, after docs' sweep; versions set at merge) and spec/10.
 - **The Entra refusal** says the values Entra sends in words, with a verb that agrees, and then which are set
   here. For example: "Here a person's unit comes from Entra ID, and is changed there. Their clearance and
   handling codes are set here, with Access." The admin guide's §9 quotes it.
@@ -28,6 +28,11 @@ The orchestrator's order, 14 November 2026 (v0.5.2, from docs' sweep):
 - **A right named in a refusal** is named as the screens name it (`schemas.rights.right_name`, held to the Glass's
   `rightName`): "you cannot give a right you do not hold: Administer system", and the forbidden pair's words. This
   is A2's point 3, folded into Amendment 19 by the orchestrator.
+
+- **docs' sweep's test** (`test_guides_cloud_platform.py`) read the old refusal as one of the `_refused` sentences §9
+  lists, each followed by "On this deployment Entra ID holds…". The new refusal is raised on its own, since that
+  line was false for the values set here. So the test now checks that §9 quotes the new sentence whole, and its
+  planted omission removes another refusal ("A sign-in is reset in Entra ID.").
 
 **Records.**
 - `red_before_code.log`: the test file at the head, against main's code. 10 of its 11 cases fail. The 11th, the

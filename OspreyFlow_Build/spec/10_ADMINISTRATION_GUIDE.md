@@ -1485,7 +1485,7 @@ stays `sub`.
 - a guest from another directory (`acct` of `1`, or an `idp` naming another tenant or a provider
   that is not Entra), **while this deployment does not admit guests**, in these words: "this is a
   guest account, homed outside this organisation's Entra ID, and this deployment does not admit
-  guests: an administrator can admit them in Admin › People". `acct` is an optional claim the app
+  guests: an administrator can admit them in Admin › People and roles". `acct` is an optional claim the app
   registration must ask for, so `idp` is the check that works without configuration.
 
 **Guests are admitted only when an administrator turns it on** (ADR-148 Amendment 17). In
@@ -1614,10 +1614,10 @@ and what happens next, depends on what was asked:
   runs wait for that load. Their rules are not judged at that load. The watch list shows *Stopped*
   with why beside it, in the Conduit's words for its owner (ADR-044 Amendment 1).
 
-**Other refusals.** An owner disabled in *Admin › People and roles* is refused, and three such refusals in a
-row pause a schedule, as on Keycloak; so is an owner *Admin › People and roles* does not hold ("is not a
-person Admin › People holds"). If *Admin › People and roles*'s store cannot be read, the run is refused as
-that and never counted. None of these says "the identity provider could not be reached": Entra is
+**Other refusals.** An owner disabled in *Admin › People and roles* is refused, and three such refusals
+in a row pause a schedule, as on Keycloak; so is an owner not held in *Admin › People and roles* ("is not
+held in Admin › People and roles"). If the people store behind *Admin › People and roles* cannot be read,
+the run is refused as that and never counted. None of these says "the identity provider could not be reached": Entra is
 not asked.
 
 **So a schedule runs only while its owner keeps signing in.** The 24 hours run from the owner's last
@@ -2100,8 +2100,7 @@ its own sign-in page. What a person may do is their **roles**; what they may see
 **Where people sign in with Entra ID** (`cloud-platform`, section 6a.7), Entra holds their accounts,
 and *People and roles* gives them roles, adds them by object id before they first sign in, and
 disables them. What Entra holds is refused here, in words, each followed by "On this deployment
-Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's clearance, unit and handling codes are changed in Entra ID."), a value Entra sends, where
-the administrator fallback is set for another ("Here … come from Entra ID, and are changed there."), a sign-in's reset ("A sign-in is
+Entra ID holds people's accounts…": inviting ("People are not invited here."), access ("A person's clearance, unit and handling codes are changed in Entra ID."), a sign-in's reset ("A sign-in is
 reset in Entra ID."), removing ("A person is not removed here: they would return, with no roles, at
 their next sign-in. Disable them instead, or remove them in Entra ID.") and joining ("There is no
 organisation account to join."). **A dashboard identity** is its own Entra app registration, which
@@ -2114,6 +2113,9 @@ refused at sign-in (section 6a.7). A person is shown by object id,
 not by name. A guest account, homed in another organisation's Entra ID, signs in only while
 **Admit guest accounts** is on, below the list (section 6a.7), and is marked as a guest in it;
 while it is off, a guest is listed as not enabled.
+Under the administrator fallback (section 6a.7), a value Entra sends is refused on its own, saying which
+values come from where, never that all three do: "Here a person's unit comes from Entra ID, and is changed
+there. Their clearance and handling codes are set here, with Access."
 
 ### 9.1 The Admin place
 
@@ -3168,7 +3170,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |
-| `cloud_platform.claims.clearance` | mapping | required | Where clearance comes from: {claim: <name>}, {groups: {<group id>: <value>}}, or {administrator: true}, set in Admin › People |
+| `cloud_platform.claims.clearance` | mapping | required | Where clearance comes from: {claim: <name>}, {groups: {<group id>: <value>}}, or {administrator: true}, set in Admin › People and roles |
 | `cloud_platform.claims.org_unit` | mapping | required | Where the organisational unit comes from: {claim: ...}, {groups: {...}}, or {administrator: true} (the poc shape alone) |
 | `cloud_platform.claims.handling_codes` | mapping | required | Where the handling codes come from: {claim: ...}, {groups: {<id>: [codes]}}, or {administrator: true} (the poc shape alone) |
 | `cloud_platform.claims.groups_claim` | str | `groups` | The token claim listing the person's Entra group ids, which a {groups: ...} table above is read from |
