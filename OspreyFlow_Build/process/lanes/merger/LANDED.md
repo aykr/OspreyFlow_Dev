@@ -122,3 +122,4 @@ d196271 defb2e9 case live-drift
 8b9d9ae c3de22e platform v052-step4run
 8177aaf 07b0f92 case search-draw-crash (the StrictMode crash)
 cb7eb8e 982d40a platform v052-m9 (the fallback)
+863e6a6 aab0fa2 docs v052-results (user guide 1.57), PDF reprinted
