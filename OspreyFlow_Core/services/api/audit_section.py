@@ -251,7 +251,9 @@ READS_AND_OTHER: tuple[str, ...] = (
     "case_brief_remove_requirement", "case_brief_set_priority", "case_brief_set_status",
     "case_strength_influencers_set", "connections", "create_investigation", "create_pack",
     "create_site", "delete_board", "delete_case_view", "delete_trend",
-    "embedded_dashboard_guest_token", "expand", "expand_preview", "explain_alert",
+    "embedded_dashboard_guest_token", "expand", "expand_preview",
+    # ADR-151: the cap's batch job queued, and refused (its saved view is `save_case_view`).
+    "batch_expand", "batch_expand_refused", "explain_alert",
     "explain_resolution_cluster", "explore_busiest_days", "explore_busiest_links",
     "explore_counts", "explore_groups", "explore_most_connected", "explore_starter_questions",
     "explore_starter_run", "explore_whats_new", "export", "export_pack", "extract_document",

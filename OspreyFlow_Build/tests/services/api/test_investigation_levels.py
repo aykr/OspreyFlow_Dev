@@ -65,6 +65,9 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("PUT", P + "/tab"): V,
     ("POST", P + "/seed"): E,
     ("POST", P + "/expand"): E,
+    # ADR-151: started at Editor as `expand` is; read at the level, the requester's own job alone.
+    ("POST", P + "/batch-expansions"): E,
+    ("GET", P + "/batch-expansions/{job_id}"): V,
     ("POST", P + "/expand/preview"): V,
     ("DELETE", P + "/nodes"): E,
     ("GET", P + "/resolution/threshold"): V,

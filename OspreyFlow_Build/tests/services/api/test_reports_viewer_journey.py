@@ -266,7 +266,10 @@ def test_the_reached_half_sees_the_case_s_refusal(journey: Any) -> None:
 #: Viewer is, so it answers them empty (`test_needs_you.py`).
 OPEN_TO_ANY_SIGNED_IN = {
     "list_datasets_route", "case_datasets_route", "list_investigations", "set_tab_state",
-    "get_investigation", "list_case_views", "open_case_view", "readiness_route", "liveness_route",
+    "get_investigation", "list_case_views", "open_case_view",
+    # ADR-151, weighed 14 November: a job is its requester's alone, and starting one needs
+    # `investigate`, which a Reports Viewer lacks, so every job they ask for is not found.
+    "get_batch_expansion", "readiness_route", "liveness_route",
     "openapi_document_route", "get_ontology_route", "get_map_providers_route", "get_map_tile_route",
     "get_map_local_source_route", "list_connectors", "list_domain_packs", "get_handling_scheme_route",
     "get_yardstick_route", "get_grading_scheme_route", "list_transforms", "my_rights_route", "my_needs_you_route",
