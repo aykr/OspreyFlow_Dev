@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -142,6 +143,37 @@ def test_every_secret_a_workload_reads_is_listed_for_the_install() -> None:
     assert named and named <= set(values["secrets"]["keys"])
     assert values["secrets"]["defaults"] == {"OSPREY_KEYCLOAK_ADMIN": "admin",
                                              "OSPREY_POSTGRES_USER": "osprey"}  # fmt: skip
+
+
+def test_the_model_timeouts_reach_the_conduit_from_the_environment_at_their_defaults() -> None:
+    """ADR-135 Amendment 13's two timeouts, rendered for compose as `${VAR:-default}` (D2's
+    render-timeouts.diff, merged 47824b7): read as secrets with a default, they stopped
+    chart-check (the orchestrator, 14 November 2026). They are not secrets: the cluster's
+    environment holds each at its default, for the operator to change there, and the Conduit
+    reads it from there; no secret is named for either."""
+    values = values_for(cluster_config())
+    timeouts = {"OSPREY_MODEL_TIMEOUT_SECONDS": "900", "OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS": "120"}
+    assert {k: values["environment"].get(k) for k in timeouts} == timeouts
+    api = {e["name"]: e for e in _workloads(values)["api"]["env"]}
+    for name in timeouts:
+        assert api[name] == {"name": name, "config": name}, api[name]
+        assert name not in values["secrets"]["keys"] and name not in values["secrets"]["defaults"]
+
+
+def test_the_rendered_model_timeouts_are_the_adapters_own_defaults() -> None:
+    """The render's defaults (`harness.render.MODEL_TIMEOUTS`) are what the model adapters fall back
+    to when the variable is unset, so a deployment that sets neither waits as long either way."""
+    from harness.render import MODEL_TIMEOUTS
+
+    core = Path(__file__).resolve().parents[3] / "OspreyFlow_Core/packages/adapters"
+    source = "".join(
+        (core / f).read_text(encoding="utf-8")
+        for f in ("model_litellm/client.py", "extract_laurium/adapter.py")
+    )
+    fallbacks = dict(
+        re.findall(r'os\.environ\.get\(\s*"(OSPREY_\w*MODEL_TIMEOUT_SECONDS)",\s*"(\d+)"', source)
+    )
+    assert fallbacks == MODEL_TIMEOUTS
 
 
 def test_no_secret_is_in_the_values() -> None:

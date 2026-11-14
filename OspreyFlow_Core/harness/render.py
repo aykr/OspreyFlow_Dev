@@ -155,6 +155,17 @@ _OLLAMA_PULL_SCRIPT = (
 )
 
 
+#: ADR-135 Amendment 13: how long a model call is waited for, in seconds, the deployment's own
+#: model's (ADR-095) and a hosted engine's, as the adapters default them
+#: (`model_litellm/client.py`, `extract_laurium/adapter.py`). Tunables, not secrets: compose
+#: reads each from the env file with this default, and the cluster render puts each in its
+#: environment at it (`harness/cluster.py`), never among the secrets.
+MODEL_TIMEOUTS: dict[str, str] = {
+    "OSPREY_MODEL_TIMEOUT_SECONDS": "900",
+    "OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS": "120",
+}
+
+
 def render_ollama_pull_script(config: OspreyConfig) -> str:
     """The developer stack's pull script plus one line: the deployment's own extraction model,
     pulled and digest-verified the same way (`06_DECISIONS.md` ADR-095 decision 1). The developer
@@ -1061,10 +1072,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             api_environment["OSPREY_MODEL_SETTINGS_DIR"] = MODEL_SETTINGS_PATH
             # ADR-135 Amendment 13: how long a model call is waited for, the deployment's own model
             # (ADR-095) and a hosted engine's, each the operator's to set in the env file.
-            api_environment["OSPREY_MODEL_TIMEOUT_SECONDS"] = "${OSPREY_MODEL_TIMEOUT_SECONDS:-900}"
-            api_environment["OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS"] = (
-                "${OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS:-120}"
-            )
+            for name, seconds in MODEL_TIMEOUTS.items():
+                api_environment[name] = "${" + name + ":-" + seconds + "}"
             # ADR-095 Amendment 2: where to ask whether the models have arrived (`/v1/readiness`).
             api_environment["OSPREY_OLLAMA_URL"] = "http://ollama:11434"
             # ADR-098 decision 2: the fast recogniser. Not in `depends_on` below: without it the
