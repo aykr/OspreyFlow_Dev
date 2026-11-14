@@ -221,6 +221,19 @@ def keycloak_argv(run: str, name: str, port: int) -> list[str]:
     ]  # fmt: skip
 
 
+def without_limits() -> bool:
+    """`STEP4_NO_LIMITS=1`: the Conduit and the worker run without the poc's CPU and memory limits,
+    only to measure what those limits account for (the gap between step 4's M3 to M5 and one page,
+    the orchestrator, 14 November 2026). Step 4's own measures run at the limits."""
+    return os.environ.get("STEP4_NO_LIMITS") == "1"
+
+
+def limits_said() -> str:
+    if without_limits():
+        return "without the poc's limits (STEP4_NO_LIMITS=1)"
+    return f"at the poc's limits {poc_limits('api')}"
+
+
 def service_argv(
     run: str, name: str, image: str, workload: str, environment: dict[str, str],
     command: Sequence[str], settings: Sequence[str] = (),
@@ -229,12 +242,15 @@ def service_argv(
     """`settings`: the Conduit's own (`conduit_environment`'s names), passed by name as the
     lease's are, their values in Docker's environment alone."""
     cpus, memory = poc_limits(workload)
+    limits = [] if without_limits() else [
+        f"--cpus={cpus}", f"--memory={memory}", f"--memory-swap={memory}"
+    ]  # fmt: skip
     named = sorted({*settings, "OIDC_ISSUER", "OIDC_JWKS_URL", "OIDC_AUDIENCE",
                     "OSPREY_WORKER_NAME"})  # fmt: skip
     passed = passed_through({k: v for k, v in environment.items() if k not in named})
     return [
         "run", "-d", "--name", name, *run_labels(run), "--network", "host",
-        f"--cpus={cpus}", f"--memory={memory}", f"--memory-swap={memory}",
+        *limits,
         *(a for w in WRITABLE for a in ("--tmpfs", f"{w}:rw,uid=10001,gid=10001,mode=0700")),
         *(a for host, at in mounts for a in ("-v", f"{host}:{at}:ro")),
         *passed, *(arg for n in named for arg in ("-e", n)),
@@ -563,8 +579,7 @@ def _run(stack: Stack, case: str, command: list[str]) -> int:
             print(f"== the last of the {part}'s log", flush=True)
             print(stack.logs(f"osprey-step4-{part}-{name}", secret_values(env)), flush=True)
         raise
-    print(f"step4: the Conduit and the worker are up at the poc's limits {poc_limits('api')}",
-          flush=True)  # fmt: skip
+    print(f"step4: the Conduit and the worker are up {limits_said()}", flush=True)
 
     tokens = {s["username"]: mint(issuer, secret, s["username"]) for s in (*SUBJECTS, PROBE)}
     short = short_lived(tokens)

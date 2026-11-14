@@ -15,6 +15,13 @@ RUNNER = ROOT / "OspreyFlow_Build/process/lanes/platform/v052-measure/step4_stac
 TEST = "tests/test_step4_stack.py"
 PLANTS = [
     (
+        "the poc's limits dropped whatever STEP4_NO_LIMITS says",
+        RUNNER,
+        '    return os.environ.get("STEP4_NO_LIMITS") == "1"',
+        '    return os.environ.get("STEP4_NO_LIMITS") is not None',
+        "without_limits",
+    ),
+    (
         "the Conduit bound to every interface",
         RUNNER,
         '    return ["uvicorn", "services.api.app:app", "--host", "127.0.0.1", "--port", str(port)]',
