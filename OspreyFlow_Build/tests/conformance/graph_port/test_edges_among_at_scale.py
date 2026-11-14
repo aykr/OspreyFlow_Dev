@@ -159,7 +159,9 @@ async def test_links_across_a_chunk_boundary_are_each_found_once(
 ) -> None:
     """Twice the chunk and a little more, so there are three chunks. Asked in the adapter's own
     order (sorted ids), so the boundaries are known: links from the first chunk into the third, from
-    the third into the first, from the second into both, inside each chunk, and a self-loop."""
+    the third into the first, from the second into both, from both into the second, inside each
+    chunk, and a self-loop. Asked again without the second chunk, only the links with neither end in
+    it."""
     nodes = [_person() for _ in range(2 * _ID_CHUNK + 50)]
     await _write_nodes(graph, nodes)
     ids = sorted(n.id for n in nodes)
@@ -170,7 +172,10 @@ async def test_links_across_a_chunk_boundary_are_each_found_once(
     pairs = [(first[-1], third[0]), (third[1], first[-2]), (first[0], third[-1]),
              (third[-2], first[4]), (second[0], first[1]), (second[-1], third[2]),
              (first[2], first[3]), (second[2], second[3]), (third[3], third[4]),
-             (second[4], second[4])]  # fmt: skip
+             (second[4], second[4]),
+             # From the first and the third into the second: asked without the second, these are
+             # reached from their sources and must be dropped for their far end alone.
+             (first[5], second[5]), (third[5], second[6])]  # fmt: skip
     assert len({frozenset(p) for p in pairs}) == len(pairs)
     links = [_link(s, t) for s, t in pairs]
     await graph.bulk_load_edges(links)
