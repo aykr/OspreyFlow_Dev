@@ -45,7 +45,7 @@ plant "a schedule giving its slot back resets" "$SCHED" \
   's/(            await reply\(self.valkey.delete\(claim\)\)\n            return)/            await self.monitors.set_status(monitor.id, "active")\n$1/' \
   "test_a_schedule_giving_its_slot_back_neither_counts_nor_resets"
 plant "the active note says nothing of how many" "$WORDS" \
-  's/"Its owner.s sign-in could not be checked at the last two loads. It stops if the next is the third "/"Its owner\x27s sign-in could not be checked at the last load. It stops if that happens at three "/' \
+  's/"Its owner.s sign-in could not be checked at the last two loads. "/"Its owner\x27s sign-in could not be checked at the last load. "/' \
   "test_the_words_for_an_active_watch_with_misses_and_none_without"
 out="$(run)"
 if grep -qE "[0-9]+ passed" <<<"$out" && ! grep -qE "[0-9]+ failed" <<<"$out"; then echo "unplanted: $(grep -E '[0-9]+ passed' <<<"$out" | tail -1)"; else echo "UNPLANTED NOT GREEN"; fails=1; fi
