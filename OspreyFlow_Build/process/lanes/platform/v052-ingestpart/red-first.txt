@@ -18,3 +18,9 @@ test_with_bedrock_enabled_the_gateway_runs_as_its_own_account (opensearchpy), an
 _holds_as_the_render_backs_it_up, red until the guide follows (docs told).
 Helm-backed, on the server only (make test): test_cp_egress_order's claims-run mounts per shape, test_backups_chart's
 standard claims run and the new standard restore putting the ingest folder back writable.
+
+# Server gates at 4a7b27a (on main 6358e3b), through stack_lease.sh offline platform (no stack, no lease):
+- make -k ci, run 20261114T085415Z-78187f64: exit 0 (the Helm-backed chart and egress cases among it).
+- make -k test, run 20261114T084310Z-83e41fd2: exit 2, its one failure docs' test_section_6a8_names_what_the_set_holds_as_the
+  _render_backs_it_up, red as designed until the guide names the standard shape's ingest folder among the set's (docs told).
+  pytest 13975 passed, 44 skipped; vitest 383 files passed.
