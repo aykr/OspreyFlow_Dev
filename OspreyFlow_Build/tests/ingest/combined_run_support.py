@@ -31,7 +31,12 @@ from adapters.graph_arcadedb.naming import logical_type_name, physical_type_name
 from ontology.handling import audience_of
 from schemas.domain import Handling
 from schemas.ingest import Recipe
-from tests.adapters.graph_arcadedb.edge_store import CountingStore, literals, make_adapter
+from tests.adapters.graph_arcadedb.edge_store import (
+    CountingStore,
+    literals,
+    make_adapter,
+    refuse_scans,
+)
 from tests.ingest.pid_golden_support import (
     _IDENTIFIERS,
     CASE,
@@ -97,25 +102,52 @@ class CountingMerging(MergingGraph):
 
 class TypedStore(CountingStore):
     """`CountingStore` that knows each vertex's type and each link's label, so a run of several
-    link types between typed nodes meets what the real store answers: the vertex's label, and only
-    the links of the label asked for, in either direction for an undirected type."""
+    link types between typed nodes meets what the real store answers: each vertex found only by its
+    own type's `id` index, and only the links of the label asked for, in either direction for an
+    undirected type. It sends what it cannot answer to `CountingStore`, which refuses a lookup by id
+    that scans the whole store (ADR-124 Amendment 18)."""
 
-    def __init__(self, node_type: Any) -> None:
+    def __init__(self, node_type: Any, ontology: Any) -> None:
         super().__init__()
         self._node_type = node_type
+        self._ontology = ontology
+
+    async def sql(
+        self, command: str, *, params: dict[str, Any] | None = None, session_id: Any = None
+    ) -> list[dict[str, Any]]:
+        if command == "SELECT name, type, indexes FROM schema:types":
+            self.sql_sent.append((command, dict(params or {})))
+            unique_id = [{"unique": True, "properties": ["id"]}]
+            return [
+                {"name": physical_type_name(t.name), "type": "vertex", "indexes": unique_id}
+                for t in self._ontology.entity_types
+            ] + [
+                {"name": physical_type_name(t.name), "type": "edge", "indexes": unique_id}
+                for t in self._ontology.edge_types
+            ]
+        lookup = re.fullmatch(r"SELECT @rid AS rid, id FROM `(\w+)` WHERE id IN :ids", command)
+        if lookup is not None and params is not None:
+            vertex_types = {physical_type_name(t.name) for t in self._ontology.entity_types}
+            if lookup.group(1) in vertex_types:
+                self.sql_sent.append((command, dict(params)))
+                return [
+                    {"rid": self.vertex_rid(i), "id": i}
+                    for i in params["ids"]
+                    if (found := self._node_type(i)) is not None
+                    and physical_type_name(found) == lookup.group(1)
+                ]
+        return await super().sql(command, params=params, session_id=session_id)
 
     async def gremlin(
         self, query: str, *, params: dict[str, Any] | None = None, session_id: Any = None
     ) -> list[Any]:
-        if query.endswith(".label()"):
+        if ".elementMap()" in query and query.startswith("g.V('#"):
             self.queries.append(query)
-            found = self._node_type(literals(query)[1])
-            return [] if found is None else [{"result": physical_type_name(found)}]
-        if ".elementMap()" in query:
-            self.queries.append(query)
-            # The literals, in order: id, source, label, reverted, superseded_by, id, target.
+            refuse_scans(query)
+            # The literals, in order: the source's record id, label, reverted, superseded_by, id,
+            # target (`GraphArcadeDBAdapter._find_existing_edge`, from the source's record id).
             quoted = literals(query)
-            src, label, tgt = quoted[1], quoted[2], quoted[-1]
+            src, label, tgt = self.vertex_id(quoted[0]), quoted[1], quoted[-1]
             both = "bothE" in query
             return [
                 link
@@ -141,7 +173,7 @@ class AdapterBacked(CountingMerging):
 
     def __init__(self, ontology: Any) -> None:
         super().__init__(ontology)
-        self.store = TypedStore(self._type_of)
+        self.store = TypedStore(self._type_of, ontology)
         self.adapter = make_adapter(self.store)
         self.adapter._schema = ontology
 
