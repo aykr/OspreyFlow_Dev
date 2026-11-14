@@ -138,8 +138,9 @@ for (const look of ["dark", "light", "govuk"] as const) {
       expect(starts, "the job started was the refused expansion, once").toEqual([{ request: { node_ids: ["p1"], depth: 1, edge_types: null } }]);
       // Nothing of the App's covers the panel: its heading, each line of its words and each of its buttons is the
       // topmost thing at its centre. Pointer events are lifted for the test, as `undecidedContrast.ts` lifts them,
-      // so an overlay that lets the pointer through (a tooltip, the canvas's corner) is still found.
-      const lift = await page.addStyleTag({ content: "* { pointer-events: auto !important; }" });
+      // so an overlay that lets the pointer through (a tooltip, the canvas's corner) is still found; pseudo-elements
+      // too, which `*` alone does not match (an App element's `::after` drawn over the panel was missed without).
+      const lift = await page.addStyleTag({ content: "*, *::before, *::after { pointer-events: auto !important; }" });
       const lines = drawn(page).locator(".batch-expansion__title, .batch-expansion__figure, .batch-expansion__status, .batch-expansion__message, button");
       for (const target of await lines.all()) {
         if (!(await target.textContent())?.trim()) continue;
