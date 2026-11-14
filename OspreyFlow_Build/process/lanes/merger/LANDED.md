@@ -120,3 +120,4 @@ f9a1802 0a2ee97 platform v052-m10ctl
 d196271 defb2e9 case live-drift
 4283b91 3bd66ec+bcca270 platform v052-ingestpart (decision 6) with docs' wording (2.05), PDF reprinted
 8b9d9ae c3de22e platform v052-step4run
+8177aaf 07b0f92 case search-draw-crash (the StrictMode crash)
