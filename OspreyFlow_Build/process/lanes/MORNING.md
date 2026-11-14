@@ -2081,3 +2081,10 @@ Also asked by the lanes:
 5. **No harness command to add a visitor**: Admin › People is enough; the orchestrator writes the owner's steps with the demo update.
 6. **Part 3's second site uses Gemini with its own budget.**
 7. **Part 3's cutover after the cut**, in a window of about an hour the owner names, once platform has proved it on a test stack.
+
+## 14 November 2026, evening (4): the owner's four points before the candidate
+
+1. **The fixed cost in every search**: name, full-text and exact search all take about 0.86 s at p50 while suggestions take 57 ms. Platform profiles one search of each kind on d (read-only, rules' lease, after M10); a single step's fix comes to the owner, who decides whether it joins v0.5.2.
+2. **M10 is a gate**: the candidate (C) and the demo update (D) wait on step 4, M10 passing; a failure in the product stops everything and goes to the owner.
+3. **The candidate's list is closed**: nothing new joins unless a client using the demo would trip over it, and any addition goes to the owner first in one line (what a user sees, what changes).
+4. **One green CI run on main**, with its number, before the candidate is made.
