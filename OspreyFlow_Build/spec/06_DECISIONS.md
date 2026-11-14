@@ -38627,13 +38627,20 @@ load. M10 is the live file's pass-or-fail case, `measure_search.measure_leaks`. 
 part-cleared principal, that matches a record they may not see. The record's ids and distinguishing words must appear
 nowhere in the answer (results, merged entities, passages, suggestions, labels, filters), the totals and group counts
 must be those of what they may see where the case gives them, and the answer must be the index's. **The control:** the
-same request as the fully cleared principal must name the hidden record, or the case reaches nothing hidden and fails
-as proving nothing. Its cases are derived from B's data, never typed by hand: from a SAME_AS truth row of "same" whose
-one record the part-cleared principal may see and whose other is SECRET, carries code R, or is in a case they are not
-granted (rules, 14 November). Two things B does not yet give, and M10 cannot run without: the two principals (a fully
-cleared one, SECRET with code R in every unit and granted every case, and a part-cleared one, OFFICIAL-SENSITIVE
-without R, in unit-records and unit-intel, granted the nominals and intel cases), and B's cases granted to them (its
-cases stage rerun with `--grant`, a change to stack d's data that takes the orchestrator's word). M9 is a live case
+same request as the case's control must name the hidden record, or the case reaches nothing hidden and fails as
+proving nothing; a case whose control is missing or not given fails the same way, never skips. **There is one control
+per unit owning an R source**, `m10-cleared-<unit>` (SECRET, code R, that unit, granted every case), and each case names
+its own (`control`, the control subject's name; a SECRET record without R may name any): a principal holds one unit, and a restricted code is read only in its own unit, so no one
+principal could be the control for every unit's records (found building step 4's runner; the orchestrator's ruling, 14
+November). Its cases are derived from B's data, never typed by hand: from a SAME_AS truth row of "same" whose one
+record the part-cleared principal may see and whose other is SECRET, carries code R, or is in a case they are not
+granted, its control the subject of the hidden record's owning unit (rules, 14 November; rules writes the generator,
+with B's load). The search is scoped to one case, so a case keeps only hidden records the measured case reads: on B,
+*Intelligence reports*, whose SECRET/C reports are hidden from `m10-part` and whose SECRET/R ones (unit-intel-covert)
+only `m10-cleared-unit-intel-covert` reads. A SAME_AS partner in another dataset is left out and counted.
+The principals: `m10-part` (OFFICIAL-SENSITIVE without R, unit-records, granted the nominals and intel cases), the
+controls, and `m10-measure` (M1 to M6's, OFFICIAL-SENSITIVE, an editor on one case for M6's draws); rules grants
+them on B's cases under its lease, and step 4's runner mints their tokens into the run's environment. M9 is a live case
 still to be written for step 6. M1, M3 and
 M4 are also to become a CI regression gate on a fixed corpus of a million names (CI cannot hold B's load), shown red
 before it is wired (rule 15). M2 is to become a `perf/` case beside glass-perf. M7 and M8 set the restore runbook's

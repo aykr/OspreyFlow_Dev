@@ -280,7 +280,7 @@ def _leak_request(case: str, leak: dict[str, Any]) -> tuple[str, dict[str, Any]]
 
 
 def measure_leaks(
-    *, base: str, case: str, token: str, cleared_token: str, cases: Sequence[dict[str, Any]]
+    *, base: str, case: str, token: str, controls: dict[str, str], cases: Sequence[dict[str, Any]]
 ) -> dict[str, Any]:
     """M10, the leak test at scale (requirement a; ADR-149 Amendment 2): each case a query, from
     B's plants, that matches a record the part-cleared principal (`token`) may not see. As that
@@ -289,16 +289,25 @@ def measure_leaks(
     may appear anywhere in the answer: results, merged entities, passages, suggestions, labels or
     filters. Where the truth gives them, `expect_total` and `expect_groups` ({key: count}) must be
     the counts of what they may see. The answer must be the index's. **The control:** the same
-    request as the fully cleared principal (`cleared_token`) must name every `never_ids`, or the
-    case reaches nothing hidden and proves nothing, and fails as that. Pass or fail, not a time:
-    any leak fails M10."""
+    request as the case's control (`controls[case["control"]]`, a principal cleared for SECRET
+    with code R in the hidden record's owning unit: a restricted code is read only in its own
+    unit, so one principal cannot be the control for every unit) must name every `never_ids`, or
+    the case reaches nothing hidden and proves nothing, and fails as that; so does a case whose
+    control is missing or not given, never skipped. Pass or fail, not a time: any leak fails M10."""
     if not cases:
         raise SystemExit("M10: no leak cases: the test would pass having asked nothing")
     failures: list[str] = []
     for i, leak in enumerate(cases):
         name = leak.get("name") or f"case {i + 1} ({leak.get('route', 'search')} {leak['query']!r})"
         path, body = _leak_request(case, leak)
-        _ms, control, error = _send(base, path, body, cleared_token)
+        unit = leak.get("control")
+        if unit not in controls:
+            failures.append(
+                f"{name}: no control token for {unit!r} (given: {', '.join(sorted(controls))}), "
+                "so the case proves nothing"
+            )
+            continue
+        _ms, control, error = _send(base, path, body, controls[unit])
         seen = set(_strings(control)) if control is not None else set()
         unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
         if control is None or unreached:

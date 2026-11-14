@@ -43,7 +43,9 @@ class _Conduit(BaseHTTPRequestHandler):
         time.sleep(self.delay)
         status = 200
         if self.leak_world and self.path.endswith(("/search", "/suggest")):
-            answer = self._leak_answer(self.headers.get("Authorization", "") == "Bearer cleared")
+            answer = self._leak_answer(
+                self.headers.get("Authorization", "") == "Bearer cleared-unit-fiu"
+            )
         elif self.path.endswith("/suggest"):
             answer: dict[str, Any] = {"nodes": [{"id": "n1"}], "more": False}
         elif self.path.endswith("/boards"):
@@ -472,6 +474,7 @@ def test_the_live_gate_fails_m6_when_no_drawn_node_reaches_the_index(
 LEAKS = [
     {
         "name": "a hidden namesake",
+        "control": "unit-fiu",
         "route": "search",
         "query": "Kestral",
         "never_ids": ["hid-1"],
@@ -481,6 +484,7 @@ LEAKS = [
     },
     {
         "name": "a hidden namesake's prefix",
+        "control": "unit-fiu",
         "route": "suggest",
         "query": "kes",
         "never_ids": ["hid-1"],
@@ -488,10 +492,15 @@ LEAKS = [
 ]
 
 
+#: One cleared control per R-owning unit (the orchestrator's ruling, 14 November 2026): only
+#: unit-fiu's sees hid-1, as only a principal of a restricted record's own unit may.
+CONTROLS = {"unit-fiu": "cleared-unit-fiu", "unit-border": "cleared-unit-border"}
+
+
 def _leaks(base: str) -> dict[str, Any]:
     _Conduit.leak_world = True
     return measure_search.measure_leaks(
-        base=base, case="case-1", token="part", cleared_token="cleared", cases=LEAKS
+        base=base, case="case-1", token="part", controls=CONTROLS, cases=LEAKS
     )
 
 
@@ -499,7 +508,8 @@ def test_nothing_hidden_seen_or_counted_meets_m10(conduit: str) -> None:
     result = _leaks(conduit)
     assert result["verdict"] == "met", result["failures"]
     tokens = {(p, a) for p, _b, a in _Conduit.seen}
-    assert ("/v1/investigations/case-1/search", "Bearer cleared") in tokens, "the control asked"
+    assert ("/v1/investigations/case-1/search", "Bearer cleared-unit-fiu") in tokens, "the control"
+    assert not any(a == "Bearer cleared-unit-border" for _p, a in tokens), "only the case's own"
     assert ("/v1/investigations/case-1/suggest", "Bearer part") in tokens
 
 
@@ -534,7 +544,7 @@ def test_a_fallback_answer_is_not_the_index_s_for_m10(conduit: str) -> None:
 def test_no_leak_cases_is_refused(conduit: str) -> None:
     with pytest.raises(SystemExit, match="asked nothing"):
         measure_search.measure_leaks(
-            base=conduit, case="c", token="part", cleared_token="cleared", cases=[]
+            base=conduit, case="c", token="part", controls=CONTROLS, cases=[]
         )
 
 
@@ -542,7 +552,7 @@ def _run_live_m10(conduit: str, tmp_path: Path) -> subprocess.CompletedProcess[s
     _Conduit.leak_world = True
     leaks = tmp_path / "leaks.jsonl"
     leaks.write_text("\n".join(json.dumps(c) for c in LEAKS))
-    extra = {"OSPREY_MEASURE_CLEARED_TOKEN": "cleared", "OSPREY_MEASURE_LEAKS": str(leaks)}
+    extra = {"OSPREY_MEASURE_CONTROLS": json.dumps(CONTROLS), "OSPREY_MEASURE_LEAKS": str(leaks)}
     return _run_live(tmp_path, conduit, extra, only="m10")
 
 
@@ -559,3 +569,26 @@ def test_the_live_gate_fails_m10_on_a_leak(conduit: str, tmp_path: Path) -> None
     assert (
         done.returncode != 0 and "M10:" in done.stdout and "hid-1 is in the answer" in done.stdout
     )
+
+
+@pytest.mark.parametrize(
+    ("control", "said"),
+    [
+        ("unit-border", "does not name ['hid-1']"),  # another unit's control cannot see it
+        ("unit-covert", "no control token for 'unit-covert'"),
+        (None, "no control token for None"),
+    ],
+)
+def test_a_case_whose_control_cannot_name_its_record_fails_never_skips(
+    conduit: str, control: str | None, said: str
+) -> None:
+    _Conduit.leak_world = True
+    if control:
+        case = {**LEAKS[0], "control": control}
+    else:
+        case = {k: v for k, v in LEAKS[0].items() if k != "control"}
+    result = measure_search.measure_leaks(
+        base=conduit, case="case-1", token="part", controls=CONTROLS, cases=[case]
+    )
+    assert result["verdict"] == "not met" and len(result["failures"]) == 1
+    assert said in result["failures"][0] and "proves nothing" in result["failures"][0]
