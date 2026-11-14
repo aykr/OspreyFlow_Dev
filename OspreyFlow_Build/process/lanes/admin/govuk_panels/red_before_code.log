@@ -1,0 +1,40 @@
+# keyboard/glass-panels-look.spec.ts at 270ae39 with src/design/panelType.css not loaded (its @import taken out of primitives.css): the Glass page's panels as main draws them
+  1) keyboard/glass-panels-look.spec.ts:94:5 › the saved views panel, in its drawer in the dark look is on the page's type scale 
+    +   "15.21px (heading): Views in this case",
+  2) keyboard/glass-panels-look.spec.ts:94:5 › the Save as a view form in the dark look is on the page's type scale 
+    +   "19.5px (heading): Save as a view",
+  3) keyboard/glass-panels-look.spec.ts:94:5 › the saved views panel, in its drawer in the light look is on the page's type scale 
+    +   "15.21px (heading): Views in this case",
+  4) keyboard/glass-panels-look.spec.ts:94:5 › the Save as a view form in the light look is on the page's type scale 
+    +   "19.5px (heading): Save as a view",
+  5) keyboard/glass-panels-look.spec.ts:94:5 › the saved views panel, in its drawer in the govuk look is on the page's type scale 
+    +   "19px (heading): Views in this case",
+    +   "19px (text): Alice's own",
+    +   "19px (meta): Private",
+    +   "16px (text): Open",
+    +   "16px (text): Share with the case",
+    +   "16px (text): Delete",
+    +   "19px (text): Payments in March",
+    +   "19px (meta): Shared",
+    +   "16px (text): Open",
+    +   "16px (text): Delete",
+  6) keyboard/glass-panels-look.spec.ts:94:5 › the open view's strip over the canvas in the govuk look is on the page's type scale 
+    +   "19px (meta): Shared",
+    +   "19px (text): Back to the case",
+  7) keyboard/glass-panels-look.spec.ts:94:5 › the Save as a view form in the govuk look is on the page's type scale 
+    +   "19px (heading): Save as a view",
+    +   "19px (text): View name",
+    +   "19px (text): 3 nodes, where they sit and the timeline's window.",
+    +   "19px (text): Save view",
+    +   "19px (text): Cancel",
+  8) keyboard/glass-panels-look.spec.ts:94:5 › the case line's New case form in the govuk look is on the page's type scale 
+    +   "19px (text): What data does this case read?",
+    +   "19px (text): Use an existing dataset…",
+    +   "19px (text): Make a new dataset — empty, loaded in the Ingest S",
+    +   "19px (text): Domain models",
+    +   "19px (text): Financial fraud and AML (FIBO)",
+    +   "19px (text): Crime case analysis (NIEM)",
+    +   "19px (text): Cyber threat analytics (STIX 2.1)",
+    +   "19px (text): Bespoke POLE (the core model)",
+  8 failed
+  19 passed (8.4s)
