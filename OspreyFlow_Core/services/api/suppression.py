@@ -31,6 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any, Protocol
 
 import asyncpg
 
@@ -189,8 +190,37 @@ class SuppressionMarkStore:
         }
 
 
+class _VisibleMembership(Protocol):
+    async def visible_membership(
+        self, investigation_id: str, principal: Principal
+    ) -> tuple[list[Any], list[Any]]: ...
+
+
+class _MarkedAmong(Protocol):
+    async def marked_among(self, node_ids: list[NodeId]) -> dict[NodeId, SuppressionMark]: ...
+
+
+async def marks_on_the_canvas(
+    working_set: _VisibleMembership,
+    marks: _MarkedAmong,
+    investigation_id: str,
+    principal: Principal,
+) -> list[SuppressionMark]:
+    """The marks on the nodes of this case's working set **as `principal` may see it**, so the
+    canvas can read its marks back when it loads (v0.5.2 route row S7): a marked node offers
+    *Remove suppression mark*, not the mark again. The ids are the working set's own projection
+    for this reader (`WorkingSetService.visible_membership`, the same `_project` every list read
+    runs), the one way `marked_among` may be called (its own docstring): a mark on a node the
+    reader may not see is never asked about, so neither its reason nor its existence reaches
+    them (rules 3 and 4). In node id order."""
+    nodes, _ = await working_set.visible_membership(investigation_id, principal)
+    found = await marks.marked_among(sorted({node.id for node in nodes}))
+    return [found[node_id] for node_id in sorted(found)]
+
+
 __all__ = [
     "NodeNotVisibleError",
     "SuppressionMark",
     "SuppressionMarkStore",
+    "marks_on_the_canvas",
 ]

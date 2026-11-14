@@ -1118,7 +1118,12 @@ from .superset_embed import (
     identity_principal,
     may_open,
 )
-from .suppression import NodeNotVisibleError, SuppressionMark, SuppressionMarkStore
+from .suppression import (
+    NodeNotVisibleError,
+    SuppressionMark,
+    SuppressionMarkStore,
+    marks_on_the_canvas,
+)
 from .target_models import (
     InMemoryTargetModelStore,
     NoModelYet,
@@ -6076,8 +6081,40 @@ async def confirm_node_route(
 class SuppressionMarkInput(BaseModel):
     investigation_id: str
     #: Why this node is proposed for suppression. Required and non-empty: an unexplained
-    #: mark is a puzzle for whoever finds it, and step two has to cite something.
-    reason: str
+    #: mark is a puzzle for whoever finds it, and step two has to cite something. Held here,
+    #: not only in the Glass's box (v0.5.2 route row S8): a reason of spaces alone, or none,
+    #: is refused (422).
+    reason: str = Field(max_length=1000)
+
+    @field_validator("reason")
+    @classmethod
+    def _reason_has_words(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("a suppression mark needs a reason")
+        return value.strip()
+
+
+@app.get("/v1/investigations/{investigation_id}/suppression-marks")
+async def list_suppression_marks(
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    audit: AuditDep,
+    marks: SuppressionMarksDep,
+) -> list[SuppressionMark]:
+    """The marks on this case's canvas, read back when it loads (v0.5.2 route row S7: a mark
+    survived a reload only in the store, so the menu offered the mark again and a second choice
+    overwrote it). Only the nodes of the working set this principal may see are asked about
+    (`suppression.marks_on_the_canvas`); a mark on any other node is never named (rules 3, 4)."""
+    found = await marks_on_the_canvas(working_set, marks, investigation.id, principal)
+    await audit.record(
+        principal=principal,
+        action="list_suppression_marks",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=len(found),
+    )
+    return found
 
 
 @app.post(

@@ -11,6 +11,8 @@ export interface ReasonPromptProps {
   /** What is being asked, in a line: "Confirm these two as the same". */
   title: string;
   confirmLabel: string;
+  /** The line over the box: by default the link menu's, whose reasons go to the audit trail. */
+  why?: string;
   /** Called with the reason, trimmed and never empty. */
   onSubmit: (reason: string) => void;
   onCancel: () => void;
@@ -19,7 +21,7 @@ export interface ReasonPromptProps {
 /** A small box that asks *why* before a write from the link menu (ADR-080: every write says why
  * and is recorded with who made it). The reason is required: the button stays off until there is
  * one. Control-Enter confirms and Escape cancels, so it can be used without a mouse. */
-export function ReasonPrompt({ x, y, title, confirmLabel, onSubmit, onCancel }: ReasonPromptProps) {
+export function ReasonPrompt({ x, y, title, confirmLabel, why = "Why? (required, kept in the audit trail)", onSubmit, onCancel }: ReasonPromptProps) {
   const [reason, setReason] = useState("");
   const ready = reason.trim() !== "";
   const submit = () => {
@@ -31,7 +33,7 @@ export function ReasonPrompt({ x, y, title, confirmLabel, onSubmit, onCancel }: 
         <strong className="value">{title}</strong>
         <label style={{ display: "grid", gap: "var(--sp-4)" }}>
           <span style={{ fontSize: "var(--fs-12)", color: "var(--text-secondary)" }}>
-            Why? (required, kept in the audit trail)
+            {why}
           </span>
           <textarea
             className="input"

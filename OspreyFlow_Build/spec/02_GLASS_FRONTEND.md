@@ -2276,7 +2276,22 @@ of a click alone.
 ```
 POST /v1/investigations/{id}/nodes/{node_id}/suppression-mark     (Editor; ADR-099 Amendment 1)
 DELETE /v1/investigations/{id}/nodes/{node_id}/suppression-mark
+GET /v1/investigations/{id}/suppression-marks                      (Viewer; v0.5.2 route row S7)
 ```
+
+**The mark asks why, and survives a reload** (v0.5.2 route rows S7 and S8, found in the docs sweep, 14 November
+2026). Choosing *Mark for suppression* opens the link menu's reason box (`ReasonPrompt`, ADR-080) titled *Mark this
+record for suppression (hides nothing yet)*, its line *Why should it be suppressed? (required, kept with the mark)*:
+the reason is required (ADR-046 step 1, "a reversible mark with a reason"), *Mark for suppression* stays off until
+there are words, Escape leaves the node unmarked, and all of it is reached by keyboard (rule 13). The server refuses
+a reason that is missing or only spaces (422) and keeps it trimmed, at most 1,000 characters. The canvas reads its
+marks back from the `GET` when it loads and again as nodes arrive, so a marked node offers *Remove suppression mark*
+and never the mark again over its reason. The `GET` names only the marks on the nodes of this case's working set as
+the reader may see it (`suppression.marks_on_the_canvas`, the working set's own projection; rules 3 and 4). Proved
+by `keyboard/keyboard.spec.ts` (the reason asked by keyboard, Escape writing nothing; a mark read back offering
+Remove), `tests/services/api/working_set/test_suppression_marks_read.py` (a mark on a node the reader may not see is
+never asked about) and `tests/services/api/test_explore_routes.py` (the route as the case's reader, audited; the
+reason refused without words).
 
 - **A marker on the node and in the inspector**, the same list-row-plus-canvas-marker pairing §9.4
   already establishes for "something here needs a human's attention" — a marked node is *flagged*,

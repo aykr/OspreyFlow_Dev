@@ -845,7 +845,7 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
           investigation_id: "inv-1",
           marked_by: "analyst-1",
           marked_at: "2026-09-27T00:00:00Z",
-          reason: "Marked from the canvas",
+          reason: "A duplicate of the confirmed record n7",
         }),
       });
     },
@@ -867,9 +867,31 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
   await item.focus();
   await page.keyboard.press("Enter");
 
+  // v0.5.2 route row S8 (ADR-046 step 1, "a reversible mark with a reason"): it asks why first, the reason required,
+  // all by keyboard. Escape leaves it unmarked; the button stays off until there are words.
+  const why = page.getByRole("textbox", { name: /Why should it be suppressed\? \(required, kept with the mark\)/ });
+  await expect(why).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(why).toHaveCount(0);
+  expect(calls).toEqual([]);
+  await canvas.focus();
+  await page.keyboard.press("\\");
+  await item.focus();
+  await page.keyboard.press("Enter");
+  await expect(why).toBeFocused();
+  const confirm = page.getByRole("button", { name: "Mark for suppression", exact: true });
+  await expect(confirm).toBeDisabled();
+  await page.keyboard.type("   ");
+  await expect(confirm).toBeDisabled();
+  await page.keyboard.type("A duplicate of the confirmed record n7");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await expect(confirm).toBeFocused();
+  await page.keyboard.press("Enter");
+
   await expect.poll(() => calls.length).toBe(1);
   expect(calls[0].method).toBe("POST");
-  expect(calls[0].body).toMatchObject({ reason: "Marked from the canvas" });
+  expect(calls[0].body).toMatchObject({ reason: "A duplicate of the confirmed record n7" });
 
   // Reversible: the same item now offers to take the mark off, and uses DELETE.
   // Re-focusing the canvas first: RadialMenu moves focus onto itself when it opens and does not
@@ -889,6 +911,42 @@ test("the radial list reaches Mark for suppression, and the mark toggles", async
   await expect.poll(() => calls.length).toBe(2);
   expect(calls[1].method).toBe("DELETE");
 
+  registerCovered("CANVAS_ACTIONS", "menu-item-mark-for-suppression");
+});
+
+test("a mark read back after a reload offers Remove, never the mark again over its reason (v0.5.2 S7)", async ({ page }) => {
+  // Before it the canvas began with no marks after every load, so the menu offered the mark again on a marked node,
+  // and choosing it overwrote the reason. Here the case already holds a mark on every node of the harness.
+  const writes: string[] = [];
+  await page.route("**/v1/investigations/*/suppression-marks", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        Array.from({ length: 12 }, (_, i) => ({
+          node_id: `n${i}`,
+          investigation_id: "inv-1",
+          marked_by: "analyst-3",
+          marked_at: "2026-11-13T09:00:00Z",
+          reason: "already proposed",
+        })),
+      ),
+    }),
+  );
+  await page.route("**/v1/investigations/*/nodes/*/suppression-mark", async (route) => {
+    writes.push(route.request().method());
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ removed: true }) });
+  });
+  await page.goto("/keyboard/harness.html");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await canvas.focus();
+  await page.keyboard.press("\\");
+  const remove = page.getByRole("menuitem", { name: "Remove suppression mark", exact: true });
+  await expect(remove).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Mark for suppression (hides nothing yet)", exact: true })).toHaveCount(0);
+  await remove.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => writes).toEqual(["DELETE"]);
   registerCovered("CANVAS_ACTIONS", "menu-item-mark-for-suppression");
 });
 

@@ -290,6 +290,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/nodes/{node_id}/retract"): E,
     ("POST", P + "/nodes/{node_id}/suppression-mark"): E,
     ("DELETE", P + "/nodes/{node_id}/suppression-mark"): E,
+    # v0.5.2 route row S7: the canvas reads its marks back, at Viewer as the canvas is.
+    ("GET", P + "/suppression-marks"): V,
     # ADR-098 decision 4: a question writes pending findings; its conversation is the case's.
     ("POST", P + "/questions"): E,
     ("POST", P + "/questions/will-read"): E,  # ADR-098 Amendment 7: as asking

@@ -252,6 +252,8 @@ READS_AND_OTHER: tuple[str, ...] = (
     "case_strength_influencers_set", "connections", "create_investigation", "create_pack",
     "create_site", "delete_board", "delete_case_view", "delete_trend",
     "embedded_dashboard_guest_token", "expand", "expand_preview",
+    # Case's S7 (v0.5.2): the case's suppression marks read back as the reader may see them.
+    "list_suppression_marks",
     # ADR-151: the cap's batch job queued, and refused (its saved view is `save_case_view`).
     "batch_expand", "batch_expand_refused", "explain_alert",
     "explain_resolution_cluster", "explore_busiest_days", "explore_busiest_links",

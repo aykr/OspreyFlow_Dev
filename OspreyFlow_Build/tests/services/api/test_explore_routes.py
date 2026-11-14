@@ -523,3 +523,82 @@ def test_a_shared_pair_goes_onto_the_case_with_its_datasets(client) -> None:  # 
     assert {tuple(p.datasets or []) for *_, p in seeded} == {tuple(READS)}
     assert audit.records[-1]["action"] == "shared_pair_canvas"
     assert http.post(path.format("hidden")).status_code == 404
+
+
+def test_the_canvas_marks_are_read_as_the_case_reader_and_audited(client) -> None:  # type: ignore[no-untyped-def]
+    """v0.5.2 route row S7: the canvas reads its suppression marks back. The working set is asked
+    with the case's principal (its datasets), so its projection, the only ids the marks store is
+    given, is this reader's (`tests/services/api/working_set/test_suppression_marks_read.py` has the
+    projection itself); the read is audited, and refused without a principal."""
+    import services.api.app as app_module
+    from services.api.suppression import SuppressionMark
+
+    http, graph, audit = client
+    seen: list[Principal] = []
+
+    class _WorkingSet:
+        async def visible_membership(self, case, principal):  # type: ignore[no-untyped-def]
+            seen.append(principal)
+            return [_node("n-1"), _node("n-2")], []
+
+    class _Marks:
+        async def marked_among(self, node_ids):  # type: ignore[no-untyped-def]
+            return {
+                n: SuppressionMark(
+                    node_id=n,
+                    investigation_id="case-e",
+                    marked_by="colleague",
+                    marked_at=datetime(2026, 11, 14, tzinfo=UTC),
+                    reason="a duplicate of a confirmed record",
+                )
+                for n in node_ids
+                if n == "n-2"
+            }
+
+    app.dependency_overrides[app_module.get_working_set] = _WorkingSet
+    app.dependency_overrides[app_module.get_suppression_marks] = _Marks
+    response = http.get("/v1/investigations/case-e/suppression-marks")
+    assert response.status_code == 200
+    assert [(m["node_id"], m["reason"]) for m in response.json()] == [
+        ("n-2", "a duplicate of a confirmed record")
+    ]
+    assert [p.datasets for p in seen] == [READS]
+    assert audit.records[-1]["action"] == "list_suppression_marks"
+    assert TestClient(app).get("/v1/investigations/case-e/suppression-marks").status_code in (
+        401,
+        403,
+    )
+
+
+def test_a_suppression_mark_needs_words_and_keeps_them_trimmed(client: Any) -> None:
+    """v0.5.2 route row S8 (ADR-046 step 1, "a reversible mark with a reason"): the reason is
+    required on the server, not only in the Glass's box. None, or spaces alone, is a 422 and
+    writes nothing; words are kept, trimmed."""
+    import services.api.app as app_module
+    from services.api.suppression import SuppressionMark
+
+    http, graph, audit = client
+    written: list[str] = []
+
+    class _Marks:
+        async def mark(self, node_id, investigation_id, principal, graph, *, reason):  # type: ignore[no-untyped-def]
+            written.append(reason)
+            return SuppressionMark(
+                node_id=node_id,
+                investigation_id=investigation_id,
+                marked_by=principal.id,
+                marked_at=datetime(2026, 11, 14, tzinfo=UTC),
+                reason=reason,
+            )
+
+    app.dependency_overrides[app_module.get_suppression_marks] = _Marks
+    url = "/v1/investigations/case-e/nodes/n-1/suppression-mark"
+    for reason in ("", "   "):
+        assert (
+            http.post(url, json={"investigation_id": "case-e", "reason": reason}).status_code == 422
+        )
+    assert http.post(url, json={"investigation_id": "case-e"}).status_code == 422
+    assert written == []
+    kept = http.post(url, json={"investigation_id": "case-e", "reason": "  a duplicate of n-7  "})
+    assert kept.status_code == 200
+    assert written == ["a duplicate of n-7"]
