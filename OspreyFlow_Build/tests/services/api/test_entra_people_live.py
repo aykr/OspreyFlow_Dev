@@ -826,3 +826,22 @@ async def test_am15_a_run_acts_as_its_owner_with_the_values_set_here(am15_world)
             await resolver.resolve_for_owner_detailed(AM15_PERSON)
     finally:
         await resolver.aclose()
+
+
+async def test_am15_a_guest_refused_while_guests_are_not_admitted_sets_nothing(am15_world) -> None:
+    """Amendments 15 and 17 on the real table: Access reads its setter through the same guest join as every
+    read (`PEOPLE_SQL … FOR SHARE OF p`), so a guest refused while guests are not admitted sets nobody's values,
+    and once guests are admitted again the same setter does."""
+    from dataclasses import replace
+
+    await am15_world.store.set_guests_admitted(True, "adm-1")
+    await am15_world.store.seed_first_administrators([AM15_SETTER], None, AM15_FIRST)  # type: ignore[arg-type]
+    await am15_world.store.person(TENANT, AM15_SETTER, replace(AM15_SEEN, guest=True))  # signs in as a guest
+    await am15_world.store.person(TENANT, AM15_PERSON, AM15_SEEN)
+    await am15_world.store.set_guests_admitted(False, "adm-1")
+    with pytest.raises(AccessBeyondTheSetter, match="setter_cannot_set"):
+        await am15_world.store.set_administrator_access(AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL"), AM15_CLASSES)
+    assert (await am15_world.store.standing(AM15_SETTER)).disabled is True  # standing's own join, the same answer
+    await am15_world.store.set_guests_admitted(True, "adm-1")
+    _, after = await am15_world.store.set_administrator_access(AM15_PERSON, AM15_BY, PersonAccessInput(clearance="OFFICIAL"), AM15_CLASSES)
+    assert after.clearance == "OFFICIAL"
