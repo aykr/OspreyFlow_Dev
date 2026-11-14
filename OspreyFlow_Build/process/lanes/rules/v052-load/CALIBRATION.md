@@ -5,6 +5,13 @@ Stack d under the rules lane's long lease (taken 2026-11-14T03:27:42Z), at lane/
 `--graph-scale 0.02`, the stack reset (`reset_stack.py`), then `--graph-scale 0.1`, reset again. Raw:
 `calibration.txt`.
 
+**Contended (rule 14), so not a measurement for step 4.** The orchestrator's notice of 14 November: the
+case-b lane ran CPU load tests on the server, light rounds from 03:14 to 03:35Z and every core from
+03:45 to 03:54Z. The whole calibration ran from 03:28 to 03:40Z, inside the light rounds (at 0.1, its
+nodes, links and same_as from 03:32 to 03:38Z). Its rates sized B's projection; step 4 takes B's own
+per-file rates from after 03:54Z instead. B's generation (03:41 to 03:49Z) and the first five minutes
+of its node stage (03:49 to 03:54Z) fell in the every-core window and are marked so in B's record.
+
 | Stage | 0.02 | 0.1 | Rate at 0.02 | Rate at 0.1 |
 | --- | ---: | ---: | ---: | ---: |
 | nodes | 13,009 in 40.4 s | 65,046 in 172.4 s | 322 a second | 377 a second |
