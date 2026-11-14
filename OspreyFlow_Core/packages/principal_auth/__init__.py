@@ -35,6 +35,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from functools import partial
 from typing import Any, Protocol, runtime_checkable
 from urllib.parse import quote
@@ -491,13 +492,39 @@ class DashboardSource(Protocol):
     async def dashboard(self, tenant_id: str, application_id: str) -> StoredDashboard | None: ...
 
 
+#: How long a clearance, unit and handling codes read from an Entra token at sign-in are trusted
+#: for anything done for the person while they are not present: an Entra access token's longest
+#: life, plus a margin (ADR-148 Amendment 8; the orchestrator's ruling, 12 November 2026). A run
+#: acting as its owner is one (Amendment 16): the same rule, this one constant.
+ACCESS_FRESH = timedelta(hours=24)
+
+
+@dataclass(frozen=True)
+class StoredOwner:
+    """An Entra person as the deployment holds them, read without their being present (ADR-148
+    Amendment 16): the roles and disabled flag Admin › People keeps, read live, and the clearance,
+    unit and codes as their last sign-in's token gave them, with when (`access_read_at`). A person
+    added by object id who has never signed in has no clearance, unit or time."""
+
+    roles: tuple[str, ...]
+    disabled: bool
+    clearance: str | None
+    org_unit: str | None
+    receivable_handling_codes: tuple[str, ...]
+    access_read_at: datetime | None
+
+
 class RoleSource(Protocol):
     """Where an Entra principal's roles are read (ADR-148 Amendment 8, the orchestrator's ruling of
     11 November 2026): the deployment's own store, keyed by tenant and object id. `person` records
     a person on their first sign-in (with no roles) and answers what is stored; it raises on any
-    failure, which the resolver turns into `PrincipalLookupUnavailable`, never a principal."""
+    failure, which the resolver turns into `PrincipalLookupUnavailable`, never a principal.
+    `owner` reads a person without recording anyone, for a run acting as them (Amendment 16):
+    `None` for a person not held."""
 
     async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson: ...
+
+    async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None: ...
 
 
 class PrincipalLookupUnavailable(Exception):
@@ -722,16 +749,27 @@ def _stored_roles(stored: StoredPerson) -> list[str]:
 def principal_from_claims(
     claims: Mapping[str, Any],
     mapping: ClaimMapping,
-    stored: StoredPerson | StoredDashboard | None = None,
+    stored: StoredPerson | StoredDashboard | StoredOwner | None = None,
 ) -> Principal:
     """The one claims-construction path (ADR-043; ADR-148 decision 9): every `Principal` this
     package builds, from a session's token or an exchanged one, is built here from verified
     claims. An Entra principal's roles are the stored person's (`stored`, read by the resolver
     from its `RoleSource`), never the token's; one disabled here is refused (401). A dashboard
     identity's (ADR-148 Amendment 10, `stored` its registration) is its registration's clearance,
-    unit and codes, the role `reports_viewer` alone, admitted to `DASHBOARD_ROUTES` alone."""
+    unit and codes, the role `reports_viewer` alone, admitted to `DASHBOARD_ROUTES` alone. A run's
+    owner on Entra (Amendment 16, `stored` the owner as held, `claims` naming only their `oid`)
+    is their stored roles and the access their last sign-in gave, judged fresh by the resolver."""
     routes: list[str] | None = None
-    if isinstance(stored, StoredDashboard):
+    if isinstance(stored, StoredOwner):
+        oid = claims.get("oid")
+        if not mapping.is_entra or not isinstance(oid, str) or not oid:
+            raise PrincipalLookupUnavailable("a stored owner is read only for an Entra mapping")
+        if stored.disabled or stored.clearance is None or stored.org_unit is None:
+            raise PrincipalLookupUnavailable("a stored owner is built only once judged current")
+        principal_id, clearance, org_unit = oid, stored.clearance, stored.org_unit
+        codes = list(stored.receivable_handling_codes)
+        roles = _stored_roles(StoredPerson(roles=stored.roles, disabled=False))
+    elif isinstance(stored, StoredDashboard):
         principal_id = _verified_dashboard(claims, mapping)
         if principal_id != stored.application_id:
             raise PrincipalLookupUnavailable("the store answered another dashboard identity")
@@ -923,6 +961,35 @@ class PrincipalExchangeUnavailable(PrincipalExchangeError):
     """The token-exchange endpoint could not be reached at all (network/timeout), or this
     deployment has not configured one — a fact about *reachability*, not a decision the IdP made
     about the target subject."""
+
+
+class OwnerRecordUnavailable(PrincipalExchangeUnavailable):
+    """On Entra ID (ADR-148 Amendment 16): the deployment's people store could not be read, in
+    time, to act as an owner. Nothing about the owner and nothing about Entra, which was not asked:
+    a caller words it as the store, never as "the identity provider could not be reached"."""
+
+
+#: ADR-148 Amendment 16: why a run is refused when its owner's access is out of date, after the
+#: owner's id in a caller's sentence ("the schedule's owner, <id>, …"). The 24 hours are
+#: `ACCESS_FRESH`'s.
+ACCESS_OUT_OF_DATE_WORDS = (
+    "has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit are out "
+    "of date: it runs again once they sign in"
+)
+
+
+class PrincipalAccessOutOfDate(PrincipalExchangeUnavailable):
+    """On Entra ID (ADR-148 Amendment 16): the owner is held and not disabled, but the clearance,
+    unit and codes their last sign-in gave are older than `ACCESS_FRESH`, or were never read (added
+    by object id, never signed in). Nothing is decided about the owner, so, as an unreachable
+    identity provider is, it never counts toward pausing a schedule; a caller says
+    `ACCESS_OUT_OF_DATE_WORDS`, never that anything could not be reached."""
+
+    def __init__(self, owner_id: str, access_read_at: datetime | None) -> None:
+        when = "never" if access_read_at is None else access_read_at.isoformat()
+        super().__init__(f"owner {owner_id!r}: access last read {when}")
+        self.owner_id = owner_id
+        self.access_read_at = access_read_at
 
 
 def _access_token_of(response: httpx.Response, what: str) -> str:
@@ -1161,13 +1228,7 @@ class PrincipalResolver:
         independent exchange against the IdP's own current state, not a lookup against anything
         this process remembers from a previous call."""
         if self._claim_mapping.is_entra:
-            # Entra has no impersonation exchange: a person cannot be signed in as without them
-            # (the orchestrator's ruling, 11 November 2026). ADR-044's unreachable path marks the
-            # run stopped; a later step gives owners a way to resolve (CARRIES).
-            raise PrincipalExchangeUnavailable(
-                "owner resolution is unavailable with Entra ID sign-in: a scheduled run cannot act "
-                "as its owner on this deployment"
-            )
+            return await self._stored_owner(owner_id)
         if not self._config.oidc_token_exchange_url:
             raise PrincipalExchangeUnavailable(
                 "OIDC_TOKEN_EXCHANGE_URL is not set — this deployment has not configured "
@@ -1225,6 +1286,49 @@ class PrincipalResolver:
         except PrincipalResolutionError as exc:
             raise PrincipalExchangeRefused(
                 f"exchanged token for owner {owner_id!r} failed verification: {exc}"
+            ) from exc
+
+    async def _stored_owner(self, owner_id: str, now: datetime | None = None) -> Principal:
+        """ADR-148 Amendment 16 (the owner's ruling 1, option A): Entra has no impersonation
+        exchange, so a run acts as its owner's stored identity. Roles and the disabled flag are
+        read live from Admin › People's store; clearance, unit and codes are as at the owner's last
+        sign-in, refused when older than `ACCESS_FRESH` (`PrincipalAccessOutOfDate`). A person not
+        held is refused; one disabled here is revoked; the store unread is `OwnerRecordUnavailable`.
+        Read fresh at every call, never cached."""
+        mapping = self._claim_mapping
+        assert self._role_source is not None and mapping.tenant_id is not None
+        try:
+            stored = await asyncio.wait_for(
+                self._role_source.owner(mapping.tenant_id, owner_id),
+                timeout=self._role_lookup_timeout,
+            )
+        except Exception as exc:  # noqa: BLE001 - every failure of the read is the store unread
+            raise OwnerRecordUnavailable(
+                f"the people store could not be read for owner {owner_id!r}: {type(exc).__name__}"
+            ) from exc
+        if stored is None:
+            raise PrincipalExchangeRefused(f"owner {owner_id!r} is not a person of this deployment")
+        if not isinstance(stored, StoredOwner):
+            raise OwnerRecordUnavailable("the people store answered something not a person")
+        if stored.disabled:
+            raise PrincipalRevoked(f"owner {owner_id!r} is disabled in this deployment")
+        read_at = stored.access_read_at
+        if (
+            read_at is None
+            or stored.clearance is None
+            or stored.org_unit is None
+            or (now or datetime.now(UTC)) - read_at > ACCESS_FRESH
+        ):
+            raise PrincipalAccessOutOfDate(owner_id, read_at)
+        try:
+            return principal_from_claims({"oid": owner_id}, mapping, stored)
+        except PrincipalLookupUnavailable as exc:
+            raise OwnerRecordUnavailable(
+                f"the stored owner {owner_id!r} is not a principal's"
+            ) from exc
+        except ValueError as exc:
+            raise OwnerRecordUnavailable(
+                f"the stored access of owner {owner_id!r} is not a principal's"
             ) from exc
 
     def resolve(self, token: str) -> Principal:

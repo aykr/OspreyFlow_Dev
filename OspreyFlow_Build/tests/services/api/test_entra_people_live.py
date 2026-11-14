@@ -449,3 +449,53 @@ async def test_the_resolver_reads_a_registered_dashboard_with_a_real_token(
     assert (principal.id, principal.clearance) == (DASHBOARD, "OFFICIAL")
     assert principal.org_unit == "unit-2"
     assert principal.roles == ["reports_viewer"] and set(principal.routes or ()) == DASHBOARD_ROUTES
+
+
+# --- ADR-148 Amendment 16: a run acting as its owner, against the real store --------------------
+
+
+async def test_a_run_acts_as_its_owner_as_the_store_holds_them(world) -> None:  # type: ignore[no-untyped-def]
+    """The real store's `owner` and the real resolver: the access the last sign-in recorded, the
+    roles as Admin › People holds them now, read without recording anyone; the other tenant's row
+    for the same object id is never this tenant's owner; an owner whose access is a day old, or who
+    was added and never signed in, is out of date; one disabled here is revoked."""
+    from principal_auth import PrincipalAccessOutOfDate, PrincipalExchangeRefused, PrincipalRevoked
+
+    resolver = _resolver("http://127.0.0.1:9/keys", world.store)
+    try:
+        await world.other.person(OTHER_TENANT, OID, SEEN)  # another tenant's row, same oid
+        with pytest.raises(PrincipalExchangeRefused):
+            await resolver.resolve_for_owner_detailed(OID)
+        await world.store.person(TENANT, OID, SEEN)
+        await world.store.update(OID, "roles", ["analyst", "source_author"])
+        owner = await resolver.resolve_for_owner_detailed(OID)
+        assert (owner.id, owner.clearance, owner.org_unit, owner.receivable_handling_codes, owner.roles) == (
+            OID, "OFFICIAL", "unit-1", ["R"], ["analyst", "source_author"]
+        )  # fmt: skip
+        assert len(await world.store.rows()) == 1  # nobody recorded by the read
+
+        await world.store.add(NEW, "adm-1")  # added by object id, never signed in
+        with pytest.raises(PrincipalAccessOutOfDate):
+            await resolver.resolve_for_owner_detailed(NEW)
+
+        conn = await asyncpg.connect(dsn=world.dsn)
+        try:
+            await conn.execute("UPDATE entra_people SET access_read_at = now() - interval '25 hours' "
+                               "WHERE tenant_id = $1 AND oid = $2", TENANT, OID)  # fmt: skip
+        finally:
+            await conn.close()
+        with pytest.raises(PrincipalAccessOutOfDate):
+            await resolver.resolve_for_owner_detailed(OID)
+
+        await EntraPeopleAdmin(world.store).set_enabled(OID, False)
+        with pytest.raises(PrincipalRevoked):
+            await resolver.resolve_for_owner_detailed(OID)
+    finally:
+        await resolver.aclose()
+
+
+async def test_the_store_answers_no_owner_for_another_tenant(world) -> None:  # type: ignore[no-untyped-def]
+    await world.store.person(TENANT, OID, SEEN)
+    assert await world.store.owner(OTHER_TENANT, OID) is None
+    held = await world.store.owner(TENANT, OID)
+    assert held is not None and (held.clearance, held.org_unit) == ("OFFICIAL", "unit-1")

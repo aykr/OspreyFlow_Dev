@@ -36,13 +36,13 @@ import ast
 import asyncio
 import re
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import ValidationError
 from services.api.auth import (
-    PrincipalExchangeUnavailable,
     PrincipalResolutionError,
     PrincipalResolver,
 )
@@ -51,8 +51,10 @@ from services.api.config import ApiConfig
 from principal_auth import (
     ClaimMapping,
     CodesSource,
+    PrincipalExchangeRefused,
     PrincipalLookupUnavailable,
     SeenPerson,
+    StoredOwner,
     StoredPerson,
     ValueSource,
 )
@@ -152,6 +154,14 @@ class FakePeople:
         self.calls: list[tuple[str, str]] = []
         self.fail: Exception | None = None
         self.delay = 0.0
+        #: Owners as held, for a run acting as them (ADR-148 Amendment 16): None when not held.
+        self.owners: dict[tuple[str, str], StoredOwner] = {}
+
+    async def owner(self, tenant_id: str, oid: str) -> StoredOwner | None:
+        self.calls.append((tenant_id, oid))
+        if self.fail is not None:
+            raise self.fail
+        return self.owners.get((tenant_id, oid))
 
     async def person(self, tenant_id: str, oid: str, seen: SeenPerson) -> StoredPerson:
         self.calls.append((tenant_id, oid))
@@ -674,14 +684,14 @@ def test_the_default_mapping_does_not_read_entra_attributes(keypair, jwks_url) -
         PrincipalResolver(_config(jwks_url)).resolve(sign_token(_key(keypair), claims))
 
 
-async def test_owner_resolution_is_unavailable_on_entra_even_with_an_exchange_configured(
+async def test_an_owner_on_entra_is_read_from_the_store_never_exchanged_even_with_an_exchange_configured(
     keypair, jwks_url, token_exchange_url: str, token_exchange_registry: TokenExchangeRegistry
 ) -> None:
-    """Entra has no impersonation exchange, so a scheduled run cannot act as its owner (the
-    orchestrator's ruling, 11 November 2026): `resolve_for_owner` answers None (ADR-044's
-    unreachable path, the run marked stopped) and the detailed form says why, even where an
-    exchange endpoint is configured and would grant. Red with the Entra refusal removed: the
-    exchange's token resolves. The one-path proof for owners stays `test_auth.py`'s (Keycloak)."""
+    """Entra has no impersonation exchange (the orchestrator's ruling, 11 November 2026), so a run
+    acts as its owner's stored identity (ADR-148 Amendment 16): even where an exchange endpoint is
+    configured and would grant, the owner is read from the people store, the exchange never asked.
+    The exchange's token says unit-1, the store unit-2: the principal is the store's. An owner not
+    held is refused, not exchanged. The rules of the stored owner are `test_owner_on_entra.py`'s."""
     token_exchange_registry.register(
         "owner-ok", entra_claims(sub="owner-ok", groups=[G_OFFICIAL, G_UNIT_1, G_CODE_R])
     )
@@ -693,11 +703,19 @@ async def test_owner_resolution_is_unavailable_on_entra_even_with_an_exchange_co
         oidc_token_exchange_client_id=TOKEN_EXCHANGE_CLIENT_ID,
         oidc_token_exchange_client_secret=TOKEN_EXCHANGE_CLIENT_SECRET,
     )
-    resolver = PrincipalResolver(config, claim_mapping=BY_GROUPS, role_source=FakePeople())
+    people = FakePeople()
+    people.owners[(TENANT, "owner-ok")] = StoredOwner(
+        roles=("analyst",), disabled=False, clearance="OFFICIAL", org_unit="unit-2",
+        receivable_handling_codes=(), access_read_at=datetime.now(UTC) - timedelta(hours=1),
+    )  # fmt: skip
+    resolver = PrincipalResolver(config, claim_mapping=BY_GROUPS, role_source=people)
     try:
-        assert await resolver.resolve_for_owner("owner-ok") is None
-        with pytest.raises(PrincipalExchangeUnavailable, match="unavailable with Entra ID"):
-            await resolver.resolve_for_owner_detailed("owner-ok")
+        owner = await resolver.resolve_for_owner_detailed("owner-ok")
+        assert (owner.id, owner.org_unit, owner.roles) == ("owner-ok", "unit-2", ["analyst"])
+        assert await resolver.resolve_for_owner("owner-unheld") is None
+        with pytest.raises(PrincipalExchangeRefused):
+            await resolver.resolve_for_owner_detailed("owner-unheld")
+        assert people.calls == [(TENANT, "owner-ok")] + [(TENANT, "owner-unheld")] * 2
     finally:
         await resolver.aclose()
 

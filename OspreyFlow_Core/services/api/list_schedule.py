@@ -26,7 +26,12 @@ from valkey.asyncio import Valkey
 from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme
-from principal_auth import PrincipalRevoked
+from principal_auth import (
+    ACCESS_OUT_OF_DATE_WORDS,
+    OwnerRecordUnavailable,
+    PrincipalAccessOutOfDate,
+    PrincipalRevoked,
+)
 from schemas.domain import Principal
 from schemas.monitoring import ListSchedule
 from schemas.rights import Right, rights_for
@@ -96,6 +101,14 @@ class ListRefreshExecutor:
         except PrincipalRevoked:
             await self._refused(scheduled, f"the schedule's owner, {scheduled.owner}, can no "
                                            "longer sign in")  # fmt: skip
+            return
+        except PrincipalAccessOutOfDate:
+            await self._refused(scheduled, f"the schedule's owner, {scheduled.owner}, "
+                                           f"{ACCESS_OUT_OF_DATE_WORDS}")  # fmt: skip
+            return
+        except OwnerRecordUnavailable:
+            await self._refused(scheduled, "Admin › People's store could not be read to act as "
+                                           "the schedule's owner")  # fmt: skip
             return
         except Exception:  # noqa: BLE001 - the exchange refused or unreachable: said, not raised
             await self._refused(scheduled, "OspreyFlow could not act as the schedule's owner, "

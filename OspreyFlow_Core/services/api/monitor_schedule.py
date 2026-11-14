@@ -25,7 +25,13 @@ from typing import Any, Protocol
 from valkey.asyncio import Valkey
 
 from conduit_common.valkey_compat import reply
-from principal_auth import PrincipalExchangeUnavailable, PrincipalRevoked
+from principal_auth import (
+    ACCESS_OUT_OF_DATE_WORDS,
+    OwnerRecordUnavailable,
+    PrincipalAccessOutOfDate,
+    PrincipalExchangeUnavailable,
+    PrincipalRevoked,
+)
 from schemas.domain import Alert, Monitor, Principal, WatchStatus
 
 from .scheduler import DEFAULT_TIMEZONE, due_slots
@@ -89,10 +95,16 @@ class MonitorScheduleExecutor:
             await self.monitors.record_slot(monitor.id, latest)
             await self.monitors.set_status(monitor.id, "stopped")
             return
-        except PrincipalExchangeUnavailable:
+        except PrincipalExchangeUnavailable as error:
             # Says nothing about the owner: the claim is given back, so the next tick tries the
-            # same slot again rather than losing it.
-            log.warning("watch %s: the identity provider could not be reached", monitor.id)
+            # same slot again rather than losing it. Each in its own words (ADR-148 Amendment 16).
+            if isinstance(error, PrincipalAccessOutOfDate):
+                log.warning("watch %s: its owner, %s, %s", monitor.id, monitor.owner_id,
+                            ACCESS_OUT_OF_DATE_WORDS)  # fmt: skip
+            elif isinstance(error, OwnerRecordUnavailable):
+                log.warning("watch %s: Admin › People's store could not be read", monitor.id)
+            else:
+                log.warning("watch %s: the identity provider could not be reached", monitor.id)
             await reply(self.valkey.delete(claim))
             return
         await self.monitors.record_slot(monitor.id, latest)

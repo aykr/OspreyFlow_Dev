@@ -31,6 +31,9 @@ from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme, principal_may_view
 from principal_auth import (
+    ACCESS_OUT_OF_DATE_WORDS,
+    OwnerRecordUnavailable,
+    PrincipalAccessOutOfDate,
     PrincipalExchangeRefused,
     PrincipalExchangeUnavailable,
     PrincipalRevoked,
@@ -618,6 +621,20 @@ class ScheduleExecutor:
         except PrincipalRevoked as error:
             raise _Refused(
                 f"the schedule's owner, {owner_id}, can no longer sign in", kind="refused_rights"
+            ) from error
+        except PrincipalAccessOutOfDate as error:
+            # ADR-148 Amendment 16: nothing decided about the owner, so never counted toward the
+            # three that pause; refused at each slot until they sign in, then run again.
+            raise _Refused(
+                f"the schedule's owner, {owner_id}, {ACCESS_OUT_OF_DATE_WORDS}",
+                kind="owner_out_of_date",
+                about_the_owner=False,
+            ) from error
+        except OwnerRecordUnavailable as error:
+            raise _Refused(
+                "Admin › People's store could not be read to act as the schedule's owner",
+                kind="failed",
+                about_the_owner=False,
             ) from error
         except PrincipalExchangeUnavailable as error:
             raise _Refused(
