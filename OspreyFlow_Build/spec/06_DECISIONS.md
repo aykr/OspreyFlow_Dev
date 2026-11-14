@@ -38076,9 +38076,17 @@ and others use the raw adapter, so a hook on the wrapper misses them. The Valkey
    of the indexed fields differs), and refused (set aside, decision 2, with its reason; reported instead of missing).
    It exits non-zero on any difference, and prints counts and the first ids of each. When either outbox still holds
    rows it says so: a change on its way shows as drift until the indexer has sent it
-   (`test_the_drift_check_says_the_outboxes_still_hold_changes`). It holds every indexed id and fingerprint and
-   every expected id in memory, some 150 bytes a document (about 4.5 GB at thirty million): a streaming check is
-   CARRIES' row, before it is run on step B's load.
+   (`test_the_drift_check_says_the_outboxes_still_hold_changes`). **It streams:** the graph's live ids, the index's
+   node documents (sorted by `id`) and its text documents (sorted by `node_id`) are merged a page at a time in one id
+   order (`search_after`, never a scroll of the whole index), and a missing document is looked up in the refused
+   index a page at a time, so its memory is bounded by the page, not by the graph: run on step B's load, a check that
+   held every id would fail on memory on the load it checks. Its counts are exact; its id lists keep the first
+   `DRIFT_IDS_KEPT` (1,000) of each kind, the count beside them, and the command says how many more (rule 2). Any of
+   the three streams out of strictly ascending order raises `DriftOrderError`, rather than calling every document
+   after it missing. `tests/services/search_index/test_drift_streams.py` holds each sentence: its peak memory at ten
+   times the graph under twice that at one (red first on the whole-set check, 0.32 MB to 3.18 MB:
+   `process/lanes/rules/v052-index/drift-stream-red-first.txt`), each difference found across pages, the cut lists,
+   the order; plants V78 (the whole index in one page) to V82.
 6. **Red first, each event type:** for each of load, merge, new version, promotion and deletion, a live case writes
    through the adapter's real method and finds the index changed (and a plant that removes that method's outbox
    write turns it red); the rebuild and the drift check each have a case that plants a difference and finds it.

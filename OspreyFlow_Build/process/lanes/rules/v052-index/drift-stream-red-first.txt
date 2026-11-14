@@ -1,0 +1,67 @@
+Red first for the streaming drift check: test_drift_streams.py run against the drift check as it was at a46e2ee (rebuild.py from git HEAD, the whole-set check), with the page-only FakeOpenSearch, on this Mac, offline. Then the streaming check: green (below the first run).
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_____________ test_its_memory_is_bounded_by_the_page_not_the_graph _____________
+
+    async def test_its_memory_is_bounded_by_the_page_not_the_graph() -> None:
+        """Ten times the graph, about the same peak: a check holding every id and fingerprint grows
+        with it (about 150 bytes a document)."""
+        small, large = await _peak(1_000), await _peak(10_000)
+>       assert large < 2 * small, (small, large)
+E       AssertionError: (320830, 3180823)
+E       assert 3180823 < (2 * 320830)
+
+../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py:94: AssertionError
+________________ test_each_difference_is_found_while_streaming _________________
+
+    async def test_each_difference_is_found_while_streaming() -> None:
+        texts = {"p-0000003": ("He met Ada.", "unit-1"), "p-0000007": ("A letter.", "unit-1")}
+        client, graph, source_texts = await _world(10, texts)
+        (index,) = client.resolve(ALIAS)
+        del client.docs[index]["p-0000002"]  # missing
+        client.docs[index]["p-0000005"] = {**client.docs[index]["p-0000005"], "names": ["Other"]}  # stale
+        client.docs[index]["p-9999999"] = {"kind": "node", "id": "p-9999999"}  # extra, past the end
+        client.docs[index]["p-0000004x"] = {"kind": "node", "id": "p-0000004x"}  # extra, in between
+        del client.docs[index]["text:p-0000003"]  # a text missing
+        client.docs[index]["text:p-0000001"] = {"kind": "text", "id": "text:p-0000001",
+                                               "node_id": "p-0000001"}  # a text extra  # fmt: skip
+        report = await drift(graph, source_texts, client, ALIAS, SCHEMA, page=3)  # type: ignore[arg-type]
+        assert sorted(report.missing) == ["p-0000002", "text:p-0000003"]
+        assert report.stale == ["p-0000005"]
+        assert sorted(report.extra) == ["p-0000004x", "p-9999999", "text:p-0000001"]
+>       assert (report.missing_count, report.stale_count, report.extra_count) == (2, 1, 3)
+                ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'Drift' object has no attribute 'missing_count'
+
+../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py:112: AttributeError
+___________ test_the_counts_are_exact_and_the_lists_say_they_are_cut ___________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11fce5460>
+
+    async def test_the_counts_are_exact_and_the_lists_say_they_are_cut(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+>       monkeypatch.setattr(rebuild_module, "DRIFT_IDS_KEPT", 5)
+E       AttributeError: <module 'services.search_index.rebuild' from '/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/rebuild.py'> has no attribute 'DRIFT_IDS_KEPT'
+
+../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py:119: AttributeError
+_____________________ test_a_stream_out_of_order_is_raised _____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11fce5df0>
+
+    async def test_a_stream_out_of_order_is_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+        """The graph's order and the index's must agree; where they do not (an id whose order differs
+        between the two), the check stops rather than calling every document after it missing."""
+>       from services.search_index.rebuild import DriftOrderError
+E       ImportError: cannot import name 'DriftOrderError' from 'services.search_index.rebuild' (/Users/ayankar/dev/osprey-wt/rules/OspreyFlow_Build/../OspreyFlow_Core/services/search_index/rebuild.py)
+
+../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py:131: ImportError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py::test_its_memory_is_bounded_by_the_page_not_the_graph
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py::test_each_difference_is_found_while_streaming
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py::test_the_counts_are_exact_and_the_lists_say_they_are_cut
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_drift_streams.py::test_a_stream_out_of_order_is_raised
+4 failed in 3.50s
+=== the streaming check
+....                                                                     [100%]
+4 passed in 3.59s

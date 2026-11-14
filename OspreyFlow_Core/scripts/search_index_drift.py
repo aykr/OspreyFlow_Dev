@@ -29,19 +29,21 @@ async def _run() -> int:
             f"{report.index_documents} documents in the index)"
         )
         return 0
-    for name, ids in (
-        ("missing", report.missing),
-        ("extra", report.extra),
-        ("stale", report.stale),
+    for name, ids, count in (
+        ("missing", report.missing, report.missing_count),
+        ("extra", report.extra, report.extra_count),
+        ("stale", report.stale, report.stale_count),
     ):
-        if ids:
-            more = f" and {len(ids) - _SHOWN} more" if len(ids) > _SHOWN else ""
-            print(f"{name}: {len(ids)} ({', '.join(ids[:_SHOWN])}{more})")
+        if count:
+            more = f" and {count - _SHOWN} more" if count > _SHOWN else ""
+            print(f"{name}: {count} ({', '.join(ids[:_SHOWN])}{more})")
     for doc_id, reason in list(report.refused.items())[:_SHOWN]:
         print(f"refused: {doc_id}: {reason}")
+    if report.refused_count > _SHOWN:
+        print(f"refused: and {report.refused_count - _SHOWN} more")
     print(
-        f"search index drift: {len(report.missing)} missing, {len(report.extra)} extra, "
-        f"{len(report.stale)} stale, {len(report.refused)} refused "
+        f"search index drift: {report.missing_count} missing, {report.extra_count} extra, "
+        f"{report.stale_count} stale, {report.refused_count} refused "
         f"({report.graph_nodes} nodes in the graph, "
         f"{report.index_documents} documents in the index); "
         "python -m scripts.rebuild_search_index mends it"
