@@ -1,0 +1,16 @@
+Route S9: ospreyflow start --build rebuilds the search index (ADR-150 Am 2). Red first, at c288544 (2026-11-14T16:18:56Z), offline on ports 59991-59994, OSPREY_LANE unset, a fresh PYTHONPYCACHEPREFIX each run.
+
+Before the fix (main b27960b's scripts/refresh.py), tests/test_refresh_search_rebuild.py: 2 failed, 1 passed (no rebuild; no rebuild failure to say). After: 3 passed; with tests/test_refresh*.py, tests/cli, test_images_built_fresh, test_named_deployment_scripts, test_connectors_are_carried_into_the_image, test_layout, harness/test_apply_search_rebuild and harness/test_update_apply: 707 passed, 1 skipped, 1 failed (test_layout's graphify-out at this worktree's root, gitignored, local only). test_refresh.py's three exact verb lists and test_images_built_fresh's compose-less directory changed to match: a rendered deployment searches with OpenSearch, so its start now ends in the rebuild's exec.
+
+Plants (plants.py, each at its call site in scripts/refresh.py, put back from the saved text):
+plant 1: start --build never rebuilds (main's behaviour)
+  ../OspreyFlow_Build/tests/test_refresh_search_rebuild.py -k 'rebuilds_the_index or fails': RED (2 failed, 1 deselected in 0.73s)
+plant 2: the rebuild right after the first up, before the theme's restart
+  ../OspreyFlow_Build/tests/test_refresh_search_rebuild.py -k 'rebuilds_the_index': RED (1 failed, 2 deselected in 0.73s)
+plant 3: the rebuild before the sign-in accounts are registered
+  ../OspreyFlow_Build/tests/test_refresh_search_rebuild.py -k 'fails': RED (1 failed, 2 deselected in 0.70s)
+plant 4: a rebuild whatever compose renders
+  ../OspreyFlow_Build/tests/test_refresh_search_rebuild.py -k 'without_opensearch': RED (1 failed, 2 deselected in 0.70s)
+plant 5: a failed rebuild in the compose call's own words
+  ../OspreyFlow_Build/tests/test_refresh_search_rebuild.py -k 'fails': RED (1 failed, 2 deselected in 0.70s)
+5/5 red
