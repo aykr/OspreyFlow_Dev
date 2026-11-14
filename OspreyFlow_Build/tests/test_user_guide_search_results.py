@@ -260,7 +260,9 @@ def test_section_5_5_quotes_the_fallback_s_line_and_says_what_it_cannot_do() -> 
     depth = SERVICE_CONSTANTS["FALLBACK_DEPTH"]
     fallback = _function(SERVICE, "_from_graph")
     for code in (
-        "SearchRequest(query=request.query, limit=FALLBACK_DEPTH)",
+        "one_past = SearchRequest.model_construct(query=request.query, limit=FALLBACK_DEPTH + 1)",
+        "found = (await search(graph, one_past, principal)).nodes",
+        "found = found[:FALLBACK_DEPTH]",
         "limited=True,",
         "counts_exact=False,",
         "DatasetFilter(id=d, name=n, count=None)",
@@ -282,7 +284,7 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
     depth, line = SERVICE_CONSTANTS["FALLBACK_DEPTH"], SERVICE_CONSTANTS["DEPTH_REACHED"]
     fallback = _function(SERVICE, "_from_graph")
     for code in (
-        "reached = len(found) >= FALLBACK_DEPTH",
+        "reached = len(found) > FALLBACK_DEPTH",  # one past the depth: exactly the depth is a whole list
         "more = len(found) > start + size reason = LIMITED_REASONS[why]",  # the whole statement: nothing or-ed on
         "if reached and not more: reason += DEPTH_REACHED.format(depth=FALLBACK_DEPTH)",
         "more=more,",
@@ -290,9 +292,9 @@ def test_section_5_5_says_the_fallback_pages_only_while_records_remain_and_where
         assert code in fallback, code
     assert fallback.count("more =") == 1, "more set once, so nothing later offers a page past the records"
     # `reached` is of the 100 before the dataset and group filters: the line stands on a narrowed list's last page too.
-    assert fallback.index("reached = len(found) >= FALLBACK_DEPTH") < fallback.index("if wanted: found = [")
+    assert fallback.index("reached = len(found) > FALLBACK_DEPTH") < fallback.index("if wanted: found = [")
     assert "{shown && (shown.page > 1 || shown.more) && (" in PAGE and "more={shown.more}" in PAGE
     assert "{more && (" in PAGE and '{more && <div className="govuk-pagination__next">' in PAGE, "Next on more alone, in both pagers"
     text = results_text()
     assert "**Next page** is offered only while a further page holds records" in text
-    assert f"where the search reached its {depth}, the last page's line adds \"{line.format(depth=depth).strip()}\", even when a dataset or a group has narrowed the list." in text
+    assert f"where the search found more than {depth}, the last page's line adds \"{line.format(depth=depth).strip()}\", even when a dataset or a group has narrowed the list." in text
