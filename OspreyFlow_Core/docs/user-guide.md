@@ -786,8 +786,9 @@ copy: there are no branches, and nothing in a saved view changes the case.
 
 - **Saving.** Select what matters and choose **Save as a view** in the selection bar; name it under
   **View name** and **Save view**. A new saved view is yours alone.
-- **Finding them.** **Saved views (n)**, on the case line, opens the **Saved views** panel; the **Cases**
-  panel, from **All cases**, lists each case's saved views too. The list starts with **The whole case**,
+- **Finding them.** **Saved views (n)**, on the case line, opens the **Saved views** panel: on the case's
+  own screen it is the one route to them, and the **Cases** panel, from **All cases**, still lists each
+  case's saved views. The list starts with **The whole case**,
   marked *Open now* when no saved view is open, and offering **Open** (*Open the whole case*, to a screen
   reader) while one is, which does what **Back to the whole case** does. Then each saved view you may see,
   with its *Private* or *Shared* tag. One saved under the name the Glass gives a selection ("Selection of
