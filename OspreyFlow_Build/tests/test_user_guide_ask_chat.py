@@ -61,7 +61,9 @@ def test_section_6_says_an_answer_with_no_document_comes_from_links_and_events()
 
 
 def test_section_6_says_ask_the_model_about_these_saves_a_private_view() -> None:
-    bar = (SRC / "canvas" / "SelectionBar.tsx").read_text(encoding="utf-8")
+    actions = (SRC / "canvas" / "selectionActions.ts").read_text(encoding="utf-8")
+    label = re.search(r'^  ask: "([^"]+)",$', actions, re.MULTILINE)
+    assert label, "the selection's ask action, in the one list the bar and the menu share (Part C)"
     canvas = (SRC / "canvas" / "GlassCanvas.tsx").read_text(encoding="utf-8")
     m = re.search(r"async function askAboutSelected\(\).*?\n    \}\n", canvas, re.DOTALL)
     assert m and "saveSelection(" in m.group(0) and "onAskInView?.(saved.view)" in m.group(0)
@@ -70,8 +72,7 @@ def test_section_6_says_ask_the_model_about_these_saves_a_private_view() -> None
     shared = next(s for s in view.body if isinstance(s, ast.AnnAssign) and getattr(s.target, "id", "") == "shared")
     private = isinstance(shared.value, ast.Constant) and shared.value.value is False
     text = ask_paragraph()
-    assert "Ask the model about these…" in bar
-    assert ("**Ask the model about these…** on any selection saves it as a private view and asks there" in text) is private
+    assert (f"**{label.group(1)}** on any selection saves it as a private view and asks there" in text) is private
     assert "starts a case of its own" not in text
 
 
