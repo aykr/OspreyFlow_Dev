@@ -125,7 +125,8 @@ def test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it() -> None:
     assert "Views in this case" not in banner and "Saved views (" in banner and "Saved view: " in banner
     assert '"reads no dataset"' in BANNER and '"reads no dataset"' in three
     assert "Case</span>" in BANNER and '"You are in the Glass · Case ‹name› ▾ · Saved views (n) · reads ‹dataset›"' in three
-    assert "**Saved views (n)**, n being how many saved views you may see, opens the **Saved views** panel" in three
+    assert ("**Saved views (n)**, n being how many saved views you may see (**Saved views** alone while they are still "
+            "being read), opens the **Saved views** panel") in three  # fmt: skip
     assert 'While a saved view is open, the line shows it after the case\'s name: "› Saved view: ‹name›".' in three
     cross = re.search(r'label: "(Open this case[^"]+)"', BANNER)
     assert cross and f"**{cross.group(1)}**" in three
@@ -134,7 +135,6 @@ def test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it() -> None:
     # The banner's own order: the case, the open saved view, then its button.
     assert banner.index("› Saved view: {openView}") < banner.index("{savedViewsLabel(savedViews)}")
     assert 'return typeof count === "number" ? `Saved views (${count.toLocaleString("en-GB")})` : "Saved views";' in banner
-    assert "(**Saved views** alone while they are still being read)" in three
     assert "the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads" in _row("Context banner")
 
 
