@@ -221,3 +221,35 @@ step 4 run tree (8ba5ed6, on main e684ef1) predates ADR-124 Amendment 20 (3c96ba
 from every vertex in the store (`g.V().has("id",within(…))`), and a search page with two or more hits calls it to
 merge them while a suggestion never does; that is the leading account of the gap, to be shown by measurement, not
 assumed (the orchestrator's ask: the same 200 exact sends, under the runner's limits and without them).
+
+**The gap, measured: the merge's `edges_among` as step 4's tree built it.** `profile_gap.py` (at 576e4d7, landed with
+this record's 41cb3dd), M5's own sends (`exact`, 20 discarded, 200 timed, one at a time), on d under rules' lease,
+21:19–21:29Z, the host idle before each arm (load 0.4, 1.4, 2.0; no make, nothing else of the lanes'):
+
+| Arm | Run | Tree | Limits | p50 / p95 / max | sends 1–20 / 21–100 / 101–200 (median) |
+| --- | --- | --- | --- | --- | --- |
+| A | 20261114T211950Z-4c2ca32c | 9ec3111 (main 10ff9e2, Am 20 and Am 21 in it) | the poc's ('2', '4g') | 114.9 / 131.1 / 234.3 ms | 123.1 / 116.4 / 111.6 ms |
+| B | 20261114T212247Z-5d32f686 | the same | none (`STEP4_NO_LIMITS=1`) | 102.0 / 115.6 / 223.1 ms | 109.1 / 102.2 / 100.1 ms |
+| D | 20261114T212406Z-502a1067 | 8ba5ed6, step 4's own (a `git archive` export, deleted after) | the poc's | 895.7 / 979.0 / 1,038.2 ms | 896.9 / 908.3 / 890.7 ms |
+
+In arm A, in process, the merge's `edges_among` on the first 20 pages' own hits (20 ids a page) took a median 43.1 ms
+(max 58.7) as built today and 808.3 ms (max 860.1) as step 4's tree sent it (e684ef1's `g.V().has("id",within(…))`,
+which starts from every vertex in the store); both found 0 links. So:
+- **The code accounts for the gap.** Step 4's tree pages at 896 ms p50 (step 4 measured 857), today's at 115 ms; the
+  difference, about 780 ms, is the old merge's 808 ms less today's 43 ms. ADR-124 Amendment 20 (3c96ba7) removed it.
+- **The CPU cap does not:** about 13 ms (A 114.9 against B 102.0 ms p50), some 11% of today's page.
+- **Warm-up does not:** the first 20 timed sends are within about 10% of the last 100 in every arm.
+- **Queueing and sends in sequence do not:** every arm sends one at a time, the same in each.
+
+**d brought down and back, and what step 4 left in the load.** Rules brought d down at 21:31Z in error, then started
+and leased it again at 21:31:12Z. The load was checked with the drift check, run 20261114T213214Z-720ab469: "search
+index drift: none (570515 nodes in the graph, 642515 documents in the index)", 55 more of each than B's record (570,460
+and 642,460). The 55 are M6's own draws, every one: in d's index `names:M6*` gives exactly 55 hits, each a Person named
+`m6<unique>` (the index's form of `measure_lag`'s label "M6 <unique>"), OFFICIAL, owned by unit-intel, in the intel
+case's own analyst layer (dataset 01M7C2SXCXTFR58WWW6F75NAYF, "Analyst layer: 01M7C2SXAPP3RF8QRSR2SKEMJK", by
+Postgres's datasets row), drawn 14:50:31–14:52:00Z at the end of step 2's measured run (20261114T143856Z-516ef319): the
+50 timed and the warm-up. Nothing else wrote to the graph: the conformance and Account cases used throwaway databases of
+their own, and M10, the profiles and the equivalence run only read. So B's load on d is B's record plus M6's draws, and
+a later run's M6 adds its own; a measure reading the whole load (M7, M8) is to count from the drift check's figures,
+not B's record.
+

@@ -81,6 +81,23 @@ def test_the_conduit_and_worker_run_at_the_poc_manifest_s_own_limits(workload: s
     assert f"--memory-swap={memory}" in argv, "no swap beyond the limit"
 
 
+@pytest.mark.parametrize("workload", ["api", "worker"])
+def test_a_run_asked_for_without_limits_runs_without_them_and_says_so(
+    workload: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gap's measurement (the orchestrator, 14 November 2026): the same sends at the poc's
+    limits and without them, to show what the CPU cap accounts for. Only `STEP4_NO_LIMITS=1`
+    drops them; anything else, or nothing, keeps them."""
+    monkeypatch.setenv("STEP4_NO_LIMITS", "1")
+    argv = step4.service_argv("r1", "n", "img", workload, {}, ["x"])
+    assert not [a for a in argv if a.startswith(("--cpus", "--memory"))], argv
+    assert step4.limits_said() == "without the poc's limits (STEP4_NO_LIMITS=1)"
+    monkeypatch.setenv("STEP4_NO_LIMITS", "yes")
+    argv = step4.service_argv("r1", "n", "img", workload, {}, ["x"])
+    assert any(a.startswith("--cpus=") for a in argv), "only 1 drops them"
+    assert step4.limits_said().startswith("at the poc's limits")
+
+
 def test_nothing_is_bound_beyond_the_host_s_loopback() -> None:
     conduit = step4.conduit_command(8123)
     assert conduit[conduit.index("--host") + 1] == "127.0.0.1"
