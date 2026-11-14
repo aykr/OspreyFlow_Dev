@@ -160,15 +160,18 @@ at. That is Phase 8a's and does not apply here.
 On the client's platform the stores are not containers on one machine and there is no `harness.backup`:
 the managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning, and **this section covers what the deployment runs
-itself**: ArcadeDB, ClickHouse and, in the proof-of-concept shape, the Ingest root's claim
+itself**: ArcadeDB, ClickHouse, the shared claim's published pipelines (`data/recipes`), model settings
+(`model-settings`) and map settings with the map key file (`map-settings`), in every shape (ADR-148
+Amendment 13), and in the proof-of-concept shape the Ingest root's claim beside them
 (`ospreyflow-ingest`: uploads and the drop folder). **The restore below is supported for one copy of
 each store** (development, and the proof-of-concept shape); the production shape's (three ArcadeDB
 copies, ClickHouse ON CLUSTER with two replicas) is not supported yet, and the render refuses it.
 
 **The schedule.** Two CronJobs, daily at 02:15 UTC (their time zone is UTC whatever the cluster's):
-`ospreyflow-backup` (ArcadeDB's `BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in the
-proof-of-concept shape, `ospreyflow-backup-claims` (each claim of its own, read-only, beside the pods
-that mount it). Both write one set, `s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by their
+`ospreyflow-backup` (ArcadeDB's `BACKUP DATABASE`, then ClickHouse's `BACKUP … TO S3`) and, in every
+shape, `ospreyflow-backup-claims` (the shared claim's three parts and, in the proof-of-concept shape, each
+claim of its own, all read-only, beside the pods that mount them). Both write one set,
+`s3://<prefix>backups/sets/<YYYYMMDDTHHMMSSZ>/`, named by their
 schedule slot; `manifest.json` is written last, only once every part is there, with the time the set
 finished. A set without it is unfinished and is never restored from. Every object is encrypted by the
 backups bucket's own KMS key (`alias/<namespace>-backups`). Two roles write it, each to its own prefix
