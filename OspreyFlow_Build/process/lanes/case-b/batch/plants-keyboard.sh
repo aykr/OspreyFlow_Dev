@@ -39,14 +39,14 @@ plant "Try the batch job again out of the Tab order" "$UI" \
   's/<button type="button" className="btn btn--primary" onClick=\{\(\) => setAttempt/<button type="button" className="btn btn--primary" tabIndex={-1} onClick={() => setAttempt/' \
   "tried again by keyboard" "a failed batch job is tried again by keyboard, and runs to its view"
 plant "the stage's words faint against the panel (dark)" "$CSS" \
-  's/\.batch-expansion__status \{ margin: 0 0 var\(--sp-8\); font-weight: 600; \}/.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; color: var(--surface-raised); opacity: 0.6; }/' \
+  's/\.batch-expansion__status \{ margin: 0 0 var\(--sp-8\); font-weight: 600; \}/.batch-expansion__status { margin: 0 0 var(--sp-8); font-weight: 600; color: #30343b; }/' \
   "running, has no automated.*\\(dark\\)" "the batch job's panel, running, has no automated WCAG 2.2 A or AA violation \\(dark\\)"
 plant "the refusal's words faint against the panel (GOV.UK)" "$CSS" \
-  's/\.batch-expansion__message \{ margin: 0 0 var\(--sp-12\); font-weight: 600; \}/.batch-expansion__message { margin: 0 0 var(--sp-12); font-weight: 600; color: var(--surface-raised); opacity: 0.6; }/' \
+  's/\.batch-expansion__message \{ margin: 0 0 var\(--sp-12\); font-weight: 600; \}/.batch-expansion__message { margin: 0 0 var(--sp-12); font-weight: 600; color: #c8c8c8; }/' \
   "refused, has no automated.*\\(govuk\\)" "the batch job's panel, refused, has no automated WCAG 2.2 A or AA violation \\(govuk\\)"
-plant "the panel's region left without a name" "$UI" \
-  's/role="region" aria-labelledby="batch-expansion-title"/role="region"/' \
-  "done, has no automated.*\\(light\\)" "the batch job's panel, done, has no automated WCAG 2.2 A or AA violation \\(light\\)"
+plant "the panel's buttons shrunk below the target size (light)" "$CSS" \
+  's/\.batch-expansion__actions \{ display: flex; gap: var\(--sp-8\); flex-wrap: wrap; \}/.batch-expansion__actions { display: flex; gap: 0; flex-wrap: wrap; }\n.batch-expansion__actions .btn { min-height: 0; min-width: 0; height: 12px; padding: 0; font-size: 8px; line-height: 1; }/' \
+  "failed, has no automated.*\\(light\\)" "the batch job's panel, failed, has no automated WCAG 2.2 A or AA violation \\(light\\)"
 
 out="$(run)"
 if grep -qE "^\s+[0-9]+ passed" <<<"$out" && ! grep -qE "^\s+[0-9]+ failed" <<<"$out"; then
