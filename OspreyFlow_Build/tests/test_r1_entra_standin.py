@@ -424,3 +424,58 @@ def test_r1s_tenant_has_the_four_people_the_dashboards_check_signs_in() -> None:
         ("reader@r1.test", "b1"), ("builder@r1.test", "b2"), ("nobody@r1.test", "b3")]
     assert all(u["claims"] == users[0]["claims"] for u in users[1:])
     assert all("roles" not in u["claims"] for u in users)
+
+
+# ---- ADR-148 Amendment 18: the API registration's access-token version ---------------------------
+
+
+@pytest.fixture
+def standin_v1() -> Iterator[str]:
+    config = {**CONFIG, "api": {**CONFIG["api"], "access_token_version": "1.0"}}
+    server = _module().make_server("entra", config, "127.0.0.1", 0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def _claims_unverified(token: str) -> dict[str, Any]:
+    return jwt.decode(token, options={"verify_signature": False})
+
+
+def test_a_v1_api_registration_gets_v1_access_tokens_as_entra_issues_them(standin_v1: str) -> None:
+    """A registration left at requestedAccessTokenVersion 1 (or null): the API's token is v1.0, its
+    issuer sts.windows.net, its audience the application id URI, `appid` for `azp`."""
+    status, answer = _post(_token_url(standin_v1), {
+        "grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
+        "scope": f"api://{API}/.default",
+    })  # fmt: skip
+    assert status == 200, answer
+    claims = _claims_unverified(answer["access_token"])
+    assert claims["ver"] == "1.0" and claims["iss"] == f"https://sts.windows.net/{TENANT}/"
+    assert claims["aud"] == f"api://{API}" and claims["appid"] == REPORTS and "azp" not in claims
+
+
+def test_a_v1_registration_s_glass_sign_in_keeps_its_id_token_at_v2(standin_v1: str) -> None:
+    code, verifier = _glass_code(standin_v1)
+    status, answer = _post(_token_url(standin_v1), {
+        "grant_type": "authorization_code", "client_id": GLASS, "code": code,
+        "redirect_uri": GLASS_REDIRECT, "code_verifier": verifier,
+    })  # fmt: skip
+    assert status == 200, answer
+    access = _claims_unverified(answer["access_token"])
+    assert access["ver"] == "1.0" and access["upn"] == "admin@r1.test" and "azp" not in access
+    ident = _claims_unverified(answer["id_token"])
+    assert ident["iss"] == f"https://login.microsoftonline.com/{TENANT}/v2.0"
+
+
+def test_the_default_registration_s_tokens_stay_v2(standin: str) -> None:
+    status, answer = _post(_token_url(standin), {
+        "grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
+        "scope": f"api://{API}/.default",
+    })  # fmt: skip
+    assert status == 200
+    assert _claims_unverified(answer["access_token"]).get("ver", "2.0") == "2.0"

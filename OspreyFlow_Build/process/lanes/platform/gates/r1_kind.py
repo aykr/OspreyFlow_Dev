@@ -301,10 +301,16 @@ def entra_config() -> dict[str, Any]:
         "claims": {claims["clearance"]["claim"]: "OFFICIAL-SENSITIVE",
                    "groups": [*claims["org_unit"]["groups"], *claims["handling_codes"]["groups"]]},
     }
+    # ADR-148 Amendment 18: the API registration's access-token version, set for one run (step 6's
+    # live check of the Conduit's words on a v1.0 token); unset, Entra's v2.0 as the poc asks for.
+    version = os.environ.get("R1_ENTRA_TOKEN_VERSION", "2.0").strip() or "2.0"
+    if version not in ("1.0", "2.0"):
+        raise SystemExit(f"R1_ENTRA_TOKEN_VERSION={version!r}: Entra issues access tokens as 1.0 or 2.0")
     return {
         "tenant_id": claims["tenant_id"],
         "jwks": [entra_keys()["jwk"]],
-        "api": {"app_id": api, "identifier": f"api://{api}", "scopes": [claims.get("scope", "access_as_user")]},
+        "api": {"app_id": api, "identifier": f"api://{api}", "scopes": [claims.get("scope", "access_as_user")],
+                "access_token_version": version},
         "clients": {
             claims["client_id"]: {"redirect_uris": [f"https://{GLASS}/"], "delegated": [claims.get("scope", "access_as_user")]},
             superset["client_id"]: {"secret": made["superset"], "delegated": superset["delegated"],

@@ -1,0 +1,18 @@
+# v052-tokver (2026-11-14T11:25:05Z): ADR-148 Amendment 18 in R1's Entra stand-in. platform-b's standin_v1.diff (lane/platform-b-v052-tokver
+# 85bf13f, its own proof there: test_standin_v1.py, conduit-red-first.txt) applied to r1_kind_servers.py as written, and the run's
+# setting R1_ENTRA_TOKEN_VERSION read into entra_config()'s api (unset: 2.0, as before; an unknown version refused in words).
+# Offline, closed ports, OSPREY_LANE and R1_ENTRA_TOKEN_VERSION unset. The first case's red before the wiring:
+FAILED tests/test_r1_kind_standins.py::test_a_token_version_entra_does_not_issue_is_refused_in_words
+1 failed, 19 deselected in 0.73s
+One plant per check at its real line (plants.py), each restored:
+plant 1: the stand-in's API tokens left v2.0 whatever the registration (the diff unapplied)
+  tests/test_r1_entra_standin.py::test_a_v1_api_registration_gets_v1_access_tokens_as_entra_issues_them: RED (1 failed in 1.78s)
+plant 2: the person's v1 token without upn
+  tests/test_r1_entra_standin.py::test_a_v1_registration_s_glass_sign_in_keeps_its_id_token_at_v2: RED (1 failed in 1.73s)
+plant 3: the run's setting not read
+  tests/test_r1_kind_standins.py::test_the_entra_stand_in_s_api_tokens_are_v2_unless_a_run_asks_for_v1: RED (1 failed in 0.70s)
+plant 4: an unknown version let through
+  tests/test_r1_kind_standins.py::test_a_token_version_entra_does_not_issue_is_refused_in_words: RED (1 failed in 0.62s)
+4/4 red
+Green: tests/test_r1_entra_standin.py and tests/test_r1_kind_standins.py 42 passed; with the R1 upgrade and decommission suites 51.
+Its live half (the Conduit's words on a v1.0 sign-in through the stand-in on kind) is step 6's, on the 18th.

@@ -402,3 +402,25 @@ def test_r1_s_poc_declares_secret_so_step_6_can_seed(monkeypatch) -> None:  # ty
     )
     monkeypatch.setenv("OSPREY_HIGHEST_MARKING", values["environment"]["OSPREY_HIGHEST_MARKING"])
     assert seed_poc._ceiling_refusal() is None
+
+
+# ---- ADR-148 Amendment 18: the API's access-token version, set for one run --------------------------
+
+
+def test_the_entra_stand_in_s_api_tokens_are_v2_unless_a_run_asks_for_v1(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """Entra issues the API's access tokens in the version its registration asks for
+    (`requestedAccessTokenVersion`), so step 6's live check of Amendment 18's words sets it for one
+    run (`R1_ENTRA_TOKEN_VERSION`); unset, the stand-in is as it was (2.0)."""
+    r1_kind = _r1_kind()
+    monkeypatch.delenv("R1_ENTRA_TOKEN_VERSION", raising=False)
+    assert r1_kind.entra_config()["api"].get("access_token_version", "2.0") == "2.0"
+    monkeypatch.setenv("R1_ENTRA_TOKEN_VERSION", "1.0")
+    api = r1_kind.entra_config()["api"]
+    assert api["access_token_version"] == "1.0" and api["identifier"].startswith("api://")
+
+
+def test_a_token_version_entra_does_not_issue_is_refused_in_words(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    r1_kind = _r1_kind()
+    monkeypatch.setenv("R1_ENTRA_TOKEN_VERSION", "3.0")
+    with pytest.raises(SystemExit, match="R1_ENTRA_TOKEN_VERSION"):
+        r1_kind.entra_config()
