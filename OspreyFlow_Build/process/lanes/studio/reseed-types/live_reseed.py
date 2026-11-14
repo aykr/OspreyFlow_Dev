@@ -41,8 +41,11 @@ PACKS = [
 ]
 #: ADR-124 Amendment 18's refusals, and any other refusal a write can meet, in their own words.
 REFUSAL = re.compile(
-    r"held by a node of another type|give it an id of its own|refus|Traceback|Error:", re.IGNORECASE
+    r"held by a node of another type|give it an id of its own|refused|Traceback|Error:",
+    re.IGNORECASE,
 )
+#: The seed's own words that name a refusal without one happening (seed_pid's help on a reset).
+NOT_A_REFUSAL = re.compile(r"If a rehearsal reset ever refuses")
 SCRATCH = Path(tempfile.mkdtemp(prefix="reseed-live-"))
 
 
@@ -77,9 +80,10 @@ async def counts(dataset_id: str) -> dict[str, int]:
     return found
 
 
-def seed(module: str, case_name: str) -> tuple[int, str]:
+def seed(module: str, case_name: str, unit: str | None) -> tuple[int, str]:
+    unit_args = ["--org-unit", unit] if unit else []
     done = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", module, "--case-name", case_name],
+        [sys.executable, "-m", module, "--case-name", case_name, *unit_args],
         cwd=CORE,
         env=environment(),
         capture_output=True,
@@ -90,13 +94,24 @@ def seed(module: str, case_name: str) -> tuple[int, str]:
 
 
 def main() -> int:
+    """`--only <pack>` runs one pack; `--org-unit <pack>=<unit>` seeds a pack as the unit that owns its
+    dataset on the stack, as `seed_internal` passes the owning unit (`sharing.unit`)."""
+    argv = sys.argv[1:]
+    only = argv[argv.index("--only") + 1] if "--only" in argv else None
+    units = dict(
+        argv[i + 1].split("=", 1) for i, a in enumerate(argv) if a == "--org-unit" and i + 1 < len(argv)
+    )
     bad = 0
     for pack, module, dataset in PACKS:
+        if only and pack != only:
+            continue
         print(f"=== {pack} ({module}, dataset {dataset.id})", flush=True)
         print("before:", asyncio.run(counts(dataset.id)), flush=True)
         for run in ("seed (as main)", "reseed (at main)"):
-            code, said = seed(module, dataset.case_name or "")
-            refusals = [ln for ln in said.splitlines() if REFUSAL.search(ln)]
+            code, said = seed(module, dataset.case_name or "", units.get(pack))
+            refusals = [
+                ln for ln in said.splitlines() if REFUSAL.search(ln) and not NOT_A_REFUSAL.search(ln)
+            ]
             after = asyncio.run(counts(dataset.id))
             print(f"{run}: exit {code}; {len(refusals)} refusal line(s)", flush=True)
             for line in refusals[:20]:
