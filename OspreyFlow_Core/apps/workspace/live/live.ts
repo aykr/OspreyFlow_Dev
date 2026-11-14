@@ -127,3 +127,12 @@ export function pageErrors(page: Page): string[] {
   });
   return seen;
 }
+
+/** Unfolds a side panel by its header's button (`layout/SidePanelStack.tsx`): every panel but the
+ * Inspector starts folded (DEFAULT_FOLDED), so a spec that uses one shows it first, as a person does. */
+export async function unfoldSidePanel(page: Page, name: string): Promise<void> {
+  const header = page.getByRole("button", { name, exact: true });
+  await expect(header, `the graph has no ${name} panel`).toBeVisible();
+  if ((await header.getAttribute("aria-expanded")) === "false") await header.click();
+  await expect(header).toHaveAttribute("aria-expanded", "true");
+}

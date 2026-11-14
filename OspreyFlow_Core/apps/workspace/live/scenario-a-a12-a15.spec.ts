@@ -11,7 +11,7 @@
 // DECISION_NEEDED.md.)
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly, pageErrors, workingSetCounts } from "./live";
+import { freshWorkspaceUrl, liveOnly, pageErrors, unfoldSidePanel, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -86,9 +86,13 @@ async function expandFromTheSelectedNode(
         `The page's errors:\n${errors.join("\n") || "(none)"}`,
     );
   }
+  // Under *Expand by link type*, each type by its name as people read it ("Associate of (8)"), not
+  // the ontology's own (`ASSOCIATE_OF`): ADR-098 Amendment 8 (14 November 2026, the live tier).
+  const label = edgeType.charAt(0) + edgeType.slice(1).toLowerCase().replace(/_/g, " ");
   const expandItem = menu
+    .getByRole("group", { name: "Expand by link type" })
     .getByRole("menuitem")
-    .filter({ hasText: new RegExp(`^${edgeType}\\b`) })
+    .filter({ hasText: new RegExp(`^${label} \\(`) })
     .first();
   await expect(
     expandItem,
@@ -106,7 +110,7 @@ async function expandFromTheSelectedNode(
     expandItem,
     `${edgeType} still previews as (0) or (…) on a node that has neighbours — the radial menu's ` +
       "cardinality is not reaching /expand/preview",
-  ).not.toHaveText(new RegExp(`^${edgeType}\\s*\\((0|…)\\)`));
+  ).not.toHaveText(new RegExp(`^${label}\\s*\\((0|…)\\)`));
 
   await expandItem.click();
 }
@@ -161,8 +165,10 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
     if (r.url().includes("/compute/clique_metric")) computed.push(r.status());
   });
 
-  // The Metrics panel starts closed (ADR-070).
-  await page.getByRole("button", { name: /^Ranking/ }).click();
+  // The Metrics panel is a side panel, folded until shown, and its Ranking section opens within it.
+  await unfoldSidePanel(page, "Metrics");
+  const ranking = page.getByRole("button", { name: /^Ranking/ });
+  if ((await ranking.getAttribute("aria-expanded")) === "false") await ranking.click();
   await page
     .getByRole("combobox", { name: "Primary metric" })
     .selectOption("clique_metric");

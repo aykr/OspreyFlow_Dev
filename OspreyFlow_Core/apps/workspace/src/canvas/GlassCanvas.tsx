@@ -497,6 +497,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
+    /** Sigma's own element, which React draws nothing into. `sigma.kill()` empties its container
+     * (`while (container.firstChild) container.removeChild(...)`), so it must never be the element
+     * React draws the toolbar, menus and selection bar into: under StrictMode, as the App is mounted
+     * (`main.tsx`), the effect's cleanup runs once on mount, emptied them out from under React, and
+     * the next one React inserted among them threw `insertBefore`, throwing away the whole tree
+     * (found live, 14 November 2026; `keyboard/canvas-strict-mode.spec.ts`). */
+    const sigmaContainerRef = useRef<HTMLDivElement>(null);
     const modifierListenersRef = useRef<(() => void) | null>(null);
     const resizeObserverRef = useRef<ResizeObserver | null>(null);
     const dimmedEdgeIdsRef = useRef<ReadonlySet<string>>(EMPTY_DIMMED_SET);
@@ -1528,7 +1535,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     }, [dimmedNodeIds]);
 
     useEffect(() => {
-      if (!containerRef.current) return;
+      if (!containerRef.current || !sigmaContainerRef.current) return;
       // `Sigma`'s own constructor calls `refresh()` synchronously — which,
       // for a graph that already has nodes at mount time (a history
       // restore, an opened view, or this checkpoint's own perf-fixture harness —
@@ -1546,7 +1553,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const sigma = new Sigma<
         WorkingSetNodeAttributes,
         WorkingSetEdgeAttributes
-      >(graph, containerRef.current, {
+      >(graph, sigmaContainerRef.current, {
         // The toolbar above and the selection bar below sit over the canvas: fitting with Sigma's
         // 30px framed the outermost nodes under them (found live, 11 October 2026).
         stagePadding: 80,
@@ -3473,6 +3480,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       >
         {/* ADR-097 step 2 (design review item 12): the canvas's tools, one docked row of labelled
             groups; Show is one segmented control. */}
+        {/* Sigma draws here and only here; React renders nothing inside it (see sigmaContainerRef). */}
+        <div ref={sigmaContainerRef} className="network-canvas__sigma" style={{ position: "absolute", inset: 0 }} />
         <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar" ref={toolbarRef}>
           <div role="group" aria-label="Select" className="canvas-toolbar__group">
             <button

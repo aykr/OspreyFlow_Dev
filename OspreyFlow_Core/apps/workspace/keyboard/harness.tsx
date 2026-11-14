@@ -8,7 +8,7 @@
 // way to reach, and a real `expand` network call `keyboard.spec.ts`
 // intercepts via `page.route` rather than this harness faking it.
 import { createRoot } from "react-dom/client";
-import { createRef, useEffect, useState } from "react";
+import { createRef, StrictMode, useEffect, useState } from "react";
 
 import "../src/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
@@ -408,8 +408,11 @@ function HarnessSelectionList() {
 }
 const selectionListeners = new Set<(ids: string[]) => void>();
 
+// `?strict=1`: under React's StrictMode, as `src/main.tsx` mounts the App, so each effect runs, is
+// cleaned up and runs again on mount, as in every dev build (the live tier's, DEMO_GUIDE.md §3.6's).
+const Mount = new URLSearchParams(window.location.search).get("strict") === "1" ? StrictMode : "div";
 createRoot(container).render(
-  <>
+  <Mount {...(Mount === "div" ? { style: { display: "contents" } } : {})}>
     <GlassCanvas
       lastChange={lastChange}
       ref={canvasHandle}
@@ -498,7 +501,7 @@ createRoot(container).render(
         }}
       />
     )}
-  </>,
+  </Mount>,
 );
 
 // a11y/every-harness.spec.ts (ADR-078 Amendment 1): the canvas's menu open, by the keyboard's own route — the
