@@ -401,7 +401,7 @@ def keeper_config(keepers: int) -> str:
 
 def _environment(config: OspreyConfig) -> dict[str, str]:
     """Lite's `deployment.env`, as the cluster's ConfigMap, with what a cluster adds."""
-    from harness.render import _render_env
+    from harness.render import MODEL_TIMEOUTS, _render_env
 
     environment: dict[str, str] = {}
     for line in _render_env(config).splitlines():
@@ -423,6 +423,12 @@ def _environment(config: OspreyConfig) -> dict[str, str]:
             "VALKEY_TLS": "true" if valkey.tls else "false",
         }
     )
+    # ADR-135 Amendment 13's model timeouts: compose reads them as `${VAR:-default}`, which the
+    # translation below reads as a secret with a default when the environment does not hold the
+    # name. They are tunables, so the environment holds each at its default, for the operator to
+    # change there (found by chart-check on main, 14 November 2026, after 47824b7).
+    for name, seconds in MODEL_TIMEOUTS.items():
+        environment.setdefault(name, seconds)
     for port_variable in ("OSPREY_API_PORT", "OSPREY_ARCADEDB_PORT"):
         # Published ports are Lite's; a cluster's one door is the proxy's load balancer.
         environment.pop(port_variable, None)
