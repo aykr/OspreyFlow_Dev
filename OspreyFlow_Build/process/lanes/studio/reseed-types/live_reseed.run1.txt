@@ -1,0 +1,32 @@
+Running on ospreyflow-test (stack f, osprey-runs/studio/), logged at osprey-runs/studio.meta/runs/20261114T131658Z-5e49020f/log: bash -c echo "load at start: $(uptime)"; OspreyFlow_Core/.venv/bin/python OspreyFlow_Build/process/lanes/studio/reseed-types/live_reseed.py; rc=$?; echo "load at end: $(uptime)"; exit $rc
+load at start:  13:16:59 up 18 days, 21:55,  8 users,  load average: 6.85, 2.61, 4.97
+=== fixture-corp (scripts.seed_fixture_corp, dataset fixture-corp)
+Traceback (most recent call last):
+  File "/root/osprey-runs/studio/OspreyFlow_Build/process/lanes/studio/reseed-types/live_reseed.py", line 105, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/process/lanes/studio/reseed-types/live_reseed.py", line 88, in main
+    print("before:", asyncio.run(counts(dataset.id)), flush=True)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/asyncio/base_events.py", line 687, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Build/process/lanes/studio/reseed-types/live_reseed.py", line 63, in counts
+    rows = await client.sql(
+           ^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Core/packages/adapters/graph_arcadedb/client.py", line 458, in sql
+    return await self.command("sql", command, params=params, session_id=session_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/osprey-runs/studio/OspreyFlow_Core/packages/adapters/graph_arcadedb/client.py", line 492, in command
+    self._raise_for_error(resp)
+  File "/root/osprey-runs/studio/OspreyFlow_Core/packages/adapters/graph_arcadedb/client.py", line 519, in _raise_for_error
+    raise ArcadeDBError(
+adapters.graph_arcadedb.client.ArcadeDBError: ArcadeDB error 500: {"error":"Internal error","requestId":"372f1bf325057ab-1","exception":"com.arcadedb.exception.SchemaException","detail":"Type with name 'V' was not found"}
+load at end:  13:17:00 up 18 days, 21:55,  9 users,  load average: 7.50, 2.82, 5.03
+Wall time: 2 s, exit 1 (stack f, the lease studio took at 2026-11-14T13:15:51Z; set-up before it 10 s)

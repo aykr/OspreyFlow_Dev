@@ -59,14 +59,22 @@ def environment() -> dict[str, str]:
 async def counts(dataset_id: str) -> dict[str, int]:
     """The pack's nodes by type, by its dataset, as the store holds them now."""
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    found: dict[str, int] = {}
     try:
-        rows = await client.sql(
-            "SELECT @type AS t, count(*) AS n FROM V WHERE datasets CONTAINS :d GROUP BY @type",
-            params={"d": dataset_id},
-        )
+        await client.create_database_if_absent()
+        types = await client.sql("SELECT name FROM schema:types WHERE type = 'vertex'")
+        for row in types:
+            name = str(row["name"])
+            counted = await client.sql(
+                f"SELECT count(*) AS n FROM `{name}` WHERE datasets CONTAINS :d",
+                params={"d": dataset_id},
+            )
+            n = int(counted[0]["n"]) if counted else 0
+            if n:
+                found[name] = n
     finally:
         await client.aclose()
-    return {str(r["t"]): int(r["n"]) for r in rows}
+    return found
 
 
 def seed(module: str, case_name: str) -> tuple[int, str]:
