@@ -44,6 +44,8 @@ declare global {
       pictureRequested?: string | null;
       /** An expansion the cap refused, its *Save a smaller view* chosen (spec/00 §4): the figure handed up. */
       savedSmallerView?: { would_be: number; cap: number; subject: string | undefined } | null;
+      /** At `?batch=1`, what *Run as a batch job* handed up (ADR-151's slot, case-b's handler). */
+      batchRequested?: { nodeId: string; edgeType: string | null; depth: number; would_be: number } | null;
     };
     __CANVAS__?: {
       viewportPositionOf: (nodeId: string) => { x: number; y: number } | null;
@@ -67,6 +69,8 @@ declare global {
       /** Land a `reproject` delta, as the server sends when the resolution slider moves: each node
        * named takes the cluster id given. */
       reproject: (clusterIds: Record<string, string>) => void;
+      /** Land a `remove` delta for one node, as when another reader's change takes it out. */
+      removeNode?: (nodeId: string) => void;
       /** The cluster id the working set holds on a node now (ADR-124: what a manual link's answer
        * moved), or `null` when it holds none. */
       clusterOf: (nodeId: string) => string | null;
@@ -169,6 +173,8 @@ window.__CANVAS__ = {
   setTheme: (theme) => applyTheme(theme),
   nodeImage: (id) => (workingSet.graph.hasNode(id) ? (workingSet.graph.getNodeAttribute(id, "image") as string) : null),
   hasNode: (id) => workingSet.graph.hasNode(id),
+  removeNode: (id) =>
+    workingSet.store.getState().applyDelta({ seq: workingSet.store.getState().seq + 1, op: "remove", node_ids: [id] }),
   reproject: (clusterIds) =>
     workingSet.store.getState().applyDelta({
       seq: workingSet.store.getState().seq + 1,
@@ -439,6 +445,13 @@ createRoot(container).render(
       onSaveSmallerView={(refused, subject) => {
         window.__KEYBOARD__!.savedSmallerView = { would_be: refused.would_be, cap: refused.cap, subject };
       }}
+      onRunExpansionAsBatch={
+        new URLSearchParams(window.location.search).get("batch") === "1"
+          ? ({ nodeId, edgeType, depth, refused }) => {
+              window.__KEYBOARD__!.batchRequested = { nodeId, edgeType, depth, would_be: refused.would_be };
+            }
+          : undefined
+      }
       onSelectionChange={(ids) => {
         window.__KEYBOARD__!.selection = ids;
         for (const listener of selectionListeners) listener(ids);

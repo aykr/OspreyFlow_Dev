@@ -2679,7 +2679,7 @@ export function App() {
           bearerToken={bearerToken}
           investigationId={investigationId}
           title="This expansion is too large"
-          why={`Expanding ${expansionOverCap.subject ?? "it"} would take the canvas past what it can hold. Nothing has been added. You can save a smaller view of the case, private to you, and open that.`}
+          why={`${expansionOverCap.subject ? `Expanding ${expansionOverCap.subject}` : "This expansion"} would take the canvas past what it can hold. Nothing has been added. You can save a smaller view of the case, private to you, and open that.`}
           onViewOpened={(opened) => {
             setExpansionOverCap(null);
             setViewsRead((n) => n + 1);

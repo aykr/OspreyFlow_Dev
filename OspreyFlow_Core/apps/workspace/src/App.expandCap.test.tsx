@@ -119,7 +119,7 @@ afterEach(() => {
 const REFUSED = { error: "limit_exceeded", cap_kind: "nodes", cap: 50_000, would_be: 50_812, options: ["save_as_view", "filter", "promote_to_batch"] } as const;
 
 describe("an expansion the cap refused (spec/00 §4)", () => {
-  test("Save a smaller view opens the save form with the expansion's words, the cap's figure, and no Try again", async () => {
+  test("Save a smaller view shows the over-cap dialog with the expansion's words, the cap's figure, and no Try again", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     await waitFor(() => expect(canvasProps.current?.onSaveSmallerView).toBeTypeOf("function"));
@@ -131,5 +131,13 @@ describe("an expansion the cap refused (spec/00 §4)", () => {
     expect(screen.queryByText("Your view of this case is too large")).toBeNull();
     fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("heading", { name: "This expansion is too large" })).toBeNull());
+  });
+
+  test("with no name for the node, the reason is a whole sentence of its own", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onSaveSmallerView).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onSaveSmallerView!({ ...REFUSED, options: [...REFUSED.options] }, undefined));
+    expect(await screen.findByText(/^This expansion would take the canvas past what it can hold\. Nothing has been added\./)).toBeTruthy();
   });
 });

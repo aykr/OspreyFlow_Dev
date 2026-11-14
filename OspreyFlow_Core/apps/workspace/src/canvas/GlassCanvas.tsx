@@ -2365,6 +2365,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       depth = 1,
     ): Promise<void> {
       if (refusedInLens()) return;
+      // A new expansion asked for: an earlier one's cap refusal no longer stands.
+      setCapRefusal(null);
       const ask = {
         apiBaseUrl,
         bearerToken,
@@ -2441,6 +2443,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           if (body?.error === "limit_exceeded" && typeof body.cap === "number" && typeof body.would_be === "number") {
             const refused = body as LimitExceeded;
             const options = edgeType === null ? await narrowingFor(nodeId, depth) : [];
+            // Gone while its choices were counted (removed, another case): nothing to offer them for.
+            if (!graph.hasNode(nodeId)) return;
             setCapRefusal({ nodeId, edgeType, x, y, depth, refused, options });
             return;
           }
@@ -3863,7 +3867,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onClose={dismissActionError}
           />
         )}
-        {capRefusal && (
+        {capRefusal && graph.hasNode(capRefusal.nodeId) && (
           <CapRefusalPrompt
             x={capRefusal.x}
             y={capRefusal.y}
@@ -3874,7 +3878,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             onChooseType={(edgeType) => {
               const { nodeId, x, y, depth } = capRefusal;
               setCapRefusal(null);
-              void expandNode(nodeId, edgeType, x, y, depth);
+              // The node removed since the refusal: expanding it would draw its neighbours back.
+              if (graph.hasNode(nodeId)) void expandNode(nodeId, edgeType, x, y, depth);
             }}
             onSaveSmallerView={
               onSaveSmallerView
@@ -3890,7 +3895,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
                 ? () => {
                     const { nodeId, edgeType, depth, refused } = capRefusal;
                     setCapRefusal(null);
-                    onRunExpansionAsBatch({ nodeId, edgeType, depth, refused });
+                    if (graph.hasNode(nodeId)) onRunExpansionAsBatch({ nodeId, edgeType, depth, refused });
                   }
                 : undefined
             }

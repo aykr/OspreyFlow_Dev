@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 
 import { type CaseViewOpened, deleteView, openView, saveView } from "../views/viewsApi";
 import type { LimitExceeded } from "./models";
@@ -59,6 +59,8 @@ export function ViewOverCapDialog({
   why = "Work in this case by others has taken the part of it you are cleared to see past what the canvas can hold. You can save a smaller view of it, private to you, and open that, or try again.",
 }: ViewOverCapDialogProps) {
   const ref = useRef<HTMLDivElement>(null);
+  // Its own: the case's over-cap dialog and an expansion's can both be up at once.
+  const titleId = useId();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   const [choosing, setChoosing] = useState(false);
@@ -170,11 +172,11 @@ export function ViewOverCapDialog({
       className="view-over-cap"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="view-over-cap-title"
+      aria-labelledby={titleId}
       ref={ref}
       onKeyDown={holdFocus}
     >
-      <h2 id="view-over-cap-title" className="view-over-cap__title">
+      <h2 id={titleId} className="view-over-cap__title">
         {title}
       </h2>
       <p className="view-over-cap__figure">{figure(wouldBe)}</p>
