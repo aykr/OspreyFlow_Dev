@@ -895,10 +895,6 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   "open-rules-and-monitoring-from-home-by-keyboard",
   // ADR-145 Amendment 15 (the owner's ruling, Q2): Build a report beside Reports, a link to Superset in a new tab.
   "build-a-report-by-keyboard",
-  // The owner's ruling of 14 November 2026 (spec 02 §3, `BAR_FOLD_ORDER`): when the bar runs out of room on one line,
-  // a folded view chosen under More views, a folded Build a report followed from it, and a place from the folded places.
-  "folded-view-chosen-by-keyboard",
-  "folded-place-chosen-by-keyboard",
 ] as const);
 
 /** Rules and Monitoring (ADR-146 decisions 2 and 6, L2.9): its tabs, an alert opened at its own
