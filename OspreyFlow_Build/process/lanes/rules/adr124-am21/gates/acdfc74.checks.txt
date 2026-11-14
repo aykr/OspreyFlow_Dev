@@ -1,0 +1,29 @@
+rules-adr124-am21 checks at acdfc74 (on main f585330), on the Mac in the worktree, slot 9 and closed ports, no stack, no server
+== offline adapter and search tests (store tests deselected)
+........................................................................ [ 80%]
+..................                                                       [100%]
+90 passed in 20.40s
+-- offline adapter and search tests (store tests deselected) exit=0
+== citation-check
+doc-citations-check: 2977 file(s) scanned, every cited path exists.
+-- citation-check exit=0
+== test-file-coverage-check
+test-file-coverage-check: 1143 test file(s), 0 allowlisted, no new drift.
+-- test-file-coverage-check exit=0
+== ruff check .
+All checks passed!
+-- ruff check . exit=0
+== ruff format --check (adapter)
+188 |     """The client's `1 − N/ΣN` for one value, in one dataset (or across the case)."""
+    |
+
+1 file would be reformatted, 13 files already formatted
+-- ruff format --check (adapter) exit=1
+== mypy packages services harness
+Success: no issues found in 493 source files
+-- mypy packages services harness exit=0
+checks rc=1
+== ruff format --check (the branch's Core files: adapter.py, builders.py)
+2 files already formatted
+-- exit=0
+# The adapter-wide format check's one file is packages/adapters/graph_arcadedb/strength.py, which this branch does not touch: identical to main.
