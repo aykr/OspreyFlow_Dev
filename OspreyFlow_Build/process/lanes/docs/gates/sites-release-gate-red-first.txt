@@ -1,0 +1,6 @@
+# The release gate's test (tests/test_sites_design.py::test_the_build_refuses_a_release_its_pages_were_not_checked_against), made relative to CHECKED_AGAINST (v0.5.1), each run with a fresh PYTHONPYCACHEPREFIX.
+# 1. build.py's refusal planted away in place ('if RELEASE != CHECKED_AGAINST:' made 'if False:'):
+FAILED tests/test_sites_design.py::test_the_build_refuses_a_release_its_pages_were_not_checked_against
+1 failed in 0.67s
+# 2. Restored:
+1 passed in 0.65s

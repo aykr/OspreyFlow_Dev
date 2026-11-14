@@ -9,12 +9,17 @@ and the owner's decisions of 12 November 2026. Every check has a case that plant
   the test's own shows the check red), no competitor named, i2 not until its ADR is accepted, and
   Laurium not named (the owner's decision 4);
 - no local path, no credential, no placeholder left, and only the one address the owner gave (decision 2);
-- no script and no request outside the site; every internal link and anchor resolves, across the two sites too;
+- no script but the site's own (`assets/site.js`, and the one inline script in `<head>` that sets the theme before the
+  page paints, allowed by its hash in the page's content security policy and by nothing wider: the orchestrator's
+  ruling of 13 November 2026), and no request outside the site; every internal link and anchor resolves, across the
+  two sites too;
 - the committed pages are `build.py`'s output, byte for byte.
 """
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import html
 import re
 import shutil
@@ -39,6 +44,7 @@ MARKETING = Path(__file__).resolve().parents[1] / "marketing_site"
 SITES = MARKETING / "sites"
 sys.path.insert(0, str(MARKETING))
 import client_hashes  # noqa: E402
+import identifier_check  # noqa: E402
 
 DOMAINS = {"org": "ospreyflow.org", "net": "ospreyflow.net"}
 PAGES = {
@@ -53,7 +59,8 @@ COMPETITORS = re.compile(
 )
 #: The owner's decision 4 (12 November 2026): neither site names Laurium.
 LAURIUM = re.compile(r"laurium", re.IGNORECASE)
-LOCAL_PATH = re.compile(r"/Users/|/home/|[A-Za-z]:\\\\?Users|file://", re.IGNORECASE)
+#: The local-path rule, from the publish check itself: one rule, for the pages and for what is published.
+LOCAL_PATH = identifier_check.LOCAL_PATH
 CREDENTIAL = re.compile(
     r"AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY|\bgh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}"
     r"|\bsk-[A-Za-z0-9_-]{20,}|\bxox[abpr]-[A-Za-z0-9-]{10,}|\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*\S",
@@ -115,10 +122,9 @@ def names(root: Path, pattern: re.Pattern[str]) -> list[str]:
 
 
 def _readable(page: Path) -> str:
-    """What the page shows, and every attribute's value too (an address, a file name, an email address)."""
-    source = page.read_text(encoding="utf-8")
-    values = re.findall(r'\b[a-z-]+="([^"]*)"', source, flags=re.IGNORECASE)
-    return page_text(page) + " . " + " . ".join(html.unescape(v) for v in values)
+    """What the page shows, and what it carries unseen (comments, every attribute's value however quoted), as the
+    publish check reads it: one implementation (`identifier_check.readable`)."""
+    return identifier_check.readable(page.read_text(encoding="utf-8"))
 
 
 def clients(root: Path, hashes: Path) -> list[str] | str:
@@ -127,6 +133,8 @@ def clients(root: Path, hashes: Path) -> list[str] | str:
     held = client_hashes.known(hashes)
     if held is None:
         return client_hashes.ABSENT
+    if not held:
+        return identifier_check.EMPTY
     return [f"{_id(p)}: {h[:12]}…" for p in pages(root) for h in sorted(client_hashes.named(_readable(p), held))]
 
 
@@ -177,9 +185,40 @@ def _elsewhere(value: str) -> bool:
     return bool(parts.scheme or parts.netloc)
 
 
+#: The only script a page may load from a file: the site's own.
+SITE_SCRIPT = '<script src="assets/site.js"></script>'
+CSP = re.compile(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)">')
+
+
+def _inline_hash(script: str) -> str:
+    return "sha256-" + base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode()
+
+
+def scripts(page: Path) -> list[str]:
+    """Each script on the page that is not the site's own: any other `<script>`, an inline one whose hash the page's
+    policy does not name, a policy that allows more than its own file and that hash, or a handler in an attribute."""
+    source = page.read_text(encoding="utf-8")
+    found = []
+    policy = CSP.search(source)
+    directives = dict((d.strip().split(" ", 1) + [""])[:2] for d in policy.group(1).split(";") if d.strip()) if policy else {}
+    allowed = directives.get("script-src", "").split()
+    for m in re.finditer(r"<script\b([^>]*)>(.*?)</script>", source, flags=re.DOTALL | re.IGNORECASE):
+        if m.group(0) == SITE_SCRIPT:
+            continue
+        if m.group(1).strip() or f"'{_inline_hash(m.group(2))}'" not in allowed:
+            found.append(f"{_id(page)}: <script{m.group(1)}> not the site's own")
+    if not policy:
+        found.append(f"{_id(page)}: no content security policy")
+    elif [a for a in allowed if a != "'self'" and not a.startswith("'sha256-")] or directives.get("default-src") != "'self'":
+        found.append(f"{_id(page)}: the policy allows more than the site's own script: {policy.group(1)!r}")
+    found += [f"{_id(page)}: {m.group(0)!r}" for m in re.finditer(r"\bon[a-z]+\s*=|javascript:", source, re.IGNORECASE)]
+    return found
+
+
 def requests_outside(root: Path) -> list[str]:
-    """No script, and nothing the browser fetches by itself (a style sheet, an image, a font) from elsewhere."""
-    found = [f"{_id(p)}: <script>" for p in pages(root) if "<script" in p.read_text(encoding="utf-8").lower()]
+    """No script but the site's own, and nothing the browser fetches by itself (a style sheet, an image, a font, a
+    script) from elsewhere."""
+    found = [v for p in pages(root) for v in scripts(p)]
     for p in pages(root):
         source = p.read_text(encoding="utf-8")
         for tag, attribute, value in _parse(p).links:
@@ -274,7 +313,9 @@ def test_the_pages_are_build_pys_output(tmp_path: Path) -> None:
     assert run.returncode == 0, run.stderr
     for site in DOMAINS:
         built = sorted(p.relative_to(tmp_path / site) for p in (tmp_path / site).rglob("*") if p.is_file())
-        held = sorted(p.relative_to(SITES / site) for p in (SITES / site).rglob("*") if p.is_file() and p.suffix != ".jpg")
+        # The screenshots are made only with --images; every other file, Solirius Reply's photographs included, by a plain build.
+        held = sorted(p.relative_to(SITES / site) for p in (SITES / site).rglob("*")
+                      if p.is_file() and (p.suffix != ".jpg" or p.name.startswith("solirius-")))  # fmt: skip
         assert built == held, site
         for relative in built:
             assert (tmp_path / site / relative).read_bytes() == (SITES / site / relative).read_bytes(), relative
@@ -408,11 +449,38 @@ def test_the_address_check_flags_any_other_address(sites: Path) -> None:
     assert _red("address", sites)
 
 
+@pytest.mark.parametrize(
+    "fragment",
+    [
+        '<script src="https://cdn.example/a.js"></script>',
+        "<script>document.title='x'</script>",
+        '<button type="button" onclick="go()">Go</button>',
+        '<a href="javascript:void(0)">Go</a>',
+    ],
+)
+def test_the_script_check_flags_any_script_not_the_sites_own(sites: Path, fragment: str) -> None:
+    _plant(sites / "org" / "features.html", fragment)
+    assert _red("request outside", sites)
+
+
+def test_the_script_check_flags_the_head_script_changed_from_its_hash(sites: Path) -> None:
+    page = sites / "net" / "index.html"
+    page.write_text(page.read_text().replace("classList.add('theme-dark')", "classList.add('theme-light')", 1))
+    assert _red("request outside", sites) == ["net/index.html: <script> not the site's own"]
+
+
+@pytest.mark.parametrize("widened", ["'self' 'unsafe-inline'", "'self' https://cdn.example"])
+def test_the_script_check_flags_a_policy_wider_than_the_sites_own(sites: Path, widened: str) -> None:
+    page = sites / "org" / "team.html"
+    page.write_text(re.sub(r"script-src 'self'", f"script-src {widened}", page.read_text(), count=1))
+    assert any("allows more" in v for v in _red("request outside", sites))
+
+
 def test_the_request_check_flags_a_script_and_a_font_from_elsewhere(sites: Path) -> None:
     _plant(sites / "org" / "index.html", '<script src="assets/a.js"></script>')
     (sites / "net" / "assets" / "site.css").write_text("@font-face{src:url(https://fonts.example/a.woff2)}")
     found = _red("request outside", sites)
-    assert any("<script>" in v for v in found) and any("site.css" in v for v in found)
+    assert any('<script src="assets/a.js">' in v for v in found) and any("site.css" in v for v in found)
 
 
 @pytest.mark.parametrize(

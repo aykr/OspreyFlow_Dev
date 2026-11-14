@@ -1,0 +1,115 @@
+# sites2 (BRIEF_sites2.md): tests/test_sites.py's new script rule and tests/test_sites_design.py, written before any change to build.py, run against the pages as merged at efdb75a (the 12 November design). On the Mac on closed ports, no stack, 2026-11-13T19:55:27Z. Each 'test_the_sites_pass' red is the old design lacking what the new one must have (a CSP and its hashed head script; fonts, headings, the animations, the datasets chapter, the release badge, the Solirius Reply section, the line to .net) or a real violation in it (recipe, on org/contribute.html: 'Connectors and recipes'). The planted-violation cases that fail here fail because what they plant into (the animations, the fonts, the palettes) is not built yet; each is shown red again against the new build, by its check reporting the plant.
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider -rf tests/test_sites.py tests/test_sites_design.py
+E       AssertionError: assert ['net/contact... policy', ...] == []
+E         Left contains 12 more items, first extra item: 'net/contact.html: no content security policy'
+E         Use -v to get more diff
+E       assert ['net/contact... policy', ...] == ["net/index.h...e site's own"]
+E         At index 0 diff: 'net/contact.html: no content security policy' != "net/index.html: <script> not the site's own"
+E         Left contains 11 more items, first extra item: 'net/index.html: no content security policy'
+E         Use -v to get more diff
+E       assert False
+E        +  where False = any(<generator object test_the_script_check_flags_a_policy_wider_than_the_sites_own.<locals>.<genexpr> at 0x10e407ac0>)
+E       assert False
+E        +  where False = any(<generator object test_the_script_check_flags_a_policy_wider_than_the_sites_own.<locals>.<genexpr> at 0x10e42c380>)
+E       assert (False)
+E        +  where False = any(<generator object test_the_request_check_flags_a_script_and_a_font_from_elsewhere.<locals>.<genexpr> at 0x10e42cba0>)
+E       AssertionError: assert ['org/index.h...GOV.UK steps'] == []
+E         Left contains 5 more items, first extra item: 'org/index.html: the seats are []'
+E         Use -v to get more diff
+E       AssertionError: assert ['org/contrib...low.net', ...] == []
+E         Left contains 9 more items, first extra item: 'org/contribute.html: 0 quiet lines to ospreyflow.net'
+E         Use -v to get more diff
+E       AssertionError: assert ['org :root: ...defined', ...] == []
+E         Left contains 78 more items, first extra item: 'org :root: ink or ground not defined'
+E         Use -v to get more diff
+E       assert ['org/index.h...tored."', ...] == []
+E         Left contains 10 more items, first extra item: 'org/index.html: the datasets chapter lacks "Every load is recorded with the pipeline version that made it, and can be reverted. The dataset\'s model is versioned: one live, one draft, and every earlier version can be restored."'
+E         Use -v to get more diff
+E       AssertionError: assert ['org: no @fo...ex Mono', ...] == []
+E         Left contains 8 more items, first extra item: 'org: no @font-face for Atkinson Hyperlegible Next'
+E         Use -v to get more diff
+E       AssertionError: assert ['org/assets/...set in Arial'] == []
+E         Left contains 2 more items, first extra item: 'org/assets/site.css: the GOV.UK drawing is not set in Arial'
+E         Use -v to get more diff
+E       assert ['org: headin...eorgia,serif'] == []
+E         Left contains 2 more items, first extra item: 'org: headings set in "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif'
+E         Use -v to get more diff
+E       assert ["org/contrib...ml: 'recipe'"] == []
+E         Left contains 2 more items, first extra item: "org/contribute.html: 'recipes'"
+E         Use -v to get more diff
+E       AssertionError: assert ['net/contact...e badge', ...] == []
+E         Left contains 12 more items, first extra item: 'net/contact.html: no release badge'
+E         Use -v to get more diff
+E       assert ['org: 0 Soli...ply' section"] == []
+E         Left contains 4 more items, first extra item: 'org: 0 Solirius Reply images, not 4'
+E         Use -v to get more diff
+E       StopIteration
+E       assert ['org: headin...eorgia,serif'] == ['net: headin...eorgia,serif']
+E         At index 0 diff: 'org: headings set in "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif' != 'net: headings set in "Iowan Old Style","Palatino Linotype",Georgia,serif'
+E         Left contains one more item: 'net: headings set in "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif'
+E         Use -v to get more diff
+E       AssertionError: .theme-dark
+E       assert None
+E       AssertionError: .ov
+E       assert None
+E       AssertionError: .theme-dark .ov
+E       assert None
+E       AssertionError: .gv
+E       assert None
+E       AssertionError: assert ['org/index.h...e badge', ...] == ['org/index.html: v2.6.0']
+E         Left contains 12 more items, first extra item: 'net/contact.html: no release badge'
+E         Use -v to get more diff
+E       assert ["org/contrib...ml: 'recipe'"] == ["org/contrib...ml: 'recipe'"]
+E         At index 0 diff: "org/contribute.html: 'recipes'" != "org/contribute.html: 'recipe'"
+E         Left contains 2 more items, first extra item: "org/contribute.html: 'recipe'"
+E         Use -v to get more diff
+E       assert None
+E       AssertionError: 'every name is invented' is not in index.html
+E       assert 'every name is invented' in '<!DOCTYPE html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-wid...cross" href="https://ospreyflow.net">Services and support: ospreyflow.net</a></p></div>\n</footer>\n</body>\n</html>\n'
+E       AssertionError: '<div class="gv-stage">' is not in public-sector.html
+E       assert '<div class="gv-stage">' in '<!DOCTYPE html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-wid...cross" href="https://ospreyflow.net">Services and support: ospreyflow.net</a></p></div>\n</footer>\n</body>\n</html>\n'
+E       AssertionError: 'pipeline v3' is not in index.html
+E       assert 'pipeline v3' in '<!DOCTYPE html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-wid...cross" href="https://ospreyflow.net">Services and support: ospreyflow.net</a></p></div>\n</footer>\n</body>\n</html>\n'
+E       AssertionError: 'Model v14 · live' is not in index.html
+E       assert 'Model v14 · live' in '<!DOCTYPE html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-wid...cross" href="https://ospreyflow.net">Services and support: ospreyflow.net</a></p></div>\n</footer>\n</body>\n</html>\n'
+E       AssertionError: 'pipeline version that made it' is not in index.html
+E       assert 'pipeline version that made it' in '<!DOCTYPE html>\n<html lang="en-GB">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-wid...cross" href="https://ospreyflow.net">Services and support: ospreyflow.net</a></p></div>\n</footer>\n</body>\n</html>\n'
+E       assert ['org: 0 Soli...ply' section"] == ["net/assets/...rrent site's"]
+E         At index 0 diff: 'org: 0 Solirius Reply images, not 4' != "net/assets/solirius-desk.jpg is not the current site's"
+E         Left contains 4 more items, first extra item: "org/index.html: no 'Developed by Solirius Reply' section"
+E         Use -v to get more diff
+FAILED tests/test_sites.py::test_the_sites_pass[request outside] - AssertionE...
+FAILED tests/test_sites.py::test_the_script_check_flags_the_head_script_changed_from_its_hash
+FAILED tests/test_sites.py::test_the_script_check_flags_a_policy_wider_than_the_sites_own['self' 'unsafe-inline']
+FAILED tests/test_sites.py::test_the_script_check_flags_a_policy_wider_than_the_sites_own['self' https://cdn.example]
+FAILED tests/test_sites.py::test_the_request_check_flags_a_script_and_a_font_from_elsewhere
+FAILED tests/test_sites_design.py::test_the_sites_pass[animations] - Assertio...
+FAILED tests/test_sites_design.py::test_the_sites_pass[between sites] - Asser...
+FAILED tests/test_sites_design.py::test_the_sites_pass[contrast] - AssertionE...
+FAILED tests/test_sites_design.py::test_the_sites_pass[datasets chapter] - as...
+FAILED tests/test_sites_design.py::test_the_sites_pass[fonts] - AssertionErro...
+FAILED tests/test_sites_design.py::test_the_sites_pass[govuk drawing] - Asser...
+FAILED tests/test_sites_design.py::test_the_sites_pass[headings] - assert ['o...
+FAILED tests/test_sites_design.py::test_the_sites_pass[recipe] - assert ["org...
+FAILED tests/test_sites_design.py::test_the_sites_pass[release] - AssertionEr...
+FAILED tests/test_sites_design.py::test_the_sites_pass[solirius] - assert ['o...
+FAILED tests/test_sites_design.py::test_the_font_check_flags_a_missing_file_and_licence
+FAILED tests/test_sites_design.py::test_the_heading_check_flags_the_drafts_serif
+FAILED tests/test_sites_design.py::test_the_contrast_check_flags_a_pairing_below_four_and_a_half[.theme-dark-ink-2-#5f6263]
+FAILED tests/test_sites_design.py::test_the_contrast_check_flags_a_pairing_below_four_and_a_half[.ov-k-t3-#a2a5a6]
+FAILED tests/test_sites_design.py::test_the_contrast_check_flags_a_pairing_below_four_and_a_half[.theme-dark .ov-k-brass-#6b4d12]
+FAILED tests/test_sites_design.py::test_the_contrast_check_flags_a_pairing_below_four_and_a_half[.gv-g-sec-#b1b4b6]
+FAILED tests/test_sites_design.py::test_the_release_check_flags_the_drafts_typed_badge
+FAILED tests/test_sites_design.py::test_the_recipe_check_flags_the_codes_word
+FAILED tests/test_sites_design.py::test_the_animation_check_flags_a_chapter_missing_and_the_govuk_animation_on_net
+FAILED tests/test_sites_design.py::test_the_synthetic_check_flags_a_section_that_does_not_say_so
+FAILED tests/test_sites_design.py::test_the_govuk_check_flags_the_crown_the_typeface_and_a_missing_note[<path class="govuk-logotype-crown" d="M0 0"></path>]
+FAILED tests/test_sites_design.py::test_the_datasets_check_flags_a_dataset_version_and_the_codes_word[pipeline v3-recipe v3]
+FAILED tests/test_sites_design.py::test_the_datasets_check_flags_a_dataset_version_and_the_codes_word[Model v14 \xb7 live-Dataset v14 \xb7 live]
+FAILED tests/test_sites_design.py::test_the_datasets_check_flags_a_dataset_version_and_the_codes_word[pipeline version that made it-load]
+FAILED tests/test_sites_design.py::test_the_solirius_check_flags_an_image_not_the_current_sites
+30 failed, 68 passed, 1 skipped in 20.46s
+
+## green, after the build: build.py's output at the commit that carries this record, 2026-11-13T20:13:09Z. The planted-violation cases above that failed for want of what they plant into now pass: each reports its plant.
+$ env ARCADEDB_HTTP_PORT=1 OSPREY_POSTGRES_PORT=1 POSTGRES_PORT=1 VALKEY_PORT=1 CLICKHOUSE_HTTP_PORT=1 ../OspreyFlow_Core/.venv/bin/python -m pytest -q -p no:cacheprovider tests/test_sites.py tests/test_sites_design.py tests/test_website_wording.py
+134 passed, 1 skipped in 5.05s

@@ -1,0 +1,93 @@
+# sites2: the browser checks (marketing_site/check/sites.spec.ts) shown red, on the Mac, Chromium, Playwright 1.64.1, no stack, 2026-11-13T20:06:14Z. First against the pages as merged at efdb75a (the 12 November design: no theme switch, no player, no CSP, no fonts of its own), then against copies of the current pages (build.py's output) with one defect planted in each, by sed, as each heading names. Under each heading, the failures are the cases that defect should fail. The full green run follows the reds.
+
+## the 12 November pages (efdb75a). Its light-theme scans pass (it had no dark theme to scan)
+$ SITES_DIR=<efdb75a's sites> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:108:5 › the player starts paused, and stays so, under reduced motion
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:119:5 › the player does not advance off screen, and does once it is back
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:131:5 › the player does not advance in a hidden tab
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:142:5 › every control in the overview works from the keyboard alone
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:163:5 › every control in the GOV.UK drawing works from the keyboard alone
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:173:5 › the skip link, the site switcher and the theme switch come first, by keyboard
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/contact.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/index.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/public-sector.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/sectors.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/services.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/contribute.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/features.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/get-started.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/governance.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/index.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/public-sector.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on org/team.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:206:5 › no page asks for anything from another host, fonts included
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:36:5 › the theme switch turns the dark theme on and off, is kept, and is applied before the page paints
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:58:5 › the dark theme changes the page's colours and the overview's, and leaves the GOV.UK drawing light
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:79:7 › the player on net/index.html advances every seven seconds, and pauses
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:79:7 › the player on org/index.html advances every seven seconds, and pauses
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:79:7 › the player on org/public-sector.html advances every seven seconds, and pauses
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:96:5 › the overview moves from one seat to the next after its last chapter, and loops
+  12 passed (1.1m)
+  25 failed
+
+## site.js ignores reduced motion: 'playing = !still' made 'playing = true'
+$ SITES_DIR=<copy: motion> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'motion'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:108:5 › the player starts paused, and stays so, under reduced motion
+  1 failed
+
+## site.js ignores off screen: '!inView ||' removed from the timer's guard
+$ SITES_DIR=<copy: offscreen> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'off screen'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:119:5 › the player does not advance off screen, and does once it is back
+  1 failed
+
+## site.js ignores a hidden tab: '|| document.hidden' removed from the timer's guard
+$ SITES_DIR=<copy: hidden> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'hidden tab'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:131:5 › the player does not advance in a hidden tab
+  1 failed
+
+## Pause no longer pauses the CSS animations: the is-paused toggle removed
+$ SITES_DIR=<copy: pause> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'pauses'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:79:7 › the player on net/index.html advances every seven seconds, and pauses
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:79:7 › the player on org/index.html advances every seven seconds, and pauses
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:79:7 › the player on org/public-sector.html advances every seven seconds, and pauses
+  3 failed
+
+## the head script changed on org's pages, its hash in the policy not: the browser refuses it, so a dark choice is not applied before site.js runs
+$ SITES_DIR=<copy: csp> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'theme switch'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:36:5 › the theme switch turns the dark theme on and off, is kept, and is applied before the page paints
+  1 failed
+  1 passed
+
+## the overview's chapter buttons made spans (org/index.html): not reachable by keyboard
+$ SITES_DIR=<copy: keys> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'keyboard alone'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:142:5 › every control in the overview works from the keyboard alone
+  1 failed
+  1 passed
+
+## the header's Solirius Reply logo without its alt (net/services.html)
+$ SITES_DIR=<copy: axe> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'axe finds nothing on net/services.html'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/services.html in the dark theme
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:189:9 › axe finds nothing on net/services.html in the light theme
+  2 failed
+
+## green: the current pages
+$ NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts
+  37 passed
+
+## found by looking, not by a check: the approved design's player starts paused under reduced motion, and Pause freezes each drawing's fade-in at its first frame, so a reduced-motion reader, or anyone choosing a chapter while paused, sees an empty drawing. Two cases written, red against build.py's output as it then was (the share of the shown drawing visible: 0 and 0.05), then fixed in site.css and site.js
+$ NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g "drawn in full"
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:149:5 › a chapter chosen while paused is drawn in full
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:136:5 › under reduced motion every chapter is drawn in full, still
+    Received:   0.05333333333333334
+    Received:   0
+  2 failed
+
+## added with the phone-width case: net/contact.html given a 900px-wide paragraph
+$ SITES_DIR=<copy: wide> NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts -g 'sideways'
+  ✘ [chromium] › marketing_site/check/sites.spec.ts:246:5 › no page scrolls sideways at a phone's width
+    +   "net/contact.html: 900 > 360",
+  1 failed
+
+## green, final: the current pages, 2026-11-13T20:13:14Z
+$ NODE_PATH=../OspreyFlow_Core/node_modules ../OspreyFlow_Core/node_modules/.bin/playwright test -c marketing_site/check/playwright.config.ts
+  40 passed (4.8s)

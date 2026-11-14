@@ -1,17 +1,39 @@
 #!/usr/bin/env python3
 """Builds the two OspreyFlow sites as plain static files: org/ (ospreyflow.org) and net/ (ospreyflow.net), beside
-this file. No external requests: system fonts, own CSS, own images, no script.
+this file, in the design the owner approved on 13 November 2026 (`process/lanes/docs/BRIEF_sites2.md`). No external
+request: the site's own fonts, style sheet, images and one script (the theme switch and the animations' player), and
+one inline script in <head>, allowed by its hash in each page's content security policy.
 
     python3 build.py                  # rewrite every page and style sheet in org/ and net/
     python3 build.py --out <folder>   # into another folder (tests/test_sites.py compares the two)
     python3 build.py --images <shots> # also make each shown image from its capture in <shots> (needs Pillow)
 
 The pages and style sheets in org/ and net/ are this script's output and are committed; a test fails when they
-differ from it. The images are committed too, and made only with --images, from fresh captures."""
-import argparse, math, os, random, html
+differ from it. The images are committed too, and made only with --images, from fresh captures.
+
+The release each page names is read from the product's CHANGELOG at build time, never typed. The build refuses when it
+differs from CHECKED_AGAINST: what the pages say is in a release, and what is only on main, was checked against that
+release, and a new one means checking it again before the pages may say so."""
+import argparse, base64, hashlib, math, os, random, re, shutil, html, sys
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent
+SOURCE = OUT / 'source'
+CHANGELOG = OUT.parents[2] / 'OspreyFlow_Core' / 'CHANGELOG.md'
+#: The release every claim on the pages was last checked against (docs lane, 14 November 2026: sites-v051-facts.md).
+CHECKED_AGAINST = 'v0.5.1'
+sys.path.insert(0, str(OUT))
+import overview as OV, govanim as GV  # noqa: E402
+
+
+def latest_release(changelog=CHANGELOG):
+    m = re.search(r'^## (v\d+\.\d+\.\d+) — \d{4}-\d{2}-\d{2}$', Path(changelog).read_text(encoding='utf-8'), re.MULTILINE)
+    if m is None:
+        raise SystemExit(f'{changelog}: no released version')
+    return m.group(1)
+
+
+RELEASE = CHECKED_AGAINST  # set from the CHANGELOG by build()
 ORG, NET, APP = 'https://ospreyflow.org', 'https://ospreyflow.net', 'https://ospreyflow.app'
 REPO = 'https://github.com/aykr/OspreyFlow'
 STATEMENT = ('OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering, '
@@ -58,7 +80,7 @@ def fig(name, caption=None, cls=''):
 def network_svg(seed=7, n=34, dark=False):
     """An original radial network motif: one centre, a ring, a few cross links."""
     r = random.Random(seed); cx, cy, R = 300, 300, 235
-    ink = '#E9E4D8' if dark else '#14181F'; amber = '#E0A030' if dark else '#B8720C'; teal = '#4FB3A8' if dark else '#0E6B63'
+    ink, amber, teal = 'var(--ink,#191B1C)', 'var(--accent,#8A6318)', 'var(--second,#007177)'
     pts = []
     for i in range(n):
         a = 2 * math.pi * i / n - math.pi / 2; rr = R * (1 if i % 5 else .78)
@@ -66,22 +88,28 @@ def network_svg(seed=7, n=34, dark=False):
     o = [f'<svg class="motif" viewBox="0 0 600 600" role="img" aria-label="A network drawn around one point">']
     for i, (x, y) in enumerate(pts):
         w = r.choice([.6, .6, .9, 1.4, 2.2]); c = r.choice([ink, ink, ink, teal, amber])
-        o.append(f'<line x1="{cx}" y1="{cy}" x2="{x:.1f}" y2="{y:.1f}" stroke="{c}" stroke-width="{w}" opacity=".55"/>')
+        o.append(f'<line x1="{cx}" y1="{cy}" x2="{x:.1f}" y2="{y:.1f}" style="stroke: {c}" stroke-width="{w}" opacity=".55"/>')
     for _ in range(11):
         a, b = r.sample(range(n), 2)
-        o.append(f'<line x1="{pts[a][0]:.1f}" y1="{pts[a][1]:.1f}" x2="{pts[b][0]:.1f}" y2="{pts[b][1]:.1f}" stroke="{teal}" stroke-width=".8" opacity=".5" stroke-dasharray="3 4"/>')
+        o.append(f'<line x1="{pts[a][0]:.1f}" y1="{pts[a][1]:.1f}" x2="{pts[b][0]:.1f}" y2="{pts[b][1]:.1f}" style="stroke: {teal}" stroke-width=".8" opacity=".5" stroke-dasharray="3 4"/>')
     for i, (x, y) in enumerate(pts):
         c = amber if i % 7 == 0 else (teal if i % 4 == 0 else ink)
-        if i % 3 == 0: o.append(f'<rect x="{x-6:.1f}" y="{y-6:.1f}" width="12" height="12" fill="{c}"/>')
-        else: o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6" fill="{c}"/>')
-    o.append(f'<circle cx="{cx}" cy="{cy}" r="15" fill="{amber}"/><circle cx="{cx}" cy="{cy}" r="26" fill="none" stroke="{amber}" stroke-width="1.5"/></svg>')
+        if i % 3 == 0: o.append(f'<rect x="{x-6:.1f}" y="{y-6:.1f}" width="12" height="12" style="fill: {c}"/>')
+        else: o.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="6" style="fill: {c}"/>')
+    o.append(f'<circle cx="{cx}" cy="{cy}" r="15" style="fill: {amber}"/><circle cx="{cx}" cy="{cy}" r="26" fill="none" style="stroke: {amber}" stroke-width="1.5"/></svg>')
     return ''.join(o)
 
-MARK = ('<svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="5" fill="currentColor"/>'
-        '<g stroke="currentColor" stroke-width="1.6"><line x1="16" y1="16" x2="4" y2="6"/><line x1="16" y1="16" x2="28" y2="8"/>'
-        '<line x1="16" y1="16" x2="26" y2="27"/><line x1="16" y1="16" x2="5" y2="25"/></g>'
-        '<circle cx="4" cy="6" r="2.6" fill="currentColor"/><circle cx="28" cy="8" r="2.6" fill="currentColor"/>'
-        '<rect x="23.5" y="24.5" width="5" height="5" fill="currentColor"/><rect x="2.5" y="22.5" width="5" height="5" fill="currentColor"/></svg>')
+#: The product's mark, the mesh cut (`apps/workspace/src/shell/BrandMark.tsx`), as the approved design draws it.
+MARK = ('<svg class="mark" viewBox="0 0 48 48" aria-hidden="true">' + ''.join(
+    f'<path d="{d}" style="fill: currentColor"></path>' for d in (
+        'M4.9 6.7L6.4 17.2L23.9 11.1Z', 'M6.8 17.9L24.3 19.9L24.2 11.7Z', 'M6.6 18.6L8 29.1L24.2 20.7Z',
+        'M8.4 30.1L9.4 41L24.4 21.2Z', 'M9.8 41.2L24.4 30.2L24.7 21.5Z', 'M25.6 11.9L26.2 29.2L43.9 25.7Z')) + '</svg>')
+
+#: Sets the theme before the page paints. Allowed by its hash in each page's policy, and by nothing wider.
+THEME_SCRIPT = ("try{if(localStorage.getItem('ospreyflow.site.theme')==='dark'){document.documentElement.classList.add('theme-dark')}}"
+                "catch(e){}")
+CSP = ("default-src 'self'; script-src 'self' 'sha256-" + base64.b64encode(hashlib.sha256(THEME_SCRIPT.encode()).digest()).decode()
+       + "'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'")
 
 NAV = {
  'org': [('index.html', 'Home'), ('features.html', 'Features'), ('public-sector.html', 'UK public sector'),
@@ -89,19 +117,49 @@ NAV = {
  'net': [('index.html', 'Home'), ('sectors.html', 'Where it applies'), ('public-sector.html', 'UK public sector'),
          ('services.html', 'Services'), ('contact.html', 'Contact')],
 }
-TAG = {'org': 'The open-source project', 'net': 'From Solirius Reply'}
+TAG = {'org': 'Open-source project', 'net': 'Services'}
+
+SOLIRIUS = ('Since 2007, Solirius has helped organisations across the public and private sector simplify complex technology '
+            'problems with people-centred solutions. Solirius is part of the Reply Group. OspreyFlow is its open source '
+            'intelligence mapping platform for crime analysis, anti-money-laundering, fraud detection, and event monitoring and '
+            'alerting, released under the Apache License 2.0.')
+
+
+def solirius_section():
+    """From the current site's home page, its words, logos and photographs (the owner's instruction, 13 November 2026;
+    `sites/README.md` records where each image came from)."""
+    return ('<section class="band tint" id="solirius"><div class="wrap sol"><div><div class="sol-logo"><img '
+            'src="assets/solirius-reply-logo-section.png" alt="Solirius Reply" width="148" height="64"></div>'
+            f'<h2>Developed by Solirius Reply</h2><p>{SOLIRIUS}</p><p class="actions"><a class="btn" href="https://www.solirius.com">'
+            'solirius.com</a><a class="btn" href="https://www.solirius.com/contact">Contact Solirius</a></p></div>'
+            '<div class="sol-photos"><img src="assets/solirius-desk.jpg" alt="A Solirius desk with code on screen and a Solirius mug" '
+            'width="700" height="312"><img src="assets/solirius-tablet.jpg" alt="A hand pointing at a service shown on a tablet" '
+            'width="700" height="312"></div></div></section>')
+
 
 def page(site, slug, title, desc, body):
     nav = ''.join(f'<li><a href="{h}"{" aria-current=\"page\"" if h == slug else ""}>{t}</a></li>' for h, t in NAV[site])
+    org_tab = ('index.html', ' is-on" aria-current="true') if site == 'org' else (ORG, '')
+    net_tab = ('index.html', ' is-on" aria-current="true') if site == 'net' else (NET, '')
+    releases = ('' if site == 'org' else ORG + '/') + 'get-started.html#releases'
+    sites = (f'<nav class="sites" aria-label="OspreyFlow sites"><div class="wrap">'
+             f'<a class="site-tab{org_tab[1]}" href="{org_tab[0]}">Project <small>ospreyflow.org</small></a>'
+             f'<a class="site-tab{net_tab[1]}" href="{net_tab[0]}">Services <small>ospreyflow.net</small></a>'
+             f'<div class="tools"><a class="release" href="{releases}">Release {RELEASE}</a>'
+             '<a class="reply" href="https://www.solirius.com"><img src="assets/solirius-reply-logo-header.png" alt="Solirius Reply" '
+             'width="80" height="26"></a><button type="button" class="theme-btn" data-theme-toggle>Dark theme</button></div></div></nav>')
     if site == 'org':
-        other = f'<a class="cross" href="{NET}">Services and support: ospreyflow.net</a>'
+        # The owner, 13 November 2026: one quiet line near the bottom of ospreyflow.org leads to ospreyflow.net.
+        body += ('<div class="wrap"><p class="to-net">Want help to run it? Solirius Reply offers pilots, builds and support: '
+                 f'<a href="{NET}">ospreyflow.net</a>.</p></div>')
+        legal = ''
         foot = (f'<div><h2>The project</h2><ul><li><a href="features.html">Features</a></li><li><a href="get-started.html">Get started</a></li>'
                 f'<li><a href="{REPO}">Source code</a></li><li><a href="governance.html">Governance</a></li></ul></div>'
                 f'<div><h2>People</h2><ul><li><a href="team.html">Team</a></li><li><a href="contribute.html">Contribute</a></li></ul></div>'
                 f'<div><h2>Elsewhere</h2><ul><li><a href="{NET}">ospreyflow.net: services from Solirius Reply</a></li>'
                 f'<li><span class="soon">ospreyflow.app: the demonstration (coming)</span></li></ul></div>')
     else:
-        other = f'<a class="cross" href="{ORG}">The open-source project: ospreyflow.org</a>'
+        legal = f'<p><a class="cross" href="{ORG}">The open-source project: ospreyflow.org</a></p>'
         foot = (f'<div><h2>OspreyFlow</h2><ul><li><a href="sectors.html">Where it applies</a></li><li><a href="public-sector.html">UK public sector</a></li>'
                 f'<li><a href="services.html">Services</a></li><li><a href="contact.html">Contact</a></li></ul></div>'
                 f'<div><h2>The project</h2><ul><li><a href="{ORG}">ospreyflow.org</a></li><li><a href="{ORG}/features.html">Every feature</a></li>'
@@ -112,15 +170,18 @@ def page(site, slug, title, desc, body):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="{CSP}">
 <title>{esc(title)}</title>
 <meta name="description" content="{esc(desc)}">
 <link rel="stylesheet" href="assets/site.css">
+<script>{THEME_SCRIPT}</script>
 </head>
-<body class="site-{site}">
+<body class="page-root is-{site}">
 <a class="skip" href="#main">Skip to main content</a>
+{sites}
 <header class="top">
   <div class="wrap bar">
-    <a class="brand" href="index.html">{MARK}<span><strong>OspreyFlow</strong><small>{TAG[site]}</small></span></a>
+    <a class="brand" href="index.html">{MARK}<strong class="wm"><b>Osprey</b>Flow</strong></a><span class="site-tag">{TAG[site]}</span>
     <nav aria-label="Main"><ul>{nav}</ul></nav>
   </div>
 </header>
@@ -129,11 +190,55 @@ def page(site, slug, title, desc, body):
 </main>
 <footer class="foot">
   <div class="wrap cols">{foot}</div>
-  <div class="wrap legal"><p>{STATEMENT}</p><p>{other}</p></div>
+  <div class="wrap legal"><p>{STATEMENT}</p>{legal}</div>
 </footer>
+<script src="assets/site.js"></script>
 </body>
 </html>
 '''
+
+
+def player_overview():
+    """The overview's markup for `source/site.js`'s player: three seats, each chapter a scene, the first one shown."""
+    tabs = ''.join(f'<button type="button" class="ov-tab{" is-on" if p == 0 else ""}" aria-pressed="{"true" if p == 0 else "false"}" '
+                   f'data-seat="{p}">{n}</button>' for p, (n, *_r) in enumerate(OV.SEATS))
+    scenes = steps = ''
+    for p, (n, _key, fns, labels) in enumerate(OV.SEATS):
+        for s_, fn in enumerate(fns):
+            line, sub, art = fn()
+            scenes += (f'<div class="ov-scene" data-seat="{p}" data-step="{s_}"{"" if (p, s_) == (0, 0) else " hidden"}><div class="ov-head">'
+                       f'<p class="ov-kicker">{n} · {s_ + 1} of {len(fns)}</p><h3 class="ov-line">{esc(line)}</h3><p class="ov-sub">{esc(sub)}</p></div>'
+                       f'<div class="ov-stage">{art}</div><div class="ov-prog"><i></i></div></div>')
+        steps += (f'<div class="ov-steps" data-seat="{p}"{"" if p == 0 else " hidden"}>' + ''.join(
+            f'<button type="button" class="ov-step{" is-on" if s_ == 0 else ""}" data-step="{s_}">{esc(x)}</button>' for s_, x in enumerate(labels)) + '</div>')
+    return (f'<div class="ov" data-player="overview"><div class="ov-top"><div class="ov-tabs" role="group" aria-label="Choose a point of view">{tabs}</div>'
+            f'<button type="button" class="ov-play" data-play>Pause</button></div>{scenes}{steps}</div>')
+
+
+def player_govuk():
+    scenes = ''
+    for s_, fn in enumerate(GV.SCENES):
+        line, sub, art = fn()
+        scenes += (f'<div class="gv-scene" data-seat="0" data-step="{s_}"{"" if s_ == 0 else " hidden"}><div class="gv-head">'
+                   f'<p class="gv-kicker">Step {s_ + 1} of {len(GV.SCENES)}</p><h3 class="gv-line">{esc(line)}</h3><p class="gv-sub">{esc(sub)}</p></div>'
+                   f'<div class="gv-stage">{art}</div><div class="gv-prog"><i></i></div></div>')
+    steps = '<div class="gv-steps" data-seat="0">' + ''.join(
+        f'<button type="button" class="gv-step{" is-on" if s_ == 0 else ""}" data-step="{s_}">{esc(x)}</button>' for s_, x in enumerate(GV.LABELS)) + '</div>'
+    return (f'<div class="gv" data-player="govuk"><div class="gv-top"><strong>The GOV.UK theme, in four steps</strong>'
+            f'<button type="button" class="gv-play" data-play>Pause</button></div>{scenes}{steps}<p class="gv-note">{esc(GV.NOTE)}</p></div>')
+
+
+def overview_section():
+    return sec('See it from three seats', player_overview(), ident='overview',
+               intro='Follow OspreyFlow from three seats: the analyst who investigates, the developer who brings data in and writes the '
+                     'rules, and the administrator who runs it. The screens are illustrations and every name is invented.')
+
+
+def govuk_section():
+    return sec('See the GOV.UK theme at work', player_govuk(), ident='govuk-theme',
+               intro='Four short steps, from the one setting that turns it on to the screens your analysts would use. The screens are '
+                     'illustrations and every name is invented.')
+
 
 def hero(kicker, h1, lede, actions, site, art=True):
     acts = ''.join(f'<a class="btn {c}" href="{h}">{t}</a>' for h, t, c in actions)
@@ -182,6 +287,7 @@ def org_index():
              'OspreyFlow is an open-source intelligence mapping platform. It turns records about people, places, objects and events into '
              'a single network, read as a graph, a map, a timeline and reports, inside your own cloud or data centre.',
              [('get-started.html', 'Get started', 'primary'), (REPO, 'Source code', ''), ('features.html', 'See every feature', 'quiet')], 'org')
+    b += overview_section()
     b += sec('Where it applies', cards(DOMAINS, 4), 'tint',
              intro='For private and public sector organisations. One platform, with a domain model, rules and demonstration data for each.')
     b += sec('What makes it defensible', cards(PRINCIPLES, 4))
@@ -209,13 +315,14 @@ def org_index():
              '<p class="more"><a href="get-started.html">Prerequisites and the install commands</a></p>')
     b += sec('Who is behind it', '<p class="intro">OspreyFlow was created at Solirius Reply, which develops it and looks after the project. '
              'It is built in the open, and contributions are welcome.</p><p class="actions"><a class="btn" href="team.html">The team</a>'
-             '<a class="btn" href="contribute.html">Contribute</a><a class="btn quiet" href="governance.html">How decisions are made</a></p>', 'tint')
+             '<a class="btn" href="contribute.html">Contribute</a><a class="btn quiet" href="governance.html">How decisions are made</a></p>')
+    b += solirius_section()
     return page('org', 'index.html', 'OspreyFlow: open-source intelligence mapping', STATEMENT, b)
 
 def org_features():
-    b = hero('Features · release v0.5.0', 'Everything in OspreyFlow today',
-             'Everything on this page is built and in release v0.5.0, except the section headed "On main, coming with the next release". '
-             'Screens are from demonstration deployments with synthetic data, taken before v0.5.0, and are being replaced.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
+    b = hero(f'Features · release {RELEASE}', 'Everything in OspreyFlow today',
+             f'Everything on this page is built and in release {RELEASE}, except the section headed "On main, coming with the next release". '
+             'Screens are from demonstration deployments with synthetic data, and are being replaced.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
     toc = [('glass', 'The Glass'), ('studio', 'Ingest Studio'), ('monitoring', 'Rules and Monitoring'), ('boards', 'Drawing boards'),
            ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture'), ('coming', 'On main, coming next')]
     b += '<nav class="toc wrap" aria-label="On this page"><ul>' + ''.join(f'<li><a href="#{i}">{t}</a></li>' for i, t in toc) + '</ul></nav>'
@@ -231,7 +338,7 @@ def org_features():
         '<div class="pair">' + fig('map-time') + fig('matrix') + '</div>', ident='glass')
     b += sec('Ingest Studio: bringing data in', split(ul([
         '<strong>1 Model.</strong> A domain model for each dataset: its entity types, link types and markings. Starters for crime, anti-money laundering, fraud and cyber.',
-        '<strong>2 Sources.</strong> Files, a SQL database, an HTTP API or JSON files, each with a declared marking and legal basis.',
+        '<strong>2 Sources.</strong> Files, a SQL database, an HTTP API or JSON files, and on the shared-platform profile S3 buckets and Athena, each with a declared marking and legal basis.',
         '<strong>3 Pipelines.</strong> Each source with its own profile, mapping and load, published as a version.',
         '<strong>4 Runs.</strong> By hand, on a schedule or when a file arrives. Verify shows what a file would create and which rows it would reject before anything loads.',
         '<strong>Held rows.</strong> A rule can hold rows for a reviewer before a load commits.',
@@ -258,9 +365,9 @@ def org_features():
         'A withdrawn item is kept in the record, never erased.']) + '</div></div>', 'tint', 'boards')
     b += sec('Models and questions', split(ul([
         "<strong>Questions.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
-        '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject.',
+        '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject. On the shared-platform profile, a second, open-source extraction engine for structured facts in documents is installed and runs; no screen uses it yet.',
         '<strong>Local by default.</strong> Extraction, vision, transcription and embeddings run on the deployment itself.',
-        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it.",
+        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London, checked so far against a stand-in gateway, not yet against AWS or an organisation's own.",
         '<strong>Every answer names the engine and model that produced it.</strong>',
         '<strong>Keys are write-only,</strong> held by the model gateway alone, with limits and usage per engine.']), fig('questions'), flip=True), ident='models')
     b += sec('Admin and access', cards([
@@ -269,26 +376,28 @@ def org_features():
         ('Markings and clearance', 'Handling markings on every record, a highest allowed marking per dataset, and reads filtered in the store.'),
         ('Audit', 'Who did what and when, including every export, every approval and every change to what may leave the deployment.'),
         ('Dashboards', 'Apache Superset embedded in a case with the same sign-in, reading a reporting feed.'),
-        ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.')]), 'tint', 'admin')
+        ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.'),
+        ('A shared government platform', "A profile for shared government Kubernetes platforms: one namespace, the platform's managed services, non-root containers and a single-copy shape for a proof of concept, with sign-in through Microsoft Entra ID. Installed and checked on a test cluster, not yet on a platform. In this release, loads there are started by hand and reporting is not on it; the administration guide's section 6a has every limit.")]), 'tint', 'admin')
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
         ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch or PostgreSQL for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
     b += sec('On main, coming with the next release', ul([
-        'A profile for shared government Kubernetes platforms: one namespace, the platform\'s managed services, non-root containers and a single-copy shape for a proof of concept. Not yet installed on a platform.',
-        'S3 and Athena as sources in the Ingest Studio.',
-        'A second, open-source extraction engine for structured facts in documents.',
-        "Routing to your organisation's own AI gateway, or to Amazon Bedrock in London, on the shared-platform profile."]) +
-        '<p>These are merged in development and not in release v0.5.0. They arrive with the next release.</p>', 'tint', 'coming')
+        'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner, while the owner has signed in within the last 24 hours.',
+        'Reporting on the shared-platform profile, through Apache Superset.',
+        'The shared-platform profile\'s data-safety fixes, to its backups and restore.']) +
+        f'<p>These are merged in development and not in release {RELEASE}. They arrive with the next release.</p>', 'tint', 'coming')
     return page('org', 'features.html', 'Features · OspreyFlow', 'Every feature in the current OspreyFlow release: analysis, ingest, monitoring, drawing boards, models and administration.', b)
 
-def public_sector(site):
+def org_public_sector():
+    site = 'org'
     b = hero('UK public sector', 'OspreyFlow for the UK public sector',
              'The whole product under the GOV.UK Design System\'s look, for services on a gov.uk domain, with government security markings, '
-             'need-to-know access and a full audit trail. Everything on this page is in release v0.5.0.',
-             [('get-started.html', 'Install with a GOV.UK starter', 'primary')] if site == 'org' else [('contact.html', 'Talk to Solirius Reply', 'primary'), (ORG + '/get-started.html', 'Install it yourself', '')],
+             f'need-to-know access and a full audit trail. Everything on this page is in release {RELEASE}.',
+             [('get-started.html', 'Install with a GOV.UK starter', 'primary'), (NET + '/public-sector.html', 'Help from Solirius Reply', '')],
              site, art=False)
+    b += govuk_section()
     b += sec('What "designed to meet" means', f'<p class="callout">{GDS}</p>')
     b += sec('The GOV.UK theme, chosen at install', split(
         '<p>The GOV.UK theme is a deployment setting, not a separate edition or a fork. One setting gives every page the GOV.UK header and '
@@ -314,9 +423,28 @@ def public_sector(site):
         ('What is inside it?', 'Open-source components throughout, each listed with its licence. No software licence fee.')]))
     return page(site, 'public-sector.html', 'UK public sector · OspreyFlow', 'OspreyFlow under the GOV.UK theme: designed to meet the GDS Service Standard, with security markings, need-to-know access and audit.', b)
 
+def net_public_sector():
+    """The owner, 13 November 2026: the full UK public sector page is ospreyflow.org's; this one gives the services angle
+    and leads to it, so there is one source and nothing to drift."""
+    b = hero('UK public sector', 'OspreyFlow for a UK public sector service',
+             "OspreyFlow has a GOV.UK theme for services on a gov.uk domain, with government security markings, need-to-know access "
+             "and a full audit trail. Solirius Reply helps a public sector team take it from a pilot to a live service.",
+             [('contact.html', 'Talk to Solirius Reply', 'primary'), (ORG + '/public-sector.html', 'The UK public sector page on ospreyflow.org', '')],
+             'net', art=False)
+    b += sec('What "designed to meet" means', f'<p class="callout">{GDS}</p>')
+    b += sec('How Solirius Reply helps a public sector team', ul([
+        "<strong>Pilot.</strong> A few weeks on your own or anonymised data, under the GOV.UK theme with your service's name.",
+        "<strong>Build.</strong> A deployment in your own tenancy, with your organisation's sign-in, roles and markings.",
+        '<strong>Run and expand.</strong> Support once it is live, and help as it grows.']) +
+        '<p class="more"><a href="services.html">How we work with you</a></p>', 'tint')
+    b += sec('The whole picture, on the project\'s own site', f'<p>How the GOV.UK theme works, the starters and what a security or '
+             f'architecture team will ask are on <a href="{ORG}/public-sector.html">ospreyflow.org\'s UK public sector page</a>.</p>')
+    return page('net', 'public-sector.html', 'UK public sector · OspreyFlow', 'How Solirius Reply helps a UK public sector team adopt OspreyFlow under the GOV.UK theme.', b)
+
+
 def org_start():
-    b = hero('Get started · release v0.5.0', 'Install OspreyFlow', 'One command per computer, then a check, then the install. Lite runs on one machine and is the place to start. '
-             'Everything on this page is in release v0.5.0.',
+    b = hero(f'Get started · release {RELEASE}', 'Install OspreyFlow', 'One command per computer, then a check, then the install. Lite runs on one machine and is the place to start. '
+             f'Everything on this page is in release {RELEASE}.',
              [(REPO, 'Open the repository', 'primary')], 'org', art=False)
     b += sec('Three commands', f'<pre><code>git clone {REPO}.git\ncd OspreyFlow\nsh install.sh</code></pre>'
         '<p>On Windows, run <code>install.ps1</code>. Then:</p>'
@@ -337,7 +465,7 @@ def org_start():
         ('Architecture Guide', 'How it is built, what crosses each boundary and how access is enforced, for architects and security reviewers.')], 4) +
         f'<p>Each is in the repository\'s <code>docs/</code> folder, as Markdown and as a PDF with screenshots. <a href="{REPO}">Open the repository</a>.</p>', 'tint')
     b += sec('Releases', '<p>A checkout of a release tag installs that release\'s own signed images. Nothing checks for updates on its own, '
-        'because the deployment never calls out; ask with <code>ospreyflow update --check</code>.</p>')
+        'because the deployment never calls out; ask with <code>ospreyflow update --check</code>.</p>', ident='releases')
     return page('org', 'get-started.html', 'Get started · OspreyFlow', 'Install OspreyFlow: prerequisites, the three commands, the modes and the guides.', b)
 
 def person(name, role, text, placeholder=False):
@@ -368,7 +496,7 @@ def org_contribute():
              'a clearer page in a guide or a well-described bug are all as welcome.', [(REPO, 'Open the repository', 'primary')], 'org', art=False)
     b += sec('Where to start', cards([
         ('Try it and tell us', 'Install Lite with a starter, work through a demonstration case, and open an issue for anything that confused you or broke.'),
-        ('Connectors and recipes', 'A connector reads one kind of source; a recipe maps it to a domain model. Each is a small, self-contained file with its own test.'),
+        ('Connectors and pipelines', 'A connector reads one kind of source; a pipeline maps it to a domain model. Each is a small, self-contained file with its own test.'),
         ('Domain models', 'Crime, anti-money laundering, fraud and cyber ship today. A model for another field is a contribution in itself.'),
         ('Guides', 'The guides live in the repository as Markdown. Corrections and clearer wording are reviewed like code.'),
         ('Adapters', 'Each of the four ports has a conformance suite. An adapter for another engine is supported once it passes it.'),
@@ -380,7 +508,7 @@ def org_contribute():
         '<strong>Plain words on screen.</strong> A refusal says what was refused and why, in words a person can act on.',
         '<strong>You have the right to submit it.</strong> Contributions are made under the Apache License 2.0.']), 'tint')
     b += sec('How a change is reviewed', '<ol class="steps"><li>Open an issue describing the problem, or comment on an existing one.</li>'
-        '<li>Open a pull request. A maintainer runs the project\'s checks on it before it is merged: tests, licence checks, accessibility scans and image scans.</li>'
+        '<li>Open a pull request.</li>'
         '<li>A maintainer reviews it. A change to access control or to what may leave a deployment gets a second reviewer.</li>'
         '<li>Once merged, it ships in the next release and is named in the change log.</li></ol>'
         '<p class="note">The repository\'s contributing guide and code of conduct are not yet in the repository. Until then, open an issue to start a conversation.</p>')
@@ -415,6 +543,7 @@ def net_index():
              'OspreyFlow joins records about people, places, objects and events into one network your analysts can explore, question and act on. '
              'It is open source, with no software licence fee, and runs inside your own cloud or data centre.',
              [('contact.html', 'Talk to us', 'primary'), ('services.html', 'How we work with you', ''), (ORG, 'The open-source project', 'quiet')], 'net')
+    b += overview_section()
     b += sec('The problem: the picture is in pieces', cards([
         ('Five sources, five tools', 'Call records in spreadsheets, intelligence reports in another system, a network drawn by hand, pins on a separate map, watch lists somewhere else.'),
         ('What goes wrong', 'Links are missed between tools and teams. The chain back to the source breaks in every copy. Access is set up five times, five ways.'),
@@ -440,7 +569,8 @@ def net_index():
         ('Pilot', 'A few weeks on your own or anonymised data, with a handful of analysts, ending in a short report of what was found.', ('services.html', 'More')),
         ('Build', 'A production deployment in your own tenancy: pipelines for your sources, your sign-in and your look.', ('services.html', 'More')),
         ('Run and expand', 'Support, new sources and teams, and dashboards for leadership.', ('services.html', 'More'))]) +
-        '<p class="actions"><a class="btn primary" href="contact.html">Talk to us</a></p>', 'tint')
+        '<p class="actions"><a class="btn primary" href="contact.html">Talk to us</a></p>')
+    b += solirius_section()
     return page('net', 'index.html', 'OspreyFlow: intelligence mapping from Solirius Reply', STATEMENT, b)
 
 def net_sectors():
@@ -495,7 +625,7 @@ def net_services():
     b += sec('Deployment options', cards([
         ('Your cloud account', 'AWS or Azure, on one server or a Kubernetes cluster, using the cloud\'s managed services.'),
         ('Your own data centre', 'One Linux server or a cluster in your network, with your own certificates.'),
-        ('A shared government platform', 'A profile for shared Kubernetes platforms is arriving with the next release.')]))
+        ('A shared government platform', 'A profile for shared Kubernetes platforms, in the current release: installed and checked on a test cluster, not yet on a platform.')]))
     b += sec('Who we are', f'<p>Solirius Reply created OspreyFlow and leads its development. <a href="{ORG}/team.html">Meet the team</a> on the project\'s own site.</p>', 'tint')
     return page('net', 'services.html', 'Services · OspreyFlow', 'How Solirius Reply helps organisations adopt OspreyFlow: a pilot, a build, and running it.', b)
 
@@ -507,93 +637,34 @@ def net_contact():
         f'<p>Or install it yourself in a few minutes: <a href="{ORG}/get-started.html">get started on ospreyflow.org</a>.</p></div></div>')
     return page('net', 'contact.html', 'Contact · OspreyFlow', 'Contact Solirius Reply about OspreyFlow.', b)
 
-CSS = r'''
-:root{--paper:#F6F3EC;--paper2:#EDE8DC;--ink:#14181F;--ink2:#3A4350;--line:#D6CFBF;--amber:#A9650A;--amber2:#C98A1E;--teal:#0E6B63;--card:#FFFDF8;--max:1180px}
-*{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
-h1,h2,h3,.brand strong{font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;font-weight:600;line-height:1.15;letter-spacing:-.01em}
-h1{font-size:clamp(2.1rem,4.6vw,3.6rem);margin:.2em 0 .4em}h2{font-size:clamp(1.5rem,2.6vw,2.1rem);margin:0 0 .7em}h3{font-size:1.2rem;margin:1.2em 0 .3em}
-a{color:var(--teal);text-underline-offset:3px}a:hover{color:var(--ink)}
-a:focus-visible,summary:focus-visible{outline:3px solid var(--amber2);outline-offset:3px}
-code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em}
-code{background:var(--paper2);padding:.1em .35em;border-radius:3px}
-pre{background:var(--ink);color:#F1ECDF;padding:18px 20px;border-radius:6px;overflow:auto;line-height:1.5}pre code{background:none;padding:0;color:inherit}
-.wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
-.skip{position:absolute;left:-9999px}.skip:focus{left:12px;top:12px;background:var(--ink);color:#fff;padding:10px 14px;z-index:9}
-.top{border-bottom:1px solid var(--line);background:var(--paper);position:sticky;top:0;z-index:5}
-.bar{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;padding-top:12px;padding-bottom:12px}
-.brand{display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}.brand strong{font-size:1.3rem;display:block}
-.brand small{display:block;font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
-.mark{width:30px;height:30px;color:var(--amber)}
-.top nav ul{display:flex;flex-wrap:wrap;gap:4px 18px;list-style:none;margin:0;padding:0}
-.top nav a{color:var(--ink);text-decoration:none;font-size:.95rem;padding:6px 0;border-bottom:2px solid transparent}
-.top nav a:hover,.top nav a[aria-current]{border-bottom-color:var(--amber)}
-.hero{padding:72px 0 64px;border-bottom:1px solid var(--line)}.hero.plain{padding:56px 0 40px}
-.hero .grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:48px;align-items:center}.hero.plain .grid{grid-template-columns:minmax(0,820px)}
-.kicker{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:#8C5208;font-weight:600;margin:0}
-.lede{font-size:1.2rem;color:var(--ink2);max-width:42em}
-.motif{width:100%;max-width:460px;height:auto;display:block;margin:0 auto}
-.actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:1.6em}
-.btn{display:inline-block;padding:11px 20px;border:1.5px solid var(--ink);color:var(--ink);text-decoration:none;font-weight:600;border-radius:3px}
-.btn:hover{background:var(--ink);color:var(--paper)}.btn.primary{background:var(--ink);color:var(--paper)}.btn.primary:hover{background:var(--amber);border-color:var(--amber);color:#fff}
-.btn.quiet{border-color:transparent;text-decoration:underline;padding-left:6px;padding-right:6px}
-.band{padding:60px 0}.band.tint{background:var(--paper2)}
-.intro{font-size:1.1rem;color:var(--ink2);max-width:46em;margin-top:-.4em}
-.cards{display:grid;gap:18px;margin-top:22px}.c3{grid-template-columns:repeat(3,1fr)}.c4{grid-template-columns:repeat(4,1fr)}
-.card{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--amber);padding:20px 20px 16px;border-radius:3px}
-.card h3{margin-top:0}.card p{margin:.4em 0;color:var(--ink2);font-size:.97rem}.more{font-weight:600}
-.ticks{list-style:none;padding:0;margin:1em 0}.ticks li{padding:7px 0 7px 26px;position:relative;border-bottom:1px solid var(--line)}.ticks li:last-child{border-bottom:0}
-.ticks li::before{content:"";position:absolute;left:4px;top:1em;width:8px;height:8px;background:var(--amber)}.ticks li:nth-child(odd)::before{border-radius:50%;background:var(--teal)}
-.split{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:40px;align-items:start}.split.flip>div{order:2}
-.shot{margin:0}.shot img{width:100%;height:auto;display:block;border:1px solid var(--line);border-radius:4px;box-shadow:0 10px 30px rgba(20,24,31,.12)}
-figcaption{font-size:.85rem;color:var(--ink2);margin-top:8px}.syn{opacity:.8}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:32px}
-.cols2{display:grid;grid-template-columns:1fr 1fr;gap:40px}
-.callout{background:var(--card);border-left:4px solid var(--teal);padding:16px 20px;max-width:52em}
-.note,.soon{color:var(--ink2);font-style:italic}
-.fill{background:#FFE9A8;color:#4A3500;padding:0 .3em;border:1px dashed #A9650A;font-style:normal}
-.tablewrap{overflow:auto}table{border-collapse:collapse;width:100%;background:var(--card);border:1px solid var(--line)}
-caption{text-align:left;font-weight:600;padding:8px 0}th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}thead th{background:var(--ink);color:var(--paper)}
-.toc ul{display:flex;flex-wrap:wrap;gap:8px 10px;list-style:none;padding:18px 0 0;margin:0}.toc a{display:inline-block;padding:5px 12px;border:1px solid var(--line);border-radius:99px;text-decoration:none;background:var(--card);font-size:.92rem;color:var(--ink)}
-.people{display:grid;grid-template-columns:1fr 1fr;gap:20px}.people.four{grid-template-columns:repeat(4,1fr)}.people.four .person{flex-direction:column;gap:10px}
-.person{display:flex;gap:16px;background:var(--card);border:1px solid var(--line);padding:20px;border-radius:3px}.person h3{margin:0}.person .role{color:var(--amber);font-weight:600;margin:.1em 0 .5em}
-.person p{margin:.3em 0}.avatar{flex:none;width:56px;height:56px;border-radius:50%;background:var(--paper2);display:grid;place-items:center}.avatar .mark{width:30px;height:30px}
-.steps,.stages{padding:0;list-style:none;counter-reset:s}.steps li{counter-increment:s;padding:10px 0 10px 48px;position:relative;border-bottom:1px solid var(--line)}
-.steps li::before,.stages>li::before{content:counter(s);position:absolute;left:0;top:8px;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--paper);display:grid;place-items:center;font-weight:700}
-.stages{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}.stages>li{counter-increment:s;position:relative;background:var(--card);border:1px solid var(--line);padding:56px 20px 14px;border-radius:3px}
-.stages>li::before{left:20px;top:16px}.stages h3{margin-top:0}.who{font-weight:600;color:var(--ink2)}
-.foot{background:var(--ink);color:#D9D3C5;padding:48px 0 28px;font-size:.93rem}.foot a{color:#F3D9A4}.foot h2{font-size:1rem;color:#fff;margin:0 0 .6em;font-family:inherit;letter-spacing:.04em;text-transform:uppercase}
-.foot .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:28px}.foot ul{list-style:none;padding:0;margin:0}.foot li{padding:3px 0}
-.foot .legal{border-top:1px solid #39424F;margin-top:28px;padding-top:18px}.foot .soon{color:#A9A394}
-/* ospreyflow.net: the commercial site wears the dark hero */
-.site-net .top{background:var(--ink);border-bottom-color:#2B3441}.site-net .brand,.site-net .top nav a{color:#F4EFE3}.site-net .brand small{color:#B9B2A2}.site-net .mark{color:var(--amber2)}
-.site-net .top nav a:hover,.site-net .top nav a[aria-current]{border-bottom-color:var(--amber2)}
-.site-net .hero{background:var(--ink);color:#F4EFE3;border-bottom:0}.site-net .hero .lede{color:#C9C3B4}.site-net .hero .kicker{color:var(--amber2)}
-.site-net .hero .btn{border-color:#F4EFE3;color:#F4EFE3}.site-net .hero .btn:hover{background:#F4EFE3;color:var(--ink)}
-.site-net .hero .btn.primary{background:var(--amber2);border-color:var(--amber2);color:var(--ink)}.site-net .hero .btn.primary:hover{background:#F4EFE3;border-color:#F4EFE3}
-.site-net .hero .btn.quiet{border-color:transparent}.site-net .card{border-top-color:var(--teal)}
-@media (max-width:900px){.hero .grid,.split,.cols2,.pair,.people,.people.four,.stages,.foot .cols{grid-template-columns:1fr}.c3,.c4{grid-template-columns:1fr 1fr}.split.flip>div{order:0}.art{display:none}.top{position:static}}
-@media (max-width:560px){.c3,.c4{grid-template-columns:1fr}body{font-size:16px}.band{padding:44px 0}}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-@media print{.top,.foot,.actions{display:none}.band{padding:16px 0}}
-'''
+#: Copied as they are into each site's assets/: the style sheet, the script, the fonts and their licences, and Solirius
+#: Reply's logos and photographs (the current site's own, at the owner's instruction).
+ASSETS = {'site.css': 'site.css', 'site.js': 'site.js',
+          **{f'fonts/{p.name}': f'fonts/{p.name}' for p in sorted((SOURCE / 'fonts').iterdir())},
+          **{p.name: f'solirius/{p.name}' for p in sorted((SOURCE / 'solirius').iterdir())}}
 
-def build(out=OUT, shots=None):
+
+def build(out=OUT, shots=None, changelog=CHANGELOG):
+    global RELEASE
+    RELEASE = latest_release(changelog)
+    if RELEASE != CHECKED_AGAINST:
+        raise SystemExit(f'The CHANGELOG\'s latest release is {RELEASE}, and the pages were checked against {CHECKED_AGAINST}. Check every '
+                         f'claim marked as in a release or only on main against {RELEASE}, then set CHECKED_AGAINST to it.')
     sites = {
-     'org': {'index.html': org_index(), 'features.html': org_features(), 'public-sector.html': public_sector('org'), 'get-started.html': org_start(),
+     'org': {'index.html': org_index(), 'features.html': org_features(), 'public-sector.html': org_public_sector(), 'get-started.html': org_start(),
              'team.html': org_team(), 'contribute.html': org_contribute(), 'governance.html': org_governance()},
-     'net': {'index.html': net_index(), 'sectors.html': net_sectors(), 'public-sector.html': public_sector('net'), 'services.html': net_services(),
+     'net': {'index.html': net_index(), 'sectors.html': net_sectors(), 'public-sector.html': net_public_sector(), 'services.html': net_services(),
              'contact.html': net_contact()},
     }
     for s, pages in sites.items():
-        os.makedirs(f'{out}/{s}/assets', exist_ok=True)
+        os.makedirs(f'{out}/{s}/assets/fonts', exist_ok=True)
         used = set()
         for name, content in pages.items():
             with open(f'{out}/{s}/{name}', 'w', encoding='utf-8') as f:
                 f.write(content)
             used |= {k for k in SHOTS if f'assets/{k}.jpg' in content}
-        with open(f'{out}/{s}/assets/site.css', 'w', encoding='utf-8') as f:
-            f.write(CSS.strip() + '\n')
+        for target, source in ASSETS.items():
+            shutil.copyfile(SOURCE / source, f'{out}/{s}/assets/{target}')
         if shots is not None:
             from PIL import Image  # only for --images: the captures are not in the repository
             for k in sorted(used):
@@ -601,9 +672,11 @@ def build(out=OUT, shots=None):
                 im.save(f'{out}/{s}/assets/{k}.jpg', quality=80, optimize=True)
         print(s, len(pages), 'pages', len(used), 'images' + ('' if shots else ' (held, not remade)'))
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Build ospreyflow.org and ospreyflow.net.')
     parser.add_argument('--out', type=Path, default=OUT)
     parser.add_argument('--images', type=Path, default=None, metavar='SHOTS')
+    parser.add_argument('--changelog', type=Path, default=CHANGELOG, help='the CHANGELOG the release is read from')
     args = parser.parse_args()
-    build(args.out, args.images)
+    build(args.out, args.images, args.changelog)

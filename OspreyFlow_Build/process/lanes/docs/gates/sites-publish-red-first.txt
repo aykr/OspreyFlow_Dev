@@ -1,0 +1,24 @@
+# Item 5's tests (tests/test_publish_pages.py) at b4aa701, each run with a fresh PYTHONPYCACHEPREFIX, no OSPREY_LANE, closed ports; each case runs a copy of the script in a scratch folder, so no run reaches a checkout.
+# 1. Against main's publish_pages.sh (no --site; item 4's grep):
+FAILED tests/test_publish_pages.py::test_a_site_with_no_repository_written_is_refused_in_words[org]
+FAILED tests/test_publish_pages.py::test_a_site_with_no_repository_written_is_refused_in_words[net]
+FAILED tests/test_publish_pages.py::test_an_address_not_on_github_is_refused[org]
+FAILED tests/test_publish_pages.py::test_an_address_not_on_github_is_refused[net]
+FAILED tests/test_publish_pages.py::test_the_push_can_come_first
+FAILED tests/test_publish_pages.py::test_site_takes_org_or_net[args0]
+FAILED tests/test_publish_pages.py::test_site_takes_org_or_net[args1]
+FAILED tests/test_publish_pages.py::test_site_takes_org_or_net[args2]
+FAILED tests/test_publish_pages.py::test_an_unknown_argument_stops_before_anything_is_done[--Push]
+FAILED tests/test_publish_pages.py::test_an_unknown_argument_stops_before_anything_is_done[push]
+FAILED tests/test_publish_pages.py::test_an_unknown_argument_stops_before_anything_is_done[org]
+FAILED tests/test_publish_pages.py::test_an_unknown_argument_stops_before_anything_is_done[--sites]
+FAILED tests/test_publish_pages.py::test_a_site_is_published_whole_with_its_own_domain
+13 failed, 1 passed in 0.77s
+
+# 2. Against the owner's approved diff as proposed (process/lanes/docs/sites-proposal/publish_pages.diff on main's script), before the empty-site stop:
+FAILED tests/test_publish_pages.py::test_site_takes_org_or_net[args2]
+1 failed, 13 passed in 0.85s
+
+# 3. As committed:
+14 passed in 0.83s
+# The one case green against main's script is the committed REPOSITORIES file having no address, which holds whatever the script is. The approved diff as proposed let '--site ""' fall through to the current site; the stop on an empty site was added for it.

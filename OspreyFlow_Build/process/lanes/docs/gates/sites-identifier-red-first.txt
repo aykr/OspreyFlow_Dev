@@ -1,0 +1,27 @@
+# Item 4's tests (tests/test_site_identifiers.py) at 0908654, on main 292ec5f with sites2's design beneath, each run with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a), no OSPREY_LANE, closed ports.
+# 1. Against the rule as publish_pages.sh's grep held it, written as the same checker (identifier_check.violations replaced in place: the owner's pattern and a local path, on every page, no exception):
+FAILED tests/test_site_identifiers.py::test_the_site_as_built_passes
+FAILED tests/test_site_identifiers.py::test_a_seventh_person_card_is_refused
+FAILED tests/test_site_identifiers.py::test_a_renamed_card_is_refused
+FAILED tests/test_site_identifiers.py::test_a_name_twice_on_the_team_page_is_refused
+FAILED tests/test_site_identifiers.py::test_each_team_name_on_another_page_is_refused[Ayan Kar]
+FAILED tests/test_site_identifiers.py::test_each_team_name_on_another_page_is_refused[Matthew Couldridge]
+FAILED tests/test_site_identifiers.py::test_each_team_name_on_another_page_is_refused[Will Forbes]
+FAILED tests/test_site_identifiers.py::test_each_team_name_on_another_page_is_refused[Harrison Boyle-Thomas]
+FAILED tests/test_site_identifiers.py::test_each_team_name_on_another_page_is_refused[Graham Burnside]
+FAILED tests/test_site_identifiers.py::test_each_team_name_on_another_page_is_refused[Laurence Rawlings]
+FAILED tests/test_site_identifiers.py::test_the_owners_address_on_the_team_page_is_refused
+FAILED tests/test_site_identifiers.py::test_a_local_path_is_refused
+FAILED tests/test_site_identifiers.py::test_a_clients_name_is_refused_without_printing_it
+FAILED tests/test_site_identifiers.py::test_nothing_is_published_without_the_local_hash_file
+FAILED tests/test_site_identifiers.py::test_the_command_exits_one_on_a_violation
+FAILED tests/test_site_identifiers.py::test_the_organisations_shared_mailbox_is_not_a_personal_identifier
+FAILED tests/test_site_identifiers.py::test_a_team_name_in_another_case_or_spacing_is_refused[MATTHEW COULDRIDGE]
+FAILED tests/test_site_identifiers.py::test_a_team_name_in_another_case_or_spacing_is_refused[Will&nbsp;Forbes]
+FAILED tests/test_site_identifiers.py::test_a_team_name_in_another_case_or_spacing_is_refused[Graham\nBurnside]
+19 failed, 2 passed in 2.21s
+
+# 2. The rule as applied:
+21 passed in 6.92s
+
+# The two green under the old rule are test_the_old_rule_refused_the_team_page (which asserts the old grep refuses the Team page) and test_the_team_page_under_another_name_is_refused (the old rule refuses the owner's name on any page, so a renamed Team page is refused by it too). The old rule refuses ospreyflow.org's Team page itself, which every case's copy of the site carries, so several of the 19 may be red for that shared reason as well as their own; this run shows the test file cannot pass against the old rule, not each case's own reason one by one.
