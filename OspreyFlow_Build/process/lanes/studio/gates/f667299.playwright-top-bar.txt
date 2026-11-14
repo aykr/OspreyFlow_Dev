@@ -1,0 +1,19 @@
+
+Running 14 tests using 1 worker
+
+  ✓   1 keyboard/top-bar.spec.ts:19:1 › the case choice and the account are one button each, and the bar is one line (540ms)
+  ✓   2 keyboard/top-bar.spec.ts:30:1 › the Filters icon sits inside the search box (237ms)
+  ✓   3 keyboard/top-bar.spec.ts:40:1 › with the mouse: choose another case, browse all cases, sign out (434ms)
+  ✓   4 keyboard/top-bar.spec.ts:55:1 › with the keyboard: open the case menu, move through it, choose, and Escape closes (235ms)
+  ✓   5 keyboard/top-bar.spec.ts:75:1 › with the keyboard: tabbing out of an open menu closes it, and the account menu signs out (245ms)
+  ✓   6 keyboard/top-bar.spec.ts:93:1 › with the keyboard: the theme is switched from its icon in the bar, and the page changes (ADR-115 Amendment 1) (281ms)
+  ✓   7 keyboard/top-bar.spec.ts:120:1 › the search hint floats over the page, keeps the bar one line, and fades by itself (5.0s)
+  ✓   8 keyboard/top-bar.spec.ts:139:1 › the Filters panel floats over the page too, so opening it does not grow the bar (268ms)
+  ✓   9 keyboard/top-bar.spec.ts:146:1 › at 924 wide the bar wraps to two lines and nothing leaves the window (ADR-115 Amendment 2) (222ms)
+  ✓  10 keyboard/top-bar.spec.ts:163:1 › at 1440 wide, a long case name and its scope badge never push the account off screen (ADR-115 Amendment 3) (220ms)
+  ✓  11 keyboard/top-bar.spec.ts:182:3 › the box says its suggestions are limited when the index did not answer (dark) (5.9s)
+  ✓  12 keyboard/top-bar.spec.ts:182:3 › the box says its suggestions are limited when the index did not answer (light) (5.8s)
+  ✓  13 keyboard/top-bar.spec.ts:182:3 › the box says its suggestions are limited when the index did not answer (govuk) (5.8s)
+  ✓  14 keyboard/top-bar.spec.ts:205:1 › with the index answering, the box shows no limited line (510ms)
+
+  14 passed (27.4s)
