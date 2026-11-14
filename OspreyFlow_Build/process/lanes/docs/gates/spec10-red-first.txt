@@ -32,3 +32,14 @@ E       AssertionError: assert '<!-- docume...ol:begin -->' not in '# 10 — Ins
 
 ## 5. Green
 2 passed in 0.20s
+
+## 6. The repair a lane is told of, at a890ddc plus the test's --write: the shipped guide changed alone (02:15 made 02:30), red with the command; the command run; green
+E           AssertionError: spec/10 differs from the shipped guide at section 1's line 1419:
+E             spec:    **Nightly, at 02:15 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
+E             shipped: **Nightly, at 02:30 UTC**, whatever the cluster's time zone: the CronJob `ospreyflow-backup` (ArcadeDB's
+E           Change the shipped guide (docs/administration-guide.md), then mirror it: from OspreyFlow_Build: python -m tests.test_admin_guide_copies --write
+../OspreyFlow_Build/tests/test_admin_guide_copies.py:44: AssertionError
+1 failed, 1 passed in 0.20s
+spec/10_ADMINISTRATION_GUIDE.md: level with OspreyFlow_Core/docs/administration-guide.md from section 1
+2 passed in 0.19s
+ 1 file changed, 1 insertion(+), 1 deletion(-)
