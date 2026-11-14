@@ -1,6 +1,6 @@
 """Writes the client-size synthetic dataset to a folder (ROUTE_052 step B, `v052-load`).
 
-    python -m scripts.generate_client_size --out DIR [--scale 1.0] [--graph-scale 0.25]
+    python -m scripts.generate_client_size --out DIR [--scale 1.0] [--graph-scale 1.0]
                                            [--seed 20261116] [--jobs N]
 
 Plain generation: no store, no network. `--out` must be outside the git working tree (the files
