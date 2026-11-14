@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 from services.api import worker_main
+from services.api.batch_expansion import BatchExpandBindings
 from services.api.jobs import JobQueue
 from services.api.worker import JobWorker
 from services.resolve import trigger
@@ -25,6 +26,12 @@ from ontology.loader import load_default_ontology
 
 async def _layers() -> set[str]:
     return {"layer-of-case-a"}
+
+
+#: ADR-151's batch expansion's stores; the cases here run other jobs, so none is asked anything.
+_BATCH = BatchExpandBindings(
+    views=object(), investigations=object, datasets=object(), jobs=object(), audit=None  # type: ignore[arg-type]
+)
 
 
 async def test_the_deployed_worker_runs_a_resolution_job_with_the_layers(
@@ -41,7 +48,7 @@ async def test_the_deployed_worker_runs_a_resolution_job_with_the_layers(
     worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
     worker_main.register_all(
         worker, ontology=ontology, scheme=scheme, valkey=valkey, analyst_layers=_layers, alerts=None,
-        judgement_store=None,
+        judgement_store=None, batch=_BATCH,
     )
     handler = worker._handlers["resolve_entity_type"]  # noqa: SLF001
     result = await handler({"entity_type": "Person"}, graph=object(), tx="tx")
@@ -72,6 +79,7 @@ async def test_the_registration_check_fails_with_the_bindings_planted_out(
         analyst_layers=_layers,
         alerts=None,
         judgement_store=None,
+        batch=_BATCH,
     )
     with pytest.raises(TypeError, match="analyst_layers"):
         await worker._handlers["resolve_entity_type"](  # noqa: SLF001
@@ -104,7 +112,7 @@ async def test_the_deployed_worker_gives_both_jobs_the_alerts_repoint_journal(
     worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
     worker_main.register_all(worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(),
                              valkey=valkey, analyst_layers=_layers, alerts=alerts,
-                             judgement_store=None)  # fmt: skip
+                             judgement_store=None, batch=_BATCH)  # fmt: skip
     await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
     await worker._handlers["resolve_entity_type"]({"entity_type": "Person"}, graph=object(), tx="tx")  # noqa: SLF001
     assert seen == {"supersede_node": alerts, "resolve_entity_type": alerts}
@@ -143,7 +151,7 @@ async def test_the_supersede_job_is_given_the_judgement_store_it_is_registered_w
     judgements, alerts, valkey = object(), object(), object()
     worker = JobWorker(valkey, JobQueue(valkey), object(), consumer_name="test")  # type: ignore[arg-type]
     worker_main.register_all(worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(), valkey=valkey,
-                             analyst_layers=_layers, alerts=alerts, judgement_store=judgements)  # type: ignore[arg-type]  # fmt: skip
+                             analyst_layers=_layers, alerts=alerts, judgement_store=judgements, batch=_BATCH)  # type: ignore[arg-type]  # fmt: skip
     await worker._handlers["supersede_node"]({}, graph=object(), tx="tx")  # noqa: SLF001
     assert (seen["judgement_store"], seen["alerts"]) == (judgements, alerts)
 
@@ -225,5 +233,5 @@ def test_a_registration_without_the_judgement_store_is_refused() -> None:
     with pytest.raises(TypeError, match="judgement_store"):
         worker_main.register_all(  # type: ignore[call-arg]
             worker, ontology=load_default_ontology(), scheme=load_uk_le_scheme(), valkey=valkey,
-            analyst_layers=_layers, alerts=None,
+            analyst_layers=_layers, alerts=None, batch=_BATCH,
         )  # fmt: skip

@@ -44,6 +44,12 @@ class JobRecord(BaseModel):
     payload: dict[str, Any]
     result: dict[str, Any] | None = None
     error: str | None = None
+    #: A running job's stage, in words a person can read (ADR-151 decision 4); kept through each
+    #: later state change.
+    progress: str | None = None
+    #: When a worker took it (ADR-151: a job still running long past its own limit was abandoned by
+    #: a worker that stopped, since nothing reclaims a pending entry).
+    started_at: datetime | None = None
 
 
 def _job_key(job_id: str) -> str:
@@ -72,8 +78,12 @@ class JobQueue:
         convention in a second module."""
         return _queue_key(job_type)
 
-    async def submit(self, job_type: str, payload: dict[str, Any]) -> str:
-        job_id = new_id()
+    async def submit(
+        self, job_type: str, payload: dict[str, Any], *, job_id: str | None = None
+    ) -> str:
+        """`job_id` is given by a caller that must name the job before it is queued (ADR-151's
+        one-at-a-time claim); otherwise a new one is made."""
+        job_id = job_id or new_id()
         record = JobRecord(
             id=job_id,
             job_type=job_type,
@@ -93,12 +103,22 @@ class JobQueue:
 
     async def mark_running(self, job_id: str) -> None:
         await self._transition(job_id, state="running")
+        existing = await self.get_status(job_id)
+        if existing is not None:
+            await self._save(existing.model_copy(update={"started_at": datetime.now(UTC)}))
 
     async def mark_done(self, job_id: str, result: dict[str, Any]) -> None:
         await self._transition(job_id, state="done", result=result)
 
     async def mark_failed(self, job_id: str, error: str) -> None:
         await self._transition(job_id, state="failed", error=error)
+
+    async def mark_progress(self, job_id: str, progress: str) -> None:
+        """A running job's stage, written whole as every change is (ADR-151 decision 4)."""
+        existing = await self.get_status(job_id)
+        if existing is None:
+            raise KeyError(f"no job record for {job_id!r}")
+        await self._save(existing.model_copy(update={"progress": progress}))
 
     async def _transition(
         self,

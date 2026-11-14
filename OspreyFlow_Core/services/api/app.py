@@ -226,6 +226,7 @@ from schemas.analytics import (
     Sighting,
     SightingRequest,
 )
+from schemas.batch_expansion import BatchExpansion, BatchExpansionInput
 from schemas.boards import (
     Board,
     BoardInput,
@@ -597,6 +598,9 @@ from .assessments import (
 )
 from .audit import AuditWriteError, AuditWriter
 from .auth import PrincipalResolutionError, PrincipalResolver, bearer_scheme
+from .batch_expansion import BatchExpandBindings, BatchNotFound, BatchRunning
+from .batch_expansion import read as read_batch_expansion
+from .batch_expansion import submit as submit_batch_expansion
 from .board_store import BoardItemStore, InMemoryBoardItemStore, PostgresBoardItemStore
 from .boards import BoardNotFound, Boards, DrawingRefused, ItemNotFound, NotTheBoardsCreator
 from .case_brief import (
@@ -1540,6 +1544,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         alerts=alerts_store,
         judgement_store=judgements_store,
         compute=compute,
+        batch=BatchExpandBindings(
+            views=case_view_store,
+            investigations=lambda: investigations,
+            datasets=datasets_store,
+            jobs=jobs,
+            audit=audit,
+        ),
     )
     app.state.job_worker = job_worker
     app.state.principal_resolver = resources.principal_resolver
@@ -2968,6 +2979,23 @@ async def _too_many_identifiers_handler(
 async def _view_not_found_handler(request: Request, exc: ViewNotFound) -> JSONResponse:
     """ADR-144 decision 3: someone else's private view, another case's, and none at all alike."""
     return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"error": "view_not_found"})
+
+
+@app.exception_handler(BatchNotFound)
+async def _batch_not_found_handler(request: Request, exc: BatchNotFound) -> JSONResponse:
+    """ADR-151 decision 4: another member's batch expansion, another case's, and none alike."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"error": "batch_expansion_not_found"}
+    )
+
+
+@app.exception_handler(BatchRunning)
+async def _batch_running_handler(request: Request, exc: BatchRunning) -> JSONResponse:
+    """ADR-151 decision 2: one at a time per requester and case, naming the one running."""
+    return JSONResponse(
+        status_code=status.HTTP_409_CONFLICT,
+        content={"error": "batch_expansion_running", "detail": str(exc), "id": exc.job_id},
+    )
 
 
 @app.exception_handler(NotTheViewsCreator)
@@ -4563,6 +4591,51 @@ async def save_case_view(
         result_cardinality=1,
     )
     return view.wire()
+
+
+# --- batch expansions (ADR-151; spec 03 §3.2) -------------------------------------------------
+#
+# The working-set cap's third choice: the refused expansion run by the job worker under the
+# requester's own access and saved as a private view, or refused with its figures (rule 2).
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/batch-expansions",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def start_batch_expansion(
+    investigation: InvestigationEditorDep,
+    body: BatchExpansionInput,
+    principal: PrincipalDep,
+    jobs: JobsDep,
+    valkey: ValkeyDep,
+    audit: AuditDep,
+) -> BatchExpansion:
+    """Queues the expansion the cap refused, at Editor as `expand` is; reads nothing from the graph
+    and adds nothing to the working set (ADR-151 decision 1)."""
+    started = await submit_batch_expansion(jobs, valkey, investigation.id, principal, body)
+    await audit.record(
+        principal=principal,
+        action="batch_expand",
+        investigation_id=investigation.id,
+        resolved_query={"job_id": started.id, **body.request.model_dump(mode="json")},
+        result_cardinality=0,
+        justification=body.justification,
+    )
+    return started
+
+
+@app.get("/v1/investigations/{investigation_id}/batch-expansions/{job_id}")
+async def get_batch_expansion(
+    investigation: InvestigationViewerDep,
+    job_id: str,
+    principal: PrincipalDep,
+    jobs: JobsDep,
+    views: CaseViewsDep,
+) -> BatchExpansion:
+    """The job as its requester is told it; anyone else's is not found (ADR-151 decision 4)."""
+    return await read_batch_expansion(jobs, views, investigation.id, job_id, principal)
 
 
 @app.get("/v1/investigations/{investigation_id}/views/{view_id}")

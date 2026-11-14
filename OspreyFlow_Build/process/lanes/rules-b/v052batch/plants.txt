@@ -1,0 +1,14 @@
+RED   | expanded as no one: the requester's scope dropped | -k 'hidden_node or requesters_own_scope' | 2 failed, 23 deselected in 5.29s
+RED   | the Editor re-check at run time dropped | -k 'lost_edit' | 1 failed, 24 deselected in 5.21s
+RED   | past the cap, cut to fit | -k 'past_the_cap' | 1 failed, 24 deselected in 5.15s
+RED   | past the link cap, cut to fit | -k 'past_the_cap' | 1 failed, 24 deselected in 5.34s
+RED   | nothing found saved as an empty view | -k 'finding_nothing' | 1 failed, 24 deselected in 5.43s
+RED   | the exception's own words served | -k 'failed_batch_says' | 1 failed, 24 deselected in 5.67s
+RED   | another member's job read | -k 'another_members' | 1 failed, 24 deselected in 5.42s
+RED   | one at a time not held | -k 'second_batch' | 1 failed, 24 deselected in 5.17s
+RED   | a view saved and not audited kept | -k 'not_audited' | 1 failed, 24 deselected in 5.96s
+RED   | the view's input built by model_construct, every validator skipped | -k 'same_validators' | 1 failed, 24 deselected in 6.21s
+RED   | a job left running by a stopped worker never given up | -k 'stopped_worker' | 1 failed, 24 deselected in 5.88s
+RED   | no time limit | -k 'too_long' | 1 failed, 24 deselected in 6.78s
+RED   | the job run in the worker's own context, not a task of its own | -k 'scope_ends' | 1 failed, 24 deselected in 6.35s
+CONTROL (unplanted, fresh cache): 25 passed in 11.65s

@@ -620,3 +620,6 @@ export type { DatasetFilter } from "./DatasetFilter";
 export type { DateSpan } from "./DateSpan";
 export type { OfferedFilters } from "./OfferedFilters";
 export type { SearchPageResponse } from "./SearchPageResponse";
+export type { BatchExpansionInput } from "./BatchExpansionInput";
+export type { BatchRefusal } from "./BatchRefusal";
+export type { BatchExpansion } from "./BatchExpansion";

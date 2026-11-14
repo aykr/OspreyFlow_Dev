@@ -39139,6 +39139,15 @@ runs, with the inventory note corrected there (the orchestrator's ruling of 14 N
      requester: `node_ids` are the expansion's nodes, `window` is the request's `temporal_window`, and there
      is no layout and no threshold. Its name is the body's `name`, or "Expanded from 12 nodes, 14 Nov 2026
      14:05".
+   - `CaseViewInput` bounds a selection that a client posts at 10,000 ids. That bound is on a request body.
+     The batch's selection is the adapter's answer for the requester, not client input. The job validates the
+     view's input through `BatchViewInput`, a subclass of `CaseViewInput`, so it inherits every validator the
+     client's input has and any added later; only the selection's bound is raised, to the view's cap. It never
+     uses `model_construct`, which would skip every validator, not only the bound (the orchestrator's ruling
+     of 14 November 2026; `test_a_batch_view_passes_the_same_validators_a_client_view_does`, red with
+     `model_construct`).
+     Bounding the batch at 10,000 instead would refuse most of the expansions the cap refuses, so the third
+     choice would answer almost nothing.
    - It is ADR-144's live lens. Each opening re-reads the case as its reader may see it. A shared reader sees
      their own level, and `missing` counts the rest without naming them.
 6. **Where it runs: where the job worker runs.** `batch_expand` is registered in `worker_main.register_all`,
@@ -39173,7 +39182,8 @@ runs, with the inventory note corrected there (the orchestrator's ruling of 14 N
   for the clearance snapshot in **Cost**. ADR-144's
   `test_a_view_shows_the_rest_and_counts_the_missing` proves a different reader, not the same reader later.
 - The Glass's tests are case-b's: the cap dialog's third button, the progress, done and refused words, and
-  *Open the view*, in `keyboard/view-over-cap.spec.ts`. Rule 13 applies.
+  *Open the view*, beside case's `keyboard/canvas-expand-cap.spec.ts` (the expansion's cap prompt, not the
+  view's over-cap dialog). Rule 13 applies.
 - Live on a leased stack: the leak test and the ten-minute bound against ArcadeDB. Each rule is planted alone
   and shown red (`process/lanes/rules-b/v052batch/`).
 
@@ -39194,6 +39204,12 @@ runs, with the inventory note corrected there (the orchestrator's ruling of 14 N
 - **Not durable past 24 hours.** A job's record lives 24 hours (`JOB_TTL_SECONDS`), and the view it saved is
   durable.
 - **No cancel.** A job runs to done, refused or its ten minutes.
+- **A job its worker abandons stays pending in the stream.** Nothing reclaims a pending entry (no
+  `XAUTOCLAIM`; the admin lane's finding, 14 November 2026). So a job still `running` a minute past its ten
+  minutes is said as `failed`, and its claim is taken over, so its requester can start another rather than
+  waiting out the record's 24 hours (`JobRecord.started_at`;
+  `test_a_job_left_running_by_a_stopped_worker_is_failed_and_does_not_block`). The job itself is not run
+  again.
 
 ### Revisit if
 
