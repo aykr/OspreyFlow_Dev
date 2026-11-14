@@ -1,0 +1,21 @@
+case-b, ADR-044 Amendment 2's live store cases and plants, stack b (the orchestrator's standing allowance for short Postgres runs, 14 Nov 2026), head dd90d53
+
+Running on ospreyflow-test (stack b, osprey-runs/case-b/), logged at osprey-runs/case-b.meta/runs/20261114T162017Z-49642582/log: bash OspreyFlow_Build/process/lanes/case-b/adr044-escalation/plants-live.sh
+== unplanted, both files whole
+23 passed in 1.48s
+AS IT MUST BE (red): the hotlist's count not put back by set_status
+    E           assert (3, None) == (0, None)
+AS IT MUST BE (red): the hotlist's count answered, not kept (gone at a restart)
+    E       assert 1 == 2
+AS IT MUST BE (red): the watch's count not put back by set_status
+    E           AssertionError: assert ('revoked', 2, None) == ('revoked', 0, None)
+AS IT MUST BE (red): the watch's count answered, not kept
+    E           assert (0, None) == (1, "Its owne...ds in a row.")
+AS IT MUST BE (red): the hotlist's count read, then written, in two statements (two evaluators read the same count)
+    E           assert [1, 1, 1, 1] == [1, 2, 3, 4]
+AS IT MUST BE (red): a stopped hotlist left out of evaluation
+    E       AssertionError: assert '01M7DDRDDZXS98XDSATK1RY71T' in {'01M720RJHAF878CHRZ07RFQXAT', '01M726PHQ93PN6WG6K48TE8B54', '01M7363XVXX6Q8Y1MBGCDN5F69', '01M7366GDE6A7T2K7PQ94D1V3T', '01M7366GW9J96BYZMDDFT5QG03', '01M7366HA4DF7JAWRP2VRJBG88', ...}
+every live plant red for its reason
+Wall time: 11 s, exit 0 (stack b, the lease case-b took at 2026-11-14T16:19:53Z; set-up before it 11 s)
+Lease on stack b released by case-b.
+

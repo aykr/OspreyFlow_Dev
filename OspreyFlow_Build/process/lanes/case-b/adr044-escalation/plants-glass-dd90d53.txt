@@ -1,0 +1,10 @@
+AS IT MUST BE (red): the note shown beside Stopped too, over the reason
+    × a stopped watch shows its reason, not a note left behind 2ms
+AS IT MUST BE (red): the note never shown
+    × the note is shown beside Active 3ms
+AS IT MUST BE (red): the hotlist's list not passing the note
+    × says, while active, how many loads could not check its owner's sign-in 1004ms
+AS IT MUST BE (red): the watch's list not passing the note
+    × says, while active, how many loads could not check its owner's sign-in 1004ms
+unplanted: Tests 19 passed (19)
+every plant red for its reason, unplanted green
