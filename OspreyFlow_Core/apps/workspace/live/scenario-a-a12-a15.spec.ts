@@ -11,7 +11,7 @@
 // DECISION_NEEDED.md.)
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly, pageErrors, workingSetCounts } from "./live";
+import { freshWorkspaceUrl, liveOnly, pageErrors, unfoldSidePanel, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -165,8 +165,10 @@ test("A12 — the Clique Metric ranks nodes in the metrics panel", async ({
     if (r.url().includes("/compute/clique_metric")) computed.push(r.status());
   });
 
-  // The Metrics panel starts closed (ADR-070).
-  await page.getByRole("button", { name: /^Ranking/ }).click();
+  // The Metrics panel is a side panel, folded until shown, and its Ranking section opens within it.
+  await unfoldSidePanel(page, "Metrics");
+  const ranking = page.getByRole("button", { name: /^Ranking/ });
+  if ((await ranking.getAttribute("aria-expanded")) === "false") await ranking.click();
   await page
     .getByRole("combobox", { name: "Primary metric" })
     .selectOption("clique_metric");

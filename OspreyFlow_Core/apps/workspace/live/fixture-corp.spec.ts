@@ -23,7 +23,7 @@
 // `family_name`/`given_names`/`date_of_birth` only.
 import { expect, type Page, test } from "@playwright/test";
 
-import { freshWorkspaceUrl, liveOnly, workingSetCounts } from "./live";
+import { freshWorkspaceUrl, liveOnly, unfoldSidePanel, workingSetCounts } from "./live";
 
 test.beforeEach(liveOnly);
 
@@ -148,9 +148,7 @@ async function pairByKeyboard(page: Page): Promise<void> {
 async function addPersonVariable(page: Page): Promise<void> {
   // The query builder is one of the side panels, folded until shown (`layout/SidePanelStack.tsx`'s
   // DEFAULT_FOLDED: every panel but the Inspector). Its header's button unfolds it.
-  const header = page.getByRole("button", { name: "Query builder", exact: true });
-  await expect(header, "the graph has no Query builder panel").toBeVisible();
-  if ((await header.getAttribute("aria-expanded")) === "false") await header.click();
+  await unfoldSidePanel(page, "Query builder");
   await page
     .getByRole("combobox", { name: "Entity type" })
     .selectOption("Person");
