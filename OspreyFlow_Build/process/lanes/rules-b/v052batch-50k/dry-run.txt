@@ -1,0 +1,13 @@
+DRY RUN: nothing is connected to and nothing is written.
+  hubs: 10
+  official_leaves: 49,990
+  secret_leaves: 500
+  nodes_written: 50,500
+  links_written: 50,490
+  result_nodes: 50,000
+  result_links: 49,990
+  the cap: 50,000 nodes; the result sits on it: True
+  SECRET leaves the leak check expects absent from the saved view: 500
+  setup estimate at v052-load's rates: nodes 198 s, links 79 s, total 4.6 min (bounded at 15 min)
+  the whole run is bounded at 45 min: the setup, then the batch end to end, then the curve, the profile and the comparisons while time is left
+  edges_among's script at 50,000 ids carries them twice: about 2.9 MB of text

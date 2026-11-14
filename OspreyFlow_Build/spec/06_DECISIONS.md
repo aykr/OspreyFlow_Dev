@@ -39403,7 +39403,8 @@ registered job type, and the inventory note is corrected.
   is not seen until the view is next opened. The open re-reads under the reader's current principal, so the
   view never shows more than its reader may see. The node ids saved were chosen under the old clearance, and
   `missing` counts them (`test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost`).
-- **`edges_among` at 50,000 ids is still not measured.** On stack e (14 November 2026), expand from one seed over
+- **`edges_among` at 50,000 ids** (settled by ADR-124 Amendment 20, which measured the query as built failing to
+  compile at 25,000 ids and the record-id shape answering 50,000 in 6.2 s). As first recorded: **not measured.** On stack e (14 November 2026), expand from one seed over
   4,001 nodes took 1.1 s, and `edges_among` over those 4,001 had not answered within the run's remaining seconds.
   Writing them by the ordinary path took 417 s, so the run never reached 50,000 (`process/lanes/rules-b/v052batch/live.txt`).
   The ten-minute bound is a guess, and its failure is a safe one: a batch too slow to count is refused
@@ -39509,6 +39510,94 @@ reads is its own record") for the write path.*
      to the record in the index, each red (`PLANTS_RECORD.txt`); and the review's R1 to R4, D1 to D3, S1 and I1 in
      the same file, each red offline at the head (`PLANTS_RECORD.offline.txt`); A9 to A11 list the scale test alone, so it is shown
      red by its own measure, not by an offline refusal.
+
+### ADR-124, Amendment 20 (14 November 2026) — `edges_among` starts from record ids, a chunk at a time
+
+*Reserved for the rules-b lane on 14 November (the owner's ruling on the 50,000-node measurement, for v0.5.2; rules
+reviews, since the graph adapter is its file). Amends Amendment 2's last point and Amendment 18 §3 for the read that
+counts the links among a set of nodes, and settles ADR-151's Cost point that `edges_among` at 50,000 ids had not been
+measured.*
+
+1. **What was wrong.** `render_edges_among_gremlin` wrote every id into the Groovy script as a literal list, twice
+   (`g.V().has("id",within([…]))…outE()…where(inV().has("id",within([…]))…)`). Measured on stack b under the lease
+   rules-b took at 2026-11-14T13:51:02Z (`process/lanes/rules-b/v052batch-50k/findings.md`, 50,500 nodes): 9.9 s at
+   5,000 ids and 19.7 s at 10,000. Its plan at 5,000 read every vertex in the store (`GraphStep(vertex,[])`, 50,568),
+   and the two `within` tests took 95% of the time. At 25,000 ids ArcadeDB could not compile the script ("Class too
+   large", a Groovy `ClassTooLargeException`), so a batch expansion of 50,000 nodes failed (ADR-151, the job's state
+   `failed`, nothing saved, nothing cut). Opening a view that large would fail the same way, since it counts with the
+   same call. ADR-151's view cap could not be reached.
+2. **What is built.** `edges_among` takes the ids without repeats, sorted, in chunks of 1,000 (`_ID_CHUNK`, as
+   `get_nodes`). Each chunk is resolved to record ids through each vertex type's unique `id` index by SQL, the ids
+   bound (`_record_ids`, Amendment 2). Each chunk then sends one Gremlin query from those records:
+   `g.V(<record ids>).<access>.outE(<types>).<access>.dedup().as('e').inV().<access>.as('t')
+   .select('e','t').by(elementMap()).by(values('id'))`. The adapter keeps a row where its far end's id was asked for.
+   - **Access** is on the tail, the link and the head in the traversal, as before (rule 3). The Python step only
+     narrows to the ids the caller passed, which it already knows; it is not an access check, and it stays in the
+     adapter.
+   - **Each link once.** A link is reached from its own source alone, and each source record is in one chunk, so a
+     link across two chunks is found once. Nothing is merged by id: two links of different types may hold one id
+     (`test_suite.py`'s shared-id case), and both are listed, as before.
+   - **The round trips** depend only on how many ids were asked: every chunk's query is sent, `g.V().limit(0)` for a
+     chunk where nothing resolved, so an absent id costs what a hidden one does.
+   - **Unchanged:** an empty or one-node set sends nothing and has none; `edge_types` narrows every chunk's query. A
+     bare `str` for the ids is refused, as `get_nodes` refuses it. As on every read by id (Amendment 2), a vertex
+     type without a unique `id` index is not asked, so a link whose source is of such a type is not found from it,
+     where the query as built, which scanned every vertex, found it. Every type the ontology applies has the index.
+
+   Measured in the same run (`measure50k.py`'s comparison B, the same shape): 3.3 s at 5,000 ids, 4.1 s at 10,000,
+   4.9 s at 25,000, 6.2 s at 50,000. At 5,000 and 10,000 the link-id sets were exactly those of the query as built,
+   compared both ways. The cost is one SQL query per vertex type and one Gremlin call per 1,000 ids.
+   Each chunk reads every visible out-link of each start and the far end is narrowed in the adapter, so a start of
+   very high degree streams all its links: measured only to hubs of some 5,000 links (the 50k shape), and a later
+   scale run should hold a hub of many more (`process/lanes/CARRIES.md`, after the v0.5.2 cut; the rules lane's
+   review of 14 November).
+3. **Every caller keeps its contract** (the port's: every link with both ends in the set, each once, access-filtered
+   in the adapter; order unspecified):
+   - the batch expansion (`batch_expansion._expand_and_save`, ADR-151): the links among its result;
+   - `open_view` (`case_views._read_selection`, and `_matches` for the resolution links with `edge_types`);
+   - the auto-links (`WorkingSetService.add_by_identifiers` and `expand`, up to `AUTO_LINKS_MAX_VIEW_NODES`) and
+     `links_among` (ADR-098);
+   - the explore starters (`run_starter`, `shared_pair`);
+   - the alert queue's cited links (`alert_queue._cited_edges`);
+   - the drawn watches (`drawn_watches._run`);
+   - the boards (`open`, `link`, `alike`).
+
+   None depended on the order of the answer. None sends a set near the old wall except the batch and `open_view`;
+   the others gain the speed only.
+4. **Held by** (rule 12):
+   - offline, `tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py`:
+     - a query's text at 50,000 ids is about what it is at 2,000 (the compile wall);
+     - no query scans the store by `id` (`edge_store.refuse_scans`), and no id is in the text;
+     - a link is kept only where its far end was asked for;
+     - links across a chunk boundary, both ways, and a self-loop are each found once;
+     - an absent id costs the round trips a hidden one does, with the empty chunk's query sent;
+     - `edge_types` narrows every chunk;
+     - six of its seven cases are red on the query as built (`process/lanes/rules-b/am20/red-first.txt`);
+   - live, `tests/conformance/graph_port/test_edges_among_at_scale.py`:
+     - 50,500 nodes (500 SECRET) and 52,000 links, asked at 25,000, 30,000, 50,000 and 50,500 ids of a seeded shuffle,
+       SECRET ids included: each answer is exactly the fixture's visible links among those ids, both ways, none
+       twice. Red on the query as built at 25,000;
+     - links across three chunks' boundaries, both ways, each once;
+     - a SECRET far end, in a chunk other than its partners', gives the same answer and the same round trips as an
+       id the store does not hold, and a SECRET-cleared reader sees both of its links;
+   - the conformance suite's existing `edges_among` cases (`test_suite.py`), unchanged, and every live file that calls
+     it: the whole graph-port conformance suite with them, 459 passed on stack e under the lease rules-b took at
+     2026-11-14T15:23:37Z (`process/lanes/rules-b/am20/live-1.txt`; its one failure was the chunk-boundary case's own
+     fixture, whose reversed pairs of an undirected link type merged, fixed and green in `live-3.txt`);
+   - live red-first: the new cases against main's `edges_among` and renderer, word for word, red past the wall
+     (`live-1.txt`); the SECRET case passes there too, as it should, since the old query already hid the far end;
+   - plants (`process/lanes/rules-b/am20/plants.py`), each red on its assertion: offline, the far end untested, an
+     empty chunk not sent, one query for every id, the link types dropped, the start found by a scan, a one-node set
+     queried (`plants.txt`); live, the far end's access step dropped (the SECRET case) and the far end untested (the
+     chunk-boundary case, once it had links into the chunk left out; `live-2.txt` shows it green before that,
+     `live-3.txt` red after).
+
+   **Measured after** (the same 50k shape, `process/lanes/rules-b/am20/measure50k_after.py`, on stack e in the same
+   lease, `live-1.txt`): the batch expansion of 50,000 nodes ran end to end in 26.0 s, of which counting its
+   links took about 8.7 s (between the job's own progress words), and saved its view (50,000 nodes, 49,990 links; none of the 500 SECRET leaves). The view row's `lens` column
+   is 231,466 bytes; `get_nodes` over the 50,000 took 7.9 s. `edges_among` alone: 3.5 s at 5,000 ids, 4.2 s at 10,000,
+   5.8 s at 25,000, 8.1 s at 50,000, each answer exactly the fixture's links, none twice. One chunk's query at 1,000
+   record ids took 1.5 s with `.profile()`.
 
 ### ADR-150, Amendment 1 (14 November 2026) — The drift check streams
 

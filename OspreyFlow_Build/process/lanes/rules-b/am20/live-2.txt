@@ -1,0 +1,37 @@
+# rules-b am20 live run 2, stack e, the lease rules-b took at 2026-11-14T15:44:30Z, head def4443. The chunk-boundary case had no link into the omitted chunk, so its plant stayed green (the far end never mattered there); links from the first and third chunks into the second added at the next commit and rerun in live-3.txt. The SECRET plant is red on its assertion.
+Lease on stack e taken by rules-b. Start it with: OspreyFlow_Build/scripts/stack_lease.sh up rules-b (the throwaway stack, not dev.yaml's, which binds the owner's 2480)
+Pin its ports for every live run: export ARCADEDB_HTTP_PORT=2495 POSTGRES_PORT=55437 VALKEY_PORT=6383 MINIO_ENDPOINT=localhost:9008 CLICKHOUSE_HTTP_PORT=18127 OPENSEARCH_PORT=19204 POSTGRES_PASSWORD=*** OSPREY_LANE=rules-b CLICKHOUSE_USER=osprey CLICKHOUSE_PASSWORD=***
+e: holder=rules-b stack=e purpose=am20 run 2: the fixed chunk-boundary case and the two live plants with their reasons (same queue turn) since=2026-11-14T15:44:30Z worktree=/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Build
+Test stack e's Postgres (osprey-test-e-pg): max_connections 400.
+Test stack e up for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Running on ospreyflow-test (stack e, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261114T154445Z-8a04668f/log: bash process/lanes/rules-b/am20/live2.sh
+== START
+ 15:44:46 up 19 days, 22 min,  6 users,  load average: 1.84, 2.20, 3.39
+               total        used        free      shared  buff/cache   available
+Mem:              62          24          10          12          40          38
+Swap:              3           1           2
+== 1. the new conformance cases at the head
+ADR-124 Am 20: edges_among at 25,000 ids, 12,481 links in 3.4 s
+ADR-124 Am 20: edges_among at 30,000 ids, 17,946 links in 4.0 s
+ADR-124 Am 20: edges_among at 50,000 ids, 49,990 links in 7.4 s
+ADR-124 Am 20: edges_among at 50,500 ids, 50,999 links in 7.4 s
+3 passed in 126.44s (0:02:06)
+exit 0
+== 2. the live plants
+RED   | the far end's access step dropped | -k 'secret_far_end' | 1 failed, 2 deselected in 2.44s
+    E       AssertionError: assert {'01M7DBV2CQY...S94FQHETHRP1'} == {'01M7DBV2CQYZJZS94FQHETHRP1'}
+    E         
+    E         Extra items in the left set:
+GREEN?! | the far end not tested | -k 'chunk_boundary' | 1 passed, 2 deselected in 3.68s
+CONTROL (unplanted, fresh cache): 3 passed in 121.62s (0:02:01)
+== END
+ 15:49:06 up 19 days, 27 min,  7 users,  load average: 1.69, 1.90, 2.97
+               total        used        free      shared  buff/cache   available
+Mem:              62          24          10          12          40          37
+Swap:              3           1           2
+Wall time: 261 s, exit 0 (stack e, the lease rules-b took at 2026-11-14T15:44:30Z; set-up before it 11 s)
+Test stack e down for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack e released by rules-b.
+EXIT=0
+
+[exited with code 0]

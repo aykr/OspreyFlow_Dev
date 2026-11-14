@@ -1,0 +1,8 @@
+rules-b am20 red first, offline: the new cases against main's adapter.py and builders.py (0245427), closed ports, fresh cache
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py::test_a_query_s_text_grows_with_its_chunk_not_with_the_set
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py::test_no_query_looks_ids_up_by_scanning_the_store
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py::test_a_link_is_kept_only_where_its_far_end_was_asked_for
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py::test_links_across_a_chunk_boundary_are_each_found_once
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py::test_an_absent_id_costs_what_a_hidden_one_costs
+FAILED ../OspreyFlow_Build/tests/adapters/graph_arcadedb/test_edges_among_from_record_ids.py::test_the_link_types_narrow_every_chunk_s_query
+6 failed, 1 passed in 2.17s

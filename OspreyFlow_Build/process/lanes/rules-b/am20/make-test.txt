@@ -1,0 +1,24 @@
+# make test via offline at 6e5def2 (on main 0245427): 1 failed, 14441 passed, 45 skipped; JS all green (391 files, 3508 tests). The one failure is main's, not this branch's: test_product_tree_link_check flags spec/02_GLASS_FRONTEND.md lines 1251 and 1261 (process/lanes/case-b/batch/ references, case-b's), which current main 8121919 still has (lines 1253, 1263); this branch does not touch 02. Wall time 658 s.
+( cd ../OspreyFlow_Core && .venv/bin/pytest -c /root/osprey-runs/rules-b/OspreyFlow_Build/pytest.ini -n auto --dist loadgroup --ignore=../OspreyFlow_Build/tests/conformance/graph_port --ignore=../OspreyFlow_Build/tests/test_worker_isolation_live.py --ignore=../OspreyFlow_Build/tests/conformance/analytics_port --ignore=../OspreyFlow_Build/tests/test_analytics_clickhouse.py --ignore=../OspreyFlow_Bu
+E       AssertionError: new private-tree reference(s) from an Apache-scoped document: [('spec/02_GLASS_FRONTEND.md', 1251, 'process/'), ('spec/02_GLASS_FRONTEND.md', 1261, 'process/')]. Either fix the reference, or add it to OspreyFlow_Build/tests/fixtures/product_tree_link_allowlist.txt if genuinely already known.
+E       assert [('spec/02_GL..., 'process/')] == []
+E         
+E         Left contains 2 more items, first extra item: ('spec/02_GLASS_FRONTEND.md', 1251, 'process/')
+E         Use -v to get more diff
+147.15s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_failed_put_in_puts_the_live_database_back_and_says_where_the_restored_one_is
+143.47s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_failed_put_back_says_where_each_copy_is_and_never_that_it_was_put_back
+143.13s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_restore_failing_before_the_swap_leaves_the_live_database_as_it_was[truncated-zip-ArcadeDB's restore of the set's zip failed]
+FAILED ../OspreyFlow_Build/tests/test_product_tree_link_check.py::test_no_new_private_tree_references_beyond_the_allowlist
+==== 1 failed, 14441 passed, 45 skipped, 123 warnings in 584.53s (0:09:44) =====
+make live-collect || touch /root/osprey-runs/rules-b/OspreyFlow_Build/.make-test-failed
+make -C ../OspreyFlow_Core test-js || touch /root/osprey-runs/rules-b/OspreyFlow_Build/.make-test-failed
+     [33m[2m✓[22m[39m offers no second try of a failed job once a view is open[33m 2775[2mms[22m[39m
+[2m Test Files [22m [1m[32m391 passed[39m[22m[90m (391)[39m
+[2m      Tests [22m [1m[32m3508 passed[39m[22m[90m (3508)[39m
+  2775 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > offers no second try of a failed job once a view is open
+[2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m Test Files [22m [1m[32m7 passed[39m[22m[90m (7)[39m
+[2m      Tests [22m [1m[32m51 passed[39m[22m[90m (51)[39m
+make test: a part above failed
+Wall time: 658 s, exit 2 (no stack, no lease; set-up before it 7 s)

@@ -1,0 +1,98 @@
+# rules-b am20 live run 1, stack e, the lease rules-b took at 2026-11-14T15:23:37Z, branch head 799145c (on main 0245427). The chunk-boundary case failed here on its fixture (reversed pairs of an undirected type merge), fixed at 5fea6b5 and rerun in live-2.txt; its plant and the control's failure here are void for that reason. Everything else stands.
+799145c
+Lease on stack e taken by rules-b. Start it with: OspreyFlow_Build/scripts/stack_lease.sh up rules-b (the throwaway stack, not dev.yaml's, which binds the owner's 2480)
+Pin its ports for every live run: export ARCADEDB_HTTP_PORT=2495 POSTGRES_PORT=55437 VALKEY_PORT=6383 MINIO_ENDPOINT=localhost:9008 CLICKHOUSE_HTTP_PORT=18127 OPENSEARCH_PORT=19204 POSTGRES_PASSWORD=*** OSPREY_LANE=rules-b CLICKHOUSE_USER=osprey CLICKHOUSE_PASSWORD=***
+e: holder=rules-b stack=e purpose=am20: the live conformance, red first against main's edges_among, two live plants, the callers' suites and the 50k rerun (the orchestrator's queue, rules-b first, make idle) since=2026-11-14T15:23:37Z worktree=/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Build
+Test stack e's Postgres (osprey-test-e-pg): max_connections 400.
+Test stack e up for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Running on ospreyflow-test (stack e, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261114T152356Z-fe8257ca/log: bash process/lanes/rules-b/am20/live.sh
+== START
+ 15:23:56 up 19 days, 2 min,  8 users,  load average: 3.35, 3.56, 6.17
+               total        used        free      shared  buff/cache   available
+Mem:              62          25          13          12          37          37
+Swap:              3           1           2
+== 1. the new conformance cases at the head
+ADR-124 Am 20: edges_among at 25,000 ids, 12,481 links in 3.5 s
+ADR-124 Am 20: edges_among at 30,000 ids, 17,946 links in 3.8 s
+ADR-124 Am 20: edges_among at 50,000 ids, 49,990 links in 7.7 s
+ADR-124 Am 20: edges_among at 50,500 ids, 50,999 links in 7.6 s
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_edges_among_at_scale.py::test_links_across_a_chunk_boundary_are_each_found_once
+1 failed, 2 passed in 127.88s (0:02:07)
+exit 1
+== 2. the rights table (a store test)
+5 passed, 1 warning in 12.31s
+exit 0
+== 3. red first, live, against main's edges_among
+E           adapters.graph_arcadedb.client.ArcadeDBError: ArcadeDB error 400: {"error":"Cannot execute command","requestId":"25b6f7ce5b47c8ab-1b904","exception":"com.arcadedb.exception.CommandParsingException","detail":"Error on parsing gremlin query: org.codehaus.groovy.control.MultipleCompilationE
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_edges_among_at_scale.py::test_past_the_compile_wall_the_answer_is_exactly_the_fixture_s_links
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_edges_among_at_scale.py::test_links_across_a_chunk_boundary_are_each_found_once
+2 failed, 1 passed in 105.57s (0:01:45)
+red first, live: exit 1 (expected non-zero)
+== 4. the live plants
+RED   | the far end's access step dropped | -k 'secret_far_end' | 1 failed, 2 deselected in 2.66s
+RED   | the far end not tested | -k 'chunk_boundary' | 1 failed, 2 deselected in 4.08s
+CONTROL (unplanted, fresh cache): 1 failed, 2 passed in 129.80s (0:02:09)
+== 5. the callers' suites: the graph port's whole conformance, and the live files that call edges_among
+8.66s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[cancellation]
+6.45s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_close_whose_commit_is_reported_failed_but_landed_keeps_its_record
+6.36s call     tests/ingest/test_alert_evidence_withheld_live.py::test_a_commit_that_lands_after_the_writer_failed_is_still_repointed[timeout]
+FAILED ../OspreyFlow_Build/tests/conformance/graph_port/test_edges_among_at_scale.py::test_links_across_a_chunk_boundary_are_each_found_once
+1 failed, 459 passed in 631.62s (0:10:31)
+exit 1
+== 6. the 50k rerun
+[start] uptime: 15:41:02 up 19 days, 19 min,  9 users,  load average: 2.13, 2.33, 3.73
+[start] free -g: total        used        free      shared  buff/cache   available
+Mem:              62          25          11          12          37          36
+Swap:              3           1           2
+started 2026-11-14T15:41:02Z
+  nodes: 2,000 written at 3 s
+  nodes: 12,000 written at 15 s
+  nodes: 22,000 written at 27 s
+  nodes: 32,000 written at 39 s
+  nodes: 42,000 written at 51 s
+  nodes: 50,500 written at 61 s
+nodes written: 50,500 in 61.2 s
+  links: 10,000 of 50,490 at 19 s
+  links: 20,000 of 50,490 at 23 s
+  links: 30,000 of 50,490 at 27 s
+  links: 40,000 of 50,490 at 31 s
+  links: 50,000 of 50,490 at 35 s
+  links: 50,490 of 50,490 at 35 s
+links written (bulk): 50,490 in 35.3 s
+  job at 0.0 s: ('running', None)
+  job at 0.5 s: ('running', 'Expanding from 10 nodes')
+  job at 16.3 s: ('running', 'Counting the links among 50,000 nodes')
+  job at 25.0 s: ('running', 'Saving the view')
+  job at 25.5 s: ('done', 'Saving the view')
+batch end to end: 26.0 s, state done, result {'outcome': 'done', 'view_id': '01M7DBM1B76CDS9CN4GCYA4PWG', 'nodes': 50000, 'links': 49990}
+saved view: 50,000 chosen; SECRET leaves in it: 0 of 500 (expected 0)
+the view row's lens column: 231,466 bytes stored
+get_nodes over 50,000: 7.9 s
+  50,000 nodes
+edges_among at 5,000 ids: 3.5 s
+  4,990 links; exactly the fixture's: True (only here 0, only expected 0, twice 0)
+edges_among at 10,000 ids: 4.2 s
+  9,990 links; exactly the fixture's: True (only here 0, only expected 0, twice 0)
+edges_among at 25,000 ids: 5.8 s
+  24,990 links; exactly the fixture's: True (only here 0, only expected 0, twice 0)
+edges_among at 50,000 ids: 8.1 s
+  49,990 links; exactly the fixture's: True (only here 0, only expected 0, twice 0)
+one chunk's profile at 1,000 record ids: 1.5 s
+PROFILE (raw): [{'result': 'Traversal Metrics\nStep                                                               Count  Traversers       Time (ms)    % Dur\n=============================================================================================================\nGraphStep(vertex,[#1:280578, #1:280579, #1:2805...                  1000        1000           1.189     0.08\nHasStep([reverted.eq(false), handling_classific...                  1000        1000           1.222     0.09\nNotStep([PropertiesStep([superseded_by],propert...                  1000        1000           1.720     0.12\n  PropertiesStep([superseded_by],property)                                                     0.848\nTraversalFilterStep([PropertiesStep([datasets],...                  1000        1000           3.860     0.27\n  PropertiesStep([datasets],value)                                  1000        1000           1.088\n  UnfoldStep                                                        1000        1000           0.901\n  NoOpBarrierStep(2500)                                             1000        1000           0.530\n  IsStep(within([m50k-8272cdaa]))                                                              0.364\nOrStep([[HasStep([handling_code.within([P, C])]...                  1000        1000           1.183     0.08\n  HasStep([handling_code.within([P, C])])                                                      0.406\n  HasStep([handling_code.within([])])                                                          0.000\n  OrStep([[HasStep([owning_unit.eq(unit-1)])], ...                                             0.000\n    HasStep([owning_unit.eq(unit-1)])                                                          0.000\n    HasStep([originator.eq(unit-1)])                                                           0.000\nVertexStep(OUT,edge)                                               50490       50490          31.663     2.23\nHasStep([reverted.eq(false), handling_classific...                 50490       50490          96.653     6.80\nNotStep([PropertiesStep([superseded_by],propert...                 50490       50490          82.513     5.80\n  PropertiesStep([superseded_by],property)                                                    41.835\nTraversalFilterStep([PropertiesStep([datasets],...                 50490       50490         181.270    12.75\n  PropertiesStep([datasets],value)                                 50490       50490          51.845\n  UnfoldStep                                                       50490       50490          41.703\n  NoOpBarrierStep(2500)                                            50490       50490          26.501\n  IsStep(within([m50k-8272cdaa]))                                                             17.131\nOrStep([[HasStep([handling_code.within([P, C])]...                 50490       50490          53.805     3.78\n  HasStep([handling_code.within([P, C])])                                                     19.852\n  HasStep([handling_code.within([])])                                                          0.000\n  OrStep([[HasStep([owning_unit.eq(unit-1)])], ...                                             0.000\n    HasStep([owning_unit.eq(unit-1)])                                                          0.000\n    HasStep([originator.eq(unit-1)])                                                           0.000\nDedupGlobalStep(null,null)@[e]                                     50490       50490          35.018     2.46\nEdgeVertexStep(IN)                                                 50490       50490          30.778     2.16\nHasStep([reverted.eq(false), handling_classific...                 49990       49990          57.172     4.02\nNotStep([PropertiesStep([superseded_by],propert...                 49990       49990          84.036     5.91\n  PropertiesStep([superseded_by],property)                                                    38.592\nTraversalFilterStep([PropertiesStep([datasets],...                 49990       49990         186.468    13.11\n  PropertiesStep([datasets],value)                                 49990       49990          49.377\n  UnfoldStep                                                       49990       49990          40.483\n  NoOpBarrierStep(2500)                                            49990       49990          30.709\n  IsStep(within([m50k-8272cdaa]))                                                             16.483\nOrStep([[HasStep([handling_code.within([P, C])]...                 49990       49990          57.649     4.05\n  HasStep([handling_code.within([P, C])])                                                     18.074\n  HasStep([handling_code.within([])])                                                          0.000\n  OrStep([[HasStep([owning_unit.eq(unit-1)])], ...                                             0.000\n    HasStep([owning_unit.eq(unit-1)])                                                          0.000\n    HasStep([originator.eq(unit-1)])                                                           0.000\nSelectStep(last,[e, t],[[ElementMapStep], value...                 49990       49990         374.847    26.36\n  ElementMapStep                                                   49990       49990         289.284\nNoOpBarrierStep(2500)                                              49990       49990         140.788     9.90\n                                            >TOTAL                     -           -        1421.843        -'}]
+ended 2026-11-14T15:43:39Z
+[end] uptime: 15:43:39 up 19 days, 21 min,  9 users,  load average: 2.67, 2.44, 3.55
+[end] free -g: total        used        free      shared  buff/cache   available
+Mem:              62          26           8          12          40          36
+Swap:              3           1           2
+exit 0
+== END
+ 15:43:40 up 19 days, 21 min,  9 users,  load average: 2.67, 2.44, 3.55
+               total        used        free      shared  buff/cache   available
+Mem:              62          25           9          12          40          37
+Swap:              3           1           2
+Wall time: 1184 s, exit 0 (stack e, the lease rules-b took at 2026-11-14T15:23:37Z; set-up before it 15 s)
+Test stack e down for rules-b: osprey-test-e-arcadedb osprey-test-e-pg osprey-test-e-valkey osprey-test-e-objectstore osprey-test-e-clickhouse osprey-test-e-opensearch (on ospreyflow-test, tunnelled to 127.0.0.1 here)
+Lease on stack e released by rules-b.
+EXIT=0
+
+[exited with code 0]

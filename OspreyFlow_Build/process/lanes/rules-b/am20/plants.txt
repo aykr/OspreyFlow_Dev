@@ -1,0 +1,20 @@
+RED   | the far end not tested | -k 'far_end' | 1 failed, 6 deselected in 0.99s
+    E       AssertionError: assert ['ab', 'b-out', 'bc'] == ['ab', 'bc']
+    E         
+    E         At index 1 diff: 'b-out' != 'bc'
+RED   | a chunk where nothing resolved not sent | -k 'absent_id' | 1 failed, 6 deselected in 0.85s
+    E       assert 1 == 2
+    E        +  where 1 = len(['g.V([\'#9:0\',\'#9:1\',\'#9:2\',\'#9:3\',\'#9:4\',\'#9:5\',\'#9:6\',\'#9:7\',\'#9:8\',\'#9:9\',\'#9:10\',\'#9:11\',\..._unit",\'unit-1\'),has("originator",\'unit-1\'))))).as(\'t\').select(\'e\',\'t\').by(elementM
+    E        +    where ['g.V([\'#9:0\',\'#9:1\',\'#9:2\',\'#9:3\',\'#9:4\',\'#9:5\',\'#9:6\',\'#9:7\',\'#9:8\',\'#9:9\',\'#9:10\',\'#9:11\',\..._unit",\'unit-1\'),has("originator",\'unit-1\'))))).as(\'t\').select(\'e\',\'t\').by(elementMap()).
+RED   | every id in one query, no chunks | -k 'grows_with_its_chunk' | 1 failed, 6 deselected in 0.92s
+    E       assert 1 == (50000 // 1000)
+RED   | the link types not passed | -k 'link_types' | 1 failed, 6 deselected in 1.24s
+    E       assert False
+    E        +  where False = all(<generator object test_the_link_types_narrow_every_chunk_s_query.<locals>.<genexpr> at 0x10972bc60>)
+RED   | the start looked up by scanning the store | -k 'scanning' | 1 failed, 6 deselected in 0.76s
+    E           AssertionError: a lookup by id that scans the whole store (ADR-124 Am 18): g.V().has("id",within(['#9:0','#9:1','#9:2','#9:3','#9:4','#9:5','#9:6','#9:7','#9:8','#9:9','#9:10','#9:11','#9:12','#9:13','#9:14','#9:15','#9:16','#9:
+RED   | a one-node set queried | -k 'one_node' | 1 failed, 6 deselected in 0.77s
+    E       AssertionError: assert ([('SELECT @ri...['n000000']})] == []
+    E         
+    E         Left contains one more item: ('SELECT @rid AS rid FROM `mx_Person` WHERE id IN :ids', {'ids': ['n000000']})
+CONTROL (unplanted, fresh cache): 7 passed in 0.98s
