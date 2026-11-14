@@ -411,7 +411,7 @@ WS     /v1/investigations/{id}/stream          bidirectional delta channel
 POST   /v1/ws-ticket                           short-lived single-use ticket for the stream above
 POST   /v1/investigations/{id}/seed            seed from a search result or saved subgraph
 POST   /v1/investigations/{id}/expand          apply an expansion
-POST   /v1/investigations/{id}/expand/preview  cardinality only, no mutation
+POST   /v1/investigations/{id}/expand/preview  cardinality only, no mutation; and link_count, the asked type's links at the node the reader may see (ADR-098 Am 8)
 DELETE /v1/investigations/{id}/nodes           remove from the working set (not from the Vault)
 POST   /v1/investigations/{id}/working-set/add-by-identifiers  count, then add, a list of identifiers (ADR-128 decision 1)
 ```
