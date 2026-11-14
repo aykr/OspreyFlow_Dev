@@ -1,0 +1,83 @@
+# 4c step A (ADR-148 Am 15): principal_auth's administrator source. Red first, each pytest with a fresh PYTHONPYCACHEPREFIX (CARRIES 1cd8b5a). Mac, offline, after round 1's review.
+
+== (a) a value never set given a default instead of refused:
+FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[clearance-clearance]
+FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[org_unit-organisational unit]
+FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[receivable_handling_codes-handling codes]
+FAILED test_auth_entra_administrator_access.py::test_a_person_first_seen_has_nothing_set_and_is_refused
+FAILED test_auth_entra_administrator_access.py::test_an_empty_set_of_codes_is_a_value_an_empty_clearance_is_not
+FAILED test_auth_entra_administrator_access.py::test_another_tenant_s_row_grants_nothing
+6 failed, 154 passed, 1 warning in 74.38s (0:01:14)
+
+== (b) an administrator's value applied to a value the mapping reads from the token too:
+FAILED test_auth_entra_administrator_access.py::test_an_administrator_cannot_override_a_value_the_mapping_reads_from_the_token
+FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[clearance-clearance]
+FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[org_unit-organisational unit]
+FAILED test_auth_entra_administrator_access.py::test_a_value_never_set_is_refused_in_words[receivable_handling_codes-handling codes]
+FAILED test_auth_entra_administrator_access.py::test_a_person_first_seen_has_nothing_set_and_is_refused
+FAILED test_auth_entra_administrator_access.py::test_another_tenant_s_row_grants_nothing
+6 failed, 154 passed, 1 warning in 74.29s (0:01:14)
+
+== (c) an empty clearance or unit taken as set:
+FAILED test_auth_entra_administrator_access.py::test_an_empty_set_of_codes_is_a_value_an_empty_clearance_is_not
+1 failed, 159 passed, 1 warning in 73.67s (0:01:13)
+
+== (d) round 1's should-fix 6: a token's own claim taken where it carries one (the fixed names, Keycloak's), the stored value otherwise:
+FAILED test_auth_entra_administrator_access.py::test_a_token_cannot_raise_an_administrator_set_value_by_carrying_a_claim
+1 failed, 159 passed, 1 warning in 74.04s (0:01:14)
+
+== green:
+160 passed, 1 warning in 74.23s (0:01:14)
+
+== Plant (d) re-run on 14 November 2026 with its diffs recorded (round 2's could 12), a fresh PYTHONPYCACHEPREFIX per run.
+Finding: the readers' 'return None' and the fill's unconditional take are two guards, each covering the other. A token value reaches the principal only when both are broken, so (d-reader) alone stays green (the fill overwrites it), and the fill's change alone has no token value to keep. The whole shape below is the one that can raise a value, and it is red for the named test. The earlier prose described that whole shape.
+
+== (d-reader) the readers alone take the token's claim under the fixed names:
+--- a/packages/principal_auth/__init__.py
++++ b/packages/principal_auth/__init__.py
+@@ -382,3 +382,4 @@
+     if source.administrator:
+-        return None
++        # PLANT (d): the token's own claim under the fixed (Keycloak) names, where it carries one.
++        return claims.get({"clearance": "clearance", "organisational unit": "org_unit"}[what])
+     if source.claim is not None:
+@@ -422,3 +423,4 @@
+     if source.administrator:
+-        return None
++        # PLANT (d): the token's own codes under the fixed name, where it carries them.
++        return claims.get("receivable_handling_codes")
+     if source.claim is not None:
+
+planted: exit 0
+14 passed in 6.70s
+restored: exit 0
+14 passed in 6.68s
+
+== (d) the whole shape: the readers take it AND the fill keeps a value the reader gave:
+--- a/packages/principal_auth/__init__.py
++++ b/packages/principal_auth/__init__.py
+@@ -382,3 +382,4 @@
+     if source.administrator:
+-        return None
++        # PLANT (d): the token's own claim under the fixed (Keycloak) names, where it carries one.
++        return claims.get({"clearance": "clearance", "organisational unit": "org_unit"}[what])
+     if source.claim is not None:
+@@ -422,3 +423,4 @@
+     if source.administrator:
+-        return None
++        # PLANT (d): the token's own codes under the fixed name, where it carries them.
++        return claims.get("receivable_handling_codes")
+     if source.claim is not None:
+@@ -748,2 +750,5 @@
+         if not source.administrator:
++            continue
++        # PLANT (d): the token's value kept where the reader gave one; the stored value otherwise.
++        if getattr(verified, field) is not None:
+             continue
+
+planted: exit 1
+FAILED ../OspreyFlow_Build/tests/services/api/test_auth_entra_administrator_access.py::test_a_token_cannot_raise_an_administrator_set_value_by_carrying_a_claim
+1 failed, 13 passed in 6.69s
+restored: exit 0
+14 passed in 6.69s
+

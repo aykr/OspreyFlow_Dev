@@ -314,7 +314,9 @@ async def build_run_resources(config: ApiConfig) -> RunResources:
     jobs = JobQueue(valkey)
     # ADR-148 Amendment 8: the deployment's claim mapping; on Entra ID, roles from the people store.
     claim_mapping = ClaimMapping.from_env()
-    people_store = await open_people_store(config.postgres.dsn, claim_mapping, audit)
+    people_store = await open_people_store(
+        config.postgres.dsn, claim_mapping, audit, handling_scheme
+    )
     principal_resolver = PrincipalResolver(
         config, claim_mapping=claim_mapping, role_source=people_store,
         # ADR-148 Amendment 10: the dashboard identities, in the same store.

@@ -1131,13 +1131,17 @@ class EntraSignInConfig(BaseModel):
         description="Default: access_as_user. The delegated scope the Glass asks the API for",
     )
     clearance: dict[str, Any] = Field(
-        description="Where clearance comes from: {claim: <name>} or {groups: {<group id>: <value>}}"
+        description="Where clearance comes from: {claim: <name>}, {groups: {<group id>: <value>}}, "
+        "or {administrator: true}, set in Admin › People (the poc shape alone, ADR-148 Amendment "
+        "15)"
     )
     org_unit: dict[str, Any] = Field(
-        description="Where the organisational unit comes from: {claim: ...} or {groups: {...}}"
+        description="Where the organisational unit comes from: {claim: ...}, {groups: {...}}, or "
+        "{administrator: true} (the poc shape alone)"
     )
     handling_codes: dict[str, Any] = Field(
-        description="Where the handling codes come from: {claim: ...} or {groups: {<id>: [codes]}}"
+        description="Where the handling codes come from: {claim: ...}, {groups: {<id>: [codes]}}, "
+        "or {administrator: true} (the poc shape alone)"
     )
     groups_claim: str = Field(
         default="groups",
@@ -1147,6 +1151,13 @@ class EntraSignInConfig(BaseModel):
     )
     first_administrators: list[str] = Field(
         description="The people given the Admin role at install, by Entra object id (at least one)"
+    )
+    first_administrator_access: dict[str, Any] | None = Field(
+        default=None,
+        description="With {administrator: true} for clearance, org_unit or handling_codes (the poc "
+        "shape's fallback, ADR-148 Amendment 15): what the first administrators hold of each such "
+        "value at install, {clearance: ..., org_unit: ..., handling_codes: [...]}, so they can "
+        "sign in and set everyone else's; required then",
     )
     claims_mapping_policy: bool = Field(
         default=False,

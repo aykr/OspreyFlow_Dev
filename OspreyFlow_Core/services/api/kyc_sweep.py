@@ -32,9 +32,9 @@ from conduit_common.valkey_compat import reply
 from ontology.handling import HandlingScheme
 from ports.graph import GraphPort
 from principal_auth import (
-    ACCESS_OUT_OF_DATE_WORDS,
     PrincipalAccessOutOfDate,
     PrincipalExchangeError,
+    out_of_date_words,
 )
 from schemas.domain import Principal
 
@@ -122,10 +122,10 @@ async def sweep(
                 else:
                     try:
                         deployer = await deployer_of(rule.owner_id)
-                    except PrincipalAccessOutOfDate:
+                    except PrincipalAccessOutOfDate as error:
                         deployer = None
                         why = (
-                            f"its deployer, {rule.owner_id}, {ACCESS_OUT_OF_DATE_WORDS}: "
+                            f"its deployer, {rule.owner_id}, {out_of_date_words(error)}: "
                             f"{KYC_OUT_OF_DATE_NEXT}"
                         )
                     except PrincipalExchangeError:  # refused or unreachable: as the None answer

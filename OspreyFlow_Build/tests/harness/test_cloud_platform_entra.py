@@ -308,3 +308,54 @@ def test_a_restore_stops_superset_and_the_report_sync_with_the_other_writers() -
     writers = _values(_reporting())["backups"]["writers"]
     assert {"report-sync", "superset"} <= set(writers)
     assert not {"report-sync", "superset"} & set(_values(_config())["backups"]["writers"])
+
+
+# --- ADR-148 Amendment 15: the administrator fallback, poc alone ---------------------------------------
+
+
+FIRST_ACCESS = {"clearance": "OFFICIAL-SENSITIVE", "org_unit": "unit-1", "handling_codes": ["P"]}
+
+
+def _poc_with(**sources: object) -> dict[str, object]:
+    raw = yaml.safe_load((FIXTURES / "poc.yaml").read_text(encoding="utf-8"))
+    raw["cloud_platform"]["claims"] |= {"first_administrator_access": FIRST_ACCESS, **sources}
+    return raw
+
+
+@pytest.mark.parametrize("field", ["clearance", "org_unit", "handling_codes"])
+def test_the_administrator_fallback_renders_on_poc(field: str) -> None:
+    environment = _values(OspreyConfig.model_validate(_poc_with(**{field: {"administrator": True}})))["environment"]
+    assert json.loads(environment["OSPREY_CLAIM_MAPPING"])[field] == {"administrator": True}
+    # The first administrators can sign in to set everyone else's (Amendment 15).
+    assert json.loads(environment["OSPREY_FIRST_ADMINISTRATOR_ACCESS"]) == FIRST_ACCESS
+
+
+@pytest.mark.parametrize("given", [None, {"org_unit": "unit-1"}], ids=["none", "not-the-clearance"])
+def test_the_fallback_without_the_first_administrators_values_is_refused(given: object) -> None:
+    """Nobody could sign in to set anyone's values, the first administrators included."""
+    raw = _poc_with(clearance={"administrator": True})
+    raw["cloud_platform"]["claims"]["first_administrator_access"] = given  # type: ignore[index]
+    with pytest.raises(CloudPlatformNotRenderable, match="first_administrator_access gives the first administrators no clearance"):
+        _artefacts(OspreyConfig.model_validate(raw))
+
+
+@pytest.mark.parametrize(
+    ("field", "given"),
+    [("handling_codes", "P"), ("handling_codes", ["P", ""]), ("clearance", ""), ("org_unit", ["unit-1"])],
+    ids=["codes-a-word", "codes-an-empty-one", "clearance-empty", "unit-a-list"],
+)  # fmt: skip
+def test_a_first_administrators_value_of_the_wrong_shape_is_refused_at_render(field: str, given: object) -> None:
+    """Refused here in words, not by a Conduit that will not start (round 2's should-fix 6)."""
+    raw = _poc_with(**{f: {"administrator": True} for f in ("clearance", "org_unit", "handling_codes")})
+    raw["cloud_platform"]["claims"]["first_administrator_access"] = FIRST_ACCESS | {field: given}  # type: ignore[index]
+    with pytest.raises(CloudPlatformNotRenderable, match=f"first_administrator_access: {field} is not a value"):
+        _artefacts(OspreyConfig.model_validate(raw))
+
+
+@pytest.mark.parametrize("field", ["clearance", "org_unit", "handling_codes"])
+def test_the_administrator_fallback_is_refused_on_any_other_shape(field: str) -> None:
+    raw = _raw()
+    raw["cloud_platform"]["claims"] |= {field: {"administrator": True}, "first_administrator_access": FIRST_ACCESS}
+    assert raw["cloud_platform"].get("shape", "standard") != "poc"
+    with pytest.raises(CloudPlatformNotRenderable, match=f"sets {field} by the administrator.*only the poc shape"):
+        _artefacts(OspreyConfig.model_validate(raw))

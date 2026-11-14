@@ -32,13 +32,13 @@ from valkey.asyncio import Valkey
 from conduit_common.identity import new_id
 from conduit_common.valkey_compat import reply
 from principal_auth import (
-    ACCESS_OUT_OF_DATE_WORDS,
-    NEXT_SLOT_WORDS,
     OwnerNotHeld,
     OwnerRecordUnavailable,
     PrincipalAccessOutOfDate,
     PrincipalExchangeUnavailable,
     PrincipalRevoked,
+    out_of_date_next,
+    out_of_date_words,
 )
 from schemas.domain import Principal, TypologyRule
 from schemas.monitoring import ListSchedule, RuleRun, RuleRunOutcome, RuleScheduleView
@@ -326,7 +326,8 @@ class RuleScheduleExecutor:
             raise _Refused(f"the rule's author, {owner}, can no longer sign in") from error
         except PrincipalAccessOutOfDate as error:
             raise _Refused(
-                f"the rule's author, {owner}, {ACCESS_OUT_OF_DATE_WORDS}: {NEXT_SLOT_WORDS}",
+                f"the rule's author, {owner}, {out_of_date_words(error)}: "
+                f"{out_of_date_next(error)}",
                 outcome="failed",
             ) from error
         except OwnerNotHeld as error:

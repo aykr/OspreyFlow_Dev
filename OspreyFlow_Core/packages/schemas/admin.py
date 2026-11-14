@@ -66,6 +66,24 @@ class AccessInput(BaseModel):
         return codes
 
 
+class PersonAccessInput(BaseModel):
+    """Access for a person already here (`PUT /v1/admin/people/{id}/access`). On Keycloak, clearance
+    and unit, and the codes (none when not given), as `AccessInput`. On Entra ID with the
+    administrator fallback (ADR-148 Amendment 15), only the values this deployment sets: one not
+    given is left as it is, and a value Entra sends is never given here."""
+
+    clearance: str | None = Field(default=None, min_length=1, max_length=40)
+    org_unit: str | None = Field(default=None, min_length=1, max_length=60)
+    receivable_handling_codes: list[str] | None = None
+
+    @field_validator("receivable_handling_codes")
+    @classmethod
+    def _few_codes(cls, codes: list[str] | None) -> list[str] | None:
+        if codes is not None and len(codes) > 16:
+            raise ValueError("at most 16 handling codes")
+        return codes
+
+
 class InviteInput(AccessInput):
     """A new person (ADR-114 Amendment 5): signed in by an emailed link when the deployment has a
     mail server, else by a one-time code shown once to the administrator."""
@@ -148,6 +166,11 @@ class SignInKind(BaseModel):
     holds the accounts."""
 
     kind: Literal["keycloak", "entra"]
+    #: ADR-148 Amendment 15: on Entra ID, the values Admin › People sets here (the poc shape's
+    #: fallback); none means Entra sends every one, and Access is not offered.
+    administrator_sets: list[Literal["clearance", "org_unit", "handling_codes"]] = Field(
+        default_factory=list
+    )
 
 
 class GuestSignIn(BaseModel):
@@ -840,7 +863,7 @@ ALL_MODELS: list[type[BaseModel]] = [
     SignInKind, GuestSignIn, GuestSignInInput, DashboardInput,
     ComponentHealth, UpdateNotice, ConvertedViews, SystemStatus, EmbeddedDashboard,
     DashboardGuestToken,
-    AccessInput, InviteInput, SignInDelivery, DemoPackStatus,
+    AccessInput, PersonAccessInput, InviteInput, SignInDelivery, DemoPackStatus,
     ModelRoleStatus, EngineStatus, ScheduleRunView, AdminSchedule, PauseScheduleInput, DataFeed,
     ChangeScheduleInput, AdminDataset, DatasetEgressInput, OrganisationArrival,
     OrganisationLinkInput, DatasetPromotionPolicyInput, DatasetAuthor, AdminDatasetAuthors,

@@ -196,7 +196,8 @@ def test_a_writer_the_scan_cannot_read_is_reported(tmp_path: pathlib.Path) -> No
 #: into a kind that shows words is a change to this list too, made on purpose (rule 12). Every
 #: other action's words and count are withheld, whatever its kind.
 WORDS_SHOWN_ACTIONS = frozenset({
-    "invite_person", "add_person_by_object_id", "grant_first_administrator", "set_person_roles",
+    "invite_person", "add_person_by_object_id", "grant_first_administrator",
+    "grant_first_administrator_access", "set_person_roles",
     # ADR-148 Amendment 17: whether guests are admitted, its before and after a setting's.
     "set_guest_sign_in",
     "set_person_access",
