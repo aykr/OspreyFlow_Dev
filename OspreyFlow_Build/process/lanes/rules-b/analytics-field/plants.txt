@@ -1,0 +1,9 @@
+RED   | the adapter's bare ValueError, as before this change | test_suite.py -k 'duckdb and (field_name or smuggle)' | 10 failed, 280 deselected in 2.77s
+RED   | the adapter's bare ValueError, as before this change | test_analytics_field_refused.py | 7 failed in 4.38s
+RED   | the guard dropped: the name reaches SQL | test_suite.py -k 'duckdb and (field_name or smuggle)' | 10 failed, 280 deselected in 2.59s
+RED   | the guard dropped: the name reaches SQL | test_analytics_field_refused.py | 7 failed in 4.48s
+RED   | geocode's property past the guard | test_suite.py -k 'duckdb and geocode_events' | 1 failed, 289 deselected in 1.93s
+RED   | no handler: the routes answer a bare 500 | test_analytics_field_refused.py | 7 failed in 4.07s
+RED   | the handler answers 400 | test_analytics_field_refused.py | 7 failed in 4.18s
+CONTROL (unplanted, fresh cache): test_suite.py 145 passed, 145 deselected in 9.07s
+CONTROL (unplanted, fresh cache): test_analytics_field_refused.py 7 passed in 4.02s
