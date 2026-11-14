@@ -1,0 +1,136 @@
+upg-run: --- data (v0.5.0 installed)
+osprey_reports.figures 0
+osprey_reports.pulls 0
+public.alert_repoint_records 0
+public.alerts 0
+public.assumptions 0
+public.audit_log 0
+public.audit_log_units_from 1
+public.board_items 0
+public.case_briefs 0
+public.case_layer_reads 0
+public.case_questions 0
+public.case_strength_influencers 0
+public.case_views 0
+public.composite_members 0
+public.connector_cursors 0
+public.custom_role_versions 0
+public.custom_roles 0
+public.dataset_gazetteers 0
+public.dataset_list_subscriptions 0
+public.dataset_settings 0
+public.datasets 4
+public.deployment_list_imports 0
+public.deployment_lists 0
+public.document_texts 0
+public.drawn_merged 0
+public.drawn_watch_matches 0
+public.drawn_watches 0
+public.export_ledger 0
+public.extraction_candidates 0
+public.held_rows 0
+public.home_cases 0
+public.hotlists 0
+public.ingest_connections 1
+public.ingest_sources 0
+public.intelligence_gaps 0
+public.investigation_access_history 12
+public.investigation_datasets 2
+public.investigation_grants 10
+public.investigation_history 0
+public.investigation_tab_state 0
+public.investigations 2
+public.judgements 0
+public.kyc_expiries 0
+public.link_changes 0
+public.link_notes 0
+public.link_type_overlay 1
+public.link_type_proposals 0
+public.loaded_row_keys 0
+public.map_admin_audit 0
+public.model_admin_audit 0
+public.monitors 0
+public.operations_settings 0
+public.promotion_copies 0
+public.promotion_deleted_layers 0
+public.promotion_layer_grants 0
+public.promotion_matches 0
+public.promotion_overdue_alerts 0
+public.promotions 0
+public.quota_alerts 0
+public.recipe_load_checks 0
+public.recipe_runs 0
+public.report_pack_items 0
+public.report_pack_versions 0
+public.report_packs 0
+public.rule_runs 0
+public.run_quotas 0
+public.saved_patterns 0
+public.screening_entries 10
+public.screening_list_update_units 0
+public.screening_list_updates 0
+public.screening_lists 1
+public.sites 0
+public.strength_influencer_versions 0
+public.studio_external_owners 0
+public.studio_recipes 0
+public.suppression_marks 0
+public.target_models 0
+public.teams 0
+public.trend_definitions 0
+public.typology_rule_versions 1
+public.typology_rules 1
+public.withdrawn_row_keys 0
+graph ospreyflow edge mx_ADJOINS 0
+graph ospreyflow edge mx_ALERTED_ON 0
+graph ospreyflow edge mx_ASSOCIATE_OF 86
+graph ospreyflow edge mx_ATTRIBUTED_TO 0
+graph ospreyflow vertex mx_Account 9
+graph ospreyflow vertex mx_Alert 0
+graph ospreyflow vertex mx_Asset 0
+graph ospreyflow edge mx_BENEFICIAL_OWNER_OF 9
+graph ospreyflow edge mx_COMMUNICATED_WITH 0
+graph ospreyflow edge mx_COMPROMISES 0
+graph ospreyflow edge mx_CONTROLS 1
+graph ospreyflow edge mx_CO_DEFENDANT_OF 0
+graph ospreyflow vertex mx_Campaign 0
+graph ospreyflow edge mx_DEPICTS 0
+graph ospreyflow vertex mx_Device 0
+graph ospreyflow vertex mx_Document 1
+graph ospreyflow vertex mx_Endpoint 2
+graph ospreyflow vertex mx_Establishment 0
+graph ospreyflow vertex mx_Event 0
+graph ospreyflow edge mx_FAMILY_OF 0
+graph ospreyflow edge mx_HELD_AT 0
+graph ospreyflow edge mx_HOLDS 1
+graph ospreyflow edge mx_HOLDS_ACCOUNT 10
+graph ospreyflow edge mx_INDICATES 0
+graph ospreyflow edge mx_IN_CONFLICT_WITH 0
+graph ospreyflow vertex mx_Incident 0
+graph ospreyflow vertex mx_Infrastructure 0
+graph ospreyflow vertex mx_Location 9
+graph ospreyflow edge mx_MEMBER_OF 19
+graph ospreyflow edge mx_MENTIONED_IN 0
+graph ospreyflow vertex mx_Malware 0
+graph ospreyflow edge mx_NOT_SAME_AS 0
+graph ospreyflow edge mx_OCCURRED_AT 0
+graph ospreyflow vertex mx_Organisation 12
+graph ospreyflow edge mx_PAIRED_WITH 0
+graph ospreyflow edge mx_PART_OF 0
+graph ospreyflow edge mx_PASSES_ITEMS_TO 0
+graph ospreyflow edge mx_PRESENT_AT 1
+graph ospreyflow vertex mx_Person 71
+graph ospreyflow edge mx_REGISTERED_AT 8
+graph ospreyflow edge mx_ROLE_IN 0
+graph ospreyflow edge mx_SAME_AS 17
+graph ospreyflow edge mx_SHARED_CELL_WITH 0
+graph ospreyflow edge mx_TARGETS 0
+graph ospreyflow edge mx_TRANSACTED 11
+graph ospreyflow vertex mx_ThreatActor 0
+graph ospreyflow edge mx_USED_AS 0
+graph ospreyflow edge mx_USED_BY 0
+graph ospreyflow edge mx_USES 2
+graph ospreyflow edge mx_VERIFIED_BY 0
+graph ospreyflow edge mx_VISITED 0
+graph ospreyflow vertex mx_Vehicle 0
+graph ospreyflow vertex mx_Vulnerability 0

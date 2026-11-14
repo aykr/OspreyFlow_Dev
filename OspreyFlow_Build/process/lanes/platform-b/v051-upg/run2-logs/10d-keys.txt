@@ -1,0 +1,7 @@
+upg-run: --- every secret held at v0.5.0, after (per-key hashes only)
+upg-envdiff: mode 0o600 -> 0o600; file changed
+upg-envdiff: added none
+upg-envdiff: removed none
+upg-envdiff: changed ['OSPREY_RELEASE_VERSION']
+upg-envdiff: 80 keys held before are byte for byte the same
+upg-run: env diff exit 1

@@ -1,0 +1,3 @@
+upg-run: max_connections (server): 100
+upg-run: postgres command (compose.yaml): (none)
+upg-run: postgres container started: 2026-11-14T01:07:35.76503975Z
