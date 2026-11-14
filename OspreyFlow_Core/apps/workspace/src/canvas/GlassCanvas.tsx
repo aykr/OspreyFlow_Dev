@@ -1315,6 +1315,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // node per cluster takes part and the others follow it afterwards.
     useEffect(() => {
       let timer: ReturnType<typeof setTimeout> | undefined;
+      // The move under way (Sigma's `animateNodes`), its targets and how to stop it.
+      let animating: Record<string, { x: number; y: number }> | null = null;
+      let stopAnimating: (() => void) | null = null;
       // ADR-060 Amendment 2. "added": nodes arrived (an expansion, a search result, a stream
       // delta) — the nodes already settled stay exactly where they are and the new ones settle
       // around them, and the camera is not touched, so the view never moves under the analyst's
@@ -1490,7 +1493,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           }
           if (was.length > 0) setPreviousPositions(was);
           finish();
-        } else animateNodes(graph, targets, { duration: 420 }, finish);
+        } else {
+          // Sigma's animation reads `targets` afresh each frame: a node dropped while it runs is
+          // taken out of them (`onDropped` below), so no frame writes to a node no longer here.
+          animating = targets;
+          stopAnimating = animateNodes(graph, targets, { duration: 420 }, () => {
+            animating = null;
+            stopAnimating = null;
+            finish();
+          });
+        }
       };
       const schedule = () => {
         clearTimeout(timer);
@@ -1500,13 +1512,27 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         clearTimeout(timer);
         run("arrange");
       };
+      // A remove delta (another reader's change, a withdrawal, a revert) can drop a node, or a
+      // snapshot clear them all, mid-animation: Sigma's next frame then wrote to a node no longer in
+      // the graph and threw, uncaught (`keyboard/canvas-remove-while-arranging.spec.ts`).
+      const onDropped = ({ key }: { key: string }) => {
+        if (animating) delete animating[key];
+      };
+      const onCleared = () => {
+        if (animating) for (const id of Object.keys(animating)) delete animating[id];
+      };
       graph.on("nodeAdded", schedule);
       graph.on("edgeAdded", schedule);
+      graph.on("nodeDropped", onDropped);
+      graph.on("cleared", onCleared);
       schedule();
       return () => {
         clearTimeout(timer);
+        stopAnimating?.();
         graph.removeListener("nodeAdded", schedule);
         graph.removeListener("edgeAdded", schedule);
+        graph.removeListener("nodeDropped", onDropped);
+        graph.removeListener("cleared", onCleared);
       };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [graph]);

@@ -1,5 +1,6 @@
 import { Popover } from "../design/primitives/Popover";
 import { linkTypeName, type NamedType } from "./linkLabel";
+import { NarrowingChoices, wouldAddFigure as figure } from "./NarrowingChoices";
 import type { NarrowingOption } from "./expansionGate";
 import { EXPANSION_CONFIRM_ABOVE } from "./expansionGate";
 import type { PreviewCount } from "./nodeGestures";
@@ -18,12 +19,6 @@ export interface LargeExpansionPromptProps {
   onCancel: () => void;
   /** The case's link types: a relationship is named by its label, never its stored id (rule 7). */
   edgeTypes?: readonly NamedType[];
-}
-
-function figure(count: PreviewCount): string {
-  return count === "unavailable"
-    ? "count unavailable"
-    : count.toLocaleString("en-GB");
 }
 
 /**
@@ -48,17 +43,8 @@ export function LargeExpansionPrompt({
     return name.charAt(0).toLowerCase() + name.slice(1);
   };
   return (
-    <Popover x={x} y={y} onClose={onCancel}>
-      <div
-        role="alertdialog"
-        aria-label="Large expansion"
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--sp-6)",
-          minWidth: 280,
-        }}
-      >
+    <Popover x={x} y={y} onClose={onCancel} role="alertdialog" label="Large expansion" modal>
+      <div className="expansion-prompt">
         {subject && (
           <span>
             Expanding <strong>{subject}</strong> by{" "}
@@ -71,17 +57,7 @@ export function LargeExpansionPrompt({
             : `This would add ${figure(wouldAdd)} nodes, more than ${EXPANSION_CONFIRM_ABOVE.toLocaleString("en-GB")}.`}
         </strong>
         {wouldAdd === "unavailable" && <span>Nothing has been added.</span>}
-        {options.length > 0 && <span>Expand by one relationship instead:</span>}
-        {options.map((option) => (
-          <button
-            key={option.edgeType}
-            type="button"
-            className="radial-menu__item"
-            onClick={() => onChooseType(option.edgeType)}
-          >
-            {named(option.edgeType)} ({figure(option.wouldAdd)})
-          </button>
-        ))}
+        <NarrowingChoices options={options} edgeTypes={edgeTypes} onChooseType={onChooseType} />
         <button
           type="button"
           className="radial-menu__item"
