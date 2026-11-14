@@ -292,7 +292,7 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     fireEvent.click(within(places()).getByRole("button", { name: "The Glass" }));
     fireEvent.click(within(await screen.findByRole("group", { name: "View" })).getByRole("button", { name: "Graph" }));
     expect(await screen.findByRole("region", { name: "Batch job: the whole expansion" })).toBeTruthy();
-    expect(screen.getByText("Expanding from 1 node.")).toBeTruthy();
     expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
+    expect(screen.getByText("Expanding from 1 node.")).toBeTruthy();
   }, 15_000);
 });
