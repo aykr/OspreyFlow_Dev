@@ -530,7 +530,10 @@ basemap, which demo packs — then (`--starter <theme>-<domain>` fills these in 
 3. starts the deployment and waits until every service is healthy and the extraction model has
    downloaded (it says which, and its size: `qwen2.5:7b-instruct`, about 4.7 GB, or the 14b on a GPU,
    about 9 GB), so Ask works as soon as the install says it is done;
-4. makes the demo accounts (unless `--no-demo-accounts`) and loads the chosen demo packs.
+4. where the deployment searches with OpenSearch (`components.search: opensearch`, the default),
+   rebuilds the search index from the graph, so search answers from the index at once; a rebuild that
+   fails fails the install, saying so;
+5. makes the demo accounts (unless `--no-demo-accounts`) and loads the chosen demo packs.
 
 It ends by saying the address and that the sign-in details are in `deployment.env`.
 
@@ -1107,7 +1110,10 @@ with the render to install.
 
 **The runbooks (poc shape).** `INSTALL.md` takes the deployment from its settings to a Glass that
 answers: the checks of the tools and rights, the Terraform's pull request, the unpinned render and
-the push, the pinned render, `helm upgrade --install`, the sign-in check (and the way back in when
+the push, the pinned render, `helm upgrade --install`, then, where the deployment searches with
+OpenSearch, the search index rebuilt from the graph by a Job once the Conduit and the workers are rolled out
+(on a fresh install and on every upgrade; the step fails, naming the Job, if it has not started in five
+minutes or finished in 30), the sign-in check (and the way back in when
 nobody can manage people, section 6a.7), and the Glass's health. `DECOMMISSION.md` removes it: a
 last backup, `helm uninstall`, the claims and our Secret, the buckets and repositories emptied, and
 the backups bucket and its key by a choice with no default: its step 7 refuses until it is given
@@ -1150,12 +1156,13 @@ the deployment onto the new release's images and values. In order:
    install are the new release's pinned render, never the old one's. A release that needs a change in
    the Terraform says so in its notes, and the Terraform is this render's `terraform/` folder: its pull
    request is applied now, before the install, as at the first install.
-4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces
-   each pod on the new release, and its own checks follow, as at the first install: section 6's check
+4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces each pod on the new release, the search index is rebuilt from the
+   graph as on a fresh install (an index made before v0.5.2 is not one v0.5.2 writes to), and its own checks
+   follow, as at the first install: section 6's check
    that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
    step 1, if the install has not.
 
-**What will check it.** v0.5.2's install test, planned for 25 November 2026 on a kind cluster, is to
+**What will check it.** v0.5.2's install test, planned for 16 November 2026 on a kind cluster (route step 6), is to
 install v0.5.1, then the candidate by these steps over it, and check that the data made before the
 upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
 restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
@@ -2048,8 +2055,8 @@ Added in this guide, beyond ADR-148's own list:
     each as a sensitive variable with no default, and its state then holds it (section 6a.3).
 11. **The app registrations**: who in the organisation registers the Glass (a single-page
     application, returning to the deployment's address with a trailing `/`) and this API (exposing
-    its scope), and makes the extension attributes or groups the claims name (section 6a.7). They are
-    two registrations, `client_id` and `api_client_id`, not one.
+    its scope), and makes the extension attributes or groups the claims name (section 6a.7). They are two registrations, `client_id` and `api_client_id`, not one, and with reporting
+    on, Superset's and the report sync's too: the rendered `INSTALL.md` counts them.
 12. **Volume encryption**: whether the platform's storage class, `gp2-expand`, encrypts its volumes.
     ArcadeDB's and ClickHouse's data, the shared volume and, in the poc shape, the Ingest root are
     encrypted at rest only if it does; the render does not check.
@@ -3070,8 +3077,9 @@ that can read it first; without one the check cannot answer, and says so.
 - `ospreyflow update` moves to the newest release (`--to vX.Y.Z` for another; `--yes` asks
   nothing). It checks every image's signature first and changes nothing if one fails; refuses if a
   local change to a file would be overwritten ("commit or undo them first"); **backs everything up**;
-  moves the checkout to the tag; starts the release's images and checks each service runs them. If
-  anything fails after the backup it **rolls back** — the previous release and its data restored
+  moves the checkout to the tag; starts the release's images and checks each service runs them; and,
+  where the deployment searches with OpenSearch, rebuilds the search index from the graph (an index made
+  before v0.5.2 is not one v0.5.2 writes to). If anything fails after the backup it **rolls back** — the previous release and its data restored
   from the backup just taken — and says so.
 - **Without internet**: on a machine with it, `ospreyflow update --make-bundle <file> --to
   vX.Y.Z` writes the release, verified, to one file; carry it over and run

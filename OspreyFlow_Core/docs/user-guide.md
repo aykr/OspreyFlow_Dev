@@ -383,6 +383,11 @@ are dots.
 and **Explain this link**. Confirming or marking needs a reason, kept in the audit with your name.
 **Match strictness** at the top of the graph sets how sure a match must be to show records as one —
 Strict, Balanced (the default) or Broad — and says how many merged and split.
+Records drawn into the graph, by a search, an expansion or a list, arrive already shown as one where they
+match at the case's strictness, with **Explain cluster** on them. What is shown as one is worked out for you
+alone, from the records you may see: a record hidden from you joins nothing. When someone else on the case
+changes the strictness, your graph follows the next time you expand it or the case is loaded again, not at
+once.
 
 **Groups.** **Communities** boxes groups of closely linked entities; fold a group from its box, or
 press `G` on a node in it. **Layout** offers Organic, Force-directed tree, and Clustered bubbles;
