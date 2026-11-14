@@ -72,7 +72,7 @@ sightings into a rendered deployment.
 
 **Every row, by tier, on the closing-pass proof.** "Rendered" is
 `tests/scenarios/test_phase8_exit_over_the_wire.py` against a fresh-clone `local-lite` install,
-signed in as the demo analyst (27 passed). "Glass" is `make glass-live` on the developer stack
+signed in as the demo analyst (27 passed, before two cases were split in two on 14 November: 29 now). "Glass" is `make glass-live` on the developer stack
 (`apps/workspace/live/`). `test_scenario_a_over_the_wire` and `test_scenario_b_over_the_wire` are
 the two walkthrough cases that carry the rows with no case of their own.
 
@@ -81,7 +81,7 @@ the two walkthrough cases that carry the rows with no case of their own.
 | A1 | `test_a1_…` ×4 (grid, redraw, polygon ref, geocode) | — | Yes |
 | A2–A5 | `test_scenario_a_over_the_wire` | — | Yes |
 | A6 | `test_a6_…` | — | Yes |
-| A7 | `test_a7_…` ×2 | — | Yes |
+| A7 | `test_a7_…` ×3 | — | Yes |
 | A8–A11 | `test_scenario_a_over_the_wire` | — | Yes |
 | A12 | `test_scenario_a_over_the_wire` | `scenario-a-a12-a15.spec.ts` A12 | Yes |
 | A13, A14 | `test_scenario_a_over_the_wire` | `scenario-a-a12-a15.spec.ts` A13–A15 | Yes |

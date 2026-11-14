@@ -2367,8 +2367,18 @@ def test_a7_an_unknown_field_name_is_refused_rather_than_ignored(
     """A field name that is not a safe identifier must be refused at the boundary, not
     interpolated. The values are parameterised; the *column* is not, which is why the adapter
     validates it — and why this is asserted over the wire rather than only in the conformance
-    suite. Needs no seeded events: the refusal is the boundary's, whatever the case holds, so it
-    runs on a deployment with no seed path (v0.5.2's poc); the table's survival is the next case."""
+    suite. Needs no seeded events: the same request without the field name is answered first, so the
+    refusal is the field name's and not the case's, a missing right's or the ingress's; it runs on a
+    deployment with no seed path (v0.5.2's poc). The table's survival is the next case."""
+    body = {
+        "filter": {"investigation_scope": seeded_scope},
+        "dimensions": [{"name": "category", "field": "item_type", "bucketing": "categorical"}],
+    }
+    control = analyst.post("/v1/analytics/cross-filter", json=body)
+    assert control.status_code == 200, (
+        f"the same request with a safe field name was not answered, so a refusal would prove nothing: "
+        f"{control.status_code} {control.text[:200]}"
+    )
     hostile = analyst.post(
         "/v1/analytics/cross-filter",
         json={

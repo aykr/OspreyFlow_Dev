@@ -82,6 +82,9 @@ PLANTS: list[tuple[str, str, str, str]] = [
     ('install_verify.py', '        for field in ("updated", "ready", "available"):\n            if got.get(field) != w["count"]:', '        for field in ("updated", "available"):\n            if got.get(field) != w["count"]:', 'a workload not ready passes'),
     ('spec08_live.sh', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG="$STATE/kubeconfig"', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH"', "spec08's wrapper without r1's kubeconfig"),
     ('spec08_live.sh', 'PYTHONPATH=.:packages:cli exec .venv/bin/python "$HERE/spec08_poc.py" run "$@"', 'PYTHONPATH=packages:cli exec .venv/bin/python "$HERE/spec08_poc.py" run "$@"', "spec08's wrapper without the Core on the path (run() imports scripts.)"),
+    ('spec08_live.sh', 'export PATH="$HOME/osprey-runs/platform.tools/bin:$PATH" KUBECONFIG', 'export PATH="$PATH" KUBECONFIG', "spec08's wrapper without r1's tools on the PATH"),
+    ('spec08_live.sh', 'export OSPREY_PLATFORM_FOLDERS="$(cd "$GATES/../../../.." && pwd)/tests/fixtures/cloud_platform/platforms"', 'export OSPREY_PLATFORM_FOLDERS="$(cd "$GATES/../../.." && pwd)/tests/fixtures/cloud_platform/platforms"', "spec08's wrapper naming another platform folder"),
+    ('spec08_live.sh', '"$HERE/spec08_poc.py" run "$@"', '"$HERE/spec08_poc.py" run', "spec08's wrapper drops its pytest arguments"),
     ('spec08_poc.py', '    bash ../OspreyFlow_Build/process/lanes/case-b/v052/spec08_live.sh [pytest arguments]', '    bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py ../../case-b/v052/spec08_poc.py run', "spec08's docstring names r1_kind.sh py again"),
     ('spec08_poc.py', '    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": None,', '    "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": NO_SEED,', "A7's refusal left waiting on the seed"),
     ('spec08_poc.py', '    "test_the_stream_opens_through_the_proxy_with_a_ticket": None,', '    "test_the_stream_opens_through_the_proxy_with_a_ticket": NO_SEED,', "the stream's seed-free half left waiting on the seed"),
@@ -114,8 +117,10 @@ def run_routes(folder: Path) -> tuple[int, str]:
     done = subprocess.run([sys.executable, "-m", "pytest", "-c", str(build / "pytest.ini"), "--rootdir", str(build),
                            "-p", "no:cacheprovider", "-q", "-p", "no:randomly", str(folder / ROUTES.name)],
                           capture_output=True, text=True, check=False, env=env)
-    last = [line for line in done.stdout.splitlines() if line.strip()][-1:] or [done.stderr[-200:]]
-    return done.returncode, last[0]
+    lines = [line for line in done.stdout.splitlines() if line.strip()]
+    last = lines[-1:] or [done.stderr[-200:]]
+    failed = [line.split(" - ")[0].split("::")[-1] for line in lines if line.startswith("FAILED ")]
+    return done.returncode, last[0] + (f" ({', '.join(failed)})" if failed else "")
 
 
 def route_plants(tmp: Path) -> int:
@@ -148,9 +153,9 @@ SPEC08_PLANTS: list[tuple[str, str, str]] = [
     ('        assert opening["op"] == "snapshot" and opening["nodes"] == [], opening\n\n\ndef test_the_delta_stream',
      '        assert opening["op"] == "snapshot" and opening["nodes"] == [], opening\n        _find(analyst, PRINCIPAL_SUBJECT_PRISON_NUMBER)\n\n\ndef test_the_delta_stream',
      "the stream's seed-free half finds a seeded subject"),
-    ('    assert hostile.status_code >= 400, (\n        f"a field name carrying SQL was accepted: {hostile.status_code} {hostile.text[:200]}"\n    )\n\n\ndef test_a7_the_events',
-     '    assert hostile.status_code >= 400, (\n        f"a field name carrying SQL was accepted: {hostile.status_code} {hostile.text[:200]}"\n    )\n    assert analyst.post("/v1/analytics/cross-filter", json={}).json()["category"]["total"] > 0\n\n\ndef test_a7_the_events',
-     "A7's refusal half counts the seeded events"),
+    ('    assert "DROP" not in hostile.text\n\n\ndef test_a7_the_events',
+     '    assert "DROP" not in hostile.text\n    analyst.post(_in_case("/v1/search"), json={"query": _someone()})\n\n\ndef _someone():\n    return SECOND_SUBJECT_PRISON_NUMBER\n\n\ndef test_a7_the_events',
+     "A7's refusal half searches for a seeded subject through a new helper"),
 ]
 
 
@@ -173,15 +178,17 @@ def spec08_plants(tmp: Path, base: Path) -> int:
 
 def run(folder: Path, module: Path | None = None) -> tuple[int, str]:
     done = subprocess.run(
-        [sys.executable, "-m", "pytest", "-c", str(HERE.parents[3] / "pytest.ini"), "-p", "no:cacheprovider", "-q", "-x",
+        [sys.executable, "-m", "pytest", "-c", str(HERE.parents[3] / "pytest.ini"), "-p", "no:cacheprovider", "-q", "-x", "-rf",
          "-p", "no:randomly", str(folder)], capture_output=True, text=True, check=False,
         env={**os.environ, "OSPREY_V052_SPEC08_MODULE": str(module or HERE.parents[3] / "tests" / "scenarios" / "test_phase8_exit_over_the_wire.py"),
              "OSPREY_V052_R1_GATES": str(HERE.parents[1] / "platform" / "gates"),
              # A fresh bytecode cache for every run (the orchestrator's CARRIES, 1cd8b5a): a .pyc is matched to its
              # source by mtime to the second and size, so a rewrite within a second could run the last plant's code.
              "PYTHONPYCACHEPREFIX": tempfile.mkdtemp(prefix="plant-pyc-")})
-    last = [line for line in done.stdout.splitlines() if line.strip()][-1:] or [done.stderr[-200:]]
-    return done.returncode, last[0]
+    lines = [line for line in done.stdout.splitlines() if line.strip()]
+    last = lines[-1:] or [done.stderr[-200:]]
+    failed = [line.split(" - ")[0].split("::")[-1] for line in lines if line.startswith("FAILED ")]
+    return done.returncode, last[0] + (f" ({', '.join(failed)})" if failed else "")
 
 
 def main() -> int:

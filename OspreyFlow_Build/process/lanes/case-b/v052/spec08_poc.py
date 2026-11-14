@@ -1,5 +1,6 @@
 """Spec 08's acceptance scenarios on the poc shape (ROUTE_052 step 6, BRIEF_v052): the closing-pass proof,
-`tests/scenarios/test_phase8_exit_over_the_wire.py`, run **unchanged** against the kind deployment, as a
+`tests/scenarios/test_phase8_exit_over_the_wire.py`, run unchanged (but for two cases split so their seed-free halves
+run here, 14 November) against the kind deployment, as a
 pytest plugin that
 
 - signs in at the Entra stand-in as the Glass does (authorization code with PKCE, the stand-in's own
@@ -15,7 +16,7 @@ rows built on them cannot be performed there. What runs is what an analyst can d
 sign in, the ingest root and the Studio on the CDR fixture (B1-B3, uploaded through
 `POST .../ingest/source-files`, the analyst's own door), the site grid (A1's first three), and B13-B14 on
 the uploaded seizure record, the stream through the ingress (ticket, upgrade, snapshot) and A7's refusal of a
-hostile field name: 14 of 29, each split from its seeded half. (B13-B14's fixture asked routes the Conduit had moved; fixed in c6c6044,
+hostile field name, two halves split from seeded cases: 14 of 29. (B13-B14's fixture asked routes the Conduit had moved; fixed in c6c6044,
 held by tests/scenarios/test_over_the_wire_routes_exist.py.)
 
     # on the kind cluster, after the install and under a lease (from OspreyFlow_Core), with r1_kind.sh's own

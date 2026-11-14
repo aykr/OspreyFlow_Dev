@@ -63,26 +63,70 @@ SPLIT = {
     "test_the_stream_opens_through_the_proxy_with_a_ticket": "test_the_delta_stream_is_reachable_through_the_proxy",
     "test_a7_an_unknown_field_name_is_refused_rather_than_ignored": "test_a7_the_events_table_survives_a_refused_field_name",
 }
-#: What a case does that rests on a seed: it finds a seeded identifier, or reads a count the seed put there.
-SEEDED = ("_find(", "_in_case(", '["total"] > 0', "PRINCIPAL_SUBJECT")
+#: The seed datasets' own modules (NO_SEED's hmp, fixture-corp and scenarios seeds). A name the module imports from one,
+#: and every module constant or helper that uses such a name, followed to a fixed point, rests on a seed.
+SEED_MODULES = ("demo_fixtures.hmp", "demo_fixtures.hmp_population", "demo_fixtures.fixture_corp", "scripts.seed_scenarios")
 
 
-def _case_source(name: str) -> str:
+def _names(node: Any) -> set[str]:
     import ast
 
-    source = s8.MODULE.read_text(encoding="utf-8")
-    node = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == name)
-    return ast.get_source_segment(source, node) or ""
+    return {n.id for n in ast.walk(node) if isinstance(n, ast.Name)}
+
+
+def seeded_names(source: str) -> set[str]:
+    """Every name in the module that rests on a seed: imported from a seed module, or a module-level constant or helper
+    whose own code uses one, however many helpers deep."""
+    import ast
+
+    tree = ast.parse(source)
+    seeded = {a.asname or a.name for n in tree.body if isinstance(n, ast.ImportFrom) and (n.module or "") in SEED_MODULES
+              for a in n.names}
+    defined: dict[str, Any] = {}
+    for n in tree.body:
+        if isinstance(n, ast.FunctionDef) and not n.name.startswith("test_"):
+            defined[n.name] = n
+        elif isinstance(n, (ast.Assign, ast.AnnAssign)):
+            for t in n.targets if isinstance(n, ast.Assign) else [n.target]:
+                if isinstance(t, ast.Name):
+                    defined[t.id] = n
+    while True:
+        more = {name for name, node in defined.items() if name not in seeded and _names(node) & seeded}
+        if not more:
+            return seeded
+        seeded |= more
+
+
+def _case(source: str, name: str) -> Any:
+    import ast
+
+    return next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == name)
+
+
+def test_the_seed_reading_follows_a_seeded_name_through_helpers() -> None:
+    """The reading's own red: a seeded name reached through a helper two deep, under another name, is found; a helper
+    that uses only what the case uploads is not."""
+    source = (
+        "from demo_fixtures.hmp_population import PRINCIPAL_SUBJECT_PRISON_NUMBER as P\n"
+        "from demo_fixtures.seizure_record import UPLOADED\n"
+        "WHO = P\n"
+        "def _deep(): return WHO\n"
+        "def _deeper(client): return client.get(_deep())\n"
+        "def _uploaded(client): return client.get(UPLOADED)\n"
+        "def test_x(client): _deeper(client); _uploaded(client)\n"
+    )
+    seeded = seeded_names(source)
+    assert {"P", "WHO", "_deep", "_deeper"} <= seeded and not {"UPLOADED", "_uploaded"} & seeded, seeded
 
 
 @pytest.mark.parametrize("ours, seeded", list(SPLIT.items()))
 def test_a_seed_free_half_runs_on_poc_and_reaches_no_seed(ours: str, seeded: str) -> None:
-    """Each split case's seed-free half runs on poc, and its body does nothing that rests on a seed (red if a seeded
-    step is moved back into it); its seeded half still waits on the seed and holds what the half left out."""
+    """Each split case's seed-free half runs on poc, and nothing in it rests on a seed, through any helper (red if a
+    seeded step is moved back into it, by name or through a helper); its seeded half still waits on the seed."""
     assert s8.DISPOSITIONS[ours] is None and s8.DISPOSITIONS[seeded] == s8.NO_SEED
-    body = _case_source(ours)
-    assert not [w for w in SEEDED if w in body], [w for w in SEEDED if w in body]
-    assert [w for w in SEEDED if w in _case_source(seeded)], seeded
+    source = s8.MODULE.read_text(encoding="utf-8")
+    used = _names(_case(source, ours)) & seeded_names(source)
+    assert not used, f"{ours} runs on poc and uses what rests on a seed: {sorted(used)}"
 
 
 def test_the_plugin_skips_exactly_the_cases_that_cannot_run_and_swaps_the_sign_in() -> None:
