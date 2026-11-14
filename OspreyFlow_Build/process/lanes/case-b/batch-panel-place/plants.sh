@@ -14,12 +14,14 @@ trap 'git checkout -q HEAD -- "$APP" "$UI"' EXIT
 fails=0
 run() { (cd "$WS" && npx vitest run "$TEST" 2>&1); }
 
-plant() { # name, perl substitution, the failure's words (regex), the case (default: the place case), the file (default: App)
-  local name="$1" sub="$2" why="$3" case="${4:-$CASE}" file="${5:-$APP}" out
+plant() { # name, perl substitution, the failure's words (regex), the case (default: the place case), the file
+  # (default: App), and a second substitution in the panel, for a plant that takes out two guards
+  local name="$1" sub="$2" why="$3" case="${4:-$CASE}" file="${5:-$APP}" also="${6:-}" out
   perl -0pi -e "$sub" "$file"
   if git diff --quiet -- "$file"; then echo "PLANT DID NOT APPLY: $name"; fails=1; return; fi
+  if [ -n "$also" ]; then perl -0pi -e "$also" "$UI"; git diff --quiet -- "$UI" && { echo "PLANT DID NOT APPLY: $name (panel)"; fails=1; git checkout -q HEAD -- "$file"; return; }; fi
   out="$(run)"
-  git checkout -q HEAD -- "$file"
+  git checkout -q HEAD -- "$file" "$UI"
   if grep -qF "FAIL  $TEST > an expansion the cap refused, run as a batch job (ADR-151) > $case" <<<"$out" && grep -qE "$why" <<<"$out"; then
     echo "AS IT MUST BE (red, for its reason): $name"; grep -m1 -E "$why" <<<"$out" | sed 's/^ */    /'
   else
@@ -30,9 +32,11 @@ plant() { # name, perl substitution, the failure's words (regex), the case (defa
 plant "the panel drawn over every place in the case, as on main before" \
   's/<div hidden=\{view !== "graph" \|\| searching !== null \|\| readerDocumentId !== null\}>/<div>/' \
   "AssertionError: expected <section"
-plant "the panel taken away off the Graph, so the way back starts another job" \
+# Two guards hold this (the panel kept mounted off the Graph, and the job kept by the App); the plant takes out
+# both, in two files, the shape a second job would really take.
+plant "the panel taken away off the Graph, and its job not kept, so the way back starts another job" \
   's/\{bearerToken && batchExpansion.asked && \(\n        <div hidden=\{view !== "graph" \|\| searching !== null \|\| readerDocumentId !== null\}>/{bearerToken \&\& batchExpansion.asked \&\& view === "graph" \&\& (\n        <div>/' \
-  "expected \[ \{ url: .* \} \] to have a length of 1 but got 2|to have a length of 1 but got 2"
+  "to have a length of 1 but got 2" "$CASE" "$APP" 's/if \(attempt === 0 && kept\) \{/if (false) {/'
 
 plant "the panel drawn over the search results (they draw no view)" \
   's/ \|\| searching !== null//' \
