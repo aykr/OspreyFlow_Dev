@@ -69,6 +69,9 @@ try:
         r = run(k)
         tail = r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-300:]
         print(f"{'RED  ' if r.returncode else 'GREEN?!'} | {name} | -k {k!r} | {tail}", flush=True)
+        # Why it went red, so a plant red for another reason (an error, not the assertion) is seen.
+        for line in [x for x in r.stdout.splitlines() if x.startswith("E ")][:3]:
+            print(f"    {line[:240]}", flush=True)
         open(path, "w").write(originals[path])
     print("CONTROL (unplanted, fresh cache):", run("").stdout.strip().splitlines()[-1], flush=True)
 finally:
