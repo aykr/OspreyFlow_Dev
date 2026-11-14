@@ -179,13 +179,19 @@ async def test_another_readers_threshold_move_gives_no_cluster_id_through_a_memb
     # the stream's delta nor in B's own snapshot: V and X joined, to B, would tell B that something B cannot see
     # joins them (rule 3). Before the amendment the move wrote the cluster onto the case's stored nodes and put
     # it on the shared stream, keys cut to what B may read, values not.
+    # The move must change the cluster, or it affects nothing and nothing could leak (the first version of
+    # this test moved Balanced to Strict at 0.999991, stayed green with the old path planted back, and so
+    # proved nothing: rule 15). Apart at Strict, merged at Balanced: the move joins V, H and X, and the
+    # cluster's id is its smallest member's, `p-h`, the hidden one's.
+    from services.resolve.projection import THRESHOLD_BALANCED, THRESHOLD_STRICT
+
     v, h, x = _person("p-v"), _person("p-h", classification="SECRET"), _person("p-x")
-    service, store = _service([v, h, x], [_same_as("p-v", "p-h"), _same_as("p-h", "p-x")])
+    service, store = _service([v, h, x], [_same_as("p-v", "p-h", 0.97), _same_as("p-h", "p-x", 0.97)])
+    await store.set_threshold(INVESTIGATION, THRESHOLD_STRICT)
     await service.seed(INVESTIGATION, [v, h, x], [], CLEARED)
 
-    from services.resolve.projection import THRESHOLD_STRICT
-
-    await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_STRICT, CLEARED)
+    moved = await service.set_resolution_threshold(INVESTIGATION, THRESHOLD_BALANCED, CLEARED)
+    assert set(moved.delta.affected_cluster_ids.values()) == {"p-h"}, "the move did not join them, so it tests nothing"
     shared_after = [d for d in (await store.deltas_after(INVESTIGATION, 0) or []) if isinstance(d, DeltaReproject)]
     assert shared_after, "the move put nothing on the shared stream"
     known = await store.source_fidelity_nodes(INVESTIGATION)
