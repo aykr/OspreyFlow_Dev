@@ -36924,7 +36924,47 @@ beside the current view, and there is one route to cases and one place to manage
 `note` props, left for a later clean-up with their tests; `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
 record it is.
 
-**Part A (step 3e′), the search results layout:** to be recorded here when built.
+**Part A (step 3e′, `v052-results`), the search results layout, as built (14 November 2026).** Built against the search
+service's request and response as studio froze them (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md` at ee7a16d) and
+modelled them (`packages/schemas/search.py`, `SearchPageRequest` and `SearchPageResponse`, studio's 47e9213, carried on
+this branch as the same commit). The owner's rulings stand: strict ranking, and the groups count records, the screen
+saying "records".
+
+1. **Enter opens the results.** Enter on the words typed in the top bar's search box opens the results page. Suggestions
+   under the box stay as they were: one moved to with the arrow keys is still chosen by Enter (`Combobox`'s `onSubmit`:
+   with it, nothing is highlighted until the arrow keys move; without it, Enter chooses the first option, as before, so
+   the query builder's box is unchanged).
+2. **They fill the main area.** The results (`search/SearchResults.tsx`) are laid over the view the person left, which
+   stays mounted beneath them, as it was, and `inert` while they show: "Back to ‹view›" returns to it exactly as it was,
+   focus in the search box. While they show no view is current (none pressed in the switch, *More views* not marked),
+   and choosing any view leaves them. A rail panel opens beside them and leaves them showing.
+3. **The page.** A back link (`govuk-back-link` under GOV.UK); the heading "Search results for '…'", focused on opening;
+   the total in records, the Conduit's, with "(counts may be incomplete)" where `counts_exact` is false, announced in a
+   status line when results load; *All* then the Conduit's groups, each with its count, choosing one asking again; the
+   dataset and date filters the response offers, beside the list, with *Clear filters*; each result named as the canvas
+   names it (`nodeLabel` of its first record, so the analyst's per-type label holds), its type, the Conduit's words for
+   why it matched, its date, and for a document its passage with the matched words bold and underlined; *Next page* and
+   *Previous page* (20 a page); "No records match '…'." with *Clear filters* where a filter is on; on the fallback, the
+   Conduit's `limited_reason` in one line; a refusal in the Conduit's words.
+4. **The actions.** *Show on graph* (named "Show on graph: ‹name›", the visible words first, WCAG 2.5.3) seeds every
+   record the result stands for through `/seed` and returns to the graph. *Open*, for a document, reads it over the view;
+   the results are kept, hidden, and shown again when the reader closes. The Ask line, "Ask a question about '…'
+   instead", opens Ask & Chat with the words in its question box, focused (`QuestionsPanel`'s `draft`); nothing is sent
+   until the person presses Ask. It is offered only to someone Ask & Chat is offered to (`ask_model`).
+5. **Every count is the Conduit's** (rule 7): the Glass shows the response's `total`, `groups[].count` and dataset counts
+   and counts nothing itself; a dataset the fallback cannot count is listed without one.
+6. **Decided by the lane under the never-stop rule** (the owner free to overrule): *Show on graph* leaves the results for
+   the graph, as choosing a suggestion does; *Open* keeps them; the page size is 20.
+
+Tests, each red first: `search/SearchResults.test.tsx` (16), `App.search.test.tsx` (10, on the real App),
+`design/primitives/Combobox.test.tsx` (3); `keyboard/search-results.spec.ts` on `search-results-harness.html` in dark,
+light and GOV.UK (registry `SEARCH_RESULTS_ACTIONS`), and `a11y/every-harness.spec.ts` scanning the page open, with
+nothing found, on the fallback and refused. The plants: `process/lanes/case/gates/v052-results-unit-reds.log` (30 of 30)
+and `v052-results-browser-reds.bc3a371.log` (8 of 8). The registry and every-harness states are the orchestrator's
+files, sent as `process/lanes/case/shared-files-v052-results.diff`.
+
+**Not covered:** the route itself, its access rules and its leak test (studio's, ADR-149); the user guide's page on
+search (docs', after the freeze's sweep); a live run against a real index, which waits for studio's route on main.
 
 ### ADR-144, Amendment 3 (13 November 2026) — *Views ▾* by the graph: the case's saved views one click from the canvas
 

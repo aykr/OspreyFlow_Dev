@@ -380,7 +380,7 @@ One row, 40px. From the left:
   The box looks at each type's identifiers and its names and titles (a person's family and given
   names, an organisation's name, a place's name, a document's title) and never at a sensitive
   property; it starts after two characters and says `Type at least 2 characters to search.` while
-  there is one (ADR-074).
+  there is one (ADR-074). Enter on the typed words, no suggestion moved to, opens the search results page (§2.0c).
 - **The view switch**, everything that replaces the main area, a segmented group named *View* (ADR-145
   Amendment 15, the owner's navigation decision): *Graph · Map · Drawing board · Reports*, and Messages when a
   dossier is open; then **More views ▾**, a menu of *Matrix, Figures, Ownership, Connection strength*, one click
@@ -627,6 +627,31 @@ Proved by keyboard in `keyboard/boards.spec.ts` (`promote-drawn-items-by-keyboar
 `close-the-promotion-sheet-by-escape`) and `keyboard/promotions.spec.ts` (`PROMOTION_ACTIONS`); axe
 scans the sheet, the Studio list, its details and rejection, the merge sheet and the delete question in
 dark, light and GOV.UK.
+
+### 2.0c The search results page (ADR-145 Amendment 15 Part A; the owner's navigation decision of 13 November 2026)
+
+Enter on the words typed in the top bar's search box opens the results page (`search/SearchResults.tsx`); a suggestion
+moved to with the arrow keys is still chosen by Enter. The results fill the main area, over the view the person left,
+which stays as it was beneath them and out of reach (`inert`); while they show no view is current, and choosing any
+view leaves them. They read `POST /v1/investigations/{id}/search` (`packages/schemas/search.py`: `SearchPageRequest`,
+`SearchPageResponse`), 20 a page.
+
+- **Back to ‹view›** (a GOV.UK back link under that brand) returns to the view exactly as it was, focus in the search box.
+- **The heading**, "Search results for '…'", takes focus on opening; under it the total in records, the Conduit's, with
+  "(counts may be incomplete)" where it says so; a status line announces each load.
+- **Groups:** *All*, then each group the Conduit sends with its count; choosing one asks again for it.
+- **Filters**, beside the list: the datasets and the date span the response offers, and *Clear filters*.
+- **Each result:** its name as the canvas names it (`nodeLabel`), its type, why it matched (the Conduit's words), its
+  date, and for a document the passage with the matched words bold and underlined. *Show on graph: ‹name›* seeds every
+  record it stands for and returns to the graph; *Open*, for a document, reads it over the view, the results kept.
+- **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat with
+  the words in the question box, focused, and sends nothing.
+- **No results** says "No records match '…'." with *Clear filters* where a filter is on. **The fallback** shows the
+  Conduit's one line on why the results are limited. **A refusal** is said in the Conduit's words.
+- Every count is the Conduit's: the Glass counts nothing it was sent (rule 7).
+
+Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,
+`keyboard/search-results.spec.ts` (`SEARCH_RESULTS_ACTIONS`) and the every-harness scan of `search-results-harness.html`.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
