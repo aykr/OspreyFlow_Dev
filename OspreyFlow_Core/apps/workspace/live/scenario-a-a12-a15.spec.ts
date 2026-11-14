@@ -86,9 +86,13 @@ async function expandFromTheSelectedNode(
         `The page's errors:\n${errors.join("\n") || "(none)"}`,
     );
   }
+  // Under *Expand by link type*, each type by its name as people read it ("Associate of (8)"), not
+  // the ontology's own (`ASSOCIATE_OF`): ADR-098 Amendment 8 (14 November 2026, the live tier).
+  const label = edgeType.charAt(0) + edgeType.slice(1).toLowerCase().replace(/_/g, " ");
   const expandItem = menu
+    .getByRole("group", { name: "Expand by link type" })
     .getByRole("menuitem")
-    .filter({ hasText: new RegExp(`^${edgeType}\\b`) })
+    .filter({ hasText: new RegExp(`^${label} \\(`) })
     .first();
   await expect(
     expandItem,
@@ -106,7 +110,7 @@ async function expandFromTheSelectedNode(
     expandItem,
     `${edgeType} still previews as (0) or (…) on a node that has neighbours — the radial menu's ` +
       "cardinality is not reaching /expand/preview",
-  ).not.toHaveText(new RegExp(`^${edgeType}\\s*\\((0|…)\\)`));
+  ).not.toHaveText(new RegExp(`^${label}\\s*\\((0|…)\\)`));
 
   await expandItem.click();
 }
