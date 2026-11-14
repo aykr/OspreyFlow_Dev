@@ -380,7 +380,7 @@ One row, 40px. From the left:
   The box looks at each type's identifiers and its names and titles (a person's family and given
   names, an organisation's name, a place's name, a document's title) and never at a sensitive
   property; it starts after two characters and says `Type at least 2 characters to search.` while
-  there is one (ADR-074).
+  there is one (ADR-074). Enter on the typed words, no suggestion moved to, opens the search results page (§2.0c).
 - **The view switch**, everything that replaces the main area, a segmented group named *View* (ADR-145
   Amendment 15, the owner's navigation decision): *Graph · Map · Drawing board · Reports*, and Messages when a
   dossier is open; then **More views ▾**, a menu of *Matrix, Figures, Ownership, Connection strength*, one click
@@ -627,6 +627,42 @@ Proved by keyboard in `keyboard/boards.spec.ts` (`promote-drawn-items-by-keyboar
 `close-the-promotion-sheet-by-escape`) and `keyboard/promotions.spec.ts` (`PROMOTION_ACTIONS`); axe
 scans the sheet, the Studio list, its details and rejection, the merge sheet and the delete question in
 dark, light and GOV.UK.
+
+### 2.0c The search results page (ADR-145 Amendment 15 Part A; the owner's navigation decision of 13 November 2026)
+
+Enter on the words typed in the top bar's search box opens the results page (`search/SearchResults.tsx`); a suggestion
+moved to with the arrow keys is still chosen by Enter. The results fill the main area, over the view the person left,
+which stays as it was beneath them and out of reach (`inert`); while they show no view is current, and choosing any
+view leaves them, as do a saved view opened, another place and the cross-link. The box's own Filters shape its
+suggestions alone: the results start at *All* with no filter. They read `POST /v1/investigations/{id}/search` (`packages/schemas/search.py`: `SearchPageRequest`,
+`SearchPageResponse`), 20 a page.
+
+- **Back to ‹view›** (a GOV.UK back link under that brand) returns to the view exactly as it was, focus in the search box.
+- **The heading**, "Search results for '…'", takes focus on opening, and again when the same words are searched again;
+  under it the total in records, the Conduit's (the chosen group's own count once one is chosen), with "(counts may be
+  incomplete)" where it says so; a status line announces each load. Every count is the latest answer's.
+- **Groups:** *All*, then each group the Conduit sends with its count; choosing one asks again for it.
+- **Filters**, beside the list: the datasets and the date span the response offers (GOV.UK's date input under that
+  brand), and *Clear filters*. *Next page* and *Previous page* (GOV.UK's pagination under that brand) and *Clear
+  filters* take focus to the heading of the new answer.
+- **Each result:** its name as the canvas names it (`nodeLabel`), its type, why it matched (the Conduit's words), its
+  date, and for a document the passage with the matched words bold and underlined. *Show on graph: ‹name›* seeds every
+  record it stands for and returns to the graph, focus on it; *Open*, for a document, reads it over the view, the
+  results kept and shown again when it closes, focus on their heading. A record a result names that the answer does
+  not hold is said, never dropped.
+- **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat with
+  the words in the question box, focused, once, and sends nothing.
+- **No results** says "No records match '…'." with *Clear filters* where a filter is on. **The fallback** shows the
+  Conduit's one line on why the results are limited (a line of the Glass's own where it gives none). **A refusal** is
+  said in the Conduit's words. A query longer than the search takes (200 characters, counted as the Conduit counts
+  them) is refused, never cut: the box takes it whole, typed or pasted, and the refusal names the limit and the query's
+  length. Any other refusal that comes as the framework's list says only that the search could not be done. Help's
+  keys panel opens over the results when asked for (Help or `?`); the panel shown by itself on a first visit stays
+  with the graph, never over the results' actions, and is there again on Back.
+- Every count is the Conduit's: the Glass counts nothing it was sent (rule 7).
+
+Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,
+`keyboard/search-results.spec.ts` (`SEARCH_RESULTS_ACTIONS`) and the every-harness scan of `search-results-harness.html`.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

@@ -1162,6 +1162,22 @@ export const WELCOME_ACTIONS = defineActionRegistry("WELCOME_ACTIONS", [
   "close-the-welcome-panel",
 ] as const);
 
+// The search results page (the owner's navigation decision of 13 November 2026, Part A; ADR-145 Amendment 15 Part A):
+// opened by Enter in the top bar's search box, each of its actions by keyboard, and Back with focus in the box.
+export const SEARCH_RESULTS_ACTIONS = defineActionRegistry("SEARCH_RESULTS_ACTIONS", [
+  "open-search-results-by-keyboard",
+  "choose-a-result-group-by-keyboard",
+  "filter-search-results-by-keyboard",
+  "next-page-of-results-by-keyboard",
+  "previous-page-of-results-by-keyboard",
+  "clear-search-filters-by-keyboard",
+  "filter-results-by-date-by-keyboard",
+  "show-a-result-on-the-graph-by-keyboard",
+  "open-a-document-from-the-results-by-keyboard",
+  "ask-instead-from-the-results-by-keyboard",
+  "back-from-the-results-by-keyboard",
+] as const);
+
 // ADR-124 decision 2 (U6b): the dialog a reader is shown when their own view of the case is past a cap.
 export const VIEW_OVER_CAP_ACTIONS = defineActionRegistry("VIEW_OVER_CAP_ACTIONS", [
   "see-the-over-cap-dialog-when-the-server-says-the-view-is-too-large",

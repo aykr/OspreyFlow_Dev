@@ -32,6 +32,8 @@ export interface GlobalSearchProps {
   /** Draws what "Add many from a list" added (ADR-128 decision 1). With none, the box has no such
    * button: a box nothing can draw for (the From and To of Find connections) offers nothing new. */
   onApplyDelta?: (delta: WorkingSetDelta) => void;
+  /** Enter on the typed words, no suggestion moved to: the search results page (ADR-145 Amendment 15 Part A). */
+  onSearch?: (query: string) => void;
 }
 
 /** A prefix shorter than this is not worth asking about; the Conduit refuses it too (ADR-059, ADR-074). */
@@ -66,6 +68,7 @@ export function GlobalSearch({
   label = "Search entities, identifiers, documents",
   slashFocuses = true,
   onApplyDelta,
+  onSearch,
 }: GlobalSearchProps) {
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
@@ -201,6 +204,7 @@ export function GlobalSearch({
           value={query}
           options={results.map((node) => ({ value: node.id, label: `${node.type}: ${displayValue(node)}` }))}
           onQueryChange={onQueryChange}
+          onSubmit={onSearch}
           onChange={(value) => {
             const node = results.find((n) => n.id === value);
             if (node) onSelect(node);

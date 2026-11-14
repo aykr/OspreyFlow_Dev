@@ -36924,7 +36924,71 @@ beside the current view, and there is one route to cases and one place to manage
 `note` props, left for a later clean-up with their tests; `case-screen-options-harness.tsx`, L2.3's prototype of the old variants, left as the
 record it is.
 
-**Part A (step 3e′), the search results layout:** to be recorded here when built.
+**Part A (step 3e′, `v052-results`), the search results layout, as built (14 November 2026).** Built against the search
+service's request and response as studio froze them (`process/lanes/studio/SEARCH_RESPONSE_SHAPE.md` at ee7a16d) and
+modelled them (`packages/schemas/search.py`, `SearchPageRequest` and `SearchPageResponse`, studio's 47e9213, carried on
+this branch as the same commit). The owner's rulings stand: strict ranking, and the groups count records, the screen
+saying "records".
+
+1. **Enter opens the results.** Enter on the words typed in the top bar's search box opens the results page. Suggestions
+   under the box stay as they were: one moved to with the arrow keys is still chosen by Enter (`Combobox`'s `onSubmit`:
+   with it, nothing is highlighted until the arrow keys move; without it, Enter chooses the first option, as before, so
+   the query builder's box is unchanged).
+2. **They fill the main area.** The results (`search/SearchResults.tsx`) are laid over the view the person left, which
+   stays mounted beneath them, as it was, and `inert` while they show: "Back to ‹view›" returns to it exactly as it was,
+   focus in the search box. While they show no view is current (none pressed in the switch, *More views* not marked),
+   and choosing any view leaves them, as do a saved view opened (from the Cases panel or an alert), another place, the
+   context row's cross-link and the openers of Rules and Monitoring and the Studio. A rail panel opens beside them and
+   leaves them showing; Help's keys panel opens over them. When they show, Back's focus, the view's reach and focus
+   after a document is read are one hook, `search/useSearchResultsOverlay.ts`, which the keyboard harness uses too.
+   The same words searched again ask again and take focus to the heading. The search box's own Filters (an entity
+   type, *Only nodes on screen*) shape its suggestions alone: the results start at *All* with no filter, and their
+   own filters are the page's.
+3. **The page.** A back link (`govuk-back-link` under GOV.UK); the heading "Search results for '…'", focused on opening;
+   the total in records, the Conduit's (the chosen group's own count once a group is chosen), with "(counts may be
+   incomplete)" where `counts_exact` is false, announced in a status line at each load; every count from the latest
+   answer, the group and filters as they stand; *All* then the Conduit's groups, each with its count, choosing one asking again; the
+   dataset and date filters the response offers, beside the list, with *Clear filters*; each result named as the canvas
+   names it (`nodeLabel` of its first record, so the analyst's per-type label holds), its type, the Conduit's words for
+   why it matched, its date, and for a document its passage with the matched words bold and underlined; a record the
+   result names that the answer does not hold is said ("1 of its 3 records could not be read."), never dropped in
+   silence; *Next page* and *Previous page* (20 a page; GOV.UK's pagination under that brand), each, like *Clear
+   filters*, taking focus to the heading of the new answer; the date filter GOV.UK's date input (day, month, year)
+   under that brand, a date field otherwise; "No records match '…'." with *Clear filters* where a filter is on; on the
+   fallback, the Conduit's `limited_reason` in one line, or "Results are limited: the search index is not in use."
+   where it gives none; a refusal in the Conduit's words. A query over the search's limit (`MAX_QUERY_CHARS`, 200,
+   counted by character as the Conduit counts) is refused, never cut (rule 2). The box sets no `maxLength`, so a long
+   query is taken whole, pasted or typed. FastAPI's 422 for it is a list, not words, and the page names the limit
+   from it: "The search could not be done: a search can be at most 200 characters, and this one has ‹n›. Shorten it
+   and press Enter again." Any other list refusal says only "The search could not be done (‹status›)." and never
+   the framework's own words. Found reading studio's route while preparing the live check; the orchestrator ruled on
+   14 November 2026 that it is fixed before the merge and that the box sets no `maxLength`. Help's keys panel opens
+   over the results only when asked for (Help or `?`). The panel shown by itself on a first visit belongs to the graph:
+   over the results it lay on the first result's *Show on graph*, found by the live check, so it is not drawn there and
+   is shown again on Back.
+4. **The actions.** *Show on graph* (named "Show on graph: ‹name›", the visible words first, WCAG 2.5.3) seeds every
+   record the result stands for through `/seed` and returns to the graph, focus on it. *Open*, for a document, reads it
+   over the view; the results are kept, hidden, and shown again when the reader closes, focus on their heading (never
+   on the view beneath, inert again). The Ask line, "Ask a question about '…' instead", opens Ask & Chat with the words
+   in its question box, focused (`QuestionsPanel`'s `draft`), once: closed and opened again, the box is empty. Nothing
+   is sent until the person presses Ask. It is offered only to someone Ask & Chat is offered to (`ask_model`).
+5. **Every count is the Conduit's** (rule 7): the Glass shows the response's `total`, `groups[].count` and dataset counts
+   and counts nothing itself; a dataset the fallback cannot count is listed without one.
+6. **Decided by the lane under the never-stop rule** (the owner free to overrule): *Show on graph* leaves the results for
+   the graph, as choosing a suggestion does; *Open* keeps them; the page size is 20.
+
+Tests, each red first: `search/SearchResults.test.tsx` (25), `App.search.test.tsx` (17, on the real App),
+`design/primitives/Combobox.test.tsx` (4); `keyboard/search-results.spec.ts` on `search-results-harness.html` in dark,
+light and GOV.UK (registry `SEARCH_RESULTS_ACTIONS`, eleven actions, Previous page, Clear filters and the dates among
+them, a read document hiding the results where the stylesheet applies, and a pasted over-long query kept whole and
+refused with the limit named), and `a11y/every-harness.spec.ts` scanning
+the page open, with nothing found, on the fallback and refused. The plants: `process/lanes/case/gates/v052-results-unit-reds.log`
+and `v052-results-browser-reds.2016275.log` (the over-long query's plants in `v052-results-browser-reds.too-long.log`), each plant red for its stated reason; those marked "the first review's"
+are the defects the lane review found (14 November 2026). The registry and every-harness states are the orchestrator's
+files, sent as `process/lanes/case/shared-files-v052-results.diff`.
+
+**Not covered:** the route itself, its access rules and its leak test (studio's, ADR-149); the user guide's page on
+search (docs', after the freeze's sweep); a live run against a real index, which waits for studio's route on main.
 
 ### ADR-144, Amendment 3 (13 November 2026) — *Views ▾* by the graph: the case's saved views one click from the canvas
 

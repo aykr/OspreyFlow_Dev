@@ -1,0 +1,46 @@
+# at 168be41 (rebased on main 554f4b9: rules-b's Whole case, platform's v052-measure) with process/lanes/case/shared-files-v052-results.diff applied (git apply; reverted after with git apply -R)
+# OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts --workers=1
+[832/866] keyboard/trends.spec.ts:82:1 › a saved trend is added to a pack by keyboard
+[833/866] keyboard/trends.spec.ts:97:1 › every registered Trends action has its own proving test case above
+[834/866] keyboard/view-over-cap.spec.ts:21:1 › the dialog appears on a view_over_cap; Try again resyncs from nothing; a smaller view can be saved and opened by keyboard
+[835/866] keyboard/view-over-cap.spec.ts:82:1 › Escape puts the dialog away, and a button brings it back
+[836/866] keyboard/view-over-cap.spec.ts:97:1 › every registered over-cap dialog action has its own proving test case above
+[837/866] keyboard/views.spec.ts:25:1 › a view is opened from Views in this case by keyboard
+[838/866] keyboard/views.spec.ts:32:1 › a private view is shared with the case by keyboard, by its creator
+[839/866] keyboard/views.spec.ts:41:1 › a view is deleted by keyboard after asking once, and nothing else is
+[840/866] keyboard/views.spec.ts:53:1 › a view of another case is opened from the cases list by keyboard
+[841/866] keyboard/views.spec.ts:60:1 › a view is named and saved from its form by keyboard
+[842/866] keyboard/views.spec.ts:71:1 › Back to the case is reached from the banner over an opened view by keyboard
+[843/866] keyboard/views.spec.ts:81:1 › a view is opened from Views by the graph by keyboard, and Back to the case closes it
+[844/866] keyboard/views.spec.ts:109:1 › Views by the graph says how to make one when the case has none, by keyboard
+[845/866] keyboard/views.spec.ts:119:1 › a merged drawing's notes are opened and closed from its view's banner by keyboard
+[846/866] keyboard/views.spec.ts:132:1 › another member of the case is shown nothing of a private view, and no share or delete
+[847/866] keyboard/views.spec.ts:145:1 › every registered case view action has its own proving test case above
+[848/866] keyboard/views.spec.ts:156:5 › ospreyflow dark: in the Cases drawer each view's name, tag and actions fit
+[849/866] keyboard/views.spec.ts:156:5 › ospreyflow dark&long=1: in the Cases drawer each view's name, tag and actions fit
+[850/866] keyboard/views.spec.ts:156:5 › ospreyflow dark&asking=delete: in the Cases drawer each view's name, tag and actions fit
+[851/866] keyboard/views.spec.ts:156:5 › ospreyflow light: in the Cases drawer each view's name, tag and actions fit
+[852/866] keyboard/views.spec.ts:156:5 › ospreyflow light&long=1: in the Cases drawer each view's name, tag and actions fit
+[853/866] keyboard/views.spec.ts:156:5 › ospreyflow light&asking=delete: in the Cases drawer each view's name, tag and actions fit
+[854/866] keyboard/views.spec.ts:156:5 › govuk light: in the Cases drawer each view's name, tag and actions fit
+[855/866] keyboard/views.spec.ts:156:5 › govuk light&long=1: in the Cases drawer each view's name, tag and actions fit
+[856/866] keyboard/views.spec.ts:156:5 › govuk light&asking=delete: in the Cases drawer each view's name, tag and actions fit
+[857/866] keyboard/watch-panels.spec.ts:47:1 › submitting the hotlist form creates a hotlist and it appears in the list, reachable by keyboard alone
+[858/866] keyboard/watch-panels.spec.ts:117:1 › a new hotlist's audience is chosen, and an existing one's changed, by keyboard alone
+[859/866] keyboard/watch-panels.spec.ts:172:1 › submitting the monitor form turns a saved pattern into a monitor, reachable by keyboard alone
+[860/866] keyboard/watch-panels.spec.ts:276:1 › a watched pattern's own schedule is set by keyboard (ADR-146 decision 4, G16)
+[861/866] keyboard/watch-panels.spec.ts:285:1 › an entity is watched for, from the Glass, by keyboard (ADR-146 decision 4)
+[862/866] keyboard/watch-panels.spec.ts:295:1 › a saved pattern is saved as a watch, from the Glass, by keyboard (ADR-146 decision 4)
+[863/866] keyboard/watch-panels.spec.ts:304:1 › an alert is raised to the dataset, by keyboard (ADR-146 decision 7)
+[864/866] keyboard/watch-panels.spec.ts:324:1 › every registered watch-panel action has its own proving test case above
+[865/866] keyboard/welcome.spec.ts:7:1 › ? opens the panel, never while typing; a step restores by keyboard; Close shuts it
+[866/866] keyboard/welcome.spec.ts:38:1 › every registered welcome-panel action has its own proving test case above
+  2 failed
+    keyboard/sources-connectors.spec.ts:379:1 › a list's schedule is stopped, so it is refreshed by hand only 
+    keyboard/sources-connectors.spec.ts:402:1 › every registered Sources connector action has its own proving test case above 
+  1 skipped
+  863 passed (8.9m)
+
+# sources-connectors.spec.ts alone, same tree, shared diff applied: OSPREY_PORTS_SLOT=2 npx playwright test --config keyboard/playwright.config.ts keyboard/sources-connectors.spec.ts --workers=1
+[14/14] keyboard/sources-connectors.spec.ts:402:1 › every registered Sources connector action has its own proving test case above
+  14 passed (4.4s)

@@ -1,0 +1,32 @@
+# at 5e70734 with the shared diff applied
+# OSPREY_PORTS_SLOT=2 npx playwright test --config a11y/playwright.config.ts a11y/every-harness.spec.ts -g 'search-results-harness|questions-harness|places-harness|top-bar-harness|contrast finding|scan found'
+[54/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1 (dark) has no automated WCAG 2.2 A or AA violations
+[55/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1 (light) has no automated WCAG 2.2 A or AA violations
+[56/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1 (govuk) has no automated WCAG 2.2 A or AA violations
+[57/82] a11y/every-harness.spec.ts:436:5 › search-results-harness.html open=1: every labelled field's name contains its visible label (2.5.3)
+[58/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=none (dark) has no automated WCAG 2.2 A or AA violations
+[59/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=none (light) has no automated WCAG 2.2 A or AA violations
+[60/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=none (govuk) has no automated WCAG 2.2 A or AA violations
+[61/82] a11y/every-harness.spec.ts:436:5 › search-results-harness.html open=1&state=none: every labelled field's name contains its visible label (2.5.3)
+[62/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=limited (dark) has no automated WCAG 2.2 A or AA violations
+[63/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=limited (light) has no automated WCAG 2.2 A or AA violations
+[64/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=limited (govuk) has no automated WCAG 2.2 A or AA violations
+[65/82] a11y/every-harness.spec.ts:436:5 › search-results-harness.html open=1&state=limited: every labelled field's name contains its visible label (2.5.3)
+[66/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=refused (dark) has no automated WCAG 2.2 A or AA violations
+[67/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=refused (light) has no automated WCAG 2.2 A or AA violations
+[68/82] a11y/every-harness.spec.ts:394:7 › search-results-harness.html open=1&state=refused (govuk) has no automated WCAG 2.2 A or AA violations
+[69/82] a11y/every-harness.spec.ts:436:5 › search-results-harness.html open=1&state=refused: every labelled field's name contains its visible label (2.5.3)
+[70/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html (dark) has no automated WCAG 2.2 A or AA violations
+[71/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html (light) has no automated WCAG 2.2 A or AA violations
+[72/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html (govuk) has no automated WCAG 2.2 A or AA violations
+[73/82] a11y/every-harness.spec.ts:436:5 › top-bar-harness.html: every labelled field's name contains its visible label (2.5.3)
+[74/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html help=1 (dark) has no automated WCAG 2.2 A or AA violations
+[75/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html help=1 (light) has no automated WCAG 2.2 A or AA violations
+[76/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html help=1 (govuk) has no automated WCAG 2.2 A or AA violations
+[77/82] a11y/every-harness.spec.ts:436:5 › top-bar-harness.html help=1: every labelled field's name contains its visible label (2.5.3)
+[78/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html reports=1 (dark) has no automated WCAG 2.2 A or AA violations
+[79/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html reports=1 (light) has no automated WCAG 2.2 A or AA violations
+[80/82] a11y/every-harness.spec.ts:394:7 › top-bar-harness.html reports=1 (govuk) has no automated WCAG 2.2 A or AA violations
+[81/82] a11y/every-harness.spec.ts:436:5 › top-bar-harness.html reports=1: every labelled field's name contains its visible label (2.5.3)
+[82/82] a11y/every-harness.spec.ts:446:1 › every listed contrast finding names a look this file scans
+  82 passed (1.2m)

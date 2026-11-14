@@ -108,6 +108,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-144 (L3.2b): case views as another member sees them, the Save as a view form, and the banner
   // over an opened view.
   // ADR-144 Amendment 3: the graph's *Views ▾*, closed, open on the case's views, and open on none.
+  // ADR-145 Amendment 15 Part A: the search results page open, with nothing found, on the fallback and refused.
+  "search-results-harness.html": ["open=1", "open=1&state=none", "open=1&state=limited", "open=1&state=refused"],
   "views-harness.html": ["in=drawer", "in=drawer&asking=delete", "in=drawer&long=1", "as=bob", "show=form", "show=lens", "show=merged", "show=merged&notes=open", "asking=delete", "show=menu", "show=menu&open=1", "show=menu&open=1&empty=1"],
   // ADR-143 decisions 4 to 7 (L3.3): a board open with its drawn and loaded items, its inspector, its
   // item and link forms and the withdrawal's question; another member's read-only view; a blank board;
