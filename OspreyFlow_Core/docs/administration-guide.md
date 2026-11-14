@@ -14,10 +14,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.02** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.03** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.03 | 2026-11-14 | §6a.8: the backup sets kept 34 days, a day inside RDS's 35-day point-in-time window, since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to midnight UTC (ADR-148 Amendment 13 point 5, amended 14 November); platform's diff, with the retention said to be no longer than that. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 2.02 | 2026-11-14 | Guests on Entra ID as built (ADR-148 Amendment 17, the audit's ruling 4b). §6a.7: a guest account is refused, in its own words, until an administrator of people turns on *Admit guest accounts* in *Admin › People*; each change audited; admitted, a guest signs in through the same mapping and is given nothing a member with the same token would not be; turned off, every guest is refused at their next request, and a run as a guest owner stops; the untried guest token's shape restated. §9: the setting, and guests marked in the list. Held by `tests/test_guides_cloud_platform.py`. PDF made by the orchestrator at merge. |
 | 2.01 | 2026-11-14 | §9: on Entra ID a dashboard identity is registered by its app registration's application id, with no secret shown (ADR-148 Amendment 10), and its refusals quoted as `entra_people.py` words them; the refusal of every dashboard identity, which the code no longer raises, struck. §6a.1: the decommission's backups bucket and its key by a choice with no default, `BACKUPS=keep` or `BACKUPS=destroy`, as the rendered `DECOMMISSION.md` makes it (ADR-148 Amendment 13 decision 6). Held by `tests/test_guide_v052_admin.py`. PDF made by the orchestrator at merge. |
 | 2.00 | 2026-11-14 | §6a on search, as ADR-148 Amendment 13 and the render have it: §6a.1, the poc shape makes the platform's OpenSearch domain as the standard shape does (the refusal struck), `postgres-fulltext` makes none, and the Conduit, the workers and the index's two Jobs are given its address; the shared folders in the standard shape, the Ingest root and no staging; §6a.3, `opensearch.tf` in every shape; §6a.8, the restore's step 6 names the backups' CronJobs it resumes, and step 7, the index rebuilt and the drift check, the index not in a set. §6a.2: the index's rebuild and drift check sized as the Conduit (0.5 CPU, 2 GiB, a 4 GiB limit; the poc's CPU limit 2). §6a.5: their way out, ArcadeDB, the managed stores' networks (OpenSearch on 443), S3 and STS. §13: a local restore's last step rebuilds the index from the graph where there is an OpenSearch (no longer "holds no index of OspreyFlow's yet"). Held by `tests/test_guides_cloud_platform_search.py`, which reads the render, `profile.yaml`'s rows and `restore.py`. PDF made by the orchestrator at merge. |
@@ -1733,8 +1734,9 @@ policy denies against accident (an administrator who rewrites the policy can lif
 decommission does once the retention ends).
 Two roles write a set, ClickHouse's own and the runner's, each to its own prefix, by IRSA, so no key
 is stored anywhere; neither can erase a set. The bucket is versioned (an object overwritten keeps
-its previous version for 7 days), and a set's objects expire 35 days after they were written: the
-retention is 35 days in all, a proposal until the organisation agrees its own.
+its previous version for 7 days), and a set's objects expire 34 days after they were written: the
+retention is 34 days in all, a proposal until the organisation agrees its own, which may be shorter
+but not longer: a set kept longer would outlive RDS's point-in-time window (below), 35 days at most.
 
 **Checking last night's backup.** A backup Job that completed wrote a finished set, and its log names
 it (`backup: set …`). **A failed run is a failed Job**, its log naming the store, the step and the
@@ -1763,8 +1765,9 @@ ArcadeDB and one ClickHouse copy; this deployment runs more, and its restore is 
    withdrawn or deleted since the set comes back under today's grants. The platform team restores RDS
    to the set's finish time by its own point-in-time procedure; the deployment is pointed at it only
    once nothing that writes runs (step 4). **RDS keeps its point-in-time restore for 35 days**, as the
-   Terraform renders it (`backup_retention_period`), against the sets' 35: every set still kept can
-   be restored with its database.
+   Terraform renders it (`backup_retention_period`), against the sets' 34: a day inside RDS's window,
+   since RDS's earliest restorable point lags by up to about a day and the sets' expiry rounds up to
+   midnight UTC, so every set still kept can be restored with its database.
 3. **No backup during the restore**: both CronJobs suspended, and any backup still running left to
    finish.
 4. **Everything that writes stopped**: the render's own list, `backups.writers` in `values.yaml`, each
