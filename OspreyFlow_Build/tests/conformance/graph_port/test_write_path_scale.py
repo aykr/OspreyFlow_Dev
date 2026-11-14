@@ -13,12 +13,20 @@ load must take less than one and a half times as long. Measured on the lane stac
 stack c): 6.63 s and 6.41 s at 2,000 and 22,000, flat. At 22,000 one scan per item adds only some
 2 s to a 6.6 s load (Amendment 2: 11 ms a scan at 20,000), which no bound can tell from noise, so
 the graph is made large enough that each scanning lookup put back (plants A9 to A11) costs more than
-the whole load does. The times are printed, so a run records them. The offline stand-ins refuse the scanning shapes outright
+the whole load does. The offline stand-ins refuse the scanning shapes outright
 (`tests/adapters/graph_arcadedb/edge_store.refuse_scans`); this is the measurement behind them.
+
+**Counted always, timed only under a lease** (rule 14). The load's round trips to the store, SQL and
+Gremlin, are counted at both sizes and must be the same: deterministic, so CI's conformance job
+holds it. The time bound is asserted only in a run that names its lease (`stack_lease.sh remote`
+writes the run's lease into `$OSPREY_RUN_TAG/lease`), since a time taken beside unknown work
+measures nothing; elsewhere the times are printed and not judged. A scan put back (plants A9 to
+A11) is one round trip, so only the timed run shows it at size; offline, the stand-ins refuse it.
 """
 
 from __future__ import annotations
 
+import os
 import time
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -74,7 +82,44 @@ def _link(source: str, target: str) -> EdgeWrite:
     )  # fmt: skip
 
 
-async def _load(graph: GraphArcadeDBAdapter) -> float:
+class _Counted:
+    """The adapter's client, with each round trip to the store counted."""
+
+    def __init__(self, client: object) -> None:
+        self._client = client
+        self.trips = 0
+
+    def __getattr__(self, name: str) -> object:
+        attr = getattr(self._client, name)
+        if name not in ("sql", "gremlin"):
+            return attr
+
+        async def counted(*args: object, **kwargs: object) -> object:
+            self.trips += 1
+            return await attr(*args, **kwargs)
+
+        return counted
+
+
+def _lease() -> str | None:
+    """The lease this run was taken under, where `stack_lease.sh remote` named one."""
+    tag = os.environ.get("OSPREY_RUN_TAG")
+    if not tag or not os.path.isfile(os.path.join(tag, "lease")):
+        return None
+    with open(os.path.join(tag, "lease"), encoding="utf-8") as f:
+        return f.read().strip() or None
+
+
+async def _load(graph: GraphArcadeDBAdapter) -> tuple[float, int]:
+    counted = _Counted(graph._client)
+    graph._client = counted  # type: ignore[assignment]
+    try:
+        return await _timed_load(graph), counted.trips
+    finally:
+        graph._client = counted._client  # type: ignore[assignment]
+
+
+async def _timed_load(graph: GraphArcadeDBAdapter) -> float:
     started = time.perf_counter()
     nodes = [_person(n) for n in range(LOAD)]
     tx = await graph.begin_transaction()
@@ -93,11 +138,17 @@ async def _load(graph: GraphArcadeDBAdapter) -> float:
 async def test_a_loads_time_grows_with_the_load_not_the_graph(graph: GraphArcadeDBAdapter) -> None:
     await _pad(graph, 0, 2_000)
     await _load(graph)  # warm: scripts compiled, types read
-    small = await _load(graph)
+    small, small_trips = await _load(graph)
     await _pad(graph, 2_000, 100_000)
-    large = await _load(graph)
-    print(f"ADR-124 Am 18: the load at 2,000 padding {small:.2f} s, at 102,000 {large:.2f} s")
-    assert large < 1.5 * small, (small, large)
+    large, large_trips = await _load(graph)
+    lease = _lease()
+    print(
+        f"ADR-124 Am 18: the load at 2,000 padding {small:.2f} s and {small_trips} round trips, "
+        f"at 102,000 {large:.2f} s and {large_trips}; lease: {lease or 'none, so not timed'}"
+    )
+    assert large_trips == small_trips, (small_trips, large_trips)
+    if lease is not None:
+        assert large < 1.5 * small, (small, large)
 
 
 async def test_one_call_writing_one_node_twice_ends_as_one_node(graph: GraphArcadeDBAdapter) -> None:

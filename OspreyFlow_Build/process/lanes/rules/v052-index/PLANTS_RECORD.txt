@@ -1,4 +1,4 @@
-ADR-150's plants at 942a319 (lane/rules-adr124-am18 on a46e2ee), stack c under the rules lane's lease (taken 2026-11-14T02:36:09Z, brought down and released after), the working tree clean and committed (run 2). Exit 0: built GREEN (158), V1 to V86 each RED (84; V43, V44 retired), restored GREEN. Each pytest run with a fresh PYTHONPYCACHEPREFIX. Unfiltered, below the scale test's three runs of the same run. The previous record, at a879b3c: gates/a879b3c.live-stack-c.txt.
+ADR-150's plants at 942a319 (lane/rules-adr124-am18 on a46e2ee), stack c under the rules lane's lease (taken 2026-11-14T02:35:59Z, as its raw lease line says, brought down and released after), the working tree clean and committed (run 2). Exit 0: built GREEN (158), V1 to V86 each RED (84; V43, V44 retired), restored GREEN. Each pytest run with a fresh PYTHONPYCACHEPREFIX. Unfiltered, below the scale test's three runs of the same run. The previous record, at a879b3c: gates/a879b3c.live-stack-c.txt.
 === scale run 1
 ADR-124 Am 18: the load at 2,000 padding 23.95 s, at 102,000 15.45 s
 ..
