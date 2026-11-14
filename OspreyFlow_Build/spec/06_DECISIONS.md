@@ -38798,16 +38798,15 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
    - `principal_from_claims`, the one construction path (decision 9), refuses a guest's claims itself unless its
      caller says the guest was admitted (`guest_admitted`), so no other caller can let one in unasked.
 3. **Admitted, a guest is any person, never more** (rule 3). The same mapping, so the clearance, unit and handling codes
-   their own token gives (a guest's token often carries none of the tenant's extension attributes or groups, and is
+   their own token gives, or, where the mapping sets one here, People's (below) (a guest's token often carries none of the tenant's extension attributes or groups, and is
    then refused as any person missing them is), and the roles Admin › People gives. The person is recorded as a guest
    (`entra_people.guest`), and People marks them.
-   - *With the administrator fallback* (Amendment 15, line added 14 November 2026): a value the mapping sources from
-     the administrator is a guest's as anyone's, the one set in People with Access, never their token's, and a guest
-     with it never set is refused in a member's words. The Guests form says which values come from People and which
-     from the token, from `GET /v1/admin/sign-in`'s `administrator_sets` (`guestAdmissionWords`). Held by
-     `test_entra_guests.py::test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token`
-     (red at its own assertion with a guest's token clearance planted in, `process/lanes/admin/guest_words/`) and by
-     `PeopleEntraAdministrator.test.tsx`'s *Guests words*, for every set the mapping can name.
+   - *With the administrator fallback* (Amendment 15, a line added 14 November 2026):
+     - A value the mapping sources from the administrator is a guest's as it is anyone's: the one set in People with
+       Access, never their token's.
+     - A guest with that value never set is refused in a member's words.
+     - The Guests form says which values come from People and which from the token, from
+       `GET /v1/admin/sign-in`'s `administrator_sets` (`guestAdmissionWords`).
 4. **Turned off, a guest already recorded is refused everywhere a person is read.** At their next request (by token,
    decision 2). An open live view (`standing` answers them as disabled). A run acting as them as its owner
    (Amendment 16's stored owner): `PrincipalRevoked`, counted as an owner who can no longer sign in. **Not** a reporting
@@ -38840,6 +38839,13 @@ Amendment 6 point 8, which refused every guest (B2B) account outright.
 - `PeopleEntra.test.tsx`: the box shows the setting and switches it, a refusal is shown in its words with the box left
   as it was, a guest is marked, no box on Keycloak; `keyboard/admin.spec.ts`: the box switched by keyboard
   (`admit-guest-accounts-by-keyboard`, rule 13).
+- With the administrator fallback (the line added to point 3), each test red first and every plant red at its own
+  assertion (`process/lanes/admin/guest_words/`):
+  - `test_entra_guests.py::test_an_admitted_guest_takes_a_value_the_deployment_sets_from_people_never_from_their_token`,
+    through `resolve_principal` for each of clearance, unit and handling codes set here: People's value, never the
+    token's; the member's principal field for field; never set, refused in the member's words;
+  - `PeopleEntraAdministrator.test.tsx`'s *Guests words*: the form's whole sentence for each of the 8 sets
+    `administrator_sets` can hold, served in the Conduit's sorted order.
 - `test_entra_guests.py` also: an admitted guest through Superset's client held to Superset's routes; a guest owner
   whose setting cannot be read is the store unread; the construction path refusing a guest's claims unasked.
 - `test_entra_people.py` also: a guest manager counts for nothing once guests are off, so the last member cannot give
