@@ -159,13 +159,27 @@ def _env(container: dict[str, Any]) -> dict[str, Any]:
     return {e["name"]: e.get("value", e.get("valueFrom")) for e in container.get("env", [])}
 
 
-def test_the_standard_shape_has_no_claims_run() -> None:
+#: The shared claim's parts every set holds (the ADR-148 audit's ruling 3, Amendment 13), in order.
+SHARED = "shared-recipes,shared-model-settings,shared-map-settings"
+SHARED_CLAIM_READ_ONLY = {
+    "name": "shared",
+    "persistentVolumeClaim": {"claimName": "ospreyflow-shared", "readOnly": True},
+}
+
+
+def test_the_standard_shapes_claims_run_backs_the_shared_claims_parts_alone() -> None:
+    """The standard shape has no claim of its own, but every shape's sets hold the shared claim's
+    published pipelines, model settings and map settings (Amendment 13), so its claims run is
+    rendered, mounting the shared claim read-only and nothing else."""
     docs = _docs(rendered.values())
-    assert not [d for d in docs if d["metadata"]["name"].startswith("ospreyflow-backup-claims")]
+    claims = pod_spec(_exactly(docs, "CronJob", "ospreyflow-backup-claims"))
+    assert claims is not None
+    assert claims["volumes"] == [SHARED_CLAIM_READ_ONLY]
     main = pod_spec(_exactly(docs, "CronJob", "ospreyflow-backup"))
     assert main is not None
     env = _env(main["containers"][0])
-    assert "OSPREY_BACKUP_CLAIMS" not in env
+    named = _env(claims["containers"][0])["OSPREY_BACKUP_CLAIMS"]
+    assert env["OSPREY_BACKUP_CLAIMS"] == named == SHARED
     # Each run names its set by its Job's name, the schedule slot (platform_backup.set_of).
     assert env["OSPREY_BACKUP_JOB"] == {"fieldRef": {"fieldPath": "metadata.labels['batch.kubernetes.io/job-name']"}}
 
@@ -183,7 +197,8 @@ def test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only
     assert term == {"labelSelector": {"matchLabels": {"ospreyflow.io/shared": "true"}},
                     "topologyKey": "kubernetes.io/hostname"}  # fmt: skip
     assert pod["volumes"] == [{"name": "claim-ingest",
-                               "persistentVolumeClaim": {"claimName": "ospreyflow-ingest", "readOnly": True}}]  # fmt: skip
+                               "persistentVolumeClaim": {"claimName": "ospreyflow-ingest", "readOnly": True}},
+                              SHARED_CLAIM_READ_ONLY]  # fmt: skip
     container = pod["containers"][0]
     assert container["command"][-1] == "backup-claims"
     assert {"name": "claim-ingest", "mountPath": "/claims/ingest"} in container["volumeMounts"]
@@ -192,7 +207,7 @@ def test_the_claims_run_is_beside_the_shared_pods_on_the_same_schedule_read_only
         spec = pod_spec(cron)
         assert spec is not None
         env = _env(spec["containers"][0])
-        assert env["OSPREY_BACKUP_CLAIMS"] == "ingest", cron["metadata"]["name"]
+        assert env["OSPREY_BACKUP_CLAIMS"] == f"ingest,{SHARED}", cron["metadata"]["name"]
         assert "fieldRef" in env["OSPREY_BACKUP_JOB"]
     assert _rules(docs) == AWAITED
 
@@ -206,7 +221,9 @@ def test_a_restore_with_claims_puts_them_back_in_a_job_of_its_own() -> None:
     assert pod is not None
     assert pod["containers"][0]["command"][-3:] == ["restore-claims", "--set", "20261111T021500Z"]
     assert [c["name"] for c in pod["initContainers"]] == ["verify"], "every part checked before a claim is replaced"
-    assert pod["volumes"] == [{"name": "claim-ingest", "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"}}]
+    ingest = {"name": "claim-ingest", "persistentVolumeClaim": {"claimName": "ospreyflow-ingest"}}
+    shared = {"name": "shared", "persistentVolumeClaim": {"claimName": "ospreyflow-shared"}}
+    assert pod["volumes"] == [ingest, shared]
     assert "affinity" not in pod, "the claims' pods are stopped for a restore; the claim is free"
     assert _exactly(docs, "Job", "ospreyflow-restore-20261111t021500z")
     assert _rules(docs) == AWAITED
@@ -276,7 +293,9 @@ def test_each_of_p9s_pods_runs_as_its_own_account_with_its_token() -> None:
     pod."""
     values = _with_claims(rendered.values())
     values["backups"]["restore"] = {"set": "20261111T021500Z"}
-    docs = [d for d in _docs(values) if d["kind"] in ("CronJob", "Job")]
+    # P9's own (the search index's standing Jobs, v0.5.2 step 3a, are not P9's: held elsewhere).
+    docs = [d for d in _docs(values) if d["kind"] in ("CronJob", "Job")
+            and not d["metadata"]["name"].startswith("ospreyflow-search-")]  # fmt: skip
     names = {d["metadata"]["name"] for d in docs}
     assert names == {"ospreyflow-backup", "ospreyflow-backup-claims", "ospreyflow-restore-20261111t021500z",
                      "ospreyflow-restore-claims-20261111t021500z"}  # fmt: skip
