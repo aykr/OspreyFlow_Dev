@@ -1586,37 +1586,52 @@ what this deployment holds of them: their roles, and whether they are disabled, 
 *Admin › People* at each run; their clearance, unit and handling codes as their last sign-in gave
 them. That is:
 
-- **a pipeline's schedule and its watched folder** (developer guide, §6.3), and **Run now** in
-  *Admin › Operations*, which runs as the schedule's owner (section 9.11);
-- **`ospreyflow run`**, an orchestrator's trigger (section 8), which runs as the pipeline's owner;
+- **a pipeline's schedule and its watched folder** (developer guide, §6.3), **Run now** in
+  *Admin › Operations*, which runs as the schedule's owner (section 9.11), and **`ospreyflow run`**,
+  an orchestrator's trigger (section 8), which runs as the pipeline's owner;
 - **a rule that runs on a schedule** (user guide, §7.11), and **the daily check for KYC documents
   that lapse**, which runs each KYC rule as the person who deployed it;
-- **a screening list's refresh schedule** (section 9.5);
+- **a screening list's refresh schedule**, a subscribed list's or a deployment-wide one's
+  (section 9.5);
 - **a watch's own runs**, and **at a load, anyone else's rules, hotlists and watches** (user guide,
   §7.5).
 
-Each is refused, and recorded in words, when its owner:
+**The 24 hours.** The access held for a person is recorded when they sign in, and again at most
+hourly while they use OspreyFlow. A run is refused when that record is more than 24 hours old, or
+there is none (a person added by object id who has never signed in). Such a refusal decides nothing
+about the owner, so it never counts toward the three refusals that pause a schedule. What it says,
+and what happens next, depends on what was asked:
 
-- **is disabled** in *Admin › People*: as on Keycloak, three such refusals in a row pause a
-  schedule;
-- **is not a person this deployment holds**;
-- **has not signed in within the last 24 hours**, or never has (a person added by object id), so the
-  clearance and unit held for them are out of date: the same 24 hours as for a case transfer above.
-  The words say so: "the schedule's owner, <id>, has not signed in to OspreyFlow within the last 24
-  hours, so their clearance and unit are out of date: it runs again once they sign in". Nothing is
-  decided about the owner, so it never counts toward pausing a schedule, which runs again at its
-  next slot after they sign in. A watch is tried again each minute; at a load, that person's rules,
-  hotlists and watches are left out.
+- **a slot of a schedule** (a pipeline's, a rule's or a list's), or a watch's run: "the schedule's
+  owner, <id>, has not signed in to OspreyFlow within the last 24 hours, so their clearance and unit
+  are out of date: it runs at its next slot after they sign in" (a rule's says "the rule's author").
+  A watch keeps its slot and is tried again each minute;
+- **Run now** and **`ospreyflow run`**: the same, ending "run it again once they have signed in",
+  since nothing asked for by hand runs again by itself;
+- **the daily KYC check**: the rule's audit says the deployer is out of date and that "the documents
+  that lapsed are not judged by this day's check; the rule judges its customers afresh at its next
+  load". The check does not come back for that day;
+- **at a load**: the owner's hotlists and watches are marked stopped, as for any owner who cannot be
+  acted as, and are made active again at the first load after they sign in; a stopped watch's own
+  runs wait for that load. Their rules are not judged at that load.
 
-If *Admin › People*'s store cannot be read, the run is refused as that, never counted, and never as
-"the identity provider could not be reached".
+**Other refusals.** An owner disabled in *Admin › People* is refused, and three such refusals in a
+row pause a schedule, as on Keycloak; so is an owner *Admin › People* does not hold ("is not a
+person Admin › People holds"). If *Admin › People*'s store cannot be read, the run is refused as
+that and never counted. None of these says "the identity provider could not be reached": Entra is
+not asked.
 
-**So a schedule runs only on the days its owner signs in.** A daily load over a weekend or a holiday
-on which its owner does not sign in is refused for those days, and runs again at the first slot after
-they do; a watch, a scheduled rule and a list's refresh are the same. Give a schedule that must run
-unattended for longer an owner who signs in each working day. There is no unattended owner on this
-profile: reading a person's access from Entra itself at each run needs an application permission
-the organisation would grant, which this release does not ask for.
+**So a schedule runs only while its owner keeps signing in.** The 24 hours run from the owner's last
+recorded access, not from the day. An owner last active on Friday at 17:00, with a daily slot at
+06:00: Saturday's run goes ahead (13 hours later), Sunday's and Monday's are refused (Monday's comes
+before they sign in that morning), and Tuesday's goes ahead. Give a schedule that must run unattended
+for longer an owner who signs in each working day. There is no unattended owner on this profile:
+reading a person's access from Entra itself at each run needs an application permission the
+organisation would grant, which this release does not ask for.
+
+**A leaver's runs go on for up to 24 hours.** Disabling or removing a person in Entra stops their
+sign-in, but runs as them keep the access last recorded for up to 24 hours after it. Disable a leaver
+in *Admin › People* as well: that stops every run as them at once.
 
 A load started by hand in the Ingest Studio (**Run now**, developer guide §3.9) runs as the person
 who starts it, and is not affected.

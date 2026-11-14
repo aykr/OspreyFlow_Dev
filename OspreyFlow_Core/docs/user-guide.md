@@ -1088,7 +1088,8 @@ is as much a source as a row.
 
 **Where people sign in with Entra ID** (a deployment on a shared platform), your rules, hotlists and
 watches are judged at another person's load, and your watch's own runs happen, only while you have
-signed in within the last 24 hours: the administration guide, §6a.7, says why.
+used OspreyFlow within the last 24 hours. Otherwise, at a load your hotlists and watches are marked
+stopped until the first load after you sign in again: the administration guide, §6a.7, says why.
 
 ### 7.6 The rule editor: a rule written as a sentence
 
@@ -1293,8 +1294,9 @@ as you see it, and raises an alert for each new finding, once.
 - A rule for the whole deployment does not run on a schedule: it is judged within each case as that
   case's data loads.
 - **Where people sign in with Entra ID** (a deployment on a shared platform), a rule's scheduled run
-  acts as you only while you have signed in within the last 24 hours, and is refused, in those words,
-  otherwise (the administration guide, §6a.7).
+  acts as you only while you have used OspreyFlow within the last 24 hours. Otherwise it is recorded
+  as not run, in those words, and runs at its next slot after you sign in; this never stops the
+  schedule (the administration guide, §6a.7).
 
 ### 7.12 A second person's approval
 

@@ -460,8 +460,9 @@ are cleared below the source — tells them on their alerts; **three refusals in
 Admin → Operations lists every one, and 4 Runs every one of the dataset's.
 
 **Where people sign in with Entra ID** (a deployment on a shared platform), a schedule or watched
-folder runs as the person who set it only while they have signed in within the last 24 hours;
-otherwise each run is refused, in those words, until they sign in (administration guide, §6a.7).
+folder runs as the person who set it only while they have used OspreyFlow within the last 24 hours.
+Otherwise each slot is refused, in those words, and runs at its next slot after they sign in; such a
+refusal never counts toward the three that pause a schedule (administration guide, §6a.7).
 
 ### 6.4 Reverting a load
 
