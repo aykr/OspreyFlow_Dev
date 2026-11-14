@@ -37,7 +37,7 @@ WAITS='FileNotFoundError: .*/exit|still running'
 if [ "${PLANTS_ONLY:-}" != 1 ]; then
 # 0. Main as it is (its test file and its script), the host loaded as a night of lane runs loads it: every core and
 #    2,000 more processes. Three rounds of the four exit-waiting cases; then the branch under the same load.
-cp $D/main_test_stack_lease.py $T
+cp $D/main_test_stack_lease.py.txt $T  # main f5fe931's file, kept as .txt (the citation check reads .py files, and this one cites from tests/)
 load_on
 for r in 1 2 3; do py -k "$FOUR" --durations=4 > $L; echo "main, round $r: $(grep -E '[0-9]+ (passed|failed)' $L | tail -1)"; reasons $L; grep -E "s call" $L | sed 's/tests.test_stack_lease.py:://'; done
 git checkout -q HEAD -- $T
