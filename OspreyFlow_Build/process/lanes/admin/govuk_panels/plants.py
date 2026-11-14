@@ -12,27 +12,44 @@ ROOT = Path(__file__).resolve().parents[5]
 WS = ROOT / "OspreyFlow_Core/apps/workspace"
 TYPE = "OspreyFlow_Core/apps/workspace/src/design/panelType.css"
 PRIMS = "OspreyFlow_Core/apps/workspace/src/design/primitives.css"
-SAVED, STRIP, MORE, NARROW, CASE = ("the saved views panel", "the open view's strip", "the top bar's More menu in",
-                                    "the top bar's More menu, folded narrow", "the case switcher's menu")
+SAVED, STRIP, FORM = "the saved views panel", "the open view's strip", "the Save as a view form"
+MORE, NARROW = "the top bar's More menu, in the Glass's frame", "the top bar's More menu, folded narrow"
+SWITCHER, NEWCASE = "the case line's case switcher", "the case line's New case form"
+EXPLORE, EXPORT = "the Explore drawer", "the Export drawer"
 LOOK = {"dark": "dark look", "light": "light look", "govuk": "govuk look"}
+ALL = ("dark", "light", "govuk")
 
-#: (name, [(file, site, replacement)], the cases that must fail: (panel, look))
+#: (name, [(file, site, replacement)], the cases that must fail: (panel, look)). The last two plants are synthetic:
+#: they show the cases that pass on main by design (no panel there was off the scale) can fail at all.
 PLANTS = [
-    ("the panel type sheet not loaded", [(PRIMS, '@import "./panelType.css";\n', "")],
-     [(SAVED, "dark"), (SAVED, "light"), (SAVED, "govuk"), (STRIP, "govuk")]),
-    ("GOV.UK's tags left at the Design System's size", [(TYPE, ") .govuk-tag {", ") .govuk-tag-not-this {")],
+    ("the panel type sheet not loaded (main's CSS)", [(PRIMS, '@import "./panelType.css";\n', "")],
+     [(SAVED, "dark"), (SAVED, "light"), (SAVED, "govuk"), (STRIP, "govuk"), (FORM, "dark"), (FORM, "light"),
+      (FORM, "govuk"), (NEWCASE, "govuk")]),
+    ("a menu left to inherit the row it opens from (the case line's 19px)",
+     [(TYPE, ":where(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view) {\n",
+       ":where(.not-a-panel) {\n")],
+     [(NEWCASE, "govuk")]),
+    ("a panel's label heading left at the browser's size",
+     [(TYPE, ":where(h2, h3, h4, h5, h6):where(.label) {", ":where(h6.not-this) {")],
+     [(SAVED, "dark"), (SAVED, "light"), (FORM, "dark"), (FORM, "light")]),
+    ("GOV.UK's tags left at the Design System's size", [(TYPE, ".govuk-caption-xl, .govuk-tag)", ".govuk-caption-xl)")],
      [(SAVED, "govuk"), (STRIP, "govuk")]),
-    ("a panel's bare heading left at the browser's size", [(TYPE, ":where(h2, h3, h4, h5, h6):where(.label) {", ":where(h6.not-this) {")],
-     [(SAVED, "dark"), (SAVED, "light")]),
     ("GOV.UK's summary list left at the Design System's size",
      [(TYPE, ".govuk-summary-list, .govuk-summary-list__key, .govuk-summary-list__value, .govuk-summary-list__actions,", "")],
      [(SAVED, "govuk")]),
-    ("a menu's items drawn off the scale", [(TYPE, "/* GOV.UK Frontend's type classes, on the page's scale",
-                                            ".menu-panel .menu-panel__item { font-size: var(--fs-16); }\n/* GOV.UK Frontend's type classes, on the page's scale")],
-     [(MORE, "dark"), (MORE, "light"), (MORE, "govuk"), (NARROW, "dark"), (NARROW, "light"), (NARROW, "govuk"),
-      (CASE, "dark"), (CASE, "light"), (CASE, "govuk")]),
     ("GOV.UK's links left at the Design System's size", [(TYPE, ".govuk-link, .govuk-back-link, ", ".govuk-back-link, ")],
      [(SAVED, "govuk")]),
+    ("GOV.UK's form fields left at the Design System's size",
+     [(TYPE, ".govuk-label, .govuk-fieldset__legend, .govuk-input, ", ".govuk-fieldset__legend, ")],
+     [(FORM, "govuk")]),
+    ("synthetic: a menu's items drawn off the scale",
+     [(TYPE, "/* GOV.UK Frontend's type classes, on the page's scale",
+       ".menu-panel .menu-panel__item { font-size: var(--fs-16); }\n/* GOV.UK Frontend's type classes, on the page's scale")],
+     [(m, lk) for m in (MORE, NARROW, SWITCHER) for lk in ALL]),
+    ("synthetic: a drawer's body drawn off the scale",
+     [(TYPE, "/* GOV.UK Frontend's type classes, on the page's scale",
+       ".drawer .panel__body * { font-size: var(--fs-16) !important; }\n/* GOV.UK Frontend's type classes, on the page's scale")],
+     [(m, lk) for m in (SAVED, EXPLORE, EXPORT) for lk in ALL]),
 ]
 
 
