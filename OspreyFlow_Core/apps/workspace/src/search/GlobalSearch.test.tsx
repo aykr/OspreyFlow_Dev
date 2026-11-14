@@ -169,6 +169,29 @@ describe("GlobalSearch as the analyst types", () => {
     expect(screen.getByRole("status").getAttribute("data-faded")).toBeNull();
   });
 
+  // Docs' review, 14 Nov: a "Starts with" search past 50 characters showed "Suggestions are
+  // unavailable." The Conduit refuses it in words (a 422), and the box now says those words (rule 2).
+  it("says the Conduit's own words when it refuses what was typed", async () => {
+    const words = "a suggestion is at most 50 characters";
+    stubFetch(() => ({ status: 422, body: { detail: words } }));
+    mount();
+    type("C13");
+    await pause();
+    expect(screen.getByRole("status").textContent).toBe(words);
+    expect(screen.getByRole("status").textContent).not.toMatch(/unavailable/i);
+  });
+
+  it("still says unavailable for a refusal with no words, and for a failure", async () => {
+    for (const reply of [{ status: 422, body: { detail: [{ msg: "field required" }] } }, { status: 503 }]) {
+      stubFetch(() => reply);
+      mount();
+      type("C13");
+      await pause();
+      expect(screen.getByRole("status").textContent).toMatch(/unavailable/i);
+      cleanup();
+    }
+  });
+
   it("says so when the Conduit cannot answer, and does not leave the last answer standing", async () => {
     stubFetch((query) =>
       query === "C13" ? { body: { nodes: [account("n1", "C1305486145")], more: false } } : { status: 500 },

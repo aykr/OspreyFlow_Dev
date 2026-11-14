@@ -60,13 +60,24 @@ export const LIMITED_SUGGESTIONS: Record<LimitedWhy | "unknown", string> = {
  * a nudge, so it should not sit over the page for as long as the list is open. */
 export const SEARCH_HINT_MS = 4000;
 
-type Outcome = "idle" | "short" | "found" | "none" | "unavailable";
+type Outcome = "idle" | "short" | "found" | "none" | "unavailable" | "refused";
 
 /** `spec/02_GLASS_FRONTEND.md`'s workspace layout: "⌘K — Search entities,
  * identifiers, documents". ADR-059: from the third character, after a pause, the box asks
  * `POST /v1/suggest` for nodes whose identifiers *start with* what is typed (`/v1/search` stays an
  * exact match). An answer to a question the analyst has already moved past is dropped, a list cut
  * off at ten says so, and an unanswered question says so instead of leaving the last list standing. */
+/** A 422's words, when the Conduit gave them as a sentence (`detail` a string); `null` when it gave a
+ * validation list or nothing readable, which the box treats as a failure. */
+async function refusalWords(response: Response): Promise<string | null> {
+  try {
+    const body = (await response.json()) as { detail?: unknown };
+    return typeof body.detail === "string" && body.detail.trim() ? body.detail : null;
+  } catch {
+    return null;
+  }
+}
+
 export function GlobalSearch({
   apiBaseUrl,
   bearerToken,
@@ -82,6 +93,8 @@ export function GlobalSearch({
   const [results, setResults] = useState<Node[]>([]);
   const [query, setQuery] = useState("");
   const [more, setMore] = useState(false);
+  /** The Conduit's own words when it refuses what was typed (a 422), shown as they are (rule 2). */
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [limited, setLimited] = useState<LimitedWhy | "unknown" | null>(null);
   const [outcome, setOutcome] = useState<Outcome>("idle");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -110,7 +123,12 @@ export function GlobalSearch({
       });
       if (mine !== latest.current) return;
       if (!response.ok) {
-        settle("unavailable", [], false);
+        // A refusal of what was typed (a 422 with the Conduit's words, such as the 50-character
+        // limit) is said in its words; anything else is a failure, and says so.
+        const detail = response.status === 422 ? await refusalWords(response) : null;
+        if (mine !== latest.current) return;
+        setRefusal(detail);
+        settle(detail ? "refused" : "unavailable", [], false);
         return;
       }
       const body = (await response.json()) as {
@@ -164,7 +182,9 @@ export function GlobalSearch({
   }, [options]);
 
   const status =
-    outcome === "unavailable"
+    outcome === "refused" && refusal
+      ? refusal
+      : outcome === "unavailable"
       ? "Suggestions are unavailable."
       : outcome === "short"
         ? `Type at least ${SUGGEST_MIN_CHARS} characters to search.`
@@ -178,7 +198,8 @@ export function GlobalSearch({
 
   // Only the nudge fades. "Nothing matches" and "could not answer" are answers to what was typed and
   // stay while it stands. A new answer (a new `results`) brings the nudge back.
-  const nudge = status !== null && outcome !== "none" && outcome !== "unavailable" && outcome !== "short";
+  const nudge =
+    status !== null && outcome !== "none" && outcome !== "unavailable" && outcome !== "short" && outcome !== "refused";
   const [faded, setFaded] = useState(false);
   useEffect(() => {
     setFaded(false);
