@@ -497,9 +497,11 @@ async def _from_graph(
 
 
 #: A case-sensitive suggestion asks the index this many times its page, at most `_WIDEST`, so the
-#: page still fills once the matches in another case are left out.
+#: page still fills once the matches in another case are left out; and pages on, at most `_PAGES`
+#: times, until its page is full or the matches run out. Past that, the graph's prefix read answers.
 _WIDER = 4
 _WIDEST = 100
+_PAGES = 5
 
 
 async def suggest_page(
@@ -526,20 +528,28 @@ async def suggest_page(
         unknown = sorted(set(request.types) - {t.name for t in schema.entity_types})
         if unknown:
             raise ValueError(f"not an entity type: {', '.join(unknown)}")
-    if (
-        searcher is not None
-        and access_filter is not None
-        and request.mode == "starts_with"
-        and pending_complete
-    ):
+    why: FallbackWhy = "no_index"
+    if searcher is not None and access_filter is not None and not pending_complete:
+        why = "catching_up"
+    elif searcher is not None and access_filter is not None and request.mode == "starts_with":
         try:
-            return await _suggest_from_index(
+            answered_by_index = await _suggest_from_index(
                 request, principal, graph, searcher, access_filter, pending, schema
             )
         except IndexUnavailable:
-            pass
+            why = "unreachable"
+        else:
+            if answered_by_index is not None:
+                return answered_by_index
+            # The index could not fill a case-sensitive page within its bound: the graph's own
+            # prefix read answers, exactly, and nothing is limited about it.
+            exact = await suggest(graph, request, principal)
+            return exact.model_copy(update={"source": "graph", "limited": False})
     answered = await suggest(graph, request, principal)
-    return answered.model_copy(update={"source": "graph", "limited": request.mode == "starts_with"})
+    limited = request.mode == "starts_with"
+    return answered.model_copy(
+        update={"source": "graph", "limited": limited, "limited_why": why if limited else None}
+    )
 
 
 def _starts_with(node: Node, prefix: str, schema: OntologySchema | None) -> bool:
@@ -562,30 +572,52 @@ async def _suggest_from_index(
     access_filter: dict[str, Any],
     pending: Sequence[str],
     schema: OntologySchema | None,
-) -> SuggestResponse:
+) -> SuggestResponse | None:
+    """The index's suggestions, or `None` where a case-sensitive page cannot be filled within
+    `_PAGES` pages while the index still holds more: then the caller asks the graph, which answers
+    case-sensitively and exactly, so the box never shows an empty list with "more match"."""
     asked = request.limit if request.ignore_case else min(_WIDEST, request.limit * _WIDER)
+    pages = 1 if request.ignore_case else _PAGES
     prefixes = [request.query]
     alternative = search_alternative(request.query)
     if alternative is not None and alternative != request.query:
         prefixes.append(alternative)  # ADR-128 decision 1, as today's suggestion
-    ids: list[str] = []
-    more = False
+    seen: set[str] = set()
+    kept: list[Node] = []
+    unfinished = False  # some prefix still had matches when its scan stopped
     for prefix in prefixes:
-        body = q.build_suggest_body(
-            prefix, access_filter=access_filter, limit=asked, types=request.types, pending=pending
-        )
-        found, had_more = q.read_suggest_response(
-            await searcher(body, SUGGEST_TIMEOUT), limit=asked
-        )
-        ids += [i for i in found if i not in ids]
-        more = more or had_more
-    read = {n.id: n for n in await graph.get_nodes(ids, principal)} if ids else {}
-    nodes = [read[i] for i in ids if i in read]
-    if not request.ignore_case:
-        nodes = [n for n in nodes if any(_starts_with(n, p, schema) for p in prefixes)]
+        start = 0
+        had_more = False
+        for _ in range(pages):
+            body = q.build_suggest_body(
+                prefix,
+                access_filter=access_filter,
+                limit=asked,
+                types=request.types,
+                pending=pending,
+                start=start,
+            )
+            found, had_more = q.read_suggest_response(
+                await searcher(body, SUGGEST_TIMEOUT), limit=asked
+            )
+            fresh = [i for i in found if i not in seen]
+            seen.update(fresh)
+            read = {n.id: n for n in await graph.get_nodes(fresh, principal)} if fresh else {}
+            nodes = [read[i] for i in fresh if i in read]
+            if not request.ignore_case:
+                nodes = [n for n in nodes if any(_starts_with(n, p, schema) for p in prefixes)]
+            kept += nodes
+            start += asked
+            if not had_more or len(kept) > request.limit:
+                break
+        unfinished = unfinished or had_more
+        if len(kept) > request.limit:
+            break
+    if len(kept) <= request.limit and unfinished and not request.ignore_case:
+        return None
     return SuggestResponse(
-        nodes=nodes[: request.limit],
-        more=more or len(nodes) > request.limit,
+        nodes=kept[: request.limit],
+        more=len(kept) > request.limit or (unfinished and request.ignore_case),
         source="index",
         limited=False,
     )
