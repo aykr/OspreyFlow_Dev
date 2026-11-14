@@ -149,5 +149,33 @@ test_step4_dry_run and test_step4_stack are 80 passed, 2 skipped; `plants_m10.py
 `plants_tokens.py` 6/6 (its sixth re-anchored on the control-error line). M10 runs again in a later turn (about 30
 minutes) once rules' word fix is in.
 
+**M9's profile: the unlabelled `or()` over the whole store dominates.** `profile_m9.py`, read-only, on d under rules'
+lease after M10's runs, repeat 3, the five M9 names; rules' QUEUE line deleted after. At cbb7ad9:
+`osprey-runs/rules.meta/runs/20261114T162936Z-90a75f73/log` (16:29–16:43Z); at 6208ee7, with `by_sql`:
+`…/20261114T164402Z-8bb511ed/log` (16:44–16:57Z). 1,180 indexes. Medians per name (figures from rules' report of
+the two logs):
+
+| Variant | cbb7ad9 | 6208ee7 |
+| --- | --- | --- |
+| `current` (the query as sent) | 5.48–5.71 s | 5.39–5.47 s |
+| `limit_20` | 5.41–5.93 s | 5.37–5.48 s |
+| `no_access` | 21.3–23.1 s | 21.2–21.6 s |
+| `count` (the `or()` alone) | 21.2–22.9 s | 21.2–21.4 s |
+| `by_label` | 4–12 ms | 3–4 ms |
+| `by_sql` | — | 67–70 ms |
+
+What it shows: the limit is not the cost (`limit_20` as `current`), and building rows is not (`count` is slower
+still). The matching is: an `or()` across every field with no start set reads every vertex; `current` is quicker
+than `no_access` and `count` only because the access filter's own steps narrow first. A labelled `has()` on an
+indexed field is answered from the index on 26.10.1 (`by_label`), which corrects platform's reading of ADR-124
+Amendment 18's note (3.6 s at 200k), which was of `within()` and unlabelled lookups. So M9's slowness is the family of
+am18's write path and am20's `edges_among`, a Gremlin read that starts from the whole store, and the fix is to start
+from index-found records. Rules builds it as ADR-124 Amendment 21 in the `by_sql` shape (SQL per type and field, then
+`search_nodes`' own Gremlin from the record ids, the gazetteer guard and the access filter in the traversal), which
+the orchestrator ruled and am18 and am20 use. Every variant answered 0 rows for all five names (M9's queries are the
+fallback's misspellings, which match nothing exactly), so the "same ids" lines show nothing; Am 21's equivalence rests
+on the conformance suite's search and access cases, unchanged, and a live case on d of matching queries (a family
+name, an e164, an organisation, a gazetteer place by name and by identifier) comparing the new query with the old.
+
 (To be filled in from rules' results: each run's id, start and end, the server's state before it, the runner's lines,
 pytest's summary, M9's agreement with its time, and what each figure means for v0.5.2.)
