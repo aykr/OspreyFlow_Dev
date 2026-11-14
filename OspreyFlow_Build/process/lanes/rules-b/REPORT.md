@@ -1,7 +1,8 @@
 # rules-b lane · report · v052D, Ask & Chat parts D(i) and D(ii) (13 November 2026)
 
 (The guides step's report is in git history, at 69ef543 and before.) Brief: `BRIEF_v052D.md`. Branch
-`lane/rules-b-v052D`, rebased on main dec68d0. Built at **0482cb6**. Gated head: *pending, see Gates*.
+`lane/rules-b-v052D`, rebased on main 779bd41. Built at 0482cb6, reviewed and fixed in 9245030, 35d9c58 and 2cc8d4b. Gated head:
+**a0cfa1a** (code); the records after it change no code.
 ADR-098 Am 7, ADR-129 Am 4, ADR-135 Am 12 and ADR-144 Am 4 are written. D(iii), *Whole case* through the
 search service, is the next part, after studio's search service lands (Fri 20 Nov).
 
@@ -15,12 +16,12 @@ was stale.
 
 | Item | At the start | Now |
 | --- | --- | --- |
-| read_from, no-docs answer, read summary, will-read route | untouched | done: `test_questions_read_from.py` (24) |
-| Panel: radios, About, Will read, engine named, unusable, failed list | untouched | done: `QuestionsPanel.test.tsx` (+10) |
+| read_from, no-docs answer, read summary, will-read route | untouched | done: `test_questions_read_from.py` (29; 12 plants red, `v052D/server-plants.txt`) |
+| Panel: radios, About, Will read, engine named, unusable, failed list | untouched | done: `QuestionsPanel.test.tsx` (41 in `src/questions`; 9 plants red, `v052D/glass-plants.txt`) |
 | Bar reconciled (ADR-144 d4) | untouched | done, as `bar-v052D.patch` (case's files) |
-| Keyboard and axe | untouched | done: `questions.spec.ts` new case; axe dark/light |
-| Amendments | reserved | written (3d88885) |
-| packages/schemas commit | none | 0482cb6, last |
+| Keyboard and axe | untouched | done: `questions.spec.ts` new case (21/21, `keyboard-run3.txt`); axe dark, light and GOV.UK (`axe-run3.txt`) |
+| Amendments | reserved | written, brought to the reviewed build (2cc8d4b) |
+| packages/schemas commit | none | 0482cb6 (the review fixes after it depend on it; the orchestrator agreed) |
 
 ## Exit criteria
 | Criterion (BRIEF_v052D D(i), D(ii)) | Met | Proved by |
@@ -39,11 +40,18 @@ was stale.
 | Engine list with reasons from the case refusals | yes | `_unusable` uses `ModelRoutes.offered(case_datasets, held)` as `GET …/models/engines` does |
 | The rules on what may leave do not change | yes | `model_routing.py` untouched; will-read calls `RoutedModel.choose` as asking does |
 | Rule 4: a reader without access is not counted, quoted or cited | yes | *a hidden document and item are not counted, quoted or cited* (red with the request's count); *the cleared reader is counted …*; *an answer whose summary counts a hidden document is not shown to a lower reader* |
-| Keyboard and axe in both looks; QUESTIONS_ACTIONS as a diff | yes | 21/21 keyboard (`v052D/keyboard-run2.txt`); axe dark+light (`v052D/axe-run2.txt`); `registry-v052D.patch` |
+| Keyboard and axe in both looks; QUESTIONS_ACTIONS as a diff | yes | 21/21 keyboard (`v052D/keyboard-run3.txt`); axe dark, light and GOV.UK (`v052D/axe-run3.txt`); `registry-v052D.patch` |
 
 ## Gates (raw, under `gates/`)
-Pending: own review and the orchestrator's, then one rebase and one round (make test and make -k ci on the server
-via `stack_lease.sh offline`, a leased live run including `test_route_rights.py` and `test_questions_store.py`).
+At a0cfa1a with `audit-v052D.patch`, `spec03-v052D.patch` and `registry-v052D.patch` applied unstaged, reverted after.
+
+| Gate | Result | Red items, and why none is this branch's |
+| --- | --- | --- |
+| `make test` (offline) | exit 2: pytest 12 failed / 13328 passed; test-js 7 | Python: the backups chart and rows tests (7), `test_guides_cloud_platform` 6a8, `test_worker_isolation` (missing `search_index/test_feed_live.py`), `test_write_store_marks` (`NEEDS_CADDY`) and `test_stack_lease` ×2 are main's reds at 779bd41, fixed on main since (f896864, e5fab5a; MORNING's "missing feed file"). test-js: `App.test.tsx`'s hook, `App.chrome`, `App.matrix` ×3 and `MatrixView` ×2 time out under the server's load (5 s/10 s), the known MatrixView timing; no questions file fails. |
+| `make -k ci` (offline) | exit 2: only `harness-a11y` | `install-page.spec.ts` ×3, each a 1.0 m timeout; the every-harness axe, `questions-harness` included, passed. |
+| live, stack e (`live rules-b --base main`) | exit 1: 12 failed / 467 passed | `test_apply_env.py` ×10 (apply never wrote `deployment.env`), `test_golden_set` recall and `test_phase8_exit_criterion_end_to_end` (ConnectError, no model on the stack). `test_route_rights.py` and `test_questions_store.py` ran and passed. |
+| the route-rights row plant (stack e, same lease) | red as it should be | `will_read_route`'s row removed: `test_every_route_names_the_right_the_table_gives_it` fails (`v052D/live-rights-plant.txt`). |
+| server plants (offline, a fresh `PYTHONPYCACHEPREFIX` per run) | 12 of 12 red; control 29 passed | `v052D/server-plants.txt` |
 
 ## Decisions taken
 1. **The wip commit.** `reset --hard` was refused, so it is rebased, not dropped; HANDOFF.md is deleted in
@@ -68,6 +76,17 @@ via `stack_lease.sh offline`, a leased live run including `test_route_rights.py`
     (handoff), until D(iii).
 11. **The will-read block is an `aria-live="polite"` region, not a second `role="status"`**, so the view's status
     line stays the panel's one status (the in-view keyboard case reads `getByRole("status")`).
+12. **Ask stays enabled while will-read is loading** (accepted by the orchestrator): the question itself is routed
+    and refused by the same rule, so a slow dry run never blocks it.
+13. **The routing's refusal is scrubbed of dataset names for a caller the store names none to** (ADR-099 Am 11),
+    in will-read and in the question's 409 alike, rather than replaced by "not known", so the two still decide
+    identically (accepted by the orchestrator).
+14. **`QueryBuilderPanel`'s failed-list words are left alone**: not this lane's file; listed for the orchestrator.
+15. **The reviews' items, all fixed before the gates**: About in the canvas's form (`canvas_label`, never an id);
+    a selected link counted only inside the scope's links; will-read keyed on the body sent, debounced, asked again
+    on focus when the timeline window moved; the picker keeps the case's reasons while will-read is pending or
+    refused; a 200 with no engine list is a failure; *Whole case* in the server's words; the questions harness
+    under GOV.UK too; will-read in a private view refused to another member (with its plant).
 
 ## Out of the lane's map (sent as patches, `process/lanes/rules-b/v052D/`)
 See `PATCHES.md` § v052D.
@@ -75,8 +94,9 @@ See `PATCHES.md` § v052D.
 ## Requests to the orchestrator
 - Apply `audit-v052D.patch` and `spec03-v052D.patch` with the merge (each gate red without it), and
   `registry-v052D.patch` (the new keyboard case registers its id).
-- `bar-v052D.patch` to case/case-b (agreed with case-b, 13 Nov: folded into their shared action list if theirs
-  lands first); `user-guide-v052D.patch` to docs.
+- `bar-v052D.patch` to case/case-b. Agreed with case-b: whichever branch lands second drops the `documentCount > 0`
+  gate in both `SelectionBar.tsx` and `selectionActions.ts`; if case-b lands first, rules-b regenerates the patch
+  against `selectionActions.ts`. `user-guide-v052D.patch` to docs.
 
 ## Questions for the owner
 None.
