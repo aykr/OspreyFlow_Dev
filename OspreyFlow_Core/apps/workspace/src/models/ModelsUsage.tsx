@@ -162,7 +162,7 @@ export function ModelsUsage({ read, today = new Date() }: { read: ReadUsage; tod
 
   return (
     <section aria-labelledby="models-usage">
-      <h3 id="models-usage">Usage</h3>
+      <h2 id="models-usage" className="value">Usage</h2>
       <p className="label" style={{ margin: 0 }}>
         Calls and tokens per engine and job, from the model gateway&apos;s own records, by whole days in UTC. Only counts
         are kept: no prompt, answer, key or person, and no figure for any one person. Calls refused for a budget are

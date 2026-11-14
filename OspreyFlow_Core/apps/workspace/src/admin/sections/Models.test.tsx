@@ -49,6 +49,16 @@ function stub(answers: (path: string, init?: RequestInit) => Answer | undefined)
 }
 
 describe("Models", () => {
+  it("heads its parts with h2s beneath Admin's h1, sized as People's (ADR-145 Amendment 16)", async () => {
+    stub(() => undefined);
+    const { container } = render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    await screen.findByRole("heading", { name: "Engines" });
+    const headings = [...container.querySelectorAll("h1, h2, h3, h4, h5, h6")];
+    expect(headings.map((h) => h.tagName)).toEqual(headings.map(() => "H2"));
+    expect(headings.length).toBeGreaterThan(2);
+    expect(headings.every((h) => h.classList.contains("value"))).toBe(true);
+  });
+
   it("marks an engine the render did not make, in the Conduit's words (ADR-135 Amendment 8)", async () => {
     const words = "not made by the render: Declare it in osprey.yaml, re-render, and have the platform team apply the Terraform";
     const UNMADE = { ...VIEW, engines: [{ ...VIEW.engines[0], not_made: words }] };

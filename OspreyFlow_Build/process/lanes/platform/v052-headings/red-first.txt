@@ -1,0 +1,11 @@
+# v052-headings (the orchestrator, 14 November 2026; ADR-145 Amendment 16, admin's GOV.UK pass found it): Admin › Models
+# and Admin › Maps headed their parts with h3s straight beneath the section's h1. Now h2s, `className="value"`, which
+# admin.css's `.admin-place__section h2.value` draws below the h1 in every look, as People's are; Models' "Usage"
+# (src/models/ModelsUsage.tsx, drawn in Admin › Models alone) with them. Platform's two sections only: admin does its own.
+Red first (vitest, the sections' own tests, before the change):
+  Maps:   expected [ 'H3', 'H3', 'H3', 'H3' ] to deeply equal [ 'H2', 'H2', 'H2', 'H2' ]
+  Models: expected [ 'H3', 'H3', 'H3', 'H3', 'H3' ] to deeply equal [ 'H2', 'H2', 'H2', 'H2', 'H2' ]
+  Tests  2 failed | 22 skipped (24)
+Green after: src/admin/sections, src/models, AdminPlace and AdminSections: 10 files, 112 tests passed. tsc and eslint clean.
+The look spec (keyboard/admin-look.spec.ts: one h1, levels [1, 2], every h2 below the h1, in dark, light and GOV.UK) and
+the axe scans (a11y/every-harness.spec.ts, the two new states in the three looks): waiting for a local browser slot.

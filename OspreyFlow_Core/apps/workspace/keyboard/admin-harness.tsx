@@ -66,6 +66,52 @@ if (serving === "datasets") {
   };
 }
 
+// `?serve=models` and `?serve=maps` (ADR-145 Amendment 16, the GOV.UK pass's headings): for the look spec and
+// the axe scans, the page serves Admin › Models (an engine without its key, the declared local models, no
+// usage yet) or Admin › Maps (the local basemap and a hosted provider needing its key) itself; `open=` then
+// opens the section. The views are the sections' own unit tests'. Synthetic (rule 9).
+if (serving === "models" || serving === "maps") {
+  const GEMINI = { name: "gemini", label: "Gemini", roles: { extraction: "gemini-2.5-flash" }, api_base: null,
+                   privacy_contract: false, contract_reference: null };  // prettier-ignore
+  const NONE = { calls: 0, succeeded: 0, failed: 0, prompt_tokens: 0, completion_tokens: 0, tokens: 0 };
+  const LICENCE = { id: "ODbL-1.0", redistributable: true, client_scope: "open", note: null };
+  const OSM = { id: "osm-local", label: "OpenStreetMap", kind: "vector", source: "file:///data/tiles/gb.pmtiles",
+                proxy: "none", style: "bundled:osprey-dark", attribution: "© OpenStreetMap contributors",
+                licence: LICENCE, variables: {} };  // prettier-ignore
+  const HOSTED = { id: "hosted", label: "Hosted tiles", kind: "raster",
+                   source: "https://tiles.example.test/{z}/{x}/{y}.png?key={credential}", proxy: "required",
+                   cache: { ttl_days: 30, prefetch_areas: [] }, attribution: "Example",
+                   licence: { id: "example", redistributable: false, client_scope: "per-deployment", note: null },
+                   variables: {} };  // prettier-ignore
+  const row = (provider: object, tier: number, extra: object = {}) => ({
+    provider, tier, key_state: "none", needs_key: false, key_set_at: null, key_set_by: null,
+    state: "Ready: a local file on this deployment.", ready: true, ...extra,
+  });  // prettier-ignore
+  const served: Record<string, unknown> = {
+    "/v1/admin/models": {
+      engines: [{ provider: GEMINI, key_state: "none", key_set_at: null, key_set_by: null, default_for: [] }],
+      defaults: {}, local_only: false, sendable_handling_codes: ["O"], source: "models file",
+      local_models: { extraction: "qwen2.5:7b-instruct", vision: null, transcription: null, embedding: "all-minilm" },
+    },
+    "/v1/admin/models/history": { entries: [] },
+    "/v1/admin/models/usage": { start: "2026-11-01", end: "2026-11-08", rows: [], by_engine: {}, by_job: {}, total: NONE },
+    "/v1/admin/maps": {
+      default: "osm-local", changed_in_admin: false, areas: [], schedule: { every_hours: null }, next_run_at: null,
+      providers: [row(OSM, 1), row(HOSTED, 3, { needs_key: true, state: "Needs a key: none is set.", ready: false })],
+      basemap: {
+        basemaps: [{ provider_id: "osm-local", file: "gb.pmtiles", built: false, size_bytes: null, built_at: null }],
+        glyphs_installed: false, glyph_fonts: ["Noto Sans Regular"], builder_ready: true,
+        builder_state: "Ready: Java and the map builder are installed.", regions: ["great-britain", "rutland"],
+      },
+    },
+    "/v1/admin/maps/history": { entries: [] },
+  };  // prettier-ignore
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
+
 // `?serve=people` (L2.5): for the axe scans, the page serves Admin › People and Roles itself: two
 // people, one holding a team's custom role, their case levels, a case with no Author, the roles and a
 // disable plan; `show=` then opens *Disable…* (`disable`), a new role's form (`role-form`) or a team
