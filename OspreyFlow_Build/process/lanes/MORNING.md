@@ -134,6 +134,21 @@ The items below are kept as they were written.
    client's API registration. That is something the client creates, which A ruled out, so it is not being built.
    Say if you want it after v0.5.2.
 
+10. **"Promote to a batch job" at the working-set cap is required but built nowhere (case's finding, 14 Nov).**
+    spec 00 (§ the working set, lines 828–830), spec 03 (lines 1441–1443) and the working-set decision (06:335)
+    say that at the cap the Glass offers three choices: save a smaller view, filter before expanding, or promote the
+    expansion to a batch job whose result is a saved subgraph. The Conduit already names all three in its typed
+    `limit_exceeded`. But there is no batch-job route, job type or screen anywhere, and ADR-144 Am 2 already narrowed
+    the over-cap dialog to *Save as a view*. Case is now giving the canvas's expand refusal the two that exist:
+    narrow by link type, and save as a view. The third is your call:
+    - **(a)** build it for v0.5.2: a batch job that runs the expansion server-side and saves the result as a view
+      (roughly 1–2 days across case and rules, and it needs an ADR);
+    - **(b)** defer it past v0.5.2, amending spec 00 and 03 to say two choices until it is built, and telling the
+      client.
+
+    Recommended: (b). It has been missing since before this route, B's load shows the cap is rarely met on the
+    measured case, and (a) would land in freeze week.
+
 ## Decided by the lanes, for you to overrule if you wish
 
 - **Case, Build a report for the Administrator (ADR-145 Am 15 decision 5):** a builder without the Reports
