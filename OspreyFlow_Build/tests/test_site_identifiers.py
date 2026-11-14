@@ -12,7 +12,7 @@ import pytest
 
 MARKETING = Path(__file__).resolve().parents[1] / "marketing_site"
 sys.path.insert(0, str(MARKETING))
-import identifier_check  # noqa: E402
+import identifier_check
 
 ORG = MARKETING / "sites" / "org"
 #: A person card exactly as build.py's `person()` writes it, avatar included.
@@ -55,7 +55,7 @@ def test_the_old_rule_refused_the_team_page() -> None:
     """Why the rule changes: the publish script's grep, as it stood, refuses the owner's own Team page."""
     old = subprocess.run(
         ["grep", "-lI", "-i", "-E", "ayan[[:space:]._-]?(d[._-])?kar|ayankarsolirius", str(ORG / "team.html")],
-        capture_output=True, text=True)
+        check=False, capture_output=True, text=True)
     assert old.returncode == 0
 
 
@@ -113,7 +113,7 @@ def test_nothing_is_published_without_the_local_hash_file(site: Path, hashes: Pa
 
 def test_the_command_exits_one_on_a_violation(site: Path) -> None:
     _plant(site / "index.html", "</main>", "<p>Laurence Rawlings</p>")
-    run = subprocess.run([sys.executable, str(MARKETING / "identifier_check.py"), str(site)], capture_output=True, text=True)
+    run = subprocess.run([sys.executable, str(MARKETING / "identifier_check.py"), str(site)], check=False, capture_output=True, text=True)
     assert run.returncode == 1 and "index.html" in run.stderr
 
 
