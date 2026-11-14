@@ -593,8 +593,8 @@ def test_below_floor_memory_produces_the_offer_and_changes_nothing_on_disk(
     assert offer is not None
     text = offer.render_text()
     assert "opensearch" in text, "the offer must name the component it drops"
-    assert "PostgreSQL full-text" in text
-    assert "semantic search is unavailable" in text, "the trade-off must be stated, not implied"
+    assert "exact search" in text, "the offer must say what search becomes"
+    assert "the search page says so" in text, "the trade-off must be stated, not implied"
     assert "--accept-reduced" in text
 
     after = {p.name: p.read_bytes() for p in sorted(rendered_dir.iterdir())}

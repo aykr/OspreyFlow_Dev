@@ -784,10 +784,15 @@ gate. The deploy waits on **liveness**: readiness stays authenticated and is a d
 and a deploy that waited on readiness would be waiting on the identity provider to answer before it
 could tell whether its own processes had started.
 
-If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch and falls
-back to PostgreSQL full-text, stating the trade-off on screen: search quality degrades and
-semantic search is unavailable, and the platform otherwise works. It is offered, not applied
-silently.
+If Preflight finds less than 16 GB it offers a reduced variant that drops OpenSearch (`search:
+postgres-fulltext`), stating the trade-off on screen: with no search index, search is the graph
+store's own exact search, at most 100 matches and with no date filter, and the search page says
+"Search is limited to exact identifiers: this deployment has no search index." The platform
+otherwise works. It is offered, not applied silently. (The setting's name is older than the code:
+nothing searches PostgreSQL. Docs' v0.5.2 sweep found the words ahead of the code, 14 November
+2026.) The same exact search answers when a deployment with OpenSearch finds it not answering
+(ADR-150's fallback), until it does, and the page says "Search is limited to exact identifiers just
+now: the search index cannot be reached."
 
 ### 3.1 Tests never reach a deployment on the same machine (the owner's answer, 1 November 2026)
 

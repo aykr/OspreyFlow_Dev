@@ -95,6 +95,13 @@ from schemas.deployment import (
 
 #: Where the workspace's nginx serves the basemap's glyph files from
 #: (`apps/workspace/nginx.conf.template`).
+#: The search page's own words when search answers without an index, as the Conduit says them
+#: (`services/api/search_service.py`'s `LIMITED_REASONS`; the harness does not import the Conduit,
+#: so `tests/harness/test_search_fallback_words.py` holds the two to the fallback's real answer).
+_NO_INDEX = "Search is limited to exact identifiers: this deployment has no search index."
+_UNREACHABLE = (
+    "Search is limited to exact identifiers just now: the search index cannot be reached."
+)
 GLYPHS_CONTAINER_PATH = "/usr/share/nginx/fonts"
 
 #: **Where the ingest root is mounted inside the Conduit — fixed, not configurable** (owner ruling
@@ -1823,10 +1830,14 @@ Generated for this deployment. Regenerate rather than edit.
 {rows}
 
 Search backend: `{config.components.search.value}`{
-        " — the reduced variant (spec/05_DEPLOYMENT.md §3): OpenSearch is dropped and full-text "
-        "falls back to PostgreSQL. Search quality degrades and semantic search is unavailable."
+        " — the reduced variant (spec/05_DEPLOYMENT.md §3): OpenSearch is dropped, so there is no "
+        "search index and search is the graph store's own exact search, at most 100 matches and "
+        "with no date filter. The search page says so: "
+        f'"{_NO_INDEX}"'
         if config.components.search is SearchBackend.POSTGRES_FULLTEXT
-        else "."
+        else ". If OpenSearch does not answer, search is the graph store's own exact search until "
+        "it does, at most 100 matches and with no date filter, and the search page says so: "
+        f'"{_UNREACHABLE}"'
     }
 
 ## Hosts

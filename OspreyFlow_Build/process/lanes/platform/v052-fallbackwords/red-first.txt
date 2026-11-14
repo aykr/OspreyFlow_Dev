@@ -1,0 +1,19 @@
+v052-fallbackwords: what the deployment says search does without OpenSearch (docs' v0.5.2 sweep, EARLY_FACTS.md §4)
+
+Checked against the code (main 71042d2): no to_tsvector, tsquery or plainto_tsquery anywhere in services/ or
+packages/; search_service.search_page answers from _from_graph (search.search -> graph.search_nodes, the graph
+store's exact search, FALLBACK_DEPTH 100, no date filter) both with no index ("no_index") and when the index
+raises IndexUnavailable ("unreachable"), with LIMITED_REASONS' words. No semantic search is built.
+
+Red first: tests/harness/test_search_fallback_words.py against main's words, offline on 59991-59994:
+  4 failed: the runbook's reduced line (matched 'falls back to PostgreSQL'), the runbook's opensearch line (no
+  'cannot be reached' sentence), Preflight's memory advice (matched 'falls back to PostgreSQL'), spec 05 §3
+  (matched 'falls back to PostgreSQL'); each on the words, not on setup.
+Green: the four, with test_preflight, test_render, test_deployment_schema, test_search_service and
+  test_cloud_platform_render: 330 passed, 7 skipped.
+Plants (plants.py, each file put back to main's alone): 5/5 red.
+Lint: ruff check (E,F,UP) and format with OspreyFlow_Core/pyproject.toml on the changed Python: clean (the I001
+  import-order reports from the root are on main's lines too).
+Not changed: ADR-049 Amendment 5 quotes spec 05's old sentence as the text it ruled on (that Preflight offers);
+  a quote, left as written. The CARRIES row is on lane/docs-v052-sweep-early, not main: carries_done.diff.
+Server gates (make -k test, make -k ci via stack_lease offline): not run; they need a QUEUE line.
