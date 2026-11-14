@@ -79,7 +79,13 @@ def test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says() 
     assert strip.index("Back to the whole case") < strip.index("{from.label}") < strip.index("Saved view: <span")
     assert strip.index("Nothing in a saved view changes the case.") < strip.index("{from.backLabel}")
     text = saved_views()
-    assert ("the **Cases** panel, from **All cases**, lists each case's saved views too.") in text
+    assert ("**Saved views (n)**, on the case line, opens the **Saved views** panel: on the case's own screen it is the "
+            "one route to them, and the **Cases** panel, from **All cases**, still lists each case's saved views.") in text  # fmt: skip
+    # The decision's own words for it (ADR-144 Amendment 6, as case corrected it after this lane's review).
+    decisions = fold((CORE.parent / "OspreyFlow_Build" / "spec" / "06_DECISIONS.md").read_text(encoding="utf-8"))
+    amendment = decisions[decisions.index("### ADR-144, Amendment 6 (14 November 2026)") :][:3000]
+    assert ("The case line's **Saved views (n)** is the one route on the case's own screen to its saved views; "
+            "*All cases* still lists each case's saved views") in amendment  # fmt: skip
     assert ('A saved view opened from an alert says "Opened from an alert" straight after the way back, and offers '
             "**← Back to the alert** after the note.") in text  # fmt: skip
 
