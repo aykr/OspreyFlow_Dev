@@ -144,6 +144,12 @@ your session has ended (you have been away, or your administrator has ended it),
 the selection, the map and anything you have typed, stays as it is. If the sign-in service cannot be
 reached, it says so and offers **Try again**.
 
+**Refreshing the page** keeps you signed in and where you were. It asks the sign-in service's own session
+first, without showing you anything, and shows the sign-in page only when that session has ended. Home
+stays Home, a case stays that case on the view it had, and Admin, the Ingest Studio and Rules and
+Monitoring stay themselves; a place your roles do not open is shown as Home. This is kept for the tab
+alone, and **Sign out** forgets it, so the next person to sign in there starts at Home.
+
 **Signing out**: the account button at the top right (your name and clearance) has **Sign out**.
 
 ## 3. Home
@@ -192,6 +198,10 @@ in the top bar's view switch, not here (section 5). Elsewhere it says "You are i
 "You are in Rules and Monitoring" or "You are in Admin". If you can open both the Glass and the Ingest
 Studio, the banner offers **Open this case's data in the Ingest Studio ↗**, and from there **← Back to
 case ‹name› in the Glass**, which brings you back to the same case and view.
+
+**Under the GOV.UK theme**, on every screen but Home and the sign-in page, the GOV.UK header and the
+phase banner are slim, and the context banner, a GOV.UK notification banner, is folded into one row,
+"You are in …" at its start, so the canvas has more of the window.
 
 ## 4. Cases
 

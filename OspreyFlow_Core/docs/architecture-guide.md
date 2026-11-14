@@ -107,6 +107,9 @@ sign-in, online map tiles, and on Small and Enterprise the cloud's managed servi
 **One set of images, three modes.** Lite runs on one computer under Docker; Small runs on one
 server, in your cloud or your own network; Enterprise runs on Kubernetes (EKS or AKS). The same images
 and the same acceptance suite serve all three. The administration guide's section 1 compares them.
+A namespace on an organisation's own shared Kubernetes platform is a profile of its own, `cloud-platform`
+(the administration guide's section 6a): the platform's managed services, non-root containers, sign-in
+through the organisation's Entra ID, and a single-copy shape for a proof of concept.
 
 ## 4. The four places
 

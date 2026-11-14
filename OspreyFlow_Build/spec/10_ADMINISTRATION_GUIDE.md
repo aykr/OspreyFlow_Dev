@@ -2829,6 +2829,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
 | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |
+| A namespace on a shared platform (`cloud-platform`), the poc shape | As section 6a.1's *Moving to a new release* says: back up first, then run the new release's rendered `INSTALL.md` again, whose `helm upgrade --install` moves the deployment onto the new release. The standard shape's runbooks are *coming* (section 6a.10) |
 
 **Checking for a newer release.** The deployment never calls out to look. Run
 `ospreyflow update --check` on the computer that holds the checkout: it asks the repository's

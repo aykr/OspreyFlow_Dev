@@ -5,7 +5,8 @@ fraud detection, and event monitoring and alerting.
 
 For whoever installs OspreyFlow and looks after it: **Lite** (one computer), **Small** (one cloud
 server on the cloud's managed services, or one server of your own with every store on it) and
-**Enterprise** (a Kubernetes cluster on the cloud's managed services). It describes what is built, and says plainly where something is not yet.
+**Enterprise** (a Kubernetes cluster on the cloud's managed services), and a namespace on an organisation's
+own shared Kubernetes platform (`cloud-platform`, section 6a). It describes what is built, and says plainly where something is not yet.
 
 The other guides in this folder are the [user guide](user-guide.md), for analysts, and the
 [developer guide](developer-guide.md), for data engineers. Appendix A, every `osprey.yaml` setting,
@@ -3036,6 +3037,7 @@ digest. Each release's notes are its section of `CHANGELOG.md`.
 | Small | **Not yet by `update`**: its first step, the backup, refuses a deployment on a managed database (section 13). The cloud's own backups protect the data |
 | Small on your own server, installed from a release tag | `ospreyflow update`, as Lite: its backup is written to `<server.backups>/<deployment>/` first |
 | Enterprise | Move the checkout to the release's tag and run the install again: the chart is upgraded in place, every password and account kept |
+| A namespace on a shared platform (`cloud-platform`), the poc shape | As section 6a.1's *Moving to a new release* says: back up first, then run the new release's rendered `INSTALL.md` again, whose `helm upgrade --install` moves the deployment onto the new release. The standard shape's runbooks are *coming* (section 6a.10) |
 
 **Checking for a newer release.** The deployment never calls out to look. Run
 `ospreyflow update --check` on the computer that holds the checkout: it asks the repository's
