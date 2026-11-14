@@ -145,3 +145,5 @@ platform-b	v052-attribution	S	building	v0.5.2 fix (A): The map's attribution chi
 platform-b	v052-version	S	building	v0.5.2 fix (V): The Glass shows the code's own version, not an older checkout's .git commit (the demo showed v0.5.0)
 studio	v052-pipeline-words	S	building	v0.5.2 fix (N): The Ingest Studio's messages say Pipeline, as its screens do, not recipe
 case-b	v052-help-everywhere	S	building	v0.5.2 fix (H): Help (?) opens its panel from every view, not only Graph
+studio	v052-model-words	S	building	v0.5.2 fix (D2): The model's refusals in words: the provider's 429 and 401, a time-out said instead of a 500, a deadline on the Glass's model fetches (studio's demo research)
+admin	v052-admin-grant	S	building	v0.5.2 fix (A2): Only an administrator can give the osprey-admin role; a people manager is refused in words (studio's demo research; rule 4)
