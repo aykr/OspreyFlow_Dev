@@ -1,0 +1,49 @@
+# v0.6.0 item 9, the rename: red-first run, 15 November 2026
+Tree: lane/docs-v060-rename 6fcfe7b on main 7dd860e, merged with platform's lane/platform-v060-fresh-only 9c7acb0 (rf), in a scratch worktree, so §14's quotation is planted against rf's real words.
+Command: python3 v060-rename-plants.py <tree> <venv python>; a fresh PYTHONPYCACHEPREFIX each run; the offline ports 59991-59994.
+On main alone, before rf merges, test_section_14_quotes_the_refusal_as_harness_fresh_only_words_it fails in its own words (harness.fresh_only is not here), never a skip.
+
+unplanted: 58 passed in 5.47s
+RED  VERSION back at v0.5.2
+     OspreyFlow_Core/VERSION: 'v0.6.0' -> 'v0.5.2'
+     failed: test_the_changelog_says_v060_is_installed_fresh_and_version_names_it, test_v060_is_said_to_be_installed_fresh_and_the_move_not_rehearsed, test_the_tables_are_printed_from_the_manifest_alone
+RED  the manifest left at v0.5.2
+     OspreyFlow_Core/harness/cloud_platform/poc_manifest.yaml: '\nversion: v0.6.0\n' -> '\nversion: v0.5.2\n'
+     failed: test_the_tables_are_printed_from_the_manifest_alone
+RED  the CHANGELOG without the fresh-install sentence
+     OspreyFlow_Core/CHANGELOG.md: '**v0.6.0 is installed fresh: there is no upgrade to it from any earlier version.**\n\n' -> ''
+     failed: test_the_changelog_says_v060_is_installed_fresh_and_version_names_it
+RED  the CHANGELOG's Before you update back
+     OspreyFlow_Core/CHANGELOG.md: '**Before you install.**' -> '**Before you update.**'
+     failed: test_the_changelog_says_v060_is_installed_fresh_and_version_names_it
+RED  the user guide's header left at v0.5.2
+     OspreyFlow_Core/docs/user-guide.md: '· For OspreyFlow v0.6.0 · Issued' -> '· For OspreyFlow v0.5.2 · Issued'
+     failed: test_every_guide_s_header_names_the_latest_release
+RED  §14 without its opening rule
+     OspreyFlow_Core/docs/administration-guide.md: '**v0.6.0 is installed fresh.** No earlier deployment is moved to it:' -> 'No earlier deployment is moved to it:'
+     failed: test_the_guides_say_how_a_v060_deployment_moves_and_that_v060_is_installed_fresh
+RED  the README without its line
+     OspreyFlow_Core/README.md: 'v0.6.0 itself is installed fresh: no earlier deployment is moved to it,' -> 'No earlier deployment is moved,'
+     failed: test_the_guides_say_how_a_v060_deployment_moves_and_that_v060_is_installed_fresh
+RED  §14's quotation in other words
+     OspreyFlow_Core/docs/administration-guide.md: 'and nothing moves it onto v0.6.0.' -> 'and it is not moved onto v0.6.0.'
+     failed: test_section_14_quotes_the_refusal_as_harness_fresh_only_words_it
+RED  rf's words changed at their source
+     OspreyFlow_Core/harness/fresh_only.py: 'is installed fresh; this deployment is' -> 'is a fresh install; this deployment is'
+     failed: test_section_14_quotes_the_refusal_as_harness_fresh_only_words_it
+RED  a struck passage put back in §13
+     OspreyFlow_Core/docs/administration-guide.md: '**v0.6.0 is installed fresh.**' -> "Sets taken before v0.5.0 may still be in the checkout's `backups/`. **v0.6.0 is installed fresh.**"
+     failed: test_no_guide_keeps_a_passage_for_an_earlier_release_s_deployment
+RED  the named-volume move put back in the README
+     OspreyFlow_Core/README.md: 'v0.6.0 itself is installed fresh:' -> "The stores' one-time move to named volumes runs first. v0.6.0 itself is installed fresh:"
+     failed: test_no_guide_keeps_a_passage_for_an_earlier_release_s_deployment
+RED  §6a.1's old install test put back
+     OspreyFlow_Core/docs/administration-guide.md: '**Not yet rehearsed.** No deployment has yet been moved to a new release by these steps:' -> '**What will check it.** It is to install v0.5.1, then the candidate by these steps over it:'
+     failed: test_no_guide_keeps_a_passage_for_an_earlier_release_s_deployment, test_v060_is_said_to_be_installed_fresh_and_the_move_not_rehearsed, test_the_terraform_s_pull_request_follows_the_render_that_makes_it
+RED  §6a.1 without its v0.6.0 line
+     OspreyFlow_Core/docs/administration-guide.md: 'v0.6.0 itself is installed fresh, into a namespace of its own: a namespace on an earlier release stays on it (section 14). ' -> ''
+     failed: test_the_guides_say_how_a_v060_deployment_moves_and_that_v060_is_installed_fresh, test_v060_is_said_to_be_installed_fresh_and_the_move_not_rehearsed, test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release
+RED  §14's old index sentence put back
+     OspreyFlow_Core/docs/administration-guide.md: 'rebuilds the search index from the graph. If anything fails' -> 'rebuilds the search index from the graph (an index made before v0.5.2 is not one v0.5.2 writes to). If anything fails'
+     failed: test_no_guide_keeps_a_passage_for_an_earlier_release_s_deployment, test_an_update_rebuilds_the_index_inside_what_rolls_back
+restored: 58 passed in 11.22s
