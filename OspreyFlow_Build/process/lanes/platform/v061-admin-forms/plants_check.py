@@ -22,15 +22,15 @@ PLANTS = [
     (
         "Add after a refused check goes ahead",
         ADMIN,
-        "            if not models or not all(m.ok for m in models):\n",
-        "            if not models:\n",
+        "                if not models or not all(m.ok for m in models):\n",
+        "                if not models:\n",
         "refused_without_a_passed_check",
     ),
     (
         "a refused check keeps its key in the gateway",
         ADMIN,
-        "            if not models or not all(m.ok for m in models):\n                if not provider.keyless:\n                    await self._gateway.delete_credential(provider.name)\n",
-        "            if not models or not all(m.ok for m in models):\n                pass\n",
+        "                if not models or not all(m.ok for m in models):\n                    if not provider.keyless:\n                        await self._gateway.delete_credential(provider.name)\n",
+        "                if not models or not all(m.ok for m in models):\n                    pass\n",
         "leaves_nothing_in_the_gateway",
     ),
     (
@@ -49,16 +49,18 @@ PLANTS = [
     ),
     # Where a refused body is answered since the review's fixes (`_check_refusal`): not JSON at all,
     # then a field's rule quoting what it refused.
+    # Moved to `_engine_refusal` (the owner's review, Fixes B and C), where a body is answered now.
     ("a refused body is echoed back", APP,
-     '        return {"error": "check_refused", "detail": _CHECK_BODY_REFUSED}\n    errors =',
-     '        return {"error": "check_refused", "detail": raw.decode()}\n    errors =',
+     '    except ValueError:\n        return {"error": error, "detail": refused}\n    errors =',
+     '    except ValueError:\n        return {"error": error, "detail": raw.decode()}\n    errors =',
      "appears_nowhere"),
-    ("a refused field's words not redacted", APP,
-     '"words": model_admin_module.redacted(msg, sent)}', '"words": msg}',
+    ("a refused field's words not fixed (the validator's own)", APP,
+     '        fields.append({"field": named[0], "words": named[1]})\n',
+     '        fields.append({"field": named[0], "words": str(e.get("msg", ""))})\n',
      "refused_field_is_named"),
     ("a key pasted into the label is taken", ADMIN,
-     "                if shown and label_looks_like_a_key(shown):\n",
-     "                if False:\n", "appears_nowhere"),
+     "        if shown and label_looks_like_a_key(shown):\n",
+     "        if False:\n", "appears_nowhere"),
     ("Cancel leaves the key in the gateway", ADMIN,
      "            if not pending.provider.keyless:\n                await self._gateway.delete_credential(pending.provider.name)\n            rest =",
      "            rest =", "cancel_removes"),
@@ -82,7 +84,7 @@ PLANTS = [
     (
         "a key pasted into a model name is checked",
         ADMIN,
-        "    if any(model_looks_like_a_key(m) for m in provider.roles.values()):\n",
+        "    if any(model_looks_like_a_key(part) for part in parts) or _UUID.fullmatch(name):\n",
         "    if False:\n",
         "pasted_into_a_model_name",
     ),
@@ -95,9 +97,9 @@ PLANTS = [
     ),
     (
         "a refused job not named, only the roles",
-        APP,
-        '        if field == "provider.roles" and (job := re.match(r"the (\\w+) model ", msg)):\n',
-        "        if False and (job := None):\n",
+        ADMIN,
+        '        elif found := re.match(r"the (\\w+) model ", words):\n',
+        "        elif found := None:\n",
         "refused_field_is_named",
     ),
     (
@@ -155,10 +157,12 @@ PLANTS = [
     (
         "a check's key left unrecorded when its save fails",
         ADMIN,
-        "            except BaseException:\n                # Unrecorded, nothing would ever remove it: the key goes with the refusal.\n                if not provider.keyless:\n                    await self._gateway.delete_credential(provider.name)\n                raise\n",
-        "            except BaseException:\n                raise\n",
-        "cannot_be_written",
-        "../OspreyFlow_Build/tests/services/api/test_model_admin_routes.py",
+        "            except BaseException:\n                # Its key goes with the refusal; the record too, where it can still be written\n                # (else the sweep removes it, and nothing else of it is left).\n                if not provider.keyless:\n                    await self._gateway.delete_credential(provider.name)\n",
+        "            except BaseException:\n                # Its key goes with the refusal; the record too, where it can still be written\n                # (else the sweep removes it, and nothing else of it is left).\n",
+        # Since ruling 25 a full disk refuses before the key is handed over, so the routes' case no
+        # longer reaches this handler (it went GREEN); the record that cannot be saved after a pass does.
+        "record_cannot_be_saved",
+        "../OspreyFlow_Build/tests/services/api/test_model_key_review.py",
     ),
 ]
 env = {**os.environ, "ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "POSTGRES_PASSWORD": "throwaway",

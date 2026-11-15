@@ -114,3 +114,60 @@ The owner's rulings 18 and 19 (15 Nov ~16:15Z, on main at bd253df), at 5ff67cb:
   the Conduit (plant 17). After: keyboard 19/19 with ACTION_REGISTRY.diff applied; every-harness axe for Models
   60/60 with EVERY_HARNESS.diff applied (the new state open=edit&moved=1 shown to draw its key field); both
   reverted after.
+
+The owner's key review (15 Nov; rulings 21-28), at 9f6b2c6:
+  test_model_key_review.py, written before the code (29 cases; FAILED is red, PASSED held already):
+    PASSED test_an_odd_shaped_key_appears_nowhere[lower-hyphen]
+    PASSED test_an_odd_shaped_key_appears_nowhere[short]
+    PASSED test_an_odd_shaped_key_appears_nowhere[uuid]
+    PASSED test_an_unexpected_transport_error_reports_no_key_and_leaves_no_credential[/credentials]
+    PASSED test_an_unexpected_transport_error_reports_no_key_and_leaves_no_credential[/chat/completions]
+    PASSED test_a_key_not_sent_as_text_is_refused_unechoed[number]
+    PASSED test_a_key_not_sent_as_text_is_refused_unechoed[list]
+    PASSED test_a_key_not_sent_as_text_is_refused_unechoed[object]
+    FAILED test_a_refused_model_name_is_said_by_its_job_never_echoed_nor_audited
+    FAILED test_every_catalogue_name_and_real_model_name_looks_like_one
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[question]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[too-long]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[angle]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[accent]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[comma]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[hash]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[uuid]
+    FAILED test_a_key_in_a_model_name_box_appears_nowhere[lower-hyphen]
+    FAILED test_a_key_in_a_model_name_box_appears_nowhere[short]
+    FAILED test_a_key_in_a_model_name_box_appears_nowhere[uuid]
+    FAILED test_a_key_shaped_field_name_is_never_echoed[extra-in-provider]
+    FAILED test_a_key_shaped_field_name_is_never_echoed[extra-at-top]
+    FAILED test_a_key_shaped_field_name_is_never_echoed[key-under-roles]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[roles]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[address]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[reference]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[name]
+    FAILED test_a_key_in_the_address_is_refused
+    FAILED test_a_check_stopped_after_its_key_reached_the_gateway_is_swept_with_its_key
+  The 8 already held (P2's three odd shapes as the real key, P3's two transport errors, P9's three
+  non-string keys) are shown red by plants instead: plants_review.py, 17/17 red (plants_review_run.txt).
+  Red for real defects at 9f6b2c6: a refused model name echoed in the answer, the page and the audit
+  (ruling 22); any name taken as a model (ruling 23); a UUID taken; a key-shaped field name echoed by
+  the edit and check routes (Fix B, all three bodies); a key in the address read past (P9); a credential
+  left by a Conduit stopped mid-check (ruling 25).
+  Found while building: the older key rule refused a real model name (`moondream:1.8b-v2-q4_K_M`, 24
+  mixed characters): each part between `:`, `/` and `@` is now judged alone. The ruling 25 test first
+  modelled the stop with an exception, whose handler still ran; a stop runs nothing, so the test now lets
+  only the record's save happen. Plant 5 went GREEN on refused_field's last line, which an earlier branch
+  defends (rule 15); retargeted to the branch a key under roles takes.
+  test_models_verb.py: presence "unknown" without the Conduit RED at 9f6b2c6 (it read deployment.env);
+  P7's refusal case held already, shown red by plant 14.
+  test_model_keys_commands.py (P6): held already, shown red by plant 13.
+  Models.test.tsx: the result's lines by job RED at 9f6b2c6 (": Extraction and Ask: …", the model
+  undefined); green after.
+  Browser, slot 9: P8's case green, then red under each of three plants (sessionStorage, localStorage,
+  the key in the check's address), restored after each (plants_p8_run.txt). Keyboard 20/20 with
+  ACTION_REGISTRY.diff applied; every-harness axe for Models 60/60 with EVERY_HARNESS.diff; both reverted.
+  The earlier plants (plants_check.py) re-run: 21/21. Five anchors had gone stale: three on the refusal
+  code moved to _engine_refusal and refused_field, one on the combined clean-up handler, and plant 7's,
+  which the format restore of 15 Nov had put back to HEAD's indentation in the script committed at
+  9f6b2c6 (plants_run.txt's 21/21 was the run before that restore). All moved to their real call sites;
+  plant 21 went GREEN until it was pointed at the save that now follows the key (a full disk refuses
+  before the key since ruling 25), with a case for it.

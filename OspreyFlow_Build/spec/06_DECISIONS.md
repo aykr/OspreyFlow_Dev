@@ -40094,7 +40094,8 @@ views; *All cases* still lists each case's saved views. `views/ViewsMenu.tsx`, i
 
 Status: written 15 November 2026 by the platform lane under the reservation (`spec/ADR_RESERVATIONS.md`), from the
 owner's prompt and rulings of 15 November 2026 (`process/lanes/admin-forms/OWNER_PROMPT_2026-11-15.md`,
-`OWNER_RULINGS_2026-11-15.md`, rulings 7 and 12 to 20) and `PREBUILD_FINDINGS.md` §5.3's draft, **cut to the
+`OWNER_RULINGS_2026-11-15.md`, rulings 7, 12 to 28; the owner's key review,
+`KEY_REVIEW_2026-11-15.md`) and `PREBUILD_FINDINGS.md` §5.3's draft, **cut to the
 owner's first slice** (the owner, 15 November 2026; ruling 12): the provider list, the label, the address shown and changeable, only the provider's jobs,
 a typed model name with a current example, the preview, the existing write-only key field, and the key and each
 typed name proved by one call before **Add**. **Not in it:** listing the models a key may use (the draft's wildcard
@@ -40195,7 +40196,59 @@ the guide's lines that were not updated then.
    nothing (before, the old key was removed first, and a refused new one left the engine with none). A key-shaped
    label, reference or model name is refused on an edit as at the check. **The one exception:** a key moved out of
    `deployment.env` at install (`key_moved`, `services/api/model_keys.move_keys`) is the installer's own key,
-   moved, not changed, so nothing is asked of the provider at install; it is still write-only and audited.
+   moved, not changed, so nothing is asked of the provider at install; it is still write-only and audited
+   (the owner kept it so: ruling 21).
+10. **The owner's independent key review** (15 November 2026, `process/lanes/admin-forms/KEY_REVIEW_2026-11-15.md`;
+   rulings 22 to 28), with synthetic keys only:
+   - **A typed model name is never echoed** (ruling 22): `ModelCheck` carries the jobs, its outcome and
+     fixed words that name the job ("Extraction and Ask: …"), never the typed name; the screen shows those
+     words, and `engine_checked`'s audit records each job and its outcome. An edit's or a new key's
+     refusal says the job too.
+   - **A model name is taken only if it looks like one** (ruling 23, generously): letters, digits and
+     `. _ - : / @`, up to 128 characters (`services/api/model_admin.model_name_refusal`), on the check and on
+     an edit. It is not a key detector: an Azure deployment's or a client gateway's model is named freely,
+     so a lower-case hyphenated key has a model's shape; what protects such a key is that a refused name is
+     never echoed, and one the provider answers for is a model. A UUID, and a name whose part between `:`,
+     `/` or `@` looks like a key, are refused as a key's shape; each part is judged alone, so a model's own
+     tag (`moondream:1.8b-v2-q4_K_M`) is taken. Shown against every catalogue example and the real names
+     this build meets.
+   - **Fixed words per field** (the review's Fixes B and C): the check's and the edit's refusals name
+     fields from a fixed list (`FIELD_WORDS`, `refused_field`) with that field's fixed words; a field
+     name that was sent (an extra field, a key under `roles`) is never named back, and a validator's own
+     words are never sent, since one quotes with `repr`, which escapes a quote that an exact-match
+     redaction cannot find. An extra field, a body that is not JSON, or a field off the list is answered in
+     the route's fixed words.
+   - **No key in the address** (the review's P9): the three routes that take a key refuse any query
+     string in fixed words, whatever the body holds; a key sent as a number, a list or an object is refused
+     in fixed words, never echoed.
+   - **Nothing reports local variables** (Fix D): no error reporter, rich traceback or `show_locals`
+     anywhere in the Conduit, the CLI, the harness or the packages; an unexpected transport error during
+     the hand-over or the proving call leaves no credential and no key in any answer, log record (formatted
+     whole, traceback included) or output.
+   - **A Conduit stopped mid-check leaves nothing behind** (ruling 25): the check's record
+     (`PendingCheck.passed = False`) is written before the key goes to the gateway and marked passed
+     once every model has answered; a record not passed is never offered for **Add**, and the sweep removes
+     it after `CHECK_LIFE` with its credential, by name. No credential is ever read back to find one
+     (`credential_reads` stays 0).
+   - **`deployment.env`** (ruling 24): on Compose the key's line is removed right after a successful move
+     (`harness/apply.py`, `move_model_keys_into_gateway`, lines 236 to 245, held by
+     `tests/harness/test_apply_changed_settings.py`'s `_moved_into_the_gateway`); `ospreyflow models` asks the
+     gateway, through the Conduit, for presence, and says *unknown* when it does not answer, never reading
+     `deployment.env`. **On the cloud-platform profile the key stays in the namespace's Kubernetes Secret**,
+     given to the gateway alone (ruling 28, the cluster's own secret store, ruling 5); the guide says so.
+   - **The guide** (ruling 26) prefers the hidden prompt and says `export NAME=key` lands in the shell's
+     history.
+   - **Owed after v0.6.0's package test** (ruling 27): one measured run against the real LiteLLM at the
+     demo's log level with a synthetic key, its logs and its database row searched; if a credential body
+     reaches the logs, that logger is lowered in the rendered gateway settings, held by a test reading the
+     rendered config.
+   Held by `tests/services/api/test_model_key_review.py` (each item above, P1 to P5 and P9),
+   `test_model_keys_commands.py` (P6: `python -m services.api.model_keys` run as a command against a
+   stand-in gateway served on localhost), `tests/cli/test_models_verb.py` (P7, and presence *unknown*),
+   the widened `test_model_engine_checks.py` key tests (P4 and P5), and `keyboard/admin-models.spec.ts`'s
+   P8 (no key in either browser storage, the address bar or any address asked); each shown red first, the
+   review's plants 17 of 17 (`plants_review_run.txt`) and P8's three at the browser slot
+   (`plants_p8_run.txt`).
 
 Held by: `tests/services/api/test_model_catalogue.py` (the list, its order, jobs, addresses, examples, prefixes, the
 profiles); `test_model_engine_kinds.py` (decision 1 as changed); `test_model_engine_checks.py` (**Add** refused
