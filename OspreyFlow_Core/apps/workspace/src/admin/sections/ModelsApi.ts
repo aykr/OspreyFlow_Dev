@@ -4,6 +4,7 @@
 import type {
   AdminEngine,
   ConnectionTestResult,
+  EngineCheckResult,
   EngineLimits,
   ModelAdminHistory,
   ModelsAdminView,
@@ -38,8 +39,6 @@ const n = encodeURIComponent;
 
 export const readModels = (api: ModelsApi) => ask<ModelsAdminView>(api, "/v1/admin/models");
 export const readHistory = (api: ModelsApi) => ask<ModelAdminHistory>(api, "/v1/admin/models/history");
-export const addEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
-  ask<ModelsAdminView>(api, "/v1/admin/models/engines", { method: "POST", body: JSON.stringify({ provider }) });
 export const editEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
   ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(provider.name)}`, {
     method: "PUT",
@@ -62,3 +61,16 @@ export const setLimits = (api: ModelsApi, name: string, limits: EngineLimits) =>
 /** ADR-135 Amendment 3: the gateway's own records over whole UTC days, as counts only. */
 export const readUsage = (api: ModelsApi, start: string, end: string) =>
   ask<ModelUsageView>(api, `/v1/admin/models/usage?start=${n(start)}&end=${n(end)}`);
+/** ADR-135 Amendment 14: the key and each typed model proved by one call in the gateway before the
+ * engine exists. The key is in this request's body alone, where the engine has one; the answer is
+ * the outcome in fixed words, never the key. */
+export const checkEngine = (api: ModelsApi, provider: ModelProviderConfig, key: string | null) =>
+  ask<EngineCheckResult>(api, "/v1/admin/models/checks", {
+    method: "POST",
+    body: JSON.stringify(key === null ? { provider } : { provider, key }),
+  });
+/** **Add** names the passed check, never the key. */
+export const addChecked = (api: ModelsApi, check: string) =>
+  ask<ModelsAdminView>(api, `/v1/admin/models/checks/${n(check)}/add`, { method: "POST" });
+export const cancelCheck = (api: ModelsApi, check: string) =>
+  ask<ModelsAdminView>(api, `/v1/admin/models/checks/${n(check)}`, { method: "DELETE" });

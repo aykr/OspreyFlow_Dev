@@ -26,18 +26,46 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByRole("table", { name: "Engines", exact: true })).toBeVisible();
 });
 
-test("an engine is added by keyboard", async ({ page }) => {
+// ADR-135 Amendment 14: a provider chosen from the list, its model typed, its key checked, then Add.
+test("an engine is added by keyboard, checked before Add", async ({ page }) => {
   await press(page, "Add an engine");
   await page.getByLabel("Provider", { exact: true }).focus();
-  await page.keyboard.press("End"); // the last provider listed
-  await typeInto(page, /Extraction and Ask: the provider/, "claude-x");
+  // Type-ahead on the closed list (on macOS an arrow key opens it instead of moving the choice).
+  await page.keyboard.type("Anthropic");
+  await expect(page.getByLabel("Label analysts see", { exact: true })).toHaveValue("Anthropic");
+  await expect(page.getByLabel("Transcription: model name")).toHaveCount(0);
+  await typeInto(page, "Extraction and Ask: model name", "claude-sonnet-5-5");
+  await typeInto(page, /^Key/, SYNTHETIC_KEY);
   await page.getByLabel(/Under a privacy contract/).focus();
   await page.keyboard.press("Space");
   await typeInto(page, /reference/, "DPA 2026/09");
+  await expect(page.getByText(/^Analysts will see:/)).toContainText("Anthropic (under contract)");
+  await press(page, "Check");
+  await expect(page.getByRole("status")).toContainText("Add the engine within 15 minutes");
+  await expect(page.getByLabel(/^Key/)).toHaveValue("");
   await press(page, "Add the engine");
-  await expect(page.getByRole("status")).toContainText("is added");
-  expect(await asked(page)).toContain("POST /engines");
+  await expect(page.getByRole("status")).toContainText("Anthropic is added and offered to analysts");
+  expect(await asked(page)).toEqual(expect.arrayContaining(["POST /checks", "POST /checks/chk-1/add"]));
+  expect(await asked(page)).not.toContain("POST /engines");
+  expect(await page.content()).not.toContain(SYNTHETIC_KEY);
   registerCovered(REGISTRY, "add-a-model-engine-by-keyboard");
+});
+
+test("a passed check is cancelled by keyboard, from the form and from the list", async ({ page }) => {
+  await press(page, "Add an engine");
+  await typeInto(page, "Extraction and Ask: model name", "gemini-3.8-flash");
+  await typeInto(page, /^Key/, SYNTHETIC_KEY);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: "Add the engine", exact: true })).toBeVisible();
+  await press(page, "Cancel");
+  await expect(page.getByRole("status")).toContainText("its check and key are removed");
+  expect(await asked(page)).toContain("DELETE /checks/chk-1");
+  await page.goto("/keyboard/models-harness.html?held=1");
+  await expect(page.getByRole("table", { name: "Being checked" })).toContainText("Anthropic");
+  await press(page, "Cancel the check of Anthropic");
+  await expect(page.getByRole("status")).toContainText("Anthropic was not added");
+  expect(await asked(page)).toContain("DELETE /checks/chk-held");
+  registerCovered(REGISTRY, "cancel-a-model-engine-check-by-keyboard");
 });
 
 // What reached the Conduit's stand-in in each request's body (never a key's: the harness keeps none).
@@ -59,18 +87,16 @@ async function onCloudPlatform(page: Page) {
 test("Bedrock in London is added by keyboard, signed in by the IAM role with no key asked for", async ({ page }) => {
   await onCloudPlatform(page);
   await press(page, "Add an engine");
-  await page.getByLabel("Kind of engine", { exact: true }).focus();
-  // Type-ahead on the closed list, as the gateway's case does: on macOS End and the arrow keys open
-  // a closed list instead of moving the choice, so "End" left the kind unchanged there.
-  await page.keyboard.type("Amazon"); // "Amazon Bedrock in London, by the gateway's own IAM role"
-  await expect(page.getByLabel("Engine name", { exact: true })).toHaveValue("bedrock");
-  await expect(page.getByText(/no key is kept/)).toBeVisible();
+  await page.getByLabel("Provider", { exact: true }).focus();
+  await page.keyboard.type("Amazon"); // "Amazon Bedrock"
+  await expect(page.getByText(/in London only: no key and no address/)).toBeVisible();
+  await expect(page.getByLabel(/^Key/)).toHaveCount(0);
   await typeInto(page, "Label analysts see", "Bedrock");
-  await typeInto(page, /Extraction and Ask: the provider/, "anthropic.claude-3-haiku");
+  await typeInto(page, "Extraction and Ask: model name", "amazon.nova-pro-v1:0");
+  await press(page, "Check");
   await press(page, "Add the engine");
-  await expect(page.getByRole("status")).toContainText("no key is needed");
-  expect(await asked(page)).toContain("POST /engines");
-  expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({ name: "bedrock", kind: "bedrock", auth: "iam_role", api_base: null });
+  await expect(page.getByRole("status")).toContainText("Bedrock is added");
+  expect((await sentBody(page, "POST /checks"))?.provider).toMatchObject({ name: "bedrock", kind: "bedrock", auth: "iam_role", api_base: null });
   await expect(page.getByRole("table", { name: "Engines", exact: true })).toContainText("IAM role: no key kept");
   await expect(page.getByRole("button", { name: /key for Bedrock/ })).toHaveCount(0);
   await press(page, "Test the connection to Bedrock");
@@ -78,30 +104,46 @@ test("Bedrock in London is added by keyboard, signed in by the IAM role with no 
   registerCovered(REGISTRY, "add-bedrock-by-iam-role-by-keyboard");
 });
 
-test("the organisation's own gateway is added by keyboard, signed in by its token", async ({ page }) => {
-  await onCloudPlatform(page);
+test("the organisation's own gateway is added by keyboard at its address, by its token", async ({ page }) => {
   await press(page, "Add an engine");
-  await page.getByLabel("Kind of engine", { exact: true }).focus();
-  // Type-ahead on the closed list (on macOS an arrow key opens it instead of moving the choice).
-  await page.keyboard.type("Your"); // "Your organisation's own AI gateway"
-  await expect(page.getByLabel("Engine name", { exact: true })).toBeEditable();
-  await typeInto(page, "Engine name", "acme_ai");
-  await expect(page.getByText(/Signs in by a token/)).toBeVisible();
-  await typeInto(page, /Address of your gateway/, "https://ai.example/v1");
-  await typeInto(page, /Extraction and Ask: the provider/, "gpt-4o-mini");
+  await page.getByLabel("Provider", { exact: true }).focus();
+  await page.keyboard.type("Another"); // "Another provider or your own gateway", on every profile
+  await typeInto(page, "Address (https://)", "https://ai.example/v1");
+  await typeInto(page, "Extraction and Ask: model name", "acme-chat");
+  await typeInto(page, /^Token/, SYNTHETIC_KEY);
+  await press(page, "Check");
   await press(page, "Add the engine");
-  await expect(page.getByRole("status")).toContainText("acme_ai is added. Enter its key next");
-  expect(await asked(page)).toContain("POST /engines");
-  // What was added, not only that POST was asked (the review's item 8).
-  expect((await sentBody(page, "POST /engines"))?.provider).toMatchObject({
-    name: "acme_ai",
-    kind: "gateway",
-    auth: "key",
-    api_base: "https://ai.example/v1",
-  });
-  await press(page, "Enter key for acme_ai");
-  await expect(page.getByRole("textbox", { name: /Key for acme_ai/ })).toHaveValue("");
+  await expect(page.getByRole("status")).toContainText("is added and offered to analysts");
+  // What was checked, not only that it was asked (the review's item 8), and never its token.
+  const checked = await sentBody(page, "POST /checks");
+  expect(checked?.provider).toMatchObject({ name: "gateway", kind: "gateway", auth: "key", api_base: "https://ai.example/v1" });
+  expect(checked).not.toHaveProperty("key");
   registerCovered(REGISTRY, "add-the-organisations-gateway-by-keyboard");
+});
+
+test("a provider's own address is changed for a gateway in front of it, by keyboard", async ({ page }) => {
+  await press(page, "Add an engine");
+  await expect(page.getByText("Address: https://generativelanguage.googleapis.com")).toBeVisible();
+  await press(page, "Change the address of Google Gemini");
+  await typeInto(page, /Address of the gateway in front of it/, "https://proxy.example/gemini");
+  await typeInto(page, "Extraction and Ask: model name", "gemini-3.8-flash");
+  await typeInto(page, /^Key/, SYNTHETIC_KEY);
+  await press(page, "Check");
+  await expect(page.getByRole("button", { name: "Add the engine", exact: true })).toBeVisible();
+  expect((await sentBody(page, "POST /checks"))?.provider).toMatchObject({ name: "gemini", api_base: "https://proxy.example/gemini" });
+  registerCovered(REGISTRY, "change-a-model-providers-address-by-keyboard");
+});
+
+test("a refused key is said at the key field, by keyboard, and nothing can be added", async ({ page }) => {
+  await press(page, "Add an engine");
+  await typeInto(page, "Extraction and Ask: model name", "gemini-3.8-flash");
+  await typeInto(page, /^Key/, "synthetic-refuse-key");
+  await press(page, "Check");
+  await expect(page.getByRole("alert")).toContainText("Nothing was kept");
+  await expect(page.getByLabel(/^Key/)).toHaveAttribute("aria-invalid", "true");
+  await expect(page.getByLabel(/^Key/)).toHaveAccessibleDescription("The provider refused the key.");
+  await expect(page.getByRole("button", { name: "Add the engine", exact: true })).toHaveCount(0);
+  registerCovered(REGISTRY, "see-a-model-check-refused-by-keyboard");
 });
 
 test("an engine is edited by keyboard", async ({ page }) => {

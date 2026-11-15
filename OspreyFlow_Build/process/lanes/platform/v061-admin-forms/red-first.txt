@@ -17,3 +17,30 @@ plant 6: a key pasted into the label is taken
 plant 7: Cancel leaves the key in the gateway
   -k 'cancel_removes': RED (1 failed, 8 deselected in 5.68s)
 7/7 red
+
+Stage 4 (the browser's half) and stage 5 (the screen), red first on 15 November 2026, on sol, offline on closed ports
+59991-59999, no stack, no browser.
+
+The Conduit: the view carries the form's providers and the passed checks (test_model_engine_checks.py, 3 new
+cases). Before the change: 3 failed (KeyError 'providers' / 'checks'); after: 12 passed. Plants:
+  a lapsed check still shown (the 15-minute filter removed): -k being_checked RED (1 failed)
+  Bedrock offered off the cloud platform (the whole catalogue served): -k offers_this_profile RED (1 failed)
+Found on the way: stage 3's three check routes were never recorded in placesByRole.json
+(test_place_routes::test_the_record_of_places_by_role_is_the_routes and the manage_models hidden-place case red at
+881920b); rewritten with OSPREY_WRITE_PLACES_BY_ROLE=1, 105 passed. And stage 3 never regenerated the TypeScript
+(ModelAdminEntry.ts lacked the three check actions, so make schemas-check was red at 881920b); regenerated with the
+new types, schemas-check: 627 generated types match.
+
+The Glass (Models.test.tsx, 11 new cases, the add form's old tests replaced). Run against the screen as it was at
+HEAD (Models.tsx and ModelsApi.ts from 4965ec6): 11 failed, 12 passed. Against the new screen: 23 passed. Plants in
+Models.tsx, each at the real call site:
+  the key kept in sessionStorage at Check: RED (1 failed: the browser-half key test)
+  the key field not emptied once sent: RED (2 failed)
+  the key put in Add's address: RED (1 failed)
+  autocomplete left on the key field: RED (1 failed)
+  Add the engine offered before any check: RED (6 failed)
+(A first plant, Add's own `if (!passed) return` guard removed, stayed green: the button is not drawn before a pass,
+so that guard is not the defence; replaced by the plant above, which is.)
+
+Not run here: keyboard/admin-models.spec.ts and the axe scan of the new states (the every-harness diff): a browser
+run needs a slot from the orchestrator (Prompt L), and was refused here.
