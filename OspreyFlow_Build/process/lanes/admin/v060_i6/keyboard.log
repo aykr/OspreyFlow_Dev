@@ -1,4 +1,4 @@
-# The whole keyboard suite (keyboard/playwright.config.ts, the gate among it) at ba4bf1c, local slot 5: 1352 passed, 5 skipped, none failed.
-# At 5ad39e5 (before ruling (b)'s names) 2 ingest-studio cases failed under load and passed alone (56 of 56); at a346002 glass-panels-look's
-# Save as a view heading failed in the dark and light looks: scale.css's :where(h2) came after panelType.css's equally weightless label
-# rule, and scale.css is now imported first.
+# The whole keyboard suite (keyboard/playwright.config.ts, the gate and scale-rules among it) at 1494913, local slot 5: 1354 passed, 5 skipped, none failed.
+# Earlier: at 5ad39e5, 2 ingest-studio cases failed under load and passed alone (56 of 56). At a346002, glass-panels-look's Save as a view
+# heading failed in the dark and light looks: scale.css's :where(h2) came after panelType.css's equally weightless label rule, and scale.css is
+# now imported first.
