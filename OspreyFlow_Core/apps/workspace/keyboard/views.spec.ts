@@ -1,6 +1,6 @@
 // Case views by keyboard alone (ADR-144; rule 13): a view opened from the saved views list, shared
 // with the case, deleted after asking once, opened from another case's row in the cases list, saved
-// from its form, and left for the case from the banner over an opened view. Saving from the canvas
+// from its form, and left for the whole case from the strip over an opened saved view. Saving from the canvas
 // (the selection bar and a node's menu) is in `keyboard.spec.ts`, asking the model in a view in
 // `selection.spec.ts`, and saving a smaller view from the over-cap dialog in `view-over-cap.spec.ts`.
 // No `page.mouse`, no `.click()`.
@@ -69,53 +69,50 @@ test("a view is named and saved from its form by keyboard", async ({ page }) => 
   registerCovered("VIEW_ACTIONS", "save-a-view-from-its-form-by-keyboard");
 });
 
-test("Back to the case is reached from the banner over an opened view by keyboard", async ({ page }) => {
+test("Back to the whole case is reached from the strip over an opened saved view by keyboard", async ({ page }) => {
   await open(page, "?show=lens");
-  await expect(page.getByRole("region", { name: "Open view" })).toContainText("2 items in this view could not be shown");
-  await press(page, "Back to the case");
+  await expect(page.getByRole("region", { name: "Saved view", exact: true })).toContainText("2 items in this view could not be shown");
+  await press(page, "Back to the whole case");
   await expect.poll(async () => (await state(page)).back).toBe(true);
   registerCovered("VIEW_ACTIONS", "go-back-to-the-case-from-an-open-view-by-keyboard");
 });
 
-// ADR-144 Amendment 3 (the owner, 13 November 2026): the graph's *Views ▾*, opened, a view chosen, the lens
-// open on it, and *Back to the case*, each by keyboard alone.
-test("a view is opened from Views by the graph by keyboard, and Back to the case closes it", async ({ page }) => {
-  await open(page, "?show=menu");
-  const views = page.getByRole("toolbar", { name: "Canvas tools" }).getByRole("button", { name: "Views" });
-  await views.focus();
-  await page.keyboard.press("Enter");
-  const menu = page.getByRole("group", { name: "Saved views in this case" });
-  await expect(menu.getByRole("button")).toHaveText(["Alice's ownPrivate", "Payments in MarchShared"]);
-  await page.keyboard.press("Tab");
-  await page.keyboard.press("Tab");
-  await expect(menu.getByRole("button", { name: /^Payments in March/ })).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect.poll(async () => (await state(page)).opened).toBe("v-shared");
-  await expect(menu).toHaveCount(0);
-  const lens = page.getByRole("region", { name: "Open view" });
-  await expect(lens).toContainText("Payments in March");
-  // The open view is marked in the menu when it is opened again.
-  await views.focus();
-  await page.keyboard.press("Enter");
-  await expect(menu.getByRole("button", { name: /^Payments in March/ })).toHaveAttribute("aria-current", "true");
-  await page.keyboard.press("Escape");
-  await expect(menu).toHaveCount(0);
-  await expect(views).toBeFocused();
-  await press(page, "Back to the case");
-  await expect(lens).toHaveCount(0);
-  await expect.poll(async () => (await state(page)).back).toBe(true);
-  registerCovered("VIEW_ACTIONS", "open-a-view-from-views-by-the-graph-by-keyboard");
-});
-
-test("Views by the graph says how to make one when the case has none, by keyboard", async ({ page }) => {
-  await page.goto("/keyboard/views-harness.html?show=menu&empty=1");
-  const views = page.getByRole("toolbar", { name: "Canvas tools" }).getByRole("button", { name: "Views" });
-  await views.focus();
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("group", { name: "Saved views in this case" })).toHaveText(
-    "No saved views yet. Select nodes and choose Save as a view.",
-  );
-});
+// ADR-145 Amendment 17 (the owner, 14 November 2026; ADR-144 Amendment 6 withdrew the graph's *Views ▾*): from the
+// case line's *Saved views (n)*, a saved view opened from its panel takes focus to the strip, the case line names it,
+// *Back to the whole case* is the strip's first item and the next Tab, and it puts the whole case back and focus on
+// *Saved views*; in the dark, light and GOV.UK looks. By keyboard alone (rule 13).
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: a saved view opened from the case line takes focus to its strip, and Back to the whole case returns it to Saved views`, async ({ page }) => {
+    await page.goto(`/keyboard/views-harness.html?show=way-back${brand === "govuk" ? "&brand=govuk" : ""}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    const caseLine = page.getByRole("region", { name: "You are in the Glass" });
+    await expect(page.getByRole("region", { name: "The whole case" })).toHaveText("You are looking at the whole case.");
+    await expect(caseLine).not.toContainText("› Saved view:");
+    const savedViews = caseLine.getByRole("button", { name: "Saved views (2)", exact: true });
+    await savedViews.focus();
+    await page.keyboard.press("Enter");
+    await expect(savedViews).toHaveAttribute("aria-expanded", "true");
+    await press(page, "Open Payments in March");
+    const strip = page.getByRole("region", { name: "Saved view", exact: true });
+    await expect(strip).toBeFocused();
+    await expect(strip).toContainText("Saved view: Payments in March");
+    await expect(strip).toContainText("Nothing in a saved view changes the case.");
+    await expect(caseLine).toContainText("› Saved view: Payments in March");
+    await expect(page.getByRole("region", { name: "The whole case" })).toHaveCount(0);
+    // The way back is the strip's first item: the next Tab from the strip.
+    await page.keyboard.press("Tab");
+    const back = strip.getByRole("button", { name: "Back to the whole case", exact: true });
+    await expect(back).toBeFocused();
+    if (brand === "govuk") await expect(back).toHaveClass(/govuk-back-link/);
+    await page.keyboard.press("Enter");
+    await expect(strip).toHaveCount(0);
+    await expect(caseLine).not.toContainText("› Saved view:");
+    await expect(page.getByRole("region", { name: "The whole case" })).toHaveText("You are looking at the whole case.");
+    await expect(savedViews).toBeFocused();
+    expect((await state(page)).back).toBe(true);
+    registerCovered("VIEW_ACTIONS", "open-a-saved-view-from-the-case-line-and-back-to-the-whole-case-by-keyboard");
+  });
+}
 
 test("a merged drawing's notes are opened and closed from its view's banner by keyboard", async ({ page }) => {
   await page.goto("/keyboard/views-harness.html?show=merged");

@@ -16,7 +16,7 @@ import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { ThemeToggle } from "../theme/ThemeToggle";
 import { currentBrand } from "../brand/brand";
 import { BrandMark } from "./BrandMark";
-import { BAR_FOLD_ORDER } from "./railLayout";
+import { BAR_FOLD_ORDER, MORE_LABEL, MORE_NAME } from "./railLayout";
 import "./chrome.css";
 
 export interface TopBarView {
@@ -157,10 +157,12 @@ export function TopBar({ app, places, caseSwitcher, search, views = [], moreView
       )}
       {buildAReport !== undefined && !linkFolded && <BuildAReportLink href={buildAReport} />}
       {(menuViews.length > 0 || linkFolded) && (
-        // ADR-145 Amendment 2: the views used less, one click away; the one open names the button.
+        // ADR-145 Amendment 2: the ways of showing the case used less, one click away, under *More* (Amendment 17); the
+        // one open names the button.
         <DropdownPanel
-          label={moreOpen ? moreOpen.label : "More views"}
-          panelLabel="More views"
+          label={moreOpen ? moreOpen.label : MORE_LABEL}
+          buttonName={moreOpen ? undefined : MORE_NAME}
+          panelLabel={MORE_NAME}
           buttonClassName={moreOpen ? "menu-button--pressed" : undefined}
         >
           {(close) => (

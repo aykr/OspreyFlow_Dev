@@ -61,7 +61,7 @@ import { MORE_VIEWS, offeredViews, RAIL_LABELS, railMark, splitRail, splitViews,
 const ALL_SWITCH_VIEWS = [...VIEW_SWITCH, ...MORE_VIEWS];
 import { Drawer } from "./design/primitives/Drawer";
 import { TopBar } from "./shell/TopBar";
-import { ContextBanner, crossLinkFor, useCaseContext } from "./shell/ContextBanner";
+import { ContextBanner, crossLinkFor, focusSavedViewsButton, useCaseContext } from "./shell/ContextBanner";
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
@@ -117,10 +117,9 @@ import { caseIsOpenable, listCases, openCase, openCaseView } from "./investigati
 import { caseForDataset } from "./ingest/studio/datasets";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
-import { ViewLensBanner } from "./views/ViewLensBanner";
-import { ViewsMenu } from "./views/ViewsMenu";
+import { ViewLensBanner, WholeCaseStrip } from "./views/ViewLensBanner";
 import { ViewsPanel } from "./views/ViewsPanel";
-import { type CaseView, type CaseViewOpened, openView, saveView } from "./views/viewsApi";
+import { type CaseView, type CaseViewOpened, listViews, openView, saveView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
@@ -824,6 +823,19 @@ export function App() {
   // back to it, still open; `null` for a view opened any other way.
   const [lensFromAlert, setLensFromAlert] = useState<{ alertId: string; title: string } | null>(null);
   const [viewsRead, setViewsRead] = useState(0);
+  // ADR-145 Amendment 17: how many saved views of the case this reader may see, for the case line's *Saved views (n)*;
+  // read again whenever the views are (`viewsRead`), `null` while read or refused.
+  const [savedViewCount, setSavedViewCount] = useState<{ caseId: string; count: number } | null>(null);
+  useEffect(() => {
+    if (!investigationId || !bearerToken) return;
+    let live = true;
+    listViews(API_BASE_URL, bearerToken, investigationId)
+      .then((views) => live && setSavedViewCount({ caseId: investigationId, count: views.length }))
+      .catch(() => live && setSavedViewCount(null));
+    return () => {
+      live = false;
+    };
+  }, [bearerToken, investigationId, viewsRead]);
   // An expansion the working set's cap refused, its *Save a smaller view* chosen (spec/00 §4): the over-cap
   // dialog's save form, in the expansion's own words.
   const [expansionOverCap, setExpansionOverCap] = useState<{ refused: LimitExceeded; subject: string | undefined } | null>(null);
@@ -1152,6 +1164,15 @@ export function App() {
     setViewProblem(problem);
     return problem;
   }
+
+  /** *Back to the whole case* (ADR-145 Amendment 17): the strip's back link, and the saved views panel's *The whole
+   * case*: the saved view closed, the panel too, and focus back on the case line's *Saved views*. */
+  const backToTheWholeCase = (): void => {
+    setCasesOpen(false);
+    closeLens();
+    // After the strip and the drawer have gone, so focus is not taken back by either on its way out.
+    requestAnimationFrame(() => focusSavedViewsButton());
+  };
 
   function closeLens(): void {
     lensAskedRef.current += 1;
@@ -1911,9 +1932,12 @@ export function App() {
       <ContextBanner
         place={app}
         // The owner's navigation decision (ADR-145 Amendment 15): no mode toggle and no note in the Glass; its views
-        // are the top bar's one switch. The case line's *Views in this case* opens the Cases panel at its views.
+        // are the top bar's one switch. The case line's *Saved views (n)* opens the saved views panel (Amendment 17),
+        // and the saved view open is named after the case.
         onViews={app === "glass" ? () => setCasesOpen((open) => (open ? false : "views")) : undefined}
         viewsOpen={casesOpen !== false}
+        savedViews={savedViewCount && savedViewCount.caseId === investigationId ? savedViewCount.count : null}
+        openView={app === "glass" && view === "graph" && lens ? lens.opened.view.name : null}
         caseSwitcher={
           <CaseSwitcher
             apiBaseUrl={API_BASE_URL}
@@ -2155,7 +2179,7 @@ export function App() {
                 shared={lens.opened.view.shared ?? false}
                 missing={lens.opened.missing}
                 annotations={lens.opened.annotations ?? []}
-                onBack={closeLens}
+                onBack={backToTheWholeCase}
                 from={
                   lensFromAlert
                     ? {
@@ -2171,6 +2195,8 @@ export function App() {
                 }
               />
             )}
+            {/* ADR-145 Amendment 17: with no saved view open, the strip says the whole case is on screen. */}
+            {view === "graph" && !lens && investigationId && <WholeCaseStrip />}
             {view === "graph" && viewProblem && (
               <p role="alert" className="view-lens-banner">
                 {viewProblem}
@@ -2220,19 +2246,8 @@ export function App() {
                   setQuestionsOpen(true);
                 }}
                 lens={lens !== null}
-                // ADR-144 Amendment 3: the case's saved views one click from the canvas; opening one is
-                // the drawer's own `openLens`.
-                viewsMenu={
-                  investigationId ? (
-                    <ViewsMenu
-                      apiBaseUrl={API_BASE_URL}
-                      bearerToken={bearerToken}
-                      caseId={investigationId}
-                      openViewId={lens?.opened.view.id ?? null}
-                      onOpen={(chosen) => void openLens(chosen.id)}
-                    />
-                  ) : undefined
-                }
+                // ADR-144 Amendment 6: the toolbar's *Views* menu (Amendment 3) is withdrawn on the owner's word; the case
+                // line's *Saved views (n)* is the one route on the case's own screen (All cases still lists them).
                 onSelectionChange={(nodeIds) => {
                   setSelectedNodeIds(nodeIds);
                   const first = nodeIds[0];
@@ -2852,11 +2867,8 @@ export function App() {
               openViewId={lens?.opened.view.id ?? null}
               refreshKey={viewsRead}
               takeFocus={casesOpen === "views"}
-              // The whole case, from the list: what the strip's *Back to the whole case* does.
-              onOpenWholeCase={() => {
-                setCasesOpen(false);
-                closeLens();
-              }}
+              // The whole case, from the list: what the strip's *Back to the whole case* does, focus back on *Saved views*.
+              onOpenWholeCase={backToTheWholeCase}
               onOpen={(chosen) => {
                 setCasesOpen(false);
                 void openLens(chosen.id);

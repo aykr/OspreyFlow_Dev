@@ -169,12 +169,12 @@ describe("the rail's Explore Details and the top bar's More views", () => {
       <TopBar app="glass" views={[view("graph", true), view("map")]} moreViews={[view("matrix"), view("reports")]} account={null} />,
     );
     expect(within(screen.getByRole("group", { name: "View" })).getAllByRole("button").map((b) => b.textContent)).toEqual(["Graph", "Map"]);
-    fireEvent.click(screen.getByRole("button", { name: /^More views/ }));
-    fireEvent.click(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Reports" }));
+    fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case/ }));
+    fireEvent.click(within(screen.getByRole("group", { name: "More ways to show the case" })).getByRole("button", { name: "Reports" }));
     expect(chose).toHaveBeenCalledWith("reports");
     rerender(<TopBar app="glass" views={[view("graph"), view("map")]} moreViews={[view("matrix"), view("reports", true)]} account={null} />);
     // The button names the view open, and the menu marks it as the current one.
     fireEvent.click(screen.getByRole("button", { name: /^Reports/ }));
-    expect(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Reports" }).getAttribute("aria-current")).toBe("page");
+    expect(within(screen.getByRole("group", { name: "More ways to show the case" })).getByRole("button", { name: "Reports" }).getAttribute("aria-current")).toBe("page");
   });
 });

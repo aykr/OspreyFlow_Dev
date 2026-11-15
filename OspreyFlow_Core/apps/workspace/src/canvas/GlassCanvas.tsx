@@ -42,7 +42,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type ReactNode,
 } from "react";
 
 import type {
@@ -263,9 +262,6 @@ export interface GlassCanvasProps {
    * links among, no paths or messages put on, no remove, no manual same-as or split. The selection
    * can still be saved as a view and asked about. */
   lens?: boolean;
-  /** ADR-144 Amendment 3: the case's *Views ▾*, drawn first in the toolbar's View group, beside *Clear
-   * view*. Absent (no case open): not drawn. */
-  viewsMenu?: ReactNode;
   /** ADR-115 E6: the case's latest history step and when, for the toolbar's note. */
   lastChange?: string | null;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
@@ -462,7 +458,7 @@ const LENS_LINK_MENU_ITEMS: ReadonlySet<string> = new Set([
 ]);
 
 /** Said when something that would change the case's working set is asked for in a view. */
-const LENS_NOTICE = "This is a view: nothing in it changes the case. Go back to the case to change it.";
+const LENS_NOTICE = "This is a saved view: nothing in it changes the case. Go back to the whole case to change it.";
 
 /** The selected link: the brass the lasso already uses. */
 
@@ -484,7 +480,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onViewSaved,
       onAskInView,
       lens = false,
-      viewsMenu,
       lastChange,
       onEdgeSelect,
       onFocusChange,
@@ -3673,7 +3668,6 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             />
           </div>
           <div role="group" aria-label="View" className="canvas-toolbar__group canvas-toolbar__group--end">
-            {viewsMenu}
             <ViewActions
               nodeCount={graph.order}
               onClearAll={lens ? undefined : () => void removeNodeIds(graph.nodes())}

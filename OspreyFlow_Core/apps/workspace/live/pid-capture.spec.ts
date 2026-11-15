@@ -114,7 +114,7 @@ export async function pickFromSearch(page: Page, text: string, pick: RegExp): Pr
 /** The working set is the server's, per case, so a shot starts by emptying what an earlier one
  * left, through the view's own Clear view and its confirmation. */
 export async function clearCanvas(page: Page): Promise<void> {
-  const clear = page.getByRole("button", { name: "Clear view" });
+  const clear = page.getByRole("button", { name: "Clear the graph" });
   // The case's saved working set arrives after the page draws: checked at once, Clear view was still
   // disabled and the saved nodes landed after it (357 of them, 1 November 2026). So it is checked
   // again until the canvas reads empty.
@@ -1055,7 +1055,7 @@ test("CAP-A2-C7", async ({ page }) => {
   await page.getByRole("button", { name: "Save view" }).click();
   await casesPanel(page);
   await page.getByRole("button", { name: `Open ${called}` }).click();
-  await expect(page.getByRole("region", { name: "Open view" })).toContainText(called, { timeout: 60_000 });
+  await expect(page.getByRole("region", { name: "Saved view" })).toContainText(called, { timeout: 60_000 });
   await page.waitForTimeout(6000);
   await shot(page, "CAP-A2-C7-b");
 });

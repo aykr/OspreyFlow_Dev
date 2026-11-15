@@ -494,8 +494,9 @@ export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
   "go-back-to-the-case-from-an-open-view-by-keyboard",
   // ADR-143 Amendment 2 decision 7 (L3.9).
   "open-a-merged-drawings-notes-by-keyboard",
-  // ADR-144 Amendment 3: the graph's *Views ▾*, a view chosen there, the lens open on it, and Back.
-  "open-a-view-from-views-by-the-graph-by-keyboard",
+  // ADR-145 Amendment 17 (ADR-144 Amendment 6 withdrew Amendment 3's *Views ▾* by the graph, and its case with it): a
+  // saved view opened from the case line into the strip, and Back to the whole case.
+  "open-a-saved-view-from-the-case-line-and-back-to-the-whole-case-by-keyboard",
 ] as const);
 
 /** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made

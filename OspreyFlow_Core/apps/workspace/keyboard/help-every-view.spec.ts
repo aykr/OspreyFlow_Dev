@@ -54,7 +54,7 @@ async function goTo(page: Page, name: string): Promise<boolean> {
     await expect(button).toHaveAttribute("aria-pressed", "true");
     return true;
   }
-  const more = page.getByRole("banner").getByRole("button", { name: new RegExp(`^(More views|${MORE.join("|")})`) });
+  const more = page.getByRole("banner").getByRole("button", { name: new RegExp(`^(More ways to show the case|${MORE.join("|")})`) });
   if ((await more.count()) === 0) return false;
   await more.first().focus();
   await page.keyboard.press("Enter");

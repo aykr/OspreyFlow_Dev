@@ -112,14 +112,14 @@ export async function chooseView(
     await inSwitch.click();
     return;
   }
-  await page.getByRole("button", { name: /^More views/ }).click();
-  await page.getByRole("group", { name: "More views" }).getByRole("button", { name, exact: true }).click();
+  await page.getByRole("button", { name: /^More ways to show the case/ }).click();
+  await page.getByRole("group", { name: "More ways to show the case" }).getByRole("button", { name, exact: true }).click();
 }
 
 /** The Cases panel (the case's brief, settings, access and views, and every case), from the case line's *Views in
  * this case* (ADR-145 Amendment 15; it was the rail's Cases). */
 export async function casesPanel(page: Page): Promise<void> {
-  await page.getByRole("region", { name: "You are in the Glass" }).getByRole("button", { name: "Views in this case" }).click();
+  await page.getByRole("region", { name: "You are in the Glass" }).getByRole("button", { name: /^Saved views/ }).click();
   await expect(page.getByRole("dialog", { name: "Cases" })).toBeVisible();
 }
 

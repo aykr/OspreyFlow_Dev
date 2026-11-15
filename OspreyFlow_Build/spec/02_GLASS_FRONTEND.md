@@ -174,7 +174,7 @@ narrowed.
 ├────────────────────────────────────────────────────────────────────────────────────┤
 │ ◆ Osprey  Glass|Studio|Admin [Search… /] Graph·Map·Drawing board·Reports·More ▾ 👤 │ top bar, 44px
 ├────────────────────────────────────────────────────────────────────────────────────┤
-│ You are in the Glass · Case 4471 ▾ · Views in this case · reads Prison intel  ↗    │ banner, 32px
+│ You are in the Glass · Case 4471 ▾ · Saved views (2) · reads Prison intel  ↗       │ banner, 32px
 ├──┬───────────────────────────────────────────────────┬─────────────────────────────┤
 │▣ │ Resolution: ●Balanced            (view toolbar)   │ ▾ Inspector              ⋯  │ header, 28px
 │◷ ├───────────────────────────────────────────────────┤ ▸ Properties                │
@@ -196,7 +196,7 @@ current view, and only those (the owner's navigation decision of 13 November 202
 Amendments 2 and 12): *Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions
 to the model, ADR-098, §3.1; named *Questions* until Amendment 12) and *History*, then *Help* and *Show names*. *Cases*,
 *Dashboards* (now the view switch's *Reports*) and *⋯ Explore Details* (whose *Ownership* and *Connection strength* are
-now under *More views*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`,
+now under *More*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`,
 `aria-haspopup="dialog"`), a second press closes it, and opening or closing a panel never changes the view
 (`shell/railLayout.ts`'s `railMark`). Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener.
 Every drawer opens under the top bar and the context row, never over the navigation they carry (ADR-145 Amendment 14
@@ -217,7 +217,7 @@ any other view (320px, 280 below 1100; a shadow, no hairline). It says what the 
 Escape, `?`) and links the user guide. At sign-in it opens on the graph alone, until the person closes it
 once (by ×, Esc, Help or `?`; kept per person in this browser); `?` anywhere in the Glass but a text field
 or a list box opens or closes it (`keyboard/shell.spec.ts`, `App.help.test.tsx`). The Cases panel, opened
-from the case line (§2.0a), is a drawer with the open case's *Views in this case*, every case with its views (ADR-144
+from the case line (§2.0a), is a drawer with the open case's *Saved views (n)*, every case with its views (ADR-144
 decision 5), and *Browse all cases*. The
 **view toolbar** above the canvas holds what belongs to that view alone: the resolution threshold on
 the Graph, *Add site* and *Draw boundary* on the Map. The **selection bar** at the foot of the canvas
@@ -383,7 +383,7 @@ One row, 40px. From the left:
   there is one (ADR-074). Enter on the typed words, no suggestion moved to, opens the search results page (§2.0c).
 - **The view switch**, everything that replaces the main area, a segmented group named *View* (ADR-145
   Amendment 15, the owner's navigation decision): *Graph · Map · Drawing board · Reports*, and Messages when a
-  dossier is open; then **More views ▾**, a menu of *Matrix, Figures, Ownership, Connection strength*, one click
+  dossier is open; then **More ▾** (named *More ways to show the case*, ADR-145 Amendment 17), a menu of *Matrix, Figures, Ownership, Connection strength*, one click
   away, named after the one of them that is open. *Reports* is the dashboards view (ADR-111 Amendment 3: Alert
   monitoring first, then the Superset boards); *Figures* is ADR-145 Amendment 4's. Exactly one view is current.
   What each person is offered is one list, `shell/railLayout.ts`'s `offeredViews`, read by `App.tsx` and the keyboard
@@ -409,18 +409,18 @@ One row, 40px. From the left:
 
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
-Ownership and Connection strength are under *More views*, History is a panel of the rail; the resolution threshold, named **Match strictness** for what
+Ownership and Connection strength are under *More*, History is a panel of the rail; the resolution threshold, named **Match strictness** for what
 the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
 wide.
 
 **When the bar runs out of room it folds, and stays one line high** (the owner's ruling of 14 November 2026, ADR-115 Amendment 7, after
 main's CI drew the bar 73 px high, two lines, at 1440 wide on Linux: a client's Windows or smaller screen would see
 the same). What is used least leaves the bar first, in `shell/railLayout.ts`'s `BAR_FOLD_ORDER`: *Build a report*
-into *More views* (last in its menu, still a link in a new tab); then *Reports*, *Drawing board*, *Map* and a
-dossier's *Messages*, each into *More views*, ahead of its own four, in the switch's order; then the place switcher
+into *More* (last in its menu, still a link in a new tab); then *Reports*, *Drawing board*, *Map* and a
+dossier's *Messages*, each into *More*, ahead of its own four, in the switch's order; then the place switcher
 into one menu named by the place open (not under GOV.UK, where the places stand in the GOV.UK header); *Graph*, the
 landing view, last. A switch view the order does not name (the built-in Administrator's) folds just before *Graph*.
-*More views* names the folded view that is open, as it names its own. `TopBar` measures rather than using a
+*More* names the folded view that is open, as it names its own. `TopBar` measures rather than using a
 breakpoint, since what fits depends on the person's places, the case and the font as much as the window: it folds
 one more while any item sits on a second line, starts again from none folded when the bar's width changes or a web
 font arrives, each step before the screen is painted. Only with everything that folds folded do whole items wrap to a second
@@ -504,10 +504,10 @@ the Glass's frame, not on the identity provider's sign-in page), styled on the h
 **The context banner.** One row under the top bar (`shell/ContextBanner.tsx`; 41 pixels at 1440 wide
 under the OspreyFlow brand, its controls 32), a region named by its first words:
 - in the Glass, the case line (ADR-145 Amendment 15, replacing Amendment 13's *Graph · Drawing board* and its note):
-  "You are in the Glass · Case ‹case menu› · Views in this case · reads ‹the case's datasets›", the word *Case*
+  "You are in the Glass · Case ‹case menu› · Saved views (n) · reads ‹the case's datasets›", the word *Case*
   visible (hidden from assistive technology, whose name for the menu begins "Case:"). The case menu's last entry,
   *All cases*, opens the Cases panel (the open case's views, every case with its views, and *Browse all cases*);
-  *Views in this case* opens the same panel with its views list focused. "reads …" names the case's datasets once
+  *Saved views (n)* opens the same panel with its views list focused. "reads …" names the case's datasets once
   in the row ("reads no dataset" for a case reading none): the case menu draws no scope badge beside it and the
   cross-link does not name them (ADR-145 Amendment 14 decision 4); while the datasets are read or refused, "reads"
   is not drawn and the badge stays. GOV.UK's row is one row at 1440 wide and at most two lines at 1024;
@@ -540,14 +540,14 @@ ask for the administrator role as well as `manage_ontology`.
 **The count (ADR-145 Amendments 2 and 15).** A keyboard user passes 25 controls before the canvas — 26 on the
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
-Drawing board, Reports, *More views*, *Export*, the theme, the account; the case menu, *Views in this case* and the
+Drawing board, Reports, *More*, *Export*, the theme, the account; the case menu, *Saved views (n)* and the
 cross-link; the rail's Explore, Ask & Chat, History, Help and Show names; and the Graph's *Match strictness* (25
 controls, ADR-145 Amendment 15; one more, *Build a report*, for a builder where Superset is deployed).
 `App.chrome.test.tsx` counts them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
-banner's cross-link (through the real case module and a reload), the case line's *Views in this case* and *All
-cases*, the view switch and *More views*, each rail panel, *Build a report* and Home's cards end to
+banner's cross-link (through the real case module and a reload), the case line's *Saved views (n)* and *All
+cases*, the view switch and *More*, each rail panel, *Build a report* and Home's cards end to
 end, each shown red with its handler or the kept view removed (rule 13); `a11y/every-harness.spec.ts` scans `keyboard/places-harness.html`
 in the dark, light and GOV.UK variants, in each place, the Admin place drawn in it.
 
@@ -801,7 +801,7 @@ the rest.
 | Search Around | Multi-step, filtered traversal builder — `Person → uses → Endpoint → communicated with (≥5 events, in brush window) → Endpoint → used by → Person`. Preview count before committing to the canvas |
 | Pathfinder | Select two nodes, get k-shortest paths; paths render with the on-path node state (2px primary stroke, edges thickened), everything else dims to 32% |
 | Find connections | A side panel (ADR-116): From and To by search or from the selected node; the fewest degrees connecting them said in words, routes listed by degree and widened one degree at a time to eight, ten of more said as such; a route put on the canvas marks its nodes with their degree from From |
-| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar or in the right-click menu's selection actions (ADR-144 decision 4 and Amendment 5, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Views in this case* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
+| Subgraph isolation | Select nodes (by lasso, or by clicking with Shift, Ctrl or Cmd held to add one at a time; a plain click selects one node alone), then *Save as a view* on the selection bar or in the right-click menu's selection actions (ADR-144 decision 4 and Amendment 5, ADR-097 step 1) — and the selection is kept as a private view of the case, listed in *Saved views (n)* and opened as a read-only lens (§3.1h); the case is untouched. A bounding-box selection has no implementation yet |
 | Undo | Every canvas mutation is a step in an addressable history; the history panel is a list of named steps, not a stack of arrows |
 
 **Expansion budget.** Every expansion previews its cardinality before executing. Above 500 new
@@ -888,9 +888,9 @@ row along its top edge, *Canvas tools* (36px, `--surface-panel`, a hairline belo
 DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layout, *Bubbles by* for
 Clustered bubbles, *Arrange* — a re-run icon (ADR-115 E4) — which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
 *Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand
-all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear view*,
+all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear the graph*,
 *Add files*), then the case's last change ("Last change: Expanded, yesterday", a fixed label with no number and no name (ADR-124 decision 8), from
-the history the History drawer lists; hidden below a 1100px window) and *Details* (ADR-115 E4, E6). A menu's panel and *Clear view*'s confirmation are laid over the canvas under their
+the history the History drawer lists; hidden below a 1100px window) and *Details* (ADR-115 E4, E6). A menu's panel and *Clear the graph*'s confirmation are laid over the canvas under their
 button, as overlays with a shadow. The toolbar's controls are quiet buttons at `--fs-12`; a pressed or
 open one is primary text with a 2px underline. Checked in the browser (`keyboard/canvas-look.spec.ts`:
 the groups, one row, no shadow); each control keeps its own keyboard case.
@@ -1196,35 +1196,33 @@ keyboard.
 **Opening one: a read-only lens (the owner's ruling of 8 November 2026, ADR-144 Amendment 2).** An
 opened view takes the canvas's place: its items as the Conduit answers them (only what the reader may
 see now, each already collapsed at the view's threshold, or the case's when it has none), placed where
-the view keeps them, and the timeline set to its window. A banner above the canvas reads "View: <name>",
-its *Private* or *Shared* tag, "n items in this view could not be shown" when the Conduit counted any
-(never which, nor why), "Nothing in a view changes the case." and **Back to the case**. Nothing in a view
+the view keeps them, and the timeline set to its window. A strip above the canvas starts with **Back to the whole
+case** (GOV.UK's back link in that look; ADR-145 Amendment 17), then reads "Saved view: <name>", its *Private* or *Shared* tag, "n items in this view could not be shown" when the Conduit counted any
+(never which, nor why), and "Nothing in a saved view changes the case."; with none open it says "You are looking at
+the whole case.", and the case line names the open one after the case, "› Saved view: <name>". Nothing in a view
 changes the case's working set: the selection bar offers *Save as a view*, *Ask the model about these…*
-and *Clear* only; the toolbar offers no *Clear view*, *Add files* or *Show links among all*; a node's
+and *Clear* only; the toolbar offers no *Clear the graph*, *Add files* or *Show links among all*; a node's
 menu offers only what changes nothing (read full screen, view messages, expand a group, save the
 selection as a view); and a link's menu only folding, a note, hiding, its history and its events (no
 *Confirm as the same*, *Mark as not the same*, *Explain this link*, *Change* or *Put the emails on the
 canvas*: explaining asks the case about clusters worked out at the case's threshold, not the view's).
-An action that would change the working set asked for another way is said ("This is a view: nothing in
-it changes the case. Go back to the case to change it."), not done. When the view opens, focus moves to
-its *Back to the case*. A view past the working set's cap is refused with its own figures, never cut to fit
+An action that would change the working set asked for another way is said ("This is a saved view: nothing in
+it changes the case. Go back to the whole case to change it."), not done. When the view opens, focus moves to
+the strip, whose first Tab is *Back to the whole case*; that returns focus to the case line's *Saved views*. A view past the working set's cap is refused with its own figures, never cut to fit
 (rule 2). The lens is the Graph's: the Map, the Matrix and the status bar go on showing the
 case while a view is open. A view with no window clears the timeline's window while it is open, and
-*Back to the case* gives the case's window back and takes `case_view` out of the address. The over-cap
+*Back to the whole case* gives the case's window back and takes `case_view` out of the address. The over-cap
 dialog, the case's, steps aside while a view is open on the Graph, and shows on the Map and the Matrix,
 which show the case, and again on the Graph once the analyst is back on the case, if it is still past
 the cap.
 
-**Views ▾ by the graph (ADR-144 Amendment 3).** The canvas toolbar's View group opens with **Views ▾**,
-beside *Clear view* (`views/ViewsMenu.tsx`): the open case's views as the drawer's list reads them (the
-same route, read again each time it opens, so the same rights), each marked *Private* or *Shared* and the
-one open now marked current; choosing one is the drawer's own *Open* (`openLens`). With none it says "No
-saved views yet. Select nodes and choose Save as a view."; a refused list is said in words. Sharing and
-deleting stay in the drawer.
+**Views ▾ by the graph (ADR-144 Amendment 3) — withdrawn (ADR-144 Amendment 6, the owner, 14 November 2026).** The
+canvas toolbar has no *Views* menu: the case line's *Saved views (n)* is the one route on the case's own screen to its
+saved views; *All cases* still lists each case's saved views (ADR-145 Amendment 17).
 
 **Where views are listed (ADR-144 decision 5).** The **Cases** panel (opened by the case switcher's *All cases*, or
-at its views by the case line's *Views in this case*, ADR-145 Amendment 15) shows, first, the open
-case's **Views in this case**: each view the reader may see (their own, and those shared with the case)
+at its views by the case line's *Saved views (n)*, ADR-145 Amendment 15) shows, first, the open
+case's **Saved views (n)**: each view the reader may see (their own, and those shared with the case)
 with its *Private* or *Shared* tag and *Open*; its creator alone is offered *Share with the case* (while
 it is private) and *Delete*, which asks once — "Delete this view? Nothing on the case is deleted with
 it." Under the GOV.UK brand the panel is a GOV.UK summary list with `govuk-tag`s (decision 7). Below it,
@@ -1438,7 +1436,7 @@ dataset*, refused in the Conduit's words for a drawn item). Each has its case in
 `keyboard/alerts.spec.ts` or `keyboard/watch-panels.spec.ts` (rule 13).
 
 **Ultimate beneficial ownership: the *Ownership* place (ADR-109 phase C).** Under the view switch's
-*More views* (ADR-145 Amendment 15). An organisation or account is found by name (the case's own suggest), and traced: a line
+*More* (ADR-145 Amendment 15). An organisation or account is found by name (the case's own suggest), and traced: a line
 naming the beneficial owners at the threshold (25% unless changed; a person holding control is one
 whatever the share; a person whose share is partly unknown is "possibly more"), a warning for each
 circle of cross-holdings ("traced once, not round and round"), and a table of every party with a
@@ -1495,7 +1493,7 @@ stored or drawn on the node: the score is a read, and another analyst may read a
 case is in `keyboard/inspector.spec.ts` (`score-a-neighbourhoods-risk-by-keyboard`).
 
 **The case's *Figures* (ADR-145 Amendment 4 decision 8; ADR-111's Reports view until L2.12).** The view
-switch names it *Figures*; the code keeps the view id `reports`. An entry of the top bar's view switch — under *More views* since
+switch names it *Figures*; the code keeps the view id `reports`. An entry of the top bar's view switch — under *More* since
 ADR-145 Amendment 2, or in the switch itself for someone offered neither Graph nor Map — for people who read rather than investigate (a case Viewer and above). It draws the case's
 figures as the Conduit counts them for this reader (`GET …/reports`): the alerts of the period
 ("3 alerts in the last 12 weeks"), alerts raised each week by typology (stacked bars in the channel
@@ -1538,10 +1536,10 @@ leaves out what it would only be refused — never in place of the Conduit's che
 decision 2), *History* and *Explore* for investigate, *Ask & Chat* for ask_model (the Ingest Studio,
 Admin and Proposed types are no longer on the rail: the place switcher offers the places,
 `shell/places.ts`, §2.0a); the view switch offers Graph, Map and Drawing board for investigate and
-*Reports* for read_reports, and its *More views* Matrix for investigate, Figures for read_reports,
+*Reports* for read_reports, and its *More* Matrix for investigate, Figures for read_reports,
 *Ownership* for trace_ownership and *Connection strength* for investigate or
 manage_strength_influencers (ADR-145 Amendment 15); a person who may not investigate (a Reports Viewer)
-has Reports in the switch with Figures under *More views*, and lands on Figures; the Figures' download is offered only to holders of read_report_feed.
+has Reports in the switch with Figures under *More*, and lands on Figures; the Figures' download is offered only to holders of read_report_feed.
 
 **Superset dashboards inside the Glass (ADR-111 Amendment 3; ADR-145 Amendment 4 decision 8).** The
 view switch's *Reports* (the rail's *Dashboards* until ADR-145 Amendment 15) is the one door: the case's Figures have no *Dashboards* tab since L2.12. It lists
@@ -2114,7 +2112,7 @@ Not negotiable and cheaper to build in than to retrofit.
   cannot" case, over a deliberately disconnected fixture node.
 - The canvas exposes an accessible alternative view — the Matrix view is not a novelty, it is
   the screen-reader-navigable rendering of the same data. **What it is (built 1 November 2026, GDS
-  remediation plan A1):** *Matrix* in the view switch — under *More views*, beside *Graph* and *Map*,
+  remediation plan A1):** *Matrix* in the view switch — under *More*, beside *Graph* and *Map*,
 since ADR-145 Amendment 2 — open to anyone who
   may investigate. Two HTML tables over the working set's own graph — no request of its own, so
   nothing the reader may not see can reach it (rule 3) and it carries no count but the rows it shows

@@ -227,7 +227,7 @@ describe("saving a smaller view", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Person" }));
     fireEvent.click(screen.getByRole("button", { name: "Save and open the view" }));
     expect((await screen.findByRole("alert")).textContent).toBe(
-      'Too many for the canvas: 50,020 nodes against a limit of 50,000. The view "Smaller view of this case" was saved and could not be removed: delete it from Views in this case. Narrow the choice and try again.',
+      'Too many for the canvas: 50,020 nodes against a limit of 50,000. The view "Smaller view of this case" was saved and could not be removed: delete it from Saved views. Narrow the choice and try again.',
     );
     expect(calls.some((c) => c.method === "DELETE")).toBe(true);
   });

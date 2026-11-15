@@ -9,6 +9,8 @@ export interface DropdownPanelProps {
   title?: string;
   /** Extra class on the button. */
   buttonClassName?: string;
+  /** The button's accessible name, where it is to say more than its words (which it must then contain, WCAG 2.5.3). */
+  buttonName?: string;
   /** Open towards the left instead of the right of the button (for a button at the right-hand edge). */
   alignRight?: boolean;
   /** The panel's content; given a function that closes the panel. */
@@ -18,7 +20,7 @@ export interface DropdownPanelProps {
 /** A button that opens a small panel beneath it (ADR-065). The panel is not in the page until
  * opened; it closes on Escape (focus returns to the button), on a click outside, and when
  * keyboard focus moves outside it, so it never traps a keyboard user. */
-export function DropdownPanel({ label, panelLabel, title, alignRight = false, buttonClassName, children }: DropdownPanelProps) {
+export function DropdownPanel({ label, panelLabel, title, alignRight = false, buttonClassName, buttonName, children }: DropdownPanelProps) {
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -58,6 +60,7 @@ export function DropdownPanel({ label, panelLabel, title, alignRight = false, bu
         aria-expanded={open}
         aria-controls={open ? panelId : undefined}
         title={title}
+        aria-label={buttonName}
         onClick={() => setOpen((was) => !was)}
       >
         <span className="menu-button__label">{label}</span>

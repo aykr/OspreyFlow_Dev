@@ -1,6 +1,7 @@
-// Over the canvas while a view is open (the owner's ruling of 8 November 2026, ADR-144 Amendment 2):
-// which view, whether anything in it could not be shown (a count, never which or why: ADR-144
-// decision 2), that nothing in it changes the case, and the way back to the case. A merged drawing's
+// Over the canvas while a saved view is open (the owner's ruling of 8 November 2026, ADR-144 Amendment 2; its words
+// and the way back ADR-145 Amendment 17's): *Back to the whole case* first, which saved view, whether anything in it
+// could not be shown (a count, never which or why: ADR-144 decision 2), and that nothing in it changes the case. With
+// none open, `WholeCaseStrip` says the whole case is on screen. A merged drawing's
 // view (ADR-143 Amendment 2 decision 7, L3.9) also offers *Notes from the drawing*: what did not
 // become data, as the Conduit gave it to this reader (an item they may not see has none).
 import "./views.css";
@@ -30,24 +31,30 @@ export function ViewLensBanner({ name, shared, missing, onBack, from, annotation
   const govuk = currentBrand() === "govuk";
   const [notesOpen, setNotesOpen] = useState(startOpen);
   const note = missingNote(missing);
-  // Focus comes here when the view opens, wherever it was asked for (the Cases drawer, the over-cap
-  // dialog that has just closed), so a keyboard user is never left on the page body.
-  const back = useRef<HTMLButtonElement>(null);
-  const backFrom = useRef<HTMLButtonElement>(null);
-  useEffect(() => (backFrom.current ?? back.current)?.focus(), []);
+  // Focus comes to the strip when the saved view opens (ADR-145 Amendment 17), wherever it was asked for (the saved
+  // views panel, the over-cap dialog that has just closed), so a keyboard user is never left on the page body and
+  // hears which saved view is open; *Back to the whole case* is the next Tab.
+  const strip = useRef<HTMLDivElement>(null);
+  useEffect(() => strip.current?.focus(), []);
   return (
-    <div role="region" aria-label="Open view" className="view-lens-banner">
+    <div ref={strip} role="region" aria-label="Saved view" tabIndex={-1} className="view-lens-banner">
+      {/* ADR-145 Amendment 17: the way back is the first thing in the strip; under GOV.UK, GOV.UK's back link. */}
+      <button type="button" className={govuk ? "govuk-back-link view-lens-banner__whole" : "view-lens-banner__whole"} onClick={onBack}>
+        {/* The chevron is drawn, never read: GOV.UK's own is its back link's, and generated content would be named. */}
+        {!govuk && <span aria-hidden="true">‹ </span>}
+        Back to the whole case
+      </button>
       {from && <span className="view-lens-banner__from">{from.label}</span>}
       <span>
-        View: <span className="view-lens-banner__name">{name}</span>
+        Saved view: <span className="view-lens-banner__name">{name}</span>
       </span>
       <span className={govuk ? `govuk-tag ${shared ? "govuk-tag--green" : "govuk-tag--grey"}` : shared ? "view-tag view-tag--shared" : "view-tag"}>
         {shared ? "Shared" : "Private"}
       </span>
       {note && <span className="view-lens-banner__note">{note}</span>}
-      <span className="view-lens-banner__note">Nothing in a view changes the case.</span>
+      <span className="view-lens-banner__note">Nothing in a saved view changes the case.</span>
       {from && (
-        <button ref={backFrom} type="button" className={govuk ? "govuk-button view-lens-banner__back" : "btn btn--primary view-lens-banner__back"} onClick={from.onBack}>
+        <button type="button" className={govuk ? "govuk-button view-lens-banner__back" : "btn btn--primary view-lens-banner__back"} onClick={from.onBack}>
           {from.backLabel}
         </button>
       )}
@@ -62,9 +69,6 @@ export function ViewLensBanner({ name, shared, missing, onBack, from, annotation
           Notes from the drawing ({annotations.length})
         </button>
       )}
-      <button ref={back} type="button" className={govuk ? "govuk-button govuk-button--secondary view-lens-banner__back" : "btn view-lens-banner__back"} onClick={onBack}>
-        Back to the case
-      </button>
       {notesOpen && annotations.length > 0 && (
         <dl id="view-drawing-notes" className={govuk ? "govuk-summary-list view-drawing-notes" : "view-drawing-notes"}>
           {annotations.map((a) => (
@@ -79,6 +83,16 @@ export function ViewLensBanner({ name, shared, missing, onBack, from, annotation
           ))}
         </dl>
       )}
+    </div>
+  );
+}
+
+/** The strip with no saved view open (ADR-145 Amendment 17): it says the whole case is on screen, so the strip is never
+ * a surprise when a saved view opens into it. */
+export function WholeCaseStrip() {
+  return (
+    <div role="region" aria-label="The whole case" className="view-lens-banner view-lens-banner--whole">
+      <span className="view-lens-banner__note">You are looking at the whole case.</span>
     </div>
   );
 }

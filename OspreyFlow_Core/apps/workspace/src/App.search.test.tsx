@@ -134,7 +134,7 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
     // The results start at All with no filter: the search box's own Filters shape its suggestions alone (§2.0c).
     expect(sent.find((s) => s.url.endsWith("/inv-1/search"))?.body).toEqual({ query: "Kestrel", group: null, filters: {}, page: 1, page_size: 20 });
     expect(pressed()).toEqual([]);
-    expect(screen.getByRole("button", { name: /^More views/ }).className).not.toContain("menu-button--pressed");
+    expect(screen.getByRole("button", { name: /^More ways to show the case/ }).className).not.toContain("menu-button--pressed");
     // The view left stays as it was beneath, out of reach while the results show.
     expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
   });
@@ -266,10 +266,10 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
   test("a saved view opened from the Cases panel leaves the results, the graph current under the view", async () => {
     await openResults();
     const region = screen.getByRole("region", { name: "You are in the Glass" });
-    fireEvent.click(within(region).getByRole("button", { name: "Views in this case" }));
+    fireEvent.click(within(region).getByRole("button", { name: /^Saved views/ }));
     const panel = await screen.findByRole("dialog", { name: "Saved views" }); // ADR-145 Amendment 17
     fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
-    await screen.findByRole("region", { name: "Open view" });
+    await screen.findByRole("region", { name: "Saved view" });
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull());
     expect(pressed()).toEqual(["Graph"]);
   });

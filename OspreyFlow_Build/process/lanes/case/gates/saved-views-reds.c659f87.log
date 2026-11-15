@@ -1,0 +1,63 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261114T222310Z-9de1d2c9/log: sh -c export PATH=$HOME/.local/node/bin:$PATH && PLANT_HEAD=c659f87 python3 OspreyFlow_Build/process/lanes/case/gates/saved_views_reds.py
+# saved-views reds at c659f87 (the local checkout's, passed in); each plant restored from the file's own text
+## 1. focus left where it was when a saved view opens (not the strip)
+plant in OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx; keyboard/views.spec.ts -g ospreyflow\ dark:\ a\ saved\ view\ opened\ from\ the\ case\ line\ takes\ focus\ to\ its\ strip --workers=1; exit 1
+  ✘  1 keyboard/views.spec.ts:84:3 › ospreyflow dark: a saved view opened from the case line takes focus to its strip, and Back to the whole case returns it to Saved views (5.4s)
+    Error: expect(locator).toBeFocused() failed
+    Expected: focused
+    Received: inactive
+        14 × locator resolved to <div role="region" tabindex="-1" aria-label="Saved view" class="view-lens-banner">…</div>
+  1 failed
+## 2. Back to the whole case not first in the strip (a control before it)
+plant in OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx; run src/App.views.test.tsx -t a saved view opened from the case line takes focus to its strip; exit 1
+ [31m❯[39m src/App.views.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 1809[2mms[22m[39m
+[31m     [31m×[31m a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views[39m[33m 524[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[31m[1mAssertionError[22m: expected <button type="button" …(1)></button> to be <button type="button" …(1)>…(1)</button> // Object.is equality[39m
+[32m- Expected[39m
+[31m+ Received[39m
+## 3. the case line not naming the open saved view
+plant in OspreyFlow_Core/apps/workspace/src/shell/ContextBanner.tsx; keyboard/views.spec.ts -g ospreyflow\ light:\ a\ saved\ view\ opened\ from\ the\ case\ line\ takes\ focus\ to\ its\ strip --workers=1; exit 1
+  ✘  1 keyboard/views.spec.ts:84:3 › ospreyflow light: a saved view opened from the case line takes focus to its strip, and Back to the whole case returns it to Saved views (5.4s)
+    Error: expect(locator).toContainText(expected) failed
+    Expected substring: "› Saved view: Payments in March"
+    Received string:    "You are in the Glass·CaseOperation Ledger (synthetic demo)·Saved views (2)"
+        14 × locator resolved to <div role="region" class="context-banner" aria-labelledby="context-banner-title">…</div>
+  1 failed
+## 4. the back link not returning focus to Saved views
+plant in OspreyFlow_Core/apps/workspace/src/App.tsx; run src/App.views.test.tsx -t a saved view opened from the case line takes focus to its strip; exit 1
+ [31m❯[39m src/App.views.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 2552[2mms[22m[39m
+[31m     [31m×[31m a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views[39m[33m 1590[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+[31m[1mAssertionError[22m: expected <body><div>…(1)</div></body> to be <button type="button" …(4)></button> // Object.is equality[39m
+[32m- Expected[39m
+[31m+ Received[39m
+## 5. the GOV.UK look's back link not GOV.UK's
+plant in OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx; keyboard/views.spec.ts -g govuk\ light:\ a\ saved\ view\ opened\ from\ the\ case\ line\ takes\ focus\ to\ its\ strip --workers=1; exit 1
+  ✘  1 keyboard/views.spec.ts:84:3 › govuk light: a saved view opened from the case line takes focus to its strip, and Back to the whole case returns it to Saved views (5.4s)
+    Error: expect(locator).toHaveClass(expected) failed
+    Expected pattern: /govuk-back-link/
+    Received string:  "view-lens-banner__whole"
+        14 × locator resolved to <button type="button" class="view-lens-banner__whole">Back to the whole case</button>
+  1 failed
+## 6. no whole-case strip with none open
+plant in OspreyFlow_Core/apps/workspace/src/App.tsx; run src/App.views.test.tsx -t a saved view opened from the case line takes focus to its strip; exit 1
+ [31m❯[39m src/App.views.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 1485[2mms[22m[39m
+[31m     [31m×[31m a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views[39m[33m 469[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+## 7. Saved views without its count
+plant in OspreyFlow_Core/apps/workspace/src/shell/ContextBanner.tsx; run src/App.views.test.tsx -t a saved view opened from the case line takes focus to its strip; exit 1
+ [31m❯[39m src/App.views.test.tsx [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 2140[2mms[22m[39m
+[31m     [31m×[31m a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views[39m[33m 1261[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+## 8. More without its name (More views' old name back)
+plant in OspreyFlow_Core/apps/workspace/src/shell/TopBar.tsx; keyboard/shell.spec.ts -g each\ view\ is\ chosen\ by\ keyboard:\ Graph,\ Map,\ Drawing\ board\ and\ Reports --workers=1; exit 1
+  ✘  1 keyboard/shell.spec.ts:134:1 › each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views (1.0m)
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+  1 failed
+# 8 of 8 red
+Wall time: 98 s, exit 0 (no stack, no lease; set-up before it 38 s)

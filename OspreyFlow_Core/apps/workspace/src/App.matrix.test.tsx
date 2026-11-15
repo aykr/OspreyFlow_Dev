@@ -114,8 +114,8 @@ const viewButton = (name: string) =>
   within(screen.getByRole("group", { name: "View" })).getByRole("button", { name });
 // ADR-145 Amendment 2 (variant B): the Matrix is under More views, one click away.
 const chooseMatrix = () => {
-  fireEvent.click(screen.getByRole("button", { name: /^More views|^Matrix▾/ }));
-  fireEvent.click(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Matrix" }));
+  fireEvent.click(screen.getByRole("button", { name: /^More ways to show the case|^Matrix▾/ }));
+  fireEvent.click(within(screen.getByRole("group", { name: "More ways to show the case" })).getByRole("button", { name: "Matrix" }));
 };
 const entities = () => screen.getByRole("grid", { name: /^Entities in this view/ });
 const rowOf = (name: RegExp) =>
@@ -135,7 +135,7 @@ test("the view switch offers the Graph, the Map and the drawing board (ADR-145 A
   chooseMatrix();
   // The view open is one of More views': the button names it, and its menu marks it as current.
   fireEvent.click(screen.getByRole("button", { name: /^Matrix/ }));
-  expect(within(screen.getByRole("group", { name: "More views" })).getByRole("button", { name: "Matrix" }).getAttribute("aria-current")).toBe("page");
+  expect(within(screen.getByRole("group", { name: "More ways to show the case" })).getByRole("button", { name: "Matrix" }).getAttribute("aria-current")).toBe("page");
   expect(screen.getByRole("heading", { name: "Matrix" })).toBeTruthy();
   // The same working set, read again from nothing: three people, two links.
   expect(entities().querySelector("caption")?.textContent).toMatch(/^Entities in this view, 3\./);

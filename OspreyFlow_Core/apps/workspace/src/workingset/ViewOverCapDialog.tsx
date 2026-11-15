@@ -154,7 +154,7 @@ export function ViewOverCapDialog({
     const removed = await deleteView(apiBaseUrl, bearerToken, investigationId, saved.view.id);
     const kept = removed.ok
       ? "No view was kept."
-      : `The view "${saved.view.name}" was saved and could not be removed: delete it from Views in this case.`;
+      : `The view "${saved.view.name}" was saved and could not be removed: delete it from Saved views.`;
     setBusy(false);
     if (result.ok) {
       setMessage(`Nothing matched that choice. ${kept} Choose other types or dates.`);

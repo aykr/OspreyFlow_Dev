@@ -59,7 +59,7 @@ export function ViewActions({
             disabled={nodeCount === 0}
             onClick={() => setConfirming(true)}
           >
-            Clear view
+            Clear the graph
           </button>
         )}
       {onAddFiles && (
@@ -70,7 +70,7 @@ export function ViewActions({
       {confirming && onClearAll && nodeCount > 0 && (
         <div
           role="alertdialog"
-          aria-label="Clear the view"
+          aria-label="Clear the graph"
           className="canvas-menu-panel canvas-menu-panel--end"
           style={{
             display: "flex",
