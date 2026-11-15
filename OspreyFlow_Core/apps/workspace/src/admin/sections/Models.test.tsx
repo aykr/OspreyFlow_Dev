@@ -21,6 +21,8 @@ const VIEW = {
   local_only: false,
   sendable_handling_codes: ["O"],
   source: "models file",
+  // What the Conduit sends off the cloud platform since Amendment 14: your own gateway on every profile.
+  engine_kinds: ["provider", "gateway"],
 };
 const SET = { ...VIEW, engines: [{ ...VIEW.engines[0], key_state: "set", key_set_at: "2026-11-08T10:00:00Z", key_set_by: "admin-1" }] };
 
@@ -75,7 +77,7 @@ describe("Models", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Enter key for Gemini" }));
     const field = screen.getByLabelText(/Key for Gemini/) as HTMLInputElement;
     expect(field.type).toBe("password");
-    expect(field.getAttribute("autocomplete")).toBe("off");
+    expect(field.getAttribute("autocomplete")).toBe("new-password");
     expect(field.value).toBe("");
     fireEvent.change(field, { target: { value: PLANTED } });
     fireEvent.click(screen.getByRole("button", { name: "Set the key" }));
@@ -210,7 +212,8 @@ describe("Models", () => {
     fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini/gemini-3.8-flash" } });
     const key = screen.getByLabelText(/^Key/) as HTMLInputElement;
     expect(key.type).toBe("password");
-    expect(key.getAttribute("autocomplete")).toBe("off");
+    expect(key.getAttribute("autocomplete")).toBe("new-password");
+    expect(key.getAttribute("data-1p-ignore")).toBe("true");
     expect(key.value).toBe("");
     expect((screen.getByRole("button", { name: "Check" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.change(key, { target: { value: PLANTED } });
@@ -329,6 +332,82 @@ describe("Models", () => {
     }
     // It did leave, once, in the check's body: the test cannot pass by sending nothing.
     expect(sent.filter((s) => s.body.includes(PLANTED)).map((s) => s.path)).toEqual(["/v1/admin/models/checks"]);
+  });
+
+  it("empties a typed key when the provider is changed, so it is never sent where it was not typed for", async () => {
+    const sent = stub((path, init) => (path === "/v1/admin/models/checks" ? { status: 200, body: PASSED } : listed(LISTED)(path, init)));
+    await openAdd();
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "gateway" } });
+    expect((screen.getByLabelText(/^Token/) as HTMLInputElement).value).toBe("");
+    expect((screen.getByRole("button", { name: "Check" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(sent.some((s) => s.body.includes(PLANTED))).toBe(false);
+  });
+
+  it("ties each field the Conduit's rules refused to that field, in the Conduit's words", async () => {
+    // The real Conduit's shape (`test_a_refused_field_is_named_so_the_form_can_say_it_there`).
+    const fields = [
+      { field: "provider.api_base", words: "the provider's address must be https://, so case content is encrypted" },
+      { field: "provider.roles.extraction", words: "the extraction model is not a model name" },
+    ];
+    const detail = `${fields.map((f) => `${f.field}: ${f.words}`).join("; ")}. Nothing was checked.`;
+    stub((path, init) => (path === "/v1/admin/models/checks" ? { status: 422, body: { detail: { error: "check_refused", detail, fields } } } : listed(LISTED)(path, init)));
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "azure" } });
+    fireEvent.change(screen.getByLabelText("Address (https://)"), { target: { value: "http://ai.example" } });
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "my deployment" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    await screen.findByRole("alert");
+    for (const [label, words] of [["Address (https://)", fields[0]!.words], ["Extraction and Ask: model name", fields[1]!.words]] as const) {
+      const input = screen.getByLabelText(label);
+      expect(input.getAttribute("aria-invalid")).toBe("true");
+      const ids = input.getAttribute("aria-describedby")!.split(" ");
+      expect(ids.map((i) => document.getElementById(i)!.textContent)).toContain(words);
+    }
+  });
+
+  it("sends the label the preview shows, the provider's own when the field is emptied", async () => {
+    const sent = stub((path, init) => (path === "/v1/admin/models/checks" ? { status: 200, body: PASSED } : listed(LISTED)(path, init)));
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Label analysts see"), { target: { value: "" } });
+    expect(screen.getByText(/^Analysts will see:/).textContent).toMatch(/^Analysts will see: Google Gemini \(no contract\)/);
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini-3.8-flash" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    await screen.findByRole("button", { name: "Add the engine" });
+    expect(JSON.parse(sent.find((s) => s.path === "/v1/admin/models/checks")!.body).provider.label).toBe("Google Gemini");
+  });
+
+  it("offers no Cancel while a check is out, so none can pass unseen after the form has closed", async () => {
+    let answer: (value: Response) => void = () => undefined;
+    stub(listed(LISTED));
+    const fetched = globalThis.fetch as unknown as ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>;
+    const plain = fetched.getMockImplementation()!;
+    fetched.mockImplementation(async (url: string, init?: RequestInit) =>
+      new URL(String(url)).pathname === "/v1/admin/models/checks" ? new Promise<Response>((r) => (answer = r)) : plain(url, init),
+    );
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini-3.8-flash" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    answer({ ok: true, status: 200, json: async () => PASSED } as Response);
+    await screen.findByRole("button", { name: "Add the engine" });
+    expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("keeps your own gateway's model names whole, its prefix being only LiteLLM's way to it", async () => {
+    const sent = stub((path, init) => (path === "/v1/admin/models/checks" ? { status: 200, body: { ...PASSED, engine: "gateway" } } : listed(LISTED)(path, init)));
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "gateway" } });
+    fireEvent.change(screen.getByLabelText("Address (https://)"), { target: { value: "https://ai.example/v1" } });
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "openai/gpt-4o" } });
+    fireEvent.change(screen.getByLabelText(/^Token/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    await screen.findByRole("button", { name: "Add the engine" });
+    const body = JSON.parse(sent.find((s) => s.path === "/v1/admin/models/checks")!.body);
+    expect(body.provider).toMatchObject({ name: "gateway", kind: "gateway", auth: "key", roles: { extraction: "openai/gpt-4o" } });
   });
 
   // ADR-135 Amendment 4: an engine signed in by the gateway's own IAM role keeps no key.

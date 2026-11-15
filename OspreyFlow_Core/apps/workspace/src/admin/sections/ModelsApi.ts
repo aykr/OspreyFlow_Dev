@@ -18,6 +18,23 @@ export interface ModelsApi {
   bearerToken: string;
 }
 
+/** A field the Conduit's rules refused (ADR-135 Amendment 14): `provider.api_base`,
+ * `provider.roles.<job>`, `provider.label`, `provider.contract_reference` or `key`, in its words. */
+export interface RefusedField {
+  field: string;
+  words: string;
+}
+
+/** The Conduit's refusal in its own words, with each refused field named where it names one. */
+export class ModelsRefused extends Error {
+  constructor(
+    message: string,
+    readonly fields: RefusedField[] = [],
+  ) {
+    super(message);
+  }
+}
+
 /** One call to the Conduit; `path` is written out whole at each call site (`/v1/admin/models…`), so
  * the place and section scans read every route this screen uses. */
 async function ask<T>(api: ModelsApi, path: string, init: RequestInit = {}): Promise<T> {
@@ -27,8 +44,8 @@ async function ask<T>(api: ModelsApi, path: string, init: RequestInit = {}): Pro
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
-    const detail = body.detail as { detail?: string } | undefined;
-    if (typeof detail?.detail === "string") throw new Error(detail.detail);
+    const detail = body.detail as { detail?: string; fields?: RefusedField[] } | undefined;
+    if (typeof detail?.detail === "string") throw new ModelsRefused(detail.detail, detail.fields ?? []);
     if (response.status === 403) throw new Error("Your account does not hold the right to manage models.");
     throw new Error(`Models could not complete that (${response.status}).`);
   }

@@ -51,7 +51,7 @@ test("an engine is added by keyboard, checked before Add", async ({ page }) => {
   registerCovered(REGISTRY, "add-a-model-engine-by-keyboard");
 });
 
-test("a passed check is cancelled by keyboard, from the form and from the list", async ({ page }) => {
+test("a passed check is cancelled by keyboard from the form", async ({ page }) => {
   await press(page, "Add an engine");
   await typeInto(page, "Extraction and Ask: model name", "gemini-3.8-flash");
   await typeInto(page, /^Key/, SYNTHETIC_KEY);
@@ -60,12 +60,16 @@ test("a passed check is cancelled by keyboard, from the form and from the list",
   await press(page, "Cancel");
   await expect(page.getByRole("status")).toContainText("its check and key are removed");
   expect(await asked(page)).toContain("DELETE /checks/chk-1");
+  registerCovered(REGISTRY, "cancel-a-model-engine-check-by-keyboard");
+});
+
+test("a check waiting for Add is cancelled by keyboard from Being checked", async ({ page }) => {
   await page.goto("/keyboard/models-harness.html?held=1");
   await expect(page.getByRole("table", { name: "Being checked" })).toContainText("Anthropic");
   await press(page, "Cancel the check of Anthropic");
   await expect(page.getByRole("status")).toContainText("Anthropic was not added");
   expect(await asked(page)).toContain("DELETE /checks/chk-held");
-  registerCovered(REGISTRY, "cancel-a-model-engine-check-by-keyboard");
+  registerCovered(REGISTRY, "cancel-a-held-model-engine-check-by-keyboard");
 });
 
 // What reached the Conduit's stand-in in each request's body (never a key's: the harness keeps none).
@@ -114,10 +118,10 @@ test("the organisation's own gateway is added by keyboard at its address, by its
   await press(page, "Check");
   await press(page, "Add the engine");
   await expect(page.getByRole("status")).toContainText("is added and offered to analysts");
-  // What was checked, not only that it was asked (the review's item 8), and never its token.
+  // What was checked, not only that it was asked (the review's item 8); the token is on no page.
   const checked = await sentBody(page, "POST /checks");
   expect(checked?.provider).toMatchObject({ name: "gateway", kind: "gateway", auth: "key", api_base: "https://ai.example/v1" });
-  expect(checked).not.toHaveProperty("key");
+  expect(await page.content()).not.toContain(SYNTHETIC_KEY);
   registerCovered(REGISTRY, "add-the-organisations-gateway-by-keyboard");
 });
 

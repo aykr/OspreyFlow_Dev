@@ -77,7 +77,8 @@ const view = () => ({
   sendable_handling_codes: ["O"],
   source: "models file",
   // ADR-135 Amendment 7 decision 1: `cloud=1` is the cloud-platform profile, which offers the two kinds.
-  engine_kinds: params.get("cloud") ? ["provider", "gateway", "bedrock"] : ["provider"],
+  // Amendment 14: your own gateway on every profile, Bedrock on the cloud platform alone.
+  engine_kinds: params.get("cloud") ? ["provider", "gateway", "bedrock"] : ["provider", "gateway"],
   // ADR-135 Amendment 9: `engine=laurium`, the extraction engine the render chose (read-only).
   extraction_engine: params.get("engine") === "laurium" ? "laurium" : "deep_read",
   providers,

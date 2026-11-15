@@ -29,7 +29,9 @@ import {
   setKey,
   setLimits,
   testConnection,
+  ModelsRefused,
   type ModelsApi,
+  type RefusedField,
 } from "./ModelsApi";
 import { LimitsForm, ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
 import { engineOptionText } from "../../models/engines";
@@ -181,14 +183,24 @@ function EngineForm({
   );
 }
 
-/** Which field a Conduit refusal of the check is about, from its fixed words, so the words are tied to it. */
+/** The form's fields a refusal can be tied to. */
 type Field = "label" | "address" | "key" | "reference" | `job-${string}`;
-function refusedField(words: string): Field | null {
-  if (words.startsWith("The label")) return "label";
-  if (words.startsWith("The agreement reference")) return "reference";
-  if (words.startsWith("Give the key")) return "key";
-  if (/address/i.test(words)) return "address";
-  return null;
+/** The form's field for a field the Conduit's rules named (`RefusedField.field`). */
+function formField(named: string): Field | null {
+  if (named === "provider.api_base") return "address";
+  if (named === "provider.label") return "label";
+  if (named === "provider.contract_reference") return "reference";
+  if (named === "key") return "key";
+  const job = /^provider\.roles\.(\w+)$/.exec(named);
+  return job ? `job-${job[1]}` : null;
+}
+/** The fields a refusal in the check's own fixed words is about (`model_admin.py`'s `check`). */
+function wordsFields(words: string, jobs: string[]): Field[] {
+  if (words.startsWith("The label")) return ["label"];
+  if (words.startsWith("The agreement reference")) return ["reference"];
+  if (words.startsWith("Give the key")) return ["key"];
+  if (words.startsWith("A model name looks like a key")) return jobs.map((j) => `job-${j}` as Field);
+  return [];
 }
 
 /**
@@ -220,8 +232,8 @@ function AddEngineForm({
   const [contract, setContract] = useState(false);
   const [reference, setReference] = useState("");
   const [result, setResult] = useState<EngineCheckResult | null>(null);
-  const [refused, setRefused] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [refused, setRefused] = useState<{ words: string; fields: RefusedField[] } | null>(null);
+  const [busy, setBusy] = useState<"checking" | "adding" | null>(null);
   if (!entry) return null;
   const id = "add-engine";
   const passed = result?.ok === true && result.check !== null;
@@ -234,14 +246,19 @@ function AddEngineForm({
     setChanging(false);
     setAddress("");
     setRoles({});
+    // A key is never sent to a provider or an address it was not typed for (Amendment 2).
+    setKeyText("");
     setResult(null);
     setRefused(null);
   };
-  /** The model as the provider names it: the prefix is the form's business, taken off if typed. */
-  const bare = (model: string) => model.trim().replace(new RegExp(`^${entry.prefix}/`), "");
+  /** The model as the provider names it: the prefix is the form's business, taken off if typed. Not
+   * for your own gateway, whose prefix is only LiteLLM's way to it and whose own names may hold it. */
+  const bare = (model: string) =>
+    entry.kind === "gateway" ? model.trim() : model.trim().replace(new RegExp(`^${entry.prefix}/`), "");
   const engine = (): ModelProviderConfig => ({
     name: entry.id,
-    label: label.trim() || null,
+    // The label the preview shows is the label sent: left empty, the provider's own.
+    label: shown,
     roles: Object.fromEntries(
       entry.jobs.map((job) => [job, bare(roles[job] ?? "")] as const).filter(([, model]) => model !== ""),
     ),
@@ -256,30 +273,30 @@ function AddEngineForm({
     setKeyText(""); // cleared once sent, whatever the answer
     setResult(null);
     setRefused(null);
-    setBusy(true);
+    setBusy("checking");
     void checkEngine(api, engine(), typed)
       .then(setResult)
-      .catch((e: Error) => setRefused(e.message))
-      .finally(() => setBusy(false));
+      .catch((e: Error) => setRefused({ words: e.message, fields: e instanceof ModelsRefused ? e.fields : [] }))
+      .finally(() => setBusy(null));
   };
   const add = () => {
     if (!passed) return;
-    setBusy(true);
+    setBusy("adding");
     void addChecked(api, result.check!)
       .then((view) =>
         onAdded(view, `${shown} is added and offered to analysts for cases whose data may leave this deployment.`),
       )
       .catch((e: Error) => {
         setResult(null);
-        setRefused(e.message);
+        setRefused({ words: e.message, fields: [] });
       })
-      .finally(() => setBusy(false));
+      .finally(() => setBusy(null));
   };
   const cancel = () => {
     if (!passed) return onClose(null, null);
     void cancelCheck(api, result.check!)
       .then((view) => onClose(view, `${shown} was not added; its check and key are removed.`))
-      .catch((e: Error) => setRefused(e.message));
+      .catch((e: Error) => setRefused({ words: e.message, fields: [] }));
   };
 
   // Each refusal tied to the field it is about: a key refused to the key, a model to its job.
@@ -291,8 +308,14 @@ function AddEngineForm({
     else if (m.outcome === "model_not_offered" || m.outcome === "model_not_enabled")
       for (const r of m.roles) errors.set(fieldOf(r), m.words);
   }
-  const refusedAt = refused ? refusedField(refused) : null;
-  if (refused && refusedAt) errors.set(refusedAt, refused);
+  if (refused) {
+    for (const named of refused.fields) {
+      const at = formField(named.field);
+      if (at) errors.set(at, named.words);
+    }
+    const filled = entry.jobs.filter((j) => (roles[j] ?? "").trim() !== "");
+    for (const at of wordsFields(refused.words, filled)) errors.set(at, refused.words);
+  }
   const errorId = (f: Field) => `${id}-${f}-error`;
   const tied = (f: Field, hint?: string) => ({
     "aria-invalid": errors.has(f) ? (true as const) : undefined,
@@ -310,7 +333,7 @@ function AddEngineForm({
 
   return (
     <form className="admin-models-form" aria-label="Add an engine" autoComplete="off" onSubmit={check}>
-      <fieldset disabled={passed || busy} className="admin-models-fieldset">
+      <fieldset disabled={passed || busy !== null} className="admin-models-fieldset">
         <label htmlFor={`${id}-provider`}>Provider</label>
         <Select id={`${id}-provider`} value={entry.id} onChange={(e) => choose(e.target.value)}>
           {providers.map((p) => (
@@ -368,10 +391,16 @@ function AddEngineForm({
             <label htmlFor={`${id}-key`}>
               {entry.kind === "gateway" ? "Token" : "Key"} (sent once to the model gateway, never shown again)
             </label>
+            {/* Never filled or saved by the browser: `new-password` is the value browsers honour on a
+                password field (they ignore `off` there), and the password managers' own opt-outs. */}
             <Input
               id={`${id}-key`}
               type="password"
-              autoComplete="off"
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              data-form-type="other"
               spellCheck={false}
               value={key}
               onChange={(e) => setKeyText(e.target.value)}
@@ -400,7 +429,7 @@ function AddEngineForm({
       <p className="admin-models-preview" id={`${id}-preview`}>
         Analysts will see: <strong>{preview}</strong>. It is offered only for cases whose data may leave this deployment.
       </p>
-      {busy && <p role="status">Checking…</p>}
+      {busy && <p role="status">{busy === "checking" ? "Checking…" : "Adding…"}</p>}
       {result && (
         <div role={result.ok ? "status" : "alert"} className="admin-models-result">
           <p style={{ margin: 0 }}>{result.words}</p>
@@ -415,18 +444,19 @@ function AddEngineForm({
           )}
         </div>
       )}
-      {refused && <p role="alert">{refused}</p>}
+      {refused && <p role="alert">{refused.words}</p>}
       <div className="admin-models-actions">
         {passed ? (
-          <Button type="button" variant="primary" onClick={add} disabled={busy}>
+          <Button type="button" variant="primary" onClick={add} disabled={busy !== null}>
             Add the engine
           </Button>
         ) : (
-          <Button type="submit" variant="primary" disabled={busy || (entry.key && key.trim() === "")}>
+          <Button type="submit" variant="primary" disabled={busy !== null || (entry.key && key.trim() === "")}>
             Check
           </Button>
         )}
-        <Button type="button" onClick={cancel}>
+        {/* Not while a check is out: it could pass after the form closed, its key unseen here. */}
+        <Button type="button" onClick={cancel} disabled={busy !== null}>
           Cancel
         </Button>
       </div>
@@ -452,7 +482,11 @@ function KeyForm({ engine, onSend, onCancel }: { engine: AdminEngine; onSend: (k
       <Input
         id={`key-${name}`}
         type="password"
-        autoComplete="off"
+        autoComplete="new-password"
+        data-1p-ignore="true"
+        data-lpignore="true"
+        data-bwignore="true"
+        data-form-type="other"
         spellCheck={false}
         value={key}
         onChange={(e) => setKeyText(e.target.value)}
@@ -546,8 +580,8 @@ export function Models({ api }: { api: ModelsApi }) {
               Settings come from {view.source}.
             </p>
             {/* ADR-135 Amendments 5, 8 and 9: chosen at set-up on the cloud-platform profile (the one that
-                offers Laurium, and the gateway kind), shown, not changed here. */}
-            {(view.engine_kinds ?? []).includes("gateway") && (
+                offers Laurium, and the only one offering Bedrock), shown, not changed here. */}
+            {(view.engine_kinds ?? []).includes("bedrock") && (
               <p className="label" style={{ margin: "0.5rem 0 0" }}>
                 Extraction engine: {view.extraction_engine === "laurium" ? "Laurium" : "OspreyFlow Deep read"}, chosen
                 at set-up: change it in osprey.yaml, re-render, and have the platform team apply it.
