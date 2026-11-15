@@ -25,10 +25,8 @@ PLANTS = [
      [f"{REFUSED}[another-case]"]),
     ("a roles string taken for a list", [(SI, "if isinstance(roles, list) else []", "if isinstance(roles, list) else [roles] if isinstance(roles, str) else []")],
      [f"{REFUSED}[a-string-not-a-list]"]),
-    ("the role named otherwise", [(PA, 'RUN_APP_ROLE = "OspreyFlow.Run"', 'RUN_APP_ROLE = "Runs.Trigger"')],
-     ["test_the_run_app_role_is_principal_auths_own_name", f"{REFUSED}[another-role]",
-      "test_an_app_only_token_holding_the_run_role_names_its_client", "test_an_entra_app_only_token_names_its_client",
-      "test_a_v1_app_only_token_names_its_client_by_appid"]),
+    # The role's name is not planted: renamed, it fails nearly every case of the file (the words name it, every
+    # admitted token holds it), so a plant could not tell its own red from the rest. The name's own case guards it.
 ]
 
 
