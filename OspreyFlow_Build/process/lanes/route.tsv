@@ -21,7 +21,7 @@ us	Every image's upgrade layer refreshed daily, wherever images are built (the o
 cs	`ospreyflow run` on Entra sends the scope Entra requires (the owner, 15 Nov)	admin	2026-11-15	2026-11-16	n	-	admin:v060-cli-scope
 rp	The release path: images push stamped; the dev release workflow retired; release_local and the tag check on the product workflow (the owner, 15 Nov)	platform-b	2026-11-15	2026-11-16	n	-	platform-b:v060-release-path
 1	Build: every item merged on main, each lane's own tests green	orchestrator	2026-11-15	2026-11-16	y	i3,i4,i5,i6,i9,i10,i11,i14,i18,rf,gk,sc,us,cs,rp	-
-2	Test: the leak test and the timings at client size (rules-b, on sol, from STAGE2_SHEET.md); CI green on main (the orchestrator)	rules-b	2026-11-17	2026-11-17	y	1	-
+2	Test: the leak test and the timings at client size (rules-b, on sol, from STAGE2_SHEET.md); CI green on main (the orchestrator)	rules-b	2026-11-17	2026-11-17	y	1	rules-b:v060-stage2-official
 3	Package: the candidate prepared on a branch (platform-b, on sol, the checklist up to the owner's word); its merge is the candidate	platform-b	2026-11-17	2026-11-17	y	2	-
 4	Package test: one fresh install of v0.6.0 on the client platform's stand-in, with every check	platform-b	2026-11-17	2026-11-17	y	3	-
 5	Release, on the owner's word; then the GOV.UK demo rebuilt fresh from v0.6.0 (the demo lane, on sol, from REBUILD_2026-11-18.md)	orchestrator	2026-11-18	2026-11-18	y	4	-
