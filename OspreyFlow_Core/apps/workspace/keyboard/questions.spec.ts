@@ -474,6 +474,15 @@ test("Save as a view under an answer saves its items as a saved view, by keyboar
   registerCovered(REGISTRY, "save-an-answers-items-as-a-view-by-keyboard");
 });
 
+test("the page the axe scan reads draws an answer's actions and its open Save as a view form (v0.6.0 #5)", async ({ page }) => {
+  // So `a11y/every-harness.spec.ts`'s questions-harness.html case=1&save=1 scans them, not a page without them.
+  await page.goto("/keyboard/questions-harness.html?case=1&save=1");
+  const actions = page.getByRole("group", { name: "This answer's items" });
+  await expect(actions.getByRole("button", { name: "Show all on graph", exact: true })).toBeVisible();
+  await expect(actions.getByRole("button", { name: "Save as a view", exact: true })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByLabel("View name")).toHaveValue("Answer: Who paid Kestrel?");
+});
+
 test("every registered questions action has its own proving test case above", () => {
   assertAllCovered("QUESTIONS_ACTIONS", QUESTIONS_ACTIONS);
 });
