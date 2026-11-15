@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import subprocess
 import sys
@@ -325,7 +326,7 @@ async def load_gazetteer(
 
     # Read once, for the load and the points alike: a region's settlements are tens of thousands of
     # rows, but reading the extract is a pass over every node in it (some 2 GB for Great Britain).
-    places = list(read_osm_places(str(osm_pbf_path)))
+    places = read_places(osm_pbf_path)
     if tx is not None:
         report = await run(places, tx, 0)
     else:
@@ -365,6 +366,20 @@ _POINT_BATCH = 1000
 #: How many places one gazetteer transaction holds (v0.6.0 item 10): every place of Great Britain
 #: in one transaction was platform's finding.
 GAZETTEER_BATCH = 5000
+
+
+#: The suffix of the settlements a tiles-only build saves beside its extract (`map_admin`'s
+#: `PLACES_FILE`), so the load in the rebuild window reads them and not the extract again.
+PLACES_SUFFIX = ".places.json"
+
+
+def read_places(source: Path) -> list[dict[str, str]]:
+    """The settlements to load: a saved `<region>.places.json` as it was written, or else the
+    extract's own, read in one pass (`read_osm_places`)."""
+    if source.name.endswith(PLACES_SUFFIX):
+        rows = json.loads(source.read_text(encoding="utf-8"))
+        return [{str(k): str(v) for k, v in row.items()} for row in rows]
+    return list(read_osm_places(str(source)))
 
 
 def _summed(total: LoadReport, part: LoadReport) -> LoadReport:
