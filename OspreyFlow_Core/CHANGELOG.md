@@ -111,10 +111,17 @@ around: one view switch, a case line that says what is open, and "view" kept for
 - **Help** opens its panel from every view. The map's attribution is readable in every look. The version
   shown is the code's own. Every panel and menu is on the page's own type scale, and no screen carries an
   internal note.
+- **The GOV.UK look's type:** headings, labels and controls are on one scale, in both looks. Names are
+  in the page's face, and only values and code are in mono.
 - **Words, not codes:** a hosted engine's refusals and time-outs; a sign-in refused for an access value
   not set, a token-version mismatch or a guest; an analytics field refused with a 422; the Ingest Studio's
   messages saying *pipeline*; a Studio SQL step stopped at its time limit; and only an administrator may
   give the administrator role.
+- **Ask & Chat is a page** (ADR-145 Amendment 18): it opens over the view as the search results page does,
+  with **Back to ‹view›** first and focus on its heading, the view kept beneath it and inert. The results
+  page and the Ask & Chat page replace each other, and Back from either returns to the view. Opening it
+  while a document is open closes the document and shows the page. **Show all on graph** closes the page
+  and puts focus on the canvas.
 - **Ask & Chat's earlier questions** collapse to their lines, the newest answer open; asking a new
   question closes the earlier ones, and a closed line says how many proposals in it are left to decide.
 - **Under an Ask & Chat answer, Show all on graph** puts every item its markers stand for on the case's
