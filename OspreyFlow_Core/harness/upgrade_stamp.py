@@ -16,6 +16,9 @@ arg reaches every builder we use the same way (`docker build`, `docker buildx bu
 
 The places that build pass `build_args()`: `ospreyflow start --build` (`scripts/refresh.py`), the
 harness's install and apply (`harness/apply.py`), and the local release (`tools/release_local.py`).
+`ospreyflow images push` (`cli/ospreyflow/images.py`, the cloud-platform install's step 3)
+computes the same stamp itself, since the command imports nothing of the product (ADR-114
+decision 3).
 The Makefiles and the workflows pass `$(date -u +%F)` themselves. Held by
 `tests/test_upgrade_stamp.py`.
 """

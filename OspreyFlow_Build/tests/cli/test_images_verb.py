@@ -68,7 +68,14 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str, 
     assert not {"report-sync", "superset"} & set(built)
     api = built["api"].argv
     assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"
-    assert all("--build-arg" not in c.argv for name, c in built.items() if name != "api")
+    # The day's upgrade stamp on every one (the owner's cached-upgrade ruling, v0.6.0), and no other
+    # build arg but the Conduit's.
+    def build_args(argv: list[str]) -> list[str]:
+        return [argv[i + 1] for i, word in enumerate(argv) if word == "--build-arg"]
+
+    assert all([a.split("=")[0] for a in build_args(c.argv)] == ["OSPREY_UPGRADE_STAMP"]
+               for name, c in built.items() if name != "api")  # fmt: skip
+    assert [a.split("=")[0] for a in build_args(api)] == ["CONDUIT_JAVA", "OSPREY_UPGRADE_STAMP"]
     assert built["api"].cwd == rig.product
     pushed = [c.argv[2] for c in rig.runner.calls if c.argv[:2] == ["docker", "push"]]
     assert sorted(pushed) == sorted(c.argv[c.argv.index("-t") + 1] for c in built.values())

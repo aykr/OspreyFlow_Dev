@@ -1,0 +1,18 @@
+--- a/OspreyFlow_Core/.github/workflows/release.yml
++++ b/OspreyFlow_Core/.github/workflows/release.yml
+@@ -28,6 +28,15 @@
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
++      # ADR-114 Amendment 47: a deployment shows the code's own VERSION, so a release whose VERSION is
++      # not its tag would name itself wrongly wherever it is installed.
++      - name: The tag is the code's own VERSION
++        run: |
++          stamped="$(cat VERSION)"
++          if [ "$stamped" != "$GITHUB_REF_NAME" ]; then
++            echo "::error::the tag $GITHUB_REF_NAME is not the code's VERSION ($stamped): the release commit sets VERSION to the tag"
++            exit 1
++          fi
+       - name: The tag's changelog section is its notes
+         run: python3 -m scripts.changelog_check --tag "$GITHUB_REF_NAME" --notes-out notes.md
+       - uses: actions/upload-artifact@v4

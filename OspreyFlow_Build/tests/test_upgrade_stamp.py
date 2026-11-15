@@ -14,7 +14,10 @@ fail, and the case that catches it:
   (the workflows' change is the owner's to apply, `process/lanes/rules/v060-upgrade-stamp/
   workflows_upgrade_stamp.diff`: until it is, this reads them with that diff applied to a copy);
 - `ospreyflow start --build`, the harness's install and apply, or the local release building
-  without it — the three `..._passes_the_stamp` cases below.
+  without it — the three `..._passes_the_stamp` cases below;
+- `ospreyflow images push` (the cloud-platform install's step 3) building one of ours without it, or
+  its own copy of the day drifting from `harness.upgrade_stamp`'s —
+  `test_images_push_passes_the_stamp` and `test_the_command_s_stamp_is_harness_s`.
 
 Red first: `process/lanes/rules/v060-upgrade-stamp/plants.py`.
 """
@@ -202,5 +205,43 @@ def test_the_local_release_passes_the_stamp(monkeypatch: pytest.MonkeyPatch) -> 
     calls: list[list[str]] = []
     monkeypatch.setattr(release_local, "_run", lambda cmd, *a, **k: calls.append(list(cmd)))
     release_local.build_and_scan("0123456")
-    builds = [c for c in calls if c[:2] == ["docker", "build"]]
+    builds = [c for c in calls if c[:3] == ["docker", "buildx", "build"]]  # the product workflow's scan build
     assert builds and all(STAMPED in c for c in builds), builds
+
+
+# ---- `ospreyflow images push` (the cloud-platform install's step 3, and R1's) -----------------------------
+# Found preparing v0.6.0's package step (platform-b, 15 November 2026): the one builder the client's
+# cloud-platform install runs passed only the profile's build args, so its upgrade layer was the cached one.
+
+
+def test_images_push_passes_the_stamp() -> None:
+    """Each image of ours it builds takes the day's stamp, beside the profile's own build args; a
+    third-party image is copied by digest, never built, so it takes none."""
+    from ospreyflow import images
+
+    plan = {"images": [
+        {"target": "reg/ospreyflow/api:abc", "dockerfile": "services/api/Dockerfile", "context": ".",
+         "build_args": {"CONDUIT_JAVA": "omitted"}},
+        {"target": "reg/ospreyflow/laurium:abc", "dockerfile": "Dockerfile", "context": "services/laurium"},
+        {"target": "reg/valkey:8.0", "source": "valkey/valkey@sha256:" + "0" * 64},
+    ]}  # fmt: skip
+    commands = [command for _words, command in images.steps(plan)]
+    builds = [c for c in commands if c[:2] == ["docker", "build"]]
+    assert len(builds) == 2 and all(STAMPED in c for c in builds), builds
+    assert "CONDUIT_JAVA=omitted" in builds[0]
+    assert not any(STAMPED in c for c in commands if c[:2] != ["docker", "build"])
+
+
+@pytest.mark.parametrize("now", [
+    datetime(2026, 11, 15, 12, 0, tzinfo=UTC),
+    datetime(2026, 11, 15, 23, 59, 59, tzinfo=UTC),
+    # A builder in another timezone, already the 16th locally: the stamp is still the UTC day.
+    datetime.fromisoformat("2026-11-16T01:30:00+05:00"),
+])  # fmt: skip
+def test_the_command_s_stamp_is_harness_s(now: datetime) -> None:
+    """The command depends on nothing but the standard library and PyYAML (ADR-114 decision 3), so it
+    computes the stamp itself: held here to one value with `harness.upgrade_stamp`."""
+    from ospreyflow import images
+
+    assert images.UPGRADE_STAMP_ARG == UPGRADE_STAMP_ARG
+    assert images.upgrade_stamp(now) == upgrade_stamp(now)
