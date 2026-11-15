@@ -3,6 +3,6 @@
 make -k ci: exit 2. One target failed, trivy-image-superset (Makefile:75). Trivy's database now lists 192 HIGH findings
 (no CRITICAL), all PostgreSQL CVEs, in the pinned apache/superset@sha256:16b50bbe… base image's client libraries
 (deploy/superset/Dockerfile). #18 touches neither the image nor its Dockerfile. Every other ci target passed.
-make test: exit 0. The tail: 
+make test: exit 0. Python: 14763 passed, 45 skipped. Vitest: 398 files, 3598 tests passed (and 3 + 51 in the budget and integration configs).
 Lint: ruff on the branch's own .py files (git diff --name-only 97dc544...HEAD) matches each file's base count. The Core
 files are clean, as is CI's own ruff scope (OspreyFlow_Core).
