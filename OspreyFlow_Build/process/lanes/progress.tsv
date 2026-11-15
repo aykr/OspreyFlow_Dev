@@ -164,14 +164,14 @@ platform	v052-r1domainguard	S	done	Step 6: R1 probes the OpenSearch domain only 
 docs	v052-cut	M	done	Step 7 docs: v0.5.2 CHANGELOG (the release notes), guide headers UG 1.66 AG 2.18 DG 1.38 ArchG 1.5, sites checked against v0.5.2	lane/docs-v052-cut
 case	v052-case-line-size	S	done	v0.5.2 (the owner, 15 Nov): the case line on the top bar's type size in both looks, held by measurement	lane/case-line-one-size
 case-b	v052-ask-markers	S	done	v0.5.2 (the owner, 15 Nov): Ask & Chat's markers, their names and the answer's words	lane/case-b-ask-markers
-orchestrator	v052-candidate2	S	building	v0.5.2 step C again: the candidate remade with L1 and L2 (the owner, 15 Nov), CI green; step 6 starts on it as soon as green
+orchestrator	v052-candidate2	S	done	v0.5.2 step C again: the candidate remade with L1 and L2 (the owner, 15 Nov), CI green; step 6 starts on it as soon as green (CANCELLED 15 Nov ~10:20Z by the owner's v0.6.0 plan; never made)
 admin	v052-govuk-admin-scroll	S	done	v0.5.2 (the owner, 15 Nov): GOV.UK Admin one scroller and the System page's fonts; merged after step 6	lane/admin-govuk-scroll-type
 rules-b	admin-forms-research	M	done	Admin forms: the five questions before building (profiles, the way out, listing, provider terms, estimates); research only, nothing built before the cut	lane/rules-b-admin-forms-research
 platform	v052-backup-mapkeys	S	done	v0.5.2 (the owner, 15 Nov): cloud-platform backups never hold map-keys.yaml (ADR-147 decision 1); a restore names the keys to enter again	lane/platform-backup-mapkeys
 case-b	v060-i3-accordion	M	done	v0.6.0 (the owner, 15 Nov): Ask & Chat history as an accordion	lane/case-b-v060-accordion
 case-b	v060-i4-fullpage	M	building	v0.6.0 (the owner, 15 Nov): Ask & Chat as a full page
 case	v060-i5-show-all	M	done	v0.6.0 (the owner, 15 Nov): Show all on graph and Save as a view	lane/case-v060-show-all
-admin	v060-i6-govuk-type	M	todo	v0.6.0 (the owner, 15 Nov): The GOV.UK look's type
+admin	v060-i6-govuk-type	M	building	v0.6.0 (the owner, 15 Nov): The GOV.UK look's type
 docs	v060-i9-rename	M	done	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0	lane/docs-v060-rename
 rules-b	v060-i10-basemap	M	building	v0.6.0 (the owner, 15 Nov): The basemap as a step of the demo's install recipe
 platform-b	v060-i11-package-test	M	done	v0.6.0 (the owner, 15 Nov): The package test reshaped, fresh install only	lane/platform-b-v060-package-test

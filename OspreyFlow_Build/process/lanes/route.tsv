@@ -8,14 +8,18 @@
 i3	Ask & Chat history as an accordion: earlier questions collapse to their question line, the newest stays open	case-b	2026-11-15	2026-11-15	n	-	case-b:v060-i3-accordion
 i4	Ask & Chat as a full page, with a back link to the view left, as the search results page	case-b	2026-11-15	2026-11-16	y	i3	case-b:v060-i4-fullpage
 i5	"Show all on graph" under an answer, with "Save as a view"	case	2026-11-15	2026-11-16	n	-	case:v060-i5-show-all
-i6	The GOV.UK look's type: Admin's remaining monospace words, and one confirming pass over every screen	admin	2026-11-16	2026-11-16	n	i18	admin:v060-i6-govuk-type
+i6	The GOV.UK look's type: Admin's remaining monospace words, and one confirming pass over every screen	admin	2026-11-15	2026-11-16	n	-	admin:v060-i6-govuk-type
 i9	The rename to v0.6.0: VERSION, the CHANGELOG, the guides' headers, the manifest, the client page tables; the guides' upgrade passages	docs	2026-11-15	2026-11-15	n	-	docs:v060-i9-rename
 i10	The basemap built as a step of the demo's install recipe (great-britain, settlements only)	rules-b	2026-11-15	2026-11-16	y	-	rules-b:v060-i10-basemap
 i11	The package test reshaped: fresh install only, the images kept across the cluster's remake, the memory figures recorded	platform-b	2026-11-15	2026-11-16	n	-	platform-b:v060-i11-package-test
 i14	Alert sources say why a hotlist or watch stopped	rules	2026-11-15	2026-11-15	n	-	rules:v060-i14-stopped-why
 i18	The run service admits only the intended service identity (an app role), proved on the R1 stand-in	admin	2026-11-15	2026-11-16	y	-	admin:v060-i18-run-app-role
 rf	Fresh install only, held: `ospreyflow update` and install refuse an earlier deployment, in words	platform	2026-11-15	2026-11-15	n	-	platform:v060-rf-fresh-only
-1	Build: every item merged on main, each lane's own tests green	orchestrator	2026-11-15	2026-11-16	y	i3,i4,i5,i6,i9,i10,i11,i14,i18,rf	-
+gk	The guide corrected: a model key is entered in Admin › Models; Bedrock in London means Amazon Nova (the owner, 15 Nov)	docs	2026-11-15	2026-11-15	n	-	docs:v060-model-keys-guide
+sc	The Superset image's PostgreSQL client CVEs fixed by upgrading, no ignore (CI green)	rules	2026-11-15	2026-11-15	n	-	rules:v060-superset-cves
+us	Every image's upgrade layer refreshed daily, wherever images are built (the owner, 15 Nov)	rules	2026-11-15	2026-11-15	n	-	rules:v060-upgrade-cache
+cs	`ospreyflow run` on Entra sends the scope Entra requires (the owner, 15 Nov)	admin	2026-11-15	2026-11-16	n	-	admin:v060-cli-scope
+1	Build: every item merged on main, each lane's own tests green	orchestrator	2026-11-15	2026-11-16	y	i3,i4,i5,i6,i9,i10,i11,i14,i18,rf,gk,sc,us,cs	-
 2	Test: CI green on main; the leak test and the timings at client size once more	orchestrator	2026-11-17	2026-11-17	y	1	-
 3	Package: one candidate, made once	orchestrator	2026-11-17	2026-11-17	y	2	-
 4	Package test: one fresh install of v0.6.0 on the client platform's stand-in, with every check	platform-b	2026-11-17	2026-11-17	y	3	-
