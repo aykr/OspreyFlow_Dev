@@ -176,4 +176,6 @@ def test_the_tables_are_printed_from_the_manifest_alone(listed: dict[str, Any]) 
     assert "| **Total** | | **10** |" in text
     listed["workloads"]["superset"]["requests"]["memory"] = "3Gi"
     assert manifest.tables(listed) != text  # nothing printed is held anywhere else
-    assert yaml.safe_load(manifest.MANIFEST.read_text())["version"] == "v0.5.2"
+    # The release the manifest describes is the one the code is (`OspreyFlow_Core/VERSION`, set at the rename).
+    version = (manifest.MANIFEST.parents[2] / "VERSION").read_text(encoding="utf-8").strip()
+    assert yaml.safe_load(manifest.MANIFEST.read_text())["version"] == version.removesuffix("-dev")
