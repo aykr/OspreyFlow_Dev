@@ -1,0 +1,8 @@
+# #18's gate at b877f83, on the test server through stack_lease.sh offline (the QUEUE's first line), 15 November 2026,
+# run 20261115T132525Z-363c8d11: make -k ci, then make test.
+make -k ci: exit 2. One target failed, trivy-image-superset (Makefile:75). Trivy's database now lists 192 HIGH findings
+(no CRITICAL), all PostgreSQL CVEs, in the pinned apache/superset@sha256:16b50bbe… base image's client libraries
+(deploy/superset/Dockerfile). #18 touches neither the image nor its Dockerfile. Every other ci target passed.
+make test: exit 0. The tail: 
+Lint: ruff on the branch's own .py files (git diff --name-only 97dc544...HEAD) matches each file's base count. The Core
+files are clean, as is CI's own ruff scope (OspreyFlow_Core).
