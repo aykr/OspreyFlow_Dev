@@ -1,7 +1,7 @@
 // One confirming pass over every screen in the GOV.UK look (v0.6.0 #6, the owner's closed list): each harness the
 // every-harness scan opens, in each of its states, under `brand=govuk`, every text element measured.
-// - Its face: mono only on a value to copy (`.value`, `.identifier`, `td.numeric`, `code`, `kbd`, `samp`, `pre`;
-//   tokens.css, DESIGN.md §9 exception 3); words everywhere else in the page's face.
+// - Its face: mono only on a value to copy, and every value to copy in mono (`.value`, `.identifier`, `td.numeric`,
+//   `code`, `kbd`, `samp`, `pre`; tokens.css, DESIGN.md §9 exception 3); words everywhere else in the page's face.
 // - Its size: one of the scale's sizes where it sits, read from that element's own tokens, so GOV.UK's scale on the
 //   welcome, home and Admin pages (tokens.css remaps it there) and the workspace's 13px scale elsewhere
 //   (DESIGN.md §9 exception 1, §11).
@@ -74,7 +74,8 @@ for (const page of PAGES) {
         const first = (family: string) => family.split(",")[0]!.trim().replace(/["']/g, "").toLowerCase();
         const root = getComputedStyle(document.documentElement);
         const mono = first(root.getPropertyValue("--mono"));
-        const value = ".value, .identifier, td.numeric, code, kbd, samp, pre, .value *, .identifier *, code *, pre *";
+        const copyable = ".value, .identifier, td.numeric, code, kbd, samp, pre";
+        const value = `${copyable}, .value *, .identifier *, code *, pre *`;
         // GOV.UK Frontend's own components keep GOV.UK's sizes (the orchestrator, 15 November 2026), and the harness's own
         // chrome is no screen of the product's.
         const frame = ".govuk-header, .govuk-footer, .govuk-phase-banner, .govuk-skip-link, .skip-link, [data-harness-only]";
@@ -93,6 +94,9 @@ for (const page of PAGES) {
           const where = `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : ""}`;
           measured += 1;
           if (face === mono && !el.matches(value)) out.push({ text: own.slice(0, 60), where, size, face, why: "mono, not a value to copy" });
+          // And the reverse (case's review of 1b0f225): a value to copy is in mono, whatever else styles it. A heading
+          // classed `.value` is in the page's face by design (tokens.css), so it is not one.
+          if (el.matches(copyable) && !el.matches("h1, h2, h3, h4, h5, h6") && face !== mono) out.push({ text: own.slice(0, 60), where, size, face, why: "a value to copy, not in mono" });
           // Ruling F is of sizes: GOV.UK Frontend's own classes keep GOV.UK's, so only their size is not read.
           if (!govuk(el) && !scale.includes(size)) out.push({ text: own.slice(0, 60), where, size, face, why: `${size}px, off the scale (${scale.join(", ")})` });
         }
