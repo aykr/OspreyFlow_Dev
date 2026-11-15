@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
-index 3e8f19b..e4253b2 100644
+index 3e8f19b..d54308e 100644
 --- a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
 +++ b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
 @@ -278,9 +278,13 @@ def domain_text() -> str:
@@ -39,7 +39,7 @@ index 3e8f19b..e4253b2 100644
          },
          "user": admin,
          # The people v052-r1's dashboards check signs in to Superset by `login_hint` (platform-b): a
-@@ -991,6 +1001,95 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
+@@ -991,6 +1001,97 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
         and any(line.endswith("403 anonymous") for line in logged), logged[-6:])
  
  
@@ -70,10 +70,12 @@ index 3e8f19b..e4253b2 100644
 +
 +def refusal_words(refused: SystemExit) -> str:
 +    """What `sh()` says of a command that failed, without the command itself (which may be a script over many
-+    lines): its own output, after `sh()`'s `: exit <n>`."""
++    lines): the first line of its own output, after `sh()`'s `: exit <n>`, so the record keeps one line a check
++    (`kubectl exec` adds its own "command terminated with exit code 1" after it)."""
 +    said = str(refused)
 +    found = re.search(r": exit \d+\n(.*)", said, re.DOTALL)
-+    return (found.group(1) if found else said).strip()[:300]
++    output = (found.group(1) if found else said).strip()
++    return (output.splitlines() or [""])[0][:300]
 +
 +
 +def standin_token(client_id: str, secret: str) -> str:
@@ -135,7 +137,7 @@ index 3e8f19b..e4253b2 100644
  def checks() -> None:
      """The check list (CHECKS.md), each with its expected answer; stops at the first that fails."""
      log = record("check")
-@@ -1094,6 +1193,14 @@ def checks() -> None:
+@@ -1094,6 +1195,14 @@ def checks() -> None:
          print(line)
          lines.append(line)
          log.write_text("\n".join(lines) + "\n")
@@ -246,7 +248,7 @@ index 0e880c2..8c380a8 100644
      status, answer = _post(_token_url(standin), {
          "grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
 diff --git a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
-index 39ebd04..3dae3f1 100644
+index 39ebd04..7dca157 100644
 --- a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
 +++ b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
 @@ -10,6 +10,18 @@ What a mistake would do, and the case that catches it (rule 12):
@@ -338,7 +340,7 @@ index 39ebd04..3dae3f1 100644
      config = tmp_path / "r1_kind_osprey.yaml"
      config.write_text(yaml.safe_dump({
          "components": {"search": search},
-@@ -123,3 +177,60 @@ def test_a_release_with_opensearch_has_its_domain_checked(
+@@ -123,3 +177,62 @@ def test_a_release_with_opensearch_has_its_domain_checked(
      probed, log = _checks(tmp_path, monkeypatch, "opensearch")
      assert probed == ["domain"]
      assert "SKIP the domain" not in log
@@ -392,10 +394,12 @@ index 39ebd04..3dae3f1 100644
 +        # (that script, against the real stand-in: tests/test_r1_entra_standin.py).
 +        raise SystemExit("kubectl -n platform-managed exec deployment/entra-standin --: exit 1\n"
 +                         "the stand-in refused (400): unauthorized_client: AADSTS700016: Application "
-+                         "with identifier was not found in the directory\n")
++                         "with identifier was not found in the directory\n"
++                         "command terminated with exit code 1\n")
 +
 +    with pytest.raises(SystemExit, match="issues orchestrator its token"):
 +        _checks(tmp_path, monkeypatch, "opensearch", issue=refused)
 +    log = (tmp_path / "check.log").read_text()
 +    line = next(x for x in log.splitlines() if x.startswith("FAIL the Entra stand-in issues"))
 +    assert "AADSTS700016" in line and "kubectl" not in line, line
++    assert "command terminated" not in log, "one line a check in the record"

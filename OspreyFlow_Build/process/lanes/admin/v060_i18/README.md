@@ -54,23 +54,27 @@ before answering (`app.py`). Keycloak is unchanged.
     run API lets the unassigned application or the dashboard identity in, refuses the granted orchestrator, or
     answers a 404 in other words; and records a token the stand-in will not issue. It holds R1's words to the
     Conduit's own constants and 404.
-  - Offline, the stand-in's issuing is stood in for; `STANDIN_TOKEN` itself runs only live.
+  - `STANDIN_TOKEN` itself runs offline too, against the real stand-in (`tests/test_r1_entra_standin.py`); only
+    the `kubectl exec` hop into the pod is live alone. R1's record keeps one line a check: the refusal's first
+    line, not the "command terminated" kubectl adds.
   - Applied at adabc4b, R1's driver tests pass (37 in the two changed files, 102 across R1's seven test files).
   - **The live run is pending.** It needs R1 on kind, under a lease the orchestrator queues.
 
 **Records** (the branch's base is main 97dc544):
 - `red_before_code.log`: the test file at adabc4b, run against 97dc544's code. 11 red, each at its named
   assertion: the role's name, the six shapes refused in words, the v1.0 token, and a client that is no dashboard
-  with no role, also when the registrations answer nothing or too slowly (let in on the base). The dashboard cases
+  with no role (let in on the base), also when the registrations answer nothing (let in) or too slowly (a 503 on the
+  base, where the run role's words are now kept). The dashboard cases
   pass on the base, as they should: it already refuses a dashboard.
-- `plants.py` and `plants.log`: 22 plants at adabc4b, each red only where it must be.
+- `plants.py` and `plants.log`: 23 plants, each red only where it must be (the head is named in the log).
   - The Conduit's six: the role not required, compared without its case, a roles string taken for a list, the
     run role asked before the dashboards', a registered dashboard holding no role sent to grant itself it, and a
     run-role refusal turned into a 503 when the registrations cannot be read.
-  - R1's ten, with `r1_proof.diff` applied: no gate by release, skipped on every release, an unreadable version
+  - R1's eleven, with `r1_proof.diff` applied: no gate by release, skipped on every release, an unreadable version
     taken for an old one, the unassigned application let in, any answer or any 404 taken for the granted
     orchestrator, the dashboard identity let in, an unissued token exiting unrecorded, the record keeping `sh()`'s
-    command instead of the refusal, and the in-pod fetch letting a refusal out as a traceback.
+    command instead of the refusal, the record taking every line kubectl adds, and the in-pod fetch letting a
+    refusal out as a traceback.
   - The guide diff's six, with `registration_and_guide.diff` applied: the first draft's words, the manifest without
     the role, the runbook's paragraph said only with reporting on, the guide's `run` row and the install without
     `OSPREY_TOKEN_SCOPE`, and the install's scope forced to `api://<id>` whatever the ID URI.

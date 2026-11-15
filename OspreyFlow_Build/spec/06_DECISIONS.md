@@ -39197,8 +39197,8 @@ In the lane's diffs, for the orchestrator (platform's files and the guide):
 - `tests/harness/test_cloud_platform_poc.py`: the install says how the role is granted and renders the token URL
   and scope, with reporting and without, with `api_id_uri` set and not.
 
-`OspreyFlow_Build/process/lanes/admin/v060_i18/` has the red record and the plants: twenty-two, each red where it
-must be (six in the Conduit, ten in R1's driver, six in the guide's diff).
+`OspreyFlow_Build/process/lanes/admin/v060_i18/` has the red record and the plants: twenty-three, each red where it
+must be (six in the Conduit, eleven in R1's driver, six in the guide's diff).
 
 ### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
 
