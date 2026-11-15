@@ -271,7 +271,7 @@ export function Roles({ api }: { api: AdminApi }) {
           {builtIn.map((role) => (
             <tr key={role.id}>
               <td>
-                <span className="value">{role.label}</span>
+                <span className="admin-words">{role.label}</span>
                 {role.gives?.length ? (
                   <>
                     <br />
@@ -315,7 +315,7 @@ export function Roles({ api }: { api: AdminApi }) {
           {custom.map((role) => (
             <tr key={role.id}>
               <td>
-                <span className="value">{role.name}</span>
+                <span className="admin-words">{role.name}</span>
                 <br />
                 <span className="label">{`v${role.version}${role.team ? ` · team ${role.team.display_name}, ${role.team.mailbox}` : ""}`}</span>
               </td>

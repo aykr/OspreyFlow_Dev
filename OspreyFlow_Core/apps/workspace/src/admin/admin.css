@@ -115,3 +115,9 @@
 .admin-system__name, .admin-system__version, .admin-system__marking, .admin-system__converted {
   font-family: var(--ui); font-weight: 600;
 }
+
+/* Admin's words in the page's own face (v0.6.0 #6; the owner's ruling, 15 November 2026): a role's label, a custom
+   role's name, a schedule's label, the tips' role labels and an organisation arrival's sign-in name are words to read,
+   as a person's name and a case's are above. Mono stays for a value to copy (tokens.css: "every identifier … is set
+   in mono"; DESIGN.md §9 exception 3), such as a run's time. `keyboard/admin-words-face.spec.ts` holds it. */
+.admin-words { font-family: var(--ui); }

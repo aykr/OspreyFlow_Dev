@@ -159,7 +159,7 @@ export function Schedules({ api }: { api: AdminApi }) {
             {schedules.map((s) => (
               <tr key={s.recipe_id}>
                 <td>
-                  <span className="value">{s.label}</span>
+                  <span className="admin-words">{s.label}</span>
                   {s.flagged && <div className="label">Needs attention: the ontology changed since it was deployed</div>}
                   {s.paused && <div className="label">{s.paused_reason ?? "paused"}</div>}
                   {open === s.recipe_id && <History api={api} schedule={s} />}
