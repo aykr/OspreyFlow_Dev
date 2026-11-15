@@ -1,7 +1,7 @@
 # Step 6 (`v052-r1`) · the install test on the candidate · run sheet
 
 Prepared offline on 14 November 2026 by platform-b, on `lane/platform-b-v052-r1` (main 78564d2 merged in). The day is
-**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days; **the cut is when step 6 passes**, Mon 16 evening or Tue 17, and Thu 19 ends the spare days; it was the 18th, and before that the 25th). **The candidate is c5bdb8e** (main, remade after the owner's saved-views exception, V1–V5; `OspreyFlow_Core/VERSION` v0.5.2; every route row before C done). It supersedes ad2725f, whose CI was green but which lacks V1–V5. **Confirm the CI before starting:** c5bdb8e's own CI run, 43657881341, must be green, and the orchestrator confirms it before 08:00Z on Mon 16. If that run is red, a fixed candidate follows and the orchestrator sends its hash: copy B is made at that commit, and this line is updated before row 1. If no candidate is confirmed by then, the day starts at the first 08:00Z after one is. ROUTE_052's brief: install v0.5.1, upgrade to the
+**Mon 16 Nov from 08:00Z** (the owner's word, 14 November; Tue 17 to Thu 19 are its spare days; **the cut is when step 6 passes**, Mon 16 evening or Tue 17, and Thu 19 ends the spare days; it was the 18th, and before that the 25th). **The candidate is 574a05c** (main; `OspreyFlow_Core/VERSION` v0.5.2; every route row before C done; the owner's saved-views exception, V1–V5, included). It supersedes c5bdb8e, whose CI failed on one stale conformance test (`test_screening_refresh` expected V3's sentence in lower case; the product was right), and ad2725f before it (green, but without V1–V5). **Confirm the CI before starting:** 574a05c's own CI run, 43664885263 (ending about 03:15Z on Mon 16), must be green, and the orchestrator confirms it before 08:00Z. If that run is red, a fixed candidate follows and the orchestrator sends its hash: copy B is made at that commit, and this line is updated before row 1. If no candidate is confirmed by then, the day starts at the first 08:00Z after one is. ROUTE_052's brief: install v0.5.1, upgrade to the
 candidate, **verify every manifest entry**, run spec 08's scenarios that apply to the shape, then decommission, with
 the operator choosing keep or destroy for the backups. "The full suite runs once, at step 6."
 
@@ -74,7 +74,7 @@ Mon 16 (and the spare days), and no other lane runs R1 then.
   tag moves to a later commit in both repositories, and copy A is made at the commit the tag names on the day.
   ROUTE_052 names 9197ea6 as v0.5.1's cut; the tag sits on 477a500, which is 9197ea6 plus the CHANGELOG's fixes from
   the upgrade rehearsal (7d76022, 477a500).
-- **Copy B** is the candidate's worktree: **c5bdb8e**, once its CI run 43657881341 is confirmed green (above).
+- **Copy B** is the candidate's worktree: **574a05c**, once its CI run 43664885263 is confirmed green (above).
 
 Each copy is sent by `stack_lease.sh remote platform-b …` (from the repository root). Within a copy, commands run
 from `OspreyFlow_Core` with `G=../OspreyFlow_Build/process/lanes/platform/gates`,
