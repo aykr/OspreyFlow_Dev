@@ -962,6 +962,15 @@ def domain_probe(account: str) -> dict[str, Any]:
     return json.loads(said.strip().splitlines()[-1])
 
 
+def searches_with_opensearch() -> bool:
+    """Whether the release being checked searches with OpenSearch, by its own `osprey.yaml`
+    (`components.search`, the schema's default `opensearch` when it is not set). A release that
+    searches with `postgres-fulltext` makes no domain: v0.5.1's, as step 6's copy A keeps it (ADR-148
+    Amendment 5 point 16)."""
+    components = yaml.safe_load(CONFIG.read_text()).get("components") or {}
+    return str(components.get("search", "opensearch")) == "opensearch"
+
+
 def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
     """The domain checked from the namespace's own pods (ADR-148 Amendment 13): the service role's
     signed request reaches OpenSearch, an unsigned one and another role's are refused 403 by the
@@ -1076,7 +1085,15 @@ def checks() -> None:
             break
         time.sleep(5)
     ok("the rule raises its alert on the load", r.status_code == 200 and any((a.get("alert") or a).get("rule_id") == f"hotlist:{hotlist}" for a in r.json()), r.text[:300])
-    domain_checks(ok)
+    # The domain only where this release has one (step 6's copy A, v0.5.1, has none; the
+    # orchestrator, 15 November 2026), said in the record either way.
+    if searches_with_opensearch():
+        domain_checks(ok)
+    else:
+        line = "SKIP the domain: this release's osprey.yaml searches with postgres-fulltext, so it has none"
+        print(line)
+        lines.append(line)
+        log.write_text("\n".join(lines) + "\n")
     print(f"every check passed (record {log})")
 
 
