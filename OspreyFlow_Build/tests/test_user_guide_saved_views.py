@@ -66,7 +66,8 @@ def test_a_strip_drawn_in_another_order_is_flagged() -> None:
 def test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says() -> None:
     app = screen("App.tsx")
     assert 'title={casesOpen === "views" ? "Saved views" : "Cases"}' in app, "the drawer's title from the case line"
-    assert "onOpenWholeCase={() => {" in app, "the whole case's Open, wired"
+    # The whole case's Open is the back link's own handler, so it does what Back to the whole case does.
+    assert "onOpenWholeCase={backToTheWholeCase}" in app
     assert '{view === "graph" && !lens && investigationId && <WholeCaseStrip />}' in app
     back = app[app.index("const backToTheWholeCase = (): void => {") :]
     assert "requestAnimationFrame(() => focusSavedViewsButton());" in back[: back.index("};")]
