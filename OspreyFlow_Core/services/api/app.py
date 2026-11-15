@@ -9380,8 +9380,8 @@ async def build_basemap_route(
     own (`map_admin.build_basemap`), never a path typed in the Glass, and the provider is registered
     in the maps file. Streamed the same way Launch is (`harness/webapp.py`'s own `_launch_events`):
     one line of real progress at a time, the build's `progress` callback bridged into an SSE
-    generator via a queue. The gazetteer loads in one graph transaction, rolled back if anything
-    fails."""
+    generator via a queue. The gazetteer loads a batch to a transaction (v0.6.0 item 10), a failed
+    batch rolled back alone, and its dataset is registered only once the whole load is in."""
     body = await _map_admin_body(request, BuildBasemapInput)
     if body.region not in GEOFABRIK_REGIONS:
         raise HTTPException(
@@ -9404,7 +9404,6 @@ async def build_basemap_route(
     async def _events() -> AsyncIterator[bytes]:
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[str] = asyncio.Queue()
-        transaction: dict[str, str] = {}
         audited = False
 
         def _progress(line: str) -> None:
@@ -9414,11 +9413,9 @@ async def build_basemap_route(
             # ADR-147 Amendment 1: into the region's gazetteer dataset, which a case's Author
             # adds to a case for its place search; before P4 the places were in no dataset. The
             # dataset is registered once they are committed (`_settle`), so a failed build leaves
-            # none behind.
-            tx = await graph.begin_transaction()
-            transaction["tx"] = tx
+            # none behind. A batch to a transaction, each committed by the load (v0.6.0 item 10).
             report = await load_gazetteer(
-                extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
+                extract, graph=graph, ontology=ontology, principal=principal,
                 load_id=f"load-osm-gazetteer-{body.region}",
                 dataset=map_places.gazetteer_dataset_id(body.region), analytics=analytics,
                 unit=gazetteer_unit,
@@ -9426,8 +9423,8 @@ async def build_basemap_route(
             return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
         async def _settle() -> None:
-            # Committed before the provider is registered (`map_admin.build_basemap`).
-            await graph.commit_transaction(transaction.pop("tx"))
+            # The load committed its batches before the provider is registered
+            # (`map_admin.build_basemap`).
             await map_places.register_gazetteer_dataset(
                 datasets, body.region, by=principal.id, unit=gazetteer_unit
             )
@@ -9451,8 +9448,6 @@ async def build_basemap_route(
                     progress=_progress, tiles_root=admin.tiles_root, settle=_settle,
                 )  # fmt: skip
             except BaseException as exc:  # noqa: BLE001 - reported to the caller, not swallowed
-                if "tx" in transaction:
-                    await graph.rollback_transaction(transaction.pop("tx"))
                 return None, exc
             return result, None
 

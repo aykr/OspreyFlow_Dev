@@ -1,0 +1,198 @@
+FFFFF.F........                                                          [100%]
+=================================== FAILURES ===================================
+_________________ test_the_gazetteer_commits_a_batch_at_a_time _________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x120066150>
+
+    async def test_the_gazetteer_commits_a_batch_at_a_time(monkeypatch: pytest.MonkeyPatch) -> None:
+        graph = _Graph()
+>       report = await _load(graph, monkeypatch, 2_500)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:92: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+graph = <tests.test_gazetteer_build_batches_and_points._Graph object at 0x1200651c0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x120066150>
+rows = 2500, recipe = {}
+
+    async def _load(graph: _Graph, monkeypatch: pytest.MonkeyPatch, rows: int, **recipe: Any) -> Any:
+        monkeypatch.setattr(script, "read_osm_places", lambda _path: _rows(rows))
+        monkeypatch.setattr(script, "run_recipe", _recording_recipe(graph, **recipe))
+>       monkeypatch.setattr(script, "GAZETTEER_BATCH", 1000)
+E       AttributeError: <module 'scripts.build_local_basemap' from '/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Build/../OspreyFlow_Core/scripts/build_local_basemap.py'> has no attribute 'GAZETTEER_BATCH'
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:77: AttributeError
+_________ test_a_failed_batch_is_rolled_back_alone_and_the_load_stops __________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x12006b560>
+
+    async def test_a_failed_batch_is_rolled_back_alone_and_the_load_stops(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        graph = _Graph()
+        with pytest.raises(RuntimeError, match="refused the batch"):
+>           await _load(graph, monkeypatch, 2_500, fail_on_batch=2)
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+graph = <tests.test_gazetteer_build_batches_and_points._Graph object at 0x12006bce0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x12006b560>
+rows = 2500, recipe = {'fail_on_batch': 2}
+
+    async def _load(graph: _Graph, monkeypatch: pytest.MonkeyPatch, rows: int, **recipe: Any) -> Any:
+        monkeypatch.setattr(script, "read_osm_places", lambda _path: _rows(rows))
+        monkeypatch.setattr(script, "run_recipe", _recording_recipe(graph, **recipe))
+>       monkeypatch.setattr(script, "GAZETTEER_BATCH", 1000)
+E       AttributeError: <module 'scripts.build_local_basemap' from '/Users/ayankar/dev/osprey-wt/rules-b/OspreyFlow_Build/../OspreyFlow_Core/scripts/build_local_basemap.py'> has no attribute 'GAZETTEER_BATCH'
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:77: AttributeError
+_________________ test_planetiler_is_given_its_heap_explicitly _________________
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12176/test_planetiler_is_given_its_h0')
+
+    def test_planetiler_is_given_its_heap_explicitly(tmp_path: Path) -> None:
+        """Without `-Xmx` the JVM takes a quarter of the machine's memory, which on the demo's server is
+        neither what was measured nor bounded beside the running demo."""
+        jar = tmp_path / "planetiler.jar"
+        jar.write_bytes(b"")
+        captured: list[list[str]] = []
+    
+        def run(argv: list[str], *, check: bool) -> subprocess.CompletedProcess[bytes]:
+            captured.append(argv)
+            return subprocess.CompletedProcess(argv, 0)
+    
+        script.run_planetiler(tmp_path / "x.osm.pbf", tmp_path / "x.pmtiles", jar_path=jar,
+                              subprocess_run=run)  # fmt: skip
+>       assert captured[1][:3] == ["java", f"-Xmx{script.PLANETILER_HEAP}", "-jar"]
+                                                  ^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: module 'scripts.build_local_basemap' has no attribute 'PLANETILER_HEAP'
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:126: AttributeError
+_ test_the_cli_build_writes_the_points_when_it_can_open_the_store[conduit-stopped] _
+
+events = <tests.test_gazetteer_build_registration_order._Events object at 0x1200651c0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11719f770>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12176/test_the_cli_build_writes_the_0')
+conduit_running = False
+
+    @pytest.mark.parametrize("conduit_running", [False, True], ids=["conduit-stopped", "conduit-running"])
+    async def test_the_cli_build_writes_the_points_when_it_can_open_the_store(
+        events: _Events,  # noqa: F811
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        conduit_running: bool,
+    ) -> None:
+        given: dict[str, Any] = {}
+    
+        async def load_gazetteer(*_args: Any, **kwargs: Any) -> Any:
+            given.update(kwargs)
+            events.seen.append(f"load into {kwargs['dataset']}")
+            return LoadReport(load_id="l", recipe_id="osm", recipe_version=1, nodes_created=3)
+    
+        async def build_basemap(
+            _admin: object, *, load_places: Any, settle: Any, **_kwargs: Any
+        ) -> tuple[str, int, int, int]:
+            counts = await load_places(tmp_path / "rutland.osm.pbf")
+            await settle()
+            return ("rutland.pmtiles", *counts)
+    
+        monkeypatch.setattr(script, "load_gazetteer", load_gazetteer)
+        monkeypatch.setattr(map_admin, "build_basemap", build_basemap)
+        monkeypatch.setattr(analytics_store, "open_analytics", _opener(conduit_running, events.seen))
+        code = await map_admin._build_here(object(), "cli:owner", "rutland", "unit-7")  # type: ignore[arg-type]
+        assert code == 0
+        # The load opens and commits its own batches: the command line holds no transaction of its own.
+>       assert "tx" not in given or given["tx"] is None
+E       AssertionError: assert ('tx' not in {'graph': <tests.test_gazetteer_build_registration_order._graph_class.<locals>._Graph object at 0x127cdddf0>, 'ontolog...ECRET', org_unit='system:resolution-trigger', receivable_handling_codes=[], roles=[], datasets=None, routes=None), ...} or 'tx-1' is None)
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:178: AssertionError
+----------------------------- Captured stdout call -----------------------------
+The places' points were not written: the analytics store is the Conduit's, which a second process cannot open while it runs. Until a build from Admin › Maps writes them, these places are found by name but not offered by the map's place search.
+Datasets given the places again: 0.
+Built rutland.pmtiles: 3 places created, 0 already known, 0 rejected.
+_ test_the_cli_build_writes_the_points_when_it_can_open_the_store[conduit-running] _
+
+events = <tests.test_gazetteer_build_registration_order._Events object at 0x12006acf0>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x120066720>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12176/test_the_cli_build_writes_the_1')
+conduit_running = True
+
+    @pytest.mark.parametrize("conduit_running", [False, True], ids=["conduit-stopped", "conduit-running"])
+    async def test_the_cli_build_writes_the_points_when_it_can_open_the_store(
+        events: _Events,  # noqa: F811
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        conduit_running: bool,
+    ) -> None:
+        given: dict[str, Any] = {}
+    
+        async def load_gazetteer(*_args: Any, **kwargs: Any) -> Any:
+            given.update(kwargs)
+            events.seen.append(f"load into {kwargs['dataset']}")
+            return LoadReport(load_id="l", recipe_id="osm", recipe_version=1, nodes_created=3)
+    
+        async def build_basemap(
+            _admin: object, *, load_places: Any, settle: Any, **_kwargs: Any
+        ) -> tuple[str, int, int, int]:
+            counts = await load_places(tmp_path / "rutland.osm.pbf")
+            await settle()
+            return ("rutland.pmtiles", *counts)
+    
+        monkeypatch.setattr(script, "load_gazetteer", load_gazetteer)
+        monkeypatch.setattr(map_admin, "build_basemap", build_basemap)
+        monkeypatch.setattr(analytics_store, "open_analytics", _opener(conduit_running, events.seen))
+        code = await map_admin._build_here(object(), "cli:owner", "rutland", "unit-7")  # type: ignore[arg-type]
+        assert code == 0
+        # The load opens and commits its own batches: the command line holds no transaction of its own.
+>       assert "tx" not in given or given["tx"] is None
+E       AssertionError: assert ('tx' not in {'graph': <tests.test_gazetteer_build_registration_order._graph_class.<locals>._Graph object at 0x16848e420>, 'ontolog...ECRET', org_unit='system:resolution-trigger', receivable_handling_codes=[], roles=[], datasets=None, routes=None), ...} or 'tx-1' is None)
+
+../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py:178: AssertionError
+----------------------------- Captured stdout call -----------------------------
+The places' points were not written: the analytics store is the Conduit's, which a second process cannot open while it runs. Until a build from Admin › Maps writes them, these places are found by name but not offered by the map's place search.
+Datasets given the places again: 0.
+Built rutland.pmtiles: 3 places created, 0 already known, 0 rejected.
+_________________ test_read_osm_places_yields_settlements_only _________________
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12176/test_read_osm_places_yields_se0')
+
+    def test_read_osm_places_yields_settlements_only(tmp_path: Path) -> None:
+        """The owner's ruling, 15 November 2026: the gazetteer carries settlements only, `place=*`
+        nodes such as cities, towns, villages and hamlets, not every named point (about 900,000 for
+        Great Britain). A named cafe, a farm, an island, a locality and a square are left out; so is a
+        settlement with no name."""
+        path = tmp_path / "mixed.osm.pbf"
+        build_synthetic_osm_pbf(path, places=[
+            ("Bigtown", "place", "city", 51.50, -0.12), ("Smalltown", "place", "town", 51.6, -0.2),
+            ("Midvillage", "place", "village", 51.7, -0.3), ("Fewhouses", "place", "hamlet", 51.8, -0.4),
+            ("Lonecottage", "place", "isolated_dwelling", 51.9, -0.5),
+            ("Northside", "place", "suburb", 51.51, -0.13), ("Oldquarter", "place", "quarter", 51.52, -0.14),
+            ("Greenrow", "place", "neighbourhood", 51.53, -0.15),
+            ("The Anchor", "amenity", "cafe", 51.5074, -0.1278),
+            ("Hill Farm", "place", "farm", 52.0, -1.1), ("Eel Island", "place", "island", 52.1, -1.2),
+            ("Black Moss", "place", "locality", 52.2, -1.3), ("Market Square", "place", "square", 52.3, -1.4),
+        ])  # fmt: skip
+        names = {r["name"] for r in read_osm_places(str(path))}
+>       assert names == {"Bigtown", "Smalltown", "Midvillage", "Fewhouses", "Lonecottage", "Northside",
+                         "Oldquarter", "Greenrow"}  # fmt: skip
+E       AssertionError: assert {'Bigtown', '...ll Farm', ...} == {'Bigtown', '...rthside', ...}
+E         
+E         Extra items in the left set:
+E         'Hill Farm'
+E         'Eel Island'
+E         'Market Square'
+E         'The Anchor'
+E         'Black Moss'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/ingest/test_osm_gazetteer_connector.py:59: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py::test_the_gazetteer_commits_a_batch_at_a_time
+FAILED ../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py::test_a_failed_batch_is_rolled_back_alone_and_the_load_stops
+FAILED ../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py::test_planetiler_is_given_its_heap_explicitly
+FAILED ../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py::test_the_cli_build_writes_the_points_when_it_can_open_the_store[conduit-stopped]
+FAILED ../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py::test_the_cli_build_writes_the_points_when_it_can_open_the_store[conduit-running]
+FAILED ../OspreyFlow_Build/tests/ingest/test_osm_gazetteer_connector.py::test_read_osm_places_yields_settlements_only
+6 failed, 9 passed in 4.86s

@@ -38,11 +38,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import subprocess
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from itertools import islice
 from pathlib import Path
 
 import httpx
@@ -185,12 +187,20 @@ def download_extract(
     return dest
 
 
+#: planetiler's Java heap, given explicitly (v0.6.0 item 10, platform's finding): without `-Xmx`
+#: the JVM takes a quarter of the machine's memory, which beside a running demo is neither bounded
+#: nor what was measured. Great Britain's figure is the measured one
+#: (`process/lanes/rules-b/v060-basemap/`).
+PLANETILER_HEAP = "2g"
+
+
 def run_planetiler(
     osm_pbf_path: Path,
     output_pmtiles_path: Path,
     *,
     jar_path: Path,
     subprocess_run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
+    heap: str = PLANETILER_HEAP,
 ) -> Path:
     """Shells out to a real `planetiler.jar` — this is a Java tool, not a
     Python or npm dependency, so it is never resolved by `pip`/`npm` and
@@ -243,6 +253,7 @@ def run_planetiler(
     subprocess_run(
         [
             "java",
+            f"-Xmx{heap}",
             "-jar",
             str(jar_path),
             f"--osm-path={osm_pbf_path}",
@@ -261,10 +272,10 @@ async def load_gazetteer(
     *,
     graph: GraphPort,
     ontology: OntologySchema,
-    tx: TxId,
     principal: Principal,
     load_id: str,
     dataset: str,
+    tx: TxId | None = None,
     analytics: AnalyticsPort | None = None,
     unit: str | None = None,
 ) -> LoadReport:
@@ -282,7 +293,13 @@ async def load_gazetteer(
     geometries.py`). Until P4 no gazetteer build wrote them, so a loaded place had a ref that
     resolved to nothing and could not be found on the map. Points already held are not written
     again (a rebuild). The command-line builds pass none: the analytics store is the Conduit's,
-    which a second process cannot open while the Conduit runs."""
+    which a second process cannot open while the Conduit runs.
+
+    **A batch at a time, given no `tx`** (v0.6.0 item 10): the places are loaded `GAZETTEER_BATCH`
+    rows to a transaction, each committed before the next begins, and a batch that fails is rolled
+    back alone and stops the load. A rebuild finds what an earlier, stopped one committed
+    (`on_match: reference`), and the caller registers the dataset only after the whole load, so a
+    stopped build's places are in no registered dataset. Given a `tx`, every place goes in it."""
     from services.api.dataset_scope import stamping
     from services.ingest.geometries import POINT_GEOMETRY_VERSION, point_geometries
 
@@ -296,20 +313,39 @@ async def load_gazetteer(
         )
     # A load reads its places whole (`sources_in_full`): its lookups are the Conduit's, never the
     # Glass's, and a gazetteer's identifiers are withheld only from what is sent to a reader.
-    with sources_in_full():
-        report, _events = await run_recipe(
-            recipe,
-            read_osm_places(str(osm_pbf_path)),
-            graph=stamping(graph, dataset=dataset),
-            ontology=ontology,
-            tx=tx,
-            principal=principal.model_copy(update={"datasets": [dataset]}),
-            load_id=load_id,
-            investigation_scope="reference-data",
-            source=str(osm_pbf_path),
-        )
+    scoped = principal.model_copy(update={"datasets": [dataset]})
+
+    async def run(rows: list[dict[str, str]], on: TxId, first: int) -> LoadReport:
+        with sources_in_full():
+            batch_report, _events = await run_recipe(
+                recipe, rows, graph=stamping(graph, dataset=dataset), ontology=ontology, tx=on,
+                principal=scoped, load_id=load_id, investigation_scope="reference-data",
+                source=str(osm_pbf_path), row_numbers=range(first, first + len(rows)),
+            )  # fmt: skip
+        return batch_report
+
+    # Read once, for the load and the points alike: a region's settlements are tens of thousands of
+    # rows, but reading the extract is a pass over every node in it (some 2 GB for Great Britain).
+    places = read_places(osm_pbf_path)
+    if tx is not None:
+        report = await run(places, tx, 0)
+    else:
+        report = LoadReport(load_id=load_id, recipe_id=recipe.id,
+                            recipe_version=recipe.version)  # fmt: skip
+        first = 0
+        left = iter(places)
+        while rows := list(islice(left, GAZETTEER_BATCH)):
+            batch_tx = await graph.begin_transaction()
+            try:
+                part = await run(rows, batch_tx, first)
+            except BaseException:
+                await graph.rollback_transaction(batch_tx)
+                raise
+            await graph.commit_transaction(batch_tx)
+            report = _summed(report, part)
+            first += len(rows)
     if analytics is not None:
-        points = point_geometries(recipe, read_osm_places(str(osm_pbf_path)))
+        points = point_geometries(recipe, places)
         for start in range(0, len(points), _POINT_BATCH):
             batch = points[start : start + _POINT_BATCH]
             held = {
@@ -326,6 +362,37 @@ async def load_gazetteer(
 
 #: How many points one read of the geometry partition asks after at once.
 _POINT_BATCH = 1000
+
+#: How many places one gazetteer transaction holds (v0.6.0 item 10): every place of Great Britain
+#: in one transaction was platform's finding.
+GAZETTEER_BATCH = 5000
+
+
+#: The suffix of the settlements a tiles-only build saves beside its extract (`map_admin`'s
+#: `PLACES_FILE`), so the load in the rebuild window reads them and not the extract again.
+PLACES_SUFFIX = ".places.json"
+
+
+def read_places(source: Path) -> list[dict[str, str]]:
+    """The settlements to load: a saved `<region>.places.json` as it was written, or else the
+    extract's own, read in one pass (`read_osm_places`)."""
+    if source.name.endswith(PLACES_SUFFIX):
+        rows = json.loads(source.read_text(encoding="utf-8"))
+        return [{str(k): str(v) for k, v in row.items()} for row in rows]
+    return list(read_osm_places(str(source)))
+
+
+def _summed(total: LoadReport, part: LoadReport) -> LoadReport:
+    """The load's report across its batches: each count added, each rejection kept."""
+    return total.model_copy(update={
+        "rows_read": total.rows_read + part.rows_read,
+        "rows_deduplicated": total.rows_deduplicated + part.rows_deduplicated,
+        "rows_already_loaded": total.rows_already_loaded + part.rows_already_loaded,
+        "nodes_created": total.nodes_created + part.nodes_created,
+        "nodes_referenced": total.nodes_referenced + part.nodes_referenced,
+        "edges_created": total.edges_created + part.edges_created,
+        "rejections": [*total.rejections, *part.rejections],
+    })  # fmt: skip
 
 
 @dataclass(frozen=True)

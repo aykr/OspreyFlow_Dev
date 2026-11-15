@@ -14,9 +14,10 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pytest
 import scripts.build_local_basemap as script
-from services.api import map_admin, map_places
+from services.api import analytics_store, map_admin, map_places
 
 from adapters.graph_arcadedb import adapter as graph_adapter_module
 from adapters.graph_arcadedb import client as graph_client_module
@@ -85,6 +86,13 @@ def events(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) 
         return 0
 
     monkeypatch.setattr(map_places, "refresh_case_copies_from_env", refresh)
+
+    async def held_by_the_conduit(engine: str, *, duckdb_path: str, handling_scheme: object) -> Any:
+        # The Conduit holds its DuckDB file while it runs: the open is refused as DuckDB refuses it,
+        # and no test here ever opens a real store (v0.6.0 item 10).
+        raise duckdb.IOException(f'IO Error: Could not set lock on file "{duckdb_path}"')
+
+    monkeypatch.setattr(analytics_store, "open_analytics", held_by_the_conduit)
     monkeypatch.setattr(script, "ArcadeDBClient", _Client)
     monkeypatch.setattr(script, "GraphArcadeDBAdapter", _graph_class(events))
     monkeypatch.setattr(graph_client_module, "ArcadeDBClient", _Client)
@@ -171,13 +179,15 @@ async def test_the_cli_build_registers_after_the_places_commit(
     monkeypatch.setattr(script, "load_gazetteer", load_gazetteer)
     monkeypatch.setattr(map_admin, "build_basemap", build_basemap)
     code = await map_admin._build_here(object(), "cli:owner", "rutland", "unit-7")  # type: ignore[arg-type]
+    # The load commits its own batches (v0.6.0 item 10,
+    # `test_gazetteer_build_batches_and_points.py`): the command line holds no transaction.
     if fails:
         assert code == 1
-        assert events.seen == ["check unit-7", "begin", "load into gazetteer-osm-rutland", "rollback"]
+        assert events.seen == ["check unit-7", "load into gazetteer-osm-rutland"]
     else:
         assert code == 0
         assert events.seen == [
-            "check unit-7", "begin", "load into gazetteer-osm-rutland", "commit", "points words",
+            "check unit-7", "load into gazetteer-osm-rutland", "points words",
             "register rutland for unit-7", "refresh gazetteer-osm-rutland",
         ]  # fmt: skip
 
