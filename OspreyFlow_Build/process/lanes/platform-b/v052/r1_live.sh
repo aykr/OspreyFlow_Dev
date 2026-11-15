@@ -8,6 +8,7 @@
 #   bash ../OspreyFlow_Build/process/lanes/platform-b/v052/r1_live.sh dashboards run
 #   bash ../OspreyFlow_Build/process/lanes/platform-b/v052/r1_live.sh survival snap|verify
 #   bash ../OspreyFlow_Build/process/lanes/platform-b/v052/r1_live.sh spec08 run
+#   bash ../OspreyFlow_Build/process/lanes/platform-b/v052/r1_live.sh memory start|mark <label>|stop|report  (v0.6.0 #11)
 #
 # From OspreyFlow_Core, on the test server, in the copy the row names (the run sheet).
 set -euo pipefail
@@ -20,7 +21,8 @@ case "${1:-}" in
   dashboards) script="$HERE/dashboards_check.py" ;;
   survival) script="$HERE/survival.py" ;;
   spec08) script="$(cd "$GATES/../../case-b/v052" && pwd)/spec08_poc.py" ;;
-  *) echo "r1_live.sh: dashboards run | survival snap|verify | spec08 run" >&2; exit 2 ;;
+  memory) script="$(cd "$HERE/../v060" && pwd)/memory_sampler.py" ;;
+  *) echo "r1_live.sh: dashboards run | survival snap|verify | spec08 run | memory start|mark|stop|report" >&2; exit 2 ;;
 esac
 shift
 PYTHONPATH=.:packages:cli exec .venv/bin/python "$script" "$@"
