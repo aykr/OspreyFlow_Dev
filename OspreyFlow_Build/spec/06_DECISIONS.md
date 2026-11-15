@@ -39177,7 +39177,7 @@ In the lane's diffs, for the orchestrator (platform's files and the guide):
   the run API lets the unassigned application or the dashboard identity in, refuses the granted orchestrator, or
   answers a 404 in other words, recording a token the stand-in will not issue, and holding its words to the
   Conduit's;
-- `tests/test_admin_guide_run_app_role.py`: the guide quotes `RUN_ROLE_NOT_HELD`, and the guide and the manifest
+- `test_admin_guide_run_app_role` (a new file the guide's diff adds): the guide quotes `RUN_ROLE_NOT_HELD`, and the guide and the manifest
   name `RUN_APP_ROLE`;
 - `tests/harness/test_cloud_platform_poc.py`: the install says how the role is granted, with reporting and without.
 
