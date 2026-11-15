@@ -32,12 +32,17 @@ export type Auth = ("key" | "iam_role") | null;
  * Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock.
  */
 export type Region = string | null;
+export type Key = string | null;
 
 /**
- * An engine added or edited. Validated as `ModelProviderConfig` is.
+ * `PUT /v1/admin/models/engines/{name}`: an engine edited, validated as `ModelProviderConfig`
+ * is, with its key where the address changed or the key is changed with it; a changed model,
+ * address or key is checked before it is saved (ADR-135 Amendment 14, the owner's ruling 19).
+ * Read by hand, so a refusal never echoes the key. An engine is added only from a check.
  */
 export interface EngineInput {
   provider: ModelProviderConfig;
+  key?: Key;
 }
 /**
  * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached

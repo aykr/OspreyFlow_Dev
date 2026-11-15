@@ -95,6 +95,36 @@ class AdminEngine(BaseModel):
     not_made: str | None = None
 
 
+class CatalogueEntry(BaseModel):
+    """One provider of *Admin › Models*' list (ADR-135 Amendment 14 point 1), as the form shows it:
+    its own address or that it asks one, whether it signs in by a key, its jobs alone, a current
+    model as the example beside the typed name, and LiteLLM's prefix, which the form takes off a
+    name typed with it. The hosts a check calls stay in the Conduit."""
+
+    id: str
+    label: str
+    kind: EngineKind
+    address: str | None
+    address_asked: bool
+    key: bool
+    example: str | None
+    jobs: list[str]
+    prefix: str
+    note: str = ""
+
+
+class HeldCheck(BaseModel):
+    """A passed check waiting for **Add** (ADR-135 Amendment 14 point 2), shown in Admin as being
+    checked so it can be cancelled; never an engine, never offered to analysts."""
+
+    id: str
+    engine: str
+    label: str
+    by: str
+    at: datetime
+    expires_at: datetime
+
+
 class ModelsAdminView(BaseModel):
     """`GET /v1/admin/models`."""
 
@@ -116,14 +146,22 @@ class ModelsAdminView(BaseModel):
     #: ADR-135 Amendment 5 decision 2 and Amendment 9: the extraction engine the deployment was
     #: rendered with, chosen at set-up (`osprey.yaml`), read-only here.
     extraction_engine: Literal["deep_read", "laurium"] = "deep_read"
+    #: ADR-135 Amendment 14: the providers this profile offers the add form, in the owner's order.
+    providers: list[CatalogueEntry] = Field(default_factory=list)
+    #: ADR-135 Amendment 14: the passed checks not yet added, cancelled or 15 minutes old.
+    checks: list[HeldCheck] = Field(default_factory=list)
 
 
 class EngineInput(BaseModel):
-    """An engine added or edited. Validated as `ModelProviderConfig` is."""
+    """`PUT /v1/admin/models/engines/{name}`: an engine edited, validated as `ModelProviderConfig`
+    is, with its key where the address changed or the key is changed with it; a changed model,
+    address or key is checked before it is saved (ADR-135 Amendment 14, the owner's ruling 19).
+    Read by hand, so a refusal never echoes the key. An engine is added only from a check."""
 
     model_config = ConfigDict(extra="forbid")
 
     provider: ModelProviderConfig
+    key: SecretStr | None = Field(default=None, min_length=1, max_length=4096)
 
 
 class EngineCheckInput(BaseModel):
@@ -138,9 +176,9 @@ class EngineCheckInput(BaseModel):
 
 
 class ModelCheck(BaseModel):
-    """One typed model's answer to the check's one call, in fixed words."""
+    """One typed model's answer to the check's one call, in fixed words, by the jobs it was typed for:
+    never the typed name, which may be a key pasted in the wrong field (the owner's ruling 22)."""
 
-    model: str
     roles: list[str]
     outcome: ConnectionOutcome
     ok: bool
@@ -254,4 +292,9 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     UsageFigures,
     UsageRow,
     ModelUsageView,
+    EngineCheckInput,
+    EngineCheckResult,
+    ModelCheck,
+    CatalogueEntry,
+    HeldCheck,
 )
