@@ -85,7 +85,17 @@ const view = () => ({
   checks: held.map((h) => ({ id: h.id, engine: h.provider.name, label: h.provider.label ?? h.provider.name, by: "admin-1", at: h.at, expires_at: "2026-11-15T12:15:00Z" })),
 });
 
+// The check's answer by job, as the Conduit's is (the owner's ruling 22): never the typed name.
+const JOB_WORDS: Record<string, string> = { extraction: "Extraction and Ask", vision: "Image description", transcription: "Transcription", embedding: "Embeddings" };
+const jobOf = (provider: Engine["provider"], model: string) =>
+  Object.keys(provider.roles).filter((r) => provider.roles[r] === model).map((r) => JOB_WORDS[r] ?? r).join(", ");
+
+const urls: string[] = [];
+(window as unknown as { modelsUrls: string[] }).modelsUrls = urls;
+
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  // P8 (the owner's key review): every address asked, whole, so a test can say none holds a key.
+  urls.push(String(input));
   const path = new URL(String(input)).pathname.replace("/v1/admin/models", "");
   const method = init?.method ?? "GET";
   asked.push(`${method} ${path || "/"}`);
@@ -117,12 +127,12 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const models = [...new Set(Object.values(provider.roles))];
     if (String(typedKey ?? "").includes("refuse")) {
       return reply(200, { engine: provider.name, ok: false, check: null, words: "The provider refused the key. Nothing was kept: correct it and check again.",
-        models: models.map((model) => ({ model, roles: Object.keys(provider.roles).filter((r) => provider.roles[r] === model), outcome: "key_refused", ok: false, words: "The provider refused the key." })) });
+        models: models.map((model) => ({ roles: Object.keys(provider.roles).filter((r) => provider.roles[r] === model), outcome: "key_refused", ok: false, words: `${jobOf(provider, model)}: The provider refused the key.` })) });
     }  // prettier-ignore
     const id = `chk-${++checks}`;
     held.push({ id, provider, at: "2026-11-15T12:00:00Z" });
     return reply(200, { engine: provider.name, ok: true, check: id, words: "The key and every model answered. Add the engine within 15 minutes to offer it to analysts.",
-      models: models.map((model) => ({ model, roles: Object.keys(provider.roles).filter((r) => provider.roles[r] === model), outcome: "ok", ok: true, words: "Connected: the engine answered." })) });
+      models: models.map((model) => ({ roles: Object.keys(provider.roles).filter((r) => provider.roles[r] === model), outcome: "ok", ok: true, words: `${jobOf(provider, model)}: Connected: the engine answered.` })) });
   }  // prettier-ignore
   const checkMatch = /^\/checks\/([^/]+)(\/add)?$/.exec(path);
   if (checkMatch) {

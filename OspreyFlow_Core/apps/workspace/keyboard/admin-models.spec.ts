@@ -145,7 +145,7 @@ test("a refused key is said at the key field, by keyboard, and nothing can be ad
   await press(page, "Check");
   await expect(page.getByRole("alert")).toContainText("Nothing was kept");
   await expect(page.getByLabel(/^Key/)).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByLabel(/^Key/)).toHaveAccessibleDescription("The provider refused the key.");
+  await expect(page.getByLabel(/^Key/)).toHaveAccessibleDescription(/The provider refused the key\./);
   await expect(page.getByRole("button", { name: "Add the engine", exact: true })).toHaveCount(0);
   registerCovered(REGISTRY, "see-a-model-check-refused-by-keyboard");
 });
@@ -180,6 +180,40 @@ test("a new key the provider refuses is said by keyboard, and the key held is ke
   await expect(page.getByRole("table", { name: "Engines", exact: true })).toContainText("Key set");
   expect(await page.content()).not.toContain("synthetic-refuse-key");
   registerCovered(REGISTRY, "see-a-new-model-key-refused-by-keyboard");
+});
+
+// P8, the owner's key review: after Check, Add, a refusal, an edit with its key and a new key, no
+// key is in either browser storage, the address bar or any address asked, the page's own or the Conduit's.
+test("no key is in browser storage, the address bar or any request's address", async ({ page }) => {
+  const keys = [SYNTHETIC_KEY, "synthetic-refuse-key", "sk-synthetic-edit-key", "sk-synthetic-new-key"];
+  const requested: string[] = [];
+  page.on("request", (r) => requested.push(r.url()));
+  await press(page, "Add an engine");
+  await typeInto(page, "Extraction and Ask: model name", "gemini-3.8-flash");
+  await typeInto(page, /^Key/, "synthetic-refuse-key");
+  await press(page, "Check");
+  await expect(page.getByRole("alert")).toContainText("Nothing was kept");
+  await typeInto(page, /^Key/, SYNTHETIC_KEY);
+  await press(page, "Check");
+  await press(page, "Add the engine");
+  await expect(page.getByRole("status")).toContainText("is added");
+  await press(page, "Edit OpenAI");
+  await typeInto(page, /^Address/, "https://proxy.example.org/v1");
+  await typeInto(page, /^Key for the new address/, "sk-synthetic-edit-key");
+  await press(page, "Check and save");
+  await expect(page.getByRole("status")).toContainText("is checked and saved");
+  await press(page, "Rotate key for Gemini");
+  await typeInto(page, /New key for Gemini/, "sk-synthetic-new-key");
+  await press(page, "Rotate the key");
+  await expect(page.getByRole("status")).toContainText("the key is set");
+  const stored = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+  const asked = await page.evaluate(() => (window as unknown as { modelsUrls: string[] }).modelsUrls);
+  expect(asked.length).toBeGreaterThan(5);
+  for (const key of keys) {
+    expect(stored).not.toContain(key);
+    expect(page.url()).not.toContain(key);
+    expect([...requested, ...asked].filter((u) => u.includes(key))).toEqual([]);
+  }
 });
 
 test("a lost key is entered again by keyboard, and the field is empty afterwards", async ({ page }) => {

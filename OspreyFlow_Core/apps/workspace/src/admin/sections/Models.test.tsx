@@ -123,7 +123,7 @@ describe("Models", () => {
   const BEDROCK_ENTRY = { id: "bedrock", label: "Amazon Bedrock", kind: "bedrock", address: null, address_asked: false, key: false, example: "amazon.nova-pro-v1:0", jobs: ["extraction", "vision"], prefix: "bedrock", note: "Amazon Bedrock is reached by this deployment's own role, in London only: no key and no address." };
   const LISTED = { ...VIEW, engines: [], engine_kinds: ["provider", "gateway"], providers: [GEMINI_ENTRY, ANTHROPIC_ENTRY, AZURE_ENTRY, GATEWAY_ENTRY], checks: [] };
   const CLOUD_LISTED = { ...LISTED, engine_kinds: ["provider", "gateway", "bedrock"], providers: [GEMINI_ENTRY, ANTHROPIC_ENTRY, AZURE_ENTRY, BEDROCK_ENTRY, GATEWAY_ENTRY] };
-  const PASSED = { engine: "gemini", ok: true, check: "chk-1", models: [{ model: "gemini-3.8-flash", roles: ["extraction"], outcome: "ok", ok: true, words: "Connected: the engine answered." }], words: "The key and every model answered. Add the engine within 15 minutes to offer it to analysts." };
+  const PASSED = { engine: "gemini", ok: true, check: "chk-1", models: [{ roles: ["extraction"], outcome: "ok", ok: true, words: "Extraction and Ask: Connected: the engine answered." }], words: "The key and every model answered. Add the engine within 15 minutes to offer it to analysts." };
   const ADDED = { ...LISTED, engines: [{ provider: { ...GEMINI, label: "Google Gemini", roles: { extraction: "gemini-3.8-flash" } }, key_state: "set", key_set_at: "2026-11-15T12:00:00Z", key_set_by: "admin-1", default_for: [] }] };
   const listed = (view: unknown) => (path: string, init?: RequestInit) =>
     path === "/v1/admin/models" && (init?.method ?? "GET") === "GET" ? { status: 200, body: view } : undefined;
@@ -175,7 +175,7 @@ describe("Models", () => {
     expect(options()).not.toContain("Amazon Bedrock");
     cleanup();
     const sent = stub((path, init) =>
-      path === "/v1/admin/models/checks" ? { status: 200, body: { ...PASSED, engine: "bedrock", models: [{ ...PASSED.models[0], model: "amazon.nova-pro-v1:0" }] } } : listed(CLOUD_LISTED)(path, init),
+      path === "/v1/admin/models/checks" ? { status: 200, body: { ...PASSED, engine: "bedrock", models: [{ ...PASSED.models[0] }] } } : listed(CLOUD_LISTED)(path, init),
     );
     await openAdd();
     fireEvent.change(screen.getByLabelText("Provider"), { target: { value: "bedrock" } });
@@ -239,8 +239,8 @@ describe("Models", () => {
     const refused = {
       engine: "gemini", ok: false, check: null,
       models: [
-        { model: "gemini-not-a-model", roles: ["extraction"], outcome: "model_not_offered", ok: false, words: "The provider does not offer that model." },
-        { model: "gemini-3.8-flash", roles: ["vision"], outcome: "key_refused", ok: false, words: "The key was refused." },
+        { roles: ["extraction"], outcome: "model_not_offered", ok: false, words: "Extraction and Ask: The provider does not offer that model." },
+        { roles: ["vision"], outcome: "key_refused", ok: false, words: "Image description: The key was refused." },
       ],
       words: "The provider does not offer that model. Nothing was kept: correct it and check again.",
     };
@@ -254,13 +254,17 @@ describe("Models", () => {
     const model = screen.getByLabelText("Extraction and Ask: model name");
     expect(model.getAttribute("aria-invalid")).toBe("true");
     expect(model.getAttribute("aria-describedby")).toContain("add-engine-job-extraction-error");
-    expect(document.getElementById("add-engine-job-extraction-error")!.textContent).toBe("The provider does not offer that model.");
+    expect(document.getElementById("add-engine-job-extraction-error")!.textContent).toBe("Extraction and Ask: The provider does not offer that model.");
     const key = screen.getByLabelText(/^Key/) as HTMLInputElement;
     expect(key.getAttribute("aria-invalid")).toBe("true");
-    expect(document.getElementById("add-engine-key-error")!.textContent).toBe("The key was refused.");
+    expect(document.getElementById("add-engine-key-error")!.textContent).toBe("Image description: The key was refused.");
     expect(key.value).toBe("");
     expect(screen.queryByRole("button", { name: "Add the engine" })).toBeNull();
     expect(document.body.innerHTML).not.toContain(PLANTED);
+    // The owner's ruling 22: each answer by its job, in the Conduit's words; no model name is sent
+    // back to be shown, so none is (the typed one stays in its own field alone).
+    const said = [...document.querySelectorAll(".admin-models-result li")].map((li) => li.textContent);
+    expect(said).toEqual(["Extraction and Ask: The provider does not offer that model.", "Image description: The key was refused."]);
   });
 
   it("ties the Conduit's refusal of a key-shaped label to the label", async () => {

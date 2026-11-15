@@ -476,10 +476,9 @@ function AddEngineForm({
           <p style={{ margin: 0 }}>{result.words}</p>
           {result.models.length > 1 && (
             <ul>
+              {/* By job, in the Conduit's words: no typed model name comes back to be shown (ruling 22). */}
               {result.models.map((m) => (
-                <li key={m.model}>
-                  {m.model}: {m.words}
-                </li>
+                <li key={m.roles.join(",")}>{m.words}</li>
               ))}
             </ul>
           )}
