@@ -20,6 +20,8 @@ declare global {
       deltas: unknown[];
       opened: string | null;
       closed?: number;
+      /** `?history=1`: the node ids of the last marker chosen. */
+      chosen?: string[];
       /** What the last question asked about, as the panel sent it. */
       scope?: unknown;
     };
@@ -65,6 +67,36 @@ if (wholeCase) {
   };
 }
 
+// `?history=1` (v0.6.0 #3): three questions already asked, the history an accordion: an earlier answer with graph
+// facts, one with two proposals still to decide, and the newest, open. For `questions.spec.ts`'s accordion case and
+// the every-harness axe scan; the routes are answered here.
+const withHistory = new URLSearchParams(window.location.search).get("history") === "1";
+if (withHistory) {
+  const at = (minute: number) => `2026-11-15T10:${String(minute).padStart(2, "0")}:00Z`;
+  const base = { author: "analyst-1", author_name: "Demo Analyst", citations: [], unplaced: 0, engine: "local", model: "qwen2.5:7b-instruct" };
+  const history = [
+    { ...base, id: "q-1", question: "Who is tied to Dana?", answer: "Rohan is tied to Dana [G-1]; Dana called Callum [G-2].", candidates: [], created_at: at(0),
+      graph_citations: [
+        { number: 1, label: "[G-1]", about: "SHAH, Rohan – associated with – MERCER, Dana", node_ids: ["n-rohan", "n-dana"], link_ids: ["l-1"] },
+        { number: 2, label: "[G-2]", about: "MERCER, Dana – called – PRICE, Callum", node_ids: ["n-dana", "n-callum"], link_ids: ["l-2"] },
+      ] },
+    { ...base, id: "q-2", question: "Who wrote about the plant?", answer: "Dana Mercer and Eli Ward wrote about it.", created_at: at(5),
+      candidates: [
+        { id: "c-1", document_id: "d-1", entity_type: "Person", properties: { name: "Dana Mercer" }, confidence: 0.8, status: "pending", model: "qwen" },
+        { id: "c-2", document_id: "d-1", entity_type: "Person", properties: { name: "Eli Ward" }, confidence: 0.7, status: "pending", model: "qwen" },
+      ] },
+    { ...base, id: "q-3", question: "Who called Callum?", answer: "Dana called Callum [G-1].", candidates: [], created_at: at(9),
+      graph_citations: [{ number: 1, label: "[G-1]", about: "MERCER, Dana – called – PRICE, Callum", node_ids: ["n-dana", "n-callum"], link_ids: ["l-2"] }] },
+  ];  // prettier-ignore
+  const read = { read_from: "selection", documents: 0, documents_without_text: 0, items: 1, links: 0, events: 0, selected: 1, first_selected: "MERCER, Dana", found: 0, passages: 0, limited_reason: null, counts_exact: true, more: false };  // prettier-ignore
+  const will = { read, engine: "local", engine_label: "This deployment's own model", model: "qwen2.5:7b-instruct", unusable: [], refused: null };
+  window.fetch = async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const body = url.endsWith("/will-read") ? will : url.includes("/models/") ? { engines: [] } : history;
+    return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+}
+
 function Panel() {
   const [view, setView] = useState<{ id: string; name: string } | null>(
     inView ? { id: "v-q", name: "Questions on 2 items" } : null,
@@ -82,6 +114,8 @@ function Panel() {
     view={view}
     onLeaveView={() => setView(null)}
     initialReadFrom={wholeCase ? "case" : undefined}
+    // In the history mode a marker can be chosen, so it is reached by Tab (a marker with nowhere to go is disabled).
+    onSelectFacts={withHistory ? (citation) => { window.__QUESTIONS__!.chosen = citation.node_ids; } : undefined}
     />
   );
 }

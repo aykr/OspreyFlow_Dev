@@ -341,6 +341,40 @@ test("Whole case is chosen by arrow keys, its search is asked with the question'
   registerCovered(REGISTRY, "select-a-search-source-from-an-answer-by-keyboard");
 });
 
+// v0.6.0 #3: the history is an accordion. Each earlier question is its line, a button (aria-expanded); a closed
+// answer's markers and proposals are never reached by Tab; Enter on the line opens it, and its markers are then reached.
+test("an earlier answer is opened from its question's line by keyboard, its markers reached only then", async ({ page }) => {
+  await page.goto("/keyboard/questions-harness.html?history=1");
+  const older = page.getByRole("button", { name: /^Who is tied to Dana\?/ });
+  const proposals = page.getByRole("button", { name: /^Who wrote about the plant\?/ });
+  await expect(older).toHaveAttribute("aria-expanded", "false");
+  await expect(proposals).toHaveAttribute("aria-expanded", "false");
+  await expect(proposals).toContainText("2 proposals to decide");
+  await expect(page.getByRole("button", { name: /^Who called Callum\?/ })).toHaveAttribute("aria-expanded", "true");
+  // Every stop Tab makes through the panel, from its start: none is a closed answer's marker or proposal.
+  await page.locator("[role='dialog']").focus();
+  const stops: string[] = [];
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("Tab");
+    stops.push(await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      return el ? el.getAttribute("aria-label") ?? el.textContent ?? "" : "";
+    }));
+  }
+  expect(stops.filter((s) => /SHAH, Rohan|^Accept |^Reject /.test(s))).toEqual([]);
+  expect(stops.some((s) => s.includes("MERCER, Dana – called – PRICE, Callum"))).toBe(true); // the newest's, open
+  // Enter on the earlier question's line opens it; its markers are then reached by Tab, after the line.
+  await older.focus();
+  await page.keyboard.press("Enter");
+  await expect(older).toHaveAttribute("aria-expanded", "true");
+  await tabToLabel(page, "Show on the graph: SHAH, Rohan – associated with – MERCER, Dana, [G-1]");
+  // And Enter closes it again.
+  await older.focus();
+  await page.keyboard.press("Enter");
+  await expect(older).toHaveAttribute("aria-expanded", "false");
+  registerCovered(REGISTRY, "open-an-earlier-answer-by-keyboard");
+});
+
 test("every registered questions action has its own proving test case above", () => {
   assertAllCovered("QUESTIONS_ACTIONS", QUESTIONS_ACTIONS);
 });

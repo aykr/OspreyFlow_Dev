@@ -908,6 +908,12 @@ proposes, you **Accept** or **Reject**; an accepted proposal enters the graph as
 **Ask the model about these…** on any selection saves it as a private view and asks there. Asking
 needs Editor.
 
+**Earlier questions.** The questions asked in the case (or in a view) are listed in the order asked, the
+newest open with its answer and each earlier one closed to its question's line. Choose a line, or press
+Enter on it, to open that answer, and again to close it; opening one closes no other. Asking a new question
+closes every earlier one. A closed answer's markers and buttons are not reached by Tab until it is open; if
+it holds proposals you have not yet accepted or rejected, its line says so: "2 proposals to decide".
+
 **Graph facts.** Along with the documents, the model is given a numbered, plain account of the graph
 around what you have selected and one link beyond it (the whole view when nothing is selected). A
 timeline period, if one is set, limits the links and events to it. The account lists each entity by type

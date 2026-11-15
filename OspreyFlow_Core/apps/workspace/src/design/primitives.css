@@ -933,3 +933,15 @@
 }
 .answer-marker:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
 .answer-marker:disabled { color: var(--text-secondary); text-decoration: none; cursor: default; }
+
+/* Ask & Chat's history as an accordion (v0.6.0 #3): each question's line is a full-width button, its answer below. */
+.questions__line {
+  display: flex; align-items: baseline; gap: var(--sp-8); width: 100%; min-height: 24px; margin: 0; padding: 0;
+  border: 0; background: none; color: var(--text-primary); font: inherit; font-weight: 600; text-align: left;
+  cursor: pointer;
+}
+.questions__line:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
+.questions__chevron { flex: none; color: var(--text-secondary); }
+.questions__question { flex: 1 1 auto; min-width: 0; }
+.questions__to-decide { flex: none; font-weight: 400; font-size: var(--fs-12); color: var(--text-secondary); }
+

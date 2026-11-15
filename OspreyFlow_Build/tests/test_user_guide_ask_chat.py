@@ -96,7 +96,8 @@ def test_section_6_gives_asking_the_case_level_the_route_requires() -> None:
     assert f"Asking needs {level}." in ask_paragraph()
 
 
-# The owner's word, 15 November 2026: the answer's markers and the engine line, in the guide as on screen.
+# The owner's word, 15 November 2026: the answer's markers and the engine line, in the guide as on
+# screen.
 ENGINES = (SRC / "models" / "engines.tsx").read_text(encoding="utf-8")
 
 
@@ -108,10 +109,12 @@ def section_6() -> str:
 
 def test_section_6_names_a_marker_as_the_panel_does() -> None:
     text = section_6()
-    assert "aria-label={`Show on the graph: ${shows}, ${label}`}" in PANEL and "title={`Show on the graph: ${shows}`}" in PANEL
+    assert "aria-label={`Show on the graph: ${shows}, ${label}`}" in PANEL
+    assert "title={`Show on the graph: ${shows}`}" in PANEL
     assert '"Show on the graph: SHAH, Rohan – associated with – MERCER, Dana"' in text
     assert '"Show on the graph: KESTREL, Ann"' in text
-    assert "`graph fact ${citation.number}`" in PANEL and '"Show on the graph: graph fact 1"' in text
+    assert "`graph fact ${citation.number}`" in PANEL
+    assert '"Show on the graph: graph fact 1"' in text
     line = "Select a marker to show that item on the graph."
     assert line in PANEL and f'"{line}"' in text
     assert "Select [G-1] on the canvas" not in text
@@ -119,7 +122,22 @@ def test_section_6_names_a_marker_as_the_panel_does() -> None:
 
 def test_section_6_writes_the_local_engine_in_lower_case_inside_answered_by() -> None:
     text = section_6()
-    assert 'const label = offered === LOCAL_LABEL ? `t${LOCAL_LABEL.slice(1)}` : offered;' in ENGINES
+    lowered = "const label = offered === LOCAL_LABEL ? `t${LOCAL_LABEL.slice(1)}` : offered;"
+    assert lowered in ENGINES
     assert "\"Answered by this deployment's own model (qwen2.5:7b-instruct)\"" in text
     assert "Answered by This deployment" not in text
+
+
+def test_section_6_says_earlier_questions_close_to_their_line_as_the_panel_does() -> None:
+    """v0.6.0 #3: the history is an accordion: the newest open, each earlier one its question's line
+    (a button), a new question closing the earlier ones, a closed line counting its proposals still
+    to decide."""
+    text = section_6()
+    assert "const open = opened[entry.id] ?? newest;" in PANEL and "aria-expanded={open}" in PANEL
+    said = "the newest open with its answer and each earlier one closed to its question's line"
+    assert said in text
+    assert "setOpened({}); // the new answer is the newest" in PANEL
+    assert "Asking a new question closes every earlier one." in text
+    assert '`${toDecide} proposals to decide`' in PANEL and '"2 proposals to decide"' in text
+    assert "hidden={!open}" in PANEL and "not reached by Tab until it is open" in text
 
