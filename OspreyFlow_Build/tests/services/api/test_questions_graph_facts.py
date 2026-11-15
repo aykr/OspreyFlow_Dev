@@ -934,3 +934,53 @@ async def test_an_answer_counting_an_event_restricted_to_another_unit_is_not_sho
     await service.ask("inv-1", "Who?", OWNER_UNIT_ASKER, selected_node_ids=[DANA])
     assert await service.history("inv-1", OTHER_UNIT_READER) == []
     assert len(await service.history("inv-1", OWNER_UNIT_ASKER)) == 1
+
+
+# --- what a fact says, for its marker in the Glass (the owner's word, 15 November 2026) ----------------
+# Each cited fact carries `about`, its two ends as the canvas names them and the link's type in words, so the
+# Glass can name the marker "Show on the graph: …". It is written from the asker's own brief (rule 3) and is
+# never sent to the model: the request is the same, byte for byte, as before it existed.
+
+#: The whole request sent to the model for the base case, as it was before `about` (main 567cb6c), selecting Dana
+#: and then nothing: a change to what the model is sent changes these.
+REQUEST_BEFORE_ABOUT = {
+    "selection": "646ed0ed00628e9860f030ba6c192e8f58d9ca34f763e379cbf2337a79f1e1ef",
+    "whole view": "f22dfbfff7fdc7bfa40a3384074aeb9340b21cd6e567ba941da0d8b3f6310575",
+}
+
+#: Every fact cited, so `about` is written for each.
+CITES_ALL: dict[str, Any] = {**ANSWER, "answer": "All of them [G-1] [G-2] [G-3] [G-4].", "graph_cited": [1, 2, 3, 4]}
+
+
+async def test_a_cited_fact_says_what_it_is_in_the_canvas_s_names() -> None:
+    service, model, _, _, _ = await _case()
+    answered = await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=[DANA], selected_link_ids=[])
+    (cited,) = answered.graph_citations
+    assert cited.about == "SHAH, Rohan – associated with – MERCER, Dana"
+
+
+async def test_what_the_model_is_sent_is_byte_for_byte_as_before() -> None:
+    import hashlib
+
+    for name, selection in (("selection", [DANA]), ("whole view", None)):
+        service, model, _, _, _ = await _case()
+        await _asked(service, model, nodes=selection)
+        (request,) = model.requests
+        assert hashlib.sha256(request.model_dump_json().encode()).hexdigest() == REQUEST_BEFORE_ABOUT[name], name
+        assert " – " not in request.text  # no fact's `about` is in what the model reads
+
+
+async def test_no_fact_s_about_names_a_node_the_asker_may_not_see() -> None:
+    """Rule 4: a node the analyst may not see sits one link from Dana, in the fact's neighbourhood. Every fact the
+    model could cite is cited, and no `about` names the hidden one, nor the one an answer kept before `about`
+    falls back to (the Glass's "graph fact n", never a name). Red with the scope read wider than the asker may see.
+    The cleared reader's answer does name it, so the check can fail."""
+    for selection in ([DANA], []):
+        service, model, _, _, _ = await _case(*_with_a_hidden_node(), answer=CITES_ALL)
+        answered = await service.ask("inv-1", "Who?", ANALYST, selected_node_ids=selection, selected_link_ids=[])
+        abouts = [c.about for c in answered.graph_citations]
+        assert abouts and all(abouts)
+        assert not any("SECRETIVE" in about or "Sam" in about for about in abouts), abouts
+    service, model, _, _, _ = await _case(*_with_a_hidden_node(), answer=CITES_ALL)
+    cleared = await service.ask("inv-1", "Who?", CLEARED, selected_node_ids=[DANA], selected_link_ids=[])
+    assert any("SECRETIVE" in c.about for c in cleared.graph_citations)

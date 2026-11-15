@@ -915,8 +915,13 @@ and last date, how often it occurred, its dataset's label and whether it is dire
 events for each month. It holds only what you may see, and never an identifier of the system. It has no
 path facts: a question about a connection is answered from the links it holds.
 
-In an answer, each `[G-n]` is a button, "Select [G-1] on the canvas". It selects what the fact stands
-for and brings it into view: the link if one drawn link is meant, otherwise its nodes. A fact the model
+In an answer, each `[G-n]` and `[S-n]` is a short marker, one space after the words it follows. Its name,
+read aloud and shown when you point at it, says what choosing it shows: "Show on the graph: SHAH, Rohan –
+associated with – MERCER, Dana" for a fact, its two ends as the canvas names them, or "Show on the graph:
+KESTREL, Ann" for a source. A line under the answer says "Select a marker to show that item on the graph."
+Choosing a fact's marker selects what the fact stands for and brings it into view: the link if one drawn
+link is meant, otherwise its nodes. An answer kept from before facts were described names a fact by its
+number, "Show on the graph: graph fact 1". A fact the model
 cites that was not in the account it was given is dropped and counted among the items left out.
 
 The documents and the graph facts share one limit. Over it, the question is refused, saying how many
@@ -946,7 +951,7 @@ deployment's own model is chosen instead. Every dataset starts at "never", so un
 changes yours, every question is answered by the deployment's own model.
 
 **"Answered by …".** Under each answer, a small line says which engine and model produced it, for
-example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This deployment's own model
+example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by this deployment's own model
 (qwen2.5:7b-instruct)". It is what the deployment says it used, not what you chose. An answer kept
 before engines were named has no such line. **Ask to search** shows the same choice and line, and the
 choice applies there too: your question is about the case, so it goes under the case's handling and

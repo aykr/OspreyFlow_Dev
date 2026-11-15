@@ -174,8 +174,10 @@ export function answeredBy(
   engines: readonly OfferedEngine[],
 ): string | null {
   if (!engine) return null;
-  const label =
-    engines.find((offered) => offered.name === engine)?.label ?? (engine === LOCAL_ENGINE ? LOCAL_LABEL : engine);
+  const offered = engines.find((one) => one.name === engine)?.label ?? (engine === LOCAL_ENGINE ? LOCAL_LABEL : engine);
+  // Inside the sentence the local engine's label is lower case, "Answered by this deployment's own model"; it keeps
+  // its capital where it stands alone, as in the engine choice (the owner, 15 November 2026).
+  const label = offered === LOCAL_LABEL ? `t${LOCAL_LABEL.slice(1)}` : offered;
   return model ? `Answered by ${label} (${model})` : `Answered by ${label}`;
 }
 

@@ -501,7 +501,7 @@ describe("QueryBuilderPanel ask to search's engine choice (ADR-135)", () => {
     await screen.findByRole("combobox", { name: "Model engine" });
     fireEvent.change(screen.getByRole("textbox", { name: "Ask to search" }), { target: { value: "q" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
-    expect(await screen.findByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
+    expect(await screen.findByText("Answered by this deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
     const [, init] = asked(fetchMock)[0] as [string, { body: string }];
     expect(JSON.parse(init.body).engine).toBe("gemini");
   });

@@ -207,6 +207,10 @@ class GraphCitation(BaseModel):
     label: str
     node_ids: list[str]
     link_ids: list[str]
+    #: What the fact says in the canvas's names, for the marker's name and hover text in the Glass
+    #: (the owner's word, 15 November 2026); from the asker's own brief, never sent to the model.
+    #: Empty in an answer kept before it was written.
+    about: str = ""
 
 
 class SearchCitation(BaseModel):
@@ -1199,6 +1203,7 @@ class QuestionsService:
                 label=held[n].label,
                 node_ids=list(held[n].node_ids),
                 link_ids=list(held[n].link_ids),
+                about=held[n].about,
             )
             for n in sorted(asked_for)
             if n in held

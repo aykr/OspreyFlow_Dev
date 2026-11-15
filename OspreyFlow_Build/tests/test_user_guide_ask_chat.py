@@ -94,3 +94,32 @@ def test_section_6_gives_asking_the_case_level_the_route_requires() -> None:
     assert m, "the ask route"
     level = {"InvestigationEditorDep": "Editor", "InvestigationViewerDep": "Viewer"}[m.group(1)]
     assert f"Asking needs {level}." in ask_paragraph()
+
+
+# The owner's word, 15 November 2026: the answer's markers and the engine line, in the guide as on screen.
+ENGINES = (SRC / "models" / "engines.tsx").read_text(encoding="utf-8")
+
+
+def section_6() -> str:
+    """All of §6, whitespace folded."""
+    start = GUIDE.index("## 6. Ask & Chat")
+    return re.sub(r"\s+", " ", GUIDE[start : GUIDE.index("\n## 7", start)])
+
+
+def test_section_6_names_a_marker_as_the_panel_does() -> None:
+    text = section_6()
+    assert "aria-label={`Show on the graph: ${shows}`}" in PANEL and "title={`Show on the graph: ${shows}`}" in PANEL
+    assert '"Show on the graph: SHAH, Rohan – associated with – MERCER, Dana"' in text
+    assert '"Show on the graph: KESTREL, Ann"' in text
+    assert "`graph fact ${citation.number}`" in PANEL and '"Show on the graph: graph fact 1"' in text
+    line = "Select a marker to show that item on the graph."
+    assert line in PANEL and f'"{line}"' in text
+    assert "Select [G-1] on the canvas" not in text
+
+
+def test_section_6_writes_the_local_engine_in_lower_case_inside_answered_by() -> None:
+    text = section_6()
+    assert 'const label = offered === LOCAL_LABEL ? `t${LOCAL_LABEL.slice(1)}` : offered;' in ENGINES
+    assert "\"Answered by this deployment's own model (qwen2.5:7b-instruct)\"" in text
+    assert "Answered by This deployment" not in text
+

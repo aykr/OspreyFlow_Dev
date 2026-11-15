@@ -7,6 +7,9 @@
 export interface GraphCitation {
   number: number;
   label: string;
+  /** What the fact says, in the canvas's names ("Callum Vance, associate of, Lewis Marchbank"): the Conduit's,
+   * from the reader's own brief. Absent from an answer kept before it was sent. */
+  about?: string | null;
   node_ids: string[];
   link_ids: string[];
 }
