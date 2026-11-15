@@ -1,0 +1,123 @@
+.......FF                                                                [100%]
+=================================== FAILURES ===================================
+_ test_the_tiles_stage_from_the_command_line_needs_no_settings_and_no_database _
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x11790a0f0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12601/test_the_tiles_stage_from_the_0')
+
+    async def test_the_tiles_stage_from_the_command_line_needs_no_settings_and_no_database(
+        monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        """P3, the rebuild's rehearsal (process/lanes/demo/REBUILD_2026-11-18.md): the tiles stage runs as
+        a bare `docker run` of the Conduit's image beside a running deployment, with only the tiles folder
+        mounted. The image holds no `osprey.yaml` and the container reaches no database, so the stage reads
+        neither: not the maps settings or audit (`open_admin`), not the unit's check, not the graph or the
+        analytics store. The unit is checked by the places stage, which loads into it."""
+        tiles = tmp_path / "tiles"
+        (tiles / PLANETILER_JAR).parent.mkdir(parents=True)
+        (tiles / PLANETILER_JAR).write_bytes(b"PK synthetic jar")
+        seen: list[Any] = []
+    
+        async def refused(*_args: Any, **_kwargs: Any) -> Any:
+            raise AssertionError("the tiles stage reached for the settings or the database")
+    
+        async def build(admin: object, *, stage: str | None, tiles_root: Path, **_kw: Any) -> Any:
+            seen.append((admin, stage, tiles_root))
+            return ("rutland.pmtiles", 0, 0, 0)
+    
+        monkeypatch.setattr(map_admin, "open_admin", refused)
+        monkeypatch.setattr(map_admin, "_analytics_if_free", refused)
+        monkeypatch.setattr(map_places, "check_unit_from_env", refused)
+        monkeypatch.setattr(map_admin, "build_basemap", build)
+        monkeypatch.setattr(map_admin, "TILES_CONTAINER_PATH", str(tiles))
+>       code = await map_admin._main(["build", "rutland", "--by", "cli:x", "--unit", "u", "--stage", "tiles"])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+../OspreyFlow_Build/tests/test_basemap_build_stages.py:182: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+services/api/map_admin.py:1301: in _main
+    admin, close = await open_admin()
+                   ^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+_args = (), _kwargs = {}
+
+    async def refused(*_args: Any, **_kwargs: Any) -> Any:
+>       raise AssertionError("the tiles stage reached for the settings or the database")
+E       AssertionError: the tiles stage reached for the settings or the database
+
+../OspreyFlow_Build/tests/test_basemap_build_stages.py:171: AssertionError
+_____ test_the_bare_tiles_stage_says_in_words_when_the_builder_is_missing ______
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12601/test_the_bare_tiles_stage_says0')
+
+    async def test_the_bare_tiles_stage_says_in_words_when_the_builder_is_missing(tmp_path: Path) -> None:
+        """With no admin, the builder is checked from the tiles folder alone, before anything is fetched."""
+        seen = _Seen()
+        with pytest.raises(MapAdminRefused) as refused:
+>           await build_basemap(
+                None, by="cli:x", region="rutland", load_places=seen.load_places,
+                downloader=seen.downloader, planetiler_runner=seen.planetiler,
+                tiles_root=tmp_path / "tiles", stage="tiles", progress=lambda _line: None,
+            )  # fmt: skip
+
+../OspreyFlow_Build/tests/test_basemap_build_stages.py:190: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+admin = None, by = 'cli:x', region = 'rutland'
+load_places = <bound method _Seen.load_places of <tests.test_basemap_build_stages._Seen object at 0x12400c590>>
+progress = <function test_the_bare_tiles_stage_says_in_words_when_the_builder_is_missing.<locals>.<lambda> at 0x1262a1a80>
+downloader = <bound method _Seen.downloader of <tests.test_basemap_build_stages._Seen object at 0x12400c590>>
+planetiler_runner = <bound method _Seen.planetiler of <tests.test_basemap_build_stages._Seen object at 0x12400c590>>
+tiles_root = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-12601/test_the_bare_tiles_stage_says0/tiles')
+settle = None, stage = 'tiles'
+
+    async def build_basemap(
+        admin: MapAdmin,
+        *,
+        by: str,
+        region: str,
+        load_places: Callable[[Path], Awaitable[tuple[int, int, int]]],
+        progress: Callable[[str], None] = print,
+        downloader: Callable[[str, Path], Path] | None = None,
+        planetiler_runner: Callable[..., Path] | None = None,
+        tiles_root: Path = Path(TILES_CONTAINER_PATH),
+        settle: Callable[[], Awaitable[None]] | None = None,
+        stage: str | None = None,
+    ) -> tuple[str, int, int, int]:
+        """The tier-1 build (`00_ARCHITECTURE.md` §1.2's one button): the region's extract, planetiler
+        into the tiles folder, the OSM gazetteer loaded (`load_places`, which the caller runs in a
+        graph transaction), and the provider registered in the maps file. Returns the file's name and
+        the gazetteer's created, referenced and rejected counts. A region not in the list is refused
+        by name; the jar is the tiles folder's own.
+    
+        **`stage`** (v0.6.0 item 10, for the demo's rebuild window): `"tiles"` downloads the extract,
+        runs planetiler and saves the extract's settlements beside it (`PLACES_FILE`), loading and
+        registering nothing, so a running deployment's map is unchanged; `"places"` loads that file's
+        settlements and registers the provider, downloading and running nothing, and is refused in words
+        when the tiles stage's files are not there. `None` is the whole build."""
+        import json
+    
+        from scripts.build_local_basemap import (
+            GEOFABRIK_REGIONS,
+            download_extract,
+            read_places,
+            resolve_extract,
+            run_planetiler,
+        )
+    
+        if region not in GEOFABRIK_REGIONS:
+            raise MapAdminRefused(
+                f"{_shown(region)} is not a region the map can be built for. "
+                f"Known regions: {', '.join(sorted(GEOFABRIK_REGIONS))}.",
+                status=422,
+            )
+>       builder = admin.basemap()
+                  ^^^^^^^^^^^^^
+E       AttributeError: 'NoneType' object has no attribute 'basemap'
+
+services/api/map_admin.py:1189: AttributeError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/test_basemap_build_stages.py::test_the_tiles_stage_from_the_command_line_needs_no_settings_and_no_database
+FAILED ../OspreyFlow_Build/tests/test_basemap_build_stages.py::test_the_bare_tiles_stage_says_in_words_when_the_builder_is_missing
+2 failed, 7 passed in 1.87s
