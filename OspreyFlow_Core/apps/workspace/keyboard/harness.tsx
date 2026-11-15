@@ -19,6 +19,7 @@ import { SelectionList } from "../src/inspector/SelectionList";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { bringFactIntoView } from "../src/questions/graphFacts";
+import type { AnswerIds } from "../src/questions/AnswerActions";
 import { showAnswerOnCanvas } from "../src/questions/showAnswer";
 import { saveView } from "../src/views/viewsApi";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
@@ -580,19 +581,7 @@ createRoot(container).render(
           if (canvasHandle.current) bringFactIntoView(canvasHandle.current, citation);
         }}
         // v0.6.0 #5, as `App.tsx` wires them: the answer's items on the real canvas by id, and saved as a view.
-        onShowAll={(ids) =>
-          void showAnswerOnCanvas({ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "keyboard-fixture" }, ids, () =>
-            canvasHandle.current
-              ? {
-                  applyDelta: (delta) => workingSet.store.getState().applyDelta(delta),
-                  hasNode: (id) => workingSet.graph.hasNode(id),
-                  highlightNodes: (nodeIds) => canvasHandle.current?.highlightNodes(nodeIds),
-                  centreOn: (nodeId) => canvasHandle.current?.centreOn(nodeId),
-                  say: (words) => (window.__KEYBOARD__!.said = words),
-                }
-              : null,
-          )
-        }
+        onShowAll={(ids) => void showAllOnCanvas(ids)}
         onSaveAsView={async (ids, name) => {
           const saved = await saveView("http://keyboard-test.invalid", "unused", "keyboard-fixture", { name, nodeIds: ids.nodeIds });
           return saved.ok ? null : saved.message;
@@ -601,6 +590,21 @@ createRoot(container).render(
     )}
   </Mount>,
 );
+
+/** *Show all on graph*, as `App.tsx`'s `showAnswerOnGraph` draws it through `questions/showAnswer.ts`. */
+function showAllOnCanvas(ids: AnswerIds) {
+  return showAnswerOnCanvas({ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "keyboard-fixture" }, ids, () =>
+    canvasHandle.current
+      ? {
+          applyDelta: (delta) => workingSet.store.getState().applyDelta(delta),
+          hasNode: (id) => workingSet.graph.hasNode(id),
+          highlightNodes: (nodeIds) => canvasHandle.current?.highlightNodes(nodeIds),
+          centreOn: (nodeId) => canvasHandle.current?.centreOn(nodeId),
+          say: (words) => (window.__KEYBOARD__!.said = words),
+        }
+      : null,
+  );
+}
 
 function AskPageOverCanvas() {
   const ask = useAskPage(false, { leave: () => undefined }, true);
@@ -620,6 +624,8 @@ function AskPageOverCanvas() {
               if (canvasHandle.current) bringFactIntoView(canvasHandle.current, citation);
             })
           }
+          // As `App.tsx`'s `showAnswerOnGraph`: the page left, the items shown on the canvas, focus there.
+          onShowAll={(ids) => ask.showOnGraph(() => void showAllOnCanvas(ids))}
         />
       </AskPage>
     </div>

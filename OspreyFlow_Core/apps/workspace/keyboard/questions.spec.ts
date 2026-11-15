@@ -418,13 +418,13 @@ const N9 = {
   audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
 }; // prettier-ignore
 
-async function askForAll(page: Page, addAnswer: (route: import("@playwright/test").Route) => Promise<void>) {
+async function askForAll(page: Page, addAnswer: (route: import("@playwright/test").Route) => Promise<void>, at = "/keyboard/harness.html?questions=1") {
   const added: unknown[] = [];
   await page.route("**/v1/investigations/*/working-set/add-by-ids", async (route) => {
     added.push(route.request().postDataJSON());
     await addAnswer(route);
   });
-  await serve(page, [], SHOW_ALL, "/keyboard/harness.html?questions=1");
+  await serve(page, [], SHOW_ALL, at);
   await page.getByLabel("Your question").focus();
   await page.keyboard.type("Who is near n2?");
   await page.keyboard.press("Control+Enter");
@@ -450,6 +450,27 @@ test("Show all on graph under an answer puts every item it stands for on the rea
   await expect.poll(async () => (await state()).nodes.slice().sort()).toEqual(["n2", "n3", "n9"]);
   expect((await state()).said).toBe("1 of this answer's items could not be shown.");
   registerCovered(REGISTRY, "show-all-of-an-answers-items-on-the-graph-by-keyboard");
+});
+
+test("Show all on graph on Ask & Chat's page leaves it, selects the answer's items on the real canvas, and focus is on the canvas", async ({ page }) => {
+  // ADR-145 Amendment 18 (rule 13), against the real canvas and App's own hook (harness.html?questions=page).
+  const added = await askForAll(
+    page,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ outcome: { delta: { seq: 9, op: "add", nodes: [N9], edges: [] }, links_among: "not_asked" }, not_shown: 1 }),
+      }),
+    "/keyboard/harness.html?questions=page",
+  );
+  await page.getByRole("region", { name: "Ask & Chat" }).getByRole("button", { name: "Show all on graph", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
+  await expect.poll(() => added).toEqual([{ node_ids: ["n2", "n3", "n9", "hidden-1"], link_ids: ["e2"] }]);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selection.slice().sort())).toEqual(["n2", "n3", "n9"]);
+  await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
+  registerCovered(REGISTRY, "show-all-from-the-ask-page-by-keyboard");
 });
 
 test("Show all on graph past the working set's cap adds nothing and says the cap's own figures (rule 2)", async ({ page }) => {

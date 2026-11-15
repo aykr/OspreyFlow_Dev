@@ -756,24 +756,25 @@ export function App() {
    * not shown is said, never which. Past the working set's cap nothing is added and the typed refusal is said with its
    * figures, and *Save as a view* beside it is the way to keep them all (rule 2). A saved view open over the canvas is
    * closed first: the items go on the case, not the view. */
-  const showAnswerOnGraph = async (ids: AnswerIds): Promise<void> => {
+  const showAnswerOnGraph = (ids: AnswerIds): void => {
     if (!investigationId) return;
     if (lens) closeLens();
-    // ADR-145 Amendment 18: the answer is on Ask & Chat's page; the page goes, as a marker's does, and focus follows to
-    // the graph once it is back in reach.
-    leavePages();
     setView("graph");
-    setTimeout(() => document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus(), 0);
-    await showAnswerOnCanvas({ apiBaseUrl: API_BASE_URL, bearerToken, investigationId }, ids, () =>
-      glassCanvasRef.current
-        ? {
-            applyDelta: (delta) => workingSetRef.current.store.getState().applyDelta(delta),
-            hasNode: (id) => workingSetRef.current.graph.hasNode(id),
-            highlightNodes: (nodeIds) => glassCanvasRef.current?.highlightNodes(nodeIds),
-            centreOn: (nodeId) => glassCanvasRef.current?.centreOn(nodeId),
-            say: setToast,
-          }
-        : null,
+    // ADR-145 Amendment 18: the answer is on Ask & Chat's page; the page goes, as a marker's does (one hook,
+    // `questions/useAskPage.ts`), the items are shown once the canvas is back in reach, and focus goes to it.
+    ask.showOnGraph(
+      () =>
+        void showAnswerOnCanvas({ apiBaseUrl: API_BASE_URL, bearerToken, investigationId }, ids, () =>
+          glassCanvasRef.current
+            ? {
+                applyDelta: (delta) => workingSetRef.current.store.getState().applyDelta(delta),
+                hasNode: (id) => workingSetRef.current.graph.hasNode(id),
+                highlightNodes: (nodeIds) => glassCanvasRef.current?.highlightNodes(nodeIds),
+                centreOn: (nodeId) => glassCanvasRef.current?.centreOn(nodeId),
+                say: setToast,
+              }
+            : null,
+        ),
     );
   };
   /** v0.6.0 #5: *Save as a view* under an Ask & Chat answer: its nodes saved as a saved view of the case, private to
@@ -2740,9 +2741,8 @@ export function App() {
         >
           <QuestionsPanel
             // v0.6.0 #5: under each answer, Show all on graph and Save as a view.
-            onShowAll={(ids) => void showAnswerOnGraph(ids)}
+            onShowAll={showAnswerOnGraph}
             onSaveAsView={saveAnswerAsView}
-           
             apiBaseUrl={API_BASE_URL}
             bearerToken={bearerToken}
             investigationId={investigationId}
