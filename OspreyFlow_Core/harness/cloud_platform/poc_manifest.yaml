@@ -182,7 +182,7 @@ managed:
     signing: sigv4         # the namespace's IAM role (IRSA); no fine-grained access control
     # Not backed up: the index is rebuilt from the graph (ADR-150), after every restore.
 
-# The client's Entra ID: what its administrator registers (ADR-148 Amendments 8, 9 and 10).
+# The client's Entra ID: what its administrator registers (ADR-148 Amendments 8, 9, 10 and 20).
 entra:
   glass:
     kind: single-page application
@@ -191,7 +191,7 @@ entra:
   api:
     kind: web API
     exposes: access_as_user
-    app_roles: [Dashboard.Read]
+    app_roles: [Dashboard.Read, OspreyFlow.Run]
   superset:
     kind: web application, with a client secret
     redirect: "https://bi.<the deployment's name>/oauth-authorized/<provider>"

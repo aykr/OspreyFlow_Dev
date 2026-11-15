@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.22** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 2.23** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.23 | 2026-11-15 | §6a.7: a service identity on Entra ID must hold this API's app role `OspreyFlow.Run` (ADR-148 Amendment 20; v0.6.0 #18), defined on the API's registration and granted to the orchestrator's application; §6a.2's poc tables list it beside `Dashboard.Read`. §6a.7 and §8's `run` row: `ospreyflow run` on Entra ID sends `OSPREY_TOKEN_SCOPE`, the API's `/.default` scope, without which Entra issues no token (the owner, beside #18). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.22 | 2026-11-15 | §6a.9, Bedrock in London (the owner's ruling 17): the example's model is `amazon.nova-pro-v1:0`, a model AWS serves in-Region in London; Bedrock in London means Amazon Nova and the Titan embeddings, not current Claude models, which London serves only through the EU and global profiles the region rule refuses; Claude through AWS's EU profile is not offered in v0.6.0. Held by `tests/test_admin_guide_bedrock_london.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.21 | 2026-11-15 | §10's *Keys*, §8's `models key` row and §4.1's guided install, as the code has done since ADR-135 Amendment 2 (the owner followed the guide on 15 November and it was wrong): a key is entered in *Admin › Models* with **Enter key** (**Rotate key**) and **Set the key**, write-only, kept by the model gateway alone and used with nothing restarted; **Remove key** beside it; neither for an engine on the gateway's IAM role. The install hands a key from `deployment.env` to the gateway and removes its line; `ospreyflow models key` runs the Conduit's own key path and restarts nothing. Held by `tests/test_admin_guide_model_keys.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.20 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November: one release, installed fresh). §6a.1's *Moving to a new release* is for a release after v0.6.0, which is installed fresh into a namespace of its own, and the move is not yet rehearsed; §14 opens with the same rule. Passages for deployments only an earlier release could have made are struck: the checkout's deployment from before v0.4.2, an `admin` from v0.4.6, the rules' move at v0.5.0, the hosted engines' egress after an upgrade, HMP loaded before v0.2.0, the stores' move to named volumes and §14.1, an `osprey.yaml` from v0.4.x, sets from before v0.5.0, v0.4.8's backups on Linux, a bundle from before v0.4.12, and their rows in §16. Held by `tests/test_guides_release_header.py`, `tests/test_guide_6a_upgrade.py` and `tests/test_guides_v060_fresh.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -1354,7 +1355,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | Registration | Kind | Details |
 |---|---|---|
 | glass | single-page application | redirect: https://<the deployment's name>/; grants: the API's access_as_user (delegated) |
-| api | web API | exposes: access_as_user; app roles: Dashboard.Read |
+| api | web API | exposes: access_as_user; app roles: Dashboard.Read, OspreyFlow.Run |
 | superset | web application, with a client secret | redirect: https://bi.<the deployment's name>/oauth-authorized/<provider>; grants: the API's access_as_user (delegated) |
 | report-sync | application (client credentials), with a client secret | grants: the API's Dashboard.Read (application) |
 
@@ -1716,8 +1717,10 @@ manage people is a guest.
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
 words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
 
-**Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
-assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator. Roles are
+**A person's roles are not read from an Entra token.** Its `roles` are app roles an Entra
+administrator assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator.
+(Two app roles of this API's own are read, from an application's token, never a person's: a
+dashboard identity's `Dashboard.Read` and an orchestrator's `OspreyFlow.Run`, below.) Roles are
 assigned in *Admin › People and roles*, which keeps them in the deployment's own Postgres, by tenant and
 `oid`:
 
@@ -1751,7 +1754,16 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
   account could not be read, offers *Try again*, and keeps *Sign out* within reach.
 - **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
   pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
-  registration.
+  registration, and must hold this API's app role `OspreyFlow.Run` (ADR-148 Amendment 20): the
+  client's Entra administrator defines the role on the API's registration (allowed member types:
+  Applications) and grants it to the orchestrator's application with admin consent. Any other
+  application of the tenant is refused (403): "the orchestrator's application does not hold this
+  API's OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API
+  permissions, this API, Application permissions) and grant admin consent, then ask for a new
+  token". `ospreyflow run` asks Entra ID for that token with `OSPREY_TOKEN_SCOPE` set to the API's
+  own scope, its application ID URI followed by `/.default` (by default `api://<the API's
+  application id>/.default`; `api_id_uri` where one is set), which the install's *What it needs*
+  names; without it Entra ID issues none (AADSTS1002012), and the command says so.
 
 - **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
   for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
@@ -2233,7 +2245,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
 | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
 | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
-| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's application ID URI followed by `/.default`); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |

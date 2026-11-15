@@ -9,7 +9,8 @@ out of OspreyFlow (`06_DECISIONS.md` ADR-140 Amendment 9 decision 4; ADR-141 dec
 
 **Who acts.** A release is a person's act: the bearer token is theirs (`OSPREY_TOKEN`). A run is
 triggered by a service identity: its client-credentials token is asked of the deployment's
-identity provider (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`), and the run
+identity provider (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, and on Entra ID
+`OSPREY_TOKEN_SCOPE`, the API's `/.default` scope), and the run
 acts as the pipeline's owner, never as the identity (decision 10). No secret is printed: a
 refusal names what is missing, never a value.
 
@@ -79,15 +80,31 @@ def service_token(env: Mapping[str, str], http: httpx.Client) -> str:
         raise CommandRefused(
             f"Set {', '.join(missing)}: a run is triggered by the deployment's service identity."
         )
-    answer = http.post(
-        env["OSPREY_TOKEN_URL"],
-        data={
-            "grant_type": "client_credentials",
-            "client_id": env["OSPREY_CLIENT_ID"],
-            "client_secret": env["OSPREY_CLIENT_SECRET"],
-        },
-    )
+    form = {
+        "grant_type": "client_credentials",
+        "client_id": env["OSPREY_CLIENT_ID"],
+        "client_secret": env["OSPREY_CLIENT_SECRET"],
+    }
+    # Entra ID issues an app-only token only for a resource's `/.default` scope (AADSTS1002012);
+    # Keycloak needs none, so with no OSPREY_TOKEN_SCOPE the request is what it always was.
+    scope = env.get("OSPREY_TOKEN_SCOPE", "").strip()
+    if scope:
+        form["scope"] = scope
+    answer = http.post(env["OSPREY_TOKEN_URL"], data=form)
     if answer.status_code != 200:
+        codes = _entra_codes(answer)
+        if 1002012 in codes:
+            raise CommandRefused(
+                "Entra ID refused the service identity's sign-in: it needs the API's own scope. "
+                "Set OSPREY_TOKEN_SCOPE to this deployment's API scope: its application ID URI "
+                "followed by `/.default` (the install's *What it needs* names it)."
+            )
+        if 500011 in codes:
+            raise CommandRefused(
+                "Entra ID refused the service identity's sign-in: OSPREY_TOKEN_SCOPE names no API "
+                "of this tenant. Set it to this deployment's API scope: its application ID URI "
+                "followed by `/.default` (the install's *What it needs* names it)."
+            )
         raise CommandRefused(
             f"The identity provider refused the service identity's sign-in ({answer.status_code}); "
             "check its client id and secret, and that it may sign in as a service."
@@ -96,6 +113,16 @@ def service_token(env: Mapping[str, str], http: httpx.Client) -> str:
     if not isinstance(token, str) or not token:
         raise CommandRefused("The identity provider's answer held no access token.")
     return token
+
+
+def _entra_codes(answer: httpx.Response) -> list[int]:
+    """Entra ID's own error codes in a refusal (`error_codes`), or none for another provider's."""
+    try:
+        body = answer.json()
+    except ValueError:
+        return []
+    codes = body.get("error_codes") if isinstance(body, dict) else None
+    return [c for c in codes if isinstance(c, int)] if isinstance(codes, list) else []
 
 
 def _words(answer: httpx.Response) -> str:

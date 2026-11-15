@@ -14,3 +14,12 @@ report-sync:
   client_id: dddddddd-eeee-4fff-8000-000000000002
   service_principal: 60000000-0000-4000-8000-000000000002
   roles: [Dashboard.Read]                  # principal_auth.DASHBOARD_APP_ROLE (admin, ADR-148 Am 10; confirmed 13 Nov)
+# ADR-148 Amendment 20 (v0.6.0 #18): two orchestrators' applications, one granted this API's OspreyFlow.Run and one
+# granted no app role, so the run API's refusal of any other application of the tenant is checked live.
+orchestrator:
+  client_id: eeeeeeee-ffff-4000-8111-000000000003
+  service_principal: 60000000-0000-4000-8000-000000000003
+  roles: [OspreyFlow.Run]                  # principal_auth.RUN_APP_ROLE
+orchestrator-unassigned:
+  client_id: eeeeeeee-ffff-4000-8111-000000000004
+  service_principal: 60000000-0000-4000-8000-000000000004

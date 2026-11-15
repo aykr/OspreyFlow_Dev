@@ -26,6 +26,7 @@ import hashlib
 import importlib.util
 import json
 import secrets
+import sys
 import threading
 import urllib.error
 import urllib.parse
@@ -59,6 +60,9 @@ SUPERSET_SECRET = "superset-throwaway-secret"
 REPORTS_SECRET = "reports-throwaway-secret"
 ACCESS = f"api://{API}/access_as_user"
 
+UNASSIGNED = "eeeeeeee-ffff-4000-8111-000000000004"
+UNASSIGNED_SECRET = "unassigned-synthetic-secret"
+
 CONFIG: dict[str, Any] = {
     "tenant_id": TENANT,
     "jwks": [],  # the driver's own key, for its crafted refusals (none here)
@@ -69,6 +73,8 @@ CONFIG: dict[str, Any] = {
                    "delegated": ["access_as_user"]},
         REPORTS: {"secret": REPORTS_SECRET, "service_principal": "60000000-0000-4000-8000-000000000002",
                   "roles": ["Reports.Read"]},
+        # ADR-148 Amendment 20: an application granted no app role, as an orchestrator not yet given OspreyFlow.Run.
+        UNASSIGNED: {"secret": UNASSIGNED_SECRET, "service_principal": "60000000-0000-4000-8000-000000000004"},
     },
     "user": {
         "oid": ADMIN, "name": "Synthetic Administrator", "preferred_username": "admin@r1.test",
@@ -274,6 +280,46 @@ def test_authorize_refuses_another_tenant_client_redirect_and_an_ungranted_scope
 
 
 # ---- client credentials -------------------------------------------------------------------------
+
+
+def test_an_application_granted_no_app_role_gets_a_token_without_roles(standin: str) -> None:
+    """Entra leaves `roles` out of an app-only token when no app role is assigned to the application, never `[]`:
+    the shape the run API refuses (ADR-148 Amendment 20), modelled as the real tenant issues it (rule 15)."""
+    status, answer = _post(_token_url(standin), {
+        "grant_type": "client_credentials", "client_id": UNASSIGNED, "client_secret": UNASSIGNED_SECRET,
+        "scope": f"api://{API}/.default",
+    })  # fmt: skip
+    assert status == 200, answer
+    claims = _verify(standin, answer["access_token"], API)
+    assert claims["idtyp"] == "app" and claims["azp"] == UNASSIGNED
+    assert "roles" not in claims
+
+
+def _r1_kind():  # type: ignore[no-untyped-def]
+    gates = str(Path(__file__).parents[1] / "process/lanes/platform/gates")
+    sys.path.insert(0, gates)
+    try:
+        import r1_kind
+    finally:
+        sys.path.remove(gates)
+    return r1_kind
+
+
+def test_r1s_in_pod_token_fetch_gets_a_token_and_says_a_refusal_whole(standin: str) -> None:
+    """ADR-148 Amendment 20: R1's checks fetch an orchestrator's token by running `STANDIN_TOKEN`
+    in the stand-in's pod. The same script, run here through `sh()` against the real stand-in: a
+    registered application gets its token, and one the stand-in does not know fails with the
+    stand-in's own AADSTS words, which `refusal_words` keeps for R1's record (rule 15: the shape
+    the real call site produces)."""
+    r1 = _r1_kind()
+    scope = f"api://{API}/.default"
+    run = (sys.executable, "-I", "-c", r1.STANDIN_TOKEN, standin, TENANT)
+    token = r1.sh(*run, UNASSIGNED, UNASSIGNED_SECRET, scope).strip()
+    assert _verify(standin, token, API)["azp"] == UNASSIGNED
+    with pytest.raises(SystemExit) as refused:
+        r1.sh(*run, "eeeeeeee-ffff-4000-8111-0000000000ff", "no-secret", scope)
+    said = r1.refusal_words(refused.value)
+    assert "AADSTS700016" in said and "Traceback" not in said, said
 
 
 def test_the_report_sync_gets_an_app_only_token_with_its_roles_and_no_scp(standin: str) -> None:

@@ -1,0 +1,405 @@
+diff --git a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
+index 3e8f19b..d54308e 100644
+--- a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
++++ b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
+@@ -278,9 +278,13 @@ def domain_text() -> str:
+ def entra_clients() -> dict[str, str]:
+     """Each confidential client's secret, made once per run and kept in the run's state folder (600)."""
+     path = STATE / "entra-clients.json"
+-    if path.is_file():
+-        return json.loads(path.read_text())
+-    made = {name: secrets.token_urlsafe(32) for name in ("superset", "report-sync")}
++    names = ("superset", "report-sync", "orchestrator", "orchestrator-unassigned")
++    # A state folder from before a client was added (ADR-148 Amendment 20's two orchestrators) keeps its secrets and
++    # gains the new ones.
++    kept = json.loads(path.read_text()) if path.is_file() else {}
++    if all(name in kept for name in names):
++        return kept
++    made = {**{name: secrets.token_urlsafe(32) for name in names}, **kept}
+     path.parent.mkdir(parents=True, exist_ok=True)
+     path.touch(mode=0o600)
+     path.write_text(json.dumps(made))
+@@ -294,6 +298,7 @@ def entra_config() -> dict[str, Any]:
+     extra = yaml.safe_load((HERE / "r1_kind_entra.yaml").read_text())
+     made = entra_clients()
+     superset, reports = extra["superset"], extra["report-sync"]
++    orchestrator, unassigned = extra["orchestrator"], extra["orchestrator-unassigned"]
+     api = claims["api_client_id"]
+     admin = {
+         "oid": claims["first_administrators"][0], "name": "Synthetic Administrator",
+@@ -317,6 +322,11 @@ def entra_config() -> dict[str, Any]:
+                                     "redirect_uris": [f"https://bi.{GLASS}{superset['redirect_path']}"]},
+             reports["client_id"]: {"secret": made["report-sync"], "service_principal": reports["service_principal"],
+                                    "roles": reports["roles"]},
++            # ADR-148 Amendment 20: one orchestrator granted OspreyFlow.Run, one granted no app role.
++            orchestrator["client_id"]: {"secret": made["orchestrator"], "service_principal": orchestrator["service_principal"],
++                                        "roles": orchestrator["roles"]},
++            unassigned["client_id"]: {"secret": made["orchestrator-unassigned"],
++                                      "service_principal": unassigned["service_principal"]},
+         },
+         "user": admin,
+         # The people v052-r1's dashboards check signs in to Superset by `login_hint` (platform-b): a
+@@ -991,6 +1001,97 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
+        and any(line.endswith("403 anonymous") for line in logged), logged[-6:])
+ 
+ 
++# ADR-148 Amendment 20: a client-credentials request made from the Entra stand-in's own pod, so the token is the
++# stand-in's issuing (r1_kind_servers.py `_client_credentials`, in this run's token version), never one shaped here.
++# A refusal is written as Entra's error and its AADSTS words, so R1's record shows them, not a traceback's top.
++STANDIN_TOKEN = """
++import json, ssl, sys, urllib.error, urllib.parse, urllib.request
++base, tenant, client, secret, scope = sys.argv[1:6]
++body = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": client, "client_secret": secret,
++                               "scope": scope}).encode()
++req = urllib.request.Request(f"{base}/{tenant}/oauth2/v2.0/token", data=body, method="POST")
++ctx = ssl._create_unverified_context()  # the pod's own server, by its loopback address
++try:
++    answer = urllib.request.urlopen(req, context=ctx)
++except urllib.error.HTTPError as refused:
++    said = refused.read().decode()
++    try:
++        error = json.loads(said)
++        said = f"{error.get('error')}: {error.get('error_description')}"
++    except ValueError:
++        pass
++    sys.stderr.write(f"the stand-in refused ({refused.code}): {said}\\n")
++    sys.exit(1)
++print(json.load(answer)["access_token"])
++"""
++
++
++def refusal_words(refused: SystemExit) -> str:
++    """What `sh()` says of a command that failed, without the command itself (which may be a script over many
++    lines): the first line of its own output, after `sh()`'s `: exit <n>`, so the record keeps one line a check
++    (`kubectl exec` adds its own "command terminated with exit code 1" after it)."""
++    said = str(refused)
++    found = re.search(r": exit \d+\n(.*)", said, re.DOTALL)
++    output = (found.group(1) if found else said).strip()
++    return (output.splitlines() or [""])[0][:300]
++
++
++def standin_token(client_id: str, secret: str) -> str:
++    """An app-only token for this API from the Entra stand-in, for one of its registered applications."""
++    c = yaml.safe_load(CONFIG.read_text())["cloud_platform"]["claims"]
++    scope = f"api://{c['api_client_id']}/.default"
++    return kubectl("-n", MANAGED, "exec", "deployment/entra-standin", "--", "/app/.venv/bin/python", "-c", STANDIN_TOKEN,
++                   "https://127.0.0.1", c["tenant_id"], client_id, secret, scope).strip()
++
++
++def runs_role_release(c: Any, admin: dict[str, str]) -> bool:
++    """Whether the release being checked has ADR-148 Amendment 20 (v0.6.0 on), by its own version as Admin › System
++    says it. Step 6's copy A is v0.5.1, which predates it. A version that cannot be read is not taken as an old
++    release: the checks run, and a release that lacks the role fails them, never skipping quietly."""
++    r = c.get("/v1/admin/system", headers=admin)
++    version = str((r.json() if r.status_code == 200 else {}).get("version") or "").strip().lstrip("v")
++    parts = version.split(".")[:2]
++    if len(parts) < 2 or not all(p.isdigit() for p in parts):
++        return True
++    return (int(parts[0]), int(parts[1])) >= (0, 6)
++
++
++#: The Conduit's own words for a run it has no record of (app.py), so a 404 from anything else (an ingress, the
++#: Glass's page) is never read as the door let through; and the run API's words for the role it refuses and for a
++#: dashboard identity (service_identity.py RUN_ROLE_NOT_HELD, DASHBOARD_IS_NO_SERVICE_IDENTITY), held to those
++#: constants by tests/test_r1_kind_domain_guard.py.
++RUN_NOT_FOUND = "no run this service identity triggered has that id"
++RUN_ROLE_WORDS = "does not hold this API's OspreyFlow.Run app role"
++DASHBOARD_WORDS = "dashboard identity"
++
++
++def run_api_role_checks(c: Any, ok: Any) -> None:
++    """ADR-148 Amendment 20 on the live Conduit, with tokens the stand-in issues: the run API takes an orchestrator
++    holding OspreyFlow.Run past its door (a run that does not exist is then a 404), and refuses in words an
++    application of the tenant holding no app role and the report sync's dashboard identity."""
++    extra = yaml.safe_load((HERE / "r1_kind_entra.yaml").read_text())
++    made = entra_clients()
++    o, u, d = extra["orchestrator"], extra["orchestrator-unassigned"], extra["report-sync"]
++    def ask(name: str, client_id: str) -> Any:
++        # A token the stand-in will not issue is said in the record, as any check is: a stand-in started before the
++        # two orchestrators were added refuses them (700016) until `entra` applies it again.
++        try:
++            bearer = standin_token(client_id, made[name])
++        except SystemExit as refused:
++            ok(f"the Entra stand-in issues {name} its token", False, refusal_words(refused))
++        return c.get("/v1/runs/r1-no-such-run", headers={"Authorization": f"Bearer {bearer}"})
++
++    r = ask("orchestrator", o["client_id"])
++    ok("the run API takes an orchestrator holding OspreyFlow.Run past its door (the run is not found)",
++       r.status_code == 404 and RUN_NOT_FOUND in r.text, (r.status_code, r.text[:200]))
++    r = ask("orchestrator-unassigned", u["client_id"])
++    ok("the run API refuses an application holding no app role, in words",
++       r.status_code == 403 and RUN_ROLE_WORDS in r.text, (r.status_code, r.text[:200]))
++    r = ask("report-sync", d["client_id"])
++    ok("the run API refuses the report sync's dashboard identity, as a dashboard's",
++       r.status_code == 403 and DASHBOARD_WORDS in r.text, (r.status_code, r.text[:200]))
++
++
+ def checks() -> None:
+     """The check list (CHECKS.md), each with its expected answer; stops at the first that fails."""
+     log = record("check")
+@@ -1094,6 +1195,14 @@ def checks() -> None:
+         print(line)
+         lines.append(line)
+         log.write_text("\n".join(lines) + "\n")
++    # ADR-148 Amendment 20, on a release that has it (v0.6.0 on), said in the record either way.
++    if runs_role_release(c, admin):
++        run_api_role_checks(c, ok)
++    else:
++        line = "SKIP the run API's app role: this release predates ADR-148 Amendment 20 (v0.6.0)"
++        print(line)
++        lines.append(line)
++        log.write_text("\n".join(lines) + "\n")
+     print(f"every check passed (record {log})")
+ 
+ 
+diff --git a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind_entra.yaml b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind_entra.yaml
+index ff9381b..34c0fb6 100644
+--- a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind_entra.yaml
++++ b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind_entra.yaml
+@@ -14,3 +14,12 @@ report-sync:
+   client_id: dddddddd-eeee-4fff-8000-000000000002
+   service_principal: 60000000-0000-4000-8000-000000000002
+   roles: [Dashboard.Read]                  # principal_auth.DASHBOARD_APP_ROLE (admin, ADR-148 Am 10; confirmed 13 Nov)
++# ADR-148 Amendment 20 (v0.6.0 #18): two orchestrators' applications, one granted this API's OspreyFlow.Run and one
++# granted no app role, so the run API's refusal of any other application of the tenant is checked live.
++orchestrator:
++  client_id: eeeeeeee-ffff-4000-8111-000000000003
++  service_principal: 60000000-0000-4000-8000-000000000003
++  roles: [OspreyFlow.Run]                  # principal_auth.RUN_APP_ROLE
++orchestrator-unassigned:
++  client_id: eeeeeeee-ffff-4000-8111-000000000004
++  service_principal: 60000000-0000-4000-8000-000000000004
+diff --git a/OspreyFlow_Build/tests/test_r1_entra_standin.py b/OspreyFlow_Build/tests/test_r1_entra_standin.py
+index 0e880c2..8c380a8 100644
+--- a/OspreyFlow_Build/tests/test_r1_entra_standin.py
++++ b/OspreyFlow_Build/tests/test_r1_entra_standin.py
+@@ -26,6 +26,7 @@ import hashlib
+ import importlib.util
+ import json
+ import secrets
++import sys
+ import threading
+ import urllib.error
+ import urllib.parse
+@@ -59,6 +60,9 @@ SUPERSET_SECRET = "superset-throwaway-secret"
+ REPORTS_SECRET = "reports-throwaway-secret"
+ ACCESS = f"api://{API}/access_as_user"
+ 
++UNASSIGNED = "eeeeeeee-ffff-4000-8111-000000000004"
++UNASSIGNED_SECRET = "unassigned-synthetic-secret"
++
+ CONFIG: dict[str, Any] = {
+     "tenant_id": TENANT,
+     "jwks": [],  # the driver's own key, for its crafted refusals (none here)
+@@ -69,6 +73,8 @@ CONFIG: dict[str, Any] = {
+                    "delegated": ["access_as_user"]},
+         REPORTS: {"secret": REPORTS_SECRET, "service_principal": "60000000-0000-4000-8000-000000000002",
+                   "roles": ["Reports.Read"]},
++        # ADR-148 Amendment 20: an application granted no app role, as an orchestrator not yet given OspreyFlow.Run.
++        UNASSIGNED: {"secret": UNASSIGNED_SECRET, "service_principal": "60000000-0000-4000-8000-000000000004"},
+     },
+     "user": {
+         "oid": ADMIN, "name": "Synthetic Administrator", "preferred_username": "admin@r1.test",
+@@ -276,6 +282,46 @@ def test_authorize_refuses_another_tenant_client_redirect_and_an_ungranted_scope
+ # ---- client credentials -------------------------------------------------------------------------
+ 
+ 
++def test_an_application_granted_no_app_role_gets_a_token_without_roles(standin: str) -> None:
++    """Entra leaves `roles` out of an app-only token when no app role is assigned to the application, never `[]`:
++    the shape the run API refuses (ADR-148 Amendment 20), modelled as the real tenant issues it (rule 15)."""
++    status, answer = _post(_token_url(standin), {
++        "grant_type": "client_credentials", "client_id": UNASSIGNED, "client_secret": UNASSIGNED_SECRET,
++        "scope": f"api://{API}/.default",
++    })  # fmt: skip
++    assert status == 200, answer
++    claims = _verify(standin, answer["access_token"], API)
++    assert claims["idtyp"] == "app" and claims["azp"] == UNASSIGNED
++    assert "roles" not in claims
++
++
++def _r1_kind():  # type: ignore[no-untyped-def]
++    gates = str(Path(__file__).parents[1] / "process/lanes/platform/gates")
++    sys.path.insert(0, gates)
++    try:
++        import r1_kind
++    finally:
++        sys.path.remove(gates)
++    return r1_kind
++
++
++def test_r1s_in_pod_token_fetch_gets_a_token_and_says_a_refusal_whole(standin: str) -> None:
++    """ADR-148 Amendment 20: R1's checks fetch an orchestrator's token by running `STANDIN_TOKEN`
++    in the stand-in's pod. The same script, run here through `sh()` against the real stand-in: a
++    registered application gets its token, and one the stand-in does not know fails with the
++    stand-in's own AADSTS words, which `refusal_words` keeps for R1's record (rule 15: the shape
++    the real call site produces)."""
++    r1 = _r1_kind()
++    scope = f"api://{API}/.default"
++    run = (sys.executable, "-I", "-c", r1.STANDIN_TOKEN, standin, TENANT)
++    token = r1.sh(*run, UNASSIGNED, UNASSIGNED_SECRET, scope).strip()
++    assert _verify(standin, token, API)["azp"] == UNASSIGNED
++    with pytest.raises(SystemExit) as refused:
++        r1.sh(*run, "eeeeeeee-ffff-4000-8111-0000000000ff", "no-secret", scope)
++    said = r1.refusal_words(refused.value)
++    assert "AADSTS700016" in said and "Traceback" not in said, said
++
++
+ def test_the_report_sync_gets_an_app_only_token_with_its_roles_and_no_scp(standin: str) -> None:
+     status, answer = _post(_token_url(standin), {
+         "grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
+diff --git a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
+index 39ebd04..7dca157 100644
+--- a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
++++ b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
+@@ -10,6 +10,18 @@ What a mistake would do, and the case that catches it (rule 12):
+   `test_a_release_without_opensearch_passes_its_checks_with_the_domain_skipped`;
+ - the domain skipped on a release with one: `test_a_release_with_opensearch_has_its_domain_checked`.
+ 
++The run API's app role (ADR-148 Amendment 20, v0.6.0 #18) likewise, by the release's own version:
++- checked on a release before v0.6.0, which has no such role:
++  `test_a_release_before_v060_skips_the_run_api_role_in_words`;
++- skipped on a release that has it, or on one whose version cannot be read:
++  `test_a_v060_release_has_its_run_api_role_checked_with_the_standins_tokens`;
++- a run API that lets an application holding no app role past its door, refuses the orchestrator
++  holding the role, or lets the report sync's dashboard identity in, or a 404 that is not the
++  Conduit's, passes the checks:
++  `test_a_run_api_answering_wrongly_fails_the_checks`;
++- the checks' words drift from the Conduit's own:
++  `test_the_checks_words_are_the_conduits_own`.
++
+ Each runs the real `r1_kind.checks()`, the door, the tokens and the record stood in for, and the
+ domain's own checks (`domain_checks`, held by the domain's tests) recorded rather than run."""
+ 
+@@ -45,9 +57,29 @@ class _Answer:
+         return self._body
+ 
+ 
++def _conduit_words() -> tuple[str, str, str]:
++    """The Conduit's own refusals, and its 404 for a run it has no record of, read from its code."""
++    import re
++
++    from services.api.service_identity import DASHBOARD_IS_NO_SERVICE_IDENTITY, RUN_ROLE_NOT_HELD
++
++    app = (Path(__file__).parents[2] / "OspreyFlow_Core/services/api/app.py").read_text(encoding="utf-8")
++    found = re.search(r'"(no run this service identity triggered[^"]*)"', app)
++    assert found, "the run API's own 404 for an unknown run"
++    return RUN_ROLE_NOT_HELD, DASHBOARD_IS_NO_SERVICE_IDENTITY, found.group(1)
++
++
+ class _Door:
+     """The Glass's door as a deployment that passes every check answers it. Tokens are the names
+-    `token()` was stood in to give: `admin`, `stranger`, or `refused`."""
++    `token()` was stood in to give: `admin`, `stranger`, or `refused`, and `standin_token()` the
++    application's own name from `r1_kind_entra.yaml`. `version` is what Admin › System says;
++    `wrong` says what the run API gets wrong, if anything."""
++
++    version: Any = "v0.6.0"
++    #: What the run API gets wrong, if anything: "unassigned-in", "orchestrator-out", "dashboard-in", or
++    #: "ingress-404" (the path reaches no Conduit, so a 404 in another's words).
++    wrong = ""
++    runs: list[str] = []
+ 
+     def get(self, path: str, headers: dict[str, str] | None = None, **_: Any) -> _Answer:
+         who = (headers or {}).get("Authorization", "").removeprefix("Bearer ")
+@@ -63,6 +95,19 @@ class _Door:
+             return _Answer(200)
+         if path.endswith("/alert-queue"):
+             return _Answer(200, [{"rule_id": "hotlist:h1"}])
++        if path == "/v1/admin/system":
++            return _Answer(200, {"version": self.version}) if who == "admin" else _Answer(403)
++        if path == "/v1/runs/r1-no-such-run":
++            self.runs.append(who)
++            role, dashboard, not_found = _conduit_words()
++            let_in = {"orchestrator": self.wrong != "orchestrator-out",
++                      "orchestrator-unassigned": self.wrong == "unassigned-in",
++                      "report-sync": self.wrong == "dashboard-in"}
++            if who == "orchestrator" and self.wrong == "ingress-404":
++                return _Answer(404, {"detail": "Not Found"})
++            if let_in.get(who):
++                return _Answer(404, {"detail": not_found})
++            return _Answer(403, {"detail": dashboard if who == "report-sync" else role})
+         raise AssertionError(f"an unexpected GET {path}")
+ 
+     def post(self, path: str, headers: dict[str, str] | None = None, **_: Any) -> _Answer:
+@@ -87,8 +132,17 @@ class _Door:
+         return _Answer(200)
+ 
+ 
+-def _checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, search: str) -> tuple[list[str], str]:
++def _checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, search: str, version: Any = "v0.6.0",
++            wrong: str = "", issue: Any = None) -> tuple[list[str], str]:
+     r1 = _r1_kind()
++    monkeypatch.setattr(_Door, "version", version)
++    monkeypatch.setattr(_Door, "wrong", wrong)
++    monkeypatch.setattr(_Door, "runs", [])
++    # The stand-in's issuing (held by tests/test_r1_entra_standin.py) stood in by the application's name.
++    names = {v["client_id"]: k for k, v in yaml.safe_load((GATES / "r1_kind_entra.yaml").read_text()).items()
++             if isinstance(v, dict) and "client_id" in v}
++    monkeypatch.setattr(r1, "standin_token", issue or (lambda client_id, secret: names[client_id]))
++    monkeypatch.setattr(r1, "entra_clients", lambda: {n: f"{n}-secret" for n in names.values()})
+     config = tmp_path / "r1_kind_osprey.yaml"
+     config.write_text(yaml.safe_dump({
+         "components": {"search": search},
+@@ -123,3 +177,62 @@ def test_a_release_with_opensearch_has_its_domain_checked(
+     probed, log = _checks(tmp_path, monkeypatch, "opensearch")
+     assert probed == ["domain"]
+     assert "SKIP the domain" not in log
++
++
++def test_a_release_before_v060_skips_the_run_api_role_in_words(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    _, log = _checks(tmp_path, monkeypatch, "postgres-fulltext", version="v0.5.1")
++    assert _Door.runs == [], "v0.5.1 has no OspreyFlow.Run, so nothing asks its run API for it"
++    assert "SKIP the run API's app role" in log and "FAIL" not in log, log[-300:]
++
++
++@pytest.mark.parametrize("version", ["v0.6.0", "0.7.1", None, "unreleased"])
++def test_a_v060_release_has_its_run_api_role_checked_with_the_standins_tokens(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: Any
++) -> None:
++    _, log = _checks(tmp_path, monkeypatch, "opensearch", version=version)
++    assert _Door.runs == ["orchestrator", "orchestrator-unassigned", "report-sync"]
++    assert "SKIP the run API's app role" not in log and "FAIL" not in log, log[-300:]
++    assert "PASS the run API refuses an application holding no app role, in words" in log
++
++
++@pytest.mark.parametrize(("wrong", "check"), [
++    ("unassigned-in", "refuses an application holding no app role"),
++    ("orchestrator-out", "takes an orchestrator holding OspreyFlow.Run past its door"),
++    ("dashboard-in", "refuses the report sync's dashboard identity"),
++    ("ingress-404", "takes an orchestrator holding OspreyFlow.Run past its door"),
++], ids=["unassigned-in", "orchestrator-out", "dashboard-in", "ingress-404"])  # fmt: skip
++def test_a_run_api_answering_wrongly_fails_the_checks(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrong: str, check: str
++) -> None:
++    with pytest.raises(SystemExit, match=check):
++        _checks(tmp_path, monkeypatch, "opensearch", wrong=wrong)
++
++
++def test_the_checks_words_are_the_conduits_own() -> None:
++    r1 = _r1_kind()
++    role, dashboard, not_found = _conduit_words()
++    assert r1.RUN_ROLE_WORDS in role and r1.DASHBOARD_WORDS in dashboard and r1.RUN_NOT_FOUND == not_found
++
++
++def test_a_token_the_standin_will_not_issue_is_a_fail_in_the_record(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
++) -> None:
++    """A stand-in started before the orchestrators were added refuses them (700016): said in the
++    record as a FAIL with its AADSTS words, never a bare exit the record does not show."""
++
++    def refused(client_id: str, secret: str) -> str:
++        # `sh()`'s own shape for a failed kubectl exec, with what STANDIN_TOKEN writes of a refusal
++        # (that script, against the real stand-in: tests/test_r1_entra_standin.py).
++        raise SystemExit("kubectl -n platform-managed exec deployment/entra-standin --: exit 1\n"
++                         "the stand-in refused (400): unauthorized_client: AADSTS700016: Application "
++                         "with identifier was not found in the directory\n"
++                         "command terminated with exit code 1\n")
++
++    with pytest.raises(SystemExit, match="issues orchestrator its token"):
++        _checks(tmp_path, monkeypatch, "opensearch", issue=refused)
++    log = (tmp_path / "check.log").read_text()
++    line = next(x for x in log.splitlines() if x.startswith("FAIL the Entra stand-in issues"))
++    assert "AADSTS700016" in line and "kubectl" not in line, line
++    assert "command terminated" not in log, "one line a check in the record"

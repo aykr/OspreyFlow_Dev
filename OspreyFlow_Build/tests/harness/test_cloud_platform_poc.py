@@ -736,6 +736,32 @@ def test_with_reporting_on_the_install_says_what_entra_s_administrator_registers
     assert "REPORT_SYNC_DASHBOARDS        = var.report_sync_dashboards" in secrets
 
 
+@pytest.mark.parametrize("id_uri", [None, "api://ospreyflow.client.example"], ids=["id-uri-default", "id-uri-set"])
+@pytest.mark.parametrize("reporting", [True, False], ids=["reporting-on", "reporting-off"])
+def test_the_install_says_how_an_orchestrator_is_granted_the_run_role(reporting: bool, id_uri: str | None) -> None:
+    """ADR-148 Amendment 20: before step 1, with reporting or without, the client's Entra
+    administrator is told to define `OspreyFlow.Run` on the API's registration and grant it to the
+    orchestrator's own, which is the client's and not counted among the deployment's."""
+    from principal_auth import RUN_APP_ROLE
+
+    config = _reporting_on() if reporting else _config()
+    if id_uri:
+        raw = config.model_dump(mode="json", exclude_none=True)
+        raw["cloud_platform"]["claims"]["api_id_uri"] = id_uri
+        config = OspreyConfig.model_validate(raw)
+    install = _artefacts(config)["INSTALL.md"]
+    before = " ".join(install[: install.index("## 1.")].split())
+    assert f"an app role `{RUN_APP_ROLE}` (allowed member types: Applications)" in before
+    assert "application permission with admin consent" in before
+    assert "not one of this deployment's counted registrations" in before
+    claims = config.cloud_platform.claims  # type: ignore[union-attr]
+    # the API's application ID URI, `api_id_uri` where one is set, never api://<id> by force
+    scope = f"{id_uri or 'api://' + claims.api_client_id}/.default"
+    assert f"`OSPREY_TOKEN_SCOPE` to `{scope}`" in before
+    token_url = f"https://login.microsoftonline.com/{claims.tenant_id}/oauth2/v2.0/token"
+    assert f"`OSPREY_TOKEN_URL` set to `{token_url}`" in before
+
+
 def test_without_reporting_the_install_says_nothing_of_it() -> None:
     install = _artefacts(_config())["INSTALL.md"]
     assert "## 6a. Reports" not in install and "oauth-authorized" not in install

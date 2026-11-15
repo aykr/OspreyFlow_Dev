@@ -1141,7 +1141,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | Registration | Kind | Details |
 |---|---|---|
 | glass | single-page application | redirect: https://<the deployment's name>/; grants: the API's access_as_user (delegated) |
-| api | web API | exposes: access_as_user; app roles: Dashboard.Read |
+| api | web API | exposes: access_as_user; app roles: Dashboard.Read, OspreyFlow.Run |
 | superset | web application, with a client secret | redirect: https://bi.<the deployment's name>/oauth-authorized/<provider>; grants: the API's access_as_user (delegated) |
 | report-sync | application (client credentials), with a client secret | grants: the API's Dashboard.Read (application) |
 
@@ -1503,8 +1503,10 @@ manage people is a guest.
 On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
 words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
 
-**Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
-assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator. Roles are
+**A person's roles are not read from an Entra token.** Its `roles` are app roles an Entra
+administrator assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator.
+(Two app roles of this API's own are read, from an application's token, never a person's: a
+dashboard identity's `Dashboard.Read` and an orchestrator's `OspreyFlow.Run`, below.) Roles are
 assigned in *Admin › People and roles*, which keeps them in the deployment's own Postgres, by tenant and
 `oid`:
 
@@ -1538,7 +1540,16 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
   account could not be read, offers *Try again*, and keeps *Sign out* within reach.
 - **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
   pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
-  registration.
+  registration, and must hold this API's app role `OspreyFlow.Run` (ADR-148 Amendment 20): the
+  client's Entra administrator defines the role on the API's registration (allowed member types:
+  Applications) and grants it to the orchestrator's application with admin consent. Any other
+  application of the tenant is refused (403): "the orchestrator's application does not hold this
+  API's OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API
+  permissions, this API, Application permissions) and grant admin consent, then ask for a new
+  token". `ospreyflow run` asks Entra ID for that token with `OSPREY_TOKEN_SCOPE` set to the API's
+  own scope, its application ID URI followed by `/.default` (by default `api://<the API's
+  application id>/.default`; `api_id_uri` where one is set), which the install's *What it needs*
+  names; without it Entra ID issues none (AADSTS1002012), and the command says so.
 
 - **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
   for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
@@ -2020,7 +2031,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
 | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
 | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
-| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's application ID URI followed by `/.default`); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
 | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
 | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
 | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |

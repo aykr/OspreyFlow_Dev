@@ -1,0 +1,23 @@
+# tests/services/api, tests/cli and tests/harness/test_cloud_platform_poc.py offline on the closed ports, at the branch's head adabc4b and at its base 97dc544 (with the branch's two changed test files), 15 November 2026
+# The failures and errors both sides share are the tests that need Docker or a live store, which this offline run does not start.
+head adabc4b: 201 failed, 7457 passed, 29 skipped, 105 warnings, 871 errors in 547.26s (0:09:07)
+base 97dc544: 218 failed, 7440 passed, 29 skipped, 105 warnings, 871 errors in 545.56s (0:09:05)
+== failing at the head, not at the base: none
+== failing at the base (with the branch's test files), not at the head: the red cases of #18 and the CLI scope
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[a-delegated-scope]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[empty]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[no-default-suffix]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[unset]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_another_apis_scope_is_refused_in_words_naming_the_setting
+FAILED tests/cli/test_conduit_client.py::test_on_entra_the_service_identity_asks_for_the_apis_default_scope
+FAILED tests/services/api/test_service_identity_entra.py::test_a_v1_app_only_token_without_the_run_role_is_refused_in_words
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[a-string-not-a-list]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-case]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-role]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[nested]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-role]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-roles-claim]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[no-role-store-answers-none]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[no-role-store-too-slow]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[no-role-not-a-dashboard]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_app_role_is_principal_auths_own_name

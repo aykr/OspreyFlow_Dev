@@ -39,6 +39,10 @@ MAPPING = ClaimMapping(
 
 _ABSENT = object()
 
+#: ADR-148 Amendment 20: the app role this API defines for an orchestrator (v0.6.0 #18), as Entra
+#: puts it in an app-only token's `roles` once it is granted to the orchestrator's application.
+RUN_APP_ROLE = "OspreyFlow.Run"
+
 
 def _settings(jwks_url: str, **overrides: object) -> OidcResolverSettings:
     fields: dict[str, object] = {
@@ -60,7 +64,7 @@ def _app_token(keypair, **overrides: object) -> str:  # type: ignore[no-untyped-
     claims: dict[str, object] = {
         "aud": API, "iss": ISSUER, "iat": now, "nbf": now, "exp": now + 3600, "ver": "2.0",
         "tid": TENANT, "oid": SP_OID, "sub": SP_OID, "azp": AIRFLOW, "azpacr": "1",
-        "idtyp": "app", "roles": ["Runs.Trigger"],
+        "idtyp": "app", "roles": [RUN_APP_ROLE],
     }  # fmt: skip
     claims.update(overrides)
     return sign_token(keypair[0], {k: v for k, v in claims.items() if v is not _ABSENT})
@@ -293,7 +297,7 @@ def test_a_token_carrying_the_dashboard_role_is_no_service_identity(jwks_url, ke
     """Its client holds this API's `Dashboard.Read`: a dashboard's, registered here or not."""
     from principal_auth import DASHBOARD_APP_ROLE
 
-    token = _app_token(keypair, roles=["Runs.Trigger", DASHBOARD_APP_ROLE])
+    token = _app_token(keypair, roles=[RUN_APP_ROLE, DASHBOARD_APP_ROLE])
     with pytest.raises(ServiceIdentityRefused, match="dashboard") as refused:
         _verifier(jwks_url).client_of(token)
     assert refused.value.status == 403
@@ -313,12 +317,16 @@ class _Dashboards:
 
 
 @pytest.mark.parametrize("registered", [True, False], ids=["registered-dashboard", "not-a-dashboard"])
+@pytest.mark.parametrize("roles", [[RUN_APP_ROLE], _ABSENT], ids=["run-role", "no-role"])
 def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
-    jwks_url, keypair, registered
+    jwks_url, keypair, registered, roles
 ) -> None:
     """Through the real `get_service_identity`: a client Admin › Dashboards registered is refused
-    before anything is read, though its token holds no dashboard role; any other gets past this
-    door (to whatever the route's own dependencies then answer, here without the app's start)."""
+    as a dashboard's before anything is read, though its token holds no dashboard role, and also
+    when it holds no role at all (Amendment 20 would otherwise send it to grant itself
+    `OspreyFlow.Run`); any other gets past this door with the run role (to whatever the route's
+    own dependencies then answer, here without the app's start), and without it is refused in the
+    run role's words."""
     from fastapi.testclient import TestClient
     from services.api.app import app
 
@@ -327,13 +335,17 @@ def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
     app.state.people_store = _Dashboards() if registered else None
     try:
         answered = TestClient(app, raise_server_exceptions=False).post(
-            "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+            "/v1/runs",
+            json={},
+            headers={"Authorization": f"Bearer {_app_token(keypair, roles=roles)}"},
         )
     finally:
         for key, value in before.items():
             setattr(app.state, key, value)
     refused = answered.status_code == 403 and "dashboard identity" in answered.text
     assert refused is registered, (answered.status_code, answered.text)
+    if not registered and roles is _ABSENT:
+        assert answered.status_code == 403 and "OspreyFlow.Run app role" in answered.text
 
 
 class _AnswersNone(_Dashboards):
@@ -350,16 +362,28 @@ class _Slow(_Dashboards):
 
 
 @pytest.mark.parametrize(
-    ("store", "answer"),
-    [(_AnswersNone, "past"), (_Slow, 503)],
-    ids=["store-answers-none", "store-too-slow"],
+    ("store", "roles", "answer"),
+    [
+        (_AnswersNone, [RUN_APP_ROLE], "past"),
+        (_Slow, [RUN_APP_ROLE], 503),
+        (_AnswersNone, _ABSENT, 403),
+        (_Slow, _ABSENT, 403),
+    ],
+    ids=[
+        "store-answers-none",
+        "store-too-slow",
+        "no-role-store-answers-none",
+        "no-role-store-too-slow",
+    ],
 )
 def test_the_run_api_door_with_a_store_answering_none_or_too_slowly(
-    jwks_url, keypair, store, answer, monkeypatch
+    jwks_url, keypair, store, roles, answer, monkeypatch
 ) -> None:
     """A store that holds no such registration lets the client past this door; one that does not
     answer within the role lookup's bound is a 503 in words, never a wait as long as the store's
-    (ADR-148 Amendment 10, the lane review of 009a889)."""
+    (ADR-148 Amendment 10, the lane review of 009a889). A token without the run role is refused in
+    its words either way (Amendment 20): the store only chooses a dashboard's words, so a store
+    that cannot be read never turns that refusal into a 503."""
     import time
 
     from fastapi.testclient import TestClient
@@ -373,13 +397,17 @@ def test_the_run_api_door_with_a_store_answering_none_or_too_slowly(
     started = time.monotonic()
     try:
         answered = TestClient(app, raise_server_exceptions=False).post(
-            "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+            "/v1/runs",
+            json={},
+            headers={"Authorization": f"Bearer {_app_token(keypair, roles=roles)}"},
         )
     finally:
         for key, value in before.items():
             setattr(app.state, key, value)
     assert time.monotonic() - started < 10
-    if answer == 503:
+    if answer == 403:
+        assert answered.status_code == 403 and "OspreyFlow.Run app role" in answered.text
+    elif answer == 503:
         assert answered.status_code == 503 and "could not be read" in answered.text
     else:
         assert answered.status_code not in (403, 503), (answered.status_code, answered.text)
@@ -394,3 +422,75 @@ def test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error(
     token = _app_token(keypair, **{claim: [AIRFLOW]})
     with pytest.raises(ServiceIdentityRefused):
         _verifier(jwks_url).client_of(token)
+
+
+# --- ADR-148 Amendment 20: the run API's own app role (v0.6.0 #18; CARRIES row 202) ----------
+
+
+def test_the_run_app_role_is_principal_auths_own_name() -> None:
+    import principal_auth
+
+    assert getattr(principal_auth, "RUN_APP_ROLE", None) == RUN_APP_ROLE
+
+
+@pytest.mark.parametrize(
+    "roles",
+    [_ABSENT, [], ["Runs.Trigger"], ["ospreyflow.run"], "OspreyFlow.Run", [["OspreyFlow.Run"]]],
+    ids=[
+        "no-roles-claim",
+        "no-role",
+        "another-role",
+        "another-case",
+        "a-string-not-a-list",
+        "nested",
+    ],
+)
+def test_an_app_only_token_without_the_run_role_is_refused_in_words(
+    jwks_url, keypair, roles
+) -> None:
+    """Before Amendment 20 any app-only token of the pinned tenant could call the run API. Now its
+    application must hold `OspreyFlow.Run`; Entra leaves `roles` out of the token when no app role
+    is granted, so its absence is the common shape. Refused in words saying which role, and where
+    it is granted; never an error."""
+    token = _app_token(keypair, roles=roles)
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier(jwks_url).client_of(token)
+    assert refused.value.status == 403
+    assert str(refused.value) == (
+        "the orchestrator's application does not hold this API's OspreyFlow.Run app role: in "
+        "Entra ID, add it to the orchestrator's own registration (API permissions, this API, "
+        "Application permissions) and grant admin consent, then ask for a new token"
+    )
+
+
+def test_a_v1_app_only_token_without_the_run_role_is_refused_in_words(jwks_url, keypair) -> None:
+    token = _app_token(
+        keypair, azp=_ABSENT, azpacr=_ABSENT, appid=AIRFLOW, ver="1.0", idtyp=_ABSENT, roles=_ABSENT
+    )
+    with pytest.raises(ServiceIdentityRefused, match="OspreyFlow.Run app role") as refused:
+        _verifier(jwks_url).client_of(token)
+    assert refused.value.status == 403
+
+
+def test_a_dashboard_identity_holding_its_role_alone_is_told_it_is_a_dashboards(
+    jwks_url, keypair
+) -> None:
+    """Amendment 10 before Amendment 20: a dashboard identity holding `Dashboard.Read` alone is
+    told it is a dashboard's, never sent to grant itself `OspreyFlow.Run`."""
+    from principal_auth import DASHBOARD_APP_ROLE
+
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier(jwks_url).client_of(_app_token(keypair, roles=[DASHBOARD_APP_ROLE]))
+    assert refused.value.status == 403 and "dashboard identity" in str(refused.value)
+
+
+def test_an_app_only_token_holding_the_run_role_names_its_client(jwks_url, keypair) -> None:
+    for roles in ([RUN_APP_ROLE], ["Runs.Trigger", RUN_APP_ROLE]):
+        assert _verifier(jwks_url).client_of(_app_token(keypair, roles=roles)) == AIRFLOW
+
+
+def test_the_run_role_never_lets_the_deployments_own_clients_in(jwks_url, keypair) -> None:
+    for client in (GLASS, API):
+        with pytest.raises(ServiceIdentityRefused) as refused:
+            _verifier(jwks_url).client_of(_app_token(keypair, azp=client, roles=[RUN_APP_ROLE]))
+        assert refused.value.status == 403

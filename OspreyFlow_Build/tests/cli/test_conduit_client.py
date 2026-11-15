@@ -11,6 +11,7 @@ service accounts `400 unauthorized_client`. The Conduit double answers in the ro
 from __future__ import annotations
 
 import json
+import urllib.parse
 from pathlib import Path
 
 import httpx
@@ -137,6 +138,101 @@ def test_what_keycloak_refuses_is_refused_in_words_without_the_secret(env: dict[
         service_token(env, http)
     assert "refused the service identity's sign-in" in str(refused.value)
     assert env["OSPREY_CLIENT_SECRET"] not in str(refused.value)
+
+
+# --- Entra ID's token endpoint (v0.6.0, the owner's word beside ADR-148 Amendment 20) -------------
+# Entra refuses a client-credentials request without `scope`, or with one not `<resource>/.default`
+# (AADSTS1002012), names another resource (500011) and a wrong secret (7000215), as R1's stand-in
+# models it (`process/lanes/platform/gates/r1_kind_servers.py`, `_client_credentials`; rule 15: the
+# fake refuses what the real one refuses).
+
+API_SCOPE = "api://bbbbbbbb-cccc-4ddd-8eee-ffffffffffff/.default"
+_ENTRA = {"OSPREY_TOKEN_URL": "https://login.microsoftonline.com/t/oauth2/v2.0/token",
+          "OSPREY_CLIENT_ID": "eeeeeeee-ffff-4000-8111-000000000003",
+          "OSPREY_CLIENT_SECRET": "right-secret"}  # fmt: skip
+
+
+def _entra_error(status: int, error: str, code: int, words: str) -> httpx.Response:
+    return httpx.Response(status, json={
+        "error": error, "error_description": f"AADSTS{code}: {words}", "error_codes": [code],
+    })  # fmt: skip
+
+
+def _entra(request: httpx.Request) -> httpx.Response:
+    form = dict(urllib.parse.parse_qsl(request.content.decode()))
+    if form.get("client_secret") != "right-secret":
+        return _entra_error(401, "invalid_client", 7000215, "Invalid client secret provided.")
+    scope = form.get("scope", "")
+    resource, _, name = scope.rpartition("/")
+    if len(scope.split()) != 1 or name != ".default":
+        words = (f"The provided value for scope {scope} is not valid. Client credential flows must "
+                 "have a scope value with /.default suffixed to the resource identifier.")
+        return _entra_error(400, "invalid_scope", 1002012, words)
+    if f"{resource}/.default" != API_SCOPE:
+        return _entra_error(400, "invalid_resource", 500011, f"The resource principal named "
+                            f"{resource} was not found in the tenant named t.")  # fmt: skip
+    return httpx.Response(200, json={"access_token": "entra-token", "token_type": "Bearer"})
+
+
+def test_on_entra_the_service_identity_asks_for_the_apis_default_scope() -> None:
+    http = httpx.Client(transport=httpx.MockTransport(_entra))
+    assert service_token({**_ENTRA, "OSPREY_TOKEN_SCOPE": API_SCOPE}, http) == "entra-token"
+
+
+@pytest.mark.parametrize(
+    "scope",
+    [None, "", "api://bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+     "api://bbbbbbbb-cccc-4ddd-8eee-ffffffffffff/access_as_user"],
+    ids=["unset", "empty", "no-default-suffix", "a-delegated-scope"],
+)  # fmt: skip
+def test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting(
+    scope: str | None,
+) -> None:
+    env = {**_ENTRA} if scope is None else {**_ENTRA, "OSPREY_TOKEN_SCOPE": scope}
+    http = httpx.Client(transport=httpx.MockTransport(_entra))
+    with pytest.raises(CommandRefused) as refused:
+        service_token(env, http)
+    said = str(refused.value)
+    assert "OSPREY_TOKEN_SCOPE" in said and "/.default" in said, said
+    assert "right-secret" not in said
+
+
+def test_on_entra_another_apis_scope_is_refused_in_words_naming_the_setting() -> None:
+    env = {**_ENTRA, "OSPREY_TOKEN_SCOPE": "api://00000000-0000-4000-8000-000000000000/.default"}
+    http = httpx.Client(transport=httpx.MockTransport(_entra))
+    with pytest.raises(CommandRefused) as refused:
+        service_token(env, http)
+    said = str(refused.value)
+    assert "OSPREY_TOKEN_SCOPE names no API of this tenant" in said, said
+
+
+def test_on_entra_a_wrong_secret_is_refused_as_before_without_the_secret() -> None:
+    http = httpx.Client(transport=httpx.MockTransport(_entra))
+    with pytest.raises(CommandRefused) as refused:
+        env = {**_ENTRA, "OSPREY_CLIENT_SECRET": "wrong", "OSPREY_TOKEN_SCOPE": API_SCOPE}
+        service_token(env, http)
+    assert "refused the service identity's sign-in" in str(refused.value)
+    assert "wrong" not in str(refused.value)
+
+
+def test_keycloak_is_asked_as_before_with_no_scope() -> None:
+    """Keycloak is unchanged (ADR-141 decision 10): with no OSPREY_TOKEN_SCOPE the request carries
+    exactly the three fields it always did."""
+    seen: list[dict[str, str]] = []
+
+    def keycloak(request: httpx.Request) -> httpx.Response:
+        # blank values kept, so an empty `scope=` is seen, not dropped
+        seen.append(dict(urllib.parse.parse_qsl(request.content.decode(), keep_blank_values=True)))
+        return _keycloak(request)
+
+    http = httpx.Client(transport=httpx.MockTransport(keycloak))
+    assert service_token({**_ENV, "OSPREY_CLIENT_SECRET": "right-secret"}, http) == "svc-token"
+    sent = {
+        "grant_type": "client_credentials",
+        "client_id": "airflow",
+        "client_secret": "right-secret",
+    }
+    assert seen == [sent]
 
 
 def _runs(*answers: dict[str, object]) -> tuple[httpx.Client, list[httpx.Request]]:

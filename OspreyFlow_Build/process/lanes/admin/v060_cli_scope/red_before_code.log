@@ -1,0 +1,8 @@
+# tests/cli/test_conduit_client.py at adabc4b, against the base 97dc544's conduit_client.py (no scope sent)
+FAILED tests/cli/test_conduit_client.py::test_on_entra_the_service_identity_asks_for_the_apis_default_scope
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[unset]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[empty]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[no-default-suffix]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[a-delegated-scope]
+FAILED tests/cli/test_conduit_client.py::test_on_entra_another_apis_scope_is_refused_in_words_naming_the_setting
+6 failed, 23 passed in 0.68s

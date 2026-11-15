@@ -1,0 +1,13 @@
+# tests/services/api/test_service_identity_entra.py at the branch's head adabc4b, against the base 97dc544's code (main's, before #18)
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[no-role-not-a-dashboard]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[no-role-store-answers-none]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[no-role-store-too-slow]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_app_role_is_principal_auths_own_name
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-roles-claim]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-role]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-role]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-case]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[a-string-not-a-list]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[nested]
+FAILED tests/services/api/test_service_identity_entra.py::test_a_v1_app_only_token_without_the_run_role_is_refused_in_words
+11 failed, 37 passed in 30.66s

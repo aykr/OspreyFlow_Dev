@@ -2391,23 +2391,38 @@ async def get_service_identity(
     except SigningKeysUnavailable as unavailable:
         raise HTTPException(status_code=503, detail=str(unavailable)) from unavailable
     except ServiceIdentityRefused as refused:
+        # ADR-148 Amendment 20: an application refused for want of the run role may be a dashboard
+        # identity whose token holds no role; it is told it is a dashboard's, as Amendment 10 says.
+        # The registrations only choose the words: if they cannot be read, the refusal stands in
+        # the run role's words, never a 503 for a door that is shut either way.
+        if refused.client is not None:
+            try:
+                await _refuse_a_registered_dashboard(request, refused.client)
+            except HTTPException as answer:
+                if answer.status_code != 503:
+                    raise
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
-    # ADR-148 Amendment 10: a client Admin › Dashboards registered is a dashboard identity, which
-    # reads the report feed and never submits runs, whatever its token holds. The read is bounded as
-    # a person's stored roles are; past it, the same 503.
-    store = getattr(request.app.state, "people_store", None)
-    if store is not None:
-        try:
-            registered = await asyncio.wait_for(
-                store.dashboard(store.tenant_id, client), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS
-            )
-        except Exception as exc:  # noqa: BLE001 - any failure of the read is the one 503
-            raise HTTPException(
-                status_code=503, detail="the dashboard identities could not be read"
-            ) from exc
-        if registered is not None:
-            raise HTTPException(status_code=403, detail=DASHBOARD_IS_NO_SERVICE_IDENTITY)
+    await _refuse_a_registered_dashboard(request, client)
     return client
+
+
+async def _refuse_a_registered_dashboard(request: Request, client: str) -> None:
+    """ADR-148 Amendment 10: a client Admin › Dashboards registered is a dashboard identity, which
+    reads the report feed and never submits runs, whatever its token holds. The read is bounded as
+    a person's stored roles are; past it, the same 503."""
+    store = getattr(request.app.state, "people_store", None)
+    if store is None:
+        return
+    try:
+        registered = await asyncio.wait_for(
+            store.dashboard(store.tenant_id, client), timeout=ROLE_LOOKUP_TIMEOUT_SECONDS
+        )
+    except Exception as exc:  # noqa: BLE001 - any failure of the read is the one 503
+        raise HTTPException(
+            status_code=503, detail="the dashboard identities could not be read"
+        ) from exc
+    if registered is not None:
+        raise HTTPException(status_code=403, detail=DASHBOARD_IS_NO_SERVICE_IDENTITY)
 
 
 ServiceIdentityDep = Annotated[str, Depends(get_service_identity)]

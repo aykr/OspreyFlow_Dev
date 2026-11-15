@@ -67,7 +67,8 @@ def entra_registrations(config: OspreyConfig) -> int:
 
 def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> str:
     """ADR-148 Amendments 9 and 10: what the client's Entra administrator registers for Superset and
-    the report sync, before step 2 (whose Terraform asks for their secrets)."""
+    the report sync, before step 2 (whose Terraform asks for their secrets); and Amendment 20's app
+    role for an orchestrator's own registration."""
     cp = config.cloud_platform
     assert cp is not None and cp.claims is not None
     claims, parts = cp.claims, []
@@ -88,6 +89,20 @@ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> st
             "registration of its own with a client secret, granted `Dashboard.Read` with admin consent;\n"
             "step 6a registers it here. Until there is one, step 2's `report_sync_dashboards` is `[]`."
         )
+    # ADR-148 Amendment 20: the orchestrator's registration is the client's own, not one of the
+    # deployment's (entra_registrations does not count it), so it is said whatever reporting renders.
+    parts.append(
+        "**For an orchestrator that runs pipelines** (ADR-141 decision 10, ADR-148 Amendment 20): on this API's\n"
+        "registration, an app role `OspreyFlow.Run` (allowed member types: Applications). The orchestrator's\n"
+        "own app registration, the client's and not one of this deployment's counted registrations, signs in\n"
+        "with the client-credentials grant and is granted `OspreyFlow.Run` as an application permission with\n"
+        "admin consent; without it the run API refuses its token, in words saying where to grant it.\n"
+        "`ospreyflow run` signs it in with its own application id and secret (`OSPREY_CLIENT_ID`,\n"
+        f"`OSPREY_CLIENT_SECRET`), `OSPREY_TOKEN_URL` set to\n"
+        f"`https://login.microsoftonline.com/{claims.tenant_id}/oauth2/v2.0/token` and `OSPREY_TOKEN_SCOPE` to\n"
+        f"`{claims.id_uri}/.default`, the API's application ID URI and `/.default`, without which Entra ID issues\n"
+        "no token."
+    )
     return ("\n" + "\n\n".join(parts) + "\n") if parts else ""
 
 
