@@ -2129,3 +2129,6 @@ The owner's plan (`v060/OWNER_PLAN_2026-11-15.md`) replaces every earlier v0.5.2
 release, v0.6.0, fresh install only; a closed list; scope before date; one package, one CI run, one package test, one
 release. The remade candidate and step 6 were cancelled at ~10:20Z (platform-b told; its lease to be released). AD was
 merged first (eb78042), as the owner asked. Estimates requested from every owning lane.
+- **v0.6.0 rulings (the owner, ~10:10Z):** the list without item 7; a refusal holds fresh-install-only; item 23 out (the
+  package test records memory); the basemap settlements only; item 8 done. `v060/RULINGS.md` has them and the v0.6.1 list.
+  The route is rewritten to the items and the five stages (`route.tsv`; v0.5.2's kept as `route_v052_history.tsv`).

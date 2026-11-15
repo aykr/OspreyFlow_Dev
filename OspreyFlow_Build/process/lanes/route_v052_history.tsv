@@ -1,0 +1,58 @@
+# history (v0.5.2 never published; replaced by v0.6.0, the owner, 15 Nov) target	v0.5.2	2026-11-17
+# steps	B,U,C,D
+# The route to v0.5.2 (the owner, 13 Nov 2026). Kept by the orchestrator; the heartbeat's default view reads it.
+# Tab-separated: id, title, lane, start (YYYY-MM-DD), end (YYYY-MM-DD), critical (y/n), after (ids, comma, or -), progress
+# (lane:step in progress.tsv whose status gives this step's state; "-" for the orchestrator's own or the owner's).
+# The "# steps" line names the letter ids that are steps, not fixes: the default view collapses the done ones with the
+# whole-number steps, and every other letter id's with the fixes (lanes_heartbeat.sh --steps shows one line a step).
+1	v0.5.1 cut: as R1 tested it, the upgrade rehearsal and the CHANGELOG	orchestrator	2026-11-14	2026-11-17	n	-	orchestrator:v051-cut
+2	The poc manifest and its render test	platform	2026-11-14	2026-11-15	n	-	platform:v052-manifest
+3a	OpenSearch on poc: render, Terraform, sign-in, what the client provides	platform	2026-11-16	2026-11-17	n	2	platform:v052-opensearch
+3b	Superset and report sync on Entra	platform-b	2026-11-14	2026-11-19	n	2	platform-b:v052-superset
+3c	The index feed: every change reaches the index, rebuild, drift check	rules	2026-11-14	2026-11-19	y	-	rules:v052-index
+3d	The search service: names, full text, ranking, groups, suggestions, access	studio	2026-11-14	2026-11-20	y	A	studio:v052-search
+3e	The Glass's screen fixes and the navigation (Part B)	case	2026-11-14	2026-11-16	n	-	case:v052-fixes
+3e′	The search results layout (Part A), against 3d's agreed shape	case	2026-11-17	2026-11-20	y	3e	case:v052-results
+B	Client-size synthetic data at full scale, after the write-path fix (ADR-124 Am 18), loaded once	rules	2026-11-14	2026-11-14	y	3c	rules:v052-load
+3f	Promote an expansion to a batch job at the cap (ADR-151, the owner's ruling)	rules-b	2026-11-14	2026-11-16	y	-	rules-b:v052-batch
+3f′	The batch job's screen: its choice on the cap refusal, progress and result (ADR-151)	case-b	2026-11-14	2026-11-16	y	3f	case-b:v052-batch-ui
+3g	The administrator fallback on Entra (audit 4c, ADR-148 Am 15), its post-merge live run	platform-b	2026-11-14	2026-11-16	y	-	platform-b:v052-4c
+3h	A merged pair arrives as one cluster: cluster ids when nodes enter the working set (rule 6; found live 14 Nov)	case	2026-11-14	2026-11-16	y	-	case:v052-cluster-on-entry
+U	An upgrade or fresh install builds the search index (ADR-150 d4: no index made before v052-index has a fingerprint)	platform	2026-11-15	2026-11-16	y	3c	platform:v052-upgrade-index
+4	The measurement session on that load	platform	2026-11-14	2026-11-15	y	B	platform:v052-measure
+5	Feature freeze (the moment the last open feature merges) and the wording sweep at once	docs	2026-11-14	2026-11-15	y	3f,3f′,3g,3h,U	docs:v052-sweep
+3i	edges_among in chunks (ADR-124 Am 20): a batch or view past ~10k nodes answers	rules-b	2026-11-14	2026-11-16	y	-	rules-b:v052-am20
+F	Main's CI green (four fixes)	orchestrator	2026-11-14	2026-11-15	y	-	orchestrator:v052-ci
+T	The top bar stays one line: less-used views fold into More views (the owner's design rule; fallback by Sun midday: all but Graph and Map at narrow widths)	case	2026-11-14	2026-11-15	y	-	case:v052-topbar
+Q	The ontology read retried, so the Query builder and link types appear after a failed first read; step 6's live list (5 of 5)	case	2026-11-14	2026-11-15	y	-	case:v052-tidy
+P	The batch job's panel only on the canvas, not over Studio, Reports, Boards; a local-lite batch job proven to done	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-batch-panel
+S	Type-ahead: case-sensitive suggestions fill their page; the limited line says its reason, never 'just now' when no index is configured	studio	2026-11-14	2026-11-15	y	-	studio:v052-suggest
+W	Refusals say 'People and roles', not 'Admin › People'; no raw field names in the Entra refusal	admin	2026-11-14	2026-11-15	y	-	admin:v052-words
+E	A watch stays active until three unreachable evaluations in a row (ADR-044; the owner's ruling, 14 Nov)	admin	2026-11-14	2026-11-15	y	-	admin:v052-escalation
+G	The Glass shows the Conduit's words for an access value not set, a token-version mismatch and a refused guest	platform-b	2026-11-14	2026-11-15	y	-	platform-b:v052-signin-words
+M	Mark for suppression says what it does today: a mark and a reason, hiding nothing yet (the owner, 14 Nov)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-suppress-words
+R	The render's and spec 05's 'falls back to PostgreSQL' say what search really does when OpenSearch does not answer	platform	2026-11-14	2026-11-15	y	-	platform:v052-fallback-words
+K	The search results page says counts are per group, so All need not equal their sum (the owner, 14 Nov)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-group-counts
+A	The map's attribution chip readable: a token background, measured in every look	platform-b	2026-11-14	2026-11-15	y	-	platform-b:v052-attribution
+V	The Glass shows the code's own version, not an older checkout's .git commit (the demo showed v0.5.0)	platform-b	2026-11-14	2026-11-15	y	-	platform-b:v052-version
+N	The Ingest Studio's messages say Pipeline, as its screens do, not recipe	studio	2026-11-14	2026-11-15	y	-	studio:v052-pipeline-words
+H	Help (?) opens its panel from every view, not only Graph	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-help-everywhere
+D2	The model's refusals in words: the provider's 429 and 401, a time-out said instead of a 500, a deadline on the Glass's model fetches (studio's demo research)	studio	2026-11-14	2026-11-15	y	-	studio:v052-model-words
+A2	Only an administrator can give the osprey-admin role; a people manager is refused in words (studio's demo research; rule 4)	admin	2026-11-14	2026-11-15	y	-	admin:v052-admin-grant
+S7	Mark for suppression survives a reload: the marks are read back, and a marked node offers Remove	case	2026-11-14	2026-11-15	y	-	case:v052-suppress-reload
+S8	Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one	case	2026-11-14	2026-11-15	y	-	case:v052-suppress-reason
+S9	ospreyflow start --build rebuilds the search index, as install and update do	platform	2026-11-14	2026-11-15	y	-	platform:v052-startbuild-index
+M9	The fallback name search under its 5 s budget at client size: search_nodes from record ids found by index, not a scan of the store (ADR-124 Am 21)	rules	2026-11-15	2026-11-15	y	4	rules:v052-search-from-rids
+V1	"View" means a saved view only, and the way back to the whole case (ADR-145 Am 17, ADR-144 Am 6; the owner's exception, 14 Nov)	case	2026-11-14	2026-11-15	y	-	case:v052-saved-views
+V2	The saved views panel: its title, The whole case first, Open now, unnamed views told apart (the owner's exception)	case-b	2026-11-14	2026-11-15	y	-	case-b:v052-saved-views-panel
+V3	No internal note on screen: "(the client's)", "to be confirmed" removed, held by a guard (the owner's exception)	studio	2026-11-14	2026-11-15	y	-	studio:v052-no-internal-notes
+V4	Every panel and menu on the page's own type scale in both looks, by measurement (the owner's exception)	admin	2026-11-14	2026-11-15	y	-	admin:v052-panel-type-scale
+V5	The user guide follows the saved-views words; the sweep's navigation items re-run (the owner's exception)	docs	2026-11-14	2026-11-15	y	V1,V2	docs:v052-guide-saved-views
+L1	The case line on one type size, held by measurement in both looks (the owner, 15 Nov: in the candidate if step 6 still starts by Mon 08:00Z)	case	2026-11-15	2026-11-15	n	-	case:v052-case-line-size
+L2	Ask & Chat's answer: markers one space after their words, 'Show on the graph:' names, one bracket, 'this deployment's own model' (the owner, 15 Nov)	case-b	2026-11-15	2026-11-15	n	-	case-b:v052-ask-markers
+C	The candidate: main after the sweep, with CI green on it (waits on step 4, M10 passing: the owner, 14 Nov)	orchestrator	2026-11-15	2026-11-15	y	4,5,3i,F,T,Q,P,S,W,E,G,M,R,K,A,V,N,H,D2,A2,S7,S8,S9,M9,V1,V2,V3,V4,V5,L1,L2,AD,BK	orchestrator:v052-candidate2
+D	osprey-small (the GOV.UK demo) from the candidate, for client sign-ins (the owner, 14 Nov): backup, the gate, four sign-ins, health, a browser pass; restored if any check fails	orchestrator	2026-11-15	2026-11-15	n	C,4	orchestrator:v052-demo
+6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-15	2026-11-15	y	4,C	platform-b:v052-r1
+AD	GOV.UK scroll and Admin fonts: every inner scroller contained (the page never moves when a panel ends), Admin one scroller, the System page in the page's font (the owner, 15 Nov: INTO THE CANDIDATE; ADR-132's frame kept)	admin	2026-11-15	2026-11-15	n	-	admin:v052-govuk-admin-scroll
+BK	cloud-platform backups never hold the map key file; a restore names the keys to enter again (rules-b's finding, the owner, 15 Nov: in the candidate)	platform	2026-11-15	2026-11-15	n	-	platform:v052-backup-mapkeys
+7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-16	2026-11-16	y	6	-

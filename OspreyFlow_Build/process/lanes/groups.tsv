@@ -166,3 +166,13 @@ orchestrator	v052-candidate2	Housekeeping	Client install
 admin	v052-govuk-admin-scroll	Four places, the Glass and Admin	Client install
 rules-b	admin-forms-research	Housekeeping	After the client's install
 platform	v052-backup-mapkeys	Housekeeping	Client install
+case-b	v060-i3-accordion	Four places, the Glass and Admin	Client install
+case-b	v060-i4-fullpage	Four places, the Glass and Admin	Client install
+case	v060-i5-show-all	Four places, the Glass and Admin	Client install
+admin	v060-i6-govuk-type	Four places, the Glass and Admin	Client install
+docs	v060-i9-rename	Four places, the Glass and Admin	Client install
+rules-b	v060-i10-basemap	Four places, the Glass and Admin	Client install
+platform-b	v060-i11-package-test	Four places, the Glass and Admin	Client install
+rules	v060-i14-stopped-why	Four places, the Glass and Admin	Client install
+admin	v060-i18-run-app-role	Four places, the Glass and Admin	Client install
+platform	v060-rf-fresh-only	Four places, the Glass and Admin	Client install
