@@ -44,3 +44,14 @@ out and counted, never named; item 10 moves from platform to rules-b; the demo's
 
 The orchestrator's rulings on #6's confirming pass (standing rule): headings and form controls on the token scale in both
 looks (DESIGN.md's one scale); GOV.UK Frontend's own classes kept; the Studio's em sizes, the mono glyphs and D2's values in scope.
+
+## The GOV.UK demo's Gemini (the owner, 15 Nov ~12:45Z)
+
+- The key on the demo server is on Google's **free tier**: 15 requests a minute, 250,000 input tokens a minute, 500
+  requests a day (the owner's figures from Google). Google may use free-tier prompts to improve its products; the demo
+  holds synthetic data, and visitors' typed questions go with them.
+- Model: **`gemini-3.8-flash`** (Google's newest stable Flash, checked 15 Nov); the gateway's LiteLLM must route it,
+  checked at the rebuild.
+- The demo's own budget: **1,000,000 tokens a day** (Admin › Models), inside the free tier's daily limit.
+- Set at stage 5's rebuild (Wed 18 07:00 UK), then proved from a browser: the engine choice appears and one question is
+  answered by Gemini. The visitor sign-in proposal still comes to the owner.
