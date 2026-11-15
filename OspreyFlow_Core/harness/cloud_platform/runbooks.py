@@ -40,6 +40,7 @@ from harness.cloud_platform.decommission_check import DISK_NAMESPACE_TAG, KINDS
 from harness.cloud_platform.settings import PlatformSettings
 from harness.cloud_platform.terraform import BUCKETS, RDS_INSTANCE_CLASS, ecr_repositories
 from harness.cloud_platform_backups import BUCKET_SUFFIX, EXPIRE_DAYS, KEPT_AT_DECOMMISSION
+from harness.fresh_only import FRESH_FROM
 from principal_auth import TOKEN_VERSION_LOG
 from schemas.deployment import OspreyConfig, SearchBackend, generated_folder
 
@@ -185,6 +186,25 @@ def command_blocks(text: str, *, on_the_platform: bool) -> list[str]:
     return [body for platform, body in _FENCE.findall(text) if on_the_platform or not platform]
 
 
+def _fresh_only(values: dict[str, Any]) -> str:
+    """v0.6.0 is installed fresh (`harness.fresh_only`): run over a namespace that already holds a
+    deployment, this runbook stops before anything is changed unless that deployment is at v0.6.0
+    or later. The deployment's release is the `OSPREY_RELEASE_VERSION` in its `ospreyflow-env`
+    ConfigMap; the one being installed, the render's own."""
+    installing = str((values.get("environment") or {}).get("OSPREY_RELEASE_VERSION", ""))
+    return f"""This runbook installs a new deployment, or moves one already in the namespace to this release.
+{FRESH_FROM} is installed fresh: a namespace holding a deployment of an earlier release is not moved onto
+it, and the next block stops there, saying so, before anything is changed.
+
+```bash
+if helm status "$RELEASE" -n "$NS" >/dev/null 2>&1; then
+  "$PY" -m harness.fresh_only --installing {installing} \\
+    --installed "$(kubectl -n "$NS" get configmap ospreyflow-env -o jsonpath='{{.data.OSPREY_RELEASE_VERSION}}' 2>/dev/null)"
+fi
+```
+"""
+
+
 def _settings(config: OspreyConfig, platform: PlatformSettings) -> str:
     cp = config.cloud_platform
     assert cp is not None and cp.namespace is not None
@@ -263,7 +283,7 @@ granted), with the claims `cloud_platform.claims` names{"; and, for reports, tho
 {_reporting_registrations(config, values)}
 **The managed PostgreSQL** allows a `max_connections` of {POSTGRES_MAX_CONNECTIONS}. The least it must allow in this
 shape is {least}: two Conduits side by side during an update, the worker, the gateway and a reserve (ADR-114
-Amendment 43's figures), with Superset and the report sync (from v0.5.2, as many copies as this shape renders)
+Amendment 43's figures), with Superset and the report sync (as many copies as this shape renders)
 doubled by an upgrade in progress. {POSTGRES_MAX_CONNECTIONS} is set for every shape, the production shape's least
 ({least_for(True)}) among them, so this shape has more room: {POSTGRES_MAX_CONNECTIONS - least} to spare. The Terraform
 renders it as a {RDS_INSTANCE_CLASS} (8 GiB) with a parameter group setting it. In the environments repository,
@@ -282,6 +302,7 @@ kubectl auth can-i create statefulsets -n "$NS"
 kubectl auth can-i create persistentvolumeclaims -n "$NS"
 ```
 
+{_fresh_only(values)}
 ## 2. The namespace's resources (the platform team's pull request)
 
 Copy `$FOLDER/terraform/` into the namespace's folder in the environments repository and raise the

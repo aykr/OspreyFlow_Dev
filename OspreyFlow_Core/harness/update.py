@@ -38,7 +38,7 @@ from typing import Any
 
 import yaml
 
-from harness import ingest_uploads, model_downloads, search_rebuild, store_volumes
+from harness import fresh_only, ingest_uploads, model_downloads, search_rebuild, store_volumes
 from harness.atomic import replace_whole
 from harness.keycloak_theme import clear_theme_cache
 from harness.release import (
@@ -536,6 +536,10 @@ def _apply_update(
             f"ospreyflow: {tag} is older than {current}; update moves forward only.",
             file=sys.stderr,
         )
+        return 1
+    # v0.6.0 is installed fresh (`harness.fresh_only`): an earlier deployment never moves onto it.
+    if (why := fresh_only.refusal(current, tag)) is not None:
+        print(f"ospreyflow: {why} Nothing was changed.", file=sys.stderr)
         return 1
     try:
         prepared = (_prepare_bundle if bundle is not None else _prepare_online)(host, repo, release)
