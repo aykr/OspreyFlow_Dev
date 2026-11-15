@@ -435,11 +435,12 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
   });
 
-  test("the case line's cross-link to the Ingest Studio leaves the page: back in the Glass it is gone", async () => {
+  test("the case line's cross-link to the Ingest Studio leaves the page: back in the Glass by the cross-link it is gone", async () => {
     await openAsk();
     fireEvent.click(screen.getByRole("button", { name: /Open (this case's data )?in the Ingest Studio/ }));
     await screen.findByRole("region", { name: "You are in the Ingest Studio" });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: /^The Glass$/ }));
+    // Back by the Studio's own cross-link, not Places (whose Glass leaves the pages itself, and would hide the link's).
+    fireEvent.click(screen.getByRole("button", { name: /Back to (the )?(case .* in the )?Glass/ }));
     await screen.findByRole("region", { name: "You are in the Glass" });
     expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull();
   });

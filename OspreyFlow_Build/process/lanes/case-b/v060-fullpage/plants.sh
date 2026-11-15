@@ -100,7 +100,7 @@ plant "focus lost with the marker when the page goes" "$HOOK" 's/        documen
   "a marker in an answer leaves the page for the graph, focus on the canvas"
 plant "Show all on graph leaving the page over the graph it changed (App off the hook)" "$APP" 's/    ask\.showOnGraph\(\n      \(\) =>\n        void showAnswerOnCanvas\(/    ((show: () => void) => show())(\n      () =>\n        void showAnswerOnCanvas(/' js \
   "Show all on graph under an answer leaves the page for the graph"
-plant "the cross-link leaving the page showing" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
+plant "the cross-link leaving the page showing, both ways" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/; s/(          toGlass: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
   "the case line's cross-link to the Ingest Studio leaves the page"
 plant "Escape closing the page as a dialog would" "$PAGE" 's/<section className=/<section onKeyDown={(e) => { if (e.key === "Escape") onBack(); }} className=/' js \
   "Escape on the page does nothing"
