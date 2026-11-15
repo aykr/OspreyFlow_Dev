@@ -372,7 +372,8 @@ test("an earlier answer is opened from its question's line by keyboard, its mark
   await expect(proposals).toContainText("2 proposals to decide");
   await expect(page.getByRole("button", { name: /^Who called Callum\?/ })).toHaveAttribute("aria-expanded", "true");
   // Every stop Tab makes through the panel, from its start: none is a closed answer's marker or proposal.
-  await page.locator("[role='dialog']").focus();
+  // From the page's heading, its start (ADR-145 Amendment 18: the panel is on Ask & Chat's page, not in a drawer).
+  await page.getByRole("region", { name: "Ask & Chat" }).getByRole("heading", { name: "Ask & Chat" }).focus();
   const stops: string[] = [];
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press("Tab");

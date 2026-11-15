@@ -110,5 +110,8 @@ if grep -qE "Tests  [0-9]+ passed" <<<"$j" && ! grep -qE "Tests .*failed" <<<"$j
   && grep -qE "^\s+[0-9]+ passed" <<<"$a" && ! grep -qE "^\s+[0-9]+ failed" <<<"$a" \
   && grep -qE "[0-9]+ passed" <<<"$g" && ! grep -qE "failed" <<<"$g"; then
   echo "unplanted: $(grep 'Tests ' <<<"$j" | xargs); keyboard $(grep -E '^\s+[0-9]+ passed' <<<"$k" | xargs); axe $(grep -E '^\s+[0-9]+ passed' <<<"$a" | xargs); guide $(tail -1 <<<"$g")"
-else echo "UNPLANTED NOT GREEN"; fails=1; fi
+else echo "UNPLANTED NOT GREEN"; grep -E "×|Tests |^\s+[0-9]+\) |^\s+[0-9]+ (passed|failed)|^FAILED|passed|failed" <<<"$j
+$k
+$a
+$g" | head -12; fails=1; fi
 [ "$fails" = 0 ] && echo "every plant red for its reason, unplanted green" || { echo "SOME PLANT WRONG"; exit 1; }
