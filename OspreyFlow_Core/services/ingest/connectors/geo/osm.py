@@ -21,19 +21,27 @@ from collections.abc import Iterator
 
 from .osm_pbf import read_osm_pbf
 
+#: The `place=*` values that are settlements: where people live, from a city to a lone house,
+#: and the named parts of a town (https://wiki.openstreetmap.org/wiki/Key:place, "Populated
+#: settlements, urban and rural"). The owner's ruling, 15 November 2026: the gazetteer carries
+#: settlements only, not every named point (about 900,000 for Great Britain). Not a settlement:
+#: `farm`, `allotments`, `locality` (an unpopulated named place), `island`, `square`, `plot`,
+#: `city_block`, and every POI.
+SETTLEMENT_PLACES = frozenset(
+    {"city", "borough", "town", "village", "hamlet", "isolated_dwelling", "suburb", "quarter",
+     "neighbourhood"}
+)  # fmt: skip
+
 
 def read_osm_places(path: str) -> Iterator[dict[str, str]]:
-    """Only nodes carrying a non-empty `name` tag — an unnamed POI is not
-    a gazetteer entry, the same reasoning `hmp.py`'s fixture applies to
-    "structured" vs. bare records: a row with nothing to search on is not
-    what this connector exists to produce. `place_kind` (from a `place=*`
-    or POI tag such as `amenity`/`shop`) is deliberately not emitted here —
-    `packages/ontology/default.yaml`'s v7 note records why a genuinely
-    optional per-node classification can't yet bind through the recipe
-    engine without a fabricated default."""
+    """Only named settlements: nodes whose `place` tag is one of `SETTLEMENT_PLACES` and that
+    carry a non-empty `name` (an unnamed node has nothing to search on). `place_kind` is
+    deliberately not emitted here: `packages/ontology/default.yaml`'s v7 note records why a
+    genuinely optional per-node classification can't yet bind through the recipe engine without a
+    fabricated default."""
     for node in read_osm_pbf(path):
         name = node.tags.get("name")
-        if not name:
+        if not name or node.tags.get("place") not in SETTLEMENT_PLACES:
             continue
         yield {
             "osm_id": str(node.osm_id),

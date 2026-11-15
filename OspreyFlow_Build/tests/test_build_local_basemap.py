@@ -169,7 +169,7 @@ def test_run_planetiler_invokes_java_with_the_expected_arguments(tmp_path: Path)
     assert captured == [
         ["java", "-version"],
         [
-            "java", "-jar", str(jar_path),
+            "java", "-Xmx2g", "-jar", str(jar_path),
             f"--osm-path={osm_path}", f"--output={output_path}",
             "--download", f"--download_dir={tmp_path / 'sources'}", "--force",
         ]

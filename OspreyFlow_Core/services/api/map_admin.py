@@ -39,7 +39,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import asyncpg
 import yaml
@@ -64,6 +64,10 @@ from schemas.map_admin import (
 from schemas.mapconfig import MapConfig, MapProvider
 
 from .model_admin import _Exclusive
+
+if TYPE_CHECKING:
+    from ontology.handling import HandlingScheme
+    from ports.analytics import AnalyticsPort
 from .tile_math import tile_range_for_bbox, tiles_in_range
 
 log = logging.getLogger(__name__)
@@ -1286,6 +1290,31 @@ async def _main(argv: Sequence[str]) -> int:
     return 1
 
 
+async def _analytics_if_free(
+    scheme: HandlingScheme,
+) -> tuple[AnalyticsPort | None, Callable[[], Awaitable[None]]]:
+    """The Conduit's analytics store, opened as the Conduit opens it (`analytics_store`), so a
+    build writes the places' points (v0.6.0 item 10). DuckDB is one process's at a time: while the
+    Conduit runs it holds the file and the open is refused, and the build goes on without the
+    points and says so (`NO_POINTS_HERE`); run with the Conduit stopped, as the demo's install step
+    does, it writes them. ClickHouse is open to both."""
+    import duckdb
+    from services.api import analytics_store
+    from services.api.config import DEFAULT_ANALYTICS_DB_PATH
+
+    async def nothing() -> None:
+        return None
+
+    try:
+        return await analytics_store.open_analytics(
+            os.environ.get("OSPREY_ANALYTICS_ENGINE", "duckdb"),
+            duckdb_path=os.environ.get("ANALYTICS_DB_PATH", DEFAULT_ANALYTICS_DB_PATH),
+            handling_scheme=scheme,
+        )
+    except duckdb.IOException:
+        return None, nothing
+
+
 async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
     """`build` from the command line: the gazetteer loaded through the Conduit's own graph, held by
     `unit` (ADR-147 Amendment 2, the owner's ruling 8), which is checked before anything runs."""
@@ -1314,19 +1343,17 @@ async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
     graph = GraphArcadeDBAdapter(client, scheme)
     ontology = load_default_ontology()
     await graph.apply_schema(ontology)
-
-    held: dict[str, str] = {}
+    analytics, close_analytics = await _analytics_if_free(scheme)
 
     async def load_places(extract: Path) -> tuple[int, int, int]:
-        # ADR-147 Amendment 1: into the region's gazetteer dataset, as the Admin route's build.
+        # ADR-147 Amendment 1: into the region's gazetteer dataset, as the Admin route's build; a
+        # batch to a transaction, each committed by the load (v0.6.0 item 10).
         from services.api.map_places import gazetteer_dataset_id
 
-        tx = await graph.begin_transaction()
-        held["tx"] = tx
         report = await load_gazetteer(
-            extract, graph=graph, ontology=ontology, tx=tx, principal=principal,
+            extract, graph=graph, ontology=ontology, principal=principal,
             load_id=f"load-osm-gazetteer-{region}", dataset=gazetteer_dataset_id(region),
-            unit=unit,
+            unit=unit, analytics=analytics,
         )  # fmt: skip
         return report.nodes_created, report.nodes_referenced, len(report.rejections)
 
@@ -1341,8 +1368,8 @@ async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
             register_gazetteer_dataset_from_env,
         )
 
-        await graph.commit_transaction(held.pop("tx"))
-        print(NO_POINTS_HERE)
+        if analytics is None:
+            print(NO_POINTS_HERE)
         try:
             await register_gazetteer_dataset_from_env(region, by=by, unit=unit)
             # ADR-147 Amendment 2: every case that added the gazetteer given its places again.
@@ -1357,12 +1384,11 @@ async def _build_here(admin: MapAdmin, by: str, region: str, unit: str) -> int:
             admin, by=by, region=region, load_places=load_places, settle=settle
         )
     except Exception as error:  # noqa: BLE001 - said in words, exit 1
-        if "tx" in held:
-            await graph.rollback_transaction(held["tx"])
         print(f"The build stopped ({type(error).__name__}): {error}", file=sys.stderr)
         return 1
     finally:
         await client.aclose()
+        await close_analytics()
     print(
         f"Built {name}: {created} places created, {referenced} already known, {rejected} rejected."
     )

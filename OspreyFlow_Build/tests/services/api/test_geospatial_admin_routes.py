@@ -217,7 +217,12 @@ def _fake_gazetteer(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     loads: list[dict[str, Any]] = []
 
     async def _load(*_args: Any, **kwargs: Any) -> _FakeReport:
+        # As the real load does since v0.6.0 item 10: it is given no transaction and commits its
+        # own batches through the graph it is given (`load_gazetteer`'s docstring).
         loads.append(kwargs)
+        assert kwargs.get("tx") is None, "the route holds no transaction of its own"
+        graph = kwargs["graph"]
+        await graph.commit_transaction(await graph.begin_transaction())
         return _FakeReport()
 
     monkeypatch.setattr("services.api.app.load_gazetteer", _load)
@@ -338,6 +343,7 @@ def test_build_basemap_route_rolls_back_and_reports_a_real_failure(
         raise RuntimeError("planetiler stopped")
 
     monkeypatch.setattr("services.api.map_admin.build_basemap", _fake_build_that_fails)
+    DATASETS.datasets.pop("gazetteer-osm-great-britain", None)  # another test's finished build
 
     response = client.post("/v1/admin/geospatial/build-basemap", json={"region": "great-britain"})
 
@@ -347,7 +353,11 @@ def test_build_basemap_route_rolls_back_and_reports_a_real_failure(
     # Conduit's log's, never the Glass's; the person is told it stopped, and by which kind of error.
     assert "planetiler stopped" not in response.text
     assert "The build stopped (RuntimeError)" in response.text
-    assert graph.rolled_back and not graph.committed
+    # v0.6.0 item 10: the load committed its batches before planetiler stopped, and the route has no
+    # transaction to roll back; the gazetteer's dataset is registered only once the build is in, so
+    # a stopped build's places are in no dataset a case can add.
+    assert graph.committed and not graph.rolled_back
+    assert "gazetteer-osm-great-britain" not in DATASETS.datasets
 
 
 def test_build_basemap_route_takes_no_server_path_from_the_glass(client: TestClient) -> None:

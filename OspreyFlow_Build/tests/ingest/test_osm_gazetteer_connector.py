@@ -39,13 +39,25 @@ def test_read_osm_pbf_decodes_every_dense_node_including_the_unnamed_one(
     assert unnamed.lat == pytest.approx(52.0, abs=1e-4)
 
 
-def test_read_osm_places_keys_on_name_not_on_place(synthetic_pbf: Path) -> None:
-    """"The Anchor" carries `amenity=cafe`, no `place` tag at all — proving
-    the connector treats any named node as gazetteer-worthy, not only ones
-    tagged `place=*`."""
-    rows = list(read_osm_places(str(synthetic_pbf)))
-    names = {r["name"] for r in rows}
-    assert names == {"Cranford", "Hollywood", "The Anchor"}
+def test_read_osm_places_yields_settlements_only(tmp_path: Path) -> None:
+    """The owner's ruling, 15 November 2026: the gazetteer carries settlements only, `place=*`
+    nodes such as cities, towns, villages and hamlets, not every named point (about 900,000 for
+    Great Britain). A named cafe, a farm, an island, a locality and a square are left out; so is a
+    settlement with no name."""
+    path = tmp_path / "mixed.osm.pbf"
+    build_synthetic_osm_pbf(path, places=[
+        ("Bigtown", "place", "city", 51.50, -0.12), ("Smalltown", "place", "town", 51.6, -0.2),
+        ("Midvillage", "place", "village", 51.7, -0.3), ("Fewhouses", "place", "hamlet", 51.8, -0.4),
+        ("Lonecottage", "place", "isolated_dwelling", 51.9, -0.5),
+        ("Northside", "place", "suburb", 51.51, -0.13), ("Oldquarter", "place", "quarter", 51.52, -0.14),
+        ("Greenrow", "place", "neighbourhood", 51.53, -0.15),
+        ("The Anchor", "amenity", "cafe", 51.5074, -0.1278),
+        ("Hill Farm", "place", "farm", 52.0, -1.1), ("Eel Island", "place", "island", 52.1, -1.2),
+        ("Black Moss", "place", "locality", 52.2, -1.3), ("Market Square", "place", "square", 52.3, -1.4),
+    ])  # fmt: skip
+    names = {r["name"] for r in read_osm_places(str(path))}
+    assert names == {"Bigtown", "Smalltown", "Midvillage", "Fewhouses", "Lonecottage", "Northside",
+                     "Oldquarter", "Greenrow"}  # fmt: skip
 
 
 def test_read_osm_places_excludes_the_unnamed_node(synthetic_pbf: Path) -> None:
