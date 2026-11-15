@@ -30,6 +30,14 @@ the inner one's end moved the page. The standard look has no footer, and nothing
    the converted views are in the page's face. A model's id stays in mono, through the `--mono` token
    (`.identifier`): a value to copy, as tokens.css and DESIGN.md §9 exception 3 put it.
 
+4. **The classification strip, always in view** (ADR-115 decision 2, the owner's ruling, `primitives.css`): under
+   GOV.UK, as the page scrolls, the strip stays pinned at the window's top, while GOV.UK's header and the top bar
+   scroll away. Admin's sticky side list sits beneath it. Measured with Admin at 1440px and at 640px, and with the
+   Glass's page (a drawer open), each scrolled to the footer: the strip's top is at 0, and the strip itself is what
+   is drawn at its left end, its middle and its right end. No stacking level is set: under GOV.UK a drawer starts
+   below the top bar, so nothing comes over it (the plant that would need one found none). `red_strip.log` is its
+   red before code.
+
 **Harnesses** (kept): `keyboard/frame-harness`, the Glass's page as `main.tsx` and `App.tsx` draw it, with a drawer
 (holding a sideways box and a short list) or the start overlay; and `keyboard/admin-harness`'s `frame=1`, the real
 `AdminWithoutCase` in the real `BrandFrame`, with `serve=system`.
@@ -38,7 +46,7 @@ the inner one's end moved the page. The standard look has no footer, and nothing
 - `red_before_code.log`: the final specs against the base 0246f9b's code. 6 fail: Admin's one scroller under
   GOV.UK, the page moved by the drawer and the overlay, the names' face in all three looks. The 8 that pass on the
   base are guards: the standard look's frame and Admin box, the nested hand-offs, and the footer reached by wheel.
-- `plants.py` and `plants.log`: 13 plants, each red at its own assertion, matched by message.
+- `plants.py` and `plants.log`: 15 plants, each red at its own assertion, matched by message.
 - `tests.log`: the gates.
 
 **Kept, and said here** (from the lane review):
@@ -49,9 +57,7 @@ the inner one's end moved the page. The standard look has no footer, and nothing
 - **Superset boards:** a wheel inside an embedded board's iframe is that document's, and the handler can't see it.
   Wheeling past a board's end can still move the page under GOV.UK.
 - **Other mono words:** Admin still sets some names in mono, outside System: a role's label (Roles.tsx), a schedule's
-  label (Schedules.tsx), the tips' role labels (tips.tsx), and People.tsx:763. They are the same fault class as
-  System's, and a follow-up.
-- **For the owner:** under GOV.UK, Admin's classification strip now scrolls away with the page, as on any GOV.UK page.
-  ADR-115 decision 2 says "The strip is always shown". Whether that means always in view is the owner's to say.
+  label (Schedules.tsx), the tips' role labels (tips.tsx), and People.tsx:763. They go after the cut, by the owner's
+  ruling.
 - **A brand file:** `containInnerScroll.ts` and `BrandFrame.tsx` are the brand's files, not admin's; the orchestrator
   ratifies them at merge.

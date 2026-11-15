@@ -455,6 +455,9 @@ while a box inside another still hands on to it and a wheel over the page's own 
 footer. `OspreyFlow_Core/apps/workspace/src/brand/containInnerScroll.ts` and `OspreyFlow_Core/apps/workspace/src/admin/admin.css` hold this;
 `OspreyFlow_Core/apps/workspace/keyboard/frame-scroll.spec.ts` and `OspreyFlow_Core/apps/workspace/keyboard/admin-frame.spec.ts` measure it. The standard look has
 no footer and nothing that scrolls the page, and is unchanged.
+The classification strip is always in view (ADR-115 decision 2, the owner's ruling of 15 November 2026): under
+GOV.UK, as the page scrolls, it stays pinned at the window's top, with nothing over it, while GOV.UK's header and
+the top bar scroll away.
 
 The Glass page's panels and menus keep the workspace's scale too (the owner's exception, 14 November 2026).
 Inside a drawer, a canvas menu, the top bar's or the case line's menus, the strip over the canvas, or the Save
