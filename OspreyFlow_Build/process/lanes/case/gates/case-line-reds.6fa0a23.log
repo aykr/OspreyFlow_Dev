@@ -1,0 +1,51 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261115T073036Z-7fcc33e5/log: sh -c export PATH=$HOME/.local/node/bin:$PATH && PLANT_HEAD=6fa0a23 python3 OspreyFlow_Build/process/lanes/case/gates/case_line_reds.py
+# case-line reds at 6fa0a23 (the local checkout's, passed in); each plant restored from the file's own text
+## 1. the standard look's row at its old 12 px
+plant in OspreyFlow_Core/apps/workspace/src/shell/places.css; keyboard/case-line-type.spec.ts -g ospreyflow\ dark:\ every\ part\ of\ the\ case\ line\ is\ on\ the\ top\ bar's\ font\ size --workers=1; exit 1
+  ✘  1 keyboard/case-line-type.spec.ts:46:3 › ospreyflow dark: every part of the case line is on the top bar's font size and line height, the place bold (474ms)
+    Error: parts of the row off the top bar's type
+    - Expected  -  1
+    + Received  + 10
+  1 failed
+## 2. the GOV.UK row at the notification banner's 19 px
+plant in OspreyFlow_Core/apps/workspace/src/shell/places.css; keyboard/case-line-type.spec.ts -g govuk\ light:\ every\ part\ of\ the\ case\ line\ is\ on\ the\ top\ bar's\ font\ size --workers=1; exit 1
+  ✘  1 keyboard/case-line-type.spec.ts:46:3 › govuk light: every part of the case line is on the top bar's font size and line height, the place bold (488ms)
+    Error: parts of the row off the top bar's type
+    - Expected  -  1
+    + Received  + 10
+  1 failed
+## 3. the row's controls on a button's own type, not the row's
+plant in OspreyFlow_Core/apps/workspace/src/shell/places.css; keyboard/case-line-type.spec.ts -g govuk\ light:\ every\ part\ of\ the\ case\ line\ is\ on\ the\ top\ bar's\ font\ size --workers=1; exit 1
+  ✘  1 keyboard/case-line-type.spec.ts:46:3 › govuk light: every part of the case line is on the top bar's font size and line height, the place bold (493ms)
+    Error: parts of the row off the top bar's type
+    - Expected  - 1
+    + Received  + 6
+  1 failed
+## 4. (a) the cross-link never taking its short words
+plant in OspreyFlow_Core/apps/workspace/src/shell/ContextBanner.tsx; keyboard/case-line-type.spec.ts -g ospreyflow\ light:\ the\ cross\-link\ keeps\ its\ full\ words\ with\ room --workers=1; exit 1
+  ✘  1 keyboard/case-line-type.spec.ts:78:3 › ospreyflow light: the cross-link keeps its full words with room and takes its short ones without, again on widening (5.5s)
+    Error: expect(locator).toBeVisible() failed
+    Expected: visible
+    Error: element(s) not found
+  1 failed
+## 5. (b) the line never held to one line by the ellipsis
+plant in OspreyFlow_Core/apps/workspace/src/shell/places.css; keyboard/case-line-type.spec.ts -g ospreyflow\ dark:\ at\ 1024\ wide,\ the\ long\ names,\ the\ case\ line\ is\ one\ line\ high --workers=1; exit 1
+  ✘  1 keyboard/case-line-type.spec.ts:58:5 › ospreyflow dark: at 1024 wide, the long names, the case line is one line high where the top bar is (485ms)
+    Error: the case line's lines
+    Expected: 1
+    Received: 2
+  1 failed
+## 6. (b) the reads line's whole words not in its title
+plant in OspreyFlow_Core/apps/workspace/src/shell/ContextBanner.tsx; keyboard/case-line-type.spec.ts -g govuk\ light:\ the\ long\ names\ give\ way\ with\ an\ ellipsis --workers=1; exit 1
+  ✘  1 keyboard/case-line-type.spec.ts:94:3 › govuk light: the long names give way with an ellipsis, their whole words kept in the page and the title (5.5s)
+    Error: expect(locator).toHaveAttribute(expected) failed
+    Expected: "reads Prison Intelligence Dataset (synthetic) and the Ledger visits log"
+    Received: ""
+        14 × locator resolved to <span class="context-banner__fit">reads Prison Intelligence Dataset (synthetic) and…</span>
+  1 failed
+## 7. (b) something else giving way too (the switcher shrinking with them)
+plant in OspreyFlow_Core/apps/workspace/src/shell/places.css; keyboard/case-line-type.spec.ts -g ospreyflow\ dark:\ the\ long\ names\ give\ way\ with\ an\ ellipsis --workers=1; exit 0
+  1 passed (1.9s)
+STAYED GREEN
+# 6 of 7 red
+Wall time: 28 s, exit 1 (no stack, no lease; set-up before it 22 s)
