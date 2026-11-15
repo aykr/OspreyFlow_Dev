@@ -23,7 +23,7 @@ PLANTS = [
      'if not name or node.tags.get("place") not in SETTLEMENT_PLACES:', "if not name:",
      "test_read_osm_places_yields_settlements_only"),
     ("every place in one transaction", SCRIPT,
-     "while rows := list(islice(places, GAZETTEER_BATCH)):", "while rows := list(islice(places, None)):",
+     "while rows := list(islice(left, GAZETTEER_BATCH)):", "while rows := list(islice(left, None)):",
      "test_the_gazetteer_commits_a_batch_at_a_time"),
     ("a failed batch left open", SCRIPT,
      "                await graph.rollback_transaction(batch_tx)\n", "",

@@ -323,14 +323,17 @@ async def load_gazetteer(
             )  # fmt: skip
         return batch_report
 
-    places = read_osm_places(str(osm_pbf_path))
+    # Read once, for the load and the points alike: a region's settlements are tens of thousands of
+    # rows, but reading the extract is a pass over every node in it (some 2 GB for Great Britain).
+    places = list(read_osm_places(str(osm_pbf_path)))
     if tx is not None:
-        report = await run(list(places), tx, 0)
+        report = await run(places, tx, 0)
     else:
         report = LoadReport(load_id=load_id, recipe_id=recipe.id,
                             recipe_version=recipe.version)  # fmt: skip
         first = 0
-        while rows := list(islice(places, GAZETTEER_BATCH)):
+        left = iter(places)
+        while rows := list(islice(left, GAZETTEER_BATCH)):
             batch_tx = await graph.begin_transaction()
             try:
                 part = await run(rows, batch_tx, first)
@@ -341,7 +344,7 @@ async def load_gazetteer(
             report = _summed(report, part)
             first += len(rows)
     if analytics is not None:
-        points = point_geometries(recipe, read_osm_places(str(osm_pbf_path)))
+        points = point_geometries(recipe, places)
         for start in range(0, len(points), _POINT_BATCH):
             batch = points[start : start + _POINT_BATCH]
             held = {
