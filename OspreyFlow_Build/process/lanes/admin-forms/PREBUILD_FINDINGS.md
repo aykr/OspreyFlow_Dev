@@ -487,3 +487,30 @@ and P5, go to platform or platform-b in about 3.5 days, in parallel once the sha
 5. **Ordnance Survey's and Esri's terms** are not read in full (§7). Esri's possible ban on caching would turn the
    tile cache off for Esri. OS's 24-hour premium limit would cap that provider's cache time. Neither should ship on a
    snippet.
+
+## 9. Point 5 closed: Esri's and Ordnance Survey's terms read in full (the orchestrator, 15 November 2026)
+
+**Esri**, ArcGIS Location Platform agreement E204 ("Platform Legal", dated 21 November 2025, 11 pages), downloaded from
+https://www.esri.com/content/dam/esrisites/en-us/media/legal/platform/platform-legal.pdf and read whole.
+- §3.1(d)(6): "Neither Customer nor Application Users may scrape, download, or extract Resultant Output, nor cache or
+  store Resultant Output except as outlined herein: A. Customer may allow pre-caching of Resultant Output as permitted
+  by the caching headers (HTTP/1.1 standard or future standard) returned by Location Services to the extent necessary
+  for enabling or optimizing the use of the Customer Application". So **no prefetch areas**: Esri is live-only under
+  ruling 3, and any cache follows Esri's own caching headers.
+- §3.1(d)(2): "A single request for Resultant Output may not be used to serve multiple users." So the tile proxy may
+  fetch Esri for an analyst, but **must not serve one cached Esri tile to a second analyst**: no shared cache for Esri.
+- §3.1(d)(4): an attribution statement acknowledging Esri and its licensors on the Basemap service's output.
+
+**Ordnance Survey**, OS Data Hub API Terms (https://osdatahub.os.uk/support/legal/api-terms, rendered in a browser,
+80,554 characters, read 15 Nov 2026):
+- "You can allow your Premium API Service End Users to … temporarily cache it for up to 24 hours". So a premium tile's
+  cache is **at most 24 hours**.
+- "You must not permit or enable your End Users to download, store or extract Premium API Data except to the extent
+  expressly provided for". So **premium maps are live-only** (ruling 3).
+- "You can allow your Premium API Service End Users to do anything with Open API Data in accordance with the Open
+  Government Licence." So **OS Open Zoomstack may be prefetched**.
+- **An obligation for premium data:** "You shall at all times maintain a list (including organisation names and contact
+  details) of all End Users with access to Premium API Data … and shall make that list available to us on our request",
+  and the End User Licence must pass on OS's terms and let OS enforce them. The licence tick for OS premium (ruling 4)
+  should say so in words.
+- "the acknowledgement of OS and Crown copyright and database rights ownership is in a conspicuous position".
