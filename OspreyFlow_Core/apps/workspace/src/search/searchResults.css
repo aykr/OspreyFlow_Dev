@@ -1,10 +1,15 @@
 /* The search results page (ADR-145 Amendment 15 Part A). Tokens only (`design/tokens.css`). It fills the main area,
    laid over the view the person left, which stays as it was beneath it. Under the GOV.UK brand the controls are the
    package's own govuk-* classes; these rules only lay them out. Every control is at least 24 by 24 pixels. */
+/* Its layer: above every control a view docks over itself (the canvas's toolbar 11, its zoom column and legend 10, the
+   selection bar 12, the saved view's strip 13, the keys panel 15), which share this stacking context, so none is drawn
+   over the page (found on the live demo, 15 November 2026: at 5 the toolbar and zoom column covered the heading); and
+   below the search box's own suggestions (`.combobox__listbox`, 20), so a new search typed over the results still
+   shows them. `keyboard/search-results.spec.ts` holds it in each look. */
 .search-results {
   position: absolute;
   inset: 0;
-  z-index: 5;
+  z-index: 19;
   overflow: auto;
   display: grid;
   align-content: start;
