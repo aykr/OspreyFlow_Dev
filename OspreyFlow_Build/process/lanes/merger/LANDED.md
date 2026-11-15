@@ -226,3 +226,4 @@ ff494d4 74e6c25 rules v060-superset-cves+upgrade-cache
 04082a8 04d2825 rules handoff-2026-11-15
 b81fe0b 6fd6c1c rules-b v060-i10-basemap
 6975e02 11fc245 docs v060-demo-papers
+a9bf5df 95206eb platform-b v060-release-path
