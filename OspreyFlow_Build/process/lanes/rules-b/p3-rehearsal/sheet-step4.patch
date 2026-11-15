@@ -1,0 +1,48 @@
+diff --git a/OspreyFlow_Build/process/lanes/demo/REBUILD_2026-11-18.md b/OspreyFlow_Build/process/lanes/demo/REBUILD_2026-11-18.md
+index ad266b9..4d91c4f 100644
+--- a/OspreyFlow_Build/process/lanes/demo/REBUILD_2026-11-18.md
++++ b/OspreyFlow_Build/process/lanes/demo/REBUILD_2026-11-18.md
+@@ -55,8 +55,10 @@ The running demo's image (574a05c) has no `--stage`, so `HANDOFF.md`'s `$C run 
+ image is built from the new folder with **its own tag**: the deployment's tag is `osprey/api:local`, and building
+ over it would change what the old deployment starts from, so never reuse it.
+ 
+-From about 05:00 (about 45 min; rules-b's figures: download 11 min, planetiler 7 min on every core at `-Xmx2g`,
+-container peak 3.0 GB, reading the settlements 14 min). Run it while nobody is using the demo.
++From about 05:00 (about 45 min in all; step 4 alone took 36.5 min in P3's rehearsal on this server on 15 November:
++download 12 min, planetiler 7 min 37 s on every core at `-Xmx2g`, saving the settlements 16 min). Run it while nobody
++is using the demo. **v0.6.0 must contain 51f2581** (the tiles stage runs bare); without it step 4 fails at once,
++looking for `/app/osprey.yaml` and Postgres.
+ 
+ 1. The code (as osprey): `git archive v0.6.0 OspreyFlow_Core | tar -x -C <scratch>`, then (root) `mkdir $NEW && chown osprey: $NEW`
+    and `rsync -a <scratch>/OspreyFlow_Core/ $NEW/` as osprey. Then `cd $NEW && uv sync --frozen --extra extraction` as osprey.
+@@ -67,9 +69,12 @@ container peak 3.0 GB, reading the settlements 14 min). Run it while nobody is u
+    `f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d`; `HANDOFF.md`'s step 6 (A) 1, rules-b's diff).
+    `<tiles>` is P6's `components.storage.tiles`; check the sha256 before using it.
+ 4. The tiles stage, the tiles folder mounted as the Conduit mounts it (read-only, with its `built/` writable), as the
+-   Conduit's own user (the image's `USER 10001:10001`):
++   Conduit's own user (the image's `USER 10001:10001`). First (root) `chown -R 10001:10001 <tiles>/built`: the stage
++   writes there as uid 10001. And check the demo's map does not already serve `osm-local-great-britain`. If it does,
++   the stage overwrites `<tiles>/built/great-britain.pmtiles`, the file that provider serves (planetiler runs with
++   `--force`), so the running map is no longer unchanged.
+    ```bash
+-   docker run --rm --name osprey-basemap-tiles --memory 4g \
++   docker run --rm --name osprey-basemap-tiles --memory 6g \
+      -v <tiles>:/data/tiles:ro -v <tiles>/built:/data/tiles/built \
+      --entrypoint python ospreyflow-basemap:v0.6.0 \
+      -m services.api.map_admin build great-britain --stage tiles --unit <the demo's unit> --by cli:orchestrator \
+@@ -78,7 +83,14 @@ container peak 3.0 GB, reading the settlements 14 min). Run it while nobody is u
+    The last line is `Built great-britain.pmtiles and saved its settlements`. It writes `<tiles>/built/great-britain.pmtiles`
+    (1.5 GB), `<tiles>/built/sources/` (1.4 GB) and, under `<tiles>/built/extracts/`, the extract and
+    `great-britain.places.json`. It opens no graph or store and registers nothing; the running demo's map is unchanged.
+-   **P3 sets the final form of this command** (the flags, whether `--cpus` is needed to keep the demo usable).
++   **P3 rehearsed this command as written, and it is final** (rules-b, 15 November, `process/lanes/rules-b/p3-rehearsal/RECORD.md`).
++   It needs no `--cpus`: beside a running stack, p95 latency went from 6.6 to 8.3 ms (ArcadeDB) and from 12.5 to 14.1 ms
++   (Postgres). `--unit` is required but this stage does not check it; the places stage checks it in the window.
++   At `--memory 4g` it reached the cap (the cgroup's peak counts the page cache of the 3.7 GB the stage writes) and
++   swapped up to 3.0 GB, yet it finished. `--memory 6g` here, so the build pushes no swap beside the running demo (the
++   orchestrator, 15 November): a higher cap only loosens the measured run. Disk: about 5 GB
++   (`extracts/` 2.1 GB, the tiles 1.5 GB, `sources/` 1.4 GB). The fall-back below was not needed, so it was not
++   rehearsed.
+ 5. Remove the job's image when (B) has run: `docker image rm ospreyflow-basemap:v0.6.0`.
+ 
+ **Fall-back (if P3 has not passed by Tuesday evening, or step 4 fails):** (A) runs **in the window**, right after

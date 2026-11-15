@@ -1,0 +1,13 @@
+RED  a named point that is not a settlement kept: test_read_osm_places_yields_settlements_only; red: ['test_read_osm_pla
+RED  every place in one transaction: test_the_gazetteer_commits_a_batch_at_a_time; red: ['test_a_failed_batch_is_rolled_
+RED  a failed batch left open: test_a_failed_batch_is_rolled_back_alone_and_the_load_stops; red: ['test_a_failed_batch_i
+RED  planetiler's heap left to the JVM: test_planetiler_is_given_its_heap_explicitly; red: ['test_planetiler_is_given_it
+RED  the store opened but not given to the load: test_the_cli_build_writes_the_points_when_it_can_open_the_store; red: [
+RED  DuckDB's lock not caught: test_the_cli_build_writes_the_points_when_it_can_open_the_store; red: ['test_the_cli_buil
+RED  the tiles stage goes on to load and register: test_the_tiles_stage_builds_the_tiles_and_saves_the_settlements_and_r
+RED  the places stage downloads and runs planetiler again: test_the_places_stage_loads_the_saved_settlements_and_registe
+RED  the places stage runs without the tiles stage's files: test_the_places_stage_is_refused_in_words_without_the_tiles_
+RED  the tiles stage opens the settings and the audit first (P3): test_the_tiles_stage_from_the_command_line_needs_no_se
+RED  the bare tiles stage skips the builder's check (P3): test_the_bare_tiles_stage_says_in_words_when_the_builder_is_mi
+RED  a saved settlements file read as an extract: test_the_load_reads_a_saved_settlements_file_and_not_the_extract; red:
+control (restored): 18 passed in 2.98s

@@ -1,0 +1,62 @@
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261115T135239Z-4f2fe8b6/log: bash ../OspreyFlow_Build/process/lanes/rules-b/p3-rehearsal/rehearse.sh
+== START 2026-11-15T13:52:40Z
+ 13:52:40 up 19 days, 22:30,  5 users,  load average: 2.44, 10.24, 10.03
+               total        used        free      shared  buff/cache   available
+Mem:           64224       13362       13215        3133       41495       50861
+16
+run copy's commit: b5db38f63373ba384bdaaca87064f1b94b5c8331
+disk before:
+Filesystem            Size  Used Avail Use% Mounted on
+/dev/mapper/vg0-root  911G  442G  423G  52% /
+== 1. the image
+sha256:29f83d4485b6f44128362ca084806110a0e53f920af1fc5af30c191a3c7c05dd
+image built in 92 s: sha256:29f83d4485b6f44128362ca084806110a0e53f920af1fc5af30c191a3c7c05dd 1949686466
+== 2. the jar
+/root/osprey-runs/rules-b.scratch/p3/tiles/planetiler/planetiler.jar: OK
+== 3. the stack's baseline, 300 s
+== 4. the sheet's step 4, as written (the unit and by are placeholders' stand-ins; the name is the rehearsal's)
+step 4: exit 0, 2192 s; cgroup memory.peak 4099 MB, memory.swap.peak 2990 MB (last read before exit); docker stats sampled peak 3964 MB (limit 4 GiB)
+Downloading the 'great-britain' Geofabrik extract...
+Running planetiler...
+0:00:00 INF [download:natural_earth] - Downloading https://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip to /data/tiles/built/sources/natural_earth_vector.sqlite.zip
+0:00:00 INF [download:water_polygons] - Downloading https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip to /data/tiles/built/sources/water-polygons-split-3857.zip
+0:00:01 INF [download:lake_centerlines] - Downloading https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip (redirected to https://release-assets.githubusercontent.com/github-production-release-asset/342970808/fc40247b-b16d-48ad-bffa-38c20b7b2347?<signed query masked>) to /data/tiles/built/sources/lake_centerline.shp.zip
+0:00:32 INF [download] - Downloading pre-computed tile weights from https://raw.githubusercontent.com/onthegomap/planetiler/main/layerstats/top_osm_tiles.tsv.gz to data/tile_weights.tsv.gz
+0:07:36 INF [archive:write] - Built directories with 60 leaves, 305B root directory
+0:07:37 INF [archive] - 	overall          7m37s cpu:1h16m28s gc:36s avg:10
+Saving the extract's settlements for the places stage...
+Tiles built and 56486 settlements saved; nothing is registered yet.
+Built great-britain.pmtiles and saved its settlements; run --stage places to load them.
+last line: Built great-britain.pmtiles and saved its settlements; run --stage places to load them.
+probe exit 0
+== 5. the stack's latency (ms): baseline (samples 2 to 60) and during step 4 (warm-up sample dropped)
+base arcadedb: n 59, p50 6.0, p95 6.6, max 6.9
+base postgres: n 59, p50 10.9, p95 12.5, max 12.9
+run arcadedb: n 437, p50 5.6, p95 8.3, max 41.7
+run postgres: n 437, p50 11.3, p95 14.1, max 23.2
+== 6. what it wrote
+  
+  
+10001 4096 extracts
+10001 1581680656 great-britain.pmtiles
+10001 4096 sources
+  
+  
+  
+10001 2201340386 great-britain.osm.pbf
+10001 5480582 great-britain.places.json
+2.1G	/root/osprey-runs/rules-b.scratch/p3/tiles/built/extracts
+1.5G	/root/osprey-runs/rules-b.scratch/p3/tiles/built/great-britain.pmtiles
+1.4G	/root/osprey-runs/rules-b.scratch/p3/tiles/built/sources
+disk after:
+Filesystem            Size  Used Avail Use% Mounted on
+/dev/mapper/vg0-root  911G  450G  415G  53% /
+== END 2026-11-15T14:35:52Z
+ 14:35:52 up 19 days, 23:14,  6 users,  load average: 0.96, 1.57, 3.35
+               total        used        free      shared  buff/cache   available
+Mem:           64224       14224        7180        3134       46669       49999
+container rulesb-p3-basemap-tiles removed
+image ospreyflow-basemap:p3 removed
+scratch removed
+== EXIT 0 2026-11-15T14:35:53Z
+Wall time: 2594 s, exit 0 (stack b, the lease rules-b took at 2026-11-15T13:52:17Z; set-up before it 9 s)
