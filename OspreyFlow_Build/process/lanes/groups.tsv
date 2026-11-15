@@ -185,3 +185,4 @@ platform-b	v060-release-path	Housekeeping	Client install
 rules-b	v060-stage2-official	Housekeeping	Client install
 platform-b	v060-stage4-package-test	Housekeeping	Client install
 platform-b	v060-stage3-done	Housekeeping	Client install
+orchestrator	v060-build	Housekeeping	Client install
