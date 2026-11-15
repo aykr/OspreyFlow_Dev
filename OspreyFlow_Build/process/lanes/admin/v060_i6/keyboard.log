@@ -1,0 +1,2 @@
+# The whole keyboard suite (keyboard/playwright.config.ts) at 9db7d73, local slot 5: 5 skipped 1338 passed (5.9m) 
+# Before 9db7d73, at a346002: 2 failed (glass-panels-look's Save as a view form, dark and light: its .label heading at 19px). Cause: scale.css's :where(h2) came after panelType.css's equally weightless label rule. Fix: scale.css imported first.

@@ -80,3 +80,11 @@ replace them with our classes on our scale. **Your call.**
 
 **Asked of you:** for A and C, both looks or GOV.UK only; for F, keep or replace; and that B, D1 and the D2 marks are
 in scope. Everything else is recommended as above.
+
+## The orchestrator's rulings (15 November 2026), as built
+
+- **A and C:** fixed in both looks (`src/design/scale.css`).
+- **F:** kept. The pass leaves out `govuk-*`.
+- **B, D1 and D2:** in scope and fixed.
+- **E:** left out of the pass (`data-harness-only`).
+- **The pass:** a strict gate, red then green. `README.md` has the record.

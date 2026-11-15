@@ -80,6 +80,14 @@ Rules:
 
 Mono sizes: 11, 12, 13 with `letter-spacing: -0.005em`.
 
+A heading or a control that sets no size of its own is on this scale too, never the browser's own (v0.6.0 #6, the
+orchestrator's ruling of 15 November 2026, in every look): `h1` a screen title (`--fs-23`), `h2` a section heading
+(`--fs-19`), `h3` and `h4` a panel title (`--fs-16`), `h5` and `h6` a secondary label (`--fs-12`), and a button, field
+or select inherits the page's font (`src/design/scale.css`). Any size a component sets, and a panel's own rule
+(`panelType.css`), wins. On the GOV.UK pages' remapped scale the same tokens give GOV.UK's sizes.
+`keyboard/govuk-type-pass.spec.ts` measures every harness under GOV.UK, and fails on a text element off the scale or
+words set in mono.
+
 ### Wordmark
 
 Closed compound, internal capital. The halves are separated by **weight only** — `Osprey` at 700,
