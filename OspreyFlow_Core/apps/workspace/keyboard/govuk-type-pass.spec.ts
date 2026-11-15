@@ -19,14 +19,15 @@ import { expect, test } from "@playwright/test";
 const HERE = new URL("./", import.meta.url);
 const SCAN = readFileSync(new URL("../a11y/every-harness.spec.ts", import.meta.url), "utf8");
 
-/** every-harness's own extra states, read from its source: a page's list of query strings. */
+/** every-harness's own extra states: its `EXTRA_STATES` object, read from its source and evaluated as the plain literal
+ *  it is (a page's list of query strings), so every state is taken as it is written and passed as every-harness passes
+ *  it, none left out for its characters. */
+const LITERAL = (() => {
+  const start = SCAN.indexOf("const EXTRA_STATES");
+  return start < 0 ? "{}" : SCAN.slice(SCAN.indexOf("{", SCAN.indexOf("=", start)), SCAN.indexOf("\n};", start) + 2);
+})();
 function extraStates(): Record<string, string[]> {
-  const block = SCAN.slice(SCAN.indexOf("const EXTRA_STATES"), SCAN.indexOf("\n};", SCAN.indexOf("const EXTRA_STATES")));
-  const out: Record<string, string[]> = {};
-  for (const m of block.matchAll(/"([\w-]+\.html)":\s*\[([\s\S]*?)\]/g)) {
-    out[m[1]!] = [...m[2]!.matchAll(/"([^"\n]*)"/g)].map((q) => q[1]!).filter((q) => /^[\w=&%,.:#-]*$/.test(q));
-  }
-  return out;
+  return new Function(`return (${LITERAL});`)() as Record<string, string[]>;
 }
 
 const appliesBrand = (page: string) => {
@@ -41,17 +42,35 @@ const EXTRA = extraStates();
 const STANDARD = process.env.GOVUK_PASS_LOOK === "standard";
 const PAGES = readdirSync(HERE).filter((f) => f.endsWith(".html") && appliesBrand(f)).sort();
 
+// A misread source would make pages or states vanish rather than fail (the lane review of 15 November 2026).
+test("the pass found every-harness's pages and their states", () => {
+  expect(PAGES.length, "the brand-applying harness pages").toBeGreaterThan(30);
+  const states = Object.values(EXTRA).flat();
+  expect(Object.keys(EXTRA).length, "every-harness's pages with extra states").toBeGreaterThan(20);
+  expect(states.length, "their states").toBeGreaterThan(200);
+  expect(states.filter((q) => typeof q !== "string"), "each state a query string").toEqual([]);
+  // Counted again a second way, from the source's own string literals (its comments aside): each is a page's name
+  // or one of its states, so a state dropped on the way (a filter, a misparse) is a mismatch here.
+  const code = LITERAL.split("\n").map((line) => line.replace(/^\s*\/\/.*$/, "")).join("\n");
+  const strings = code.match(/"(?:[^"\\\n]|\\.)*"/g) ?? [];
+  expect(Object.keys(EXTRA).length + states.length, "every string of the source, a page or a state").toBe(strings.length);
+  for (const name of Object.keys(EXTRA)) expect(readdirSync(HERE), name).toContain(name);
+});
+
 for (const page of PAGES) {
   for (const state of ["", ...(EXTRA[page] ?? [])]) {
     test(`${page}${state ? ` ${state}` : ""} under GOV.UK: words in the page's face, sizes on its scale`, async ({ page: p }) => {
       await p.setViewportSize({ width: 1280, height: 900 });
-      const [query, hash] = state.split("#");
-      const brand = STANDARD ? "" : "brand=govuk";
-      await p.goto(`/keyboard/${page}?${[query, brand].filter(Boolean).join("&")}${hash ? `#${hash}` : ""}`);
+      const query = [state, STANDARD ? "" : "brand=govuk"].filter(Boolean).join("&");
+      await p.goto(`/keyboard/${page}${query ? `?${query}` : ""}`);  // as every-harness goes to it
       await p.waitForLoadState("networkidle").catch(() => undefined);
       await p.waitForTimeout(400);
       await p.evaluate(() => document.fonts.ready.then(() => undefined));
-      const found = await p.evaluate(() => {
+      // The look it claims to measure is the one drawn, and something was measured: a brand that never applied, or a
+      // harness that drew nothing, never passes for want of findings.
+      if (!STANDARD) await expect(p.locator("html")).toHaveAttribute("data-brand", "govuk");
+      else await expect(p.locator("html")).not.toHaveAttribute("data-brand", "govuk");
+      const { found, measured } = await p.evaluate(() => {
         const first = (family: string) => family.split(",")[0]!.trim().replace(/["']/g, "").toLowerCase();
         const root = getComputedStyle(document.documentElement);
         const mono = first(root.getPropertyValue("--mono"));
@@ -61,6 +80,7 @@ for (const page of PAGES) {
         const frame = ".govuk-header, .govuk-footer, .govuk-phase-banner, .govuk-skip-link, .skip-link, [data-harness-only]";
         const govuk = (e: Element) => [...e.classList].some((c) => c.startsWith("govuk-"));
         const out: { text: string; where: string; size: number; face: string; why: string }[] = [];
+        let measured = 0;
         for (const el of document.querySelectorAll("body *")) {
           const own = [...el.childNodes].filter((n) => n.nodeType === 3 && (n.textContent ?? "").trim())
             .map((n) => n.textContent!.trim()).join(" ");
@@ -71,12 +91,14 @@ for (const page of PAGES) {
           const scale = [11, 12, 13, 14, 16, 19, 23, 30, 40].map((n) => parseFloat(cs.getPropertyValue(`--fs-${n}`))).filter((n) => n > 0);
           const face = first(cs.fontFamily);
           const where = `${el.tagName.toLowerCase()}${el.className && typeof el.className === "string" ? "." + el.className.trim().split(/\s+/).slice(0, 2).join(".") : ""}`;
-          if (govuk(el)) continue;
+          measured += 1;
           if (face === mono && !el.matches(value)) out.push({ text: own.slice(0, 60), where, size, face, why: "mono, not a value to copy" });
-          if (!scale.includes(size)) out.push({ text: own.slice(0, 60), where, size, face, why: `${size}px, off the scale (${scale.join(", ")})` });
+          // Ruling F is of sizes: GOV.UK Frontend's own classes keep GOV.UK's, so only their size is not read.
+          if (!govuk(el) && !scale.includes(size)) out.push({ text: own.slice(0, 60), where, size, face, why: `${size}px, off the scale (${scale.join(", ")})` });
         }
-        return out;
+        return { found: out, measured };
       });
+      expect(measured, "text elements measured").toBeGreaterThan(0);
       const outFile = process.env.GOVUK_PASS_OUT;
       const look = STANDARD ? "standard" : "govuk";
       if (outFile) for (const f of found) appendFileSync(outFile, JSON.stringify({ look, page, state, ...f }) + "\n");
