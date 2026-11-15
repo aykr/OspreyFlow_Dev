@@ -111,5 +111,14 @@ for (const [brand, theme] of LOOKS) {
         .map((e) => e.textContent ?? ""),
     );
     expect(cut.sort()).toEqual([reads, view].sort());
+    // And no item of the row itself is drawn narrower than what it holds, but these two (a wrapper clipping its
+    // control, which the words alone would not show).
+    const clipped = await region.evaluate((element) => {
+      const row = element.querySelector(".govuk-notification-banner__content") ?? element;
+      return [...row.children]
+        .filter((c) => !c.classList.contains("context-banner__fit") && c.scrollWidth > c.clientWidth + 1)
+        .map((c) => (c.textContent ?? "").slice(0, 40));
+    });
+    expect(clipped, "items of the row clipped").toEqual([]);
   });
 }
