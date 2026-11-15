@@ -196,9 +196,10 @@ current view, and only those (the owner's navigation decision of 13 November 202
 Amendments 2 and 12): *Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions
 to the model, ADR-098, §3.1; named *Questions* until Amendment 12) and *History*, then *Help* and *Show names*. *Cases*,
 *Dashboards* (now the view switch's *Reports*) and *⋯ Explore Details* (whose *Ownership* and *Connection strength* are
-now under *More*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`,
-`aria-haspopup="dialog"`), a second press closes it, and opening or closing a panel never changes the view
+now under *More*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`;
+`aria-haspopup="dialog"` for a drawer's), a second press closes it, and opening or closing a panel never changes the view
 (`shell/railLayout.ts`'s `railMark`). Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener.
+*Ask & Chat* is the exception to the drawers: it opens as a page over the view (§2.0d, ADR-145 Amendment 18).
 Every drawer opens under the top bar and the context row, never over the navigation they carry (ADR-145 Amendment 14
 decision 2, `design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
 guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
@@ -709,6 +710,30 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
 
 Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,
 `keyboard/search-results.spec.ts` (`SEARCH_RESULTS_ACTIONS`) and the every-harness scan of `search-results-harness.html`.
+
+### 2.0d The Ask & Chat page (ADR-145 Amendment 18; v0.6.0, the owner's list of 15 November 2026)
+
+The rail's *Ask & Chat* opens the case's questions (§3.1, ADR-098) as a page that fills the main area, as the search
+results do (§2.0c), over the view the person left, which stays as it was beneath it and out of reach (`inert`)
+(`questions/AskPage.tsx`). Explore and History stay drawers.
+
+- **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and returns to the view exactly as it was,
+  focus on the rail's *Ask & Chat*. A second press of the rail's *Ask & Chat* does the same. The page has no Escape of
+  its own, as the results page has none: Escape inside it stays with the control that has focus.
+- **The heading**, "Ask & Chat", takes focus on opening; when the page opens with words carried into the question (the
+  results page's Ask line), the question box takes it instead.
+- **The results page and the Ask & Chat page replace each other**: the Ask line, or the rail's *Ask & Chat*, while the
+  results show, leaves them for the Ask page; a search from the Ask page leaves it for the results. Back from either
+  returns to the view beneath, never to the other page. Choosing any view, a saved view, another place or the
+  cross-link leaves it, as it leaves the results.
+- **A marker** in an answer (*Show on the graph: …*) leaves the page and shows the graph, the item brought into view.
+  **A document** opened from an answer is read over the view, the page hidden and shown again when it closes.
+- Help's keys panel opens over the page when asked for, as over the results.
+- The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`).
+
+Proved by `App.chrome.test.tsx`, `App.help.test.tsx`, `App.search.test.tsx`, `keyboard/shell.spec.ts`
+(`ask-and-chat-page-by-keyboard`, `SHELL_ACTIONS`) and the every-harness scan of `places-harness.html?open=questions`
+in the three looks.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

@@ -1,0 +1,13 @@
+diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+index 74da0b9..30171f8 100644
+--- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
++++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
+@@ -885,6 +885,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+   // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
+   // opened with one keypress.
+   "rail-panels-by-keyboard",
++  // ADR-145 Amendment 18 (v0.6.0 #4): Ask & Chat opens as a page over the view; Back and the rail close it.
++  "ask-and-chat-page-by-keyboard",
+   "more-views-by-keyboard",
+   "open-a-folded-panel-by-keyboard",
+   // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the
