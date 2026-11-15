@@ -2145,3 +2145,6 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
   cases stay; the check looks past page 1 to a fixed recorded bound so more cases are reached (red-first test, rehearsed).
   profile_m9.py fixed on main (it crashed after Am 21); the shipping search 59-212 ms against ~5 s for the old query.
 - **#6 merged (15 Nov ~17:40Z):** at merge one shell.spec case (govuk, More views at 1024) failed once in the whole suite and passed 3 of 3 alone; admin's and case's full runs of the branch were green. Recorded as load timing.
+- **Stages to sol (the owner, ~17:45Z):** stage 2's official run to rules-b, stage 3's preparation to platform-b (to the
+  owner's word), stage 5's demo rebuild to the demo lane (resumed on sol Tue evening). The orchestrator keeps the merges and
+  pushes to main (ADR-142), CI checks, rulings and the owner's messages.
