@@ -188,3 +188,4 @@ rules-b	v060-stage2-official	M	done	v0.6.0 stage 2: the official leak test, neve
 platform-b	v060-stage4-package-test	L	building	v0.6.0 stage 4: the package test on C = 09f1fbe (fresh install only, every check, the memory sampler), started 15 Nov ~21:40Z under the owner's lease
 platform-b	v060-stage3-done	S	done	v0.6.0 stage 3: the candidate C = 09f1fbe (CI 43756479074 green), its dry run green; no Core change needed	lane/platform-b-v060-candidate-records
 orchestrator	v060-build	S	done	v0.6.0 stage 1, Build: every closed-list item merged (#4 last, d7cf5a0), CI green on 09f1fbe	-
+orchestrator	v060-websites	S	building	The websites published: repositories named (5f9403a), checkouts cloned, tests green; waiting on the owner's client-names hash file and DNS records
