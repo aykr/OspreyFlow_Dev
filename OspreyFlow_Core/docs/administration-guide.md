@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.20** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 2.21** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.21 | 2026-11-15 | §10's *Keys*, §8's `models key` row and §4.1's guided install, as the code has done since ADR-135 Amendment 2 (the owner followed the guide on 15 November and it was wrong): a key is entered in *Admin › Models* with **Enter key** (**Rotate key**) and **Set the key**, write-only, kept by the model gateway alone and used with nothing restarted; **Remove key** beside it; neither for an engine on the gateway's IAM role. The install hands a key from `deployment.env` to the gateway and removes its line; `ospreyflow models key` runs the Conduit's own key path and restarts nothing. Held by `tests/test_admin_guide_model_keys.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.20 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November: one release, installed fresh). §6a.1's *Moving to a new release* is for a release after v0.6.0, which is installed fresh into a namespace of its own, and the move is not yet rehearsed; §14 opens with the same rule. Passages for deployments only an earlier release could have made are struck: the checkout's deployment from before v0.4.2, an `admin` from v0.4.6, the rules' move at v0.5.0, the hosted engines' egress after an upgrade, HMP loaded before v0.2.0, the stores' move to named volumes and §14.1, an `osprey.yaml` from v0.4.x, sets from before v0.5.0, v0.4.8's backups on Linux, a bundle from before v0.4.12, and their rows in §16. Held by `tests/test_guides_release_header.py`, `tests/test_guide_6a_upgrade.py` and `tests/test_guides_v060_fresh.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.19 | 2026-11-15 | §6a.8: a backup set never holds the map key file on cloud-platform either (the claims run took it with the map settings before; the owner, 15 Nov, a fix in v0.5.2), and a restore names each provider whose key must be entered again (ADR-148 Amendment 13 point 4, corrected). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.18 | 2026-11-15 | The header names v0.5.2 (step 5's sweep, §2, at the cut). Each "this release" or "this version" true only of an earlier one names it: named deployments and a dataset's egress from v0.4.2, a bundle's platform from v0.4.12, the backups folder from v0.5.0; Superset's and the report sync's copies no longer marked "from v0.5.2". Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -2222,7 +2223,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
 | `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret, its first sign-in (refusing, or joining by email when `trust_email` is on) and the record of refused sign-ins Admin → People and roles lists (section 5a.1); safe to run again, and prints no secret |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
-| `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
+| `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt, through the Conduit's own key path inside its container, as Admin › Models does: the key is kept by the model gateway alone, and nothing is restarted. Refused for an engine that signs in by the gateway's own IAM role |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
 | `ospreyflow grading change --to <scheme> --mapping <file> --dry-run` | Says how many drawn items each line of the mapping (every grade of the old scheme to one of the new) would move, writes nothing, and gives the token the change needs. `--to` is `5x5x5`, `3x5x2` or a scheme file: a YAML file with `scheme` (a name of its own), `source`, `intelligence` and `handling`, each its list of grades. Runs beside a running deployment |
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
@@ -2277,7 +2278,7 @@ on this computer only.
 `RUNBOOK.md`, written for each deployment, lists what runs, its paths and its addresses.
 
 `deployment.env` is readable by your own account alone (`600`): `ospreyflow install` writes it so,
-and `ospreyflow apply`, `models key` and `models remove-key` keep it so.
+and `ospreyflow apply` keeps it so.
 
 ### 8.3 Changing a setting
 
@@ -2797,20 +2798,33 @@ models:
 - The older single `provider:` is still read, as a one-entry list whose roles default to it. Naming
   both `provider` and `providers` is refused.
 
-**Keys.** Each provider's key is `OSPREY_MODEL_KEY_<NAME>` — for example `OSPREY_MODEL_KEY_GEMINI`
+**Keys.** A key is kept by the deployment's model gateway alone, in the gateway's own database, and
+is never written to `osprey.yaml` and never shown again, in the Admin area or anywhere else.
+**On a running deployment, a key is entered in Admin › Models** (section 10.1): an engine's row
+offers **Enter key** (**Rotate key** once one is set), which opens a password field and **Set the
+key** (**Rotate the key**). The key is write-only, handed to the gateway at once and used from the
+next call, with nothing restarted; **Remove key** removes it. An engine that signs in by the gateway's
+own IAM role (Amazon Bedrock on `cloud-platform`, section 6a.9) keeps no key, and neither is offered
+for it.
+
+At install, each provider's key is `OSPREY_MODEL_KEY_<NAME>`, for example `OSPREY_MODEL_KEY_GEMINI`
 (the single `provider:` keeps `OSPREY_MODEL_PROVIDER_KEY`). Give it in the installer's terminal
 before `ospreyflow install`, or on the guided install's Models screen; an enabled provider without
-its key stops the install, and a later install keeps a key already given. To enable a provider on a
-running deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes
-its key from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt. On a running deployment,
-`ospreyflow models key <name>` sets or replaces a key and `ospreyflow models remove-key <name>`
-removes it (section 8); `ospreyflow models` says whether each is present. A key is kept in
-`deployment.env` alone and read only by the deployment's model gateway — never by the Conduit,
-never written to `osprey.yaml`, never shown in the Admin area or any page of the Glass.
+its key stops the install. The install writes it to `deployment.env` only until the gateway is up,
+then hands it to the gateway and removes its line. If that fails it says so, the key stays in
+`deployment.env`, and the next `ospreyflow apply` tries again. To enable a provider on a running
+deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes its key
+from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt, and hands it on the same way.
+
+**From the command line**, for headless use and recovery, `ospreyflow models key <name>` sets or
+replaces a key and `ospreyflow models remove-key <name>` removes it (section 8). Both run the
+Conduit's own key path inside its container, the one Admin › Models uses, with the key passed by name
+in the environment, never as an argument; nothing is restarted. `ospreyflow models` says whether each
+key is present: yes, no, or "lost: enter it again" after a restore.
 
 **On the guided install page** (section 4.1), the Models screen has a key field for each enabled
 provider. A key typed there is sent only to the install page, on this computer — a request from
-anywhere else is refused — and is held there until the install gives it to `deployment.env`. It is
+anywhere else is refused — and is held there until the install gives it to the model gateway, by way of `deployment.env`. It is
 never written anywhere else, never logged and never shown again: the field empties once the key is
 sent, and the page says only "key set" or "no key".
 

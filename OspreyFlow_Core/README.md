@@ -40,7 +40,7 @@ set rather than five separate tools.
   a service assessment panel can say a service meets the Standard. A gov.uk service is served over
   HTTPS (Small or Enterprise); Lite answers on its own computer alone.
 - **Model engines.** The local model answers by default. An administrator may enable hosted engines
-  and give each its key (`ospreyflow models key <name>`); material leaves only when both its
+  and give each its key in Admin › Models (or `ospreyflow models key <name>`); material leaves only when both its
   handling code and its dataset allow it, and each engine shows whether a privacy contract covers it.
 
 ## Start here
