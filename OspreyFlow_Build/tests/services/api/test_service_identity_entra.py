@@ -39,6 +39,10 @@ MAPPING = ClaimMapping(
 
 _ABSENT = object()
 
+#: ADR-148 Amendment 20: the app role this API defines for an orchestrator (v0.6.0 #18), as Entra puts it in an
+#: app-only token's `roles` once it is assigned to the orchestrator's application.
+RUN_APP_ROLE = "OspreyFlow.Run"
+
 
 def _settings(jwks_url: str, **overrides: object) -> OidcResolverSettings:
     fields: dict[str, object] = {
@@ -60,7 +64,7 @@ def _app_token(keypair, **overrides: object) -> str:  # type: ignore[no-untyped-
     claims: dict[str, object] = {
         "aud": API, "iss": ISSUER, "iat": now, "nbf": now, "exp": now + 3600, "ver": "2.0",
         "tid": TENANT, "oid": SP_OID, "sub": SP_OID, "azp": AIRFLOW, "azpacr": "1",
-        "idtyp": "app", "roles": ["Runs.Trigger"],
+        "idtyp": "app", "roles": [RUN_APP_ROLE],
     }  # fmt: skip
     claims.update(overrides)
     return sign_token(keypair[0], {k: v for k, v in claims.items() if v is not _ABSENT})
@@ -293,7 +297,7 @@ def test_a_token_carrying_the_dashboard_role_is_no_service_identity(jwks_url, ke
     """Its client holds this API's `Dashboard.Read`: a dashboard's, registered here or not."""
     from principal_auth import DASHBOARD_APP_ROLE
 
-    token = _app_token(keypair, roles=["Runs.Trigger", DASHBOARD_APP_ROLE])
+    token = _app_token(keypair, roles=[RUN_APP_ROLE, DASHBOARD_APP_ROLE])
     with pytest.raises(ServiceIdentityRefused, match="dashboard") as refused:
         _verifier(jwks_url).client_of(token)
     assert refused.value.status == 403
@@ -394,3 +398,43 @@ def test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error(
     token = _app_token(keypair, **{claim: [AIRFLOW]})
     with pytest.raises(ServiceIdentityRefused):
         _verifier(jwks_url).client_of(token)
+
+
+# --- ADR-148 Amendment 20: the run API's own app role (v0.6.0 #18; CARRIES row 202) --------------------------
+
+
+def test_the_run_app_role_is_principal_auths_own_name() -> None:
+    import principal_auth
+
+    assert getattr(principal_auth, "RUN_APP_ROLE", None) == RUN_APP_ROLE
+
+
+@pytest.mark.parametrize(
+    "roles",
+    [_ABSENT, [], ["Runs.Trigger"], ["ospreyflow.run"], "OspreyFlow.Run", [["OspreyFlow.Run"]]],
+    ids=["no-roles-claim", "no-role", "another-role", "another-case", "a-string-not-a-list", "nested"],
+)
+def test_an_app_only_token_without_the_run_role_is_refused_in_words(jwks_url, keypair, roles) -> None:
+    """Before Amendment 20 any app-only token of the pinned tenant could call the run API. Now its application must
+    hold `OspreyFlow.Run`; Entra leaves `roles` out of the token when no app role is assigned, so its absence is the
+    common shape. Refused in words saying which role, and where it is assigned; never an error."""
+    token = _app_token(keypair, roles=roles)
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier(jwks_url).client_of(token)
+    assert refused.value.status == 403
+    assert str(refused.value) == (
+        "the orchestrator's application does not hold this API's OspreyFlow.Run app role: in Entra ID, assign it "
+        "to the application (the API's registration, App roles), then sign in again"
+    )
+
+
+def test_an_app_only_token_holding_the_run_role_names_its_client(jwks_url, keypair) -> None:
+    for roles in ([RUN_APP_ROLE], ["Runs.Trigger", RUN_APP_ROLE]):
+        assert _verifier(jwks_url).client_of(_app_token(keypair, roles=roles)) == AIRFLOW
+
+
+def test_the_run_role_never_lets_the_deployments_own_clients_in(jwks_url, keypair) -> None:
+    for client in (GLASS, API):
+        with pytest.raises(ServiceIdentityRefused) as refused:
+            _verifier(jwks_url).client_of(_app_token(keypair, azp=client, roles=[RUN_APP_ROLE]))
+        assert refused.value.status == 403
