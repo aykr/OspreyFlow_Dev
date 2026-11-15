@@ -1,0 +1,25 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261115T180527Z-24c84373/log: bash OspreyFlow_Build/process/lanes/v060/stage2/run.sh m9
+stage 2 step m9, official, 2026-11-15T18:05:27Z, run copy e803e72, results /root/osprey-load/stage2
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+17.11s call     tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+0.32s setup    tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 17.55s =======================
+{'measure': 'M9', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': None, 'reached': None, 'reach_bound': None, 'reached_on_page': None, 'verdict': 'met'}
+osprey-test-d-opensearch Up 12 seconds
+Wall time: 81 s, exit 0 (stack d, the lease rules-b took at 2026-11-15T18:00:53Z; set-up before it 6 s)

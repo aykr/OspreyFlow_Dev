@@ -1,0 +1,15 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261115T180109Z-c23aa504/log: bash OspreyFlow_Build/process/lanes/v060/stage2/run.sh inputs
+stage 2 step inputs, official, 2026-11-15T18:01:10Z, run copy b6d2a7f, results /root/osprey-load/stage2
+f564f75f9a3eebad675b90a2dcd145d0478bf6bec735ff818094a2fbe2fea0a7  /root/osprey-load/step4/queries.jsonl
+ae02aa9cc4cc7647282f6dedda461022e676b0590b019cfeccada42f8b80c434  /root/osprey-load/m10/leaks.jsonl
+48af1d5004c6f2aead7640637d1654ba6b9aadcab245201188de1e1608c987a6  /root/osprey-load/m10/never_join.jsonl
+expected: f564f75f… queries.jsonl, ae02aa9c… leaks.jsonl, 48af1d50… never_join.jsonl
+   500 /root/osprey-load/m10/leaks.jsonl
+   500 /root/osprey-load/m10/never_join.jsonl
+osprey-test-d-arcadedb Up 16 seconds
+osprey-test-d-opensearch Up 15 seconds
+osprey-test-d-clickhouse Up 15 seconds
+osprey-test-d-objectstore Up 15 seconds
+osprey-test-d-valkey Up 16 seconds
+osprey-test-d-pg Up 16 seconds
+Wall time: 0 s, exit 0 (stack d, the lease rules-b took at 2026-11-15T18:00:53Z; set-up before it 9 s)
