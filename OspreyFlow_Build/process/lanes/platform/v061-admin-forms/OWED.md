@@ -1,8 +1,4 @@
-# Platform lane handoff: v061-admin-forms, paused 15 Nov 2026 until after v0.6.0's package test
-
-**Branch** `lane/platform-admin-forms`, worktree `~/dev/osprey-wt/platform`. Last real commit `fc77f2a`; the
-`wip(platform): paused` commit after it holds this file alone (rewrite it away on resuming, delete this file).
-Nothing pushed, nothing merged; nothing merges before v0.6.0 is released.
+# v061-admin-forms: what is owed (carried from HANDOFF.md, retired 15 Nov 2026)
 
 **Done:** the model form's first slice (ADR-135 Am 14 points 1-8), rulings 18-20 (no unchecked add; edit and new
 key checked; point 9), the owner's key review and rulings 21-28 (point 10). Offline gates green at fc77f2a:
