@@ -21,6 +21,7 @@ What a mistake would do, and the case that catches it (rule 12):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import UTC, datetime, timedelta
@@ -29,6 +30,7 @@ from typing import Any
 
 import httpx
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 from services.api.app import app, get_principal
 
@@ -264,3 +266,124 @@ def test_a_passed_check_is_shown_as_being_checked_until_added_cancelled_or_15_mi
     assert client.get("/v1/admin/models").json()["checks"] == [], "a lapsed check is not shown"
     added = client.post(f"{CHECKS}/{_check(client).json()['check']}/add").json()
     assert added["checks"] == [] and added["engines"][0]["provider"]["name"] == "gemini"
+
+
+def _audited(world: Any, action: str) -> int:
+    return [e.action for e in world.audit.entries].count(action)
+
+
+def test_a_lapsed_check_is_removed_by_the_sweep_with_no_request(
+    client: TestClient, world: Any, clock: _Clock
+) -> None:
+    """Amendment 14 point 3's bound on how long a key is held unadded, told to the owner (point 7):
+    the sweep removes a lapsed check's key with no later request to prompt it, audited once."""
+    _check(client)
+    clock.at += timedelta(minutes=15, seconds=1)
+    asyncio.run(world.admin.sweep_checks())
+    assert _credentials(world) == []
+    assert _audited(world, "engine_check_expired") == 1
+    asyncio.run(world.admin.sweep_checks())
+    assert _audited(world, "engine_check_expired") == 1, "audited once"
+    saved = yaml.safe_load((world.folder / "models.yaml").read_text())
+    assert not saved.get("checks"), "the lapsed check is gone from the models file"
+
+
+def test_the_sweep_runs_by_itself_once_the_conduit_starts(world: Any, clock: _Clock) -> None:
+    """Started with the Conduit (`start`) and stopped with it (`close`): nothing has to call it."""
+
+    async def run() -> None:
+        world.admin._sweep_seconds = 0.01
+        await world.admin.start()
+        assert (await world.admin.check(ADMIN.id, _engine(), _key())).ok
+        clock.at += timedelta(minutes=16)
+        for _ in range(100):
+            if not _credentials(world):
+                break
+            await asyncio.sleep(0.01)
+        await world.admin.close()
+
+    asyncio.run(run())
+    assert _credentials(world) == []
+    assert _audited(world, "engine_check_expired") == 1
+
+
+def _engine() -> Any:
+    from schemas.deployment import ModelProviderConfig
+
+    return ModelProviderConfig.model_validate(ENGINE)
+
+
+def _key() -> Any:
+    from pydantic import SecretStr
+
+    return SecretStr(GOOD)
+
+
+def test_an_engine_being_checked_is_not_added_unchecked_nor_its_key_lost_to_the_sweep(
+    client: TestClient, world: Any, clock: _Clock
+) -> None:
+    """The older add route refuses a name being checked; once that check has lapsed it is swept
+    first, so the sweep can never later remove the key of an engine added by that route."""
+    _check(client)
+    held = client.post("/v1/admin/models/engines", json={"provider": ENGINE})
+    assert held.status_code == 422 and "being checked" in held.json()["detail"]["detail"]
+    clock.at += timedelta(minutes=16)
+    assert client.post("/v1/admin/models/engines", json={"provider": ENGINE}).status_code == 200
+    assert client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD}).status_code == 200
+    asyncio.run(world.admin.sweep_checks())
+    assert _credentials(world) == ["osprey-gemini"], "the live engine keeps its key"
+
+
+def test_a_key_pasted_into_a_model_name_is_refused_before_anything_is_kept(
+    client: TestClient, world: Any
+) -> None:
+    refused = _check(client, roles={"extraction": PLANTED})
+    assert refused.status_code == 422, refused.text
+    assert PLANTED not in refused.text and "model name looks like a key" in refused.text
+    assert _credentials(world) == []
+    assert PLANTED not in json.dumps([e.model_dump(mode="json") for e in world.audit.entries])
+    assert PLANTED not in "\n".join(world.gateway.raw_rows())
+
+
+def test_the_key_is_recorded_as_set_by_who_checked_it_and_when(
+    client: TestClient, world: Any, clock: _Clock
+) -> None:
+    """The owner's key rule 3: who set the key, and when, is who typed it at the check."""
+    check = _check(client).json()["check"]
+    clock.at += timedelta(minutes=5)
+    other = ADMIN.model_copy(update={"id": "admin-2"})
+    app.dependency_overrides[get_principal] = lambda: other
+    added = client.post(f"{CHECKS}/{check}/add").json()
+    engine = added["engines"][0]
+    assert engine["key_set_by"] == ADMIN.id
+    assert engine["key_set_at"].startswith("2026-11-15T12:00:00")
+    key_set = next(e for e in world.audit.entries if e.action == "key_set")
+    added_row = next(e for e in world.audit.entries if e.action == "engine_added")
+    assert key_set.by == ADMIN.id and added_row.by == "admin-2"
+
+
+@pytest.mark.parametrize(
+    ("change", "field"),
+    [
+        ({"name": "azure", "api_base": "http://ai.example/openai"}, "provider.api_base"),
+        ({"roles": {"extraction": "gemini 3.8 flash"}}, "provider.roles.extraction"),
+        # The roles' rule quotes the name it refuses: a key pasted with a space is never echoed.
+        ({"roles": {"vision": f"x {PLANTED}"}}, "provider.roles.vision"),
+        (
+            {"privacy_contract": True, "contract_reference": f"DPA {PLANTED}"},
+            "provider.contract_reference",
+        ),
+    ],
+)
+def test_a_refused_field_is_named_so_the_form_can_say_it_there(
+    client: TestClient, world: Any, change: dict[str, Any], field: str
+) -> None:
+    """Amendment 14 point 5: a value the engine's own rules refuse is named by its field (the form
+    ties the words to it), in the rules' words, never echoing what was sent, the key included."""
+    refused = _check(client, key=PLANTED, **change)
+    assert refused.status_code == 422, refused.text
+    detail = refused.json()["detail"]
+    assert [f["field"] for f in detail["fields"]] == [field]
+    assert detail["fields"][0]["words"] and "Send the engine" not in detail["detail"]
+    assert PLANTED not in refused.text and "W3R8" not in refused.text
+    assert _credentials(world) == []

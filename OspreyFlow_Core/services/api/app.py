@@ -28,6 +28,7 @@ import io
 import json
 import logging
 import os
+import re
 import socket
 import time
 from collections import Counter
@@ -20297,6 +20298,31 @@ _CHECK_BODY_REFUSED = (
 )
 
 
+def _check_refusal(raw: bytes, invalid: ValidationError) -> dict[str, object]:
+    """ADR-135 Amendment 14 point 5: each refused field named (`provider.api_base`,
+    `provider.roles.extraction` …) with the engine's own rules' words, so the form says them at
+    that field; never a value that was sent, the key included. A body that is not the check's
+    shape at all keeps the fixed words."""
+    try:
+        sent = model_admin_module.sent_values(json.loads(raw))
+    except ValueError:
+        return {"error": "check_refused", "detail": _CHECK_BODY_REFUSED}
+    errors = invalid.errors(include_input=False, include_context=False, include_url=False)
+    if not errors or any(not e["loc"] or e["type"] in ("extra_forbidden", "json_invalid")
+                         for e in errors):  # fmt: skip
+        return {"error": "check_refused", "detail": _CHECK_BODY_REFUSED}
+    fields = []
+    for e in errors:
+        msg = str(e.get("msg", "")).removeprefix("Value error, ")
+        field = ".".join(str(p) for p in e["loc"])
+        # The roles' rule names the job it refuses ("the vision model … is not a model name").
+        if field == "provider.roles" and (job := re.match(r"the (\w+) model ", msg)):
+            field = f"provider.roles.{job.group(1)}"
+        fields.append({"field": field, "words": model_admin_module.redacted(msg, sent)})
+    words = "; ".join(f"{f['field']}: {f['words']}" for f in fields) + ". Nothing was checked."
+    return {"error": "check_refused", "detail": words, "fields": fields}
+
+
 @app.post("/v1/admin/models/checks", dependencies=_MANAGE_MODELS)
 async def models_admin_check_route(
     request: Request, principal: PrincipalDep, admin: ModelAdminDep
@@ -20307,10 +20333,8 @@ async def models_admin_check_route(
     raw = await request.body()
     try:
         body = EngineCheckInput.model_validate_json(raw)
-    except ValueError:
-        raise HTTPException(
-            status_code=422, detail={"error": "check_refused", "detail": _CHECK_BODY_REFUSED}
-        ) from None
+    except ValidationError as invalid:  # a body that is not JSON at all is one too
+        raise HTTPException(status_code=422, detail=_check_refusal(raw, invalid)) from None
     try:
         return await admin.check(principal.id, body.provider, body.key)
     except model_admin_module.ModelAdminRefused as refused:

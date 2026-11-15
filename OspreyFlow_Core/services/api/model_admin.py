@@ -58,6 +58,7 @@ from schemas.deployment import (
     engine_kinds_offered,
     engine_refusal,
     label_looks_like_a_key,
+    model_looks_like_a_key,
 )
 from schemas.model_admin import (
     AdminEngine,
@@ -778,9 +779,13 @@ class ModelAdmin:
         on_change: Callable[[ModelRoutes], None] = lambda _routes: None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
         retry_seconds: float = 30.0,
+        sweep_seconds: float = 60.0,
     ) -> None:
         self._retry_seconds = retry_seconds
         self._retrying: asyncio.Task[None] | None = None
+        #: ADR-135 Amendment 14: how often a passed check past its 15 minutes is looked for.
+        self._sweep_seconds = sweep_seconds
+        self._sweeping: asyncio.Task[None] | None = None
         self._installed = installed
         self._file = settings_file
         self._gateway = gateway
@@ -931,6 +936,31 @@ class ModelAdmin:
         if not done:
             self._retrying = asyncio.create_task(self._keep_trying())
         self._on_change(self.routes())
+        # ADR-135 Amendment 14: a passed check not added is removed, key and all, within a sweep of
+        # its 15 minutes, whether or not anyone asks anything of Models again.
+        self._sweeping = asyncio.create_task(self._keep_sweeping())
+
+    async def _keep_sweeping(self) -> None:
+        while True:
+            try:
+                await self.sweep_checks()
+            except Exception as failed:  # noqa: BLE001 - logged in words, then tried again
+                log.warning("lapsed model checks not removed: %s", type(failed).__name__)
+            await asyncio.sleep(self._sweep_seconds)
+
+    async def sweep_checks(self) -> None:
+        """Every passed check past `CHECK_LIFE` removed from the models file, its key from the
+        gateway, each audited once as expired."""
+        gone: list[str] = []
+        async with self._exclusive:
+            self._fresh()
+            current = self.settings
+            if not current.checks:
+                return
+            current, gone = await self._expired(current)
+            if gone:
+                self._save(current)
+        await self._audit_expired(gone)
 
     async def _keep_trying(self) -> None:
         """Until the gateway answers: each failure waits twice as long as the last, up to ten
@@ -951,14 +981,16 @@ class ModelAdmin:
             wait = min(wait * 2, 600.0)
 
     async def close(self) -> None:
-        """Stops the background retry, if one is running."""
-        if self._retrying is not None:
-            self._retrying.cancel()
-            try:
-                await self._retrying
-            except (asyncio.CancelledError, Exception):  # noqa: BLE001 - shutdown goes on
-                pass
-            self._retrying = None
+        """Stops the background retry and the checks' sweep, if they are running."""
+        for task in (self._retrying, self._sweeping):
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):  # noqa: BLE001 - shutdown goes on
+                    pass
+        self._retrying = None
+        self._sweeping = None
 
     async def _start_once(self) -> bool:
         if self._settings is None and not any(p.keyless for p in self._installed.providers):
@@ -1145,17 +1177,30 @@ class ModelAdmin:
 
     async def add_engine(self, by: str, provider: ModelProviderConfig) -> None:
         sent = sent_values(provider)
+        expired: list[str] = []
 
         async def work(current: ModelSettings) -> None:
             if any(p.name == provider.name for p in current.providers):
                 raise ModelAdminRefused(f"An engine named {provider.name} already exists.")
+            # ADR-135 Amendment 14: a lapsed check is swept first, so its sweep can never later
+            # remove this engine's key; a live one keeps its name.
+            current, gone = await self._expired(current)
+            expired.extend(gone)
+            if any(c.provider.name == provider.name for c in current.checks.values()):
+                raise ModelAdminRefused(
+                    f"An engine named {provider.name} is being checked; add it from its check, or "
+                    "cancel the check first."
+                )
             proposed = self._validated(current.model_copy(
                 update={"providers": [*current.providers, provider]}, deep=True), sent)  # fmt: skip
             self._made_by_the_render(provider)
             await self._reconcile(proposed)
             self._save(proposed)
 
-        await self._change(by, "engine_added", provider.name, work)
+        try:
+            await self._change(by, "engine_added", provider.name, work)
+        finally:
+            await self._audit_expired(expired)
         # A plain provider's entry is as before Amendment 4: its kind fields are not named.
         named = [f for f in _EDITABLE if not (provider.plain and f in _KIND_FIELDS)]
         await self._audited(
@@ -1462,6 +1507,11 @@ class ModelAdmin:
                 ("label", provider.label),
                 ("agreement reference", provider.contract_reference),
             )
+            if any(model_looks_like_a_key(m) for m in provider.roles.values()):
+                raise ModelAdminRefused(
+                    "A model name looks like a key. Type the model's name in its job's field, and "
+                    "the key in the key field; nothing was checked."
+                )
             for field_name, shown in shown_fields:
                 if shown and label_looks_like_a_key(shown):
                     raise ModelAdminRefused(
@@ -1532,6 +1582,7 @@ class ModelAdmin:
         key is never sent again. Refused for a check that does not exist or is past `CHECK_LIFE`."""
         expired: list[str] = []
         added: list[ModelProviderConfig] = []
+        checked_by: list[str] = []
 
         async def work(current: ModelSettings) -> None:
             pending = current.checks.get(check_id)
@@ -1545,6 +1596,8 @@ class ModelAdmin:
                     status=410,
                 )
             if pending is None:
+                if gone:
+                    self._save(current)  # the lapsed ones swept here are not audited again
                 raise ModelAdminRefused(
                     "There is no check of that name. Check the key first, then add the engine.",
                     status=404,
@@ -1558,9 +1611,11 @@ class ModelAdmin:
             await self._reconcile(proposed)
             keys = dict(proposed.keys)
             if not provider.keyless:
-                keys[provider.name] = KeyRecord(set_at=self._now(), set_by=by)
+                # The owner's key rule 3: who typed the key, and when, at the check.
+                keys[provider.name] = KeyRecord(set_at=pending.at, set_by=pending.by)
             self._save(proposed.model_copy(update={"keys": keys}, deep=True))
             added.append(provider)
+            checked_by.append(pending.by)
 
         try:
             await self._change(by, "engine_added", None, work)
@@ -1573,7 +1628,7 @@ class ModelAdmin:
             {f: {"from": None, "to": _plain(getattr(provider, f))} for f in named},
         )  # fmt: skip
         if not provider.keyless:
-            await self._audited(by, "key_set", provider.name)
+            await self._audited(checked_by[0], "key_set", provider.name)
 
     async def cancel_check(self, by: str, check_id: str) -> None:
         """**Cancel**: a passed check removed, and its key with it."""

@@ -1234,3 +1234,20 @@ def test_on_cloud_platform_with_no_word_from_the_render_every_engine_is_closed(
     asyncio.run(world.admin.start())
     assert world.gateway.entry_for("gemini/g-flash") is None
     assert world.admin.routes().engines == {}
+
+
+def test_a_check_the_render_did_not_make_is_refused_before_the_key_reaches_the_gateway(
+    tmp_path: Path, serve: Callable[[World], TestClient]
+) -> None:
+    """The owner's ruling 6 (ADR-135 Amendment 14 point 3): on the cloud platform the check refuses
+    in words, naming `osprey.yaml`, an engine whose way out the render did not make, before the key
+    is handed to the gateway."""
+    w = World(tmp_path, rendered_with=("bedrock", "acme"))  # no way out made for Gemini
+    client = serve(w)
+    refused = client.post(
+        "/v1/admin/models/checks", json={"provider": GEMINI, "key": GEMINI_KEY}
+    )
+    assert refused.status_code == 422, refused.text
+    assert "osprey.yaml" in refused.json()["detail"]["detail"]
+    assert sorted(w.gateway._creds) == [], "the key never reached the gateway"
+    assert GEMINI_KEY not in "\n".join(w.gateway.raw_rows())

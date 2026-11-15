@@ -517,6 +517,14 @@ def label_looks_like_a_key(text: str) -> bool:
     return _label_looks_like_a_key(text)
 
 
+def model_looks_like_a_key(model: str) -> bool:
+    """A typed model name shaped like a key (ADR-135 Amendment 14): the model fields sit beside the
+    key field, and a model name is sent to the gateway, answered back and audited, so a key pasted
+    there is refused before anything is kept. Judged as a path segment is, since a deployment's
+    own name (`my-deployment-2024-08-06`) is a model name here."""
+    return _a_key_in_the_path(model)
+
+
 def _label_looks_like_a_key(text: str) -> bool:
     """A label or contract reference shaped like a key, or holding one among its words: each word
     checked as a whole one is (my own lane review of round 2, item 6; the reference too since P11

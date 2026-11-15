@@ -1,7 +1,7 @@
 """*Admin › Models*' provider list (the owner's prompt of 15 November 2026, Part 1; ADR-135
 Amendment 14 point 1; PREBUILD_FINDINGS.md §3.1): the form chooses a provider from a list, and
 the provider brings its address, its LiteLLM prefix, whether it has a key, a current model as
-its example, the hosts a check calls and only the jobs it can do.
+its example and only the jobs it can do.
 
 What a mistake would do, and the case that catches it (rule 12):
 - a job offered that the provider cannot do (Anthropic's or Bedrock's transcription):
@@ -24,6 +24,25 @@ from services.api import model_catalogue as cat
 from schemas.deployment import ModelProviderConfig, engine_refusal
 
 CLOUD = "cloud-platform"
+AZURE_BASE = "https://example.openai.azure.com"
+
+
+def _fields(entry: cat.CatalogueProvider, *, address: str | None = AZURE_BASE) -> dict[str, object]:
+    """The engine the Glass sends for `entry` (`Models.tsx`, `AddEngineForm`'s `engine()`): its id
+    as the name, its kind and sign-in where it is not a plain provider, and an address where it
+    asks one."""
+    fields: dict[str, object] = {"name": entry.id, "label": entry.label}
+    if entry.kind != "provider":
+        fields |= {"kind": entry.kind, "auth": "key" if entry.key else "iam_role"}
+    if entry.address_asked:
+        fields["api_base"] = address
+    return fields
+
+
+def _engine(
+    entry: cat.CatalogueProvider, model: str, *, job: str = "extraction"
+) -> ModelProviderConfig:
+    return ModelProviderConfig.model_validate({**_fields(entry), "roles": {job: model}})
 
 
 def test_the_list_is_the_owner_s_in_the_owner_s_order() -> None:
@@ -82,8 +101,14 @@ def test_the_addresses_are_the_providers_own_and_asked_where_there_is_none() -> 
     ],
 )
 def test_the_prefix_is_the_form_s_business(provider: str, model: str, routed: str) -> None:
-    assert cat.routed(provider, model) == routed
-    assert cat.bare(provider, routed) == model.split("/", 1)[-1] if "/" in model else model
+    """The catalogue's prefix is the one the engine itself routes by, so a name the form sends
+    bare reaches the gateway prefixed once; the Glass takes the prefix off a name typed with it
+    (`Models.test.tsx`)."""
+    entry = cat.provider(provider, CLOUD)
+    bare = model.removeprefix(f"{entry.prefix}/")
+    engine = _engine(entry, bare)
+    assert engine.route(bare) == routed
+    assert routed == f"{entry.prefix}/{bare}"
 
 
 @pytest.mark.parametrize(
@@ -113,7 +138,7 @@ def test_bedrock_s_example_is_one_its_own_rule_takes() -> None:
     assert entry.example is not None
     engine = ModelProviderConfig.model_validate(
         {
-            **cat.engine_fields(entry, label=entry.label, address=None),
+            **_fields(entry, address=None),
             "roles": {"extraction": entry.example},
         }
     )
@@ -125,11 +150,10 @@ def test_bedrock_s_example_is_one_its_own_rule_takes() -> None:
 )
 def test_each_entry_makes_a_valid_engine(provider: str) -> None:
     entry = cat.provider(provider, CLOUD)
-    fields = cat.engine_fields(entry, label=entry.label, address="https://example.openai.azure.com")
     model = "anthropic.a-model-v1:0" if provider == "bedrock" else "a-model"
-    engine = ModelProviderConfig.model_validate({**fields, "roles": {entry.jobs[0]: model}})
+    engine = _engine(entry, model, job=entry.jobs[0])
     assert engine_refusal(engine, CLOUD) is None, engine_refusal(engine, CLOUD)
-    assert engine.route(model) == cat.routed(provider, model)
+    assert engine.route(model) == f"{entry.prefix}/{model}"
 
 
 @pytest.mark.parametrize("profile", ["small", "local-lite", "cluster", CLOUD])
