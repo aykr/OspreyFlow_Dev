@@ -72,3 +72,18 @@ for (const [brand, theme] of LOOKS) {
     });
   }
 }
+
+// (a) When the line runs out of room, the cross-link takes its short words first, measured; with room, its full words.
+for (const [brand, theme] of LOOKS) {
+  test(`${brand} ${theme}: the cross-link keeps its full words with room and takes its short ones without, again on widening`, async ({ page }) => {
+    await open(page, brand, theme, 1440);
+    const region = page.getByRole("region", { name: "You are in the Glass" });
+    const full = region.getByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
+    const short = region.getByRole("button", { name: "Open in the Ingest Studio ↗", exact: true });
+    await expect(full).toBeVisible();
+    await page.setViewportSize({ width: 1024, height: 900 });
+    if (brand !== "govuk") await expect(short).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect(full).toBeVisible();
+  });
+}

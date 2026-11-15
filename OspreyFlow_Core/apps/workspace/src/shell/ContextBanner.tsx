@@ -15,15 +15,20 @@
 // (`ingest/IngestStudio.tsx`, Lane 1's) — the banner would need a hook there to name it — and that
 // dataset's "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an
 // unfiltered count is refused by rule 7; `02_GLASS_FRONTEND.md` §2.0a).
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 import { currentBrand } from "../brand/brand";
 import { caseDatasets, caseLabel, listCases } from "../investigation/cases";
 import { PLACE_NAME, type PlaceId } from "./places";
+import { barWraps } from "./TopBar";
 import "./places.css";
 
 export interface CrossLink {
   label: string;
+  /** Its words when the line runs out of room (the owner's word of 15 November 2026: the line stays one line where the
+   * top bar does), the place it goes to and no more: the case is the one the line names. */
+  shortLabel?: string;
   onFollow: () => void;
 }
 
@@ -112,6 +117,39 @@ export function useCaseContext(
 
 export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, openView }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
+  // The line stays one line where the top bar does (the owner's word, 15 November 2026): when its items run onto a
+  // second line, the cross-link takes its short words; measured as the top bar folds (`TopBar`'s `barWraps`), again from
+  // its full words whenever the line's width changes or a web font arrives. Only then do whole items wrap.
+  const row = useRef<HTMLDivElement>(null);
+  const [fold, setFold] = useState({ short: false, pass: 0 });
+  const shortLabel = crossLink?.shortLabel;
+  useLayoutEffect(() => {
+    if (!fold.short && shortLabel && row.current && barWraps(row.current)) setFold((current) => ({ ...current, short: true }));
+  }, [fold.short, fold.pass, shortLabel, crossLink?.label]);
+  useLayoutEffect(() => {
+    const element = row.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    let width = element.clientWidth;
+    const again = () => flushSync(() => setFold((current) => ({ short: false, pass: current.pass + 1 })));
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth !== width) {
+        width = element.clientWidth;
+        again();
+      } else if (barWraps(element)) {
+        flushSync(() => setFold((current) => ({ ...current, short: true })));
+      }
+    });
+    observer.observe(element);
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    let live = true;
+    fonts?.addEventListener?.("loadingdone", again);
+    void fonts?.ready?.then(() => live && again());
+    return () => {
+      live = false;
+      observer.disconnect();
+      fonts?.removeEventListener?.("loadingdone", again);
+    };
+  }, []);
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
   const next = () => <span className="context-banner__sep" aria-hidden="true">·</span>;
@@ -204,7 +242,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       )}
       {crossLink && (
         <button type="button" className={govuk ? "govuk-link context-banner__cross" : "btn btn--ghost context-banner__cross"} onClick={crossLink.onFollow}>
-          {crossLink.label}
+          {fold.short && crossLink.shortLabel ? crossLink.shortLabel : crossLink.label}
         </button>
       )}
     </>
@@ -214,7 +252,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     // content. "You are in …" is still the region's heading and name, at the start of the row, at its size.
     return (
       <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
-        <div className="govuk-notification-banner__content">
+        <div ref={row} className="govuk-notification-banner__content">
           <h2 className="govuk-notification-banner__title context-banner__place" id="context-banner-title">
             {YOU_ARE_IN[place]}
           </h2>
@@ -224,7 +262,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     );
   }
   return (
-    <div className="context-banner" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
+    <div ref={row} className="context-banner" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
       <h2 className="context-banner__place" id="context-banner-title">
         {YOU_ARE_IN[place]}
       </h2>
@@ -246,10 +284,14 @@ export function crossLinkFor(
   if (place === "glass") {
     // ADR-145 Amendment 14 decision 4: the row names the case's datasets once, in "reads …"; the
     // cross-link does not name them again.
-    return { label: "Open this case's data in the Ingest Studio ↗", onFollow: go.toStudio };
+    return { label: "Open this case's data in the Ingest Studio ↗", shortLabel: "Open in the Ingest Studio ↗", onFollow: go.toStudio };
   }
   if (place === "ingest") {
-    return { label: caseName ? `← Back to case ${caseName} in the Glass` : "← Back to the case in the Glass", onFollow: go.toGlass };
+    return {
+      label: caseName ? `← Back to case ${caseName} in the Glass` : "← Back to the case in the Glass",
+      shortLabel: "← Back to the Glass",
+      onFollow: go.toGlass,
+    };
   }
   return null;
 }
