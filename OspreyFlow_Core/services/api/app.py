@@ -1174,6 +1174,7 @@ from .worker import JobWorker
 from .worker_main import register_all, registered_job_types, run_forever
 from .working_set.models import (
     MAX_NODES,
+    AddedByIds,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
@@ -5441,6 +5442,14 @@ class SeedRequest(BaseModel):
     edges: list[Edge] = []
 
 
+class AddByIdsRequest(BaseModel):
+    """*Show all on graph* under an Ask & Chat answer (v0.6.0 #5): the ids its markers stand for.
+    Bounded by the working set's own cap, which the add counts after it reads (rule 2)."""
+
+    node_ids: list[NodeId] = Field(default_factory=list, max_length=50_000)
+    link_ids: list[str] = Field(default_factory=list, max_length=250_000)
+
+
 class ExpandBody(BaseModel):
     request: ExpandRequest
     justification: str | None = None
@@ -5481,6 +5490,43 @@ async def seed(
         result_cardinality=len(outcome.delta.nodes) + len(outcome.delta.edges),
     )
     return outcome
+
+
+@app.post(
+    "/v1/investigations/{investigation_id}/working-set/add-by-ids",
+    dependencies=[Depends(require_right(Right.INVESTIGATE))],
+)
+async def add_by_ids_route(
+    investigation: InvestigationEditorDep,
+    body: AddByIdsRequest,
+    principal: PrincipalDep,
+    working_set: WorkingSetDep,
+    history: HistoryDep,
+    audit: AuditDep,
+    valkey: Annotated[Valkey, Depends(get_valkey)],
+) -> AddedByIds:
+    """*Show all on graph* under an Ask & Chat answer (v0.6.0 #5): the answer's nodes and links put
+    on the canvas by id, as the case's reader may see them (`WorkingSetService.add_by_ids`, `seed`'s
+    own by-id reading; rule 3), and how many are not, never which. Past the working set's cap it is
+    refused with the typed `limit_exceeded` and its three choices, as any add is (rule 2)."""
+    added = await working_set.add_by_ids(investigation.id, body.node_ids, body.link_ids, principal)
+    await publish_delta(valkey, investigation.id, added.outcome.delta)
+    await _record_history_step(
+        working_set,
+        history,
+        investigation.id,
+        seq=added.outcome.delta.seq,
+        label=SEEDED,
+        principal=principal,
+    )
+    await audit.record(
+        principal=principal,
+        action="add_by_ids",
+        investigation_id=investigation.id,
+        resolved_query={"node_count": len(body.node_ids), "link_count": len(body.link_ids)},
+        result_cardinality=len(added.outcome.delta.nodes) + len(added.outcome.delta.edges),
+    )
+    return added
 
 
 @app.post(

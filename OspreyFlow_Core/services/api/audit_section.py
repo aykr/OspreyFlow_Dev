@@ -242,7 +242,7 @@ READS_AND_OTHER: tuple[str, ...] = (
     # saved, tested, made live or asked to go live; with the other rule actions.
     "read_rule_datasets", "rule_draft_saved", "rule_tested", "rule_made_live",
     "rule_make_live_proposed",
-    "access_admin_override", "access_denied", "add_by_identifiers", "add_pack_item",
+    "access_admin_override", "access_denied", "add_by_identifiers", "add_by_ids", "add_pack_item",
     "alert_assigned", "alert_canvas", "alert_claimed", "alert_close_approved",
     "alert_close_proposed", "alert_close_sent_back", "alert_disposed", "alert_released",
     "analytics_cross_filter", "analytics_first_seen", "analytics_geo_bins", "analytics_geometries",

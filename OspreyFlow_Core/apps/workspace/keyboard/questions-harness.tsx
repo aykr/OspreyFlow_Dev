@@ -24,6 +24,9 @@ declare global {
       chosen?: string[];
       /** What the last question asked about, as the panel sent it. */
       scope?: unknown;
+      /** v0.6.0 #5: what Show all on graph and Save as a view were handed. */
+      shown?: unknown;
+      saved?: unknown;
     };
   }
 }
@@ -116,8 +119,25 @@ function Panel() {
     initialReadFrom={wholeCase ? "case" : undefined}
     // In the history mode a marker can be chosen, so it is reached by Tab (a marker with nowhere to go is disabled).
     onSelectFacts={withHistory ? (citation) => { window.__QUESTIONS__!.chosen = citation.node_ids; } : undefined}
+    // v0.6.0 #5: Show all on graph and Save as a view under each answer, as `App.tsx` offers them; what they were
+    // handed is kept for a spec, the canvas being `harness.html?questions=1`'s.
+    onShowAll={(ids) => (window.__QUESTIONS__!.shown = ids)}
+    onSaveAsView={async (ids, name) => {
+      window.__QUESTIONS__!.saved = { ids, name };
+      return null;
+    }}
     />
   );
+}
+
+// `?save=1` (with `?case=1`): the answer's *Save as a view* form drawn open, for the every-harness axe scan.
+if (new URLSearchParams(window.location.search).get("save") === "1") {
+  const press = () => {
+    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Save as a view");
+    if (button) button.click();
+    else setTimeout(press, 50);
+  };
+  setTimeout(press, 50);
 }
 
 createRoot(container).render(

@@ -235,6 +235,29 @@ and opens over the canvas (a shadow, no hairline), and the canvas toolbar's *Det
 it either way (ADR-115 E4). The status bar (26px) sets its counts as pairs 16px apart, with no
 separator, and a tip at the right with *Next tip*, outside the counts' live region.
 
+**Under an Ask & Chat answer (v0.6.0 #5, the owner's closed list).** When an answer's markers (`[G-n]`, `[S-n]`) stand
+for any item, two actions follow its facts (`questions/AnswerActions.tsx`, mounted in the answer's own body, so a
+closed answer hides them):
+- **Show all on graph** puts every item the markers stand for on the case's canvas and selects them together, the
+  camera on the first (`questions/showAnswer.ts`, which `App.tsx` and the keyboard harness share). It closes a saved
+  view open over the canvas first, since the items go on the case. The items are read by id on the Conduit as this
+  reader may see them (`POST …/working-set/add-by-ids`, `03_CONDUIT_MIDDLEWARE.md`). What it cannot show is said as a
+  count, "n of this answer's items could not be shown.", and never named: a node hidden from the reader or no longer
+  held, and a link whose two ends the reader cannot both see (the orchestrator's ruling, 15 November 2026). Past the
+  working set's cap nothing is added, and the refusal says its figures and points to *Save as a view* (rule 2).
+- **Save as a view** opens the *Save as a view* form under the answer, named after its question ("Answer: …", cut at a
+  word past 72 characters), and saves the answer's nodes as a saved view of the case, private until shared (ADR-144;
+  the case line's *Saved views (n)* counts it). It isn't offered for an answer that stands for links alone.
+
+Proved by:
+- `keyboard/questions.spec.ts`, on the real canvas by keyboard: every item selected, one not shown counted; the cap's
+  figures with nothing added; the form named and saved;
+- `src/questions/AnswerActions.test.tsx`;
+- `tests/services/api/working_set/test_add_by_ids.py`, over the real `WorkingSetService`: hidden and absent alike,
+  never named, the half-seen link, the cap;
+- the route case in `test_explore_routes.py`;
+- the every-harness scan of `questions-harness.html case=1&save=1` in the three looks.
+
 Four rules govern this layout, and they are what make it an analytical workspace rather than a
 set of widgets:
 

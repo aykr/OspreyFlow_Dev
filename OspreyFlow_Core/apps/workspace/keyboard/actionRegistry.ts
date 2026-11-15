@@ -784,6 +784,9 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   // disabled with why) is chosen by arrow keys, and the question sends the choice.
   "choose-what-to-read-from-by-keyboard",
   "open-an-earlier-answer-by-keyboard",
+  // v0.6.0 #5: under an answer, every item its markers stand for put on the canvas and selected, and saved as a view.
+  "show-all-of-an-answers-items-on-the-graph-by-keyboard",
+  "save-an-answers-items-as-a-view-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

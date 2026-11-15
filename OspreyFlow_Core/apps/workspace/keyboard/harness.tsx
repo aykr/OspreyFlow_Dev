@@ -19,6 +19,8 @@ import { SelectionList } from "../src/inspector/SelectionList";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { bringFactIntoView } from "../src/questions/graphFacts";
+import { showAnswerOnCanvas } from "../src/questions/showAnswer";
+import { saveView } from "../src/views/viewsApi";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
@@ -33,6 +35,8 @@ declare global {
       selection: string[];
       viewMessagesNodeId: string | null;
       selectedEdge: string | null;
+      /** What the canvas said last (*Show all on graph*'s notice, v0.6.0 #5). */
+      said?: string;
       /** The last link-menu entry that hands over to the Inspector (ADR-080): which link and what. */
       linkAction: { edgeId: string; action: string } | null;
       /** The view the canvas said the selection was saved as (ADR-144 decision 4). */
@@ -568,6 +572,24 @@ createRoot(container).render(
         selection={{ nodeIds: [], linkIds: [] }}
         onSelectFacts={(citation) => {
           if (canvasHandle.current) bringFactIntoView(canvasHandle.current, citation);
+        }}
+        // v0.6.0 #5, as `App.tsx` wires them: the answer's items on the real canvas by id, and saved as a view.
+        onShowAll={(ids) =>
+          void showAnswerOnCanvas({ apiBaseUrl: "http://keyboard-test.invalid", bearerToken: "unused", investigationId: "keyboard-fixture" }, ids, () =>
+            canvasHandle.current
+              ? {
+                  applyDelta: (delta) => workingSet.store.getState().applyDelta(delta),
+                  hasNode: (id) => workingSet.graph.hasNode(id),
+                  highlightNodes: (nodeIds) => canvasHandle.current?.highlightNodes(nodeIds),
+                  centreOn: (nodeId) => canvasHandle.current?.centreOn(nodeId),
+                  say: (words) => (window.__KEYBOARD__!.said = words),
+                }
+              : null,
+          )
+        }
+        onSaveAsView={async (ids, name) => {
+          const saved = await saveView("http://keyboard-test.invalid", "unused", "keyboard-fixture", { name, nodeIds: ids.nodeIds });
+          return saved.ok ? null : saved.message;
         }}
       />
     )}

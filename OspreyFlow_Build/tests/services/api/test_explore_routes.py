@@ -602,3 +602,49 @@ def test_a_suppression_mark_needs_words_and_keeps_them_trimmed(client: Any) -> N
     kept = http.post(url, json={"investigation_id": "case-e", "reason": "  a duplicate of n-7  "})
     assert kept.status_code == 200
     assert written == ["a duplicate of n-7"]
+
+
+def test_an_answers_items_are_put_on_the_canvas_by_id_as_the_case_reader(client: Any) -> None:
+    """v0.6.0 #5 (*Show all on graph*): the route asks the working set by id with the case's
+    principal (its datasets), audits it, refuses without a principal, and passes a cap refusal
+    through as the typed `limit_exceeded` with its three choices (rule 2), never a cut add."""
+    import services.api.app as app_module
+    from services.api.working_set.models import (
+        AddedByIds,
+        DeltaAdd,
+        ExpansionOutcome,
+        LimitExceeded,
+        LimitExceededError,
+    )
+
+    http, graph, audit = client
+    seen: list[tuple[list[str], list[str], Principal]] = []
+    _run_overrides([])
+
+    class _WorkingSet:
+        async def add_by_ids(self, case, node_ids, link_ids, principal):  # type: ignore[no-untyped-def]
+            seen.append((list(node_ids), list(link_ids), principal))
+            if "too-many" in node_ids:
+                too_many = LimitExceeded(cap_kind="nodes", cap=50_000, would_be=50_001)
+                raise LimitExceededError(too_many)
+            return AddedByIds(
+                outcome=ExpansionOutcome(delta=DeltaAdd(seq=3, nodes=[_node("n-1")], edges=[])),
+                not_shown=1,
+            )
+
+        async def current_membership(self, case):  # type: ignore[no-untyped-def]
+            return [], []
+
+    app.dependency_overrides[app_module.get_working_set] = _WorkingSet
+    url = "/v1/investigations/case-e/working-set/add-by-ids"
+    response = http.post(url, json={"node_ids": ["n-1", "n-2"], "link_ids": []})
+    assert response.status_code == 200, response.text
+    assert response.json()["not_shown"] == 1
+    assert [n["id"] for n in response.json()["outcome"]["delta"]["nodes"]] == ["n-1"]
+    assert [(ids, links, p.datasets) for ids, links, p in seen] == [(["n-1", "n-2"], [], READS)]
+    assert audit.records[-1]["action"] == "add_by_ids"
+    refused = http.post(url, json={"node_ids": ["too-many"]})
+    assert refused.status_code == 409
+    assert refused.json()["error"] == "limit_exceeded"
+    assert len(refused.json()["options"]) == 3
+    assert TestClient(app).post(url, json={"node_ids": ["n-1"]}).status_code in (401, 403)

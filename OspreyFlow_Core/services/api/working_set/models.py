@@ -339,6 +339,18 @@ class ExpansionOutcome(BaseModel):
     clusters: DeltaReproject | None = None
 
 
+class AddedByIds(BaseModel):
+    """What `WorkingSetService.add_by_ids` returns (v0.6.0 #5, *Show all on graph* under an Ask &
+    Chat answer): the add, as a seed answers it, and how many of the ids asked for are not on the
+    canvas after it, never which. A node the reader may not see, or the Vault does not hold, and a
+    link they may not see or whose two ends they cannot both see (the orchestrator's ruling, 15
+    November 2026), are counted alike, as a saved view's `missing` is (ADR-144 decision 2): the ids
+    came from this reader's own answer, so the count names nothing they could not already ask."""
+
+    outcome: ExpansionOutcome
+    not_shown: int
+
+
 class LinksAmongRequest(BaseModel):
     """`POST .../links-among` (ADR-098): the nodes whose links among each other to add — left out,
     every node in the view — and, from a selection, how many degrees apart to look for routes

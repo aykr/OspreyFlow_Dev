@@ -122,6 +122,8 @@ import { ViewsPanel } from "./views/ViewsPanel";
 import { type CaseView, type CaseViewOpened, listViews, openView, saveView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
+import type { AnswerIds } from "./questions/AnswerActions";
+import { showAnswerOnCanvas } from "./questions/showAnswer";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
 import { ExplorePanel } from "./explore/ExplorePanel";
 import type { BusyDay, RankedLink } from "./explore/exploreApi";
@@ -746,6 +748,38 @@ export function App() {
       setToast(error instanceof Error ? error.message : String(error));
       return false;
     }
+  };
+  /** v0.6.0 #5: *Show all on graph* under an Ask & Chat answer. Every item its markers stand for is put on the case's
+   * canvas by id (read on the server as this reader may see them), then selected and brought into view; how many are
+   * not shown is said, never which. Past the working set's cap nothing is added and the typed refusal is said with its
+   * figures, and *Save as a view* beside it is the way to keep them all (rule 2). A saved view open over the canvas is
+   * closed first: the items go on the case, not the view. */
+  const showAnswerOnGraph = async (ids: AnswerIds): Promise<void> => {
+    if (!investigationId) return;
+    if (lens) closeLens();
+    results.leave();
+    setView("graph");
+    await showAnswerOnCanvas({ apiBaseUrl: API_BASE_URL, bearerToken, investigationId }, ids, () =>
+      glassCanvasRef.current
+        ? {
+            applyDelta: (delta) => workingSetRef.current.store.getState().applyDelta(delta),
+            hasNode: (id) => workingSetRef.current.graph.hasNode(id),
+            highlightNodes: (nodeIds) => glassCanvasRef.current?.highlightNodes(nodeIds),
+            centreOn: (nodeId) => glassCanvasRef.current?.centreOn(nodeId),
+            say: setToast,
+          }
+        : null,
+    );
+  };
+  /** v0.6.0 #5: *Save as a view* under an Ask & Chat answer: its nodes saved as a saved view of the case, private to
+   * the saver until shared (ADR-144); the case line's *Saved views (n)* counts it. Answers `null`, or why not. */
+  const saveAnswerAsView = async (ids: AnswerIds, name: string): Promise<string | null> => {
+    if (!investigationId) return "Open a case first.";
+    const saved = await saveView(API_BASE_URL, bearerToken, investigationId, { name, nodeIds: ids.nodeIds });
+    if (!saved.ok) return saved.message;
+    setViewsRead((n) => n + 1);
+    setToast(`Saved as a view: ${saved.view.name}. Open it from Saved views.`);
+    return null;
   };
   /** ADR-100 decision 5: a busiest link puts the pair and their link on the canvas. */
   const pickLinkToStart = (link: RankedLink) => {
@@ -2818,6 +2852,9 @@ export function App() {
       </Drawer>
       <Drawer open={questionsOpen} onClose={() => setQuestionsOpen(false)} title={RAIL_LABELS.questions}>
         <QuestionsPanel
+          // v0.6.0 #5: under each answer, Show all on graph and Save as a view.
+          onShowAll={(ids) => void showAnswerOnGraph(ids)}
+          onSaveAsView={saveAnswerAsView}
           apiBaseUrl={API_BASE_URL}
           bearerToken={bearerToken}
           investigationId={investigationId}

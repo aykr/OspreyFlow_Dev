@@ -10,6 +10,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
 import { currentBrand } from "../brand/brand";
+import { AnswerActions, type AnswerIds } from "./AnswerActions";
 import { sourceAsFact, splitAnswer, type AnswerPart, type GraphCitation, type SearchCitation } from "./graphFacts";
 import {
   acceptProposal,
@@ -37,6 +38,10 @@ export interface QuestionsPanelProps {
   getTimelineWindow?: () => { validFrom: string; validTo: string | null } | null;
   /** A `[G-n]` was chosen: the canvas selects what it stands for and brings it into view. */
   onSelectFacts?: (citation: GraphCitation) => void;
+  /** v0.6.0 #5: *Show all on graph* under an answer: every item its markers stand for, on the canvas and selected. */
+  onShowAll?: (ids: AnswerIds) => void;
+  /** v0.6.0 #5: *Save as a view* under an answer: those items saved as a saved view; `null` when saved, else why not. */
+  onSaveAsView?: (ids: AnswerIds, name: string) => Promise<string | null>;
   /** ADR-144 decision 4: the questions are asked in this case view (*Ask the model about these*
    * saved it, private to the asker): its conversation is listed, asked and decided through it, and
    * reads only what it holds. Absent: the case's own conversation. */
@@ -145,6 +150,8 @@ export function QuestionsPanel({
   selection,
   getTimelineWindow,
   onSelectFacts,
+  onShowAll,
+  onSaveAsView,
   view = null,
   onLeaveView,
   initialReadFrom,
@@ -351,7 +358,7 @@ export function QuestionsPanel({
                 {entry.author_name ?? entry.author} · {WHEN.format(new Date(entry.created_at))} UTC
               </p>
               <div id={bodyId} hidden={!open} style={{ display: open ? "grid" : undefined, gap: "var(--sp-8)" }}>
-              <AnswerText entry={entry} onSelectFacts={onSelectFacts} />
+              <AnswerText entry={entry} onSelectFacts={onSelectFacts} onShowAll={onShowAll} onSaveAsView={onSaveAsView} />
               <AnsweredBy engine={entry.engine} model={entry.model} engines={engineChoice.engines} />
               {entry.read && <ReadLine read={entry.read} />}
               {entry.citations.length > 0 && (
@@ -596,9 +603,13 @@ export function spacedAroundMarkers(parts: AnswerPart[]): AnswerPart[] {
 function AnswerText({
   entry,
   onSelectFacts,
+  onShowAll,
+  onSaveAsView,
 }: {
   entry: QuestionAnswer;
   onSelectFacts?: (citation: GraphCitation) => void;
+  onShowAll?: (ids: AnswerIds) => void;
+  onSaveAsView?: (ids: AnswerIds, name: string) => Promise<string | null>;
   /** ADR-144 decision 4: the questions are asked in this case view (*Ask the model about these*
    * saved it, private to the asker): its conversation is listed, asked and decided through it, and
    * reads only what it holds. Absent: the case's own conversation. */
@@ -661,6 +672,7 @@ function AnswerText({
           {unmarked.map((citation) => factButton(citation, `u${citation.number}`))}
         </div>
       )}
+      <AnswerActions entry={entry} onShowAll={onShowAll} onSaveAsView={onSaveAsView} />
       {(entry.search_citations ?? []).length > 0 && (
         <ul role="list" aria-label="Sources found in the case" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
           {(entry.search_citations ?? []).map((source) => (
