@@ -149,6 +149,8 @@ NEEDS: dict[tuple[str, str], AccessLevel] = {
     ("POST", P + "/links-among"): E,
     # ADR-128 decision 1 (B2): adds a list's nodes to the case's working set.
     ("POST", P + "/working-set/add-by-identifiers"): E,
+    # v0.6.0 #5: an Ask & Chat answer's items put on the canvas by id, at Editor as a seed is.
+    ("POST", P + "/working-set/add-by-ids"): E,
     # ADR-098 decision 5: writes the marked entity into the case.
     ("POST", P + "/documents/{document_id}/designations"): E,
     # ADR-099: what a case reads is the Author's to change.

@@ -79,6 +79,7 @@ from .access_index import ABSENT, AccessEntries, AccessSignature
 from .models import (
     MAX_EDGES,
     MAX_NODES,
+    AddedByIds,
     CardinalityPreview,
     ClusterExplanation,
     ClusterNotFoundError,
@@ -1096,8 +1097,39 @@ class WorkingSetService:
         The cap is counted over the reader's view after this filtering (`_add`). The cost is two
         by-id reads (one of nodes, one of links) and, for links with an end not in the request, one
         read of the counted index."""
-        node_ids = list(dict.fromkeys(n.id for n in nodes))
-        edge_ids = list(dict.fromkeys(e.id for e in edges))
+        outcome, _ = await self._seed_ids(
+            investigation_id, [n.id for n in nodes], [e.id for e in edges], principal
+        )
+        return outcome
+
+    async def add_by_ids(
+        self,
+        investigation_id: str,
+        node_ids: Sequence[NodeId],
+        link_ids: Sequence[str],
+        principal: Principal,
+    ) -> AddedByIds:
+        """*Show all on graph* under an Ask & Chat answer (v0.6.0 #5): the nodes and links an
+        answer's markers stand for, put on the case's working set by id alone, read as `seed` reads
+        them (each id through the Vault for the case-scoped reader, a link kept only where both its
+        ends are readable and on the canvas or in this add; rule 3), the cap counted as any add's
+        (rule 2). `not_shown` counts the ids asked for that are not on the canvas after it, never
+        naming one."""
+        outcome, shown = await self._seed_ids(investigation_id, node_ids, link_ids, principal)
+        asked = len(set(node_ids)) + len(set(link_ids))
+        return AddedByIds(outcome=outcome, not_shown=asked - shown)
+
+    async def _seed_ids(
+        self,
+        investigation_id: str,
+        node_ids_asked: Sequence[NodeId],
+        edge_ids_asked: Sequence[str],
+        principal: Principal,
+    ) -> tuple[ExpansionOutcome, int]:
+        """`seed`'s reading, by id: the outcome, and how many of the distinct ids asked for are on
+        the canvas after it (the readable nodes and the kept links)."""
+        node_ids = list(dict.fromkeys(node_ids_asked))
+        edge_ids = list(dict.fromkeys(edge_ids_asked))
         vault_nodes = {n.id: n for n in await self._graph.get_nodes(node_ids, principal)}
         vault_edges = {e.id: e for e in await self._graph.get_edges(edge_ids, principal)}
         seeded = [vault_nodes[i] for i in node_ids if i in vault_nodes]
@@ -1116,7 +1148,8 @@ class WorkingSetService:
             and vault_edges[i].source in verified
             and vault_edges[i].target in verified
         ]
-        return await self._add(investigation_id, seeded, kept, principal)
+        outcome = await self._add(investigation_id, seeded, kept, principal)
+        return outcome, len(seeded) + len(kept)
 
     async def add_by_identifiers(
         self,

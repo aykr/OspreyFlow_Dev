@@ -128,6 +128,7 @@ ROUTE_RIGHTS = {
     "expand": "investigate",
     "links_among_route": "investigate",
     "add_by_identifiers_route": "investigate",
+    "add_by_ids_route": "investigate",
     "expand_preview": "investigate",
     "remove_nodes": "investigate",
     "get_resolution_threshold_route": "investigate",
