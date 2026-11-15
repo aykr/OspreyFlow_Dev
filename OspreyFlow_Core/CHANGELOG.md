@@ -19,6 +19,9 @@ around: one view switch, a case line that says what is open, and "view" kept for
 **Before you install.**
 - **A new deployment, not an earlier one moved.** Install v0.6.0 where no OspreyFlow deployment is, or
   into a new namespace on `cloud-platform`. A deployment made by an earlier release stays on that release.
+  `ospreyflow update`, an install over an existing deployment and the rendered `INSTALL.md` each refuse
+  an earlier one, in words, before anything is changed ("v0.6.0 is installed fresh; this deployment is
+  v0.5.1, and nothing moves it onto v0.6.0…"). A deployment at v0.6.0 or later is not refused.
 - **The search index is built from the graph** on `install`, by `ospreyflow start --build` (its last
   step) and after a restore, wherever the deployment searches with OpenSearch (`components.search:
   opensearch`, the default). A build that fails fails the install, saying so.
@@ -97,6 +100,8 @@ around: one view switch, a case line that says what is open, and "view" kept for
   not set, a token-version mismatch or a guest; an analytics field refused with a 422; the Ingest Studio's
   messages saying *pipeline*; a Studio SQL step stopped at its time limit; and only an administrator may
   give the administrator role.
+- **Ask & Chat's earlier questions** collapse to their lines, the newest answer open; asking a new
+  question closes the earlier ones, and a closed line says how many proposals in it are left to decide.
 
 **Rules and watches.**
 - **A watch stays active** until three unreachable evaluations in a row (ADR-044 Amendment 2), and a
