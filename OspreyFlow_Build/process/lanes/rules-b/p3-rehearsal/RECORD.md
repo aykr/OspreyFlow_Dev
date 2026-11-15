@@ -36,7 +36,9 @@ not rehearsed (the orchestrator: only if the bare run failed).
 - **Check before step 4 whether the demo's map already serves `osm-local-great-britain`.** If it does, the stage
   overwrites the file that provider serves, because planetiler runs with `--force`. The sheet's "the running demo's
   map is unchanged" holds only if it does not (the review's item 11).
-- **Keep `--memory 4g`.** It is the measured form, even though the stage reached the cap and swapped.
+- **`--memory 6g` on the sheet** (the orchestrator, 15 November): at the measured 4g the stage reached the cap and
+  swapped 3 GB. The demo server has 53 GiB free, and a higher cap only loosens the measured run. The figures above stay
+  those of the 4g run.
 
 ## The lane review and what it changed
 A lane-reviewer read the branch before the run and found 12 items.
@@ -57,7 +59,6 @@ A lane-reviewer read the branch before the run and found 12 items.
 ## Decisions taken (Prompt L)
 - **The rehearsal's container was named apart from the sheet's.** A leftover could then never block Wednesday's run
   by its name. The cleanup removes it on every exit path anyway.
-- **`--memory 4g` kept, not raised, despite the swap.** It is the form that was measured. A changed flag the
-  morning before the demo would be unmeasured.
+- **`--memory 4g` proposed at first, as the measured form; the orchestrator overruled it to 6g** (above).
 - **The places stage was not rehearsed.** It loads into a unit and registers a provider, so it belongs in the
   window. Its behaviour is the merged #10's, measured in `v060-basemap/RECORD.md`.
