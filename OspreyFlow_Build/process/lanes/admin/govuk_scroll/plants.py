@@ -28,7 +28,7 @@ PLANTS = [
      ["itself scrolled to its end", "the drawer scrolled", "the list scrolled to its end"]),
     ("overscroll-behavior on every box under GOV.UK (the first fix's shape: a sideways table swallows a vertical wheel)",
      [(PRIMS, '@import "./panelType.css";\n', '@import "./panelType.css";\n[data-brand="govuk"] body * { overscroll-behavior: contain; }\n')],
-     ["the drawer scrolled", "then the drawer scrolled"]),
+     ["itself scrolled to its end", "the drawer scrolled", "then the drawer scrolled"]),
     ("Admin's place left a scroll box under GOV.UK (the side list then sticks to it, not to the page)",
      [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }\n', "")],
      ["the side list stays in view"]),
