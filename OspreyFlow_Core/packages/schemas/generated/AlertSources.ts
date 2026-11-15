@@ -11,6 +11,7 @@ export type DatasetId = string | null;
 export type Owner = string;
 export type OwnerName = string | null;
 export type State = "draft" | "live" | "stopped";
+export type StoppedWhy = string | null;
 export type ExpiresOn = string | null;
 export type LastFiredAt = string | null;
 export type Alerts30Days = number;
@@ -43,6 +44,7 @@ export interface AlertSource {
   owner: Owner;
   owner_name?: OwnerName;
   state: State;
+  stopped_why?: StoppedWhy;
   expires_on?: ExpiresOn;
   last_fired_at?: LastFiredAt;
   alerts_30_days?: Alerts30Days;

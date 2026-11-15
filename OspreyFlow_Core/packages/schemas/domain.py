@@ -1896,6 +1896,11 @@ class AlertSource(BaseModel):
     #: name for a routed rule); never stored. The Glass shows this, never `owner`.
     owner_name: str | None = None
     state: Literal["draft", "live", "stopped"]
+    #: ADR-044 Amendment 1: why a stopped hotlist or watch is stopped, in the owner's words
+    #: (`watch_status.STOPPED_WHY`'s fixed sentences, never an id, rule 7), as Hotlists and Watches
+    #: say beside it; `None` while live, and for a rule, whose retirement records no reason.
+    #: Only the reader's own watches are listed here, so it reaches only their owner.
+    stopped_why: str | None = None
     expires_on: date | None = None
     last_fired_at: datetime | None = None
     alerts_30_days: int = 0
