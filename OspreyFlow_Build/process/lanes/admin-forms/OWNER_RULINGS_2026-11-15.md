@@ -96,3 +96,9 @@ already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Adm
 26. **The guide prefers the hidden prompt and warns that `export NAME=key` lands in shell history** (two lines, both copies).
 27. **The real gateway's logging is measured** after v0.6.0's package test; if LiteLLM logs a credential body at the
     demo's level, that logger's level is lowered in the rendered gateway settings, held by a test reading the rendered config.
+28. **On cloud-platform the model key stays in the deployment's Kubernetes Secret** (the owner, ~17:30Z), given to no
+    workload but the gateway: it is the cluster's secret store of ruling 5. No change to cluster_install.py; the guide
+    says plainly where the key lives on cloud-platform. (Ruling 24 applies to Compose, where the key is already removed.)
+Also settled with platform: ruling 23's characters include `_` ([A-Za-z0-9._\-:/@], up to 128); ruling 25 is built by
+writing the check's record before the key goes to the gateway (no credential ever read back), with a planted-orphan test;
+Fix C as fixed words per field; `_held`'s fallback says "unknown" rather than reading deployment.env.
