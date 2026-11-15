@@ -224,3 +224,4 @@ a7638b0 5891213 docs v060-model-keys-guide
 38bf58b de45887 docs v060-ask-items
 ff494d4 74e6c25 rules v060-superset-cves+upgrade-cache
 04082a8 04d2825 rules handoff-2026-11-15
+b81fe0b 6fd6c1c rules-b v060-i10-basemap
