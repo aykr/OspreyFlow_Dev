@@ -24,6 +24,7 @@ from principal_auth import (
     DEFAULT_CLAIM_MAPPING,
     ENTRA_ALGORITHMS,
     LEEWAY_SECONDS,
+    RUN_APP_ROLE,
     ClaimMapping,
     OidcSettings,
     PrincipalResolutionError,
@@ -71,11 +72,21 @@ DASHBOARD_IS_NO_SERVICE_IDENTITY = (
 )
 
 
+#: ADR-148 Amendment 20: an orchestrator's application must hold this API's own app role.
+RUN_ROLE_NOT_HELD = (
+    f"the orchestrator's application does not hold this API's {RUN_APP_ROLE} app role: in "
+    "Entra ID, assign it to the application (the API's registration, App roles), then sign in "
+    "again"
+)
+
+
 class ServiceIdentityVerifier:
     """**On Entra ID sign-in** (ADR-148 Amendment 8) a service identity's token is an app-only
     token of the pinned tenant: the configured issuer and audience, `tid` the tenant, no delegated
     `scp`, `idtyp` `app` where present, and its client (`azp`, or `appid` in v1.0; the same if both)
-    an application id that is neither the Glass's nor this API's own. Entra issues no
+    an application id that is neither the Glass's nor this API's own, which holds this API's
+    `OspreyFlow.Run` app role in `roles` (ADR-148 Amendment 20) and not the dashboards'
+    (Amendment 10). Entra issues no
     `preferred_username` for an application, so the Keycloak rule below cannot apply. **On
     Keycloak**, a token carrying `tid` (Entra's) is refused, as `principal_auth` refuses one."""
 
@@ -175,4 +186,10 @@ class ServiceIdentityVerifier:
             # Amendment 10: a client granted the dashboards' role is a dashboard's, registered or
             # not.
             raise ServiceIdentityRefused(DASHBOARD_IS_NO_SERVICE_IDENTITY, status=403)
+        # Amendment 20: any other application of the tenant is no orchestrator until it holds this
+        # API's role. A `roles` of any other shape than a list of strings holds none: refused,
+        # never an error.
+        held = [r for r in roles if isinstance(r, str)] if isinstance(roles, list) else []
+        if RUN_APP_ROLE not in held:
+            raise ServiceIdentityRefused(RUN_ROLE_NOT_HELD, status=403)
         return client
