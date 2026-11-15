@@ -162,6 +162,57 @@ test("a pasted query longer than the search takes is kept whole in the box, and 
 });
 
 // Last in the file: the check reads the cases above it, run in order on one worker (CI's two-core runner).
+// Found on the live demo at the candidate 574a05c, 15 November 2026 (GOV.UK look, 1440 by 900): the results page was
+// drawn under the Graph's own toolbar and zoom column, its heading covered. The results fill the main area over the
+// view left (Part A), so nothing of that view may be drawn over them: at points across the whole page, and at the
+// canvas toolbar's and the zoom column's own centres, what is drawn is the results page; in each look.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: the results page is drawn over the whole of the view it covers, the canvas's toolbar and zoom column included`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/keyboard/search-results-harness.html?canvas=1&open=1${brand === "govuk" ? "&brand=govuk" : ""}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    await expect(page.getByRole("heading", { name: "Search results for 'Kestrel'" })).toBeVisible();
+    // The canvas is really there beneath, toolbar and zoom column drawn, so the case can fail.
+    await expect(page.locator(".canvas-toolbar")).toHaveCount(1);
+    await expect(page.locator(".canvas-corner")).toHaveCount(1);
+    const covered = await page.evaluate(() => {
+      const results = document.querySelector<HTMLElement>(".search-results")!;
+      // What is painted on top, asked of the page: `inert` takes the view out of hit testing (so `elementFromPoint`
+      // would look straight through a toolbar drawn over the results), never out of painting, so it is lifted while
+      // the points are asked and put back after.
+      const view = [...document.querySelectorAll<HTMLElement>("[inert]")];
+      for (const element of view) element.inert = false;
+      const box = results.getBoundingClientRect();
+      const points: [string, number, number][] = [];
+      for (const selector of [".canvas-toolbar", ".canvas-corner"]) {
+        const r = document.querySelector(selector)!.getBoundingClientRect();
+        points.push([selector, r.left + r.width / 2, r.top + r.height / 2]);
+      }
+      const heading = results.querySelector("h2")!.getBoundingClientRect();
+      points.push(["the heading", heading.left + heading.width / 2, heading.top + heading.height / 2]);
+      for (let i = 1; i < 10; i++)
+        for (let j = 1; j < 10; j++) points.push([`${i},${j}`, box.left + (box.width * i) / 10, box.top + (box.height * j) / 10]);
+      const found = points
+        .filter(([, x, y]) => !results.contains(document.elementFromPoint(x, y)))
+        .map(([what, x, y]) => `${what} (${Math.round(x)},${Math.round(y)}): ${(document.elementFromPoint(x, y) as HTMLElement | null)?.className ?? "nothing"}`);
+      for (const element of view) element.inert = true;
+      return found;
+    });
+    expect(covered, "drawn over the results page").toEqual([]);
+    // And the page stays under the search box's own suggestions: a new search typed over the results shows them.
+    const box = page.getByRole("combobox", { name: "Search entities, identifiers, documents" });
+    await box.focus();
+    await page.keyboard.type("Ke");
+    const option = page.getByRole("option").first();
+    await expect(option).toBeVisible();
+    const onTop = await option.evaluate((element) => {
+      const r = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    });
+    expect(onTop, "the suggestions drawn over the results page").toBe(true);
+  });
+}
+
 test("every registered search results action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, SEARCH_RESULTS_ACTIONS);
 });

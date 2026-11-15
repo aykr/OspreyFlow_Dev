@@ -12,6 +12,10 @@ import { createRoot } from "react-dom/client";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import type { Node } from "../../../packages/schemas/generated";
+import type { OntologySchema } from "../../../packages/schemas/generated";
+import { GlassCanvas } from "../src/canvas/GlassCanvas";
+import { OntologyRegistry } from "../src/ontology/schema";
+import { createWorkingSet } from "../src/workingset/store";
 import { GlobalSearch } from "../src/search/GlobalSearch";
 import { SearchResults } from "../src/search/SearchResults";
 import { useSearchResultsOverlay } from "../src/search/useSearchResultsOverlay";
@@ -73,6 +77,19 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
 
 await applyHarnessBrand();
 
+// `?canvas=1`: the real canvas, its toolbar and zoom column, under the results, in a view of its own as `App.tsx` lays the
+// Graph out (`flex: 1; position: relative`, beside the results in the same main area): the live demo of 15 November 2026
+// drew the canvas's toolbar and zoom over the results page, which a stand-in main area could never show.
+const wantsCanvas = params.get("canvas") === "1";
+const CANVAS_SCHEMA: OntologySchema = {
+  version: 1,
+  entity_types: [{ name: "Person", pole_class: "person", channel: "indigo", shape: "circle", icon: "person", identifiers: [] }],
+  edge_types: [],
+};
+const workingSet = createWorkingSet();
+if (wantsCanvas) workingSet.store.getState().applyDelta({ seq: 1, op: "add", nodes: [NODES[0]!], edges: [] });
+const canvasOntology = new OntologyRegistry(CANVAS_SCHEMA);
+
 function Harness() {
   // The App's own wiring (`search/useSearchResultsOverlay.ts`): when the results show, the view's reach, Back's focus,
   // and focus back into the results when a document read from them closes. The reader here is a stand-in.
@@ -92,10 +109,25 @@ function Harness() {
       </div>
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ display: "contents" }} inert={results.viewInert ? true : undefined}>
-          <main style={{ padding: "var(--sp-16)" }}>
-            <h1 style={{ margin: 0 }}>The graph</h1>
-            <button type="button" className="btn">A control on the graph</button>
-          </main>
+          {wantsCanvas ? (
+            <div style={{ flex: 1, position: "relative" }}>
+              <GlassCanvas
+                graph={workingSet.graph}
+                store={workingSet.store}
+                ontology={canvasOntology}
+                edgeTypes={CANVAS_SCHEMA.edge_types}
+                entityTypes={CANVAS_SCHEMA.entity_types}
+                investigationId="c1"
+                apiBaseUrl="http://keyboard-test.invalid"
+                bearerToken="unused"
+              />
+            </div>
+          ) : (
+            <main style={{ padding: "var(--sp-16)" }}>
+              <h1 style={{ margin: 0 }}>The graph</h1>
+              <button type="button" className="btn">A control on the graph</button>
+            </main>
+          )}
           {reading !== null && (
             <div role="dialog" aria-label={`Reading: ${reading}`} style={{ padding: "var(--sp-16)" }}>
               <button type="button" className="btn" onClick={() => setReading(null)}>
