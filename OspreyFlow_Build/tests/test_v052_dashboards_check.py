@@ -526,6 +526,7 @@ def _env_seen(script: Path, args: list[str], tmp: Path) -> dict[str, Any]:
     ("dashboards", ["run"], "process/lanes/platform-b/v052/dashboards_check.py"),
     ("survival", ["snap"], "process/lanes/platform-b/v052/survival.py"),
     ("spec08", ["run"], "process/lanes/case-b/v052/spec08_poc.py"),
+    ("memory", ["report"], "process/lanes/platform-b/v060/memory_sampler.py"),  # v0.6.0 #11
 ])  # fmt: skip
 def test_the_wrapper_gives_each_script_r1_s_own_environment(tmp_path: Path, which: str, args: list[str], script: str) -> None:
     build = Path(__file__).resolve().parents[1]

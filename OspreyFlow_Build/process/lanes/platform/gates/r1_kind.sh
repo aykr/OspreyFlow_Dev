@@ -9,7 +9,7 @@
 # osprey-small capped at about 24). Named osprey-r1-* and nothing else; never touches osprey-small.
 # Nothing is published on a host port but the cluster's registry, on 127.0.0.1.
 #
-#   bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh tools|up|status|down     (from OspreyFlow_Core)
+#   bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh tools|up|remake|status|down     (from OspreyFlow_Core)
 #   bash ../OspreyFlow_Build/process/lanes/platform/gates/r1_kind.sh py <r1_kind.py's arguments>
 #
 # Its tools are pinned and kept under ~/osprey-runs/platform.tools (shared with P7a's), never installed
@@ -69,8 +69,16 @@ nodes:
 EOF
     kind create cluster --name "$NAME" --image "$NODE_IMAGE" --config "$STATE/kind.yaml" --kubeconfig "$KUBECONFIG" --wait 0s
   fi
-  docker inspect "$NAME-registry" >/dev/null 2>&1 || docker run -d --restart=no --name "$NAME-registry" \
-    -p 127.0.0.1:5001:5000 public.ecr.aws/docker/library/registry:2 >/dev/null
+  # A registry kept by `remake` is reused, started again if the host has restarted since (--restart=no);
+  # each run's record says which (v0.6.0 #11: the images kept across the cluster's remake).
+  if docker inspect "$NAME-registry" >/dev/null 2>&1; then
+    docker start "$NAME-registry" >/dev/null
+    echo "registry: $NAME-registry kept, reused"
+  else
+    docker run -d --restart=no --name "$NAME-registry" \
+      -p 127.0.0.1:5001:5000 public.ecr.aws/docker/library/registry:2 >/dev/null
+    echo "registry: $NAME-registry started (empty)"
+  fi
   docker network connect kind "$NAME-registry" 2>/dev/null || true
   for node in $(kind get nodes --name "$NAME"); do
     docker exec "$node" mkdir -p /etc/containerd/certs.d/localhost:5001
@@ -119,6 +127,18 @@ status() {
   docker stats --no-stream --format '{{.Name}} {{.MemUsage}}' $(kind get nodes --name "$NAME") "$NAME-registry"
 }
 
+# v0.6.0 #11 (the owner's choice (a), 15 November 2026): the cluster made again with the images kept. Only the
+# kind cluster is deleted; the registry container, what it holds, our `localhost:5001/*` images and the node
+# image stay, and `up` reuses them, so a second install does not build and pull cold. `down` stays the only
+# verb that removes the registry (platform's ask).
+remake() {
+  docker inspect "$NAME-registry" >/dev/null 2>&1 || { echo "remake: no $NAME-registry to keep: run up first" >&2; exit 1; }
+  [ -x "$TOOLS/kind" ] && kind delete cluster --name "$NAME" --kubeconfig "$KUBECONFIG" || true
+  echo "$NAME remake: the cluster removed; kept: the registry $NAME-registry and" \
+    "$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -c '^localhost:5001/' || true) local localhost:5001 images"
+  up
+}
+
 down() {
   [ -x "$TOOLS/kind" ] && kind delete cluster --name "$NAME" --kubeconfig "$KUBECONFIG" || true
   docker ps -a --format '{{.Names}}' | grep "^$NAME-" | xargs -r docker rm -f
@@ -128,7 +148,7 @@ down() {
 }
 
 case "${1:-}" in
-  tools) tools ;; up) up ;; status) status ;; down) down ;;
+  tools) tools ;; up) up ;; remake) remake ;; status) status ;; down) down ;;
   py) shift; PYTHONPATH=.:packages exec .venv/bin/python "$HERE/r1_kind.py" "$@" ;;
-  *) echo "usage: r1_kind.sh tools|up|status|down|py <r1_kind.py arguments>" >&2; exit 2 ;;
+  *) echo "usage: r1_kind.sh tools|up|remake|status|down|py <r1_kind.py arguments>" >&2; exit 2 ;;
 esac

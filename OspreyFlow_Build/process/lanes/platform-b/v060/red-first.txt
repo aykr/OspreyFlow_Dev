@@ -1,0 +1,62 @@
+v0.6.0 #11's tooling, red first and planted, 15 November 2026, platform-b, offline on the Mac (ports pinned:
+ARCADEDB 59991, POSTGRES 59992, VALKEY 59993, CLICKHOUSE 59994; no stack, no server). Each plant restored after,
+a fresh PYTHONPYCACHEPREFIX for each run.
+
+1. r1_kind.sh remake, and up's registry reuse (tests/test_r1_kind_remake.py; fakes of kind, docker, kubectl and helm
+   that refuse what the real ones refuse: docker run on a name in use, rm/rmi of what is not there, docker start of
+   a missing container, kind create of a cluster that exists).
+   Red first, r1_kind.sh as on main 7dd860e: 5 failed, 1 passed (down's own case, as built):
+     test_remake_keeps_the_registry_and_our_images_and_says_so, test_remake_never_runs_a_second_registry,
+     test_a_stopped_kept_registry_is_started_again, test_remake_with_no_registry_to_keep_refuses_in_words,
+     test_up_from_nothing_starts_an_empty_registry_and_says_so
+   Plants:
+     == plant: remake is down then up (the registry and images lost)
+       test_remake_keeps_the_registry_and_our_images_and_says_so
+       test_remake_never_runs_a_second_registry
+     2 failed, 4 passed in 6.06s
+     == plant: a kept but stopped registry not started
+       test_a_stopped_kept_registry_is_started_again
+     1 failed, 5 passed in 5.52s
+     == plant: up runs a registry whatever is there
+       test_remake_keeps_the_registry_and_our_images_and_says_so
+       test_remake_never_runs_a_second_registry
+       test_a_stopped_kept_registry_is_started_again
+     3 failed, 3 passed in 4.28s
+     == plant: remake with nothing to keep goes on silently
+       test_remake_with_no_registry_to_keep_refuses_in_words
+     1 failed, 5 passed in 6.53s
+     == clean
+     41 passed in 7.83s
+
+2. The memory sampler (tests/test_v060_memory_sampler.py), its inputs in the kubelet's and kubectl's real shapes
+   (a container not measured yet, a replaced pod's counter at zero, an OOMKill as the last termination's reason,
+   kubectl exiting 1). The tests came after the code; the plants are its red:
+     == plant: an unmeasured container counted as zero
+       test_a_container_not_measured_yet_is_left_out_not_counted_as_zero
+     1 failed, 11 passed in 0.52s
+     == plant: the peak is the last sample (a snapshot)
+       test_the_report_gives_peak_steady_restarts_and_oomkills
+       test_the_peak_is_the_largest_sample_not_the_last
+     2 failed, 10 passed in 0.72s
+     == plant: restarts by workload, the replaced pod's lost
+       test_the_report_gives_peak_steady_restarts_and_oomkills
+       test_a_restart_on_a_replaced_pod_is_not_lost
+     2 failed, 10 passed in 0.54s
+     == plant: a refused request stops the run
+       test_a_refused_request_is_a_gap_and_the_run_goes_on
+     1 failed, 11 passed in 0.53s
+     == plant: an OOMKill not read
+       test_the_report_gives_peak_steady_restarts_and_oomkills
+     1 failed, 11 passed in 0.53s
+     == plant: a Deployment pod not grouped
+       test_a_pod_is_named_by_its_workload[conduit-866798dd8-qwdfc-conduit]
+       test_a_container_not_measured_yet_is_left_out_not_counted_as_zero
+       test_the_report_gives_peak_steady_restarts_and_oomkills
+       test_a_restart_on_a_replaced_pod_is_not_lost
+     4 failed, 8 passed in 0.53s
+     == clean
+     12 passed in 0.50s
+
+3. r1_live.sh memory (tests/test_v052_dashboards_check.py's wrapper case, R1's own environment):
+     plant: memory pointed at a v052 path -> FAILED test_the_wrapper_gives_each_script_r1_s_own_environment[memory-...] (1 failed, 3 passed)
+     clean: 4 passed
