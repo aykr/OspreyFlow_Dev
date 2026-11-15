@@ -718,9 +718,9 @@ results do (§2.0c), over the view the person left, which stays as it was beneat
 (`questions/AskPage.tsx`; when it shows and where focus goes, `questions/useAskPage.ts`, shared by App and the keyboard
 harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
 
-- **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and returns to the view exactly as it was,
-  focus on the rail's *Ask & Chat*. A second press of the rail's *Ask & Chat* does the same. The page has no Escape of
-  its own, as the results page has none: Escape inside it stays with the control that has focus.
+- **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and returns to the view exactly as it
+  was, focus on the rail's *Ask & Chat*. A second press of the rail's *Ask & Chat* does the same. The page has no Escape
+  of its own, as the results page has none: Escape inside it stays with the control that has focus.
 - **The heading**, "Ask & Chat", takes focus on opening; when the page opens with words carried into the question (the
   results page's Ask line), the question box takes it instead.
 - **The results page and the Ask & Chat page replace each other**: the Ask line, or the rail's *Ask & Chat*, while the
@@ -729,19 +729,23 @@ harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
   cross-link leaves it, as it leaves the results.
 - **A marker** in an answer (*Show on the graph: …*) leaves the page and shows the graph, the item brought into view,
   focus on the canvas once it is back in reach (never left on the marker that went with the page), as the results'
-  *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) leaves it the same way. **A document** opened from an answer is read over the view, the page hidden and shown again
-  when it closes, focus on its heading, never on the view beneath. *Ask the model about these…* opens the page.
+  *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) leaves it the same way, through the same hook.
+  **A document** opened from an answer is read over the view, the page hidden and shown again when it closes, focus on
+  its heading, never on the view beneath. *Ask the model about these…* opens the page, as a case opened to ask the
+  model does (ADR-098 decision 4).
 - Help's keys panel opens over the page when asked for, as over the results. The batch job's panel at the canvas's
   foot is hidden under the page, as under the results, and back when it closes.
 - The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`).
 
 Proved by `App.chrome.test.tsx` (the rail's openers), `App.search.test.tsx` (the two pages replacing each other, the
-reader, a marker, Help, another place, a saved view, *Ask the model about these…*), `App.batchExpand.test.tsx`,
-`keyboard/shell.spec.ts` (`ask-and-chat-page-by-keyboard`, `SHELL_ACTIONS`, on `places-harness.html`),
-`keyboard/questions.spec.ts` (`back-from-ask-and-chat-by-keyboard` on `questions-harness.html`, which mounts the panel
-in the page, and `select-a-graph-fact-from-the-ask-page-by-keyboard` on `harness.html?questions=page`, the page over
-the real canvas) and the every-harness scans of `places-harness.html?open=questions` and `questions-harness.html` in
-the three looks.
+reader, a marker, *Show all on graph*, Help, another place, a saved view, the cross-link, Escape doing nothing, the
+hand-off's `view=questions`, *Ask the model about these…*), `App.batchExpand.test.tsx`, `keyboard/shell.spec.ts`
+(`ask-and-chat-page-by-keyboard`, `SHELL_ACTIONS`, on `places-harness.html`), `keyboard/questions.spec.ts`
+(`back-from-ask-and-chat-by-keyboard` on `questions-harness.html`, which mounts the panel in the page; and
+`select-a-graph-fact-from-the-ask-page-by-keyboard` and `show-all-from-the-ask-page-by-keyboard` on
+`harness.html?questions=page`, the page over the real canvas), `keyboard/search-results.spec.ts` (nothing of the
+canvas drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the three looks) and the every-harness
+scans of `places-harness.html?open=questions` and `questions-harness.html` in the three looks.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

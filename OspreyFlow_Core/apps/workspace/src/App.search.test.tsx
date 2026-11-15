@@ -435,6 +435,33 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
   });
 
+  test("the case line's cross-link to the Ingest Studio leaves the page: back in the Glass it is gone", async () => {
+    await openAsk();
+    fireEvent.click(screen.getByRole("button", { name: /Open (this case's data )?in the Ingest Studio/ }));
+    await screen.findByRole("region", { name: "You are in the Ingest Studio" });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Places" })).getByRole("button", { name: /^The Glass$/ }));
+    await screen.findByRole("region", { name: "You are in the Glass" });
+    expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull();
+  });
+
+  test("Escape on the page does nothing: it is a page, not a dialog, and only Back or the rail leave it", async () => {
+    const page = await openAsk();
+    const heading = within(page).getByRole("heading", { name: "Ask & Chat" });
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+    fireEvent.keyDown(heading, { key: "Escape" });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(screen.getByRole("region", { name: "Ask & Chat" })).toBe(page);
+    expect(document.activeElement).toBe(heading);
+  });
+
+  test("a case opened to ask the model (the hand-off's view=questions, ADR-098 decision 4) opens on the page", async () => {
+    sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "questions", at: Date.now() }));
+    render(<App />);
+    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(within(page).getByRole("button", { name: "Back to Graph" })).toBeTruthy();
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+  });
+
   test("the canvas's Ask the model about these… opens the page over the graph, asking in the saved view", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
