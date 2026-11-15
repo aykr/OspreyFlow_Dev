@@ -113,6 +113,16 @@ GUIDE_PLANTS = [
      [(RUNBOOKS, "    parts.append(\n        \"**For an orchestrator that runs pipelines**",
        "    if config.reporting.sync:\n      parts.append(\n        \"**For an orchestrator that runs pipelines**")],
      [f"{POC}[reporting-off]"]),
+    # The CLI's scope (the owner's word beside #18), said in the same diff.
+    ("the guide's run row without the CLI's scope",
+     [(GUIDE, "by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's `api://<application id>/.default`)",
+       "by client credentials)")],
+     [f"{GT}test_the_guide_says_the_cli_sends_the_apis_scope_on_entra",
+      "tests/test_admin_guide_copies.py::test_the_specification_s_copy_is_the_shipped_guide_from_section_1"]),
+    ("the install without the orchestrator's token scope",
+     [(RUNBOOKS, "`OSPREY_TOKEN_SCOPE` to\\n\"\n        f\"`api://{claims.api_client_id}/.default`",
+       "`OSPREY_TOKEN_SCOPE` to\\n\"\n        f\"`the API's scope`")],
+     [f"{POC}[reporting-on]", f"{POC}[reporting-off]"]),
 ]
 
 Restore = Callable[[set[str]], object]
