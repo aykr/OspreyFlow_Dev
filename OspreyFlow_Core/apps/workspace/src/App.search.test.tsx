@@ -107,6 +107,8 @@ beforeEach(() => {
     [/\/v1\/documents\/d1$|\/documents\/d1$/, { id: "d1", title: "Invoice 44", text: "Kestrel paid", mentions: [] }],
     // The case's one answered question, for the Ask page's cases: it draws on Invoice 44 and cites one graph fact.
     [/\/inv-1\/questions$/, [ANSWERED]],
+    // Show all on graph's read by id (v0.6.0 #5), nothing new to add.
+    [/\/inv-1\/working-set\/add-by-ids$/, { outcome: { delta: { seq: 2, op: "add", nodes: [], edges: [] }, links_among: "not_asked" }, not_shown: 0 }],
   ]; // prettier-ignore
   vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
     const url = String(input).split("?")[0]!;
@@ -399,12 +401,33 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("application", { name: "Network canvas" })));
   });
 
-  test("Show all on graph under an answer leaves the page for the graph, focus on the canvas (v0.6.0 #5 on the page)", async () => {
-    const page = await openAsk();
+  test("Show all on graph under an answer leaves the page for the graph, reads the answer's items by id, focus on the canvas (v0.6.0 #5 on the page)", async () => {
+    // Left from the Map, so the Graph being current afterwards is Show all's doing, not where the page was opened.
+    await openAsk();
+    fireEvent.click(within(group()).getByRole("button", { name: "Map" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
+    const page = await screen.findByRole("region", { name: "Ask & Chat" });
     fireEvent.click(await within(page).findByRole("button", { name: "Show all on graph" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
     expect(pressed()).toEqual(["Graph"]);
+    await waitFor(() => expect(sent.filter((s) => s.url.endsWith("/inv-1/working-set/add-by-ids")).map((s) => s.body)).toEqual([{ node_ids: ["n-k"], link_ids: [] }]));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("application", { name: "Network canvas" })));
+  });
+
+  test("Show all on graph closes a saved view open beneath the page first: the items go on the case", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    const region = screen.getByRole("region", { name: "You are in the Glass" });
+    fireEvent.click(within(region).getByRole("button", { name: /^Saved views/ }));
+    const panel = await screen.findByRole("dialog", { name: "Saved views" });
+    fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
+    await screen.findByRole("region", { name: "Saved view" });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
+    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    fireEvent.click(await within(page).findByRole("button", { name: "Show all on graph" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull());
+    await waitFor(() => expect(sent.some((s) => s.url.endsWith("/inv-1/working-set/add-by-ids"))).toBe(true));
   });
 
   test("Help's keys panel opens over the page, in reach", async () => {
