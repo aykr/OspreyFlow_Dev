@@ -35,8 +35,11 @@
 .context-banner__place { margin: 0; font: inherit; font-weight: 600; color: var(--text-primary); }
 /* Every control in the row on the row's type, never a button's or GOV.UK's own; each keeps a 24 px target (WCAG 2.2,
    2.5.8) by its height, not its line. */
-.context-banner :is(button, a, .menu-button__label) { font-size: inherit; line-height: inherit; }
-.context-banner :is(button, a) { min-height: 24px; }
+:is(.context-banner, .context-banner--govuk) :is(button, a, .menu-button__label) { font-size: inherit; line-height: inherit; }
+:is(.context-banner, .context-banner--govuk) :is(button, a) { min-height: 24px; }
+/* The case switcher on the line sizes to its own words, up to its 320 px (its ellipsis and title as everywhere): the top
+   bar's 240 px floor (`.menu-button--case`) left a short case name 140 px of nothing on a line that must stay one. */
+:is(.context-banner, .context-banner--govuk) .menu-button--case { min-width: 0; }
 .context-banner__sep { color: var(--text-secondary); }
 .context-banner__cross { margin-left: auto; }
 .context-banner__sections { display: flex; gap: var(--sp-4); }
