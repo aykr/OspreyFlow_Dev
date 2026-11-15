@@ -43,7 +43,7 @@ plant "the model's spaces around a marker kept" "$P" \
   's/  const spaced = spacedAroundMarkers\(parts\);/  const spaced = parts;/' \
   js "puts a marker one space after the words it follows"
 plant "a marker named by its number alone" "$P" \
-  's/aria-label=\{`Show on the graph: \$\{shows\}`\}/aria-label={label}/' \
+  's/aria-label=\{`Show on the graph: \$\{shows\}, \$\{label\}`\}/aria-label={label}/' \
   js "names each marker by what choosing it shows"
 plant "no line under the answer" "$P" \
   's/Select a marker to show that item on the graph\./ /' \

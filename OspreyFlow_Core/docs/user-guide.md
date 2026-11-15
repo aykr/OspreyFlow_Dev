@@ -921,7 +921,8 @@ associated with – MERCER, Dana" for a fact, its two ends as the canvas names t
 KESTREL, Ann" for a source. A line under the answer says "Select a marker to show that item on the graph."
 Choosing a fact's marker selects what the fact stands for and brings it into view: the link if one drawn
 link is meant, otherwise its nodes. An answer kept from before facts were described names a fact by its
-number, "Show on the graph: graph fact 1". A fact the model
+number, "Show on the graph: graph fact 1". Read aloud, each name ends with the marker itself, "…, [G-1]", so
+you can say the marker you see to choose it. A fact the model
 cites that was not in the account it was given is dropped and counted among the items left out.
 
 The documents and the graph facts share one limit. Over it, the question is refused, saying how many

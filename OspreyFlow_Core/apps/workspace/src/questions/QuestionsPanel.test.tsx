@@ -155,14 +155,14 @@ describe("QuestionsPanel", () => {
     serve({ "GET /questions": () => json(200, [WITH_FACTS]) });
     const onSelectFacts = vi.fn();
     mount(vi.fn(), vi.fn(), { onSelectFacts });
-    fireEvent.click(await screen.findByRole("button", { name: "Show on the graph: graph fact 2" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show on the graph: graph fact 2, [G-2]" }));
     expect(onSelectFacts).toHaveBeenCalledWith({
       number: 2,
       label: "[G-2]",
       node_ids: ["n-dana", "n-callum"],
       link_ids: ["l-called"],
     });
-    expect(screen.getAllByRole("button", { name: /^Show on the graph: graph fact \d+$/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Show on the graph: graph fact \d+, \[G-\d+\]$/ })).toHaveLength(2);
   });
 
   it("makes every occurrence of a repeated [G-n] a button, so no marker is left as literal text", async () => {
@@ -171,9 +171,9 @@ describe("QuestionsPanel", () => {
     });
     const onSelectFacts = vi.fn();
     mount(vi.fn(), vi.fn(), { onSelectFacts });
-    const buttons = await screen.findAllByRole("button", { name: "Show on the graph: graph fact 1" });
+    const buttons = await screen.findAllByRole("button", { name: "Show on the graph: graph fact 1, [G-1]" });
     expect(buttons).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Show on the graph: graph fact 2" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Show on the graph: graph fact 2, [G-2]" })).toHaveLength(1);
     fireEvent.click(buttons[1]!);
     expect(onSelectFacts).toHaveBeenCalledWith(expect.objectContaining({ number: 1 }));
     // The words round them are still there, and no marker is left as plain text outside a button.
@@ -658,12 +658,12 @@ describe("QuestionsPanel · Whole case", () => {
     serve({ "GET /questions": () => json(200, [SOURCED]) });
     const onSelectFacts = vi.fn();
     mount(vi.fn(), vi.fn(), { onSelectFacts });
-    fireEvent.click(await screen.findByRole("button", { name: "Show on the graph: KESTREL, Ann" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show on the graph: KESTREL, Ann, [S-1]" }));
     expect(onSelectFacts).toHaveBeenCalledWith({ number: 1, label: "[S-1]", node_ids: ["n-k1", "n-k2"], link_ids: [] });
     const sources = screen.getByRole("list", { name: "Sources found in the case" });
     expect(sources.textContent).toContain("Person · Name is 'Kestrel'");
     // An unmarked source is still reachable: its button is in the list.
-    fireEvent.click(screen.getByRole("button", { name: "Show on the graph: Kestrel invoice" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show on the graph: Kestrel invoice, [S-2]" }));
     expect(onSelectFacts).toHaveBeenLastCalledWith({ number: 2, label: "[S-2]", node_ids: ["d-k"], link_ids: [] });
   });
 
@@ -698,7 +698,7 @@ describe("the answer's markers and wording (the owner, 15 November 2026)", () =>
   it("puts a marker one space after the words it follows, with no gap before the full stop", async () => {
     serve({ "GET /questions": () => json(200, [SPACED]) });
     mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
-    const marker = await screen.findByRole("button", { name: "Show on the graph: Callum Vance, associate of, Lewis Marchbank" });
+    const marker = await screen.findByRole("button", { name: "Show on the graph: Callum Vance, associate of, Lewis Marchbank, [G-1]" });
     const paragraph = marker.closest("p")!;
     expect(paragraph.textContent).toBe("Callum is associated with Lewis Marchbank [G-1] and Jordan Selwood [G-2].");
     // Drawn inline in the sentence, not as a padded button.
@@ -709,11 +709,11 @@ describe("the answer's markers and wording (the owner, 15 November 2026)", () =>
   it("names each marker by what choosing it shows, and says so under the answer", async () => {
     serve({ "GET /questions": () => json(200, [SPACED]) });
     mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
-    const named = await screen.findByRole("button", { name: "Show on the graph: Callum Vance, associate of, Lewis Marchbank" });
+    const named = await screen.findByRole("button", { name: "Show on the graph: Callum Vance, associate of, Lewis Marchbank, [G-1]" });
     expect(named.textContent).toBe("[G-1]");
     expect(named.getAttribute("title")).toBe("Show on the graph: Callum Vance, associate of, Lewis Marchbank");
     // An answer kept before facts were described: the fact's number, never an id.
-    const kept = screen.getByRole("button", { name: "Show on the graph: graph fact 2" });
+    const kept = screen.getByRole("button", { name: "Show on the graph: graph fact 2, [G-2]" });
     expect(kept.getAttribute("title")).toBe("Show on the graph: graph fact 2");
     expect(screen.getByText("Select a marker to show that item on the graph.")).toBeTruthy();
   });
@@ -725,7 +725,7 @@ describe("the answer's markers and wording (the owner, 15 November 2026)", () =>
     };  // prettier-ignore
     serve({ "GET /questions": () => json(200, [sourced]) });
     mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
-    const marker = await screen.findByRole("button", { name: "Show on the graph: KESTREL, Ann" });
+    const marker = await screen.findByRole("button", { name: "Show on the graph: KESTREL, Ann, [S-1]" });
     expect(marker.textContent).toBe("[S-1]");
     expect(marker.getAttribute("title")).toBe("Show on the graph: KESTREL, Ann");
     expect(screen.getByText("Select a marker to show that item on the graph.")).toBeTruthy();

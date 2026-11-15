@@ -584,7 +584,7 @@ function AnswerText({
   // An `[S-n]` selects its records as a fact does (`bringFactIntoView`); one not on the canvas
   // leaves the selection as it was.
   // The owner's word, 15 November 2026: a marker's visible text stays short ("[G-1]"); its name and hover text say
-  // what choosing it does and to what, "Show on the graph: …" (a fact's own words, or for an answer kept before the
+  // what choosing it does and to what, "Show on the graph: …, [G-1]" (a fact's own words, or for an answer kept before the
   // Conduit sent them, its number; never an id). It is drawn inline in the sentence, not as a padded button.
   const marker = (label: string, shows: string, key: string, onChoose: () => void) => (
     <button
@@ -592,7 +592,8 @@ function AnswerText({
       type="button"
       className={currentBrand() === "govuk" ? "govuk-link answer-marker" : "answer-marker"}
       disabled={!onSelectFacts}
-      aria-label={`Show on the graph: ${shows}`}
+      // Its name ends with its visible text, so a person who says what they see reaches it (WCAG 2.5.3).
+      aria-label={`Show on the graph: ${shows}, ${label}`}
       title={`Show on the graph: ${shows}`}
       onClick={onChoose}
     >
