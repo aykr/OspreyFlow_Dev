@@ -2392,8 +2392,14 @@ async def get_service_identity(
     except ServiceIdentityRefused as refused:
         # ADR-148 Amendment 20: an application refused for want of the run role may be a dashboard
         # identity whose token holds no role; it is told it is a dashboard's, as Amendment 10 says.
+        # The registrations only choose the words: if they cannot be read, the refusal stands in
+        # the run role's words, never a 503 for a door that is shut either way.
         if refused.client is not None:
-            await _refuse_a_registered_dashboard(request, refused.client)
+            try:
+                await _refuse_a_registered_dashboard(request, refused.client)
+            except HTTPException as answer:
+                if answer.status_code != 503:
+                    raise
         raise HTTPException(status_code=refused.status, detail=str(refused)) from refused
     await _refuse_a_registered_dashboard(request, client)
     return client

@@ -362,16 +362,28 @@ class _Slow(_Dashboards):
 
 
 @pytest.mark.parametrize(
-    ("store", "answer"),
-    [(_AnswersNone, "past"), (_Slow, 503)],
-    ids=["store-answers-none", "store-too-slow"],
+    ("store", "roles", "answer"),
+    [
+        (_AnswersNone, [RUN_APP_ROLE], "past"),
+        (_Slow, [RUN_APP_ROLE], 503),
+        (_AnswersNone, _ABSENT, 403),
+        (_Slow, _ABSENT, 403),
+    ],
+    ids=[
+        "store-answers-none",
+        "store-too-slow",
+        "no-role-store-answers-none",
+        "no-role-store-too-slow",
+    ],
 )
 def test_the_run_api_door_with_a_store_answering_none_or_too_slowly(
-    jwks_url, keypair, store, answer, monkeypatch
+    jwks_url, keypair, store, roles, answer, monkeypatch
 ) -> None:
     """A store that holds no such registration lets the client past this door; one that does not
     answer within the role lookup's bound is a 503 in words, never a wait as long as the store's
-    (ADR-148 Amendment 10, the lane review of 009a889)."""
+    (ADR-148 Amendment 10, the lane review of 009a889). A token without the run role is refused in
+    its words either way (Amendment 20): the store only chooses a dashboard's words, so a store
+    that cannot be read never turns that refusal into a 503."""
     import time
 
     from fastapi.testclient import TestClient
@@ -385,13 +397,17 @@ def test_the_run_api_door_with_a_store_answering_none_or_too_slowly(
     started = time.monotonic()
     try:
         answered = TestClient(app, raise_server_exceptions=False).post(
-            "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+            "/v1/runs",
+            json={},
+            headers={"Authorization": f"Bearer {_app_token(keypair, roles=roles)}"},
         )
     finally:
         for key, value in before.items():
             setattr(app.state, key, value)
     assert time.monotonic() - started < 10
-    if answer == 503:
+    if answer == 403:
+        assert answered.status_code == 403 and "OspreyFlow.Run app role" in answered.text
+    elif answer == 503:
         assert answered.status_code == 503 and "could not be read" in answered.text
     else:
         assert answered.status_code not in (403, 503), (answered.status_code, answered.text)

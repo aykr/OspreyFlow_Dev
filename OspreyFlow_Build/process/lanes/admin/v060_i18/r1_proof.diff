@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
-index 3e8f19b..5c5f10f 100644
+index 3e8f19b..e4253b2 100644
 --- a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
 +++ b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
 @@ -278,9 +278,13 @@ def domain_text() -> str:
@@ -39,21 +39,41 @@ index 3e8f19b..5c5f10f 100644
          },
          "user": admin,
          # The people v052-r1's dashboards check signs in to Superset by `login_hint` (platform-b): a
-@@ -991,6 +1001,75 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
+@@ -991,6 +1001,95 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
         and any(line.endswith("403 anonymous") for line in logged), logged[-6:])
  
  
 +# ADR-148 Amendment 20: a client-credentials request made from the Entra stand-in's own pod, so the token is the
 +# stand-in's issuing (r1_kind_servers.py `_client_credentials`, in this run's token version), never one shaped here.
++# A refusal is written as Entra's error and its AADSTS words, so R1's record shows them, not a traceback's top.
 +STANDIN_TOKEN = """
-+import json, ssl, sys, urllib.parse, urllib.request
-+tenant, client, secret, scope = sys.argv[1:5]
++import json, ssl, sys, urllib.error, urllib.parse, urllib.request
++base, tenant, client, secret, scope = sys.argv[1:6]
 +body = urllib.parse.urlencode({"grant_type": "client_credentials", "client_id": client, "client_secret": secret,
 +                               "scope": scope}).encode()
-+req = urllib.request.Request(f"https://127.0.0.1/{tenant}/oauth2/v2.0/token", data=body, method="POST")
++req = urllib.request.Request(f"{base}/{tenant}/oauth2/v2.0/token", data=body, method="POST")
 +ctx = ssl._create_unverified_context()  # the pod's own server, by its loopback address
-+print(json.load(urllib.request.urlopen(req, context=ctx))["access_token"])
++try:
++    answer = urllib.request.urlopen(req, context=ctx)
++except urllib.error.HTTPError as refused:
++    said = refused.read().decode()
++    try:
++        error = json.loads(said)
++        said = f"{error.get('error')}: {error.get('error_description')}"
++    except ValueError:
++        pass
++    sys.stderr.write(f"the stand-in refused ({refused.code}): {said}\\n")
++    sys.exit(1)
++print(json.load(answer)["access_token"])
 +"""
++
++
++def refusal_words(refused: SystemExit) -> str:
++    """What `sh()` says of a command that failed, without the command itself (which may be a script over many
++    lines): its own output, after `sh()`'s `: exit <n>`."""
++    said = str(refused)
++    found = re.search(r": exit \d+\n(.*)", said, re.DOTALL)
++    return (found.group(1) if found else said).strip()[:300]
 +
 +
 +def standin_token(client_id: str, secret: str) -> str:
@@ -61,7 +81,7 @@ index 3e8f19b..5c5f10f 100644
 +    c = yaml.safe_load(CONFIG.read_text())["cloud_platform"]["claims"]
 +    scope = f"api://{c['api_client_id']}/.default"
 +    return kubectl("-n", MANAGED, "exec", "deployment/entra-standin", "--", "/app/.venv/bin/python", "-c", STANDIN_TOKEN,
-+                   c["tenant_id"], client_id, secret, scope).strip()
++                   "https://127.0.0.1", c["tenant_id"], client_id, secret, scope).strip()
 +
 +
 +def runs_role_release(c: Any, admin: dict[str, str]) -> bool:
@@ -98,7 +118,7 @@ index 3e8f19b..5c5f10f 100644
 +        try:
 +            bearer = standin_token(client_id, made[name])
 +        except SystemExit as refused:
-+            ok(f"the Entra stand-in issues {name} its token", False, str(refused)[:300])
++            ok(f"the Entra stand-in issues {name} its token", False, refusal_words(refused))
 +        return c.get("/v1/runs/r1-no-such-run", headers={"Authorization": f"Bearer {bearer}"})
 +
 +    r = ask("orchestrator", o["client_id"])
@@ -115,7 +135,7 @@ index 3e8f19b..5c5f10f 100644
  def checks() -> None:
      """The check list (CHECKS.md), each with its expected answer; stops at the first that fails."""
      log = record("check")
-@@ -1094,6 +1173,14 @@ def checks() -> None:
+@@ -1094,6 +1193,14 @@ def checks() -> None:
          print(line)
          lines.append(line)
          log.write_text("\n".join(lines) + "\n")
@@ -148,10 +168,18 @@ index ff9381b..34c0fb6 100644
 +  client_id: eeeeeeee-ffff-4000-8111-000000000004
 +  service_principal: 60000000-0000-4000-8000-000000000004
 diff --git a/OspreyFlow_Build/tests/test_r1_entra_standin.py b/OspreyFlow_Build/tests/test_r1_entra_standin.py
-index 0e880c2..6b35762 100644
+index 0e880c2..8c380a8 100644
 --- a/OspreyFlow_Build/tests/test_r1_entra_standin.py
 +++ b/OspreyFlow_Build/tests/test_r1_entra_standin.py
-@@ -59,6 +59,9 @@ SUPERSET_SECRET = "superset-throwaway-secret"
+@@ -26,6 +26,7 @@ import hashlib
+ import importlib.util
+ import json
+ import secrets
++import sys
+ import threading
+ import urllib.error
+ import urllib.parse
+@@ -59,6 +60,9 @@ SUPERSET_SECRET = "superset-throwaway-secret"
  REPORTS_SECRET = "reports-throwaway-secret"
  ACCESS = f"api://{API}/access_as_user"
  
@@ -161,7 +189,7 @@ index 0e880c2..6b35762 100644
  CONFIG: dict[str, Any] = {
      "tenant_id": TENANT,
      "jwks": [],  # the driver's own key, for its crafted refusals (none here)
-@@ -69,6 +72,8 @@ CONFIG: dict[str, Any] = {
+@@ -69,6 +73,8 @@ CONFIG: dict[str, Any] = {
                     "delegated": ["access_as_user"]},
          REPORTS: {"secret": REPORTS_SECRET, "service_principal": "60000000-0000-4000-8000-000000000002",
                    "roles": ["Reports.Read"]},
@@ -170,7 +198,7 @@ index 0e880c2..6b35762 100644
      },
      "user": {
          "oid": ADMIN, "name": "Synthetic Administrator", "preferred_username": "admin@r1.test",
-@@ -276,6 +281,19 @@ def test_authorize_refuses_another_tenant_client_redirect_and_an_ungranted_scope
+@@ -276,6 +282,46 @@ def test_authorize_refuses_another_tenant_client_redirect_and_an_ungranted_scope
  # ---- client credentials -------------------------------------------------------------------------
  
  
@@ -187,11 +215,38 @@ index 0e880c2..6b35762 100644
 +    assert "roles" not in claims
 +
 +
++def _r1_kind():  # type: ignore[no-untyped-def]
++    gates = str(Path(__file__).parents[1] / "process/lanes/platform/gates")
++    sys.path.insert(0, gates)
++    try:
++        import r1_kind
++    finally:
++        sys.path.remove(gates)
++    return r1_kind
++
++
++def test_r1s_in_pod_token_fetch_gets_a_token_and_says_a_refusal_whole(standin: str) -> None:
++    """ADR-148 Amendment 20: R1's checks fetch an orchestrator's token by running `STANDIN_TOKEN`
++    in the stand-in's pod. The same script, run here through `sh()` against the real stand-in: a
++    registered application gets its token, and one the stand-in does not know fails with the
++    stand-in's own AADSTS words, which `refusal_words` keeps for R1's record (rule 15: the shape
++    the real call site produces)."""
++    r1 = _r1_kind()
++    scope = f"api://{API}/.default"
++    run = (sys.executable, "-I", "-c", r1.STANDIN_TOKEN, standin, TENANT)
++    token = r1.sh(*run, UNASSIGNED, UNASSIGNED_SECRET, scope).strip()
++    assert _verify(standin, token, API)["azp"] == UNASSIGNED
++    with pytest.raises(SystemExit) as refused:
++        r1.sh(*run, "eeeeeeee-ffff-4000-8111-0000000000ff", "no-secret", scope)
++    said = r1.refusal_words(refused.value)
++    assert "AADSTS700016" in said and "Traceback" not in said, said
++
++
  def test_the_report_sync_gets_an_app_only_token_with_its_roles_and_no_scp(standin: str) -> None:
      status, answer = _post(_token_url(standin), {
          "grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
 diff --git a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
-index 39ebd04..627f8b7 100644
+index 39ebd04..3dae3f1 100644
 --- a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
 +++ b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
 @@ -10,6 +10,18 @@ What a mistake would do, and the case that catches it (rule 12):
@@ -234,7 +289,7 @@ index 39ebd04..627f8b7 100644
 -    `token()` was stood in to give: `admin`, `stranger`, or `refused`."""
 +    `token()` was stood in to give: `admin`, `stranger`, or `refused`, and `standin_token()` the
 +    application's own name from `r1_kind_entra.yaml`. `version` is what Admin › System says;
-+    `unassigned_in` makes the run API let an application holding no app role past its door."""
++    `wrong` says what the run API gets wrong, if anything."""
 +
 +    version: Any = "v0.6.0"
 +    #: What the run API gets wrong, if anything: "unassigned-in", "orchestrator-out", "dashboard-in", or
@@ -283,7 +338,7 @@ index 39ebd04..627f8b7 100644
      config = tmp_path / "r1_kind_osprey.yaml"
      config.write_text(yaml.safe_dump({
          "components": {"search": search},
-@@ -123,3 +177,55 @@ def test_a_release_with_opensearch_has_its_domain_checked(
+@@ -123,3 +177,60 @@ def test_a_release_with_opensearch_has_its_domain_checked(
      probed, log = _checks(tmp_path, monkeypatch, "opensearch")
      assert probed == ["domain"]
      assert "SKIP the domain" not in log
@@ -330,12 +385,17 @@ index 39ebd04..627f8b7 100644
 +    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 +) -> None:
 +    """A stand-in started before the orchestrators were added refuses them (700016): said in the
-+    record as a FAIL, never a bare exit the record does not show."""
++    record as a FAIL with its AADSTS words, never a bare exit the record does not show."""
 +
 +    def refused(client_id: str, secret: str) -> str:
-+        raise SystemExit("AADSTS700016: Application with identifier was not found")
++        # `sh()`'s own shape for a failed kubectl exec, with what STANDIN_TOKEN writes of a refusal
++        # (that script, against the real stand-in: tests/test_r1_entra_standin.py).
++        raise SystemExit("kubectl -n platform-managed exec deployment/entra-standin --: exit 1\n"
++                         "the stand-in refused (400): unauthorized_client: AADSTS700016: Application "
++                         "with identifier was not found in the directory\n")
 +
 +    with pytest.raises(SystemExit, match="issues orchestrator its token"):
 +        _checks(tmp_path, monkeypatch, "opensearch", issue=refused)
 +    log = (tmp_path / "check.log").read_text()
-+    assert "FAIL the Entra stand-in issues orchestrator its token: AADSTS700016" in log, log[-300:]
++    line = next(x for x in log.splitlines() if x.startswith("FAIL the Entra stand-in issues"))
++    assert "AADSTS700016" in line and "kubectl" not in line, line

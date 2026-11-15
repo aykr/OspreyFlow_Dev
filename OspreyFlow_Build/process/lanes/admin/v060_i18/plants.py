@@ -47,6 +47,10 @@ PLANTS = [
     ("a registered dashboard holding no role told to grant itself the run role",
      [(APP, "        if refused.client is not None:\n            await _refuse_a_registered_dashboard(request, refused.client)\n", "")],
      [f"{DOOR}[no-role-registered-dashboard]"]),
+    ("a run-role refusal turned into a 503 when the registrations cannot be read",
+     [(APP, "            except HTTPException as answer:\n                if answer.status_code != 503:\n                    raise\n",
+       "            except HTTPException:\n                raise\n")],
+     [f"{TEST}::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[no-role-store-too-slow]"]),
     # The role's name is not planted: renamed, it fails nearly every case of the file (the words name it, every
     # admitted token holds it), so a plant could not tell its own red from the rest. The name's own case guards it.
 ]
@@ -59,6 +63,7 @@ GUARD = "tests/test_r1_kind_domain_guard.py::"
 V060 = f"{GUARD}test_a_v060_release_has_its_run_api_role_checked_with_the_standins_tokens"
 WRONG = f"{GUARD}test_a_run_api_answering_wrongly_fails_the_checks"
 UNISSUED = f"{GUARD}test_a_token_the_standin_will_not_issue_is_a_fail_in_the_record"
+INPOD = "tests/test_r1_entra_standin.py::test_r1s_in_pod_token_fetch_gets_a_token_and_says_a_refusal_whole"
 R1_PLANTS = [
     ("R1 asks every release for the role (no gate by release)",
      [(R1, "    if runs_role_release(c, admin):", "    if True:")],
@@ -85,8 +90,14 @@ R1_PLANTS = [
      [(R1, "r.status_code == 403 and DASHBOARD_WORDS in r.text", "True")],
      [f"{WRONG}[dashboard-in]"]),
     ("R1 lets a token the stand-in will not issue exit unrecorded",
-     [(R1, '            ok(f"the Entra stand-in issues {name} its token", False, str(refused)[:300])', "            raise")],
+     [(R1, '            ok(f"the Entra stand-in issues {name} its token", False, refusal_words(refused))', "            raise")],
      [UNISSUED]),
+    ("R1 records the head of sh()'s message (the command), not the refusal",
+     [(R1, '    return (found.group(1) if found else said).strip()[:300]', '    return said[:300]')],
+     [UNISSUED, INPOD]),
+    ("the in-pod fetch lets a refusal out as a traceback",
+     [(R1, "except urllib.error.HTTPError as refused:", "except KeyError as refused:")],
+     [INPOD]),
     # Not planted: R1's words drifting from the Conduit's. `test_the_checks_words_are_the_conduits_own` reads both,
     # and the plants above already change what the checks read.
 ]
@@ -112,17 +123,20 @@ GUIDE_PLANTS = [
     ("the runbook's paragraph said only with reporting on",
      [(RUNBOOKS, "    parts.append(\n        \"**For an orchestrator that runs pipelines**",
        "    if config.reporting.sync:\n      parts.append(\n        \"**For an orchestrator that runs pipelines**")],
-     [f"{POC}[reporting-off]"]),
+     [f"{POC}[reporting-off-id-uri-default]", f"{POC}[reporting-off-id-uri-set]"]),
     # The CLI's scope (the owner's word beside #18), said in the same diff.
     ("the guide's run row without the CLI's scope",
-     [(GUIDE, "by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's `api://<application id>/.default`)",
+     [(GUIDE, "by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's application ID URI followed by `/.default`)",
        "by client credentials)")],
      [f"{GT}test_the_guide_says_the_cli_sends_the_apis_scope_on_entra",
       "tests/test_admin_guide_copies.py::test_the_specification_s_copy_is_the_shipped_guide_from_section_1"]),
     ("the install without the orchestrator's token scope",
-     [(RUNBOOKS, "`OSPREY_TOKEN_SCOPE` to\\n\"\n        f\"`api://{claims.api_client_id}/.default`",
+     [(RUNBOOKS, "`OSPREY_TOKEN_SCOPE` to\\n\"\n        f\"`{claims.id_uri}/.default`",
        "`OSPREY_TOKEN_SCOPE` to\\n\"\n        f\"`the API's scope`")],
-     [f"{POC}[reporting-on]", f"{POC}[reporting-off]"]),
+     [f"{POC}[{r}-id-uri-{u}]" for r in ("reporting-on", "reporting-off") for u in ("default", "set")]),
+    ("the install's scope always api://<id>, whatever the ID URI",
+     [(RUNBOOKS, "f\"`{claims.id_uri}/.default`", "f\"`api://{claims.api_client_id}/.default`")],
+     [f"{POC}[reporting-on-id-uri-set]", f"{POC}[reporting-off-id-uri-set]"]),
 ]
 
 Restore = Callable[[set[str]], object]

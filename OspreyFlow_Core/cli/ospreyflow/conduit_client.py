@@ -96,14 +96,14 @@ def service_token(env: Mapping[str, str], http: httpx.Client) -> str:
         if 1002012 in codes:
             raise CommandRefused(
                 "Entra ID refused the service identity's sign-in: it needs the API's own scope. "
-                "Set OSPREY_TOKEN_SCOPE to this deployment's API scope, `api://<the API's "
-                "application id>/.default` (the install's *What it needs* names it)."
+                "Set OSPREY_TOKEN_SCOPE to this deployment's API scope: its application ID URI "
+                "followed by `/.default` (the install's *What it needs* names it)."
             )
         if 500011 in codes:
             raise CommandRefused(
                 "Entra ID refused the service identity's sign-in: OSPREY_TOKEN_SCOPE names no API "
-                "of this tenant. Set it to this deployment's API scope, `api://<the API's "
-                "application id>/.default` (the install's *What it needs* names it)."
+                "of this tenant. Set it to this deployment's API scope: its application ID URI "
+                "followed by `/.default` (the install's *What it needs* names it)."
             )
         raise CommandRefused(
             f"The identity provider refused the service identity's sign-in ({answer.status_code}); "

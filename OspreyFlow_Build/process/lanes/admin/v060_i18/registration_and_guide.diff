@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-index abfa41f..a539fc7 100644
+index abfa41f..527d80a 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 +++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 @@ -1141,7 +1141,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
@@ -24,7 +24,7 @@ index abfa41f..a539fc7 100644
  assigned in *Admin › People and roles*, which keeps them in the deployment's own Postgres, by tenant and
  `oid`:
  
-@@ -1538,7 +1540,15 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
+@@ -1538,7 +1540,16 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
    account could not be read, offers *Try again*, and keeps *Sign out* within reach.
  - **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
    pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
@@ -36,42 +36,51 @@ index abfa41f..a539fc7 100644
 +  API's OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API
 +  permissions, this API, Application permissions) and grant admin consent, then ask for a new
 +  token". `ospreyflow run` asks Entra ID for that token with `OSPREY_TOKEN_SCOPE` set to the API's
-+  own scope, `api://<the API's application id>/.default`, which the install's *What it needs* names;
-+  without it Entra ID issues none (AADSTS1002012), and the command says so.
++  own scope, its application ID URI followed by `/.default` (by default `api://<the API's
++  application id>/.default`; `api_id_uri` where one is set), which the install's *What it needs*
++  names; without it Entra ID issues none (AADSTS1002012), and the command says so.
  
  - **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
    for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
-@@ -2017,7 +2027,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
+@@ -2017,7 +2028,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
  | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
  | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
  | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
 -| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
-+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's `api://<application id>/.default`); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
++| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's application ID URI followed by `/.default`); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
  | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
  | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
  | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
 diff --git a/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py b/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
-index 1530019..10518d5 100644
+index 1530019..6d8eb63 100644
 --- a/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
 +++ b/OspreyFlow_Build/tests/harness/test_cloud_platform_poc.py
-@@ -736,6 +736,24 @@ def test_with_reporting_on_the_install_says_what_entra_s_administrator_registers
+@@ -736,6 +736,32 @@ def test_with_reporting_on_the_install_says_what_entra_s_administrator_registers
      assert "REPORT_SYNC_DASHBOARDS        = var.report_sync_dashboards" in secrets
  
  
++@pytest.mark.parametrize("id_uri", [None, "api://ospreyflow.client.example"], ids=["id-uri-default", "id-uri-set"])
 +@pytest.mark.parametrize("reporting", [True, False], ids=["reporting-on", "reporting-off"])
-+def test_the_install_says_how_an_orchestrator_is_granted_the_run_role(reporting: bool) -> None:
++def test_the_install_says_how_an_orchestrator_is_granted_the_run_role(reporting: bool, id_uri: str | None) -> None:
 +    """ADR-148 Amendment 20: before step 1, with reporting or without, the client's Entra
 +    administrator is told to define `OspreyFlow.Run` on the API's registration and grant it to the
 +    orchestrator's own, which is the client's and not counted among the deployment's."""
 +    from principal_auth import RUN_APP_ROLE
 +
-+    install = _artefacts(_reporting_on() if reporting else _config())["INSTALL.md"]
++    config = _reporting_on() if reporting else _config()
++    if id_uri:
++        raw = config.model_dump(mode="json", exclude_none=True)
++        raw["cloud_platform"]["claims"]["api_id_uri"] = id_uri
++        config = OspreyConfig.model_validate(raw)
++    install = _artefacts(config)["INSTALL.md"]
 +    before = " ".join(install[: install.index("## 1.")].split())
 +    assert f"an app role `{RUN_APP_ROLE}` (allowed member types: Applications)" in before
 +    assert "application permission with admin consent" in before
 +    assert "not one of this deployment's counted registrations" in before
-+    claims = _config().cloud_platform.claims  # type: ignore[union-attr]
-+    assert f"`OSPREY_TOKEN_SCOPE` to `api://{claims.api_client_id}/.default`" in before
++    claims = config.cloud_platform.claims  # type: ignore[union-attr]
++    # the API's application ID URI, `api_id_uri` where one is set, never api://<id> by force
++    scope = f"{id_uri or 'api://' + claims.api_client_id}/.default"
++    assert f"`OSPREY_TOKEN_SCOPE` to `{scope}`" in before
 +    token_url = f"https://login.microsoftonline.com/{claims.tenant_id}/oauth2/v2.0/token"
 +    assert f"`OSPREY_TOKEN_URL` set to `{token_url}`" in before
 +
@@ -81,7 +90,7 @@ index 1530019..10518d5 100644
      assert "## 6a. Reports" not in install and "oauth-authorized" not in install
 diff --git a/OspreyFlow_Build/tests/test_admin_guide_run_app_role.py b/OspreyFlow_Build/tests/test_admin_guide_run_app_role.py
 new file mode 100644
-index 0000000..6ffc919
+index 0000000..4499afc
 --- /dev/null
 +++ b/OspreyFlow_Build/tests/test_admin_guide_run_app_role.py
 @@ -0,0 +1,66 @@
@@ -115,8 +124,8 @@ index 0000000..6ffc919
 +    r"<!-- document-control:begin -->.*?<!-- document-control:end -->", re.DOTALL
 +)
 +SCOPE = (
-+    "`OSPREY_TOKEN_SCOPE` set to the API's own scope, "
-+    "`api://<the API's application id>/.default`"
++    "`OSPREY_TOKEN_SCOPE` set to the API's own scope, its application ID URI followed by "
++    "`/.default`"
 +)
 +
 +
@@ -152,7 +161,7 @@ index 0000000..6ffc919
 +    run_row = next(line for line in rows if line.startswith("| `ospreyflow run "))
 +    assert "`OSPREY_TOKEN_SCOPE`" in run_row
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index 09640b7..a4c1cb8 100644
+index 09640b7..4c9a915 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
 @@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
@@ -190,7 +199,7 @@ index 09640b7..a4c1cb8 100644
  assigned in *Admin › People and roles*, which keeps them in the deployment's own Postgres, by tenant and
  `oid`:
  
-@@ -1750,7 +1753,15 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
+@@ -1750,7 +1753,16 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
    account could not be read, offers *Try again*, and keeps *Sign out* within reach.
  - **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
    pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
@@ -202,17 +211,18 @@ index 09640b7..a4c1cb8 100644
 +  API's OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API
 +  permissions, this API, Application permissions) and grant admin consent, then ask for a new
 +  token". `ospreyflow run` asks Entra ID for that token with `OSPREY_TOKEN_SCOPE` set to the API's
-+  own scope, `api://<the API's application id>/.default`, which the install's *What it needs* names;
-+  without it Entra ID issues none (AADSTS1002012), and the command says so.
++  own scope, its application ID URI followed by `/.default` (by default `api://<the API's
++  application id>/.default`; `api_id_uri` where one is set), which the install's *What it needs*
++  names; without it Entra ID issues none (AADSTS1002012), and the command says so.
  
  - **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
    for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
-@@ -2229,7 +2240,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
+@@ -2229,7 +2241,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
  | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
  | `ospreyflow release export <dataset> --name <name> --release-version <version> --out <folder>` | Writes the dataset's release as a YAML bundle into a new, empty folder: `release.yaml` (`apiVersion: ospreyflow.io/v1`, `kind: DatasetRelease`, checked by `packages/schemas/release.schema.json`), the domain model, each published pipeline and each reference list's definition, and a small list's rows as a CSV named by its checksum. Never a credential, loaded data, case membership, an owner or a licensed screening list's rows. Does what Studio › Releases' *Export* does, as you: set `OSPREY_TOKEN` to your own sign-in token (and `OSPREY_API_URL` for another deployment's address). A pipeline marked above what you may view is left out, and the command says how many |
  | `ospreyflow release import <folder> --dataset <id> [--dry-run]` | Reads a bundle whole (every file's SHA-256, nothing it does not list) and lands the model, the pipelines and the lists as drafts in the dataset, each pipeline through the Studio's own save gates; with `--dry-run`, says what it would write and writes nothing. A refusal writes nothing. Nothing goes live: make the model live in the Studio |
 -| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
-+| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's `api://<application id>/.default`); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
++| `ospreyflow run <dataset> <pipeline> --external-run-id <id> [--version <n>\|latest] [--wait] [--fail-on held\|rejections>N%]` | Triggers a deployed pipeline as the deployment's service identity (`OSPREY_TOKEN_URL`, `OSPREY_CLIENT_ID`, `OSPREY_CLIENT_SECRET`, by client credentials, and on Entra ID `OSPREY_TOKEN_SCOPE`, the API's application ID URI followed by `/.default`); the run acts as the pipeline's owner, never as the identity. The same `--external-run-id` again loads nothing more. `--wait` waits for the run; `--fail-on` exits 2 when held rows or the share of rejected rows meets it, or when the run's counts are withheld. Exits 1 on a refusal, in words. Where people sign in with Entra ID (`cloud-platform`), the owner as *Admin › People and roles* holds them, refused if they have not signed in within 24 hours (section 6a.7) |
  | `ospreyflow map list` | Lists the map providers, each with its tier, whether its key is set (never the key) and its state; the local basemap, the place-name fonts and the prefetch areas |
  | `ospreyflow map verify` | Checks every provider's attribution, and a tier-4 service's projection and zooms, in the Conduit |
  | `ospreyflow map prefetch` | Fetches every prefetch area's tiles now, saying for each how many were fetched and any failure in plain words |
@@ -239,7 +249,7 @@ index ad5181f..e208681 100644
      kind: web application, with a client secret
      redirect: "https://bi.<the deployment's name>/oauth-authorized/<provider>"
 diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
-index 9deda9f..b27b705 100644
+index 9deda9f..faf0a27 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
 @@ -67,7 +67,8 @@ def entra_registrations(config: OspreyConfig) -> int:
@@ -252,7 +262,7 @@ index 9deda9f..b27b705 100644
      cp = config.cloud_platform
      assert cp is not None and cp.claims is not None
      claims, parts = cp.claims, []
-@@ -88,6 +89,19 @@ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> st
+@@ -88,6 +89,20 @@ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> st
              "registration of its own with a client secret, granted `Dashboard.Read` with admin consent;\n"
              "step 6a registers it here. Until there is one, step 2's `report_sync_dashboards` is `[]`."
          )
@@ -267,7 +277,8 @@ index 9deda9f..b27b705 100644
 +        "`ospreyflow run` signs it in with its own application id and secret (`OSPREY_CLIENT_ID`,\n"
 +        f"`OSPREY_CLIENT_SECRET`), `OSPREY_TOKEN_URL` set to\n"
 +        f"`https://login.microsoftonline.com/{claims.tenant_id}/oauth2/v2.0/token` and `OSPREY_TOKEN_SCOPE` to\n"
-+        f"`api://{claims.api_client_id}/.default`, the API's own scope, without which Entra ID issues no token."
++        f"`{claims.id_uri}/.default`, the API's application ID URI and `/.default`, without which Entra ID issues\n"
++        "no token."
 +    )
      return ("\n" + "\n\n".join(parts) + "\n") if parts else ""
  
