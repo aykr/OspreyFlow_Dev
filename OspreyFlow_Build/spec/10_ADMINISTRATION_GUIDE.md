@@ -1784,7 +1784,7 @@ models:
     - name: bedrock                          # Amazon Bedrock in London
       kind: bedrock                          # auth: iam_role and region: eu-west-2 by default
       # a model's own id: check your account is offered it on demand in London
-      roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}
+            roles: {extraction: amazon.nova-pro-v1:0}
   defaults: {extraction: orggateway}
 cloud_platform:
   egress_nets:                               # each engine's host, by its networks
@@ -1793,10 +1793,13 @@ cloud_platform:
 ```
 
 **The region answer is London, and only London.** `region` is Bedrock's alone and takes only
-`eu-west-2`, its default. A Bedrock model is named by its own id (`anthropic.…`); a cross-region
+`eu-west-2`, its default. A Bedrock model is named by its own id (`amazon.nova-pro-v1:0`); a cross-region
 inference profile's id (`eu.…`, `us.…`, `apac.…`, `global.…`, or any other part before the
 provider's) and an ARN are refused, since either may send the call outside London. A model Bedrock
-offers in London only through an inference profile cannot therefore be used here.
+offers in London only through an inference profile cannot therefore be used here. **So Bedrock in
+London means the models AWS serves in-Region there: Amazon Nova and the Titan embeddings, not current
+Claude models, which AWS serves from London only through its EU and global profiles. Claude through
+AWS's EU profile is not offered in v0.6.0.**
 
 **Refused in words**, each naming the field and never its value, wherever an engine is read
 (`osprey.yaml` at render, the Conduit's start, the models file and *Admin › Models*): Bedrock by a
@@ -1879,8 +1882,8 @@ first install:
 - whether the gateway's AWS client uses STS's regional endpoint: only `sts.eu-west-2` is allowed out,
   and the gateway's account carries no regional-endpoint annotation;
 - whether a model's first use needs an administrator to enable it in Bedrock's *Model access*, or
-  AWS Marketplace actions, first; newer Claude models are offered in London only through inference
-  profiles, which are refused here;
+  AWS Marketplace actions, first (current Claude models are not among the models here: London serves
+  them only through inference profiles, which are refused);
 - Bedrock's own words for a model not enabled, an invalid id and a model not offered on demand, which
   AWS does not document and *Test the connection* reads (none has been measured against Bedrock);
 - any call through your organisation's own gateway, by its token, and whatever stands in front of it;
