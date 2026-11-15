@@ -66,7 +66,7 @@ PLANTS = [
  ("test_the_app_draws_the_strip_the_panel_and_the_way_back", "the drawer titled Cases from the case line", UI+"App.tsx",
   'title={casesOpen === "views" ? "Saved views" : "Cases"}', 'title="Cases"'),
  ("test_the_app_draws_the_strip_the_panel_and_the_way_back", "the whole case's Open not wired", UI+"App.tsx",
-  "onOpenWholeCase={backToTheWholeCase}", "onOpenWholeCase={closeLens}"),
+  "onOpenWholeCase={() => {", "onSomethingElse={() => {"),
  ("test_the_app_draws_the_strip_the_panel_and_the_way_back", "the whole-case strip not drawn", UI+"App.tsx",
   "<WholeCaseStrip />}", "null}"),
  ("test_the_app_draws_the_strip_the_panel_and_the_way_back", "focus not returned to Saved views", UI+"App.tsx",
