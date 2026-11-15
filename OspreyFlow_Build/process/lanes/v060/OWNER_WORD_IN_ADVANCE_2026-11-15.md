@@ -58,3 +58,13 @@ One line now (this word recorded, the route re-dated, the answer to 4.3); one li
 test started, package test ended (with the result), release made (what was pushed and where), demo rebuilt (checks
 passed, and what waits for the owner). If the run stops: the step, the reason and what is needed, at the top of
 `MORNING.md`.
+
+## The orchestrator's answer to 4.3 (15 Nov ~18:20Z): no
+
+The condition "both already covered by the backup" does not hold, by design. `OspreyFlow_Core/harness/backup.py:392-418`
+dumps the gateway's database (`litellm`) without the rows of its sealed tables (`LiteLLM_CredentialsTable`,
+`LiteLLM_ProxyModelTable`, `LiteLLM_Config`, `LiteLLM_VerificationToken`, `LiteLLM_DeletedVerificationToken`), under
+spec 05 §6.1 ("A backup carries no secrets … Nothing in a backup may ever be encrypted with a deployment-scoped key") and
+the owner's ruling of 8 November. Carrying the key would need a new server-to-server copy of the sealed rows with the
+salt (`OSPREY_LITELLM_SALT_SECRET`): a new mechanism, and the exception §6.1 forbids. No rehearsal was run. The owner
+types the key once after the rebuild; the command goes at the top of MORNING.md then.
