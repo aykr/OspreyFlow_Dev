@@ -168,13 +168,13 @@ orchestrator	v052-candidate2	S	building	v0.5.2 step C again: the candidate remad
 admin	v052-govuk-admin-scroll	S	done	v0.5.2 (the owner, 15 Nov): GOV.UK Admin one scroller and the System page's fonts; merged after step 6	lane/admin-govuk-scroll-type
 rules-b	admin-forms-research	M	done	Admin forms: the five questions before building (profiles, the way out, listing, provider terms, estimates); research only, nothing built before the cut	lane/rules-b-admin-forms-research
 platform	v052-backup-mapkeys	S	done	v0.5.2 (the owner, 15 Nov): cloud-platform backups never hold map-keys.yaml (ADR-147 decision 1); a restore names the keys to enter again	lane/platform-backup-mapkeys
-case-b	v060-i3-accordion	M	todo	v0.6.0 (the owner, 15 Nov): Ask & Chat history as an accordion
-case-b	v060-i4-fullpage	M	todo	v0.6.0 (the owner, 15 Nov): Ask & Chat as a full page
-case	v060-i5-show-all	M	todo	v0.6.0 (the owner, 15 Nov): Show all on graph and Save as a view
+case-b	v060-i3-accordion	M	done	v0.6.0 (the owner, 15 Nov): Ask & Chat history as an accordion	lane/case-b-v060-accordion
+case-b	v060-i4-fullpage	M	building	v0.6.0 (the owner, 15 Nov): Ask & Chat as a full page
+case	v060-i5-show-all	M	building	v0.6.0 (the owner, 15 Nov): Show all on graph and Save as a view
 admin	v060-i6-govuk-type	M	todo	v0.6.0 (the owner, 15 Nov): The GOV.UK look's type
-docs	v060-i9-rename	M	todo	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0
-rules-b	v060-i10-basemap	M	todo	v0.6.0 (the owner, 15 Nov): The basemap as a step of the demo's install recipe
+docs	v060-i9-rename	M	review	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0
+rules-b	v060-i10-basemap	M	building	v0.6.0 (the owner, 15 Nov): The basemap as a step of the demo's install recipe
 platform-b	v060-i11-package-test	M	done	v0.6.0 (the owner, 15 Nov): The package test reshaped, fresh install only	lane/platform-b-v060-package-test
-rules	v060-i14-stopped-why	M	todo	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped
-admin	v060-i18-run-app-role	M	todo	v0.6.0 (the owner, 15 Nov): The run service's app role
+rules	v060-i14-stopped-why	M	building	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped
+admin	v060-i18-run-app-role	M	building	v0.6.0 (the owner, 15 Nov): The run service's app role
 platform	v060-rf-fresh-only	M	done	v0.6.0 (the owner, 15 Nov): Fresh install only, held by a refusal	lane/platform-v060-fresh-only
