@@ -1,0 +1,14 @@
+AS IT MUST BE (red): every answer open (no accordion)
+× opens only the newest answer; each earlier one is its question line, a button that says it is closed 22ms
+AS IT MUST BE (red): the newest closed too
+× closes every earlier answer when a new question is answered, the new one open 54ms
+AS IT MUST BE (red): an earlier answer left open after a new question
+× closes every earlier answer when a new question is answered, the new one open 44ms
+AS IT MUST BE (red): a closed answer's body still in reach (not hidden)
+1) keyboard/questions.spec.ts:346:1 › an earlier answer is opened from its question's line by keyboard, its markers reached only then 
+AS IT MUST BE (red): the line not saying it is open or closed
+× opens only the newest answer; each earlier one is its question line, a button that says it is closed 20ms
+AS IT MUST BE (red): a closed line not counting its proposals
+× says on a closed answer's line how many of its proposals are still to decide 25ms
+unplanted: Tests 49 passed (49); keyboard 13 passed (8.2s)
+every plant red for its reason, unplanted green

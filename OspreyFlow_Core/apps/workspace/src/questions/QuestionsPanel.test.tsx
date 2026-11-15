@@ -271,7 +271,7 @@ describe("QuestionsPanel", () => {
     await screen.findByText("Accepted");
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who wrote these?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
-    await screen.findByText("Who wrote these?", { selector: "p" });
+    await screen.findByRole("button", { name: /^Who wrote these\?/ }); // its question line (v0.6.0 #3)
     const asked = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"));
     expect(JSON.parse(asked?.init?.body as string).view_id).toBe("v 1");
     fireEvent.click(screen.getByRole("button", { name: "Ask about the whole case instead" }));
@@ -752,5 +752,84 @@ describe("the answer's markers and wording (the owner, 15 November 2026)", () =>
       "No documents were read: the answer comes from the links and events (read: 0 documents, 0 items, 83 links and 190 events; 1 document has no text to read).",
     );
     expect(words).not.toMatch(/\([^)]*\(/);
+  });
+});
+
+// v0.6.0 #3 (the owner's list; the orchestrator's rulings, 15 November 2026): the history is an accordion. Each
+// earlier question collapses to its line, a real button (aria-expanded); the newest answer stays open; a closed
+// answer's markers, documents and proposals are out of the Tab order and the accessibility tree; a new question
+// closes the earlier ones; a closed line says how many of its proposals are still to decide. No "open all", no
+// remembered state. The same in a view's conversation.
+describe("the history as an accordion (v0.6.0 #3)", () => {
+  const OLDER: QuestionAnswer = { ...WITH_FACTS, id: "q-old", question: "Who is tied to Dana?", created_at: "2026-10-07T09:00:00Z" };
+  const PENDING2: QuestionAnswer = {
+    ...ANSWERED, id: "q-mid", question: "Who wrote about the plant?", created_at: "2026-10-07T09:30:00Z",
+    candidates: [ANSWERED.candidates[0]!, { ...ANSWERED.candidates[0]!, id: "c2", properties: { name: "Eli Ward" } }],
+  };  // prettier-ignore
+  const NEWEST: QuestionAnswer = { ...ANSWERED, id: "q-new", question: "Who called Callum?", answer: "Dana called him.", candidates: [], unplaced: 0 };
+  const line = (question: string) => screen.getByRole("button", { name: new RegExp(`^${question}`) });
+
+  it("opens only the newest answer; each earlier one is its question line, a button that says it is closed", async () => {
+    serve({ "GET /questions": () => json(200, [OLDER, PENDING2, NEWEST]) });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
+    await screen.findByText("Dana called him.");
+    expect(line("Who called Callum\\?").getAttribute("aria-expanded")).toBe("true");
+    expect(line("Who is tied to Dana\\?").getAttribute("aria-expanded")).toBe("false");
+    expect(line("Who wrote about the plant\\?").getAttribute("aria-expanded")).toBe("false");
+    // A closed answer's markers and proposals are not reachable: not in the accessibility tree, so not by Tab.
+    expect(screen.queryByRole("button", { name: /^Show on the graph: / })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Accept / })).toBeNull();
+    // Its words are inside the closed panel, hidden: not shown, not read.
+    expect(screen.getByText("Rohan is tied to Dana", { exact: false }).closest("[hidden]")).not.toBeNull();
+  });
+
+  it("opens an earlier answer from its line, and closes it again", async () => {
+    serve({ "GET /questions": () => json(200, [OLDER, NEWEST]) });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
+    await screen.findByText("Dana called him.");
+    const older = line("Who is tied to Dana\\?");
+    fireEvent.click(older);
+    expect(older.getAttribute("aria-expanded")).toBe("true");
+    const panel = document.getElementById(older.getAttribute("aria-controls")!)!;
+    expect(panel.hidden).toBe(false);
+    expect(screen.getAllByRole("button", { name: /^Show on the graph: graph fact \d+, \[G-\d+\]$/ })).toHaveLength(2);
+    expect(line("Who called Callum\\?").getAttribute("aria-expanded")).toBe("true"); // opening one closes no other
+    fireEvent.click(older);
+    expect(older.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: /^Show on the graph: / })).toBeNull();
+  });
+
+  it("closes every earlier answer when a new question is answered, the new one open", async () => {
+    serve({
+      "GET /questions": () => json(200, [OLDER, NEWEST]),
+      "POST /questions": () => json(200, { ...ANSWERED, id: "q-asked", question: "And Rohan?", answer: "Rohan is tied to Dana.", candidates: [], unplaced: 0 }),
+    });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
+    await screen.findByText("Dana called him.");
+    fireEvent.click(line("Who is tied to Dana\\?"));
+    expect(line("Who is tied to Dana\\?").getAttribute("aria-expanded")).toBe("true");
+    fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "And Rohan?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    await screen.findByText("Rohan is tied to Dana.");
+    expect(line("And Rohan\\?").getAttribute("aria-expanded")).toBe("true");
+    expect(line("Who is tied to Dana\\?").getAttribute("aria-expanded")).toBe("false");
+    expect(line("Who called Callum\\?").getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("says on a closed answer's line how many of its proposals are still to decide", async () => {
+    serve({ "GET /questions": () => json(200, [PENDING2, { ...ANSWERED, id: "q-one", question: "Who else?", created_at: "2026-10-07T09:40:00Z" }, NEWEST]) });
+    mount();
+    await screen.findByText("Dana called him.");
+    expect(line("Who wrote about the plant\\?").textContent).toContain("2 proposals to decide");
+    expect(line("Who else\\?").textContent).toContain("1 proposal to decide");
+    expect(line("Who called Callum\\?").textContent).not.toContain("to decide");
+  });
+
+  it("is the same in a view's conversation", async () => {
+    serve({ "GET /questions?view_id=v1": () => json(200, [OLDER, NEWEST]) });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn(), view: { id: "v1", name: "Payments" } });
+    await screen.findByText("Dana called him.");
+    expect(line("Who is tied to Dana\\?").getAttribute("aria-expanded")).toBe("false");
+    expect(line("Who called Callum\\?").getAttribute("aria-expanded")).toBe("true");
   });
 });

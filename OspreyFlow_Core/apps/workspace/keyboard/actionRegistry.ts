@@ -783,6 +783,7 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   // ADR-098 Amendment 7: what to read from (Selected items, Everything on the graph; Whole case
   // disabled with why) is chosen by arrow keys, and the question sends the choice.
   "choose-what-to-read-from-by-keyboard",
+  "open-an-earlier-answer-by-keyboard",
 ] as const);
 
 /** Files added straight to a case (ADR-094 step 3): from the strip over the canvas, standing alone,

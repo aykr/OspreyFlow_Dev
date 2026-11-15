@@ -152,6 +152,9 @@ export function QuestionsPanel({
 }: QuestionsPanelProps) {
   const viewId = view?.id ?? null;
   const [entries, setEntries] = useState<QuestionAnswer[] | null>(null);
+  // v0.6.0 #3: which answers are open, by the reader's own choice; by default the newest alone. Put back to the
+  // default whenever the list is read again or a new question is answered (no remembered state, no "open all").
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const [question, setQuestion] = useState("");
   const questionBox = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
@@ -195,6 +198,7 @@ export function QuestionsPanel({
   useEffect(() => {
     let cancelled = false;
     setEntries(null);
+    setOpened({});
     listQuestions(apiBaseUrl, bearerToken, investigationId, viewId)
       .then((found) => !cancelled && setEntries(found))
       .catch((err: unknown) => {
@@ -255,6 +259,7 @@ export function QuestionsPanel({
         readFrom,
       });
       setEntries((prev) => [...(prev ?? []), answered]);
+      setOpened({}); // the new answer is the newest: open, and every earlier one closed
       setQuestion("");
       setWillAsked((n) => n + 1);
     } catch (err) {
@@ -317,12 +322,35 @@ export function QuestionsPanel({
       )}
       {entries !== null && entries.length > 0 && (
         <ol role="list" aria-label="Questions asked" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-16)" }}>
-          {entries.map((entry) => (
+          {entries.map((entry, index) => {
+            const newest = index === entries.length - 1;
+            const open = opened[entry.id] ?? newest;
+            const toDecide = entry.candidates.filter((c) => c.status === "pending").length;
+            const bodyId = `${radioName}-answer-${entry.id}`;
+            return (
             <li key={entry.id} style={{ display: "grid", gap: "var(--sp-8)" }}>
-              <p style={{ margin: 0, fontWeight: 600 }}>{entry.question}</p>
+              {/* v0.6.0 #3: the question's line is the accordion's button (aria-expanded), its answer the panel. */}
+              <h3 style={{ margin: 0, fontSize: "inherit" }}>
+                <button
+                  type="button"
+                  className="questions__line"
+                  aria-expanded={open}
+                  aria-controls={bodyId}
+                  onClick={() => setOpened((now) => ({ ...now, [entry.id]: !open }))}
+                >
+                  <span className="questions__chevron" aria-hidden="true">{open ? "▾" : "▸"}</span>
+                  <span className="questions__question">{entry.question}</span>
+                  {!open && toDecide > 0 && (
+                    <span className="questions__to-decide">
+                      {toDecide === 1 ? "1 proposal to decide" : `${toDecide} proposals to decide`}
+                    </span>
+                  )}
+                </button>
+              </h3>
               <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
                 {entry.author_name ?? entry.author} · {WHEN.format(new Date(entry.created_at))} UTC
               </p>
+              <div id={bodyId} hidden={!open} style={{ display: open ? "grid" : undefined, gap: "var(--sp-8)" }}>
               <AnswerText entry={entry} onSelectFacts={onSelectFacts} />
               <AnsweredBy engine={entry.engine} model={entry.model} engines={engineChoice.engines} />
               {entry.read && <ReadLine read={entry.read} />}
@@ -387,8 +415,10 @@ export function QuestionsPanel({
                     : `${entry.unplaced} items were left out: they are not in the documents, graph facts or sources the model was given.`}
                 </p>
               )}
+              </div>
             </li>
-          ))}
+            );
+          })}
         </ol>
       )}
       <form

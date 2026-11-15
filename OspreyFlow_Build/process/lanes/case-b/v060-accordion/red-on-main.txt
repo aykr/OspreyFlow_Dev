@@ -1,0 +1,12 @@
+     × opens only the newest answer; each earlier one is its question line, a button that says it is closed 133ms
+     × opens an earlier answer from its line, and closes it again 36ms
+     × closes every earlier answer when a new question is answered, the new one open 31ms
+     × says on a closed answer's line how many of its proposals are still to decide 38ms
+     × is the same in a view's conversation 1004ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name `/^Who called Callum\?/`
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name `/^Who is tied to Dana\?/`
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name `/^Who is tied to Dana\?/`
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name `/^Who wrote about the plant\?/`
+TestingLibraryElementError: Unable to find an element with the text: Dana called him.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+      Tests  5 failed | 44 skipped (49)
