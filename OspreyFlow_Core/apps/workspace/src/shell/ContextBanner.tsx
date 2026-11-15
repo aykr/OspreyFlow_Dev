@@ -117,26 +117,31 @@ export function useCaseContext(
 
 export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, openView }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
-  // The line stays one line where the top bar does (the owner's word, 15 November 2026): when its items run onto a
-  // second line, the cross-link takes its short words; measured as the top bar folds (`TopBar`'s `barWraps`), again from
-  // its full words whenever the line's width changes or a web font arrives. Only then do whole items wrap.
+  // The line stays one line where the top bar does (the owner's word and ruling, 15 November 2026), measured as the top
+  // bar folds (`TopBar`'s `barWraps`), in steps: 0, everything at its full words; 1, the cross-link's short words; 2, the
+  // open saved view's name and "reads …" ellipsized (their whole words kept in the page and in their title), nothing
+  // else; 3, if even that cannot hold one line, whole items wrap, the cross-link still short. Again from 0 whenever the
+  // line's width changes or a web font arrives.
   const row = useRef<HTMLDivElement>(null);
-  const [fold, setFold] = useState({ short: false, pass: 0 });
+  const [fold, setFold] = useState({ step: 0, pass: 0 });
   const shortLabel = crossLink?.shortLabel;
   useLayoutEffect(() => {
-    if (!fold.short && shortLabel && row.current && barWraps(row.current)) setFold((current) => ({ ...current, short: true }));
-  }, [fold.short, fold.pass, shortLabel, crossLink?.label]);
+    const element = row.current;
+    if (!element) return;
+    if (fold.step < 2 && barWraps(element)) setFold((current) => ({ ...current, step: current.step === 0 && shortLabel ? 1 : 2 }));
+    else if (fold.step === 2 && element.scrollWidth > element.clientWidth + 1) setFold((current) => ({ ...current, step: 3 }));
+  }, [fold.step, fold.pass, shortLabel, crossLink?.label, datasets, place]);
   useLayoutEffect(() => {
     const element = row.current;
     if (!element || typeof ResizeObserver === "undefined") return;
     let width = element.clientWidth;
-    const again = () => flushSync(() => setFold((current) => ({ short: false, pass: current.pass + 1 })));
+    const again = () => flushSync(() => setFold((current) => ({ step: 0, pass: current.pass + 1 })));
     const observer = new ResizeObserver(() => {
       if (element.clientWidth !== width) {
         width = element.clientWidth;
         again();
       } else if (barWraps(element)) {
-        flushSync(() => setFold((current) => ({ ...current, short: true })));
+        flushSync(() => setFold((current) => (current.step < 2 ? { ...current, step: current.step + 1 } : current)));
       }
     });
     observer.observe(element);
@@ -150,6 +155,8 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       fonts?.removeEventListener?.("loadingdone", again);
     };
   }, []);
+  const short = fold.step >= 1;
+  const squeezed = fold.step === 2;
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
   const next = () => <span className="context-banner__sep" aria-hidden="true">·</span>;
@@ -193,7 +200,11 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
           <span className="context-banner__label" aria-hidden="true">Case</span>
           {caseSwitcher}
           {/* ADR-145 Amendment 17: what is open, after the case's name; nothing while the whole case is. */}
-          {openView && <span className="context-banner__open-view">› Saved view: {openView}</span>}
+          {openView && (
+            <span className="context-banner__open-view context-banner__fit" title={`Saved view: ${openView}`}>
+              › Saved view: {openView}
+            </span>
+          )}
           {onViews && (
             <>
               {next()}
@@ -222,7 +233,9 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       {place === "glass" && datasets && (
         <>
           {next()}
-          <span>{datasets.length > 0 ? `reads ${names(datasets)}` : "reads no dataset"}</span>
+          <span className="context-banner__fit" title={datasets.length > 0 ? `reads ${names(datasets)}` : undefined}>
+            {datasets.length > 0 ? `reads ${names(datasets)}` : "reads no dataset"}
+          </span>
         </>
       )}
       {place === "ingest" && caseSwitcher && (
@@ -242,7 +255,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       )}
       {crossLink && (
         <button type="button" className={govuk ? "govuk-link context-banner__cross" : "btn btn--ghost context-banner__cross"} onClick={crossLink.onFollow}>
-          {fold.short && crossLink.shortLabel ? crossLink.shortLabel : crossLink.label}
+          {short && crossLink.shortLabel ? crossLink.shortLabel : crossLink.label}
         </button>
       )}
     </>
@@ -252,7 +265,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     // content. "You are in …" is still the region's heading and name, at the start of the row, at its size.
     return (
       <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
-        <div ref={row} className="govuk-notification-banner__content">
+        <div ref={row} className={squeezed ? "govuk-notification-banner__content context-banner--squeezed" : "govuk-notification-banner__content"}>
           <h2 className="govuk-notification-banner__title context-banner__place" id="context-banner-title">
             {YOU_ARE_IN[place]}
           </h2>
@@ -262,7 +275,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     );
   }
   return (
-    <div ref={row} className="context-banner" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
+    <div ref={row} className={squeezed ? "context-banner context-banner--squeezed" : "context-banner"} role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
       <h2 className="context-banner__place" id="context-banner-title">
         {YOU_ARE_IN[place]}
       </h2>

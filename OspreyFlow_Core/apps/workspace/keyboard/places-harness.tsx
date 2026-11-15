@@ -44,7 +44,7 @@ if (!new URLSearchParams(location.search).has("investigation")) sessionStorage.c
 window.fetch = async (input: RequestInfo | URL) =>
   new URL(String(input), location.href).pathname === "/v1/investigations"
     ? new Response(JSON.stringify([
-        { id: "kestrel", name: "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" },
+        { id: "kestrel", name: new URLSearchParams(location.search).get("long") === "1" ? "Operation Ledger (synthetic demo)" : "Kestrel", level: "author", created_at: "2026-11-01T09:00:00Z", created_by: "a" },
         { id: "harrier", name: "Harrier", level: "author", created_at: "2026-11-02T09:00:00Z", created_by: "a" },
       ]), { status: 200 })
     : new Response("[]", { status: 200 });
@@ -136,9 +136,10 @@ function Harness() {
         // ADR-145 Amendment 17: *Saved views (n)*, the harness's case holding two this reader may see.
         savedViews={2}
         // `?openview=1`: a saved view open over the canvas, named after the case ("› Saved view: …", Amendment 17).
-        openView={place === "glass" && params.get("openview") === "1" ? "Payments in March" : null}
+        // `?long=1`: a long case name, a long saved view name and a long dataset, as a demo's are.
+        openView={place === "glass" && params.get("openview") === "1" ? (params.get("long") === "1" ? "Every payment between the three Ledger accounts in March and April" : "Payments in March") : null}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
-        datasets={place === "glass" ? ["Prison intel"] : null}
+        datasets={place === "glass" ? (params.get("long") === "1" ? ["Prison Intelligence Dataset (synthetic)", "the Ledger visits log"] : ["Prison intel"]) : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
           toStudio: () => {
             window.__PLACES__!.crossed.push("to-studio");

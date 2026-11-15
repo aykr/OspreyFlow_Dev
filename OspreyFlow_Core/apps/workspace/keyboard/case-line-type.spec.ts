@@ -7,11 +7,11 @@ import { expect, test, type Page } from "@playwright/test";
 
 const LOOKS = [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const;
 
-async function open(page: Page, brand: string, theme: string, width = 1440): Promise<void> {
+async function open(page: Page, brand: string, theme: string, width = 1440, long = false): Promise<void> {
   await page.setViewportSize({ width, height: 900 });
-  await page.goto(`/keyboard/places-harness.html?openview=1${brand === "govuk" ? "&brand=govuk" : ""}`);
+  await page.goto(`/keyboard/places-harness.html?openview=1${long ? "&long=1" : ""}${brand === "govuk" ? "&brand=govuk" : ""}`);
   await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
-  await expect(page.getByRole("region", { name: "You are in the Glass" }).getByText("reads Prison intel")).toBeVisible();
+  await expect(page.getByRole("region", { name: "You are in the Glass" }).getByText(/^reads /)).toBeVisible();
 }
 
 /** Each part of the row with its computed type, and the top bar's. */
@@ -54,9 +54,9 @@ for (const [brand, theme] of LOOKS) {
     expect(Number(parts.place!.weight), "the place's heading bold").toBeGreaterThanOrEqual(600);
   });
 
-  for (const width of [1440, 1280, 1024]) {
-    test(`${brand} ${theme}: at ${width} wide the case line is one line high where the top bar is`, async ({ page }) => {
-      await open(page, brand, theme, width);
+  for (const [width, long] of [[1440, false], [1280, false], [1024, false], [1440, true], [1280, true], [1024, true]] as const) {
+    test(`${brand} ${theme}: at ${width} wide${long ? ", the long names," : ""} the case line is one line high where the top bar is`, async ({ page }) => {
+      await open(page, brand, theme, width, long);
       const rows = await page.evaluate(() => {
         const lines = (container: Element) => {
           const boxes = [...container.children].map((c) => c.getBoundingClientRect()).filter((b) => b.width > 0 && b.height > 0);
@@ -85,5 +85,30 @@ for (const [brand, theme] of LOOKS) {
     if (brand !== "govuk") await expect(short).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(full).toBeVisible();
+  });
+}
+
+// (b) With the long names at 1024, after the cross-link's short words the open saved view's name and "reads …" give way
+// with an ellipsis, and nothing else; their whole words stay in the page (what a screen reader reads) and in the title.
+for (const [brand, theme] of LOOKS) {
+  test(`${brand} ${theme}: the long names give way with an ellipsis, their whole words kept in the page and the title`, async ({ page }) => {
+    await open(page, brand, theme, 1024, true);
+    const region = page.getByRole("region", { name: "You are in the Glass" });
+    const view = "› Saved view: Every payment between the three Ledger accounts in March and April";
+    const reads = "reads Prison Intelligence Dataset (synthetic) and the Ledger visits log";
+    const trail = region.locator(".context-banner__open-view");
+    const read = region.getByText(/^reads /);
+    await expect(trail).toHaveText(view);
+    await expect(read).toHaveText(reads);
+    await expect(trail).toHaveAttribute("title", "Saved view: Every payment between the three Ledger accounts in March and April");
+    await expect(read).toHaveAttribute("title", reads);
+    await expect(region).toContainText(view);
+    const cut = await region.evaluate((element) =>
+      [...element.querySelectorAll<HTMLElement>("*")]
+        .filter((e) => e.children.length === 0 && e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === "ellipsis")
+        .map((e) => e.textContent ?? ""),
+    );
+    // Only these two (the case switcher keeps its own ellipsis, cut only past its 320 px).
+    expect(cut.filter((t) => !t.startsWith("Case: ")).sort()).toEqual([reads, view].sort());
   });
 }

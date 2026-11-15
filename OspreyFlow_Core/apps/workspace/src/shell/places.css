@@ -56,6 +56,18 @@
 .context-banner__badge { margin-left: var(--sp-4); padding: 0 var(--sp-4); border-radius: var(--r-chip); background: var(--surface-raised); color: var(--text-primary); }
 .context-banner__section[aria-disabled="true"]:hover { background: transparent; color: var(--text-secondary); }
 
+/* The line held to one line (the owner's ruling, 15 November 2026: "ellipsis to keep one line"): after the cross-link's
+   short words, the open saved view's name and "reads …" alone give way, each cut with an ellipsis, its whole words in
+   the page and in its title; nothing else shrinks (the case switcher keeps its own ellipsis). `ContextBanner` sets this
+   only while it holds one line; past that, whole items wrap. */
+/* More specific than GOV.UK's own row rule (`.context-banner--govuk .govuk-notification-banner__content`, later in this
+   sheet), which wraps. */
+.context-banner--squeezed, .context-banner--govuk .govuk-notification-banner__content.context-banner--squeezed { flex-wrap: nowrap; }
+.context-banner--squeezed > * { flex-shrink: 0; }
+.context-banner--squeezed > .context-banner__fit {
+  flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
 /* Under GOV.UK it is a GOV.UK notification banner; kept to its title and one line of content. */
 .govuk-notification-banner.context-banner--govuk { margin: 0; }
 .context-banner--govuk .govuk-notification-banner__content { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-8); padding-top: var(--sp-8); padding-bottom: var(--sp-8); }
