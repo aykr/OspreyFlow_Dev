@@ -170,7 +170,7 @@ rules-b	admin-forms-research	M	done	Admin forms: the five questions before build
 platform	v052-backup-mapkeys	S	done	v0.5.2 (the owner, 15 Nov): cloud-platform backups never hold map-keys.yaml (ADR-147 decision 1); a restore names the keys to enter again	lane/platform-backup-mapkeys
 case-b	v060-i3-accordion	M	done	v0.6.0 (the owner, 15 Nov): Ask & Chat history as an accordion	lane/case-b-v060-accordion
 case-b	v060-i4-fullpage	M	building	v0.6.0 (the owner, 15 Nov): Ask & Chat as a full page
-case	v060-i5-show-all	M	building	v0.6.0 (the owner, 15 Nov): Show all on graph and Save as a view
+case	v060-i5-show-all	M	done	v0.6.0 (the owner, 15 Nov): Show all on graph and Save as a view	lane/case-v060-show-all
 admin	v060-i6-govuk-type	M	todo	v0.6.0 (the owner, 15 Nov): The GOV.UK look's type
 docs	v060-i9-rename	M	done	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0	lane/docs-v060-rename
 rules-b	v060-i10-basemap	M	building	v0.6.0 (the owner, 15 Nov): The basemap as a step of the demo's install recipe
