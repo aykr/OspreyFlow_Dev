@@ -53,7 +53,9 @@ R1_PLANTS = [
      [f"{GUARD}test_a_release_before_v060_skips_the_run_api_role_in_words"]),
     ("R1 skips the role on every release",
      [(R1, "    if runs_role_release(c, admin):", "    if False:")],
-     [f"{V060}[{v}]" for v in ("v0.6.0", "0.7.1", "None", "unreleased")]),
+     # skipped, nothing asks the run API, so the case where it lets the unassigned in cannot fail its checks either
+     [f"{V060}[{v}]" for v in ("v0.6.0", "0.7.1", "None", "unreleased")]
+     + [f"{GUARD}test_a_run_api_letting_an_application_without_the_role_in_fails_the_checks"]),
     ("R1 takes an unreadable version for an old release",
      [(R1, "    if len(parts) < 2 or not all(p.isdigit() for p in parts):\n        return True",
        "    if len(parts) < 2 or not all(p.isdigit() for p in parts):\n        return False")],
