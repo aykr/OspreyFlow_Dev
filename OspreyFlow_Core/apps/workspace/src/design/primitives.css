@@ -2,18 +2,12 @@
    Every colour is a `var(--token)` from `spec/design/tokens.css` — no
    colour is introduced that isn't already a token (CLAUDE.md). */
 
+/* Every bare heading and control on the one scale (v0.6.0 #6), first, so that the panels' own rules after it win a
+   tie of `:where()` by coming later. */
+@import "./scale.css";
 /* The Glass page's panels and menus on the page's own type scale, GOV.UK's look included. */
 @import "./panelType.css";
 
-/* Every heading and control on the scale (v0.6.0 #6, the orchestrator's ruling of 15 November 2026, both looks:
-   DESIGN.md has one scale). A heading no rule sizes took the browser's em sizes (h3 15.21px, h2 19.5px, h1 26px on
-   the 13px base) and a control the browser's 13.333px. `:where()` weighs nothing, so every size a component sets
-   still wins; inside the GOV.UK pages' remapped subtrees the same tokens give GOV.UK's sizes. */
-:where(h1) { font-size: var(--fs-23); line-height: var(--lh-23); }
-:where(h2) { font-size: var(--fs-19); line-height: var(--lh-19); }
-:where(h3, h4) { font-size: var(--fs-16); line-height: var(--lh-16); }
-:where(h5, h6) { font-size: var(--fs-12); line-height: var(--lh-12); }
-:where(button, input, select, textarea) { font: inherit; }
 
 .btn {
   font: inherit;
