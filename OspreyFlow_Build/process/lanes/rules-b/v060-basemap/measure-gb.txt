@@ -1,0 +1,48 @@
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261115T105653Z-6ef961ad/log: bash ../OspreyFlow_Build/process/lanes/rules-b/v060-basemap/measure_gb.sh
+== START 2026-11-15T10:56:54Z
+ 10:56:54 up 19 days, 19:35,  8 users,  load average: 1.90, 2.92, 5.36
+               total        used        free      shared  buff/cache   available
+Mem:           64224       14337       10496        3225       43346       49887
+/dev/mapper/vg0-root  911G  424G  441G  50% /
+16
+== image
+sha256:8d45b0a39ddb3cf7e906efe21bd59c3321d0ff4da93dbd892ef09b93c1956be1 2026-11-15T10:41:03.759452431Z
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+== downloads
+downloads: 646 s
+2201340386 /root/osprey-runs/rules-b.scratch/v060-basemap/great-britain.osm.pbf
+93278824 /root/osprey-runs/rules-b.scratch/v060-basemap/planetiler.jar
+f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d
+== planetiler
+0:04:18 INF [osm_pass2] - Finished in 2m3s cpu:29m27s gc:12s avg:14.4
+0:04:18 INF [ne_lakes] - Finished in 0s cpu:0s avg:5.7
+0:04:18 INF [boundaries] - Finished in 0.1s cpu:0.3s avg:3.5
+0:04:18 INF [agg_stop] - Finished in 0s cpu:0s avg:0
+0:04:41 INF [sort] - Finished in 21s cpu:2m3s gc:2s avg:5.8
+0:07:11 INF [archive] - Finished in 2m31s cpu:35m48s gc:17s avg:14.2
+0:07:11 INF [archive] - Finished in 7m12s cpu:1h12m21s gc:34s avg:10.1
+0:07:11 INF [archive] - 	overall          7m12s cpu:1h12m21s gc:34s avg:10.1
+planetiler -Xmx2g: exit 0, oom-killed false, 438 s, container peak 3020 MB
+pmtiles 1581680656
+== the gazetteer load (batched, with points)
+LOAD: 2239 s; created 56,486, referenced 0, rejected 0; batches of 5,000; peak 2,400 MB
+POINTS in the scratch analytics store: 56,486
+loader exit 0
+== the count of named points against settlements (a second pass, capped at 45 min)
+PASS over the extract: 855 s; 236,115,110 nodes, 1,059,567 named, 56,486 named settlements; peak 2,344 MB
+SETTLEMENTS by kind: city 71, hamlet 20,169, isolated_dwelling 10,445, neighbourhood 2,685, quarter 837, suburb 5,800, town 1,546, village 14,933
+count exit 0 (124: stopped at the cap)
+== disk
+2.1G	/root/osprey-runs/rules-b.scratch/v060-basemap/great-britain.osm.pbf
+1.4G	/root/osprey-runs/rules-b.scratch/v060-basemap/out/sources
+1.5G	/root/osprey-runs/rules-b.scratch/v060-basemap/out/great-britain.pmtiles
+9.8M	/root/osprey-runs/rules-b.scratch/v060-basemap/analytics.duckdb
+89M	/root/osprey-runs/rules-b.scratch/v060-basemap
+== END 2026-11-15T12:06:37Z
+ 12:06:37 up 19 days, 20:44,  6 users,  load average: 1.35, 1.29, 1.61
+               total        used        free      shared  buff/cache   available
+Mem:           64224       14452        9783        3135       43834       49771
+scratch removed
+Wall time: 4186 s, exit 0 (stack b, the lease rules-b took at 2026-11-15T10:55:47Z; set-up before it 8 s)
+exit 0

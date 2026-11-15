@@ -16,7 +16,8 @@ OSM = CORE / "services/ingest/connectors/geo/osm.py"
 SCRIPT = CORE / "scripts/build_local_basemap.py"
 ADMIN = CORE / "services/api/map_admin.py"
 TESTS = ["../OspreyFlow_Build/tests/test_gazetteer_build_batches_and_points.py",
-         "../OspreyFlow_Build/tests/ingest/test_osm_gazetteer_connector.py"]  # fmt: skip
+         "../OspreyFlow_Build/tests/ingest/test_osm_gazetteer_connector.py",
+         "../OspreyFlow_Build/tests/test_basemap_build_stages.py"]  # fmt: skip
 
 PLANTS = [
     ("a named point that is not a settlement kept", OSM,
@@ -35,6 +36,18 @@ PLANTS = [
      "test_the_cli_build_writes_the_points_when_it_can_open_the_store"),
     ("DuckDB's lock not caught", ADMIN, "    except duckdb.IOException:\n",
      "    except KeyError:\n", "test_the_cli_build_writes_the_points_when_it_can_open_the_store"),
+    ("the tiles stage goes on to load and register", ADMIN,
+     "            return pmtiles.name, 0, 0, 0\n", "",
+     "test_the_tiles_stage_builds_the_tiles_and_saves_the_settlements_and_registers_nothing"),
+    ("the places stage downloads and runs planetiler again", ADMIN,
+     '    if stage == "places":\n', '    if stage == "never":\n',
+     "test_the_places_stage_loads_the_saved_settlements_and_registers_the_provider"),
+    ("the places stage runs without the tiles stage's files", ADMIN,
+     "        if not (pmtiles.is_file() and saved.is_file()):", "        if False:",
+     "test_the_places_stage_is_refused_in_words_without_the_tiles_stage_s_files"),
+    ("a saved settlements file read as an extract", SCRIPT,
+     "    if source.name.endswith(PLACES_SUFFIX):", "    if False:",
+     "test_the_load_reads_a_saved_settlements_file_and_not_the_extract"),
 ]
 
 

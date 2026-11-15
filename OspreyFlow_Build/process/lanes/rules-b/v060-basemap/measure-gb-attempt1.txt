@@ -1,0 +1,23 @@
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Build/), logged at osprey-runs/rules-b.meta/runs/20261115T105621Z-1c27fdc2/log: bash ../OspreyFlow_Build/process/lanes/rules-b/v060-basemap/measure_gb.sh
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/root/osprey-runs/rules-b/OspreyFlow_Core/scripts/build_local_basemap.py", line 51, in <module>
+    from scripts.geo_local_provider import register_local_provider as register_local_provider
+  File "/root/osprey-runs/rules-b/OspreyFlow_Core/scripts/geo_local_provider.py", line 24, in <module>
+    from schemas.mapconfig import ClientScope, MapConfig, MapProvider, MapSourceKind, ProviderLicence
+ModuleNotFoundError: No module named 'schemas'
+== START 2026-11-15T10:56:21Z
+ 10:56:21 up 19 days, 19:34,  7 users,  load average: 2.55, 3.14, 5.51
+               total        used        free      shared  buff/cache   available
+Mem:           64224       14308       10656        3138       43129       49915
+/dev/mapper/vg0-root  911G  424G  441G  49% /
+16
+== image
+sha256:8d45b0a39ddb3cf7e906efe21bd59c3321d0ff4da93dbd892ef09b93c1956be1 2026-11-15T10:41:03.759452431Z
+openjdk version "21.0.13" 2026-10-20 LTS
+OpenJDK Runtime Environment Temurin-21.0.13+9 (build 21.0.13+9-LTS)
+== downloads
+curl: (3) URL rejected: Malformed input to a URL function
+extract download failed
+Wall time: 4 s, exit 1 (stack b, the lease rules-b took at 2026-11-15T10:55:47Z; set-up before it 12 s)
+exit 1
