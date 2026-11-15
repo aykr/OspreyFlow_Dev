@@ -47,7 +47,8 @@ for (const [look, brand] of LOOKS) {
         footerGap: footer ? Math.round(y(footer.getBoundingClientRect(), "top") - y(place.getBoundingClientRect(), "bottom")) : null,
       };
     });
-    expect(m.boxes).toHaveLength(1);
+    // Under GOV.UK the document is Admin's one scroller; in the standard look Admin's own box, as before.
+    expect(m.boxes, "the one scroller").toEqual(look === "govuk" ? ["the document"] : ["section.admin-place"]);
     if (look === "govuk") {
       expect(m.hidden, "Admin's place hides none of its content").toBeLessThanOrEqual(1);
       expect(m.footerGap, "the footer follows Admin's place").toBeGreaterThanOrEqual(0);
@@ -72,12 +73,17 @@ for (const [look, brand] of LOOKS) {
         names: ["Graph store", "Case and rule stores (Postgres)"].map(face),
         version: face("OspreyFlow v0.5.2"),
         marking: face("OFFICIAL-SENSITIVE"),
+        converted: [...document.querySelectorAll(".admin-place__section p")]
+          .filter((p) => /became (a view|views)/.test(p.textContent ?? ""))
+          .map((p) => first(getComputedStyle(p).fontFamily)),
         model: face("gemini-2.5-flash"),
       };
     });
-    expect(m.names).toEqual([m.ui, m.ui]);
-    expect(m.version).toBe(m.ui);
-    expect(m.marking).toBe(m.ui);
-    expect(m.model).toBe(m.mono);
+    expect(m.names, "the parts' names in the page's face").toEqual([m.ui, m.ui]);
+    expect(m.version, "the version in the page's face").toBe(m.ui);
+    expect(m.marking, "the marking ceiling in the page's face").toBe(m.ui);
+    expect(m.converted.length, "the converted views are said").toBeGreaterThan(0);
+    expect(m.converted, "the converted views in the page's face").toEqual(m.converted.map(() => m.ui));
+    expect(m.model, "a model's id in mono, a value to copy").toBe(m.mono);
   });
 }

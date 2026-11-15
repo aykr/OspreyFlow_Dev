@@ -9,12 +9,15 @@
 // 4 November 2026: it took too much of the workspace's height). The frame names the service in the
 // page title instead, "<service> – GOV.UK", so the name is still on every page.
 //
-// The workspace and the Admin area fill the window (`--workspace-height`, default `100vh`). When
-// something stands above them, the frame measures it and sets that height to what is left, so the
-// status bar stays in view; the footer is below, reached by scrolling, as on any GOV.UK page.
+// The workspace fills the window (`--workspace-height`, default `100vh`). When something stands above it,
+// the frame measures it and sets that height to what is left, so the status bar stays in view; the footer
+// is below, reached by scrolling, as on any GOV.UK page. Under GOV.UK, Admin is a page that scrolls instead
+// (`admin/admin.css`), and a box that scrolls inside the page never moves it (`containInnerScroll.ts`; the
+// owner's ruling, 15 November 2026).
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { brandTitle, isGovUkHost, type Appearance } from "./brand";
+import { containInnerScroll } from "./containInnerScroll";
 import { GovukFooter } from "./govuk/GovukFooter";
 import { GovukHeader } from "./govuk/GovukHeader";
 import { PhaseBanner } from "./govuk/PhaseBanner";
@@ -50,6 +53,9 @@ export function BrandFrame({
   const above = useRef<HTMLDivElement>(null);
   const [claims, setClaims] = useState(0);
   const [claim] = useState(() => (wanted: boolean) => setClaims((count) => count + (wanted ? 1 : -1)));
+
+  // Under GOV.UK, a box that scrolls inside the page stops at its own end and never moves the page.
+  useLayoutEffect(() => (appearance.brand === "govuk" ? containInnerScroll() : undefined), [appearance.brand]);
 
   // Under GOV.UK the page title is "<service> – GOV.UK"; under OspreyFlow it is left as it is.
   useLayoutEffect(() => {

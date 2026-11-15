@@ -8,15 +8,15 @@ import "../src/shell/places.css";
 import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
-import { ClassificationStrip } from "../src/shell/ClassificationStrip";
-import { TopBar } from "../src/shell/TopBar";
+import { AdminWithoutCase } from "../src/shell/AdminWithoutCase";
 import { applyHarnessBrand } from "./brandHarness";
 
 // `?brand=govuk` (ADR-145 decision 13): the side list as a GOV.UK side navigation, scanned so.
 const brand = await applyHarnessBrand();
 // `?frame=1` (the owner's screenshot of Admin › System, 15 November 2026): Admin in the page's own frame, as
-// `main.tsx` and `App.tsx` draw it: the brand frame (GOV.UK's header and footer under that brand), App's root at
-// the window's height less what the frame shows above, the classification strip and the top bar above Admin.
+// `main.tsx` and the app draw it: the brand frame (GOV.UK's header and footer under that brand) around the real
+// `AdminWithoutCase` (Admin's one path, `shell/startScreen.tsx`): its root at the window's height less what the frame
+// shows above, its start bar and case line, then Admin.
 const framed = new URLSearchParams(location.search).get("frame") === "1";
 
 const tab = new URLSearchParams(location.search).get("rights") ?? "manage_people,manage_dashboards,administer_system";
@@ -295,11 +295,8 @@ createRoot(document.getElementById("root")!).render(
         ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }
         : PLAIN_APPEARANCE}
     >
-      <div style={{ display: "flex", flexDirection: "column", height: "var(--workspace-height, 100vh)" }}>
-        <ClassificationStrip marking="OFFICIAL" />
-        <TopBar app="glass" account={null} />
-        {place}
-      </div>
+      <AdminWithoutCase apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))}
+        onStart={() => undefined} account={null} marking="OFFICIAL" />
     </BrandFrame>
   ) : (
     place

@@ -3,10 +3,13 @@
 // App's root at the window's height less what the frame shows above (`--workspace-height`), the classification strip,
 // the top bar, and the Glass's body as `App.tsx` lays it: a row filling what is left, the canvas filling the row.
 // `?drawer=1` opens a drawer whose body is taller than it (a real `Drawer`, as Ask & Chat's, Explore's and History's
-// are); `?overlay=1` draws the empty canvas's start overlay with more than it can show (`App.tsx`'s explore overlay).
+// are), with two boxes of its own at its top, as a drawer's content has: a table wider than the drawer (`sideways`) and
+// a short list that scrolls (`short-list`); `?overlay=1` draws the empty canvas's start overlay with more than it can
+// show (`App.tsx`'s explore overlay). The fonts are `main.tsx`'s, so heights are the page's.
 // `?brand=govuk` as every harness. Synthetic (rule 9).
 import { createRoot } from "react-dom/client";
 
+import "../src/design/fonts";
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/shell/places.css";
@@ -48,6 +51,12 @@ createRoot(document.getElementById("root")!).render(
       </div>
       {params.get("drawer") === "1" && (
         <Drawer open onClose={() => undefined} title="Ask & Chat">
+          <div data-box="sideways" style={{ overflowX: "auto" }}>
+            <table><tbody><tr><td style={{ whiteSpace: "nowrap", minWidth: 2000 }}>A row wider than the drawer</td></tr></tbody></table>
+          </div>
+          <ul data-box="short-list" style={{ maxHeight: 80, overflowY: "auto", margin: 0 }}>
+            {Array.from({ length: 6 }, (_, i) => <li key={i}><button type="button" className="btn btn--quiet">{`Item ${i + 1}`}</button></li>)}
+          </ul>
           {lines("An answer")}
         </Drawer>
       )}

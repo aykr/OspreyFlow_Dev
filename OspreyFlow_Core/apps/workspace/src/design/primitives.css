@@ -4,8 +4,6 @@
 
 /* The Glass page's panels and menus on the page's own type scale, GOV.UK's look included. */
 @import "./panelType.css";
-/* Under GOV.UK, a box that scrolls inside the page stops at its own end. */
-@import "./frame.css";
 
 .btn {
   font: inherit;

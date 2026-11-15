@@ -16,8 +16,11 @@
    holds it. */
 [data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }
 [data-brand="govuk"] #main-content :has(> .admin-place) { height: auto !important; min-height: var(--workspace-height, 100vh); }
-/* Sticky alone: a scrolling box of its own would be a scroller no key reaches (axe's scrollable-region-focusable). */
-[data-brand="govuk"] #main-content .admin-place .admin-nav { position: sticky; top: 0; }
+/* Sticky alone: a scrolling box of its own would be a scroller no key reaches (axe's scrollable-region-focusable).
+   Only beside the section: at 640px and below the list stands above it, and pinned it would cover the section. */
+@media (min-width: 641px) {
+  [data-brand="govuk"] #main-content .admin-place .admin-nav { position: sticky; top: 0; }
+}
 
 /* The page's one heading is the open section's (the GOV.UK pass, 14 Nov): "Admin" a caption over it,
    the help page a link in the same row. Outside GOV.UK, the section heading keeps its old size. */
