@@ -8,6 +8,8 @@
 // footer and nothing that scrolls the page. Measured in `frame-harness`, the page as `main.tsx` and `App.tsx` draw it.
 import { expect, test, type Page } from "@playwright/test";
 
+import { stripAtTheEnd } from "./stripInView";
+
 async function wheelOver(page: Page, selector: string, times = 40) {
   const at = (await page.locator(selector).first().boundingBox())!;
   await page.mouse.move(at.x + Math.min(at.width / 2, 200), at.y + Math.min(at.height / 2, 30));
@@ -72,4 +74,18 @@ test("in the standard look the page frame does not scroll the page at all, as be
   await wheelOver(page, ".drawer > .panel__body");
   const m = await state(page, ".drawer > .panel__body");
   expect(m.atEnd && m.page === 0, "the drawer scrolled to its end, the page stayed").toBe(true);
+});
+
+// ADR-115 decision 2, the owner's ruling of 15 November 2026: the classification strip is always in view. The Glass's
+// page under GOV.UK scrolls by the footer's height; scrolled to it, with a drawer open, the strip is still at the
+// window's top and nothing paints over it.
+test("under GOV.UK, scrolled to the footer, the Glass's classification strip stays at the window's top", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/keyboard/frame-harness.html?drawer=1&brand=govuk");
+  await page.locator(".drawer").waitFor();
+  const m = await stripAtTheEnd(page);
+  expect(m.scrolled, "the page scrolled to the footer").toBe(true);
+  expect(m.top, "the strip's top is the window's").toBe(0);
+  expect(m.inside, "the strip is inside the window").toBe(true);
+  expect(m.uncovered, "nothing paints over the strip").toEqual([true, true]);
 });

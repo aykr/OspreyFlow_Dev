@@ -10,6 +10,8 @@
 //   (tokens.css: "every identifier … is set in mono. Mono means: this is a value you can copy").
 import { expect, test, type Page } from "@playwright/test";
 
+import { stripAtTheEnd } from "./stripInView";
+
 const LOOKS = [["dark", ""], ["light", ""], ["govuk", "&brand=govuk"]] as const;
 
 async function open(page: Page, look: string, brand: string): Promise<void> {
@@ -85,5 +87,21 @@ for (const [look, brand] of LOOKS) {
     expect(m.converted.length, "the converted views are said").toBeGreaterThan(0);
     expect(m.converted, "the converted views in the page's face").toEqual(m.converted.map(() => m.ui));
     expect(m.model, "a model's id in mono, a value to copy").toBe(m.mono);
+  });
+}
+
+// ADR-115 decision 2, the owner's ruling of 15 November 2026: the classification strip is always IN VIEW. Under GOV.UK,
+// while Admin scrolls as a page, the strip stays pinned at the top of the window and nothing paints over it; the GOV.UK
+// header and the top bar may scroll away. At 1440px and at 640px, scrolled to the footer.
+for (const width of [1440, 640]) {
+  test(`under GOV.UK at ${width}px, scrolled to the footer, Admin's classification strip stays at the window's top`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto("/keyboard/admin-harness.html?frame=1&serve=system&rights=administer_system&open=System&brand=govuk");
+    await page.getByText("Case and rule stores (Postgres)").waitFor();
+    const m = await stripAtTheEnd(page);
+    expect(m.scrolled, "the page scrolled to the footer").toBe(true);
+    expect(m.top, "the strip's top is the window's").toBe(0);
+    expect(m.inside, "the strip is inside the window").toBe(true);
+    expect(m.uncovered, "nothing paints over the strip").toEqual([true, true]);
   });
 }
