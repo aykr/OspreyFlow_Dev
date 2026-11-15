@@ -333,6 +333,7 @@ test("Whole case is chosen by arrow keys, its search is asked with the question'
   expect(scopes[0]).toMatchObject({ question: "Who is n2?", read_from: "case", selected_node_ids: [] });
 
   const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
+  await expect(page.getByRole("button", { name: "Show on the graph: N2, [S-1]" })).toBeVisible();
   await page.getByLabel("Your question").focus();
   await tabToLabel(page, "Show on the graph: N2, [S-1]");
   await page.keyboard.press("Enter");
