@@ -47,7 +47,7 @@ PLANTS = [
      [f"{TEST}::test_a_dashboard_identity_holding_its_role_alone_is_told_it_is_a_dashboards",
       f"{DOOR}[no-role-registered-dashboard]"]),
     ("a registered dashboard holding no role told to grant itself the run role",
-     [(APP, "        if refused.client is not None:\n            await _refuse_a_registered_dashboard(request, refused.client)\n", "")],
+     [(APP, "        if refused.client is not None:\n            try:", "        if False:\n            try:")],
      [f"{DOOR}[no-role-registered-dashboard]"]),
     ("a run-role refusal turned into a 503 when the registrations cannot be read",
      [(APP, "            except HTTPException as answer:\n                if answer.status_code != 503:\n                    raise\n",
