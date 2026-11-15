@@ -62,3 +62,11 @@ A lane-reviewer read the branch before the run and found 12 items.
 - **`--memory 4g` proposed at first, as the measured form; the orchestrator overruled it to 6g** (above).
 - **The places stage was not rehearsed.** It loads into a unit and registers a provider, so it belongs in the
   window. Its behaviour is the merged #10's, measured in `v060-basemap/RECORD.md`.
+
+## Gates
+At 14c8214 (code as at 7883a82, rebased on main eb7a769), on ospreyflow-test under the QUEUE, offline, raw in
+`gates/14c8214.test-ci.txt`:
+- **`make test`: exit 0.** pytest 14,855 passed and 45 skipped; then live-collect; then test-js, 3,605 passed in
+  399 files.
+- **`make -k ci`: exit 0,** with no target failing.
+- Wall time 1,522 s.
