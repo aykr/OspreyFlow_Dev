@@ -1,0 +1,5 @@
+RED  --stage places sent down the bare tiles path (the dispatch widened): test_the_places_stage_and_a_whole_build_from_the_command_line_still_check_the_unit[places]
+RED  the unit check skipped for the places stage: test_the_places_stage_and_a_whole_build_from_the_command_line_still_check_the_unit[places]
+RED  the admin reached for in the bare tiles branch after the builder check: test_the_bare_tiles_stage_runs_end_to_end_from_the_command_line
+RED  the bare stage's refusal exits 0: test_the_bare_tiles_stage_refused_from_the_command_line_exits_1_in_words
+control (restored): 13 passed in 0.67s
