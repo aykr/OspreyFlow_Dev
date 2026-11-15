@@ -12,6 +12,21 @@ FROM apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d
 USER root
 # The base image's Debian packages brought up to date at build (the release scan, 15 October 2026).
 RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# The PostgreSQL client libraries named, upgraded and checked (v0.6.0: 192 HIGH CVEs in libpq,
+# libecpg, libecpg-compat and libpgtypes at 15.19-0+deb12u1, each fixed in 15.20-0+deb12u1). The step
+# above is one layer whose text never changes, so a build reusing its cached copy keeps whatever
+# Debian held when it was first made, and `--pull` cannot reach it (the pinned base is unchanged).
+# This step's floor is the fix: the build stops, in words, if any of them is older.
+ARG PG_CLIENT_FLOOR=15.20-0+deb12u1
+RUN apt-get update \
+    && pkgs="$(dpkg-query -W -f='${db:Status-Status} ${Package}\n' 'libpq5' 'libecpg*' 'libpgtypes*' \
+        2>/dev/null | awk '$1 == "installed" {print $2}')" \
+    && test -n "$pkgs" \
+    && apt-get install -y --no-install-recommends --only-upgrade $pkgs \
+    && for p in $pkgs; do v="$(dpkg-query -W -f='${Version}' "$p")"; \
+        dpkg --compare-versions "$v" ge "$PG_CLIENT_FLOOR" \
+        || { echo "$p is $v, older than the fix $PG_CLIENT_FLOOR" >&2; exit 1; }; done \
+    && rm -rf /var/lib/apt/lists/*
 # 6.x keeps Superset in its own environment, managed by uv. Beyond the two it lacks, the packages the
 # release scan found with a fix inside the ranges Superset 6.1.0 itself declares; the fixes outside
 # them (cryptography, msgpack, pyarrow, pyOpenSSL, Pillow 13, and dnspython 2.9, which needs a newer
