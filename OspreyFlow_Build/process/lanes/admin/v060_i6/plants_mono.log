@@ -1,0 +1,8 @@
+# v0.6.0 #6 mono-words plants at dd5ff55
+== a role's label: RED where it must be; failed: [('Roles', 'dark'), ('Roles', 'light'), ('Roles', 'govuk')]
+== a custom role's name: RED where it must be; failed: [('Roles', 'dark'), ('Roles', 'light'), ('Roles', 'govuk')]
+== a schedule's label: RED where it must be; failed: [('Operations', 'dark'), ('Operations', 'light'), ('Operations', 'govuk')]
+== the tips' role labels: RED where it must be; failed: [('People and roles', 'dark'), ('People and roles', 'light'), ('People and roles', 'govuk')]
+== 'Levels in a case': RED where it must be; failed: [('People and roles', 'dark'), ('People and roles', 'light'), ('People and roles', 'govuk')]
+== an arrival's sign-in name: RED where it must be; failed: [('People and roles', 'dark'), ('People and roles', 'light'), ('People and roles', 'govuk')]
+plants: 6, missed: 0

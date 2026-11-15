@@ -73,7 +73,7 @@
 }
 /* A list with no glyphs (Home's "Your access and tasks"): its items are text, not the grid. */
 .home-facts--plain li { display: block; }
-.home-glyph { font-family: var(--mono); font-weight: 600; }
+.home-glyph { font-family: var(--ui); font-weight: 600; } /* a status mark, not a value to copy (v0.6.0 #6) */
 .home-glyph--ok { color: var(--success); }
 .home-glyph--warn { color: var(--warning); }
 .home-glyph--error { color: var(--error); }

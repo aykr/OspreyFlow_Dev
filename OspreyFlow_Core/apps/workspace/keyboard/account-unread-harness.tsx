@@ -18,7 +18,7 @@ const acted: string[] = [];
 function Harness() {
   return (
     <header className="app-header top-bar" data-app="glass">
-      <h1 className="label" style={{ margin: 0 }}>
+      <h1 className="label" style={{ margin: 0 }} data-harness-only="">
         Account unread harness
       </h1>
       <div

@@ -286,7 +286,7 @@ function HandlingOverrideEditor({
           <Button onClick={runPreview}>Preview handling</Button>
           {previewError && <div role="alert">{previewError}</div>}
           {preview && (
-            <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em" }}>{previewLine(preview)}</div>
+            <div className="value" style={{ fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)" }}>{previewLine(preview)}</div>
           )}
         </>
       )}

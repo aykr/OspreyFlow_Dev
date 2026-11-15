@@ -145,7 +145,7 @@ export function ProfileScreen({ apiBaseUrl,
                   border: "1px solid var(--border-strong)",
                   borderRadius: "var(--r-panel)",
                   padding: "0 var(--sp-8)",
-                  fontSize: "0.85em",
+                  fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)",
                   color: "var(--text-secondary)",
                 }}
               >
@@ -168,7 +168,7 @@ export function ProfileScreen({ apiBaseUrl,
         <span style={{ color: "var(--warning)" }}>⚠</span>{" "}
         <strong>{ANOMALY_LABELS[a.kind]}</strong>
         {a.column && <> — column <code>{a.column}</code></>} — {a.count} row(s)
-        <div style={{ color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>{a.sample}</div>
+        <div className="value" style={{ color: "var(--text-tertiary)" }}>{a.sample}</div>
       </li>
     );
   }
@@ -186,7 +186,7 @@ export function ProfileScreen({ apiBaseUrl,
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
         {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
-        <h1 style={{ fontSize: "1.1em", margin: 0 }}>
+        <h1 style={{ fontSize: "var(--fs-14)", lineHeight: "var(--lh-14)", margin: 0 }}>
           Profile{draft ? ` — ${draft.label}` : ""}
         </h1>
       </div>

@@ -53,14 +53,14 @@ export function RoleAndLevelTips({ roles }: { roles: readonly { id: string; labe
           .filter((r) => roleTip(r.id))
           .map((r) => (
             <div key={r.id}>
-              <dt className="value">{r.label}</dt>
+              <dt className="admin-words">{r.label}</dt>
               <dd id={roleTipId(r.id)} className="caption" style={{ margin: 0 }}>
                 {roleTip(r.id)}
               </dd>
             </div>
           ))}
         <div>
-          <dt className="value">Levels in a case</dt>
+          <dt className="admin-words">Levels in a case</dt>
           <dd id={LEVELS_TIP_ID} className="caption" style={{ margin: 0 }}>
             {Object.values(LEVEL_WORDS)
               .map((l) => `${l.name}: ${l.says}`)

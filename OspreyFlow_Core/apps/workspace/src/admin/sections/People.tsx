@@ -760,7 +760,7 @@ function ArrivalRow({
   return (
     <tr>
       <td>
-        <span className="value">{them}</span>
+        <span className="admin-words">{them}</span>
         <br />
         <span className="label">
           {`Refused ${arrival.attempts} ${arrival.attempts === 1 ? "time" : "times"}, last at ${utc(arrival.last_refused)}`}

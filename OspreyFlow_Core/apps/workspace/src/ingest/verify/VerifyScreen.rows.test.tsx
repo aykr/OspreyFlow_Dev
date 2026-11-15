@@ -42,6 +42,8 @@ describe("Verify: rejected rows", () => {
     );
     render(<VerifyScreen apiBaseUrl="http://api" investigationId="inv-1" bearerToken="t" recipeId="r1" onBack={() => undefined} />);
     fireEvent.click(await screen.findByRole("button", { name: /Run the test/i }));
-    expect(await screen.findByText("row 1: {'a': ''}")).toBeTruthy();
+    // v0.6.0 #6 sets the sample in its own .value span, so the row is matched by its list item's whole text.
+    const line = await screen.findByText((_, el) => el?.tagName === "LI" && el.textContent === "row 1: {'a': ''}");
+    expect(line.querySelector(".value")?.textContent).toBe("{'a': ''}");
   });
 });

@@ -163,7 +163,10 @@ if (serving === "people") {
                  members: [{ id: "u1", name: "Ana Analyst" }, { id: "u2", name: "Bea Engineer" }] };  // prettier-ignore
   const served: Record<string, unknown> = {
     "/v1/admin/people": [ANA, { ...ANA, id: "u2", username: "bea", name: "Bea Engineer", roles: ["data_engineer", "role:r1"] }],
-    "/v1/admin/organisation-arrivals": [],
+    // `?arrivals=1` (v0.6.0 #6): one refused organisation sign-in, so its name's face is measured.
+    "/v1/admin/organisation-arrivals": new URLSearchParams(location.search).get("arrivals") === "1"
+      ? [{ subject: "sub-1", provider_username: "pat.example", last_refused: "2026-11-05T09:30:00Z", attempts: 2 }]
+      : [],
     "/v1/admin/people/rows": {
       rows: [{ id: "u1", levels: [{ investigation_id: "c1", name: "Op Kestrel", level: "author", through: null },
                                   { investigation_id: "c2", name: "Op Heron", level: "editor", through: "Intel" }] }],

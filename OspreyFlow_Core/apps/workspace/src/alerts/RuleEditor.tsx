@@ -146,7 +146,7 @@ export function RuleEditor(props: RuleEditorProps) {
       ) : (
         <>
           <p className="label" style={{ margin: 0 }}>
-            Watching <span className="value">{dataset.name}</span>. Its conditions are offered from this dataset&apos;s own model.
+            Watching <span>{dataset.name}</span>. Its conditions are offered from this dataset&apos;s own model.
           </p>
           {ready && <SentenceBuilder
             apiBaseUrl={props.apiBaseUrl}

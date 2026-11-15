@@ -1,0 +1,7 @@
+# keyboard/scale-rules.spec.ts against 1b0f225's scale.css and primitives.css (before case's fixes), local slot 5
+   2     Error: a field classed .value in mono
+   2     Error: a label heading at the body's size
+   2     Error: code, keys and output in the design's mono
+   1   2 failed
+# and with the fixes:
+  2 passed (1.1s)

@@ -76,7 +76,7 @@ const items = show === "alert" ? [OPEN_ALERT] : show === "trend" ? [ALERT_TREND]
 
 createRoot(document.getElementById("root")!).render(
   <main style={{ background: "var(--surface-app)", color: "var(--text-primary)", padding: "var(--sp-16)", display: "grid", gap: "var(--sp-12)" }}>
-    <h1 className="value" style={{ margin: 0 }}>Weekly monitoring review</h1>
+    <h1 className="value" style={{ margin: 0 }} data-harness-only="">Weekly monitoring review</h1>
     <p className="label" style={{ margin: 0 }}>Draft pack · Marked OFFICIAL-SENSITIVE</p>
     {show === null && <p style={{ margin: 0 }}>{WITHHELD_ITEMS_SENTENCE}</p>}
     {items.map((item) => (

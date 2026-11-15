@@ -1,0 +1,11 @@
+# v0.6.0 #6 gate plants at 1494913
+== unplanted, "the pass found every-harness's pages and their states": passes
+== unplanted, 'alert-figures-harness.html under GOV.UK': passes
+== unplanted, 'ingest-studio-harness.html contacts=built&staged=sql&mode=expert&rights=expert under GOV.UK': passes
+== unplanted, 'promotions-harness.html under GOV.UK': passes
+== a state left out for its characters (the first draft's filter): RED on "the pass found every-harness's pages and their states"; ['Error: every string of the source, a page or a state', 'Expected: 260', 'Received: 253']
+== the brand never applied: RED on 'alert-figures-harness.html under GOV.UK'; ['Error: expect(locator).toHaveAttribute(expected) failed', 'Expected: "govuk"', 'Received: "ospreyflow"']
+== nothing measured, so nothing found: RED on 'alert-figures-harness.html under GOV.UK'; ['Error: text elements measured', 'Expected: > 0', 'Received:   0']
+== a value field losing its mono to .input (M1): RED on 'ingest-studio-harness.html contacts=built&staged=sql&mode=expert&rights=expert under GOV.UK'; ['Error: expect(received).toEqual(expected) // deep equality', '- Expected  -  1', '+ Received  + 10']
+== code in the browser's monospace: RED on 'promotions-harness.html under GOV.UK'; ['Error: expect(received).toEqual(expected) // deep equality', '- Expected  -  1', '+ Received  + 23']
+plants: 5, missed: 0

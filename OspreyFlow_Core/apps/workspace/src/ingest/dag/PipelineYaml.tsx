@@ -72,12 +72,12 @@ export function PipelineYaml({
       {text === null && problems.length === 0 && <p className="label">Reading the YAML…</p>}
       {text !== null && (
         <textarea
-          className="input"
+          className="input value"
           aria-label="Pipeline YAML"
           rows={24}
           spellCheck={false}
           readOnly={!editable}
-          style={{ fontFamily: "var(--mono)", minWidth: 0, width: "100%" }}
+          style={{ minWidth: 0, width: "100%" }}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />

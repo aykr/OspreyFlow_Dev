@@ -1,0 +1,17 @@
+# src/design/namesNotValues.test.ts against main 582bab2's code (each site as it was), 15 November 2026
+     × help/RolesHelpPage.tsx: {p.name} (a place's name) 3ms
+     × help/RolesHelpPage.tsx: {r.name} (a role's name) 0ms
+     × help/RolesHelpPage.tsx: {l.name} (a level's name) 0ms
+     × help/RolesHelpPage.tsx: {rightName(right)} (a right's name) 0ms
+     × ingest/checks/ChecksScreen.tsx: {rule.name} (a load rule's name) 0ms
+     × reports/DataFeedsTab.tsx: {f.label} (a data feed's label) 0ms
+     × matrix/MatrixView.tsx: {row.name} (an entity's name, a row's header) 0ms
+     × reports/PackItemView.tsx: {item.entity.name} (an entity's name in a pack) 0ms
+     × questions/QuestionsPanel.tsx: {source.name} (a source's name) 0ms
+     × questions/QuestionsPanel.tsx: {candidateLabel(candidate)} (a proposed entity's type and name) 0ms
+     × alerts/RuleEditor.tsx: {dataset.name} (a dataset's name) 0ms
+     × inspector/SelectionList.tsx: {name} (a selected entity's name) 0ms
+     × home/HomePage.tsx: {s.name} (a service's name) 0ms
+     ✓ a value to copy keeps its mono: Home's signed-in username 0ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  13 failed | 1 passed (14)

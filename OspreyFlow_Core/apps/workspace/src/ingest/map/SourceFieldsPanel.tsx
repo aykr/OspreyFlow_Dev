@@ -93,7 +93,7 @@ export function SourceFieldsPanel({
                     {isChosen ? "Let go" : "Choose"}
                   </Button>
                 )}
-                <div style={{ fontFamily: "var(--mono)", fontSize: "0.85em", color: "var(--text-secondary)" }}>
+                <div className="value" style={{ fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)", color: "var(--text-secondary)" }}>
                   {sampleRow?.values[column.name] ?? column.sample_values?.[0] ?? ""}
                 </div>
                 {(column.pattern_matches ?? []).map((m) => (
@@ -105,7 +105,8 @@ export function SourceFieldsPanel({
                       border: "1px solid var(--border-strong)",
                       borderRadius: "var(--r-panel)",
                       padding: "0 var(--sp-8)",
-                      fontSize: "0.8em",
+                      fontSize: "var(--fs-11)",
+                      lineHeight: "var(--lh-11)",
                     }}
                   >
                     {m.adapter} {percent(m.match_rate)}

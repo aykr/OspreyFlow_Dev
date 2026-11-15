@@ -28,7 +28,7 @@ function Content({ item }: { item: PackItem }) {
   if (item.kind === "entity" && item.entity) {
     return (
       <>
-        <p className="value" style={{ margin: 0 }}>{item.entity.name}</p>
+        <p style={{ margin: 0 }}>{item.entity.name}</p>
         <p className="label" style={{ margin: 0 }}>{item.entity.entity_type}</p>
         <p style={{ margin: 0 }}>{item.entity.caption}</p>
       </>

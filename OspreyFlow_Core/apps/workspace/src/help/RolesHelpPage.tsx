@@ -26,7 +26,7 @@ export function RolesHelpPage({ backTo, onBack }: RolesHelpPageProps) {
         <h3 id="help-places">The places</h3>
         <dl style={{ margin: 0 }}>
           {Object.values(PLACE_WORDS).map((p) => (
-            <div key={p.name}><dt className="value">{p.name}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{p.says}</dd></div>
+            <div key={p.name}><dt>{p.name}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{p.says}</dd></div>
           ))}
         </dl>
       </section>
@@ -35,7 +35,7 @@ export function RolesHelpPage({ backTo, onBack }: RolesHelpPageProps) {
         <dl style={{ margin: 0 }}>
           {Object.values(ROLE_WORDS).map((r) => (
             <div key={r.name}>
-              <dt className="value">{r.name}</dt>
+              <dt>{r.name}</dt>
               <dd style={{ margin: "0 0 var(--sp-8)" }}>{`${r.says} Opens ${r.places.map((p) => PLACE_WORDS[p].name).join(", ")}.`}</dd>
             </div>
           ))}
@@ -45,7 +45,7 @@ export function RolesHelpPage({ backTo, onBack }: RolesHelpPageProps) {
         <h3 id="help-levels">Your level in a case</h3>
         <dl style={{ margin: 0 }}>
           {Object.values(LEVEL_WORDS).map((l) => (
-            <div key={l.name}><dt className="value">{l.name}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{l.says}</dd></div>
+            <div key={l.name}><dt>{l.name}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{l.says}</dd></div>
           ))}
         </dl>
       </section>
@@ -61,7 +61,7 @@ export function RolesHelpPage({ backTo, onBack }: RolesHelpPageProps) {
         <h3 id="help-rights">What each right lets you do</h3>
         <dl style={{ margin: 0 }}>
           {(Object.keys(RIGHT_WORDS) as Right[]).map((right) => [right, rightSays(right)] as const).map(([right, says]) => (
-            <div key={right}><dt className="value">{rightName(right)}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{says}</dd></div>
+            <div key={right}><dt>{rightName(right)}</dt><dd style={{ margin: "0 0 var(--sp-8)" }}>{says}</dd></div>
           ))}
         </dl>
       </section>

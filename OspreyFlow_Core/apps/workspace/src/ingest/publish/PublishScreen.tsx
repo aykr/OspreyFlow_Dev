@@ -116,7 +116,7 @@ function RecipeRegistryPicker({
         padding: "var(--sp-16)",
       }}
     >
-      <h1 style={{ fontSize: "1.1em", margin: 0 }}>Deploy</h1>
+      <h1 style={{ fontSize: "var(--fs-14)", lineHeight: "var(--lh-14)", margin: 0 }}>Deploy</h1>
       <p style={{ color: "var(--text-secondary)" }}>
         Pick a pipeline from your unit's registry — draft, deployed, needing attention or a previous
         version — to deploy it or reopen it for a further edit.
@@ -347,7 +347,7 @@ export function PublishScreen({
     >
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)" }}>
         {mode === "deploy" && onBack && <Button onClick={onBack}>← Back</Button>}
-        <h1 style={{ fontSize: "1.1em", margin: 0 }}>
+        <h1 style={{ fontSize: "var(--fs-14)", lineHeight: "var(--lh-14)", margin: 0 }}>
           {mode === "deploy" ? "Deploy" : "Runs and schedule"}
           {draft ? ` — ${draft.label}` : ""}
         </h1>
@@ -358,7 +358,7 @@ export function PublishScreen({
             borderRadius: "var(--r-panel)",
             background: status === "flagged" ? "var(--warning-surface, var(--surface-raised))" : "var(--surface-raised)",
             border: "1px solid var(--border-strong)",
-            fontSize: "0.85em",
+            fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)",
           }}
         >
           {STATUS_LABEL[status] ?? status}
@@ -420,7 +420,7 @@ export function PublishScreen({
             <p role="status" style={{ margin: 0 }}>{`Paused — ${draft.schedule_paused_reason ?? "by hand"}.`}</p>
           )}
           {draft?.schedule_owner && (
-            <p style={{ color: "var(--text-secondary)", fontSize: "0.85em", margin: 0 }}>
+            <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)", margin: 0 }}>
               {`Scheduled runs act as ${draft.schedule_owner}, who set this schedule, in the case it was set in.`}
             </p>
           )}
@@ -434,12 +434,12 @@ export function PublishScreen({
               disabled={!draft?.dataset_id || (status === "draft" ? false : !canEditSchedule)}
             />
           </label>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.85em", margin: 0 }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)", margin: 0 }}>
             {draft?.dataset_id
               ? `Each new file whose name matches, in the ${draft.dataset_id} folder, runs once, a minute after it stops changing. Leave it blank to watch nothing.`
               : "This pipeline belongs to no dataset, so it has no folder to watch."}
           </p>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.85em" }}>
+          <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)" }}>
             A pipeline may be deployed unscheduled and run only on demand.
           </p>
         </div>
@@ -514,7 +514,7 @@ export function PublishScreen({
       </div>
 
       {draft?.git_path && (
-        <p style={{ color: "var(--text-secondary)", fontSize: "0.85em" }}>
+        <p style={{ color: "var(--text-secondary)", fontSize: "var(--fs-11)", lineHeight: "var(--lh-11)" }}>
           Committed at <code>{draft.git_path}</code>
           {draft.published_by ? ` by ${draft.published_by_name ?? draft.published_by}` : ""}
           {draft.published_at ? ` on ${new Date(draft.published_at).toLocaleString()}` : ""}.

@@ -1,0 +1,16 @@
+/* Every heading and control on the scale (v0.6.0 #6, the orchestrator's ruling of 15 November 2026, both looks:
+   DESIGN.md has one scale). A heading no rule sizes took the browser's em sizes (h3 15.21px, h2 19.5px, h1 26px on
+   the 13px base) and a control the browser's 13.333px. `:where()` weighs nothing, so every size a component sets
+   still wins, and so does a panel's own rule (panelType.css, imported after this, wins a tie by order); inside the
+   GOV.UK pages' remapped subtrees the same tokens give GOV.UK's sizes. */
+:where(h1) { font-size: var(--fs-23); line-height: var(--lh-23); }
+:where(h2) { font-size: var(--fs-19); line-height: var(--lh-19); }
+:where(h3, h4) { font-size: var(--fs-16); line-height: var(--lh-16); }
+:where(h5, h6) { font-size: var(--fs-12); line-height: var(--lh-12); }
+:where(button, input, select, textarea) { font: inherit; }
+/* A heading drawn as a label stays the label's size, the page's body, never above what it labels (case's ruling of
+   15 November 2026, under ruling (1)); after the sizes above, so it wins their tie. */
+:where(h1, h2, h3, h4, h5, h6):where(.label) { font-size: var(--fs-13); line-height: var(--lh-13); }
+/* Code, keys and output are values to copy, in mono (tokens.css: "Mono means: this is a value you can copy"), never
+   the browser's own monospace (v0.6.0 #6, the gate's reverse check). */
+:where(code, kbd, samp, pre) { font-family: var(--mono); }
