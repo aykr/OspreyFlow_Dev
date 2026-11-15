@@ -2120,3 +2120,5 @@ cut, from the same prompt, as its own prompt later: the history accordion, Ask &
   platform proved it at 0246f9b); the fix joins the candidate (351e2c9).
 - **Websites (the owner, 15 Nov):** public repositories aykr/ospreyflow.org and aykr/ospreyflow.net created (empty);
   publishing and ospreyflow.app (Part 3) are queued after the cut (finish.tsv p3, p4).
+- **AD review (the owner, 15 Nov):** the classification strip stays **always in view** under GOV.UK while Admin scrolls
+  (ADR-115 decision 2); the other Admin mono words go after the cut (finish.tsv p5).
