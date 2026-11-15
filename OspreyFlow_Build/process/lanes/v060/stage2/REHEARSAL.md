@@ -49,3 +49,23 @@ runs on today's main against B's load.
    layer. The official run draws 55 more.
 4. **Nothing else needed fixing.** #3, #4 and #5 changed no server-side search code, and every other runner ran
    unchanged.
+
+## The reach widened, rehearsed again (the orchestrator's ruling, 15 November)
+- **The change:** the floor stays at 90% and the file at 500. The control now looks within the first 3 pages of
+  20 results, not page 1 alone, and the part-cleared principal is asked every page its control read (d68ac22).
+- **Proved offline:**
+  - The tests were red on main's `measure_search.py` and on three plants: the control asking page 1 alone, the
+    part-cleared principal asking page 1 alone, and the control looking past the bound. The control was green
+    (`reach-plants.txt`).
+  - A record found only on page 2 counts as reached with the bound and as unreached without it.
+- **Short again on d:** rules-b's lease from 17:03:57Z, its own QUEUE turn, 226 s (`rehearsal-reach.txt`).
+
+| Step | Before (page 1) | With the bound |
+| --- | --- | --- |
+| never-join, 20 cases | 17 reached, *unmeasured* | **18 reached** (17 on page 1, 1 on page 2), *met* |
+| leaks, 20 cases | 20 reached | 20 reached, all on page 1, *met* |
+
+- **The reach rose, by one of the three:** two never-join controls still don't find the companies record within
+  60 results.
+- **What it means for the full file:** if the 500 behave like these 20, the official run gains some cases above
+  450. 20 cases are too few to say how many.
