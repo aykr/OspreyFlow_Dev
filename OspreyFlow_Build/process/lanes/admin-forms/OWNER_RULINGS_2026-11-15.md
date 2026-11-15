@@ -81,3 +81,18 @@ already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Adm
 21. **The installer's key moved from `deployment.env` at install stays unchecked** (the owner, 15 Nov ~17:10Z): it is the same
     key moving, not a changed one, and a check would need the provider reachable during the install. (Separate from the
     review's question 1, whether the key is removed from `deployment.env` after the move, which still needs its answer.)
+
+## The key review's open decisions (the owner, 15 Nov ~17:20Z, taking the orchestrator's recommendations)
+
+22. **A refused model name is never echoed**: the check result and the screen answer by job ("Extraction: the provider
+    refused this model"), never by repeating what was typed.
+23. **Model names are accepted only if they look like model names**, generously and per provider: letters, digits, `.`,
+    `-`, `:`, `/`, `@`, up to about 128 characters, shown against every catalogue name and example so no real model is
+    refused.
+24. **If the key stays in `deployment.env` after the move, it is removed** right after a successful move, with a test that
+    reads the file afterwards; `_held` then asks the gateway for presence, not `deployment.env`.
+25. **A credential orphaned by a Conduit killed mid-check is removed at start-up**: any gateway credential belonging to
+    neither an engine nor a pending check, with a test planting exactly that orphan.
+26. **The guide prefers the hidden prompt and warns that `export NAME=key` lands in shell history** (two lines, both copies).
+27. **The real gateway's logging is measured** after v0.6.0's package test; if LiteLLM logs a credential body at the
+    demo's level, that logger's level is lowered in the rendered gateway settings, held by a test reading the rendered config.
