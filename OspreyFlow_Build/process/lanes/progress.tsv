@@ -183,3 +183,4 @@ docs	v060-model-keys-guide	S	done	v0.6.0 (the owner, 15 Nov): the administration
 rules	v060-superset-cves	S	done	v0.6.0 Test stage: the Superset image's 192 HIGH PostgreSQL client CVEs fixed by upgrading to 15.20 in its Dockerfile (no ignore)	lane/rules-v060-superset-cves
 rules	v060-upgrade-cache	S	done	v0.6.0 (the owner, 15 Nov): every image's upgrade layer cache-busted in the Makefile, ci.yml and release.yml (owner diff) and a deployment's own build, so a security fix is never hidden by a cached layer	lane/rules-v060-superset-cves
 admin	v060-cli-scope	S	building	v0.6.0 (the owner, 15 Nov): `ospreyflow run` on Entra sends the scope Entra requires (AADSTS1002012 without it), beside #18
+platform-b	v060-release-path	S	building	v0.6.0: images push passes the upgrade stamp; the dev release.yml retired and release_local following the product workflow; the tag check in the product workflow (owner diffs)

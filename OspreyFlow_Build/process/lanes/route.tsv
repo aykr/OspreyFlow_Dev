@@ -19,7 +19,8 @@ gk	The guide corrected: a model key is entered in Admin › Models; Bedrock in L
 sc	The Superset image's PostgreSQL client CVEs fixed by upgrading, no ignore (CI green)	rules	2026-11-15	2026-11-15	n	-	rules:v060-superset-cves
 us	Every image's upgrade layer refreshed daily, wherever images are built (the owner, 15 Nov)	rules	2026-11-15	2026-11-15	n	-	rules:v060-upgrade-cache
 cs	`ospreyflow run` on Entra sends the scope Entra requires (the owner, 15 Nov)	admin	2026-11-15	2026-11-16	n	-	admin:v060-cli-scope
-1	Build: every item merged on main, each lane's own tests green	orchestrator	2026-11-15	2026-11-16	y	i3,i4,i5,i6,i9,i10,i11,i14,i18,rf,gk,sc,us,cs	-
+rp	The release path: images push stamped; the dev release workflow retired; release_local and the tag check on the product workflow (the owner, 15 Nov)	platform-b	2026-11-15	2026-11-16	n	-	platform-b:v060-release-path
+1	Build: every item merged on main, each lane's own tests green	orchestrator	2026-11-15	2026-11-16	y	i3,i4,i5,i6,i9,i10,i11,i14,i18,rf,gk,sc,us,cs,rp	-
 2	Test: CI green on main; the leak test and the timings at client size once more	orchestrator	2026-11-17	2026-11-17	y	1	-
 3	Package: one candidate, made once	orchestrator	2026-11-17	2026-11-17	y	2	-
 4	Package test: one fresh install of v0.6.0 on the client platform's stand-in, with every check	platform-b	2026-11-17	2026-11-17	y	3	-

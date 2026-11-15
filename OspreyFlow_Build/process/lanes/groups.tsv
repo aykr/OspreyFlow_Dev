@@ -181,3 +181,4 @@ docs	v060-model-keys-guide	Four places, the Glass and Admin	Client install
 rules	v060-superset-cves	Housekeeping	Client install
 rules	v060-upgrade-cache	Housekeeping	Client install
 admin	v060-cli-scope	Four places, the Glass and Admin	Client install
+platform-b	v060-release-path	Housekeeping	Client install

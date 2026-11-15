@@ -15,6 +15,10 @@ On the plan of record (`OWNER_PLAN_2026-11-15.md`), after the orchestrator's est
    the Makefile, both workflows (an owner's diff) and a deployment's own build; rules, with the Superset CVE fix.
 7. **`ospreyflow run` on Entra joins v0.6.0** (the owner, ~11:45Z): the CLI's service token sends the scope Entra
    requires; admin, beside #18.
+8. **The release workflows (the owner, ~13:40Z):** the dev repo's root release.yml is retired, and tools/release_local
+   follows the product's workflow (OspreyFlow_Core/.github/workflows/release.yml); the tag-against-VERSION check moves to
+   the head of the product workflow (platform-b's product_release_version.diff, an owner's apply). `ospreyflow images
+   push` gets the upgrade stamp, under ruling 6 (the client's own cloud-platform build path).
 5. **Item 8 is done**: the profile's fixed cost was `edges_among`, fixed by ADR-124 Amendment 20 on 14 Nov.
 
 The orchestrator's rulings under the standing rule, reported to the owner: item 3, a new question closes the earlier
