@@ -1603,6 +1603,16 @@ def main(
         # place only once preflight passes: a refused run writes nothing to the deployment.
         previous_path = out_dir / SECRETS_FILE
         previous_env = previous_path.read_text(encoding="utf-8") if previous_path.is_file() else ""
+        # v0.6.0 is installed fresh (`harness.fresh_only`): an install over an earlier deployment
+        # stops here, before anything is rendered into place, built or started.
+        if previous_path.is_file():
+            from harness import fresh_only
+            from harness.render import release_version
+
+            installed = fresh_only.installed_version(previous_env)
+            why = fresh_only.refusal(installed, release_version(config))
+            if why is not None:
+                raise ApplyFailed("check the deployment", f"{why} Nothing was changed.")
         stage = out_dir.parent / f".{out_dir.name}.staging"
         staged = stage_deployment(
             config,
