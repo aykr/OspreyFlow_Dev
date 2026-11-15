@@ -16,8 +16,9 @@ HARN=$WS/keyboard/places-harness.tsx
 QHARN=$WS/keyboard/questions-harness.tsx
 CHARN=$WS/keyboard/harness.tsx
 SRHARN=$WS/keyboard/search-results-harness.tsx
+SHOW=$WS/src/questions/showAnswer.ts
 REG=$WS/keyboard/actionRegistry.ts
-FILES=("$APP" "$RAIL" "$PAGE" "$CSS" "$HOOK" "$HARN" "$QHARN" "$CHARN" "$SRHARN" "$REG")
+FILES=("$APP" "$RAIL" "$PAGE" "$CSS" "$HOOK" "$HARN" "$QHARN" "$CHARN" "$SRHARN" "$SHOW" "$REG")
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
 SAVED="$(mktemp -d)"
 for f in "${FILES[@]}"; do cp "$f" "$SAVED/$(basename "$f")"; done
@@ -65,12 +66,14 @@ a document opened from an answer is read over the view, the page hidden
 a marker in an answer leaves the page for the graph, focus on the canvas
 the case line's cross-link to the Ingest Studio leaves the page
 Escape on the page does nothing
+Show all on graph closes a saved view open beneath the page first
 a case opened to ask the model (the hand-off's view=questions
 the panel is hidden under the Ask & Chat page"
 check "main's harnesses (keyboard)" "$(kb)" "Ask & Chat opens as a page over the view by keyboard
 Ask & Chat's page is left by its visible Back to Graph
 a [G-n] chosen on Ask & Chat's page leaves it
-Show all on graph on Ask & Chat's page leaves it"
+Show all on graph on Ask & Chat's page leaves it
+Show all on graph on Ask & Chat's page past the cap leaves the page"
 check "main's results harness (the stacking case)" "$(st)" "ospreyflow dark: Ask & Chat's page is drawn over
 ospreyflow light: Ask & Chat's page is drawn over
 govuk light: Ask & Chat's page is drawn over"
@@ -100,6 +103,16 @@ plant "focus lost with the marker when the page goes" "$HOOK" 's/        documen
   "a marker in an answer leaves the page for the graph, focus on the canvas"
 plant "Show all on graph leaving the page over the graph it changed (App off the hook)" "$APP" 's/    ask\.showOnGraph\(\n      \(\) =>\n        void showAnswerOnCanvas\(/    ((show: () => void) => show())(\n      () =>\n        void showAnswerOnCanvas(/' js \
   "Show all on graph under an answer leaves the page for the graph"
+# Lane review 3: App's Show all body, each part held (the lens closed, the Graph current, the items read by id).
+plant "Show all on graph leaving a saved view open beneath (App)" "$APP" 's/(  const showAnswerOnGraph = \(ids: AnswerIds\): void => \{\n    if \(!investigationId\) return;\n)    if \(lens\) closeLens\(\);\n/$1/' js \
+  "Show all on graph closes a saved view open beneath the page first"
+plant "Show all on graph leaving the view the page was opened over current (App)" "$APP" 's/(    if \(lens\) closeLens\(\);\n)    setView\("graph"\);\n(    \/\/ ADR-145 Amendment 18: the answer)/$1$2/' js \
+  "Show all on graph under an answer leaves the page for the graph, reads the answer"
+plant "Show all on graph leaving the page and showing nothing (App, the hook handed a no-op)" "$APP" 's/    ask\.showOnGraph\(\n      \(\) =>\n        void showAnswerOnCanvas\(/    ask.showOnGraph(\n      () => undefined,\n      () =>\n        void showAnswerOnCanvas(/' js \
+  "Show all on graph under an answer leaves the page for the graph, reads the answer
+Show all on graph closes a saved view open beneath the page first"
+plant "the cap's words pointing at Save as a view without saying where, the page gone (keyboard)" "$SHOW" 's/Save as a view, under the answer in Ask & Chat, keeps them all\./Save as a view keeps them all./' kb \
+  "Show all on graph on Ask & Chat's page past the cap leaves the page"
 plant "the cross-link leaving the page showing, both ways" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/; s/(          toGlass: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
   "the case line's cross-link to the Ingest Studio leaves the page"
 plant "Escape closing the page as a dialog would" "$PAGE" 's/<section className=/<section onKeyDown={(e) => { if (e.key === "Escape") onBack(); }} className=/' js \
