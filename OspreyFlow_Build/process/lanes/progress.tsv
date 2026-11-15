@@ -151,7 +151,7 @@ case	v052-suppress-reload	S	done	v0.5.2 fix (S7): Mark for suppression survives 
 case	v052-suppress-reason	S	done	v0.5.2 fix (S8): Mark for suppression asks the analyst for a reason (ADR-046 step 1), not a fixed one	lane/case-suppression-marks
 platform	v052-startbuild-index	S	done	v0.5.2 fix (S9): ospreyflow start --build rebuilds the search index, as install and update do	lane/platform-v052-startrebuild
 rules	v052-search-from-rids	S	done	v0.5.2 fix (M9): The fallback name search under its 5 s budget at client size: search_nodes from record ids found by index, not a scan of the store (ADR-124 Am 21)	lane/rules-adr124-am21
-orchestrator	v052-candidate	S	building	v0.5.2 step C: the candidate remade after a stale test (c5bdb8e's CI: 1 of 3,594 conformance, test_screening_refresh's capital O); its CI running; done when green
+orchestrator	v052-candidate	S	done	v0.5.2 step C: the candidate is 574a05c (VERSION v0.5.2, V1-V5 in), CI green: run 43664885263 (attempt 2; attempt 1's one model test varied, the code unchanged since c5bdb8e), 15 Nov 02:58Z
 case	v052-saved-views	S	done	v0.5.2 (the owner's exception, 14 Nov) (V1): "View" means a saved view only, and the way back to the whole case (ADR-145 Am 17, ADR-144 Am 6; the owner's exception, 14 Nov)	lane/case-saved-views
 case-b	v052-saved-views-panel	S	done	v0.5.2 (the owner's exception, 14 Nov) (V2): The saved views panel: its title, The whole case first, Open now, unnamed views told apart (the owner's exception)	lane/case-b-saved-views-panel
 studio	v052-no-internal-notes	S	done	v0.5.2 (the owner's exception, 14 Nov) (V3): No internal note on screen: "(the client's)", "to be confirmed" removed, held by a guard (the owner's exception)	lane/studio-no-client-words
