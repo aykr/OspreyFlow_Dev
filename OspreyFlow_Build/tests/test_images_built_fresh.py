@@ -134,7 +134,7 @@ def test_the_local_release_pulls_the_bases(monkeypatch: pytest.MonkeyPatch) -> N
         release_local, "_run", lambda cmd, *a, **k: calls.append(list(cmd))
     )
     release_local.build_and_scan("0123456")
-    builds = [c for c in calls if c[:2] == ["docker", "build"]]
+    builds = [c for c in calls if c[:3] == ["docker", "buildx", "build"]]  # the product workflow's scan build
     assert builds and all("--pull" in c for c in builds)
 
 

@@ -20,25 +20,35 @@ tag, a publication, or a change to a `.github/` file.
   there; nothing built). `tools/release_local.py` mirrors that workflow, so its `--dry-run` does not dry-run the
   release. **ADR-114 Amendment 47's tag-against-VERSION refusal (a49cf24) sits in that workflow**, behind the gate
   that always fails, so it has never run and would not stop a release.
-  - **OWNER:** the same check for the product workflow, as a diff: `product_release_version.diff` (beside this file),
-    a step at the head of its `notes` job, shown red (tag v0.6.1 against VERSION v0.6.0, exit 1) and green (v0.6.0).
-  - **OWNER, a question:** retire the development repository's root `release.yml` (it fails on every tag and
-    publishes nothing), or keep it; and with it, whether `tools/release_local.py` follows the product workflow.
-- **Laurium's image is neither built nor locked by the product release.** `harness.laurium.laurium_image` names it
-  beside the Conduit's (`ghcr.io/aykr/laurium:<sha>`) when a deployment chooses `extraction_engine: laurium`, but the
-  product matrix has no laurium entry and `harness.release_lock`'s option product varies graph store, analytics,
-  search and reporting, not the extraction engine. A pull-mode Lite or Small deployment choosing Laurium would name
-  an image no release publishes. **To check, not yet a ruled defect**: Laurium may be source-build only by decision
-  (ADR-135 Amendments 6 and 9).
-- **The upgrade stamp:** `harness/upgrade_stamp.py` says the workflows pass `$(date -u +%F)`; neither release
-  workflow does. On GitHub's fresh runners there is no layer cache, so the cached-upgrade trap cannot occur there;
-  the docstring is wrong, not the release. The dry run below passes the stamp, as a local builder must.
+  - **The owner's rulings (15 November):** the same check for the product workflow is **approved**, as the diff
+    `product_release_version.diff` (beside this file: a step at the head of its `notes` job, shown red with tag
+    v0.6.1 against VERSION v0.6.0, exit 1, and green with v0.6.0; it applies with rules' `workflows_upgrade_stamp.diff`
+    in either order). The development repository's root `release.yml` is **retired**: `retire_dev_release_yml.diff`
+    (beside this file) deletes it, for the owner to apply. **`tools/release_local.py` follows the product
+    workflow** (built: it reads the matrix and trivy settings as the dry run did, refuses a real push, and replaces
+    the lane's `release_dry_run.py`, `tests/test_release_local_matrix.py`). `tools/ci_status_check.py` served only
+    the retired workflow's gate.
+- **Laurium: settled, not a defect.** The product release neither builds nor locks Laurium's image, and needs
+  not: Laurium is for `cloud-platform` alone, refused in words on every other profile
+  (`schemas.deployment.OspreyConfig._extraction_engine_suits_the_profile`, ADR-135 Amendment 6;
+  `tests/schemas/test_extraction_engine_setting.py::test_laurium_is_refused_on_every_other_profile_in_words`, shown
+  red on 15 November with the refusal planted away: it and the translation case failed, 4 of 18). On
+  `cloud-platform`, where it is the default engine, INSTALL step 3's `ospreyflow images push` builds it from the
+  checkout (`harness/cloud_platform/profile.yaml`'s `ours:`). `harness.laurium.laurium_image`'s release name is
+  reachable only by a configuration the schema refuses. (Case-b's P12 change meant to add Laurium to the release,
+  `process/lanes/case-b/P12p2_CI.diff`, and went into the development workflow, now retired.)
+- **The upgrade stamp:** the workflows' builds take it through rules' `workflows_upgrade_stamp.diff` (the owner's to
+  apply); on GitHub's fresh runners there is no layer cache, so the trap cannot occur there meanwhile. **Found and
+  fixed here: `ospreyflow images push`**, the cloud-platform install's step 3 (the client's build, and R1's in the
+  package test), passed only the profile's build args: it now passes the day's stamp to each image of ours,
+  computed in the command (which imports nothing of the product, ADR-114 decision 3) and held equal to
+  `harness.upgrade_stamp` (`test_images_push_passes_the_stamp`, `test_the_command_s_stamp_is_harness_s`).
 
 ## The dry run (stage 3 preparation; on today's main, nothing leaves the machine)
 
-`process/lanes/platform-b/v060/release_dry_run.py` reads the product workflow's own matrix and trivy settings (it
-cannot drift from them; `tests/test_v060_release_dry_run.py`, 7 cases, 4 plants red) and runs, short of every push,
-signature and publication (printed as `[would] …`):
+`python -m tools.release_local --dry-run --tag v0.6.0` (the owner's ruling: it follows the product workflow) reads
+the workflow's own matrix and trivy settings (it cannot drift from them; `tests/test_release_local_matrix.py`) and
+runs, short of every push, signature and publication (printed as `[would] …`):
 
 | Part | Where | Result on 15 Nov (main as it stood, 0203906) |
 | --- | --- | --- |
@@ -51,8 +61,8 @@ signature and publication (printed as `[would] …`):
 | cosign signing and `harness.signatures`' verify | — | cannot run offline: keyless signing is the workflow's own GitHub identity |
 
     # on the test server, in a copy of the candidate, from OspreyFlow_Core:
-    PYTHONPATH=.:packages .venv/bin/python ../OspreyFlow_Build/process/lanes/platform-b/v060/release_dry_run.py \
-        --tag v0.6.0 --out ~/osprey-runs/platform-b.dry
+    PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.release_local --dry-run --tag v0.6.0 \
+        --out ~/osprey-runs/platform-b.dry
 
 ## The package step, in order
 
@@ -63,12 +73,12 @@ Run on the candidate `C`: the development commit the package test (stage 4) pass
 | 1 | `VERSION` is the tag | `cat OspreyFlow_Core/VERSION` → `v0.6.0` (on main already) | orchestrator |
 | 2 | The CHANGELOG's date is the tag's | in `C` itself: `## v0.6.0 — <the tag's date>` (main has 2026-11-18; set it to the day the tag is made), then `python3 -m scripts.changelog_check --tag v0.6.0` | orchestrator (a commit; `C` is then that commit, CI green on it) |
 | 3 | The guides say v0.6.0 | `grep 'For OspreyFlow v' OspreyFlow_Core/docs/*.md` (all four say v0.6.0 on main); `make docs-pdf` | orchestrator |
-| 4 | The dry run green on `C` | `release_dry_run.py --tag v0.6.0` on the test server (above): seven images built and scanned, the chart packaged, the lock refusing only our images | platform-b (queue and lease) |
+| 4 | The dry run green on `C` | `python -m tools.release_local --dry-run --tag v0.6.0` on the test server (above): seven images built and scanned, the chart packaged, the lock refusing only our images | platform-b (queue and lease) |
 | 5 | **The product repository gets `C`** | `publish_user_repo_update.sh` (the owner's script, not committed): exports `git archive C OspreyFlow_Core`, stops on a real name, a local path or a private file, commits "OspreyFlow — from <C>" in the product checkout; then `git -C OspreyFlow_user_repo push origin main` | **OWNER** (a push to the public product repository) |
 | 6 | The published tree is the tested tree | `git -C OspreyFlow_user_repo diff --stat HEAD~1` against what was expected; `git archive C OspreyFlow_Core` and the product's HEAD tree compared file for file (the one tie between the package test and the release: the commit, not a digest) | orchestrator |
 | 7 | **The tag, in the product repository** | `git -C OspreyFlow_user_repo tag -a v0.6.0 -m "OspreyFlow v0.6.0" && git -C OspreyFlow_user_repo push origin v0.6.0`. **Never move or delete a pushed tag**: a failed run ships the next patch number | **OWNER** |
 | 8 | The release workflow runs | `gh run watch -R aykr/OspreyFlow` (the run the tag started): notes, seven images, lock, page, chart, the verify step, publish | orchestrator watches |
-| 9 | **The development repository's tag** (if kept) | `git tag -a v0.6.0 C && git push origin v0.6.0`: its root workflow then fails at `ci-status-gate`, as for v0.5.1, and builds nothing | **OWNER** (and the question above) |
+| 9 | **The development repository's tag** (a marker only, once its root workflow is retired) | `git tag -a v0.6.0 C && git push origin v0.6.0`: with `retire_dev_release_yml.diff` applied, no workflow runs on it | **OWNER** |
 | 10 | After publication, as a client sees it | every image in the release's `versions.lock` pulled with an empty `DOCKER_CONFIG` (anonymously); `python -m harness.signatures --lock versions.lock --lock-signature versions.lock.sigstore.json --repository aykr/OspreyFlow --tag v0.6.0` against the published assets; `ospreyflow update --check` on a deployment names v0.6.0 | orchestrator or platform-b |
 
 ## Should the package test use this local build's images? (question 3)

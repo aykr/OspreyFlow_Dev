@@ -60,3 +60,68 @@ a fresh PYTHONPYCACHEPREFIX for each run.
 3. r1_live.sh memory (tests/test_v052_dashboards_check.py's wrapper case, R1's own environment):
      plant: memory pointed at a v052 path -> FAILED test_the_wrapper_gives_each_script_r1_s_own_environment[memory-...] (1 failed, 3 passed)
      clean: 4 passed
+
+4. ospreyflow images push passes the upgrade stamp (the owner's cached-upgrade ruling; cli/ospreyflow/images.py,
+   tests/test_upgrade_stamp.py), 15 November 2026.
+   Red first, images.py as on main 3d961cc: FAILED test_images_push_passes_the_stamp (on its assertion: no stamp in
+   either build), FAILED test_the_command_s_stamp_is_harness_s[now0, now1, now2] (4 failed).
+   tests/cli/test_images_verb.py::test_ours_are_built_here_the_conduit_without_java asserted no build arg but the
+   Conduit's: now no build arg but the stamp, and the Conduit's two, CONDUIT_JAVA then the stamp.
+   Plants:
+     == plant: the stamp not passed
+       test_images_push_passes_the_stamp
+       test_ours_are_built_here_the_conduit_without_java
+     2 failed, 32 passed in 2.90s
+     == plant: the local day, not the UTC day
+       test_the_command_s_stamp_is_harness_s[now2]
+     1 failed, 33 passed in 2.95s
+     == plant: the arg misnamed
+       test_images_push_passes_the_stamp
+       test_the_command_s_stamp_is_harness_s[now0]
+       test_the_command_s_stamp_is_harness_s[now1]
+       test_the_command_s_stamp_is_harness_s[now2]
+       test_ours_are_built_here_the_conduit_without_java
+     5 failed, 29 passed in 3.18s
+     == plant: a copied image also given the stamp (built)
+       test_images_push_passes_the_stamp
+       test_theirs_are_copied_by_their_digest
+       test_ours_are_built_here_the_conduit_without_java
+       test_a_failed_step_stops_the_push
+       test_a_dry_run_runs_nothing
+       test_every_image_goes_to_a_repository_the_terraform_makes
+       test_a_registry_not_signed_in_to_stops_the_push_at_once_saying_so
+       test_ours_are_built_for_the_platform_s_nodes
+     8 failed, 26 passed in 3.12s
+   Clean: test_upgrade_stamp.py and tests/cli/, 556 passed.
+
+5. tools/release_local.py follows the product workflow (the owner's ruling, 15 November; tests/test_release_local_matrix.py
+   rewritten, the lane's release_dry_run.py and its test retired into it).
+   Red first, release_local.py as on main 3d961cc (the development workflow's): the new test file errors at
+   collection (the old module has no workflow reader). A red, but by an import error, not an assertion.
+   Plants:
+     ERROR ../OspreyFlow_Build/tests/test_release_local_matrix.py
+     1 error in 0.69s
+     == plant: the stamp dropped
+       test_each_build_is_the_scan_build_with_the_upgrade_stamp
+     1 failed, 7 passed in 0.68s
+     == plant: a real push allowed
+     7 passed, 1 skipped in 0.74s
+     == plant: the matrix copied (the first six)
+       test_it_builds_every_image_the_product_releases
+       test_the_scan_uses_the_workflow_s_own_trivy_settings
+       test_an_image_added_to_the_workflow_is_built_here_too
+     3 failed, 5 passed in 0.58s
+     == plant: the development workflow read
+     ERROR ../OspreyFlow_Build/tests/test_release_local_matrix.py
+     1 error in 0.62s
+     == clean (the refusal test reworked)
+     8 passed in 0.60s
+     == plant: a real push allowed (again, the test reworked)
+       test_a_real_push_is_refused_in_words
+     1 failed, 7 passed in 0.58s
+   Note on the plant 'a real push allowed': its first form stayed green (7 passed, 1 skipped). With the refusal
+   gone, main() ran real commands (the changelog check wrote notes.md under the ignored dist/; docker buildx found
+   no daemon, and the suite's docker guard skipped the test). The test now stands in every command and the lock and
+   asserts none ran: red then (1 failed). The leftover OspreyFlow_Build/dist/release-dry-run/ was removed.
+   The plant 'the development workflow read' errors at collection: SERVICES is read at import, and the retired
+   workflow has no images job.
