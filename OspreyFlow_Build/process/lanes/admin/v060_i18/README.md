@@ -23,7 +23,7 @@ Keycloak is unchanged.
   - The administration guide's §6a.7 quotes the refusal. Its "Roles are not read from an Entra token" now says a
     person's roles, and names the two app roles read from an application's token. §6a.2's tables follow (2.22 on
     this main, version set at merge), and spec/10 follows the guide.
-  - A new test, `tests/test_admin_guide_run_app_role.py`, ties the guide's quote to `RUN_ROLE_NOT_HELD`, ties the
+  - A new test file in the diff, `test_admin_guide_run_app_role`, ties the guide's quote to `RUN_ROLE_NOT_HELD`, ties the
     guide's and the manifest's role to `RUN_APP_ROLE`, and refuses the first draft's words. It was shown red with
     those words planted back (`guide_plant.log`).
   - Applied on 97dc544, the guide, guide-copy and poc harness tests pass (250). There is no Terraform: the client's
