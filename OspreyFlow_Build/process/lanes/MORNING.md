@@ -2109,3 +2109,6 @@ cut, from the same prompt, as its own prompt later: the history accordion, Ask &
   menu and top bar; monospace in sentences. Ruled: **in v0.5.2 as a fix after step 6.** Step 6 runs on 0246f9b; the fix
   (admin, Glass CSS) merges after it; the v0.5.2 tag goes on a later commit with its own green CI, which step 6 did not
   run (the owner accepted this). Route row AD; step 7 waits on 6 and AD.
+- **Revised, 08:25Z (the owner):** admin measured the scroll glitch on every GOV.UK page, visitors' included (the frame
+  scrolls by the footer's 95px; an inner panel's end moves the page). The owner moved AD **into the candidate** (step 6
+  waits, ~13:00Z start, still before Mon 08:00Z), and chose **contain inner scrolls**, ADR-132's frame kept.
