@@ -136,9 +136,11 @@ around: one view switch, a case line that says what is open, and "view" kept for
   the Conduit does; while a running Conduit holds DuckDB, the build goes on without the points and says so.
 - **Two stages, so most of a build runs beside a working deployment:** `python -m services.api.map_admin
   build <region> --unit <unit> --by <who> --stage tiles` downloads the extract, runs planetiler and saves
-  the settlements beside it, registering nothing. `--stage places`, with the Conduit stopped, loads that
-  file with its points and registers the provider; without the first stage's files it is refused in words.
-  Each runs in a one-off container of the Conduit's image. `ospreyflow map build` is still the whole build.
+  the settlements beside it. It checks no unit, reaches no database and reads no settings, so it runs as a
+  bare `docker run` of the Conduit's image with only the tiles folder mounted, registering nothing
+  (`--unit` is still given). `--stage places`, in a one-off container of the deployment's own Conduit with
+  the Conduit stopped, checks the unit, loads that file with its points and registers the provider; without
+  the first stage's files it is refused in words. `ospreyflow map build` is still the whole build.
 - **What Great Britain takes** (measured on a 16-core server): a 2.1 GB download, planetiler 7 min 18 s
   at a peak of 3.0 GB of memory, the load 37 min at 2.4 GB, and about 5 GB of disk, 3.5 GB of which can be
   removed afterwards.
