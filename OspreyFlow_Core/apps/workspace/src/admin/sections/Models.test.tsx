@@ -397,6 +397,25 @@ describe("Models", () => {
     expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("says one thing at a time while it adds, in one live region, never the check's words beside it", async () => {
+    let answer: (value: Response) => void = () => undefined;
+    stub((path, init) => (path === "/v1/admin/models/checks" ? { status: 200, body: PASSED } : listed(LISTED)(path, init)));
+    const fetched = globalThis.fetch as unknown as ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>;
+    const plain = fetched.getMockImplementation()!;
+    fetched.mockImplementation(async (url: string, init?: RequestInit) =>
+      new URL(String(url)).pathname === "/v1/admin/models/checks/chk-1/add" ? new Promise<Response>((r) => (answer = r)) : plain(url, init),
+    );
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini-3.8-flash" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add the engine" }));
+    expect(screen.getAllByRole("status").map((s) => s.textContent)).toEqual(["Adding…"]);
+    answer({ ok: true, status: 200, json: async () => ADDED } as Response);
+    await screen.findByText(/Google Gemini is added and offered to analysts/);
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+  });
+
   it("keeps your own gateway's model names whole, its prefix being only LiteLLM's way to it", async () => {
     const sent = stub((path, init) => (path === "/v1/admin/models/checks" ? { status: 200, body: { ...PASSED, engine: "gateway" } } : listed(LISTED)(path, init)));
     await openAdd();

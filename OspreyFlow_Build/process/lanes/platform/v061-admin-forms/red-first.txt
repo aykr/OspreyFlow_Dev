@@ -73,3 +73,14 @@ Glass, Models.test.tsx: run against Models.tsx and ModelsApi.ts as at 506ad53:
 ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
       Tests  8 failed | 20 passed (28)
 After: 28 passed. (The Glass plants are run by hand, as recorded above; no script.)
+
+The browser runs, slot 9 (OSPREY_PORTS_SLOT=9), 15 Nov ~16:20Z, at c440153 with ACTION_REGISTRY.diff and
+EVERY_HARNESS.diff applied to the working tree only and reverted after:
+  keyboard/admin-models.spec.ts: RED, 13 passed, 4 failed. The three add cases (add, Bedrock, your own gateway)
+  failed on getByRole("status") resolving to two elements while Add was out: "Adding…" beside the check's own
+  status. The page ended correct ("… is added"); the defect was two live regions at once (a screen reader hears
+  both), and assertAllCovered failed with them.
+  Models.test.tsx's new case "says one thing at a time while it adds, in one live region …": RED at c440153
+  (received the check's words beside "Adding…"), green with the fix (the busy words replace the check's).
+  After the fix: keyboard 17 passed (with the 4 registry ids applied); every-harness axe, models states: 56 passed
+  (each new state in dark, light and govuk, and the 2.5.3 label check); Models.test.tsx 29 passed.

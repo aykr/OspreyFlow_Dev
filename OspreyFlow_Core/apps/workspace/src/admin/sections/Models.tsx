@@ -429,8 +429,9 @@ function AddEngineForm({
       <p className="admin-models-preview" id={`${id}-preview`}>
         Analysts will see: <strong>{preview}</strong>. It is offered only for cases whose data may leave this deployment.
       </p>
+      {/* One live region at a time: the busy words replace the check's, never stand beside them. */}
       {busy && <p role="status">{busy === "checking" ? "Checking…" : "Adding…"}</p>}
-      {result && (
+      {result && !busy && (
         <div role={result.ok ? "status" : "alert"} className="admin-models-result">
           <p style={{ margin: 0 }}>{result.words}</p>
           {result.models.length > 1 && (
