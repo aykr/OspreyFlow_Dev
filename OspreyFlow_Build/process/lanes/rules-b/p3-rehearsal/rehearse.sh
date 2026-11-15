@@ -5,7 +5,7 @@
 # and removed at the end. The tiles folder is a scratch one. Never osprey-small: no container, volume,
 # folder or image of it is named here. Run by stack_lease.sh remote from OspreyFlow_Build.
 set -u
-TAG=ospreyflow-basemap:v0.6.0
+TAG=ospreyflow-basemap:p3   # the orchestrator: never Wednesday's name (ospreyflow-basemap:v0.6.0)
 SCR="$(cd ../.. && pwd)/rules-b.scratch/p3"
 TILES="$SCR/tiles"
 JAR_URL=https://github.com/onthegomap/planetiler/releases/download/v0.10.2/planetiler.jar
