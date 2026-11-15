@@ -203,7 +203,7 @@ def test_on_entra_another_apis_scope_is_refused_in_words_naming_the_setting() ->
     with pytest.raises(CommandRefused) as refused:
         service_token(env, http)
     said = str(refused.value)
-    assert "OSPREY_TOKEN_SCOPE" in said and "this deployment's API" in said, said
+    assert "OSPREY_TOKEN_SCOPE names no API of this tenant" in said, said
 
 
 def test_on_entra_a_wrong_secret_is_refused_as_before_without_the_secret() -> None:
@@ -221,7 +221,8 @@ def test_keycloak_is_asked_as_before_with_no_scope() -> None:
     seen: list[dict[str, str]] = []
 
     def keycloak(request: httpx.Request) -> httpx.Response:
-        seen.append(dict(urllib.parse.parse_qsl(request.content.decode())))
+        # blank values kept, so an empty `scope=` is seen, not dropped
+        seen.append(dict(urllib.parse.parse_qsl(request.content.decode(), keep_blank_values=True)))
         return _keycloak(request)
 
     http = httpx.Client(transport=httpx.MockTransport(keycloak))
