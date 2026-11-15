@@ -186,6 +186,8 @@ const EXTRA_STATES: Record<string, string[]> = {
     // *What raises alerts*: the inventory (ADR-146 decision 5), the hotlists and the watched patterns
     // with their schedules (the alert inbox went in L2.10).
     "tab=watches",
+    // v0.6.0 #14: a stopped hotlist on *What raises alerts*, its reason under *Stopped*.
+    "tab=watches&stopped=1",
     "tab=rules&sentence=preview",
     // ADR-139 decision 8: a sentence on connection strength.
     "tab=rules&sentence=strength",

@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.69** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 1.70** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.70 | 2026-11-15 | §7.5: **What raises alerts** says why a hotlist or watch stopped, in the same words under *Stopped*; a stopped rule says nothing more (v0.6.0 #14, ADR-044 Amendment 1). Held by `tests/test_user_guide_alert_sources_stopped_why.py`. PDF made by the orchestrator at merge. |
 | 1.69 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November); v0.5.2 is not published. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.68 | 2026-11-15 | Ask & Chat (§6), "Earlier questions": each earlier question collapses to its line, the newest answer open, a closed line counting its proposals to decide (v0.6.0 item 3, the owner, 15 Nov). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.67 | 2026-11-15 | Ask & Chat (§6): a marker sits after its words and is named "Show on the graph:" and what it shows; the line under an answer with markers; the engine named in lower case after "Answered by" (the owner, 15 Nov; ADR-129 Amendment 6). Version set at merge. PDF made by the orchestrator at merge. |
@@ -1189,6 +1190,10 @@ queue on **Alerts**. There is no Watches tab and no separate inbox.
 
 A hotlist or watch stopped because its owner could not be acted as is active again at the first load
 that can act as them. One whose saved pattern is no longer its owner's stays stopped until it is.
+
+**What raises alerts** says the same words under *Stopped* beside each of your stopped hotlists and
+watched patterns. A rule there that is *Stopped* says nothing more, as a rule's retirement records no
+reason.
 
 **From the Glass.** In the Query builder, **Save as a watch** on a saved pattern makes a watched
 pattern of the case's dataset: "Saved as a watch: it runs as data loads and daily, and is kept in

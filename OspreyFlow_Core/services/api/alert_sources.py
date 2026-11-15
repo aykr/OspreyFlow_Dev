@@ -60,8 +60,10 @@ def _counts(rows: Sequence[QueuedAlert]) -> dict[str, _Held]:
         if suppressed_today(alert) and alert.suppressed_until is not None:
             held.suppressed.append(
                 SuppressedAlert(
-                    alert_id=alert.id, until=alert.suppressed_until,
-                    reason=alert.suppress_reason or "", by=alert.suppressed_by or "",
+                    alert_id=alert.id,
+                    until=alert.suppressed_until,
+                    reason=alert.suppress_reason or "",
+                    by=alert.suppressed_by or "",
                 )  # fmt: skip
             )
     return by
@@ -128,6 +130,7 @@ def inventory(
             name=f"Hotlist {hotlist.identifier_typed or hotlist.identifier}", source="watch",
             kind="hotlist", maker=hotlist.owner_id, dataset_id=hotlist.dataset_id,
             owner=hotlist.owner_id, state="live" if hotlist.status == "active" else "stopped",
+            stopped_why=hotlist.stopped_why if hotlist.status != "active" else None,
             expires_on=hotlist.review_date,
         ))  # fmt: skip
     for monitor in monitors:
@@ -138,6 +141,7 @@ def inventory(
             source="watch", kind="watched_pattern", maker=monitor.owner_id,
             dataset_id=monitor.dataset_id, owner=monitor.owner_id,
             state="live" if monitor.status == "active" else "stopped",
+            stopped_why=monitor.stopped_why if monitor.status != "active" else None,
         ))  # fmt: skip
     return [_with_counts(r, counts) for r in rows]
 

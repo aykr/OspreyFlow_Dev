@@ -1,5 +1,6 @@
 // *What raises alerts* (`06_DECISIONS.md` ADR-146 decision 5): every rule and watch in one list —
-// name and maker, source (Rule or Watch), dataset, owner, draft or live, expiry, when it last fired,
+// name and maker, source (Rule or Watch), dataset, owner, draft or live (a stopped hotlist or
+// watch with why, ADR-044 Amendment 1), expiry, when it last fired,
 // alerts in the last 30 days and the share closed as not of interest — with a filter on each
 // column, and beside each rule or watch the alerts of it suppressed today (Amendment 1). Every
 // count is the reader's own queue's, taken by the Conduit (rule 7): the Glass counts nothing.
@@ -108,6 +109,11 @@ export function AlertSourcesPanel(api: AlertsApi) {
                           {`One alert suppressed until ${when(q.until)}${q.by_name ? ` by ${q.by_name}` : ""}: ${q.reason}`}
                         </div>
                       ))}
+                    {/* ADR-044 Amendment 1: why a stopped hotlist or watch is stopped, in the owner's
+                        words, as Hotlists and Watches say it (`StatusBadge`); a rule records none. */}
+                    {key === "state" && s.state === "stopped" && s.stopped_why && (
+                      <div className="label">{s.stopped_why}</div>
+                    )}
                   </td>
                 ))}
                 <td>{s.expires_on ? when(s.expires_on) : "—"}</td>

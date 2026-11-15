@@ -151,6 +151,32 @@ describe("What raises alerts", () => {
   });
 });
 
+describe("What raises alerts says why a hotlist or watch stopped (v0.6.0 #14, ADR-044 Amendment 1)", () => {
+  it("shows a stopped hotlist's and watch's reason beside Stopped, as Hotlists and Watches do, and a retired rule's Stopped alone", async () => {
+    const revoked = "Its owner can no longer sign in to OspreyFlow.";
+    const gone = "Its saved pattern is no longer its owner's.";
+    serve({
+      "GET alert-sources": {
+        sources: [
+          { id: "h", rule_id: "hotlist:h", name: "Hotlist 07700 900310", source: "watch", kind: "hotlist", maker: "me", owner: "me", state: "stopped", stopped_why: revoked, alerts_30_days: 0, suppressed: [] },
+          { id: "m", rule_id: "monitor:m", name: "Watched pattern Calls", source: "watch", kind: "watched_pattern", maker: "me", owner: "me", state: "stopped", stopped_why: gone, alerts_30_days: 0, suppressed: [] },
+          { id: "r", rule_id: "typology:r", name: "Retired rule", source: "rule", kind: "rule", maker: "me", owner: "me", state: "stopped", stopped_why: null, alerts_30_days: 0, suppressed: [] },
+          { id: "l", rule_id: "hotlist:l", name: "Hotlist 07700 900311", source: "watch", kind: "hotlist", maker: "me", owner: "me", state: "live", alerts_30_days: 0, suppressed: [] },
+        ],
+      },
+    });
+    render(<AlertSourcesPanel {...API} />);
+    const table = await screen.findByRole("table", { name: "Rules and watches" });
+    const row = (name: string) => within(table).getByText(name).closest("tr")!;
+    expect(within(row("Hotlist 07700 900310")).getByText("Stopped")).toBeTruthy();
+    expect(within(row("Hotlist 07700 900310")).getByText(revoked)).toBeTruthy();
+    expect(within(row("Watched pattern Calls")).getByText(gone)).toBeTruthy();
+    expect(within(row("Retired rule")).getByText("Stopped")).toBeTruthy();
+    expect(row("Retired rule").textContent).not.toContain("Its ");
+    expect(row("Hotlist 07700 900311").textContent).not.toContain("Its ");
+  });
+});
+
 describe("made in the Glass", () => {
   it("watches an entity by its identifier, and offers nothing for one with none", async () => {
     const calls = serve({ "POST hotlists": { id: "h" } });
