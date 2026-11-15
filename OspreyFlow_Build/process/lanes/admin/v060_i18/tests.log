@@ -1,0 +1,16 @@
+# tests/services/api, tests/cli and tests/harness/test_cloud_platform_poc.py offline on the closed ports, on the branch and on its base 7dd860e (with the branch's test file)
+branch: 200 failed, 7449 passed, 24 skipped, 105 warnings, 871 errors in 663.26s (0:11:03)
+base: 208 failed, 7436 passed, 29 skipped, 105 warnings, 871 errors in 645.61s (0:10:45)
+== failing on the branch, not on the base:
+== failing on the base (with the new test file), not on the branch:
+FAILED tests/cli/test_images_verb.py::test_no_plan_is_refused_with_a_command_that_renders_it
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[a-string-not-a-list]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-case]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-role]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[nested]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-role]
+FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-roles-claim]
+FAILED tests/services/api/test_service_identity_entra.py::test_the_run_app_role_is_principal_auths_own_name
+
+# The 200 failures and 871 errors on both are the live-store tests the closed ports refuse. tests/cli/test_images_verb.py fails on the base alone (not this change's code).
+ruff and mypy clean on the changed files; the registration and guide diff applied: 112 passed; the R1 diff applied: 44 passed (offline; the live checks need R1)

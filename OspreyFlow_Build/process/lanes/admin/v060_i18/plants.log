@@ -1,0 +1,5 @@
+# v0.6.0 #18 plants at 31159c7
+== no role required (main's shape): RED where it must be; failed: ['test_an_app_only_token_without_the_run_role_is_refused_in_words[no-roles-claim]', 'test_an_app_only_token_without_the_run_role_is_refused_in_words[no-role]', 'test_an_app_only_token_without_the_run_role_is_refused_in_words[another-role]', 'test_an_app_only_token_without_the_run_role_is_refused_in_words[another-case]', 'test_an_app_only_token_without_the_run_role_is_refused_in_words[a-string-not-a-list]', 'test_an_app_only_token_without_the_run_role_is_refused_in_words[nested]']
+== the role compared without its case: RED where it must be; failed: ['test_an_app_only_token_without_the_run_role_is_refused_in_words[another-case]']
+== a roles string taken for a list: RED where it must be; failed: ['test_an_app_only_token_without_the_run_role_is_refused_in_words[a-string-not-a-list]']
+plants: 3, missed: 0
