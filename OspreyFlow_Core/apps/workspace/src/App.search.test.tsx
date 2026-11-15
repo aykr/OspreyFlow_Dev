@@ -399,6 +399,14 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("application", { name: "Network canvas" })));
   });
 
+  test("Show all on graph under an answer leaves the page for the graph, focus on the canvas (v0.6.0 #5 on the page)", async () => {
+    const page = await openAsk();
+    fireEvent.click(await within(page).findByRole("button", { name: "Show all on graph" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    expect(pressed()).toEqual(["Graph"]);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("application", { name: "Network canvas" })));
+  });
+
   test("Help's keys panel opens over the page, in reach", async () => {
     await openAsk();
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));

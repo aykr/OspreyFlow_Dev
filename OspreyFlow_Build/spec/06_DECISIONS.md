@@ -40205,7 +40205,8 @@ the search results page does (Amendment 15 Part A, spec 02 §2.0c). The orchestr
    belongs to the control with focus (the engine's menu, a proposal's dialog). The drawer's Escape is withdrawn with the
    drawer. Recorded here because it is a change a keyboard user will notice.
 5. **What it keeps.** A marker leaves the page for the graph with the item in view, as it closed the drawer, and focus
-   goes to the canvas once it is in reach (the drawer left it on the marker; a page that goes takes the marker with it);
+   goes to the canvas once it is in reach (the drawer left it on the marker; a page that goes takes the marker with it),
+   and *Show all on graph* under an answer (v0.6.0 #5) does the same;
    a document opened from an answer is read over the view with the page hidden and shown again on closing, focus on its
    heading, as the results are; the keys panel opens over the page when asked for; the batch job's panel at the
    canvas's foot is hidden under it, as under the results.

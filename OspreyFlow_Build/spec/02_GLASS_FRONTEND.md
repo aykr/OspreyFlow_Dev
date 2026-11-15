@@ -729,7 +729,7 @@ harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
   cross-link leaves it, as it leaves the results.
 - **A marker** in an answer (*Show on the graph: …*) leaves the page and shows the graph, the item brought into view,
   focus on the canvas once it is back in reach (never left on the marker that went with the page), as the results'
-  *Show on graph* does. **A document** opened from an answer is read over the view, the page hidden and shown again
+  *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) leaves it the same way. **A document** opened from an answer is read over the view, the page hidden and shown again
   when it closes, focus on its heading, never on the view beneath. *Ask the model about these…* opens the page.
 - Help's keys panel opens over the page when asked for, as over the results. The batch job's panel at the canvas's
   foot is hidden under the page, as under the results, and back when it closes.

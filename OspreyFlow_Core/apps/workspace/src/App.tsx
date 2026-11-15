@@ -759,8 +759,11 @@ export function App() {
   const showAnswerOnGraph = async (ids: AnswerIds): Promise<void> => {
     if (!investigationId) return;
     if (lens) closeLens();
-    results.leave();
+    // ADR-145 Amendment 18: the answer is on Ask & Chat's page; the page goes, as a marker's does, and focus follows to
+    // the graph once it is back in reach.
+    leavePages();
     setView("graph");
+    setTimeout(() => document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus(), 0);
     await showAnswerOnCanvas({ apiBaseUrl: API_BASE_URL, bearerToken, investigationId }, ids, () =>
       glassCanvasRef.current
         ? {

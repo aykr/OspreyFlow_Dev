@@ -49,8 +49,10 @@ plant() { # name, file, perl substitution, runner, cases (newline-separated), an
   if [ -n "$reason" ] && ! grep -qF -- "$reason" <<<"$out"; then echo "NOT RED FOR ITS REASON: $name (its failure never says: $reason)"; fails=1; fi
 }
 
-echo "== red on main: main's App.tsx, LeftRail.tsx and places harness"
-for f in "$APP" "$RAIL" "$HARN" "$QHARN" "$CHARN"; do git show main:"$f" >"$f"; done
+# The branch's base, not main as it is now: a later main's App imports what this branch never had.
+BASE="$(git merge-base HEAD main)"
+echo "== red on main ($(git rev-parse --short "$BASE")): main's App.tsx, LeftRail.tsx and the three harnesses"
+for f in "$APP" "$RAIL" "$HARN" "$QHARN" "$CHARN"; do git show "$BASE":"$f" >"$f"; done
 check "main's App (jsdom)" "$(js)" "Ask & Chat opens its panel without changing the view
 Ask & Chat opens its page under its own name
 the Ask line opens Ask & Chat with the words carried over
@@ -86,6 +88,8 @@ plant "focus left on the view beneath when a document read from an answer closes
   "a document opened from an answer is read over the view, the page hidden"
 plant "focus lost with the marker when the page goes" "$HOOK" 's/        document\.querySelector<HTMLElement>\(CANVAS\)\?\.focus\(\);\n//' js \
   "a marker in an answer leaves the page for the graph, focus on the canvas"
+plant "Show all on graph leaving the page over the graph it changed" "$APP" 's/(    if \(lens\) closeLens\(\);\n(?:    \/\/[^\n]*\n)*)    leavePages\(\);\n/$1    results.leave();\n/' js \
+  "Show all on graph under an answer leaves the page for the graph"
 plant "the batch job's panel left showing under the page" "$APP" 's/searching !== null \|\| questionsOpen \|\| readerDocumentId/searching !== null || readerDocumentId/' js \
   "the panel is hidden under the Ask & Chat page"
 plant "the harness's page without its back link focus (keyboard)" "$RAIL" 's/\?\.focus\(\);\n\}/;\n}/' kb \
