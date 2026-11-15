@@ -177,4 +177,4 @@ rules-b	v060-i10-basemap	M	todo	v0.6.0 (the owner, 15 Nov): The basemap as a ste
 platform-b	v060-i11-package-test	M	done	v0.6.0 (the owner, 15 Nov): The package test reshaped, fresh install only	lane/platform-b-v060-package-test
 rules	v060-i14-stopped-why	M	todo	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped
 admin	v060-i18-run-app-role	M	todo	v0.6.0 (the owner, 15 Nov): The run service's app role
-platform	v060-rf-fresh-only	M	todo	v0.6.0 (the owner, 15 Nov): Fresh install only, held by a refusal
+platform	v060-rf-fresh-only	M	done	v0.6.0 (the owner, 15 Nov): Fresh install only, held by a refusal	lane/platform-v060-fresh-only

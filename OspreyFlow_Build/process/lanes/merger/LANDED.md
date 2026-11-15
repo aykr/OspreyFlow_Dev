@@ -213,3 +213,5 @@ e2ad145 0436ec9 platform v052-r1domainguard
 351e2c9 2d3812d platform v052-backup-mapkeys
 eb78042 bce8c95 admin v052-govuk-admin-scroll
 3fb810c 18afa41 platform-b v060-i11-package-test
+a048648 9c7acb0 platform v060-rf-fresh-only
+a464871 551d725 platform-b v060-tokver-row
