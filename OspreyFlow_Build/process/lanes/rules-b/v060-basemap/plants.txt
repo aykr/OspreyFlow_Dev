@@ -1,0 +1,7 @@
+RED  a named point that is not a settlement kept: test_read_osm_places_yields_settlements_only; red: ['test_read_osm_places_yields_settlements_only']
+RED  every place in one transaction: test_the_gazetteer_commits_a_batch_at_a_time; red: ['test_a_failed_batch_is_rolled_back_alone_and_the_load_stops', 'test_the_gazetteer_commits_a_batch_at_a_time']
+RED  a failed batch left open: test_a_failed_batch_is_rolled_back_alone_and_the_load_stops; red: ['test_a_failed_batch_is_rolled_back_alone_and_the_load_stops']
+RED  planetiler's heap left to the JVM: test_planetiler_is_given_its_heap_explicitly; red: ['test_planetiler_is_given_its_heap_explicitly']
+RED  the store opened but not given to the load: test_the_cli_build_writes_the_points_when_it_can_open_the_store; red: ['test_the_cli_build_writes_the_points_when_it_can_open_the_store']
+RED  DuckDB's lock not caught: test_the_cli_build_writes_the_points_when_it_can_open_the_store; red: ['test_the_cli_build_writes_the_points_when_it_can_open_the_store']
+control (restored): 9 passed in 4.93s
