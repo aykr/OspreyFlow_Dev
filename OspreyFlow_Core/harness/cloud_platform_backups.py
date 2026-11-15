@@ -331,9 +331,10 @@ def database_names(environment: dict[str, Any]) -> tuple[str, str]:
 #: and its Keeper run through their restore (RESTORE, then a RENAME swap).
 #: The ADR-148 audit's ruling 3 (v0.5.2): the shared claim's folders the deployment cannot make
 #: again, each a part of the set's claims part: the published pipelines (the recipes repository,
-#: under the Conduit's data folder), the model settings, and the map settings with the map key file
-#: (ADR-147). The tiles and the uploads' scratch are made again; the Ingest root is a claim of its
-#: own on poc, and elsewhere a part of its own (`INGEST_PART`).
+#: under the Conduit's data folder), the model settings, and the map settings, never the map key
+#: file beside them (ADR-147 decision 1; the claims run leaves it out, `platform_backup.LEFT_OUT`).
+#: The tiles and the uploads' scratch are made again; the Ingest root is a claim of its own on poc,
+#: and elsewhere a part of its own (`INGEST_PART`).
 SHARED_PARTS = (
     {"name": "shared-recipes", "subPath": "data/recipes"},
     {"name": "shared-model-settings", "subPath": "model-settings"},

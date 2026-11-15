@@ -161,7 +161,8 @@ On the client's platform the stores are not containers on one machine and there 
 the managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and staging buckets) are the
 platform's, under its own snapshots and versioning, and **this section covers what the deployment runs
 itself**: ArcadeDB, ClickHouse, the shared claim's published pipelines (`data/recipes`), model settings
-(`model-settings`) and map settings with the map key file (`map-settings`), in every shape (ADR-148
+(`model-settings`) and map settings (`map-settings`'s maps file; the map key file beside it is never in a set, as
+ADR-147 decision 1 says of every key, and a restore names each provider whose key is entered again), in every shape (ADR-148
 Amendment 13), and the Ingest root (uploads and the drop folder) beside them: in the proof-of-concept
 shape its own claim (`ospreyflow-ingest`), and in the standard shape the shared claim's `ingest` folder,
 a part of its own (`shared-ingest`), read-only to the backup and put back by `restore-claims`. Uploads

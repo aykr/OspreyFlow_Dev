@@ -263,8 +263,8 @@ def test_a_file_gone_before_it_is_read_is_left_out_and_counted(
     late = _with_claims(settings, claims, _job("ospreyflow-backup-claims", SLOT))
     walked = pb._tree
 
-    def walk_then_remove(folder: Path) -> Any:
-        for path in walked(folder):
+    def walk_then_remove(folder: Path, leave_out: tuple[str, ...] = ()) -> Any:
+        for path in walked(folder, leave_out):
             if path.name == "people.csv":
                 path.unlink()
             yield path

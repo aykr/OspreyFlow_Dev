@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.18** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
+**Version 2.19** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.19 | 2026-11-15 | §6a.8: a backup set never holds the map key file on cloud-platform either (the claims run took it with the map settings before; the owner, 15 Nov, a fix in v0.5.2), and a restore names each provider whose key must be entered again (ADR-148 Amendment 13 point 4, corrected). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.18 | 2026-11-15 | The header names v0.5.2 (step 5's sweep, §2, at the cut). Each "this release" or "this version" true only of an earlier one names it: named deployments and a dataset's egress from v0.4.2, a bundle's platform from v0.4.12, the backups folder from v0.5.0; Superset's and the report sync's copies no longer marked "from v0.5.2". Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.17 | 2026-11-14 | §9.6 and §12: *Connection strength* is under the top bar's **More**, and neither it nor *Reports* is called a view, which means a saved view alone (ADR-145 Amendment 17). Held by `tests/test_guide_navigation_words.py`. Appendix A regenerated from the schema's descriptions without the client's words (studio's V3): the gateway is *your organisation's own*, and so is the Entra tenant id. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.16 | 2026-11-14 | §10: *How long a model is waited for*, a hosted engine 120 seconds and the deployment's own model 900, each set in `deployment.env` on Lite and Small; a call past its bound stopped, and a provider's refusal said, naming the engine, nothing recorded (ADR-135 Amendment 13, D2). On Enterprise and §6a.9's shared platform both are rendered at their defaults, with no `osprey.yaml` setting. Held by `tests/test_admin_guide_model_timeouts.py`. PDF made by the orchestrator at merge. |
@@ -1868,8 +1869,10 @@ The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and stag
 platform's, under its own snapshots and versioning. **The deployment backs up what it runs itself**
 (ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
 every shape, the shared volume's folders the deployment cannot make again**: the published
-pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
-key file (`map-settings`, ADR-147); and the Ingest root (uploads and the drop folder) beside them:
+pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings
+(`map-settings`, ADR-147: its maps file, never the map key file beside it, since no backup holds a
+key; after a restore, `restore-claims` names each map provider whose key must be entered again in
+*Admin › Maps*); and the Ingest root (uploads and the drop folder) beside them:
 in the poc shape its own claim, and in the standard shape the shared volume's folder of it (`ingest`,
 a part of its own). Uploads can be large, so the claims run's size and time grow with them. Each is
 read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.

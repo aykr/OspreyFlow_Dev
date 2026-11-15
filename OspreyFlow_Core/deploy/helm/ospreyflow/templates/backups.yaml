@@ -32,7 +32,7 @@ unfinished and never restored from. Its restore is a Job of its own, with the sh
 {{- /* Each run names its set by its Job's name: the CronJob's schedule slot. */}}
 {{- $env := append ($b.env | default list) (dict "name" "OSPREY_BACKUP_JOB" "field" "metadata.labels['batch.kubernetes.io/job-name']") }}
 {{- /* The ADR-148 audit's ruling 3 (v0.5.2): the shared claim's folders the deployment cannot make
-       again (the published pipelines, the model and map settings with the map key file), each a part
+       again (the published pipelines, the model and map settings, never the map key file), each a part
        of the claims part beside the claims of their own. */}}
 {{- $shared := ($b.shared | default list) }}
 {{- $parts := $claims }}

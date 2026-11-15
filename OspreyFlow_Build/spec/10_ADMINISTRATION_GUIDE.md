@@ -1659,8 +1659,10 @@ The managed stores (PostgreSQL on RDS, Valkey on ElastiCache, the media and stag
 platform's, under its own snapshots and versioning. **The deployment backs up what it runs itself**
 (ADR-148 Amendments 7 and 13): ArcadeDB, ClickHouse and the claims part. **The claims part holds, in
 every shape, the shared volume's folders the deployment cannot make again**: the published
-pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings with the map
-key file (`map-settings`, ADR-147); and the Ingest root (uploads and the drop folder) beside them:
+pipelines (`data/recipes`), the model settings (`model-settings`) and the map settings
+(`map-settings`, ADR-147: its maps file, never the map key file beside it, since no backup holds a
+key; after a restore, `restore-claims` names each map provider whose key must be entered again in
+*Admin › Maps*); and the Ingest root (uploads and the drop folder) beside them:
 in the poc shape its own claim, and in the standard shape the shared volume's folder of it (`ingest`,
 a part of its own). Uploads can be large, so the claims run's size and time grow with them. Each is
 read-only to the backup, and the pods that mount them are writers a restore refuses to run beside.

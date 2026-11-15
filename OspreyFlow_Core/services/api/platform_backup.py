@@ -63,6 +63,16 @@ CLAIMS_WAIT = 3 * 3600
 CLAIMS_POLL = 15.0
 #: The file system's own folder at a claim's root: never backed up, never replaced.
 LOST_FOUND = "lost+found"
+#: What a claims part never holds, by the part, at its top: the map key file beside the maps file in
+#: the shared claim's `map-settings` (ADR-147 decision 1: a provider's key is never in a backup;
+#: 05_DEPLOYMENT.md §6.1). Never taken into a set, never put back from one (a set taken before this
+#: rule holds it), and on a restore the claim's own is left where it is, as the standard shapes'
+#: restore leaves it on the volume (`map_admin` gives a key only at the address it was entered for).
+#: The provider whose key must be entered again is named by `map_keys_to_enter`.
+LEFT_OUT: dict[str, tuple[str, ...]] = {"shared-map-settings": ("map-keys.yaml",)}
+#: The claims part that holds the maps file (`map_admin.SETTINGS_FILE`), whose `keys_held` names the
+#: providers whose key was set in Admin.
+MAP_SETTINGS_PART = "shared-map-settings"
 
 
 class BackupRefused(RuntimeError):
@@ -229,7 +239,9 @@ class Bucket:
             raise
         return size, digest.hexdigest()
 
-    def put_tree(self, key: str, folder: Path) -> tuple[int, str, dict[str, Any]]:
+    def put_tree(
+        self, key: str, folder: Path, leave_out: tuple[str, ...] = ()
+    ) -> tuple[int, str, dict[str, Any]]:
         """`folder` (its top-level lost+found left out) as a gzipped tar, streamed up in parts; its
         size, SHA-256 and what was taken. A live claim moves under it (the drop folder above all):
         a file gone before it is opened is left out and counted, and one that shrinks while read is
@@ -240,9 +252,11 @@ class Bucket:
         ]
         writer = _PartWriter(self.client, bucket, key, upload_id)
         taken: dict[str, Any] = {"entries": 0, "gone": 0}
+        if left := sorted(n for n in leave_out if (folder / n).exists()):
+            taken["left_out"] = left
         try:
             with tarfile.open(fileobj=writer, mode="w|gz") as tar:  # type: ignore[call-overload]
-                for path in _tree(folder):
+                for path in _tree(folder, leave_out):
                     _add(tar, path, path.relative_to(folder).as_posix(), taken)
             writer.finish()
             self.client.complete_multipart_upload(
@@ -306,11 +320,11 @@ class Bucket:
             token = page["NextContinuationToken"]
 
 
-def _tree(folder: Path) -> Iterator[Path]:
-    """Every entry under `folder`, parents first, its top-level lost+found left out; an entry gone
-    while it is walked is passed over (os.walk's own way)."""
+def _tree(folder: Path, leave_out: tuple[str, ...] = ()) -> Iterator[Path]:
+    """Every entry under `folder`, parents first, its top-level lost+found and `leave_out` left out;
+    an entry gone while it is walked is passed over (os.walk's own way)."""
     for top in sorted(folder.iterdir()):
-        if top.name == LOST_FOUND:
+        if top.name == LOST_FOUND or top.name in leave_out:
             continue
         yield top
         if top.is_dir() and not top.is_symlink():
@@ -775,7 +789,7 @@ def take_claims(settings: Settings, bucket: Bucket) -> dict[str, Any]:
             raise BackupRefused("claims", f"read {name}", f"{folder} is not mounted in this pod")
         key = f"{prefix}claims/{name}.tar.gz"
         try:
-            size, digest, taken = bucket.put_tree(key, folder)
+            size, digest, taken = bucket.put_tree(key, folder, LEFT_OUT.get(name, ()))
         except Exception as error:  # noqa: BLE001 - reported in words
             raise BackupRefused(
                 "claims", f"upload {name} to s3://{settings.bucket}/{key}", _said(error)
@@ -1064,13 +1078,19 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
                     tar.extractall(staging, filter="data")
             except (tarfile.TarError, OSError) as error:
                 raise BackupRefused("claims", f"unpack {name}", str(error)) from error
+            # Never put back from a set (one taken before `LEFT_OUT` holds the map key file), and
+            # the claim's own left where it is.
+            kept = LEFT_OUT.get(name, ())
+            for never in kept:
+                (staging / never).unlink(missing_ok=True)
             # The old contents set aside on the claim (renamed, never deleted), then the set's moved
             # in, then the old removed: a failure part-way keeps both, and says where each is.
             swapping = True
             try:
                 before.mkdir()
                 for entry in list(target.iterdir()):
-                    if entry.name not in (LOST_FOUND, staging.name, archive.name, before.name):
+                    keep = (LOST_FOUND, staging.name, archive.name, before.name, *kept)
+                    if entry.name not in keep:
                         entry.rename(before / entry.name)
                 for entry in list(staging.iterdir()):
                     entry.rename(target / entry.name)
@@ -1091,6 +1111,18 @@ def fetch_claims(bucket: Bucket, set_id: str, folder: Path) -> list[str]:
             archive.unlink(missing_ok=True)
         restored.append(name)
     return restored
+
+
+def map_keys_to_enter(folder: Path) -> list[str]:
+    """The map providers whose key the restored maps file says was set in Admin (ADR-147): a set
+    never holds a key, so each is entered again (as `harness.restore`'s on the standard shapes)."""
+    path = folder / MAP_SETTINGS_PART / "maps.yaml"
+    if not path.is_file():
+        return []
+    import yaml
+
+    recorded = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    return sorted(str(k) for k in recorded.get("keys_held") or [])
 
 
 def restore_analytics(
@@ -1176,6 +1208,12 @@ def main(argv: list[str] | None = None) -> int:
             writers_stopped(settings)
             names = fetch_claims(bucket, set_id, settings.claims_folder)
             print(f"restore: {', '.join(names)} put back from set {set_id}")
+            if keys := map_keys_to_enter(settings.claims_folder):
+                print(
+                    "restore: a backup never holds a map key (05_DEPLOYMENT.md §6.1): enter the "
+                    f"key of {', '.join(keys)} again, in Admin › Maps. The providers and prefetch "
+                    "areas are restored."
+                )
         elif args.command == "restore-analytics":
             set_id = latest(bucket) if args.set == "latest" else args.set
             restore_analytics(settings, bucket, stores, set_id)

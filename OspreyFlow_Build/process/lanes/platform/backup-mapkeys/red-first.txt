@@ -1,0 +1,13 @@
+The map key file never in a cloud-platform set (ADR-147 decision 1; rules-b's find; the owner: in the candidate). Red first at d172add on 0246f9b (2026-11-15T09:00:46Z), offline on 59991-59994, OSPREY_LANE unset.
+
+Before (0246f9b's platform_backup.py): test_platform_backup_map_keys 4 failed; the claims part's tar held ['.maps.lock', 'map-keys.yaml', 'maps.yaml']. After: 4 passed. The cloud_platform_backup tests whole, the restore tests whole (test_restore_graph, test_restore_finds_sets, test_restore_identity_provider, test_search_index_render_and_restore, test_restore_link_state_through_the_wrapper, test_restore_and_remove; test_restore_exit_test and test_restore_drawn_layer are Docker's, left out as the Makefile does), test_map_settings_backup/render, test_cloud_platform_data_safety, test_map_admin, test_guides_cloud_platform, test_spec_doc_paths: 252 + 45 passed, 64 skipped. One double of _tree (test_platform_backup_claims' walk_then_remove) given the new leave_out argument. docs_guide.diff applied: test_admin_guide(+_copies), test_guides_cloud_platform, test_guide_role_words 125 passed. Citations clean; ruff, mypy clean on the diff.
+
+plant 1: the claims run takes the whole folder (0246f9b's behaviour)
+  -k 'never_the_map_key_file': RED (1 failed, 3 deselected in 1.00s)
+plant 2: a restore puts a set's key file back
+  -k 'puts_none_there': RED (1 failed, 3 deselected in 1.09s)
+plant 3: a restore moves the claim's own key file aside with the rest
+  -k 'keeps_the_deployment_s_own': RED (1 failed, 3 deselected in 1.09s)
+plant 4: restore-claims names no provider
+  -k 'names_each_provider': RED (1 failed, 3 deselected in 1.32s)
+4/4 red
