@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.65** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.66** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.66 | 2026-11-15 | The header names v0.5.2, the release this guide describes (step 5's sweep, §2, at the cut). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.65 | 2026-11-14 | "View" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6). §3: the case line's **Saved views (n)** (*Saved views* while unread), and "› Saved view: ‹name›" while one is open. §4 and §5: the Cases panel's saved views, **More** in place of More views with its name for a screen reader, the case line's parts in their order; §5.2, **Clear the graph**. §5.13, *Saved views*: the strip's **Back to the whole case** first and its words, the list's **The whole case** row and *Open now*, a view saved under the Glass's default name told apart by its first item and when it was saved, focus to the strip and back, the canvas's notice in a saved view, and the graph toolbar's Views menu gone. §5.12, the client's words gone (studio's V3): the composition is **Rarity plus adds**, its scale the raw-sum scale, the measure the **share of pair links**, and the influencers' "to be confirmed" note struck. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py`, `tests/test_user_guide_saved_views.py` and `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.64 | 2026-11-14 | §5.2: a batch result, and a view, up to the view's limit saved and opened with its links, and *Show links among all* on a large canvas, since the links among a set are found a thousand records at a time (ADR-124 Amendment 20). Held by `tests/test_user_guide_am20.py`. PDF made by the orchestrator at merge. |
 | 1.63 | 2026-11-14 | A watch whose owner is not held in *People and roles* quotes the stopped reason's new words ("Its owner is not held in Admin › People and roles.", ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
