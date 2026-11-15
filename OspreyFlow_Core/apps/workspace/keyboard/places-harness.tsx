@@ -135,6 +135,8 @@ function Harness() {
         viewsOpen={panels.has("cases")}
         // ADR-145 Amendment 17: *Saved views (n)*, the harness's case holding two this reader may see.
         savedViews={2}
+        // `?openview=1`: a saved view open over the canvas, named after the case ("› Saved view: …", Amendment 17).
+        openView={place === "glass" && params.get("openview") === "1" ? "Payments in March" : null}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? ["Prison intel"] : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
