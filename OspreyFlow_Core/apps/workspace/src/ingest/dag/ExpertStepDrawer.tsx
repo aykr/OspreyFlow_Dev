@@ -174,7 +174,7 @@ export function ExpertSettings(props: ExpertSettingsProps) {
           </fieldset>
           <Field label="SELECT">
             <textarea
-              className="input"
+              className="input value"
               aria-label="SELECT"
               rows={8}
               spellCheck={false}

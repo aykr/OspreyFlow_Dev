@@ -398,7 +398,7 @@ export function MapScreen({
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)", padding: "var(--sp-16)" }}>
         {onBack && <Button onClick={onBack}>← Back to the pipeline</Button>}
-        <h1 style={{ fontSize: "1.1em", margin: 0 }}>Map — {draft.label}</h1>
+        <h1 style={{ fontSize: "var(--fs-14)", lineHeight: "var(--lh-14)", margin: 0 }}>Map — {draft.label}</h1>
         <div style={{ flex: 1 }} />
         {saveError && (
           <span role="alert" style={{ color: "var(--warning)" }}>

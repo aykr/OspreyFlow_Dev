@@ -72,7 +72,7 @@ export function PipelineYaml({
       {text === null && problems.length === 0 && <p className="label">Reading the YAML…</p>}
       {text !== null && (
         <textarea
-          className="input"
+          className="input value"
           aria-label="Pipeline YAML"
           rows={24}
           spellCheck={false}
