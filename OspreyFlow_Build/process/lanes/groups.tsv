@@ -176,3 +176,4 @@ platform-b	v060-i11-package-test	Four places, the Glass and Admin	Client install
 rules	v060-i14-stopped-why	Four places, the Glass and Admin	Client install
 admin	v060-i18-run-app-role	Four places, the Glass and Admin	Client install
 platform	v060-rf-fresh-only	Four places, the Glass and Admin	Client install
+platform	v061-admin-forms	Four places, the Glass and Admin	After the client's install

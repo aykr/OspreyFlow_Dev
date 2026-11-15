@@ -2132,3 +2132,6 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **v0.6.0 rulings (the owner, ~10:10Z):** the list without item 7; a refusal holds fresh-install-only; item 23 out (the
   package test records memory); the basemap settlements only; item 8 done. `v060/RULINGS.md` has them and the v0.6.1 list.
   The route is rewritten to the items and the five stages (`route.tsv`; v0.5.2's kept as `route_v052_history.tsv`).
+- **Admin forms beside the release (the owner, 15 Nov ~11:00Z):** platform builds them (models first, then maps; MapTiler
+  stays dropped, ruling 8) on its own branch for v0.6.1; nothing merges before v0.6.0, no server queue before the package
+  test ends; key review by the owner before any demo. Estimates from PREBUILD_FINDINGS §6: models ~6.5 d, maps ~9.5 d.

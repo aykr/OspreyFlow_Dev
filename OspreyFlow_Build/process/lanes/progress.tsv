@@ -178,3 +178,4 @@ platform-b	v060-i11-package-test	M	done	v0.6.0 (the owner, 15 Nov): The package 
 rules	v060-i14-stopped-why	M	building	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped
 admin	v060-i18-run-app-role	M	building	v0.6.0 (the owner, 15 Nov): The run service's app role
 platform	v060-rf-fresh-only	M	done	v0.6.0 (the owner, 15 Nov): Fresh install only, held by a refusal	lane/platform-v060-fresh-only
+platform	v061-admin-forms	L	building	v0.6.1 (the owner, 15 Nov): the two Admin forms, models first then maps, on lane/platform-admin-forms beside the release; nothing merges before v0.6.0; no server queue until the package test has finished
