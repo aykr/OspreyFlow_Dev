@@ -2135,3 +2135,6 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **Admin forms beside the release (the owner, 15 Nov ~11:00Z):** platform builds them (models first, then maps; MapTiler
   stays dropped, ruling 8) on its own branch for v0.6.1; nothing merges before v0.6.0, no server queue before the package
   test ends; key review by the owner before any demo. Estimates from PREBUILD_FINDINGS §6: models ~6.5 d, maps ~9.5 d.
+- **The GB basemap measured (rules-b, stack b):** tiles 7 min 18 s at 3.0 GB peak (pmtiles 1.58 GB); 56,486 settlements loaded
+  in 37 min 19 s at 2.4 GB peak. **The owner: go ahead, the basemap before the window.** The tiles are built before Wed 18
+  07:00 UK with the demo up; the settlements load in the window after the fresh install (about 07:00-08:15).
