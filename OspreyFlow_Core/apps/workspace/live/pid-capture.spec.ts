@@ -670,8 +670,13 @@ test("CAP-A2-C8-a", async ({ page }) => {
     for (let i = 0; i < 40 && !(await cited.first().isVisible().catch(() => false)); i++) {
       await page.waitForTimeout(30_000);
       if (await page.getByRole("button", { name: "Asking…" }).isVisible().catch(() => false)) continue;
-      // Ask & Chat is a page (ADR-145 Amendment 18): its Back leaves it, and the rail opens it again.
-      await page.getByRole("region", { name: "Ask & Chat" }).getByRole("button", { name: /^Back to / }).click().catch(() => undefined);
+      // Ask & Chat is a page (ADR-145 Amendment 18): its Back leaves it, and the rail opens it again. The rail's press
+      // toggles, so Back is pressed only when the page is there, and waited for, never missed and then undone.
+      const back = page.getByRole("region", { name: "Ask & Chat" }).getByRole("button", { name: /^Back to / });
+      if (await back.isVisible().catch(() => false)) {
+        await back.click();
+        await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
+      }
       await rail(page, "Ask & Chat").click();
     }
     console.log(`C8-a answered after ${Math.round((Date.now() - started) / 1000)} s`);
