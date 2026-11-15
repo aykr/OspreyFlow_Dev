@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[5]
 WS = ROOT / "OspreyFlow_Core/apps/workspace"
 FRAME = "OspreyFlow_Core/apps/workspace/src/brand/BrandFrame.tsx"
 HOLD = "OspreyFlow_Core/apps/workspace/src/brand/containInnerScroll.ts"
+PRIMS = "OspreyFlow_Core/apps/workspace/src/design/primitives.css"
 ADMIN = "OspreyFlow_Core/apps/workspace/src/admin/admin.css"
 SYSTEM = "OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx"
 
@@ -24,10 +25,9 @@ PLANTS = [
     ("a box at its end left to move the page", [(HOLD, "  return inside; //", "  return false && inside; //")],
      ["the page did not move"]),
     ("every wheel inside a box held, wherever the box stands", [(HOLD, "    if (further) return false;", "    if (further) inside = true;")],
-     ["the drawer scrolled", "the list scrolled to its end", "then the drawer scrolled", "itself scrolled to its end",
-      "the drawer scrolled to its end, the page stayed"]),
+     ["itself scrolled to its end", "the drawer scrolled", "the list scrolled to its end"]),
     ("overscroll-behavior on every box under GOV.UK (the first fix's shape: a sideways table swallows a vertical wheel)",
-     [(ADMIN, "/* The page's one heading is the open section's", '[data-brand="govuk"] body * { overscroll-behavior: contain; }\n/* The page\'s one heading is the open section\'s')],
+     [(PRIMS, '@import "./panelType.css";\n', '@import "./panelType.css";\n[data-brand="govuk"] body * { overscroll-behavior: contain; }\n')],
      ["the drawer scrolled", "then the drawer scrolled"]),
     ("Admin's place left a scroll box under GOV.UK (the side list then sticks to it, not to the page)",
      [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }\n', "")],
