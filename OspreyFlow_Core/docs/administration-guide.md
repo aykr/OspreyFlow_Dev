@@ -2903,11 +2903,23 @@ a model not offered, at that job; an address that is not `https://`, at the addr
 nothing unchecked:** a refused check keeps nothing, and only a passed check offers **Add the engine**,
 which adds it from the check without sending the key again, recording the key as set by whoever
 checked it. A passed check not added within 15 minutes is removed, key and all, within a minute after
-that, and **Cancel** removes it at once. **Edit** does not check yet: after changing an engine's model
-or address, use **Test the connection**. Each provider can be added once here. Until then it is listed under **Being checked**, with when it lapses and **Cancel the
-check**, and is offered to no analyst. Each check, its outcome, its cancelling and its lapsing are in
-**History** and the audit log, never the key. Listing the models a key may use is not built yet: the
-model names are typed.
+that, and **Cancel** removes it at once. Until then it is listed under **Being checked**, with when it
+lapses and **Cancel the check**, and is offered to no analyst. No engine is added any other way, from
+this screen or by a direct call to the Conduit. Each check, its outcome, its cancelling and its lapsing
+are in **History** and the audit log, never the key. Listing the models a key may use is not built yet:
+the model names are typed. Each provider can be added once here; a second of the same provider (another
+Azure resource, say) comes in a later release.
+
+**Editing an engine, and a new key** (ADR-135 Amendment 14 point 9). A changed model name or address is
+checked the same way before it is saved: the button says **Check and save**, and nothing changes unless
+every model answers; a refusal says what the engine keeps. A changed address asks for the key with it,
+in **Key for the new address**, since a key is never sent to an address it was not entered for; every
+model is then checked at the new address with that key. A changed label or agreement alone is saved
+without a call. **Enter key** and **Rotate the key** check the new key against each of the engine's
+models before it replaces the one held: a key the provider refuses changes nothing, and the engine
+keeps working with the key it has. `ospreyflow models key` checks it the same way. A key moved in from
+`deployment.env` when the deployment is installed is not checked: it is the installer's own key, moved,
+not changed.
 
 **On a cloud platform** (`profile: cloud-platform`), an engine is reached only once the deployment's
 render has made its way out of the namespace, and for Amazon Bedrock the gateway's own IAM role,

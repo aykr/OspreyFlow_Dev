@@ -84,3 +84,33 @@ EVERY_HARNESS.diff applied to the working tree only and reverted after:
   (received the check's words beside "Adding…"), green with the fix (the busy words replace the check's).
   After the fix: keyboard 17 passed (with the 4 registry ids applied); every-harness axe, models states: 56 passed
   (each new state in dark, light and govuk, and the 2.5.3 label check); Models.test.tsx 29 passed.
+
+The owner's rulings 18 and 19 (15 Nov ~16:15Z, on main at bd253df), at 5ff67cb:
+  test_model_engine_checks.py, written before the code, 5 RED:
+    test_no_route_adds_an_engine_without_a_passed_check: POST /v1/admin/models/engines still in the app.
+    test_an_edited_model_name_is_checked_before_it_is_saved: a model the provider does not offer saved, 200.
+    test_a_changed_address_takes_its_key_with_it_and_is_checked_there: an address changed with no key saved, 200.
+    test_a_new_key_is_checked_before_it_replaces_the_one_held: a key the provider refuses set, 200.
+    test_the_key_appears_nowhere_through_an_edit_or_a_new_key: the edit's body with a key refused (no such field).
+  Green at 5ff67cb, as they should be (behaviour kept): a label or agreement alone saved with no call; a key moved
+  from deployment.env moved unchecked (the one exception).
+  Found while building, each RED before its fix:
+    test_a_corrected_key_checked_again_at_once_is_not_held_back_by_the_refused_one: RED at 5ff67cb ("cooling_down"):
+      the gateway cools a refused entry's name for a minute even once deleted, so a corrected key checked again at
+      once was refused (a defect in stage 3's check before Add, not only in ruling 19's).
+    test_the_key_appears_nowhere_through_an_edit_or_a_new_key: RED after the first build: an edit took a key pasted
+      into the label (the check's rule was never on the edit).
+    test_a_models_file_that_cannot_be_written_...: RED with its new assertion: a check whose record could not be
+      saved left its key in the gateway with nothing to remove it.
+    test_route_rights.py::test_every_route_names_the_right_the_table_gives_it: RED at c440153 (the three check
+      routes missing from the table); green with them, and with P1's add route gone.
+  Plants: 21/21 red (plants_run.txt), the 7 new ones at the new code's call sites; plant 4 (a check's entry left)
+  went GREEN once the entries had a name of their own, until offers_nothing_until_add asserted no entry at all.
+  Glass, Models.test.tsx: 4 new cases RED at 5ff67cb (no key field on a changed address, no "Check and save", no
+  words on the key form); green after. keyboard/admin-models.spec.ts at slot 9 against Models.tsx and ModelsApi.ts
+  as at 5ff67cb: "an engine's address is changed by keyboard with its key" RED (no disabled Check and save); "a new
+  key the provider refuses is said by keyboard" GREEN there, since the screen already showed the Conduit's refusal:
+  it proves the action reachable by keyboard (rule 13), and the invariant (the held key kept) is held RED-first in
+  the Conduit (plant 17). After: keyboard 19/19 with ACTION_REGISTRY.diff applied; every-harness axe for Models
+  60/60 with EVERY_HARNESS.diff applied (the new state open=edit&moved=1 shown to draw its key field); both
+  reverted after.
