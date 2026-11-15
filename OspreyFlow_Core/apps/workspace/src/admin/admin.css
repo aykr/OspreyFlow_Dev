@@ -6,6 +6,18 @@
   padding: var(--sp-16); min-height: 0; flex: 1; overflow-y: auto;
   background: var(--surface-app); color: var(--text-primary);
 }
+/* Under GOV.UK, Admin is a page that scrolls (the owner's screenshot of Admin › System, 15 November 2026). The
+   page's footer follows the workspace there (ADR-132, `brand/BrandFrame.tsx`), so Admin scrolling in its own box
+   made two scrollers, and the side list and the section were cut at the footer's edge. Here the document is Admin's
+   one scroller: the place grows with its content, App's root (sized to the window by an inline height) grows to hold
+   it, and the footer follows. The side list stays in view as the section scrolls, never past the place's end. The
+   standard look, with no footer, keeps the place's own box. `keyboard/admin-frame.spec.ts` holds it. */
+[data-brand="govuk"] .admin-place { flex: none; overflow-y: visible; }
+[data-brand="govuk"] :has(> .admin-place) { height: auto !important; min-height: var(--workspace-height, 100vh); }
+[data-brand="govuk"] .admin-place .admin-nav {
+  position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
+}
+
 /* The page's one heading is the open section's (the GOV.UK pass, 14 Nov): "Admin" a caption over it,
    the help page a link in the same row. Outside GOV.UK, the section heading keeps its old size. */
 .admin-place__title-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-16); flex-wrap: wrap; }
@@ -89,4 +101,12 @@
    the 19px body. */
 [data-brand="govuk"] .admin-place :is(.admin-nav__link, .admin-nav__coming-item, .admin-nav__coming, .admin-nav__coming-what, .admin-place__help, .admin-place__section table, .admin-place__section .btn, .admin-place__section input, .admin-place__section select, .admin-row-actions__link) {
   font-size: var(--fs-12); line-height: var(--lh-12);
+}
+
+/* Admin › System's words in the page's own face (the owner's screenshot, 15 November 2026): a part's name, the
+   version, the marking ceiling and the converted views are words to read. Mono stays for a value to copy, a model's
+   id in its table (tokens.css: "every identifier … is set in mono. Mono means: this is a value you can copy";
+   DESIGN.md §9 exception 3). */
+.admin-system__name, .admin-system__version, .admin-system__marking, .admin-system__converted {
+  font-family: var(--ui); font-weight: 600;
 }

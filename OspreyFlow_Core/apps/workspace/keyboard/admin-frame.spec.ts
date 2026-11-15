@@ -36,8 +36,13 @@ for (const [look, brand] of LOOKS) {
       const place = document.querySelector(".admin-place")!;
       const footer = document.querySelector(".govuk-footer");
       const y = (r: DOMRect, edge: "top" | "bottom") => r[edge] + window.scrollY;
+      // Scrolled to the page's end, the side list is still in view (sticky) and ends above the footer.
+      window.scrollTo(0, document.scrollingElement!.scrollHeight);
+      const nav = document.querySelector(".admin-nav")!.getBoundingClientRect();
       return {
         boxes,
+        navInView: Math.round(nav.top) >= 0,
+        navAboveFooter: footer ? nav.bottom <= footer.getBoundingClientRect().top + 1 : true,
         hidden: place.scrollHeight - place.clientHeight,
         footerGap: footer ? Math.round(y(footer.getBoundingClientRect(), "top") - y(place.getBoundingClientRect(), "bottom")) : null,
       };
@@ -46,6 +51,7 @@ for (const [look, brand] of LOOKS) {
     if (look === "govuk") {
       expect(m.hidden, "Admin's place hides none of its content").toBeLessThanOrEqual(1);
       expect(m.footerGap, "the footer follows Admin's place").toBeGreaterThanOrEqual(0);
+      expect(m.navInView && m.navAboveFooter, "the side list stays in view, above the footer").toBe(true);
     }
   });
 

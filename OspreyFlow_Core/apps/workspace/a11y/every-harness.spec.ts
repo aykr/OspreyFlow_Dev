@@ -78,6 +78,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-146 decision 2: Rules and Monitoring in the switcher with its count (inside the GOV.UK header
   // under that brand), and the place open, its banner a GOV.UK notification banner.
   // ADR-132 Amendment 8: `banner=1` is the demonstration's deployment, the compact top under GOV.UK.
+  // The page frame as main.tsx and App.tsx draw it, a drawer's long body and the start overlay open (15 Nov 2026).
+  "frame-harness.html": ["drawer=1", "overlay=1"],
   "places-harness.html": [
     "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "banner=1", "banner=1&place=rules",
     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
@@ -276,6 +278,8 @@ const EXTRA_STATES: Record<string, string[]> = {
   "needs-you-harness.html": ["open=1", "open=1&notices=1"],
   "admin-harness.html": [
     "open=connections&rights=administer_system",
+    // Admin › System in the page's own frame, the owner's screenshot (15 November 2026).
+    "frame=1&serve=system&rights=administer_system&open=System",
     // ADR-145 Amendment 16: Models and Maps, their parts h2s beneath the section's h1.
     "rights=manage_models&serve=models&open=Models",
     "rights=manage_geospatial&serve=maps&open=Maps",

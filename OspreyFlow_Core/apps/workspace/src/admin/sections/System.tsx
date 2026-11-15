@@ -31,7 +31,7 @@ export function System({ api }: { api: AdminApi }) {
           {(status.components ?? []).map((c) => (
             <li key={c.name} style={{ display: "flex", gap: "var(--sp-8)", alignItems: "baseline" }}>
               <span aria-hidden style={{ width: 10, height: 10, borderRadius: "50%", background: `var(${c.ok ? "--success" : "--error"})` }} />
-              <span className="value">{c.name}</span>
+              <span className="admin-system__name">{c.name}</span>
               {/* ADR-114 Amendment 36: a part that answered and is wrong says what to do, not "not answering". */}
               <span className="label">
                 {c.ok ? `answered in ${c.millis} ms` : (c.notice ?? `not answering: ${c.detail ?? "no reason given"}`)}
@@ -59,7 +59,7 @@ export function System({ api }: { api: AdminApi }) {
               <tr key={m.role}>
                 <td>{m.role}</td>
                 <td>
-                  <code>{m.model}</code>
+                  <code className="identifier">{m.model}</code>
                   {m.runs_at !== "this deployment" && m.local_model && (
                     <div className="label">{`Anything that may not be sent runs on ${m.local_model}.`}</div>
                   )}
@@ -75,7 +75,7 @@ export function System({ api }: { api: AdminApi }) {
       {status?.highest_marking && (
         // ADR-148 decision 10: the deployment's marking ceiling, said in words.
         <section aria-label="Highest marking" style={{ display: "grid", gap: "var(--sp-6)" }}>
-          <p className="value" style={{ margin: 0 }}>{status.highest_marking}</p>
+          <p className="admin-system__marking" style={{ margin: 0 }}>{status.highest_marking}</p>
           <p className="label" style={{ margin: 0 }}>
             {`The highest marking this deployment may hold. A load or an import marked above ${status.highest_marking} is refused before anything is written.`}
           </p>
@@ -205,7 +205,7 @@ function VersionSection({ version, update }: { version?: string | null; update?:
   const words = updateWords(version, update);
   return (
     <section aria-label="Version" style={{ display: "grid", gap: "var(--sp-6)" }}>
-      {version && <p className="value" style={{ margin: 0 }}>{`OspreyFlow ${version}`}</p>}
+      {version && <p className="admin-system__version" style={{ margin: 0 }}>{`OspreyFlow ${version}`}</p>}
       <p
         role={words.tone === "problem" ? "alert" : "status"}
         style={{
@@ -253,7 +253,7 @@ function ConvertedSection({ converted }: { converted: ConvertedViews }) {
   const [made, waiting] = convertedWords(converted);
   return (
     <section aria-label="Cases converted to views" style={{ display: "grid", gap: "var(--sp-6)" }}>
-      <p className="value" style={{ margin: 0 }}>{made}</p>
+      <p className="admin-system__converted" style={{ margin: 0 }}>{made}</p>
       <p className="label" style={{ margin: 0 }}>{waiting}</p>
     </section>
   );
