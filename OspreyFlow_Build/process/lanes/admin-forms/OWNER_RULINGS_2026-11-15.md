@@ -71,3 +71,10 @@ already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Adm
     keeping its own model beside Gemini; the rest of the forms after it.
 17. **Bedrock stays London-only in v0.6.0** (the owner, 15 Nov): in London that means Amazon Nova, not Claude; the guide
     says so. Allowing AWS's EU profile for Claude is a v0.6.1 decision.
+
+## The first slice's open points (the owner, 15 Nov ~16:15Z)
+
+18. **No engine is added unchecked by any route**: the add route requires a passed check (its id, under 15 minutes old).
+19. **Editing an engine is checked too**: a changed model name, address or key runs the same check before it is saved.
+20. **One engine per provider from the screen is acceptable for now**; a second instance of a provider comes in a later slice.
+(Bedrock's example stays amazon.nova-pro-v1:0, ruling 17. "Your own gateway on every profile" is ruling 15.)
