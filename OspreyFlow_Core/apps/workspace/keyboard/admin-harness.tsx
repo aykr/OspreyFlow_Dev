@@ -4,11 +4,20 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import "../src/shell/places.css";
 import { AdminPlace } from "../src/admin/AdminPlace";
+import { BrandFrame } from "../src/brand/BrandFrame";
+import { PLAIN_APPEARANCE } from "../src/brand/brand";
+import { ClassificationStrip } from "../src/shell/ClassificationStrip";
+import { TopBar } from "../src/shell/TopBar";
 import { applyHarnessBrand } from "./brandHarness";
 
 // `?brand=govuk` (ADR-145 decision 13): the side list as a GOV.UK side navigation, scanned so.
-await applyHarnessBrand();
+const brand = await applyHarnessBrand();
+// `?frame=1` (the owner's screenshot of Admin › System, 15 November 2026): Admin in the page's own frame, as
+// `main.tsx` and `App.tsx` draw it: the brand frame (GOV.UK's header and footer under that brand), App's root at
+// the window's height less what the frame shows above, the classification strip and the top bar above Admin.
+const framed = new URLSearchParams(location.search).get("frame") === "1";
 
 const tab = new URLSearchParams(location.search).get("rights") ?? "manage_people,manage_dashboards,administer_system";
 const open = new URLSearchParams(location.search).get("open");
@@ -60,6 +69,36 @@ if (serving === "datasets") {
     "/v1/admin/system": { components: [{ name: "Graph store", ok: true, millis: 12 }],
       converted_views: { views: 3, cases: 2 } },
   };  // prettier-ignore
+  window.fetch = async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname;
+    return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
+  };
+}
+
+// `?serve=system` (the owner's screenshot): Admin › System as a deployment shows it, each part of the page's
+// fonts present: the health list's store names, a model's id in its table, the version, the marking ceiling and
+// the converted views. Synthetic (rule 9).
+if (serving === "system") {
+  const served: Record<string, unknown> = {
+    "/v1/admin/system": {
+      components: [
+        { name: "Graph store", ok: true, millis: 12 },
+        { name: "Case and rule stores (Postgres)", ok: true, millis: 4 },
+        { name: "Search index", ok: true, millis: 9 },
+        { name: "Valkey", ok: true, millis: 1 },
+        { name: "Identity provider", ok: true, millis: 30 },
+      ],
+      models: [
+        { role: "Extraction", model: "gemini-2.5-flash", runs_at: "the provider", local_model: "llama3.1:8b" },
+        { role: "Ask & Chat", model: "claude-sonnet-5-5", runs_at: "the provider", local_model: null },
+        { role: "Recognition", model: "stanza-en-1.9", runs_at: "this deployment", local_model: null },
+      ],
+      version: "v0.5.2",
+      update: null,
+      highest_marking: "OFFICIAL-SENSITIVE",
+      converted_views: { views: 3, cases: 2 },
+    },
+  };
   window.fetch = async (input: RequestInfo | URL) => {
     const path = new URL(String(input)).pathname;
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
@@ -246,8 +285,25 @@ if (serving === "packs") {
     return new Response(JSON.stringify(served[path] ?? []), { status: 200 });
   };
 }
+// The page's own frame is the window's: the harness's fixed 1100 by 800 root would bend it.
+if (framed) document.getElementById("root")!.removeAttribute("style");
+const place = <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))} />;
 createRoot(document.getElementById("root")!).render(
-  <AdminPlace apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))} />,
+  framed ? (
+    <BrandFrame
+      appearance={brand === "govuk"
+        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }
+        : PLAIN_APPEARANCE}
+    >
+      <div style={{ display: "flex", flexDirection: "column", height: "var(--workspace-height, 100vh)" }}>
+        <ClassificationStrip marking="OFFICIAL" />
+        <TopBar app="glass" account={null} />
+        {place}
+      </div>
+    </BrandFrame>
+  ) : (
+    place
+  ),
 );
 
 if (open) {
