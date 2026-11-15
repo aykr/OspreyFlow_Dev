@@ -1,0 +1,8 @@
+R1's domain guard, red first at 30e4fb9 on main ebcba42 (2026-11-15T06:44:42Z), offline on 59991-59994, OSPREY_LANE unset.
+Before (main's r1_kind.py): test_r1_kind_domain_guard 1 failed (the v0.5.1-shaped config probed the domain), 1 passed. After: 2 passed; with every R1 test (upgrade, standins, decommission, entra, opensearch, dashboards check) 126 passed.
+
+plant 1: the domain probed whatever the release searches with (main's behaviour): a v0.5.1-shaped config
+  -k 'without_opensearch': RED (1 failed, 1 deselected in 0.58s)
+plant 2: the domain never probed: a v0.5.2-shaped config
+  -k 'with_opensearch_has': RED (1 failed, 1 deselected in 0.59s)
+2/2 red
