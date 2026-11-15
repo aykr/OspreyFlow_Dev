@@ -1,3 +1,15 @@
+<!-- STOP, at the top as the owner's word (v060/OWNER_WORD_IN_ADVANCE §2) asks -->
+**STOP, 15 Nov ~21:49Z: v0.6.0 stage 4 (the package test) stopped at row 1, on C 09f1fbe, a product defect (§2.2).**
+INSTALL's step 5 rolled out every workload, then its search index rebuild Job (ADR-150 decision 4) failed:
+`OSError: Connect call failed ('127.0.0.1', 5433)`. On cloud-platform the chart's search Jobs
+(deploy/helm/ospreyflow/templates/searchindex.yaml: ospreyflow-search-rebuild and -drift) get only OPENSEARCH_URL,
+ARCADEDB_ROOT_PASSWORD and the ospreyflow-env ConfigMap, with no Postgres settings, but the rebuild reads Postgres
+(services/search_index/resources.py:40, since ef540c5, 13 Nov), so it falls back to localhost:5433; d78ac38 (13 Nov)
+narrowed the Jobs' env and cp_policy_check admits only the graph's password. A client's first install stops at its last
+block. Needed: a product fix (the Jobs given the managed database's settings as the api has them, the policy gate
+admitting them), CI green, a new candidate, stage 4 from row 0. Nothing published. Record:
+~/osprey-runs/platform.r1/records/20261115T214305Z-INSTALL.log on the test server.
+
 # Morning, 14 November 2026 (the overnight run on the v0.5.2 route)
 
 Kept by the orchestrator through the night. The owner's words for the night: merge as ready, push main after green
