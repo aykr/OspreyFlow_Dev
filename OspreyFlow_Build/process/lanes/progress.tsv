@@ -185,3 +185,5 @@ rules	v060-upgrade-cache	S	done	v0.6.0 (the owner, 15 Nov): every image's upgrad
 admin	v060-cli-scope	S	done	v0.6.0 (the owner, 15 Nov): `ospreyflow run` on Entra sends the scope Entra requires (AADSTS1002012 without it), beside #18	lane/admin-v060-i18-run-app-role
 platform-b	v060-release-path	S	done	v0.6.0: images push passes the upgrade stamp; the dev release.yml retired and release_local following the product workflow; the tag check in the product workflow (owner diffs)	lane/platform-b-v060-stamp-release
 rules-b	v060-stage2-official	M	done	v0.6.0 stage 2: the official leak test, never-join and client-size timings on stack d (run before #4 merges; #4 is Glass-only)	lane/rules-b-stage2-official
+platform-b	v060-stage4-package-test	L	building	v0.6.0 stage 4: the package test on C = 09f1fbe (fresh install only, every check, the memory sampler), started 15 Nov ~21:40Z under the owner's lease
+platform-b	v060-stage3-done	S	done	v0.6.0 stage 3: the candidate C = 09f1fbe (CI 43756479074 green), its dry run green; no Core change needed	lane/platform-b-v060-candidate-records
