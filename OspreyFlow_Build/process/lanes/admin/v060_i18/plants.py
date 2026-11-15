@@ -29,7 +29,9 @@ PLANTS = [
     ("no role required (main's shape)",
      [(SI, "        if RUN_APP_ROLE not in held:\n            raise ServiceIdentityRefused(RUN_ROLE_NOT_HELD, status=403, client=client)\n", "")],
      [f"{REFUSED}[{i}]" for i in CASES] + [f"{TEST}::test_a_v1_app_only_token_without_the_run_role_is_refused_in_words",
-                                           f"{DOOR}[no-role-not-a-dashboard]"]),
+                                           f"{DOOR}[no-role-not-a-dashboard]"]
+     + [f"{TEST}::test_the_run_api_door_with_a_store_answering_none_or_too_slowly[no-role-store-{w}]"
+        for w in ("answers-none", "too-slow")]),
     ("the role compared without its case",
      [(SI, "        if RUN_APP_ROLE not in held:", "        if RUN_APP_ROLE.lower() not in [r.lower() for r in held]:")],
      [f"{REFUSED}[another-case]"]),
