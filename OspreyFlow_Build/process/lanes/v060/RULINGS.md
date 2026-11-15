@@ -37,3 +37,4 @@ out and counted, never named; item 10 moves from platform to rules-b; the demo's
 - Item 23, the cloud-platform shape's memory sizes from measured use
 - The websites ospreyflow.org and ospreyflow.net published (finish.tsv p3)
 - Bedrock beyond London (AWS's EU profile, for current Claude models): to decide (ruling 17)
+- Images: a cached `apt-get upgrade` layer can hide a Debian security fix in any of our Debian images (found 15 Nov on Superset; fixed there by a version floor). The lasting cure is a cache-busting build arg or `--no-cache-filter` on the upgrade stage in the Makefile and the workflow, the owner's files (rules' note)
