@@ -2112,3 +2112,11 @@ cut, from the same prompt, as its own prompt later: the history accordion, Ask &
 - **Revised, 08:25Z (the owner):** admin measured the scroll glitch on every GOV.UK page, visitors' included (the frame
   scrolls by the footer's 95px; an inner panel's end moves the page). The owner moved AD **into the candidate** (step 6
   waits, ~13:00Z start, still before Mon 08:00Z), and chose **contain inner scrolls**, ADR-132's frame kept.
+- **Accounts (the owner, 15 Nov, ~09:30Z):** "start shifting about 50% of the workload to sol after 12.00". At 12:00Z
+  the orchestrator switches case, case-b, docs and rules to sol (`lanes_launch.sh switch <lane> --account sol`, each
+  only while idle between steps); platform-b and studio are on sol already; admin, platform, rules-b and the
+  orchestrator stay on ayan, and one more moves if the split is uneven after AD.
+- **Backup fix (BK, the owner, 15 Nov):** cloud-platform backup sets held map-keys.yaml in plain text (rules-b's finding,
+  platform proved it at 0246f9b); the fix joins the candidate (351e2c9).
+- **Websites (the owner, 15 Nov):** public repositories aykr/ospreyflow.org and aykr/ospreyflow.net created (empty);
+  publishing and ospreyflow.app (Part 3) are queued after the cut (finish.tsv p3, p4).
