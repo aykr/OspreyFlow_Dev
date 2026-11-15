@@ -38,7 +38,7 @@ def main() -> int:
         try:
             out = subprocess.run(["npx", "playwright", "test", "--config", "keyboard/playwright.config.ts",
                                   "admin-words-face.spec.ts", "--reporter=line"], cwd=WS, capture_output=True, text=True,
-                                 env={**os.environ, "OSPREY_PORTS_SLOT": "1"}).stdout
+                                 env={**os.environ, "OSPREY_PORTS_SLOT": os.environ.get("OSPREY_PORTS_SLOT") or sys.exit("set OSPREY_PORTS_SLOT to your local Playwright slot")}).stdout
         finally:
             subprocess.run(["git", "checkout", "--", path], cwd=ROOT, check=True)
         failed = re.findall(r"^\s+\d+\) \S+ › (.+?) in the (\w+) look", out, re.M)

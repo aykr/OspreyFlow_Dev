@@ -21,9 +21,10 @@ only the face (tokens.css:245).
   RuleEditor and AlertQueue.
 - `h2.value` section headings, 98: Admin › Models and Maps (`admin/sections/Models.tsx`, `Maps.tsx`),
   `App.tsx:2115` "Connection strength", History, HomePage's "Rules and Monitoring".
-- Plain `h2`/`h3`, 31: HomePage "Figures", OperationsFigures, RolesHelpPage, IngestStudio, and
-  `.strength-panel__heading` (`primitives.css:592`, with no size).
-- `h1` at 26px, 17: "The graph" (search results) and `h1.value` "Home" (`home/AnswersForSection.tsx`).
+- Plain `h2`/`h3`, 31: HomePage "Figures", OperationsFigures, RolesHelpPage, IngestStudio; and
+  `.strength-panel__heading`, 11 more (`primitives.css:592`, with no size).
+- `h1` at 26px: "The graph" (search results) and `h1.value` "Home" (`home/AnswersForSection.tsx`), 6 of the
+  product's (the raw 17 counted the map-view harness's own title, group E, 12 times; corrected 15 November).
 - The same elements are off the scale in the standard look too, so this is not GOV.UK's alone.
 - In Admin, home and welcome, where tokens.css remaps the scale, the em sizes multiply the remapped base, so they
   are off there as well.
@@ -52,7 +53,7 @@ question as A.
 ## D. Mono where the pass reads words: 38
 
 - **D1, words in mono, 7 (real):** `span.home-glyph` "△" and "·" (alert-figures, start), a decorative glyph set in
-  mono, and `span.selection-bar__reading` "direct" (`linktypes/ModelProposals.tsx`). **Fix:** the page's face.
+  mono, and `span.selection-bar__reading` "direct" (`canvas/SelectionBar.tsx:129`, styled in `primitives.css`). **Fix:** the page's face.
 - **D2, values the pass does not class, 31 (not faults: mark them):** the Ingest Studio's sample cells ("SYN-0441",
   "07700 900001", "2026-01-01T09:00:00Z", "HMP Fenwick Moor"), a row's JSON in a check's `li` ("row 4 : {…}"), and
   the SQL/JSON editors' `textarea`. These are values or code, so mono is right. **Fix:** class the cells and the

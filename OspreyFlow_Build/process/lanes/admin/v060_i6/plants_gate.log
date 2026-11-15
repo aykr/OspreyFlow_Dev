@@ -1,0 +1,7 @@
+# v0.6.0 #6 gate plants at 5ad39e5
+== unplanted, "the pass found every-harness's pages and their states": passes
+== unplanted, 'alert-figures-harness.html under GOV.UK': passes
+== a state left out for its characters (the first draft's filter): RED on "the pass found every-harness's pages and their states"; ['Error: every string of the source, a page or a state', 'Expected: 260', 'Received: 253']
+== the brand never applied: RED on 'alert-figures-harness.html under GOV.UK'; ['Error: expect(locator).toHaveAttribute(expected) failed', 'Expected: "govuk"', 'Received: "ospreyflow"']
+== nothing measured, so nothing found: RED on 'alert-figures-harness.html under GOV.UK'; ['Error: text elements measured', 'Expected: > 0', 'Received:   0']
+plants: 3, missed: 0
