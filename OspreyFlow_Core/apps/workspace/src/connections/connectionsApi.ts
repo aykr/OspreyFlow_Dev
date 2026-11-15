@@ -102,3 +102,31 @@ export async function seedElements(
   // The add, then the reader's own clusters (ADR-124 Amendment 19), in that order.
   return outcomeDeltas((await response.json()) as ExpansionOutcome);
 }
+
+/** What `POST …/working-set/add-by-ids` answered (v0.6.0 #5, *Show all on graph*): the add, as the deltas to apply, and
+ * how many of the ids asked for are not on the canvas after it (never which); or the working set's own typed refusal
+ * past its cap (rule 2), with its figures, nothing added. */
+export type AddedByIds =
+  | { kind: "added"; deltas: WorkingSetDelta[]; notShown: number }
+  | { kind: "limit_exceeded"; capKind: string; cap: number; wouldBe: number };
+
+/** An Ask & Chat answer's items put on the canvas by id alone, read on the server as this reader may see them. */
+export async function addByIds(
+  context: ConnectionsContext,
+  nodeIds: readonly string[],
+  linkIds: readonly string[],
+): Promise<AddedByIds> {
+  const response = await fetch(caseUrl(context, "working-set/add-by-ids"), {
+    method: "POST",
+    headers: headers(context),
+    body: JSON.stringify({ node_ids: [...new Set(nodeIds)], link_ids: [...new Set(linkIds)] }),
+  });
+  if (response.status === 409) {
+    const body = (await response.json().catch(() => null)) as { error?: string; cap_kind?: string; cap?: number; would_be?: number } | null;
+    if (body?.error === "limit_exceeded")
+      return { kind: "limit_exceeded", capKind: body.cap_kind ?? "nodes", cap: body.cap ?? 0, wouldBe: body.would_be ?? 0 };
+  }
+  if (!response.ok) throw new Error(`The answer's items could not be added to the canvas (${response.status}). Try again.`);
+  const added = (await response.json()) as { outcome: ExpansionOutcome; not_shown: number };
+  return { kind: "added", deltas: outcomeDeltas(added.outcome), notShown: added.not_shown };
+}

@@ -375,6 +375,105 @@ test("an earlier answer is opened from its question's line by keyboard, its mark
   registerCovered(REGISTRY, "open-an-earlier-answer-by-keyboard");
 });
 
+// v0.6.0 #5: *Show all on graph* and *Save as a view* under an answer, by keyboard, against the real canvas
+// (harness.html?questions=1, wired as `App.tsx` wires them through `questions/showAnswer.ts`).
+/** An answer whose markers stand for n2 and n3 (on the canvas), n9 (not yet) and one the reader may not see. */
+const SHOW_ALL = {
+  ...ANSWER,
+  id: "q-all",
+  question: "Who is near n2?",
+  answer: "n2 knows n3 [G-1], and n9 is near [G-2].",
+  citations: [],
+  candidates: [],
+  graph_citations: [
+    { number: 1, label: "[G-1]", about: "n2 and n3", node_ids: ["n2", "n3"], link_ids: ["e2"] },
+    { number: 2, label: "[G-2]", about: "n9", node_ids: ["n9", "hidden-1"], link_ids: [] },
+  ],
+};
+const N9 = {
+  id: "n9", type: "Person", properties: { family_name: "n9" },
+  provenance: { state: "asserted", sources: [{ document_id: "fixture-doc", locator: "p.1", excerpt_hash: "a".repeat(64) }], first_seen: "2026-01-01T00:00:00Z" },
+  handling: { classification: "OFFICIAL", handling_code: "P", originator: "unit-1", owning_unit: "unit-1" },
+  audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
+}; // prettier-ignore
+
+async function askForAll(page: Page, addAnswer: (route: import("@playwright/test").Route) => Promise<void>) {
+  const added: unknown[] = [];
+  await page.route("**/v1/investigations/*/working-set/add-by-ids", async (route) => {
+    added.push(route.request().postDataJSON());
+    await addAnswer(route);
+  });
+  await serve(page, [], SHOW_ALL, "/keyboard/harness.html?questions=1");
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who is near n2?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByRole("button", { name: "Show all on graph", exact: true })).toBeVisible();
+  return added;
+}
+
+test("Show all on graph under an answer puts every item it stands for on the real canvas and selects them, by keyboard, saying how many could not be shown", async ({ page }) => {
+  const added = await askForAll(page, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ outcome: { delta: { seq: 9, op: "add", nodes: [N9], edges: [] }, links_among: "not_asked" }, not_shown: 1 }),
+    }),
+  );
+  const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, said: window.__KEYBOARD__!.said ?? null }));
+  const show = page.getByRole("button", { name: "Show all on graph", exact: true });
+  await show.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => added).toEqual([{ node_ids: ["n2", "n3", "n9", "hidden-1"], link_ids: ["e2"] }]);
+  // Every item of the answer on the canvas is selected together: the two already there and n9 just added; the one
+  // the reader may not see is counted, never named.
+  await expect.poll(async () => (await state()).nodes.slice().sort()).toEqual(["n2", "n3", "n9"]);
+  expect((await state()).said).toBe("1 of this answer's items could not be shown.");
+  registerCovered(REGISTRY, "show-all-of-an-answers-items-on-the-graph-by-keyboard");
+});
+
+test("Show all on graph past the working set's cap adds nothing and says the cap's own figures (rule 2)", async ({ page }) => {
+  await askForAll(page, (route) =>
+    route.fulfill({
+      status: 409,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50003, options: [] }),
+    }),
+  );
+  const before = await page.evaluate(() => window.__KEYBOARD__!.selection.slice());
+  await page.getByRole("button", { name: "Show all on graph", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__!.said ?? ""))
+    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view keeps them all.");
+  expect(await page.evaluate(() => window.__KEYBOARD__!.selection.slice())).toEqual(before);
+});
+
+test("Save as a view under an answer saves its items as a saved view, by keyboard", async ({ page }) => {
+  const saves: unknown[] = [];
+  await page.route("**/v1/investigations/*/views", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    saves.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({ id: "v-a", case_id: "keyboard-fixture", name: "Answer: Who is near n2?", created_by: "analyst-1", created_at: "2026-11-15T10:00:00Z", shared: false, chosen: 4 }),
+    });
+  });
+  await askForAll(page, (route) => route.fulfill({ status: 500, body: "{}" }));
+  const save = page.getByRole("button", { name: "Save as a view", exact: true });
+  await save.focus();
+  await page.keyboard.press("Enter");
+  await expect(save).toHaveAttribute("aria-expanded", "true");
+  const name = page.getByLabel("View name");
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue("Answer: Who is near n2?");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => saves.length).toBe(1);
+  expect(saves[0]).toMatchObject({ name: "Answer: Who is near n2?", node_ids: ["n2", "n3", "n9", "hidden-1"] });
+  await expect(name).toHaveCount(0);
+  registerCovered(REGISTRY, "save-an-answers-items-as-a-view-by-keyboard");
+});
+
 test("every registered questions action has its own proving test case above", () => {
   assertAllCovered("QUESTIONS_ACTIONS", QUESTIONS_ACTIONS);
 });
