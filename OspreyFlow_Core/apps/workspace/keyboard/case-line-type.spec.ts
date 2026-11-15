@@ -103,12 +103,13 @@ for (const [brand, theme] of LOOKS) {
     await expect(trail).toHaveAttribute("title", "Saved view: Every payment between the three Ledger accounts in March and April");
     await expect(read).toHaveAttribute("title", reads);
     await expect(region).toContainText(view);
+    // Every part of the line drawn narrower than its words, whatever its style: only these two. The case switcher keeps
+    // its own ellipsis, cut only past its 320 px, which "Operation Ledger (synthetic demo)" does not reach.
     const cut = await region.evaluate((element) =>
       [...element.querySelectorAll<HTMLElement>("*")]
-        .filter((e) => e.children.length === 0 && e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === "ellipsis")
+        .filter((e) => e.children.length === 0 && !e.closest(".visually-hidden") && e.scrollWidth > e.clientWidth + 1)
         .map((e) => e.textContent ?? ""),
     );
-    // Only these two (the case switcher keeps its own ellipsis, cut only past its 320 px).
-    expect(cut.filter((t) => !t.startsWith("Case: ")).sort()).toEqual([reads, view].sort());
+    expect(cut.sort()).toEqual([reads, view].sort());
   });
 }
