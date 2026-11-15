@@ -2144,3 +2144,4 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **Stage 2, the never-join reach (the orchestrator, ~16:45Z):** 14 Nov met the 90% floor exactly (450/500). The floor and the 500
   cases stay; the check looks past page 1 to a fixed recorded bound so more cases are reached (red-first test, rehearsed).
   profile_m9.py fixed on main (it crashed after Am 21); the shipping search 59-212 ms against ~5 s for the old query.
+- **#6 merged (15 Nov ~17:40Z):** at merge one shell.spec case (govuk, More views at 1024) failed once in the whole suite and passed 3 of 3 alone; admin's and case's full runs of the branch were green. Recorded as load timing.
