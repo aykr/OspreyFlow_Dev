@@ -59,3 +59,11 @@ looks (DESIGN.md's one scale); GOV.UK Frontend's own classes kept; the Studio's 
 - The demo's own budget: **1,000,000 tokens a day** (Admin › Models), inside the free tier's daily limit.
 - Set at stage 5's rebuild (Wed 18 07:00 UK), then proved from a browser: the engine choice appears and one question is
   answered by Gemini. The visitor sign-in proposal still comes to the owner.
+
+## The owner's word in advance (15 Nov ~18:10Z)
+
+Stages 3, 4 and 5 and the demo rebuild are approved in advance under the conditions in
+`OWNER_WORD_IN_ADVANCE_2026-11-15.md`, each to start as soon as the one before finishes, at any hour. The demo's
+window is now "as soon as the release is made" (it replaces Wed 18 07:00 UK). Anything in its section 2 stops the run
+and comes back to the owner at the top of MORNING.md. Gemini's key: the rebuild runs to the end without it; the Gemini
+checks wait for the owner's key, unless 4.3's carry is shown safe by a rehearsal first.
