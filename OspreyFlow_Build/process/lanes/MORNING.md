@@ -2148,3 +2148,5 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **Stages to sol (the owner, ~17:45Z):** stage 2's official run to rules-b, stage 3's preparation to platform-b (to the
   owner's word), stage 5's demo rebuild to the demo lane (resumed on sol Tue evening). The orchestrator keeps the merges and
   pushes to main (ADR-142), CI checks, rulings and the owner's messages.
+- **Stage 2 run before #4 merges (the orchestrator, ~18:00Z):** #4 is Glass-only (no route, store, schema or search change), so the
+  server measurements (leak test, never-join, timings) run now on main and stand for v0.6.0; CI green on main follows the final push.
