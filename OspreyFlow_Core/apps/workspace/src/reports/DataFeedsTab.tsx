@@ -52,7 +52,7 @@ export function DataFeedsTab({ api }: { api: ReportsApi }) {
             {feeds.map((f) => (
               <tr key={f.recipe_id}>
                 <td>
-                  <span className="value">{f.label}</span>
+                  <span>{f.label}</span>
                   {f.flagged && <div className="label">Stopped: the ontology changed since it was published</div>}
                 </td>
                 <td>{f.schedule ?? "Run by hand"}</td>

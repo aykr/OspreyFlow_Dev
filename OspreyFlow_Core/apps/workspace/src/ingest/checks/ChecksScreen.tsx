@@ -136,7 +136,7 @@ export function ChecksScreen({ apiBaseUrl, investigationId, bearerToken, recipeI
                     />
                   </td>
                   <td>
-                    <span className="value">{rule.name}</span>
+                    <span>{rule.name}</span>
                     <br />
                     <span className="label">
                       {rule.scope === "deployment" ? "Whole deployment · applies to every pipeline" : "This case"}

@@ -30,7 +30,7 @@ export function SelectionList({ nodes, onCentre, onRemove }: SelectionListProps)
                 onClick={() => onCentre(node.id)}
                 style={{ flex: 1, textAlign: "left" }}
               >
-                <span className="value">{name}</span>
+                <span>{name}</span>
                 <span style={{ color: "var(--text-tertiary)" }}> · {node.type}</span>
               </button>
               <button

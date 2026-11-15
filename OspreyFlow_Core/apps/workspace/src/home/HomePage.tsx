@@ -148,7 +148,7 @@ function AdminPicture({ services }: { services: HomeSummary["services"] }) {
       {services.map((s) => (
         <div key={s.name} className="home-pic__service">
           <span className={`home-glyph home-glyph--${s.ok ? "ok" : "error"}`}>{s.ok ? "✓" : "!"}</span>
-          <span className="value home-pic__service-name">{s.name}</span>
+          <span className="home-pic__service-name">{s.name}</span>
           <span className="home-pic__rule" />
           <span className={`home-pic__state home-glyph--${s.ok ? "ok" : "error"}`}>{s.ok ? "healthy" : s.notice ? "needs attention" : "not answering"}</span>
         </div>

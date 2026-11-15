@@ -466,7 +466,7 @@ export function MatrixView({
       rowHeader: true,
       render: (row) => (
         <>
-          <span className="value">{row.name}</span>
+          <span>{row.name}</span>
           {row.dimmed && <Dimmed />}
         </>
       ),

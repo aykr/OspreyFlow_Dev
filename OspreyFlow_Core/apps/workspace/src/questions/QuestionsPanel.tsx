@@ -381,7 +381,7 @@ export function QuestionsPanel({
                 <ul role="list" aria-label="Proposed by the model" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: "var(--sp-4)" }}>
                   {entry.candidates.map((candidate) => (
                     <li key={candidate.id} style={{ display: "flex", justifyContent: "space-between", gap: "var(--sp-8)", alignItems: "center" }}>
-                      <span className="value">
+                      <span>
                         {candidateLabel(candidate)}
                         <span style={{ color: "var(--text-tertiary)" }}> · {candidateSource(candidate)}</span>
                       </span>
@@ -678,7 +678,7 @@ function AnswerText({
           {(entry.search_citations ?? []).map((source) => (
             <li key={source.number} style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-8)", alignItems: "center" }}>
               {unmarkedSources.includes(source) ? sourceButton(source, `us${source.number}`) : <span>{source.label}</span>}
-              <span className="value">{source.name}</span>
+              <span>{source.name}</span>
               <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>
                 {source.type} · {source.why}
               </span>
