@@ -1,0 +1,50 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261115T170423Z-bbd23ef3/log: bash -c export STAGE2_SHORT=1 STAGE2_OUT=$HOME/osprey-load/stage2-rehearsal-$(date -u +%Y%m%dT%H%M); for s in leaks never-join; do echo "===== STEP $s"; bash OspreyFlow_Build/process/lanes/v060/stage2/run.sh $s; echo "===== STEP $s exit $?"; done
+===== STEP leaks
+stage 2 step leaks, SHORT (rehearsal, not a measurement), 2026-11-15T17:04:25Z, run copy 387117e, results /root/osprey-load/stage2-rehearsal-20261115T1704
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+9.84s call     tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+0.31s setup    tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 10.28s =======================
+{'measure': 'M10', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': 20, 'reached': 20, 'reach_bound': 'the first 3 pages of 20 results', 'reached_on_page': {'1': 20}, 'verdict': 'met'}
+===== STEP leaks exit 0
+===== STEP never-join
+stage 2 step never-join, SHORT (rehearsal, not a measurement), 2026-11-15T17:06:55Z, run copy 387117e, results /root/osprey-load/stage2-rehearsal-20261115T1704
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+7.09s call     tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+0.32s setup    tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 7.54s ========================
+{'measure': 'M10', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': 20, 'reached': 18, 'reach_bound': 'the first 3 pages of 20 results', 'reached_on_page': {'1': 17, '2': 1}, 'verdict': 'met'}
+===== STEP never-join exit 0
+Wall time: 226 s, exit 0 (stack d, the lease rules-b took at 2026-11-15T17:03:57Z; set-up before it 20 s)

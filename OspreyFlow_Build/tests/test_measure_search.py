@@ -38,6 +38,11 @@ class _Conduit(BaseHTTPRequestHandler):
     leak = ""
     # A never-join world: hid-1 is in another dataset, read only in its own case, case-partner.
     partner_only = False
+    # The search page on which the cleared answer names hid-1 (its rank past page 1), and the page
+    # on which a part-cleared answer leaks it (0: none); every page past `last_page` is empty.
+    hidden_page = 1
+    leak_page = 0
+    last_page = 5
     # M9: OpenSearch stopped (`index_down`), and how the fallback misbehaves: "slow", "silent"
     # (no words), "stuck" (the stop does not take), "never_back" (the start does not).
     index_down = False
@@ -73,6 +78,7 @@ class _Conduit(BaseHTTPRequestHandler):
             answer = self._leak_answer(
                 self.headers.get("Authorization", "") == "Bearer cleared-unit-fiu",
                 str(body.get("query", "")),
+                int(body.get("page", 1)),
             )
         elif self.path.endswith("/suggest"):
             answer: dict[str, Any] = {"nodes": [{"id": "n1"}], "more": False}
@@ -136,18 +142,26 @@ class _Conduit(BaseHTTPRequestHandler):
             "nodes": [],
         }  # fmt: skip
 
-    def _leak_answer(self, cleared: bool, query: str) -> dict[str, Any]:
+    def _leak_answer(self, cleared: bool, query: str, page: int = 1) -> dict[str, Any]:
         hidden = cleared and self.leak != "unreached"
         if self.partner_only:
             hidden = hidden and "/investigations/case-partner/" in self.path
-        visible = [{"node_ids": ["vis-1"], "match": {"band": "name_exact"}, "passage": []}]
+        if not self.path.endswith("/suggest"):
+            hidden = hidden and page == self.hidden_page
+        visible = [{"node_ids": [f"vis-{page}"], "match": {"band": "name_exact"}, "passage": []}]
+        if page > self.last_page:
+            visible = []
+        if not cleared and self.leak_page and page == self.leak_page:
+            visible.append({"node_ids": ["hid-1"], "match": {"band": "name_exact"}, "passage": []})
         if self.path.endswith("/suggest"):
             nodes = [{"id": "vis-1", "label": "Kestral"}]
             if hidden or (not cleared and self.leak == "id"):
                 nodes.append({"id": "hid-1", "label": "Ravenscar Kestral"})
             return {"nodes": nodes, "more": False}
         results = list(visible)
-        if hidden:
+        if page > 1 and not visible and not hidden:
+            results = []
+        elif hidden:
             results.append({"node_ids": ["hid-1"], "match": {"band": "name_exact"}, "passage": []})
         elif self.leak == "id":
             results[0] = {**results[0], "node_ids": ["vis-1", "hid-1"]}  # a merged entity
@@ -178,6 +192,7 @@ def conduit() -> Iterator[str]:
     _Conduit.delay, _Conduit.source, _Conduit.exact_first, _Conduit.seen = 0.0, "index", True, []
     _Conduit.lag, _Conduit.refuse_draw, _Conduit.drawn = 0.0, False, {}
     _Conduit.leak_world, _Conduit.leak, _Conduit.partner_only = False, "", False
+    _Conduit.hidden_page, _Conduit.leak_page, _Conduit.last_page = 1, 0, 5
     _Conduit.index_down, _Conduit.fallback = False, ""
     _Conduit.expires_after, _Conduit.control_fails = 0, 0
     server = ThreadingHTTPServer(("127.0.0.1", 0), _Conduit)
@@ -605,6 +620,62 @@ def test_a_case_the_cleared_principal_cannot_reach_is_indeterminate_never_a_pass
     assert result["failures"] == [], "an unreached case is not a leak"
     assert len(result["indeterminate"]) == 2 and result["reached"] == 0
     assert all("proves nothing" in f for f in result["indeterminate"])
+
+
+def _one_search_case(base: str) -> dict[str, Any]:
+    _Conduit.leak_world = True
+    return measure_search.measure_leaks(
+        base=base, case="case-1", token="part", controls=CONTROLS, cases=[LEAKS[0]]
+    )
+
+
+@pytest.mark.parametrize(("bound", "reached"), [(3, 1), (1, 0)], ids=["with-the-bound", "page-1-only"])
+def test_a_record_the_control_finds_only_on_page_2_counts_as_reached_within_the_bound(
+    conduit: str, monkeypatch: pytest.MonkeyPatch, bound: int, reached: int
+) -> None:
+    """The orchestrator's ruling of 15 November 2026 (stage 2's rehearsal: never-join met its 90%
+    floor exactly on page 1 alone): the control looks past page 1, to `REACH_PAGES`, so a hidden
+    record ranked 21st to 60th reaches its case. With page 1 alone it does not."""
+    monkeypatch.setattr(measure_search, "REACH_PAGES", bound)
+    _Conduit.hidden_page = 2
+    result = _one_search_case(conduit)
+    assert result["reached"] == reached and result["failures"] == [], result
+    assert result["verdict"] == ("met" if reached else "unmeasured")
+    if reached:
+        assert result["reached_on_page"] == {"2": 1}
+        assert result["reach_bound"] == "the first 3 pages of 20 results"
+        cleared = [b["page"] for p, b, a in _Conduit.seen if a == "Bearer cleared-unit-fiu"]
+        part = [b["page"] for p, b, a in _Conduit.seen if a == "Bearer part"]
+        assert cleared == [1, 2] and part == [1, 2], "the part-cleared principal asks each page"
+    else:
+        assert "within its first 1 pages" in result["indeterminate"][0]
+
+
+def test_a_leak_on_page_2_of_the_part_cleared_answer_fails_m10(conduit: str) -> None:
+    """A case reached on page 2 is checked on page 2: a hidden record there is a leak, not missed
+    because the part-cleared principal was asked page 1 alone."""
+    _Conduit.hidden_page = _Conduit.leak_page = 2
+    result = _one_search_case(conduit)
+    assert result["verdict"] == "not met"
+    assert any("hid-1 is in the answer" in f for f in result["failures"]), result["failures"]
+
+
+def test_a_record_past_the_bound_is_indeterminate_and_the_bound_is_said(conduit: str) -> None:
+    _Conduit.hidden_page = 4
+    result = _one_search_case(conduit)
+    assert result["verdict"] == "unmeasured" and result["failures"] == [], result
+    assert "within its first 3 pages" in result["indeterminate"][0]
+    cleared = [b["page"] for p, b, a in _Conduit.seen if a == "Bearer cleared-unit-fiu"]
+    assert cleared == [1, 2, 3], "never past the bound"
+
+
+def test_the_control_stops_at_the_last_result(conduit: str) -> None:
+    """Past the last page of results the control stops looking: an empty page ends the search."""
+    _Conduit.leak, _Conduit.last_page = "unreached", 1
+    result = _one_search_case(conduit)
+    assert result["reached"] == 0
+    cleared = [b["page"] for p, b, a in _Conduit.seen if a == "Bearer cleared-unit-fiu"]
+    assert cleared == [1, 2]
 
 
 def _cases(n: int, unreached: int) -> list[dict[str, Any]]:

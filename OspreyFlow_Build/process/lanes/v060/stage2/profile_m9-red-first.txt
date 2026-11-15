@@ -1,0 +1,5 @@
+red on main 33a7c9f's profile_m9.py:
+E       TypeError: SearchNodesBuilder.__init__() missing 1 required keyword-only argument: 'record_ids'
+E       AttributeError: module 'profile_m9' has no attribute '_shipping'
+2 failed in 0.47s
+green after the fix: 2 passed in 0.55s
