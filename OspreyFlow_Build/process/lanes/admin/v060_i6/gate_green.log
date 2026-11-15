@@ -1,3 +1,2 @@
-# keyboard/govuk-type-pass.spec.ts as a gate at c226c80 (the fixes), under GOV.UK, local slot 5
-# 260 passed; 0 findings
-# and again in the whole keyboard suite at 9db7d73 (keyboard.log)
+# keyboard/govuk-type-pass.spec.ts as a gate at ba4bf1c, in the whole keyboard suite, under GOV.UK, local slot 5:
+# every page-state passed, 0 findings (keyboard.log)

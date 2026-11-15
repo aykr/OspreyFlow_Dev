@@ -1,30 +1,30 @@
 # The standard look, before and after #6
 
 The orchestrator asked for the standard look's heading changes on record. `GOVUK_PASS_LIST=1 GOVUK_PASS_LOOK=standard`
-runs the same pass with no brand, listing only.
+runs the same pass with no brand, listing only, over the 44 harness pages that apply the brand, in every state.
 
-- **Before:** 376c52b, with no type fixes. **435** findings.
-- **After:** a346002 and later, with every fix, h5 and h6 included. **0** findings.
+- **Before:** main 582bab2's code. **464** findings, raw in `standard_before.jsonl`.
+- **After:** ba4bf1c. **0** findings.
 
-What changes in the standard look, by element and its size before. Each size after is its token's:
+Each size after is its token's:
 
 - h1 23px, h2 19px, h3 and h4 16px, h5 and h6 12px;
 - a control the page's 13px;
 - the Studio's 11px and 14px;
-- a mono value now classed `.value`, with no visual change.
+- a name now in the page's face, and a value classed `.value`.
 
 | Findings | Before | Element | Pages |
 |---:|---|---|---|
-| 155 | 15.21px | `h3` | monitoring, alert-figures, boards, strength, views … |
-| 117 | 19.5px | `h2` | models, maps, monitoring, strength, alert-figures … |
-| 55 | 13.3333px | `span` | ingest-studio, metrics-panel, places, shell, case-screen-options … |
+| 179 | 15.21px | `h3` | alert-figures, boards, drawn-watch-alert, ingest-studio, monitoring, operations-figures, rules-place, strength, views |
+| 118 | 19.5px | `h2` | alert-figures, maps, models, monitoring, operations-figures, rules-place, strength |
+| 55 | 13.3333px | `span` | admin, case-screen-options, frame, ingest-studio, matrix, metrics-panel, places, shell, top-bar |
 | 27 | mono, not a value to copy | `div` | ingest-studio |
 | 27 | 11.05px | `div` | ingest-studio |
 | 17 | 10.79px | `h5` | drawn-merge, promotions |
-| 11 | 13.3333px | `button` | metrics-panel, harness.html, ingest-studio, checks-on-load |
-| 8 | 14.3px | `h1` | ingest-studio, checks-on-load |
-| 7 | mono, not a value to copy | `span` | alert-figures, start, harness.html |
-| 6 | 26px | `h1` | search-results, answers |
+| 15 | 13.3333px | `button` | boards, checks-on-load, harness.html, ingest-studio, metrics-panel |
+| 8 | 14.3px | `h1` | checks-on-load, ingest-studio |
+| 7 | mono, not a value to copy | `span` | alert-figures, harness.html, start |
+| 6 | 26px | `h1` | answers, search-results |
 | 2 | mono, not a value to copy | `li` | checks-on-load, ingest-studio |
 | 2 | mono, not a value to copy | `textarea` | ingest-studio |
 | 1 | 11.05px | `span` | ingest-studio |

@@ -1,7 +1,9 @@
-# keyboard/govuk-type-pass.spec.ts as a gate at 376c52b (the gate and the harness marks, before #6's type fixes), under GOV.UK, local slot 5
-# 87 failed, 173 passed; 365 findings
-110	15.21px	h3.value
-98	19.5px	h2.value
+# keyboard/govuk-type-pass.spec.ts as a gate against main 582bab2's code, with only the test side copied in (the
+# gate itself and the harness marks), under GOV.UK, local slot 5, 15 November 2026. Each test is one page in one of
+# its states (44 pages in 269 page-states, and the guard).
+# 94 failed, 176 passed; 382 findings
+122	15.21px	h3.value
+99	19.5px	h2.value
 27	mono, not a value to copy	div
 27	11.05px	div
 19	19.5px	h2
@@ -13,6 +15,7 @@
 6	13.3333px	span.value
 5	26px	h1
 4	mono, not a value to copy	span.home-glyph.home-glyph--warn
+4	13.3333px	button.board-menu__item
 2	mono, not a value to copy	span.home-glyph.home-glyph--info
 2	mono, not a value to copy	li
 2	mono, not a value to copy	textarea.input
