@@ -1,0 +1,15 @@
+tests/test_user_guide_search_results.py after #4 rewired App's results through the Ask page's hook (the orchestrator's
+merge, 15 November 2026): each claim held against the new code, each red by a plant in the code's own shape, restored.
+
+Enter not opening the results (App's onSearch without results.open)
+  -> test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggestion_is_still_chosen
+the view in reach under the results (pageOver without results.viewInert)
+  -> test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it
+Show on graph leaving the results showing (the hook's leaveBoth without other.leave)
+  -> test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and_goes_to_the_graph
+the Ask line sending something (a fetch beside setQuestionDraft)
+  -> test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+the Ask line leaving the results under the page (the hook's openPage without other.leave)
+  -> test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing
+
+Unplanted: all of tests/test_user_guide*.py (8 files), 52 passed. ruff check (OspreyFlow_Build's config) clean.
