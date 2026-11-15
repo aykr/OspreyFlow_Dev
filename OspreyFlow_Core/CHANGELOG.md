@@ -6,6 +6,109 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.5.2 — 2026-11-15
+
+The release that searches. Search runs on OpenSearch, with each reader's access inside every query, and
+every change to the graph reaches the index in the graph's own transaction. It was measured on a
+client-size synthetic load of about 281,000 people, and each search met its budget. On the `cloud-platform`
+profile, scheduled runs, reporting and the data-safety fixes that v0.5.1 promised are in. The Glass is
+easier to find your way around: one view switch, a case line that says what is open, and "view" kept for
+saved views alone.
+
+**Before you update.**
+- **Back up first,** as for every update: `ospreyflow update` takes its own backup and rolls back if
+  anything fails.
+- **The search index is rebuilt from the graph** on `install`, on `update`, by `ospreyflow start
+  --build` (its last step) and after a restore, wherever the deployment searches with OpenSearch
+  (`components.search: opensearch`, the default). An index made before v0.5.2 is not one v0.5.2 writes
+  to. A rebuild that fails fails the install, and rolls an update back.
+- **On `cloud-platform`, `INSTALL.md` runs again from v0.5.2's copy** (administration guide §6a.1,
+  *Moving to a new release*). It rebuilds the index by a Job once the Conduit and the workers are rolled
+  out. With reporting on, Superset and the report sync need Entra registrations of their own, and
+  `INSTALL.md` counts them.
+- **Hosted model engines are bounded at 120 seconds a call, and the deployment's own model at 900**
+  (administration guide §10), set in `deployment.env` on Lite and Small.
+
+**Search (ADR-149, ADR-150).**
+- **Search on OpenSearch**, with the reader's clearance, handling codes, the case's datasets and a
+  document's owning unit in every query, never applied after the answer. Names are found with typos,
+  variants and sounds-like matches, and full text with the passage highlighted. Ranking is strict, by
+  tier, with no word-rarity scoring.
+- **The index feed:** every load, merge, new version, promotion and deletion reaches the index through an
+  outbox written in the graph's own transaction. A rebuild from the graph and a drift check come with it.
+- **The search results page,** over the view: groups counting records (so *All* need not equal their sum,
+  and the page says so), **Show on graph** and **Open**, and an over-long query refused with its limit
+  named.
+- **Suggestions as you type** fill their page, case-sensitive ones included. When they are limited, the
+  line says why.
+- **Without an index** (`postgres-fulltext`), or while OpenSearch does not answer, search falls back to
+  the graph's exact search, up to 100 matches, and says so. Its candidates are found by index first
+  (ADR-124 Amendment 21), so it stays inside its 5-second budget at client size.
+- **Ask & Chat's *Whole case*** reads the case through the search service, as the asker.
+
+**Measured** (step 4, ADR-149 Amendment 2: the shipping code, at the poc shape's limits, p50 / p95).
+- Suggestions 56 / 61 ms (budget 300 ms); a name search 111 / 126 ms (budget 1 s); full text 144 /
+  184 ms (budget 1.5 s); an exact identifier ranked first 117 / 144 ms (budget 1 s).
+- A drawn node searchable in 1.0 / 2.1 s (budget 5 s). With OpenSearch stopped mid-session, every search
+  fell back and said so, the slowest in 1.5 s.
+- **The leak test at scale:** in 500 cases, nothing a part-cleared reader may not see was in their
+  results, counts, suggestions or snippets, and a fully cleared control found each hidden record.
+- Not measured here: the suggestion list in a browser, the full rebuild and drift check on the whole load,
+  and each container's peak.
+
+**The `cloud-platform` profile (ADR-148).**
+- **Scheduled runs on Entra ID:** a schedule, a watched folder, *Run now*, `ospreyflow run`, a scheduled
+  rule, the KYC check, a list's refresh and a watch run as their owner. Roles, and whether the owner is
+  disabled, are read from *People and roles* at each run. Access comes from the owner's last sign-in and
+  is refused past 24 hours, in words.
+- **Reporting:** Superset and the report sync, one copy each, signed in with Entra ID. Embedded boards are
+  read through the guest token, with each dashboard identity's rows alone.
+- **OpenSearch on the poc shape:** two nodes, reached by the namespace's IAM role with SigV4
+  (`opensearch_signing`), no fine-grained access control, and rebuilt rather than backed up.
+- **Data safety:** the shared volume in the backup set, and the standard shape's Ingest root too. RDS's
+  point-in-time restore is 35 days, and the backup sets expire at 34, a day inside it.
+- **The administrator fallback:** where Entra sends no clearance, unit or handling codes, an
+  administrator sets them, never above their own. **Guest accounts** are refused until a people manager
+  turns them on for the tenant. **A token of the other version** is refused in words.
+- **The poc manifest:** one source for the shape's containers, Jobs, images, registry, managed services,
+  Entra registrations and egress, held to the render both ways. `seed_poc` seeds the named case with the
+  first administrator as its author.
+
+**The Glass.**
+- **Navigation** (ADR-145 Amendments 15 and 17). The rail holds panels alone. One view switch in the top
+  bar: Graph, Map, Drawing board and Reports, with the rest under **More**. The bar stays one line high,
+  folding less-used views into More. The case line reads "Case ‹name› · Saved views (n) · reads
+  ‹dataset›".
+- **Saved views:** "view" now means a saved view alone. **Back to the whole case** is the first thing in
+  a saved view's strip, and the case line names the one open. The list starts with *The whole case*, and
+  a view saved under the default name is told apart by its first item and when it was saved. The graph
+  toolbar's *Views* menu is gone (ADR-144 Amendment 6), and *Clear view* is **Clear the graph**.
+- **A batch job past the working set's cap** (ADR-151): the expansion runs on the server as you, and its
+  result is saved as a private view of the case.
+- **Merged records arrive as one** when they enter the graph, worked out for each reader from what they
+  may see (ADR-124 Amendment 19). A view or a batch result past about 10,000 nodes now opens with its
+  links (ADR-124 Amendment 20).
+- **The selection's actions,** one set in the bar and the menu, with **Expand by link type**.
+- **Mark for suppression** says it hides nothing yet. It asks why, keeps the reason, survives a reload and
+  offers **Remove suppression mark**.
+- **Help** opens its panel from every view. The map's attribution is readable in every look. The version
+  shown is the code's own. Every panel and menu is on the page's own type scale, and no screen carries an
+  internal note.
+- **Words, not codes:** a hosted engine's refusals and time-outs; a sign-in refused for an access value
+  not set, a token-version mismatch or a guest; an analytics field refused with a 422; the Ingest Studio's
+  messages saying *pipeline*; a Studio SQL step stopped at its time limit; and only an administrator may
+  give the administrator role.
+
+**Rules and watches.**
+- **A watch stays active** until three unreachable evaluations in a row (ADR-044 Amendment 2), and a
+  stopped hotlist or watch shows why beside its badge.
+
+**Fixed.**
+- **The Glass no longer throws its page away** when a search draws under React's StrictMode.
+- **On Lite, where no worker runs,** the Conduit runs every job type's loop.
+- **The graph adapter's write path** finds items by type index, so a load's time grows with its own size
+  alone (ADR-124 Amendment 18).
+
 ## v0.5.1 — 2026-11-14
 
 The release a shared Kubernetes platform installs from. The `cloud-platform` profile's proof-of-concept
