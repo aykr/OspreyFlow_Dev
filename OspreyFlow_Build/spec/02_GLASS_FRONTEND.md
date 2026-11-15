@@ -696,8 +696,9 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
 - **Each result:** its name as the canvas names it (`nodeLabel`), its type, why it matched (the Conduit's words), its
   date, and for a document the passage with the matched words bold and underlined. *Show on graph: ‹name›* seeds every
   record it stands for and returns to the graph, focus on it; *Open*, for a document, reads it over the view, the
-  results kept and shown again when it closes, focus on their heading. A record a result names that the answer does
-  not hold is said, never dropped.
+  results kept and shown again when it closes, focus on their heading. A search made while a document is read over
+  the view shows its results at once, the reader closed (§2.0d). A record a result names that the answer does not
+  hold is said, never dropped.
 - **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat with
   the words in the question box, focused, once, and sends nothing.
 - **No results** says "No records match '…'." with *Clear filters* where a filter is on. **The fallback** shows the
@@ -734,20 +735,26 @@ harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
   **A document** opened from an answer is read over the view, the page hidden and shown again when it closes, focus on
   its heading, never on the view beneath. *Ask the model about these…* opens the page, as a case opened to ask the
   model does (ADR-098 decision 4).
-- Help's keys panel opens over the page when asked for, as over the results. The batch job's panel at the canvas's
-  foot is hidden under the page, as under the results, and back when it closes.
+- **Opened while a document is read** over the view (from the results, from the view itself, from an answer before a
+  search), either page shows at once: the reader closes, as the page takes the view's place, and focus goes to the
+  page's heading (the orchestrator, 15 November 2026; `stopReading`, handed to both hooks by App and the harness).
+- Help's keys panel opens over the page when asked for, as over the results. It takes focus as it is asked for and
+  only then: drawn again elsewhere (beside the view, when the page it sat over is hidden for the reader) or drawn again
+  by App, it leaves focus where the analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the
+  canvas's foot is hidden under the page, as under the results, and back when it closes.
 - The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`).
 
 Proved by `App.chrome.test.tsx` (the rail's openers), `App.search.test.tsx` (the two pages replacing each other, the
-reader, a marker, *Show all on graph* and its saved view closed first, Help, another place, a saved view, the
-cross-link, Escape doing nothing, the hand-off's `view=questions`, *Ask the model about these…*),
-`App.batchExpand.test.tsx`, `keyboard/shell.spec.ts` (`ask-and-chat-page-by-keyboard`, `SHELL_ACTIONS`, on
-`places-harness.html`), `keyboard/questions.spec.ts` (`back-from-ask-and-chat-by-keyboard` on `questions-harness.html`,
-which mounts the panel in the page; and `select-a-graph-fact-from-the-ask-page-by-keyboard` and
-`show-all-from-the-ask-page-by-keyboard` on `harness.html?questions=page`, the page over the real canvas, with *Show all
-on graph*'s refusal past the cap there), `keyboard/search-results.spec.ts` (nothing of the canvas drawn over the page,
-on `search-results-harness.html?canvas=1&ask=1`, in the three looks) and the every-harness scans of
-`places-harness.html?open=questions` and `questions-harness.html` in the three looks.
+reader, a page opened over a document read, a marker, *Show all on graph* and its saved view closed first, Help and its
+focus, another place, a saved view, the cross-link, Escape doing nothing, the hand-off's `view=questions`, *Ask the
+model about these…*), `App.batchExpand.test.tsx`, `keyboard/shell.spec.ts` (`ask-and-chat-page-by-keyboard`,
+`SHELL_ACTIONS`, on `places-harness.html`), `keyboard/questions.spec.ts` (`back-from-ask-and-chat-by-keyboard` on
+`questions-harness.html`, which mounts the panel in the page; and `select-a-graph-fact-from-the-ask-page-by-keyboard`
+and `show-all-from-the-ask-page-by-keyboard` on `harness.html?questions=page`, the page over the real canvas, with *Show
+all on graph*'s refusal past the cap there), `keyboard/search-results.spec.ts` (either page opened while a document is
+read, by keyboard; nothing of the canvas drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the
+three looks) and the every-harness scans of `places-harness.html?open=questions` and `questions-harness.html` in the
+three looks.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 
