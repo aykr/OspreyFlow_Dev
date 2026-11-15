@@ -1,15 +1,21 @@
 # Giving a client their own sign-in on the GOV.UK demo
 
 For the owner, from the orchestrator, 14 November 2026, after the owner's answers that evening (MORNING.md,
-"evening (3)") and studio's proposal (`process/lanes/studio/demo-signins/PROPOSAL.md`). Nothing here is printed,
-logged or written to a file by any tool: you type each password and code yourself and hand them over yourself.
+"evening (3)") and studio's proposal (`process/lanes/studio/demo-signins/PROPOSAL.md`). **Revised for v0.6.0**
+(docs, 15 November 2026): the demo is rebuilt fresh from v0.6.0 on Wednesday 18 November
+(`REBUILD_2026-11-18.md`). Nothing here is printed, logged or written to a file by any tool: you type each password
+and code yourself and hand them over yourself.
+
+**After the rebuild, nothing of the old demo's people carries over.** v0.6.0 is a new deployment with new stores:
+the Demo visitor role, any visitor you added before, and their cases are not there. Add each visitor again, below.
 
 **Before the first sign-in:** the open-defects list (`OPEN_DEFECTS_FOR_SIGNINS.md`, beside this file) is empty or
 each item is accepted by you.
 
 ## Once: the Demo visitor role
 
-The orchestrator makes this at the demo update; it is listed here so you can check it.
+The orchestrator makes it again at the v0.6.0 rebuild (`REBUILD_2026-11-18.md`, step 8); it is listed here so you
+can check it.
 
 1. Sign in to https://govuk.ospreyflow.app as the demo administrator.
 2. **Admin › Roles › New role**, named **Demo visitor**.
@@ -32,9 +38,18 @@ The orchestrator makes this at the demo update; it is listed here so you can che
 
 ## The model's spend
 
-The demo's model (Gemini) has **one shared limit** for everyone. Set it in **Admin › Models** to what you are willing
-to spend while clients use the demo, and check it there. When it is reached, a visitor is told in words that the
-limit has been reached; nothing hangs and nothing is recorded.
+Gemini there is Google's free tier, which may use visitors' questions to improve Google's products.
+
+The demo offers Gemini (`gemini-3.8-flash`) in Ask & Chat beside its own model, and every answer names the engine
+that gave it. Gemini has **one shared limit** for everyone: **1,000,000 tokens a day** in **Admin › Models**, set at
+the rebuild, inside the free tier's daily limit, and reset at midnight UTC (midnight in the UK until March). Change it
+there, and check its use under **Usage**. When it is reached, a visitor is told in words that the limit has been
+reached; nothing hangs and nothing is recorded. Google's own limits on the free tier (15 requests a minute, 500 a
+day) can refuse first: the visitor is then told, in words naming the engine, that the provider refused. The
+deployment's own model still answers either way.
+
+Gemini can be chosen only in a case whose datasets allow it: the rebuild sets each demo dataset's egress to `any`
+in **Admin › Datasets**. A visitor's own case, made over those datasets, inherits that.
 
 ## When a visitor is done
 
