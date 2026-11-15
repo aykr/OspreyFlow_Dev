@@ -1,0 +1,15 @@
+# The step's specs and harnesses at 373331f, run against the base 0246f9b's code (main's): every failure pytest-style, by its assertion
+  1) keyboard/admin-frame.spec.ts:59:3 › Admin › System in the dark look sets names in the page's face and a model's id in mono 
+    Error: the parts' names in the page's face
+  2) keyboard/frame-scroll.spec.ts:28:3 › under GOV.UK, wheeling past a drawer's body's end leaves the page where it was 
+    Error: the page did not move
+  3) keyboard/admin-frame.spec.ts:59:3 › Admin › System in the light look sets names in the page's face and a model's id in mono 
+    Error: the parts' names in the page's face
+  4) keyboard/admin-frame.spec.ts:25:3 › Admin in the page's frame in the govuk look scrolls in one place, cut nowhere 
+    Error: the one scroller
+  5) keyboard/admin-frame.spec.ts:59:3 › Admin › System in the govuk look sets names in the page's face and a model's id in mono 
+    Error: the parts' names in the page's face
+  6) keyboard/frame-scroll.spec.ts:28:3 › under GOV.UK, wheeling past the empty canvas's start overlay's end leaves the page where it was 
+    Error: the page did not move
+  6 failed
+  8 passed (8.2s)

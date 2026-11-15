@@ -446,6 +446,19 @@ Transport, square corners (every radius token, status chips included, is 0), and
 Type (the owner's ruling of 31 October 2026): the welcome, start and Admin pages take GOV.UK's
 scale, 19px body; the workspace keeps the 13px base (§9 exception 1).
 
+Scrolling (the owner's rulings of 15 November 2026, keeping ADR-132's frame). Under GOV.UK the footer stands
+below the workspace, reached by scrolling the page, as on any GOV.UK page. Admin there is a page that
+scrolls: the document is its one scroller, the footer follows it, and its side list stays in view beside
+the section (above 640px). A wheel that starts in a box that scrolls inside the page (a drawer's body, the
+empty canvas's start overlay, the Studio's pane, a list) stops at that box's end and never moves the page,
+while a box inside another still hands on to it and a wheel over the page's own parts still reaches the
+footer. `OspreyFlow_Core/apps/workspace/src/brand/containInnerScroll.ts` and `OspreyFlow_Core/apps/workspace/src/admin/admin.css` hold this;
+`OspreyFlow_Core/apps/workspace/keyboard/frame-scroll.spec.ts` and `OspreyFlow_Core/apps/workspace/keyboard/admin-frame.spec.ts` measure it. The standard look has
+no footer and nothing that scrolls the page, and is unchanged.
+The classification strip is always in view (ADR-115 decision 2, the owner's ruling of 15 November 2026): under
+GOV.UK, as the page scrolls, it stays pinned at the window's top, with nothing over it, while GOV.UK's header and
+the top bar scroll away.
+
 The Glass page's panels and menus keep the workspace's scale too (the owner's exception, 14 November 2026).
 Inside a drawer, a canvas menu, the top bar's or the case line's menus, the strip over the canvas, or the Save
 as a view form, GOV.UK Frontend's type classes take the page's tokens: body text, headings, links, buttons and

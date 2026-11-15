@@ -1,0 +1,8 @@
+# The strip cases at 6cc2897, before the fix
+  1) keyboard/frame-scroll.spec.ts:82:1 › under GOV.UK, scrolled to the footer, the Glass's classification strip stays at the window's top 
+    Error: the strip's top is the window's
+  2) keyboard/admin-frame.spec.ts:97:3 › under GOV.UK at 1440px, scrolled to the footer, Admin's classification strip stays at the window's top 
+    Error: the strip's top is the window's
+  3) keyboard/admin-frame.spec.ts:97:3 › under GOV.UK at 640px, scrolled to the footer, Admin's classification strip stays at the window's top 
+    Error: the strip's top is the window's
+  3 failed

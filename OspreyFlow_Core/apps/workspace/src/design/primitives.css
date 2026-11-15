@@ -414,6 +414,12 @@
   background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);
   color: var(--text-primary); font-size: var(--fs-11); line-height: var(--lh-11); font-weight: 600;
 }
+/* ADR-115 decision 2, the owner's ruling of 15 November 2026: the strip is always in view. Under GOV.UK the page
+   scrolls (to the footer, and Admin as a page), so the strip stays pinned at the window's top while GOV.UK's header
+   and the top bar scroll away; under that brand a drawer starts below the top bar, so nothing comes over it. It is
+   App's root's first child, so it sticks for the whole page. `keyboard/admin-frame.spec.ts` and
+   `keyboard/frame-scroll.spec.ts` hold it. */
+[data-brand="govuk"] .classification-strip { position: sticky; top: 0; }
 /* One line at §5a's height while its items fit; when they do not, whole items wrap to a second line
    rather than one line too wide to see (ADR-115 Amendments 2 and 3). Whether they fit depends on the
    case's name and its scope badge as well as the window, so it is not a breakpoint. */
