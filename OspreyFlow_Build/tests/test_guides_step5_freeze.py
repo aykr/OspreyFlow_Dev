@@ -67,8 +67,8 @@ def test_an_update_rebuilds_the_index_inside_what_rolls_back() -> None:
     closed = source.index("\n    except UpdateFailed as failed:", call)
     assert opened != -1 and "return _roll_back(" in source[closed : closed + 400], "a failed rebuild rolls the update back"
     assert 'if search_rebuild.renders_opensearch(directory / "compose.yaml"):' in source[opened:call]
-    assert ("where the deployment searches with OpenSearch, rebuilds the search index from the graph (an index made "
-            "before v0.5.2 is not one v0.5.2 writes to). If anything fails after the backup it **rolls back**") in guide("administration")  # fmt: skip
+    assert ("where the deployment searches with OpenSearch, rebuilds the search index from the graph. If anything fails "
+            "after the backup it **rolls back**") in guide("administration")  # fmt: skip
 
 
 def test_start_build_rebuilds_last_and_the_guide_says_so() -> None:

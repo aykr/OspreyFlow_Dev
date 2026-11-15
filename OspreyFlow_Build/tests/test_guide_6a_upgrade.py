@@ -56,7 +56,7 @@ def test_the_upgrade_is_the_install_run_again_and_no_runbook_of_its_own() -> Non
     runbooks = {name for name in artefacts(False) if name.endswith(".md")}
     install = artefacts(False)["INSTALL.md"]
     text = upgrade_paragraph()
-    assert ("There is no separate upgrade runbook." in text) is (not any("UPGRADE" in r.upper() for r in runbooks))
+    assert ("there is no separate upgrade runbook." in text) is (not any("UPGRADE" in r.upper() for r in runbooks))
     assert ("its `helm upgrade --install` moves the deployment" in text) is ("helm upgrade --install" in install)
 
 
@@ -81,13 +81,16 @@ def test_the_install_s_own_checks_are_the_ones_the_guide_names() -> None:
     assert ("section 7's `/healthz` through the Glass" in text) is ("/healthz" in seven.group(0))
 
 
-def test_the_install_test_is_said_not_to_have_run_until_its_log_is_recorded() -> None:
-    """platform-b's run sheet names the upgrade's log `UPGRADE.log`, kept with the step's records."""
-    ran = any(BUILD.joinpath("process").rglob("UPGRADE.log"))
+def test_v060_is_said_to_be_installed_fresh_and_the_move_not_rehearsed() -> None:
+    """The owner's plan of 15 November 2026: v0.6.0 is installed fresh, with no upgrade from any earlier version, and
+    its package test is a fresh install, so the steps above are for a release after it and not yet rehearsed."""
+    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() == "v0.6.0"
     text = upgrade_paragraph()
-    assert ("It has not run yet." in text) is (not ran)
-    assert ("is to install v0.5.1, then the candidate" in text) is (not ran)
+    assert "v0.6.0 itself is installed fresh, into a namespace of its own: a namespace on an earlier release stays on it" in text
+    assert "For a release after v0.6.0 there is no separate upgrade runbook." in text
+    assert "No deployment has yet been moved to a new release by these steps" in text
     assert "has not been rehearsed" in text
+    assert "v0.5.1, then the candidate" not in text and "an index made before" not in text
 
 
 def test_section_6a8_says_when_the_report_sync_is_rendered() -> None:
@@ -104,7 +107,7 @@ def test_section_6a8_says_when_the_report_sync_is_rendered() -> None:
 def test_the_terraform_s_pull_request_follows_the_render_that_makes_it() -> None:
     """The new release's Terraform is its own render's `terraform/` folder, so its pull request can be
     raised only after the step that renders from the new copy, and is applied before the install."""
-    steps = dict(re.findall(r" (\d)\. \*\*(.*?)(?= \d\. \*\*|\*\*What will check it\.\*\*)", upgrade_paragraph()))
+    steps = dict(re.findall(r" (\d)\. \*\*(.*?)(?= \d\. \*\*|\*\*Not yet rehearsed\.\*\*)", upgrade_paragraph()))
     made = any(name.startswith("terraform/") for name in artefacts(False))
     render = next((n for n, t in steps.items() if t.startswith("Render, push and render pinned")), None)
     install = next((n for n, t in steps.items() if t.startswith("Run `INSTALL.md` again")), None)

@@ -77,7 +77,8 @@ def test_the_shared_platform_profile_is_named_where_the_modes_are() -> None:
 
 def test_section_14_says_how_a_shared_platform_namespace_moves_to_a_new_release() -> None:
     admin = guide("administration")
-    assert "**Moving to a new release (poc shape).** There is no separate upgrade runbook." in admin
+    assert "**Moving to a new release (poc shape).** v0.6.0 itself is installed fresh" in admin
+    assert "For a release after v0.6.0 there is no separate upgrade runbook." in admin
     runbook = (CORE / "harness" / "cloud_platform" / "runbooks.py").read_text(encoding="utf-8")
     install = runbook[runbook.index("def render_install(") : runbook.index("def _seed_section(")]
     step = install[install.index("## 5. The deployment") :]
