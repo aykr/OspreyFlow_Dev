@@ -55,3 +55,13 @@ Also settled from the terms (PREBUILD_FINDINGS §9): Esri is live-only with no c
 is live-only with a cache of at most 24 hours; OS Open Zoomstack may be prefetched. Correction recorded: ruling 7 is
 already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Admin, sealed in the gateway); the guide's
 "never in the Admin area" is the part to correct.
+
+## A first slice (the owner, 15 November 2026, late morning)
+
+12. **Only the model form's first slice is built now**, beside v0.6.0, then the work stops until the owner says: the
+    screen (M1), the key and a typed model name proved by one small call before Add (part of M2), and ADR-135
+    Amendment 14 cut down to the slice (M4). Not in it: model listing, Bedrock listing (M3), any wider role.
+13. **The map form waits** until the owner has used the model form on the demo. MapTiler is off; nothing is prefetched
+    for Esri or OpenStreetMap's own servers.
+14. **The administration guide's model-key passages are corrected in v0.6.0** (docs, with item 9's pass): a key has been
+    entered in Admin › Models since ADR-135 Amendment 2.
