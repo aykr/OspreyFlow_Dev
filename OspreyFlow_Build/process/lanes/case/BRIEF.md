@@ -1,3 +1,12 @@
+# Case lane · current work (15 November 2026, the orchestrator)
+
+L3.H2 below is merged (77200db), and v0.6.0 #5 (Show all on graph, Save as a view) is merged (3ffbe25). Now, on sol:
+(1) the whole keyboard suite and every-harness on main, reported; (2) the independent reviewer for case-b's v0.6.0 #4
+(lane/case-b-v060-fullpage) and admin's #6 (lane/admin-v060-i6-govuk-type) when each is sent, findings with file:line,
+no edits to their branches. The plan of record is `v060/OWNER_PLAN_2026-11-15.md` with `v060/RULINGS.md`.
+
+---
+
 # Case lane · brief L3.H2 · drawn watches on every load, and the ceiling on promotions
 
 Written by the orchestrator, 10 November 2026 evening, for the case session, **from main**. Size S. Client track
