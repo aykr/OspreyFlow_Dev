@@ -31,7 +31,7 @@ PLANTS = [
      ["itself scrolled to its end", "the drawer scrolled", "then the drawer scrolled"]),
     ("Admin's place left a scroll box under GOV.UK (the side list then sticks to it, not to the page)",
      [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }\n', "")],
-     ["the side list stays in view"]),
+     ["the side list stays in view", "nothing paints over the strip"]),
     ("Admin's one-scroller rule reaching the standard look",
      [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }',
        '#main-content .admin-place { flex: none; overflow-y: visible; }'),
