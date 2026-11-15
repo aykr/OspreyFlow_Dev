@@ -112,12 +112,6 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     });
   }  // prettier-ignore
   if (path === "" && method === "GET") return reply(200, view());
-  if (path === "/engines" && method === "POST") {
-    // ADR-135 Amendment 4: an engine signed in by the gateway's own IAM role has no key to set.
-    const provider = body.provider as Engine["provider"];
-    engines.push({ provider, key_state: provider.auth === "iam_role" ? "iam_role" : "none", key_set_at: null, key_set_by: null, default_for: [] });
-    return reply(200, view());
-  }
   if (path === "/checks" && method === "POST") {
     const provider = body.provider as Engine["provider"];
     const models = [...new Set(Object.values(provider.roles))];
@@ -155,6 +149,20 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     engine.limits = body.limits as Engine["limits"];
     return reply(200, view());
   }
+  // The owner's ruling 19, as the Conduit refuses: a key containing "refuse" fails its check and
+  // changes nothing; a changed address without its key is refused.
+  const shown = engine.provider.label ?? engine.provider.name;
+  if (method === "PUT" && String(typedKey ?? "").includes("refuse")) {
+    const kept = match[2] === "/key" ? "the key it holds" : "its models, address and key";
+    return reply(422, { detail: { error: "model_admin_refused", detail: `The provider refused the key. Nothing was changed: ${shown} keeps ${kept}.` } });
+  }
+  if (method === "PUT" && !match[2]) {
+    const next = body.provider as Engine["provider"];
+    if ((next.api_base ?? "") !== (engine.provider.api_base ?? "") && next.auth !== "iam_role" && !typedKey) {
+      return reply(422, { detail: { error: "model_admin_refused", detail: `${shown}'s address changed: give its key with it. Nothing was changed.` } });
+    }
+    if (typedKey) Object.assign(engine, { key_state: "set", key_set_at: "2026-11-15T12:00:00Z", key_set_by: "admin-1" });
+  }  // prettier-ignore
   if (match[2] === "/key") {
     // The key is never kept here either: only that one was sent.
     if (method === "PUT") Object.assign(engine, { key_state: "set", key_set_at: "2026-11-08T10:00:00Z", key_set_by: "admin-1" });
@@ -188,7 +196,8 @@ if (params.get("usage") === "chosen") {
 
 const open = params.get("open");
 if (open) {
-  const name = open === "add" ? "Add an engine" : open === "limits" ? "Set limits for Gemini" : "Enter key for OpenAI";
+  const name =
+    open === "add" ? "Add an engine" : open === "limits" ? "Set limits for Gemini" : open === "edit" ? "Edit Gemini" : "Enter key for OpenAI";
   for (let i = 0; i < 40; i++) {
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name);
     if (button) {
@@ -208,6 +217,15 @@ if (open) {
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
+}
+
+// `open=edit&moved=1`: Gemini's address changed in its edit form, so its key is asked with it and the
+// edit is checked before it is saved (the owner's ruling 19), for the axe scan of that state.
+if (open === "edit" && params.get("moved") === "1") {
+  for (let i = 0; i < 40 && !document.getElementById("edit-gemini-base"); i++) await new Promise((r) => setTimeout(r, 50));
+  const field = document.getElementById("edit-gemini-base") as HTMLInputElement;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "https://proxy.example.org/v1");
+  field.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
 // `check=passed` or `check=refused`: the add form filled and checked, for the axe scan of each answer.

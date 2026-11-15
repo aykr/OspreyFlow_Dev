@@ -159,6 +159,29 @@ test("an engine is edited by keyboard", async ({ page }) => {
   registerCovered(REGISTRY, "edit-a-model-engine-by-keyboard");
 });
 
+// The owner's ruling 19: an edit is checked too, and a changed address takes its key with it.
+test("an engine's address is changed by keyboard with its key, checked before it is saved", async ({ page }) => {
+  await press(page, "Edit Gemini");
+  await typeInto(page, /^Address/, "https://proxy.example.org/v1");
+  await expect(page.getByRole("button", { name: "Check and save", exact: true })).toBeDisabled();
+  await typeInto(page, /^Key for the new address/, SYNTHETIC_KEY);
+  await press(page, "Check and save");
+  await expect(page.getByRole("status")).toContainText("Gemini is checked and saved");
+  expect((await sentBody(page, "PUT /engines/gemini"))?.provider).toMatchObject({ name: "gemini", api_base: "https://proxy.example.org/v1" });
+  expect(await page.content()).not.toContain(SYNTHETIC_KEY);
+  registerCovered(REGISTRY, "change-a-model-engines-address-with-its-key-by-keyboard");
+});
+
+test("a new key the provider refuses is said by keyboard, and the key held is kept", async ({ page }) => {
+  await press(page, "Rotate key for Gemini");
+  await typeInto(page, /New key for Gemini/, "synthetic-refuse-key");
+  await press(page, "Rotate the key");
+  await expect(page.getByRole("alert")).toContainText("Gemini keeps the key it holds");
+  await expect(page.getByRole("table", { name: "Engines", exact: true })).toContainText("Key set");
+  expect(await page.content()).not.toContain("synthetic-refuse-key");
+  registerCovered(REGISTRY, "see-a-new-model-key-refused-by-keyboard");
+});
+
 test("a lost key is entered again by keyboard, and the field is empty afterwards", async ({ page }) => {
   await press(page, "Enter key for OpenAI");
   await typeInto(page, /Key for OpenAI/, SYNTHETIC_KEY);

@@ -450,6 +450,68 @@ describe("Models", () => {
     expect(JSON.parse(sent.find((s) => s.path === "/v1/admin/models/defaults")!.body)).toEqual({ defaults: { extraction: "gemini" } });
   });
 
+  // The owner's ruling 19: an edit is checked too.
+  const editPuts = (sent: { path: string; method: string; body: string }[]) =>
+    sent.filter((s) => s.method === "PUT" && s.path === "/v1/admin/models/engines/gemini");
+
+  it("asks the key with a changed address, checks the edit before saving, and sends the key once", async () => {
+    const sent = stub((path) => (path === "/v1/admin/models" || path === "/v1/admin/models/engines/gemini" ? { status: 200, body: SET } : undefined));
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Gemini" }));
+    expect(screen.queryByLabelText(/^Key for the new address/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Save the engine" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/^Address/), { target: { value: "https://proxy.example.org/v1" } });
+    const key = screen.getByLabelText(/^Key for the new address/) as HTMLInputElement;
+    expect(key.type).toBe("password");
+    expect(key.getAttribute("autocomplete")).toBe("new-password");
+    const save = screen.getByRole("button", { name: "Check and save" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(screen.getByText(/checked with one small call before it is saved/)).toBeTruthy();
+    fireEvent.change(key, { target: { value: PLANTED } });
+    fireEvent.click(save);
+    await screen.findByText(/Gemini is checked and saved/);
+    const puts = editPuts(sent);
+    expect(puts).toHaveLength(1);
+    expect(JSON.parse(puts[0]!.body)).toMatchObject({ provider: { name: "gemini", api_base: "https://proxy.example.org/v1" }, key: PLANTED });
+    expect(document.body.innerHTML).not.toContain(PLANTED);
+    expect(document.body.innerHTML).not.toMatch(/key was removed/);
+  });
+
+  it("checks a changed model name with no key asked, and saves a label alone as before", async () => {
+    const sent = stub((path) => (path === "/v1/admin/models" ? { status: 200, body: SET } : undefined));
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Gemini" }));
+    fireEvent.change(screen.getByLabelText("Label analysts see"), { target: { value: "Google" } });
+    expect(screen.getByRole("button", { name: "Save the engine" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: the provider's model"), { target: { value: "gemini-2.5-pro" } });
+    expect(screen.queryByLabelText(/^Key for the new address/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Check and save" }));
+    await screen.findByText(/Google is checked and saved/);
+    const body = JSON.parse(editPuts(sent)[0]!.body) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("key");
+  });
+
+  it("shows the Conduit's refusal of an edit in its words, the engine kept as it was", async () => {
+    const words = "The provider accepted the key but does not offer this model to it. Check the model name. Nothing was changed: Gemini keeps its models, address and key.";
+    stub((path, init) =>
+      path === "/v1/admin/models" ? { status: 200, body: SET }
+        : path === "/v1/admin/models/engines/gemini" && init?.method === "PUT" ? { status: 422, body: { detail: { error: "model_admin_refused", detail: words } } }
+          : undefined,
+    );
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Gemini" }));
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: the provider's model"), { target: { value: "gemini-nope" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check and save" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Nothing was changed");
+  });
+
+  it("says a new key is checked before it replaces the one held", async () => {
+    stub((path) => (path === "/v1/admin/models" ? { status: 200, body: SET } : undefined));
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Rotate key for Gemini" }));
+    expect(screen.getByText(/checked against each of the engine's models before it replaces the one held/)).toBeTruthy();
+  });
+
   it("keeps an engine's kind fixed when it is edited", async () => {
     stub((path) => (path === "/v1/admin/models" ? { status: 200, body: BY_ROLE } : undefined));
     render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);

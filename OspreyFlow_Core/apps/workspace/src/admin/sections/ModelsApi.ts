@@ -56,10 +56,12 @@ const n = encodeURIComponent;
 
 export const readModels = (api: ModelsApi) => ask<ModelsAdminView>(api, "/v1/admin/models");
 export const readHistory = (api: ModelsApi) => ask<ModelAdminHistory>(api, "/v1/admin/models/history");
-export const editEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
+/** The owner's ruling 19: a changed model name, address or key is checked before it is saved; a
+ * changed address takes its key with it, in this request's body and nowhere else. */
+export const editEngine = (api: ModelsApi, provider: ModelProviderConfig, key?: string) =>
   ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(provider.name)}`, {
     method: "PUT",
-    body: JSON.stringify({ provider }),
+    body: JSON.stringify(key ? { provider, key } : { provider }),
   });
 export const removeEngine = (api: ModelsApi, name: string) =>
   ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}`, { method: "DELETE" });

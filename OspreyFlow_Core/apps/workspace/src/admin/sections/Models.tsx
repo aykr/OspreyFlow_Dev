@@ -109,18 +109,33 @@ function when(at: string | null | undefined): string {
 /** The edit form: an engine's label, models, address and agreement; its name and kind are fixed. */
 function EngineForm({
   initial,
+  keyless,
   onSave,
   onCancel,
 }: {
   initial: Draft;
-  onSave: (draft: Draft) => void;
+  /** Signed in by the gateway's own IAM role: no key is ever asked (ADR-135 Amendment 4). */
+  keyless: boolean;
+  /** `checked`: a changed model name or address, which the Conduit checks before saving. */
+  onSave: (draft: Draft, key: string | null, checked: boolean) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
+  // Write-only, as the add form's: never filled, cleared once sent.
+  const [key, setKeyText] = useState("");
   const id = `edit-${initial.name}`;
+  // The owner's ruling 19: a changed model name or address is checked with one small call before it
+  // is saved, and a changed address takes its key with it (a key is never sent where it was not
+  // entered for). A label or an agreement changed alone asks nothing.
+  const moved = draft.api_base.trim() !== initial.api_base.trim();
+  const held = new Set(Object.values(initial.roles).map((m) => m.trim()));
+  const checked = moved || Object.values(draft.roles).some((m) => m.trim() !== "" && !held.has(m.trim()));
+  const askKey = moved && !keyless;
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSave(draft);
+    const typed = askKey ? key : null;
+    setKeyText("");
+    onSave(draft, typed, checked);
   };
   return (
     <form className="admin-models-form" aria-label={`Edit ${initial.name}`} onSubmit={submit}>
@@ -154,6 +169,25 @@ function EngineForm({
           <Input id={`${id}-base`} value={draft.api_base} onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
         </>
       )}
+      {askKey && (
+        <>
+          <label htmlFor={`${id}-key`}>
+            Key for the new address (not shown, never sent back): a key is never sent where it was not entered for
+          </label>
+          <Input
+            id={`${id}-key`}
+            type="password"
+            autoComplete="new-password"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-bwignore="true"
+            data-form-type="other"
+            spellCheck={false}
+            value={key}
+            onChange={(e) => setKeyText(e.target.value)}
+          />
+        </>
+      )}
       <label className="admin-models-check">
         <Checkbox
           checked={draft.privacy_contract}
@@ -171,9 +205,15 @@ function EngineForm({
           />
         </>
       )}
+      {checked && (
+        <p className="label" style={{ margin: 0 }}>
+          A changed model name or address is checked with one small call before it is saved: nothing changes unless it
+          answers.
+        </p>
+      )}
       <div className="admin-models-actions">
-        <Button type="submit" variant="primary">
-          Save the engine
+        <Button type="submit" variant="primary" disabled={askKey && key.trim() === ""}>
+          {checked ? "Check and save" : "Save the engine"}
         </Button>
         <Button type="button" onClick={onCancel}>
           Cancel
@@ -492,6 +532,11 @@ function KeyForm({ engine, onSend, onCancel }: { engine: AdminEngine; onSend: (k
         value={key}
         onChange={(e) => setKeyText(e.target.value)}
       />
+      <p className="label" style={{ margin: 0 }}>
+        {engine.key_state === "set"
+          ? "The new key is checked against each of the engine's models before it replaces the one held: a key the provider refuses changes nothing."
+          : "The key is checked against each of the engine's models before it is kept: a key the provider refuses is not kept."}
+      </p>
       <div className="admin-models-actions">
         <Button type="submit" variant="primary" disabled={key.trim() === ""}>
           {engine.key_state === "set" ? "Rotate the key" : "Set the key"}
@@ -695,18 +740,14 @@ export function Models({ api }: { api: ModelsApi }) {
                   <EngineForm
                     key={open.name}
                     initial={draftOf(engine.provider)}
+                    keyless={engine.key_state === "iam_role"}
                     onCancel={() => setOpen(null)}
-                    onSave={(draft) => {
-                      const hadKey = engine.key_state === "set";
-                      const next = providerOf(draft);
-                      const moved = (engine.provider.api_base ?? "") !== (next.api_base ?? "");
+                    onSave={(draft, key, checked) =>
                       act(
-                        editEngine(api, next),
-                        hadKey && moved
-                          ? `${draft.name} is saved. Its address changed, so its key was removed: a key is never sent to an address it was not entered for. Enter the key again.`
-                          : `${draft.name} is saved.`,
-                      );
-                    }}
+                        editEngine(api, providerOf(draft), key ?? undefined),
+                        checked ? `${draft.label || draft.name} is checked and saved.` : `${draft.name} is saved.`,
+                      )
+                    }
                   />
                 ) : null;
               })()}
@@ -721,7 +762,7 @@ export function Models({ api }: { api: ModelsApi }) {
                     onSend={(key) =>
                       act(
                         setKey(api, engine.provider.name, key),
-                        `${engine.provider.label ?? engine.provider.name}: the key is set. It is kept by the model gateway and never shown again.`,
+                        `${engine.provider.label ?? engine.provider.name}: checked, the key is set. It is kept by the model gateway and never shown again.`,
                       )
                     }
                   />
