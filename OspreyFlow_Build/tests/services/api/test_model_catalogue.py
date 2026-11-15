@@ -132,8 +132,27 @@ def test_each_entry_makes_a_valid_engine(provider: str) -> None:
     assert engine.route(model) == cat.routed(provider, model)
 
 
-def test_another_provider_is_offered_where_this_deployment_offers_a_gateway() -> None:
-    """ADR-135 Amendment 7 decision 1, as built: the client's own gateway is the cloud-platform
-    profile's. Offering it elsewhere amends that decision, and waits for the ruling."""
-    assert "gateway" in [p.id for p in cat.providers(CLOUD)]
-    assert "gateway" not in [p.id for p in cat.providers("small")]
+@pytest.mark.parametrize("profile", ["small", "local-lite", "cluster", CLOUD])
+def test_another_provider_or_your_own_gateway_is_offered_on_every_profile(profile: str) -> None:
+    """The owner's ruling of 15 November 2026 (ADR-135 Amendment 14, changing Amendment 7
+    decision 1): the client's own gateway on every profile, a Small's included."""
+    assert "gateway" in [p.id for p in cat.providers(profile)]
+
+
+@pytest.mark.parametrize("profile", ["small", "local-lite", "cluster"])
+def test_off_the_cloud_platform_a_gateway_engine_is_taken_and_bedrock_is_not(profile: str) -> None:
+    gateway = ModelProviderConfig.model_validate({
+        "name": "gateway", "kind": "gateway", "api_base": "https://ai.example.gov.uk/v1",
+        "roles": {"extraction": "llama-4"},
+    })  # fmt: skip
+    assert engine_refusal(gateway, profile) is None, engine_refusal(gateway, profile)
+    keyed_address = gateway.model_copy(
+        update={"api_base": "https://ai.example.gov.uk/v1?api-key=x"}
+    )
+    assert engine_refusal(keyed_address, profile) is not None, "an address is an address alone"
+    no_address = gateway.model_copy(update={"api_base": None})
+    assert engine_refusal(no_address, profile) is not None
+    bedrock = ModelProviderConfig.model_validate(
+        {"name": "bedrock", "kind": "bedrock", "roles": {"extraction": "amazon.nova-pro-v1:0"}}
+    )
+    assert engine_refusal(bedrock, profile) is not None, "Bedrock stays the cloud platform's"

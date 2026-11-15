@@ -297,26 +297,44 @@ def test_off_the_cloud_platform_profile_bedrock_is_a_provider_by_its_key_as_befo
     assert "aws_region_name" not in params
     view = client.get("/v1/admin/models").json()
     assert view["engines"][0]["key_state"] == "set"
-    assert view["engine_kinds"] == ["provider"]
+    # ADR-135 Amendment 14 (the owner's ruling of 15 November 2026): the client's own gateway too.
+    assert view["engine_kinds"] == ["provider", "gateway"]
 
 
 @pytest.mark.parametrize("profile", OTHER_PROFILES)
 @pytest.mark.parametrize(
     "body",
-    [GATEWAY, BEDROCK, {**GEMINI, "auth": "iam_role"}, {**GEMINI, "region": "eu-west-2"}],
-    ids=["gateway", "bedrock", "provider-by-role", "provider-with-a-region"],
+    [BEDROCK, GATEWAY_BY_ROLE, {**GEMINI, "auth": "iam_role"}, {**GEMINI, "region": "eu-west-2"}],
+    ids=["bedrock", "gateway-by-role", "provider-by-role", "provider-with-a-region"],
 )
-def test_off_the_cloud_platform_profile_the_two_kinds_are_neither_offered_nor_taken(
+def test_off_the_cloud_platform_profile_bedrock_and_the_role_are_neither_offered_nor_taken(
     tmp_path: Path, serve: Callable[[World], TestClient], profile: str, body: dict[str, Any]
 ) -> None:
+    """ADR-135 Amendment 7 decision 1, as Amendment 14 leaves it: Bedrock and signing in by the
+    gateway's own role stay the cloud platform's."""
     w = World(tmp_path, profile=profile)
     client = serve(w)
-    assert client.get("/v1/admin/models").json()["engine_kinds"] == ["provider"]
+    assert client.get("/v1/admin/models").json()["engine_kinds"] == ["provider", "gateway"]
     refused = client.post("/v1/admin/models/engines", json={"provider": body})
     assert refused.status_code == 422, refused.text
     assert "profile: cloud-platform" in _refusal(refused)
     assert w.gateway.entry_for(f"{body['name']}/{next(iter(body['roles'].values()))}") is None
     assert w.models_file() == ""
+
+
+@pytest.mark.parametrize("profile", OTHER_PROFILES)
+def test_off_the_cloud_platform_profile_the_client_s_own_gateway_is_offered_and_taken(
+    tmp_path: Path, serve: Callable[[World], TestClient], profile: str
+) -> None:
+    """ADR-135 Amendment 14 (the owner's ruling of 15 November 2026): "Another provider or your
+    own gateway" on every profile, a Small's included, at its address alone and by a token."""
+    w = World(tmp_path, profile=profile)
+    client = serve(w)
+    added = client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
+    assert added.status_code == 200, added.text
+    keyed = {**GATEWAY, "name": "acme_keyed", "api_base": f"{BASE}?api-key=x"}
+    refused = client.post("/v1/admin/models/engines", json={"provider": keyed})
+    assert refused.status_code == 422, "an address is an address alone, on every profile"
 
 
 @pytest.mark.parametrize("profile", OTHER_PROFILES)
@@ -355,7 +373,8 @@ def test_osprey_yaml_off_the_cloud_platform_profile_takes_bedrock_by_key_and_ref
 
     taken = cluster_config(models=models(BEDROCK_BY_KEY))
     assert taken.models.providers[0].plain
-    for kind in (BEDROCK, GATEWAY):
+    assert cluster_config(models=models(GATEWAY)).models.providers[0].kind == "gateway"
+    for kind in (BEDROCK, GATEWAY_BY_ROLE):
         with pytest.raises(ValidationError, match="profile: cloud-platform"):
             cluster_config(models=models(kind))
 
