@@ -164,7 +164,7 @@ platform	v052-r1domainguard	S	done	Step 6: R1 probes the OpenSearch domain only 
 docs	v052-cut	M	done	Step 7 docs: v0.5.2 CHANGELOG (the release notes), guide headers UG 1.66 AG 2.18 DG 1.38 ArchG 1.5, sites checked against v0.5.2	lane/docs-v052-cut
 case	v052-case-line-size	S	done	v0.5.2 (the owner, 15 Nov): the case line on the top bar's type size in both looks, held by measurement	lane/case-line-one-size
 case-b	v052-ask-markers	S	done	v0.5.2 (the owner, 15 Nov): Ask & Chat's markers, their names and the answer's words	lane/case-b-ask-markers
-orchestrator	v052-candidate2	S	todo	v0.5.2 step C again: the candidate remade with L1 and L2 (the owner, 15 Nov), CI green; step 6 starts on it as soon as green
+orchestrator	v052-candidate2	S	building	v0.5.2 step C again: the candidate remade with L1 and L2 (the owner, 15 Nov), CI green; step 6 starts on it as soon as green
 admin	v052-govuk-admin-scroll	S	building	v0.5.2 (the owner, 15 Nov): GOV.UK Admin one scroller and the System page's fonts; merged after step 6
 rules-b	admin-forms-research	M	done	Admin forms: the five questions before building (profiles, the way out, listing, provider terms, estimates); research only, nothing built before the cut	lane/rules-b-admin-forms-research
 platform	v052-backup-mapkeys	S	done	v0.5.2 (the owner, 15 Nov): cloud-platform backups never hold map-keys.yaml (ADR-147 decision 1); a restore names the keys to enter again	lane/platform-backup-mapkeys

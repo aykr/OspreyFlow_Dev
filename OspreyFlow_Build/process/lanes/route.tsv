@@ -55,4 +55,4 @@ D	osprey-small (the GOV.UK demo) from the candidate, for client sign-ins (the ow
 6	The install test on the candidate, from the manifest: v0.5.1 upgraded, and a fresh v0.5.2 install, each with spec 08's poc scenarios	platform-b	2026-11-15	2026-11-15	y	4,C	platform-b:v052-r1
 AD	GOV.UK scroll and Admin fonts: every inner scroller contained (the page never moves when a panel ends), Admin one scroller, the System page in the page's font (the owner, 15 Nov: INTO THE CANDIDATE; ADR-132's frame kept)	admin	2026-11-15	2026-11-15	n	-	admin:v052-govuk-admin-scroll
 BK	cloud-platform backups never hold the map key file; a restore names the keys to enter again (rules-b's finding, the owner, 15 Nov: in the candidate)	platform	2026-11-15	2026-11-15	n	-	platform:v052-backup-mapkeys
-7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-17	2026-11-17	y	6	-
+7	Cut v0.5.2; print the page tables; the demos when the owner says	orchestrator	2026-11-16	2026-11-16	y	6	-
