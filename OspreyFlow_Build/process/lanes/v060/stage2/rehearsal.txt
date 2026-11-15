@@ -1,0 +1,232 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261115T162715Z-0775a925/log: bash -c export STAGE2_SHORT=1 STAGE2_OUT=$HOME/osprey-load/stage2-rehearsal-$(date -u +%Y%m%dT%H%M); for s in inputs regen budgets m9 leaks never-join control profile table; do echo "===== STEP $s"; bash OspreyFlow_Build/process/lanes/v060/stage2/run.sh $s; echo "===== STEP $s exit $?"; done
+===== STEP inputs
+stage 2 step inputs, SHORT (rehearsal, not a measurement), 2026-11-15T16:27:15Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+f564f75f9a3eebad675b90a2dcd145d0478bf6bec735ff818094a2fbe2fea0a7  /root/osprey-load/step4/queries.jsonl
+ae02aa9cc4cc7647282f6dedda461022e676b0590b019cfeccada42f8b80c434  /root/osprey-load/m10/leaks.jsonl
+48af1d5004c6f2aead7640637d1654ba6b9aadcab245201188de1e1608c987a6  /root/osprey-load/m10/never_join.jsonl
+expected: f564f75f… queries.jsonl, ae02aa9c… leaks.jsonl, 48af1d50… never_join.jsonl
+   500 /root/osprey-load/m10/leaks.jsonl
+   500 /root/osprey-load/m10/never_join.jsonl
+osprey-test-d-arcadedb Up 15 seconds
+osprey-test-d-opensearch Up 14 seconds
+osprey-test-d-clickhouse Up 15 seconds
+osprey-test-d-objectstore Up 15 seconds
+osprey-test-d-valkey Up 15 seconds
+osprey-test-d-pg Up 15 seconds
+===== STEP inputs exit 0
+===== STEP regen
+stage 2 step regen, SHORT (rehearsal, not a measurement), 2026-11-15T16:27:15Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+counts: {'leaks_eligible': 10129, 'leaks_kept_out': {'SECRET/R unit-intel-covert': 1997}, 'never_text_dropped': {'leaks': 3062, 'never_join': 3}, 'leaks_words': {'cases_with_a_word': 20, 'cases': 20, 'measured': True, 'words_checked_min': 1, 'words_checked_median': 1}}
+41189df4e5cb361c66c1e5fb7eff6726bde76d06753f043c432baf1cd6aa576d  /root/osprey-load/stage2-rehearsal-20261115T1627/m10-regen/leaks.jsonl
+b3436ee5bf98327feda39e5d31e0d9aa8738d352b56988248a58674b7cbc45b1  /root/osprey-load/stage2-rehearsal-20261115T1627/m10-regen/never_join.jsonl
+===== STEP regen exit 0
+===== STEP budgets
+stage 2 step budgets, SHORT (rehearsal, not a measurement), 2026-11-15T16:27:31Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 2 deselected / 5 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .....          [100%]
+
+============================= slowest 30 durations =============================
+12.27s call     tests/perf/test_search_budget_live.py::test_m6_a_drawn_node_reaches_the_index_within_its_failure_figure
+3.72s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M5-exact]
+2.67s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M4-fulltext]
+2.02s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M3-names]
+0.84s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M1-suggest]
+0.31s setup    tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M5-exact]
+
+(9 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 5 passed, 2 deselected in 21.97s =======================
+{'measure': 'M1', 'class': 'suggest', 'n': 10, 'p50_ms': 68.4, 'p95_ms': 70.7, 'max_ms': 70.7, 'budget_ms': 300.0, 'cases': None, 'reached': None, 'verdict': 'met'}
+{'measure': 'M3', 'class': 'names', 'n': 10, 'p50_ms': 170.5, 'p95_ms': 199.4, 'max_ms': 199.4, 'budget_ms': 1000.0, 'cases': None, 'reached': None, 'verdict': 'met'}
+{'measure': 'M4', 'class': 'fulltext', 'n': 10, 'p50_ms': 198.3, 'p95_ms': 317.7, 'max_ms': 317.7, 'budget_ms': 1500.0, 'cases': None, 'reached': None, 'verdict': 'met'}
+{'measure': 'M5', 'class': 'exact', 'n': 10, 'p50_ms': 177.1, 'p95_ms': 312.7, 'max_ms': 312.7, 'budget_ms': 1000.0, 'cases': None, 'reached': None, 'verdict': 'met'}
+{'measure': 'M6', 'class': None, 'n': 3, 'p50_ms': 1885.1, 'p95_ms': 2074.4, 'max_ms': 2074.4, 'budget_ms': 5000.0, 'cases': None, 'reached': None, 'verdict': 'met'}
+===== STEP budgets exit 0
+===== STEP m9
+stage 2 step m9, SHORT (rehearsal, not a measurement), 2026-11-15T16:30:46Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+17.48s call     tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+0.30s setup    tests/perf/test_search_budget_live.py::test_m9_opensearch_stopped_mid_session_the_bar_falls_back_and_says_so
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 17.90s =======================
+{'measure': 'M9', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': None, 'reached': None, 'verdict': 'met'}
+osprey-test-d-opensearch Up 12 seconds
+===== STEP m9 exit 0
+===== STEP leaks
+stage 2 step leaks, SHORT (rehearsal, not a measurement), 2026-11-15T16:32:12Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .              [100%]
+
+============================= slowest 30 durations =============================
+7.83s call     tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+0.31s setup    tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+======================= 1 passed, 6 deselected in 8.30s ========================
+{'measure': 'M10', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': 20, 'reached': 20, 'verdict': 'met'}
+===== STEP leaks exit 0
+===== STEP never-join
+stage 2 step never-join, SHORT (rehearsal, not a measurement), 2026-11-15T16:33:30Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 6 deselected / 1 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py F              [100%]
+
+=================================== FAILURES ===================================
+___ test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal ___
+
+    def test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal() -> None:
+        stack = _stack()
+        missing = [
+            n
+            for n in ("OSPREY_MEASURE_PART_TOKEN", "OSPREY_MEASURE_CONTROLS", "OSPREY_MEASURE_LEAKS")
+            if not os.environ.get(n)
+        ]
+        if missing:
+            pytest.skip(
+                f"no leak cases named ({', '.join(missing)} unset): M10 needs the part-cleared "
+                "principal and the controls"
+            )
+        lines = Path(os.environ["OSPREY_MEASURE_LEAKS"]).read_text(encoding="utf-8").splitlines()
+        found = _void_on_401(measure_search.measure_leaks)(
+            base=stack["OSPREY_MEASURE_BASE"],
+            case=stack["OSPREY_MEASURE_CASE"],
+            token=os.environ["OSPREY_MEASURE_PART_TOKEN"],
+            controls=json.loads(os.environ["OSPREY_MEASURE_CONTROLS"]),
+            cases=[json.loads(line) for line in lines if line.strip()],
+        )
+        _record("M10", found)
+>       assert found["verdict"] == "met", (
+            f"M10 {found['verdict']}, {found['reached']} of {found['cases']} controls reached: "
+            + "; ".join((found["failures"] or found["indeterminate"])[:20])
+        )
+E       AssertionError: M10 unmeasured, 17 of 20 controls reached: never joined: cs-intel-org-1822 and cs-companies-org-12765 (cs-same-intel-org-1822): the cleared principal's answer does not name ['cs-companies-org-12765'] on page 1, so the case reaches nothing hidden and proves nothing; never joined: cs-intel-org-1894 and cs-companies-org-13269 (cs-same-intel-org-1894): the cleared principal's answer does not name ['cs-companies-org-13269'] on page 1, so the case reaches nothing hidden and proves nothing; never joined: cs-intel-org-1911 and cs-companies-org-13388 (cs-same-intel-org-1911): the cleared principal's answer does not name ['cs-companies-org-13388'] on page 1, so the case reaches nothing hidden and proves nothing
+E       assert 'unmeasured' == 'met'
+E         
+E         - met
+E         + unmeasured
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py:146: AssertionError
+============================= slowest 30 durations =============================
+5.34s call     tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+0.31s setup    tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+
+(1 durations < 0.005s hidden.  Use -vv to show these durations.)
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/perf/test_search_budget_live.py::test_m10_nothing_hidden_is_seen_or_counted_by_the_part_cleared_principal
+======================= 1 failed, 6 deselected in 5.82s ========================
+{'measure': 'M10', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': 20, 'reached': 17, 'verdict': 'unmeasured'}
+===== STEP never-join exit 1
+===== STEP control
+stage 2 step control, SHORT (rehearsal, not a measurement), 2026-11-15T16:34:43Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+== cs-intel-doc-10063 | control: m10-cleared-unit-intel | never_text: ['2025-01-21T03:17:22Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-01-21T03:17:22Z']
+   .nodes[0].properties.sent_at: '2025-01-21T03:17:22Z'
+   result: ['cs-intel-doc-10063'] 2025-01-21 name_exact
+   result: ['cs-intel-doc-7963'] 2026-11-01 name_typo
+== cs-intel-doc-10127 | control: m10-cleared-unit-intel | never_text: ['2026-08-27T23:08:54Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2026-08-27T23:08:54Z']
+   .nodes[0].properties.sent_at: '2026-08-27T23:08:54Z'
+   result: ['cs-intel-doc-10127'] 2026-08-27 name_exact
+   result: ['cs-intel-doc-38392'] 2026-11-01 name_typo
+== cs-intel-doc-10255 | control: m10-cleared-unit-intel | never_text: ['2025-07-06T11:23:30Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-07-06T11:23:30Z']
+   .nodes[0].properties.sent_at: '2025-07-06T11:23:30Z'
+   result: ['cs-intel-doc-10255'] 2025-07-06 name_exact
+   result: ['cs-intel-doc-8042'] 2026-11-01 name_typo
+== cs-intel-doc-10265 | control: m10-cleared-unit-intel | never_text: ['2025-07-13T01:29:19Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-07-13T01:29:19Z']
+   .nodes[0].properties.sent_at: '2025-07-13T01:29:19Z'
+   result: ['cs-intel-doc-10265'] 2025-07-13 name_exact
+   result: ['cs-intel-doc-6861'] 2026-11-01 name_typo
+== cs-intel-doc-10312 | control: m10-cleared-unit-intel | never_text: ['2025-01-31T19:18:41Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-01-31T19:18:41Z']
+   .nodes[0].properties.sent_at: '2025-01-31T19:18:41Z'
+   result: ['cs-intel-doc-10312'] 2025-01-31 name_exact
+   result: ['cs-intel-doc-9560'] 2026-11-01 name_typo
+positive control: the words check fired on 5 of 5
+===== STEP control exit 0
+===== STEP profile
+stage 2 step profile, SHORT (rehearsal, not a measurement), 2026-11-15T16:35:53Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+  File "<string>", line 1
+    import json,sys; q=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; print("\n".join(x["query"] for x in q if x["class"]=="names"][:5]))
+                                                                                                                                            ^
+SyntaxError: closing parenthesis ']' does not match opening parenthesis '('
+===== STEP profile exit 1
+===== STEP table
+stage 2 step table, SHORT (rehearsal, not a measurement), 2026-11-15T16:35:53Z, run copy b9ef0a6, results /root/osprey-load/stage2-rehearsal-20261115T1627
+# v0.5.2 step 4: search measured on B's load (ADR-149 Amendment 2)
+
+- **Run:** (to be filled in)
+- **Stack and lease:** d, (to be filled in) (rule 14: a figure taken without the lease is not a measurement)
+- **The scripts' commit:** b9ef0a6
+- **The load:** B, about 281,000 Persons. The owner's tens-of-millions figure is not measured (the owner's ruling of 13 November, "measure what is loaded").
+- **Known difference:** the stores on the host's loopback, unsigned and without TLS; SigV4 measured at about 35 µs per request; TLS and the network to the endpoint not measured (ADR-149 Amendment 2).
+
+| Measure | What | Budget | Failure figure | p50 / p95 / max | n | Class | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| M1 | Suggestions, 2–6 characters, the largest loaded type | ≤ 300 ms | p95 > 300 ms, or any over 2 s | 68.4 / 70.7 / 70.7 ms | 10 | suggest | **met** |
+| M2 | Suggestions in the Glass, last key to the list | ≤ 400 ms | > 600 ms | — | — | — | not measured here: a perf/ case in a browser slot |
+| M3 | Name search (typos, variants, sounds-like) | ≤ 1 s | p95 > 2 s | 170.5 / 199.4 / 199.4 ms | 10 | names | **met** |
+| M4 | Full text with the passage highlighted | ≤ 1.5 s | p95 > 3 s | 198.3 / 317.7 / 317.7 ms | 10 | fulltext | **met** |
+| M5 | An exact identifier ranked first | ≤ 1 s | p95 > 2 s | 177.1 / 312.7 / 312.7 ms | 10 | exact | **met** |
+| M6 | The feed's lag: a drawn node to searchable | ≤ 5 s | p95 > 30 s | 1885.1 / 2074.4 / 2074.4 ms | 3 |  | **met** |
+| M7 | Rebuild from the graph, B's whole load | measured, then the restore's bound set from it with a margin | the rebuild exceeds the bound the restore runbook gives it | — | — | — | not measured here: the restore's rebuild, timed |
+| M8 | Drift check, B's whole load | inside its Job's 4 GiB, its peak flat as the load grows, ≤ 1 h | out of memory, a peak growing with the documents, or over 1 h | — | — | — | not measured here: its Job's peak and time |
+| M9 | The fallback: OpenSearch stopped mid-session | the bar falls back and says so within the 5 s timeout | no message, or a wait over 5 s | max 1782.5 ms | 10 |  | **met** |
+| M10 | The leak test at scale (m10-part) | nothing they may not see, count or infer, in results, counts, suggestions or snippets | any | — | 20 (20 reached) |  | **met** |
+| M11 | Each container's peak working set during M1–M8 | peak ≤ 80% of its limit | at or over its limit, or killed | — | — | — | not measured here: the cluster's metrics |
+
+A result between the budget and the failure figure is over budget, not failed; past the failure figure, step 4 fails (ADR-149 Amendment 2).
+never-join:
+{'measure': 'M10', 'class': None, 'n': None, 'p50_ms': None, 'p95_ms': None, 'max_ms': None, 'budget_ms': None, 'cases': 20, 'reached': 17, 'verdict': 'unmeasured'}
+===== STEP table exit 0
+Wall time: 519 s, exit 0 (stack d, the lease rules-b took at 2026-11-15T16:26:59Z; set-up before it 6 s)

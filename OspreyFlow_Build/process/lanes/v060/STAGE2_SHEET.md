@@ -7,7 +7,7 @@ v0.6.0 list is merged. Every command below was run short on stack d before it wa
 
 ## Before
 - **When:** after Build closes and the v0.6.0 list is merged. The official run is one QUEUE turn of about 25 min,
-  plus up to 15 min if diagnosis is needed. The orchestrator adds the line; take the turn only when it is first and
+  plus about 20 min if diagnosis is needed. The orchestrator adds the line; take the turn only when it is first and
   `pgrep -x make` is empty.
 - **Rule 14:** one lane holds stack d for the whole run. A figure taken without the lease, or under someone else's,
   is not a measurement.
@@ -30,14 +30,16 @@ refuses to write over an existing folder. If the step was run before, move the o
 | 2 | `… run.sh budgets` | 4 min | **M1** p95 ≤ 300 ms and none over 2 s; **M3** p95 ≤ 1 s; **M4** p95 ≤ 1.5 s; **M5** p95 ≤ 1 s; **M6** p95 ≤ 5 s. Between the budget and the failure figure (M3 2 s, M4 3 s, M5 2 s, M6 30 s), a measure is *over budget*, not failed; past the failure figure, the pytest case fails |
 | 3 | `… run.sh m9` | 2 min | M9 met: every answer arrives in under 5 s with OpenSearch stopped, and the bar says so. Afterwards `osprey-test-d-opensearch` is up again (the step prints its status) |
 | 4 | `… run.sh leaks` | 4 min | M10 met: 500 of 500 controls reached, 0 failures, 0 indeterminate, the words check measured |
-| 5 | `… run.sh never-join` | 3 min | M10 met: at least 450 of 500 controls reached (the 90% floor, the orchestrator's ruling), 0 failures |
+| 5 | `… run.sh never-join` | 3 min | M10 met: at least 450 of 500 controls reached (the 90% floor, the orchestrator's ruling), 0 failures. **It met the floor exactly on 14 November (450).** One more unreached control makes it *unmeasured*, not failed: the pytest case fails on "unmeasured", and the record says so. Never trim the file to pass. The rehearsal's first 20 cases reached 17 (below) |
 | 6 | `… run.sh control` | 1 min | `positive control: the words check fired on 5 of 5` |
 | 7 | `… run.sh table` | 10 s | the table prints every measure; M2, M7, M8 and M11 say "not measured here" |
 | 8 | `OspreyFlow_Build/scripts/stack_lease.sh down <lane>`, then `… release <lane>`; delete your QUEUE line | 1 min | `status` shows d free |
 
-**Only if a figure is over budget or failed:** `… run.sh profile` before step 8 (read-only, about 10 min).
-`profile_page.py` shows where a search page's time goes. `profile_m9.py` times M9's graph fallback query beside its
-variants. **Only if `scripts/client_size_leaks.py` has changed since 14 November:** `… run.sh regen` (3 min)
+**Only if a figure is over budget or failed:** `… run.sh profile` before step 8 (read-only, about 20 min: the
+pre-Amendment-21 variants each read the whole store, 5 to 20 s a time).
+`profile_page.py` shows where a search page's time goes. `profile_m9.py` times M9's graph fallback as built (`shipping`) beside the
+query before Amendment 21 and its variants. It ran only after rules-b's fix, 4b98887; on main before that it
+raised `TypeError`. **Only if `scripts/client_size_leaks.py` has changed since 14 November:** `… run.sh regen` (3 min)
 before step 4. It writes `stage2/m10-regen/`. Read its counts (`leaks_words.measured` must be true), then replace
 `~/osprey-load/m10/*.jsonl` by hand, keeping the old files beside them. Steps 4 and 5 then measure the new hashes,
 which go into the record.
@@ -59,3 +61,6 @@ which go into the record.
 - **The runners' own tests pass offline on main:** `test_step4_stack.py`, `test_measure_search.py`,
   `test_client_size_leaks.py`, `test_step4_dry_run.py` and `test_search_nodes_from_candidates.py`, 109 passed. The
   live gate and the docker-CLI M9 case skip, as they should.
+- **One runner was broken, and is fixed:** `profile_m9.py` still built the fallback's query as it was before
+  ADR-124 Amendment 21 and raised `TypeError` on main. It is fixed at 4b98887, with `tests/test_profile_m9.py` red
+  first (`stage2/profile_m9-red-first.txt`). The measures themselves were not affected.
