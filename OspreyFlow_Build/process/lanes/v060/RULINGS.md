@@ -67,3 +67,11 @@ Stages 3, 4 and 5 and the demo rebuild are approved in advance under the conditi
 window is now "as soon as the release is made" (it replaces Wed 18 07:00 UK). Anything in its section 2 stops the run
 and comes back to the owner at the top of MORNING.md. Gemini's key: the rebuild runs to the end without it; the Gemini
 checks wait for the owner's key, unless 4.3's carry is shown safe by a rehearsal first.
+
+## The GOV.UK demo is protected (the owner, 15 Nov ~22:15Z)
+
+Once the v0.6.0 rebuild is complete and the owner has entered the Gemini key, **nothing disrupts the GOV.UK demo
+(govuk.ospreyflow.app, osprey-small at /opt/ospreyflow-v0.6.0) without telling the owner first**: no apply, restart,
+rebuild, update, settings change, restore, port or certificate change, and no step of Part 3's cutover. A change is
+proposed to the owner in one line (what changes, the expected downtime, the way back) and waits for their word.
+Reading it (checks, health, the gate) is not a disruption.
