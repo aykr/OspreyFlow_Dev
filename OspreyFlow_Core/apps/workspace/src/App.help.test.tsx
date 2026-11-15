@@ -239,10 +239,11 @@ describe("the rail as the real App draws it", () => {
     expect(within(rail).getByRole("button", { name: "History" }).getAttribute("aria-expanded")).toBe("true");
   });
 
-  test("Ask & Chat opens its drawer under its own name", async () => {
+  test("Ask & Chat opens its page under its own name (v0.6.0 #4)", async () => {
     render(<App />);
     const rail = await screen.findByRole("navigation", { name: "Workspace" });
     fireEvent.click(await within(rail).findByRole("button", { name: "Ask & Chat" }));
-    expect(await screen.findByRole("button", { name: "Close Ask & Chat" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Ask & Chat" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Back to / })).toBeTruthy();
   });
 });

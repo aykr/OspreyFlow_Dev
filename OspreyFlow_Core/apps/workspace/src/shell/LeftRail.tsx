@@ -20,6 +20,9 @@ export interface RailItem {
    * open. Such an item is never `pressed`: the rail marks the place alone, one place, one marker
    * (ADR-145 Amendment 14 decision 3); the panel's state is `aria-expanded`. */
   expanded?: boolean;
+  /** An item that opens a page over the view rather than a drawer (Ask & Chat, v0.6.0 #4): it is still
+   * `aria-expanded`, but announces no dialog. */
+  opensPage?: boolean;
 }
 
 /** The rail's ⋯ *Explore Details*: a menu of the destinations not on the rail itself. It closes on Escape
@@ -99,6 +102,15 @@ function RailMore({ items, expanded }: { items: readonly RailItem[]; expanded: b
   );
 }
 
+/** Focus to the rail's opener named `label`: where a page over the view (Ask & Chat, v0.6.0 #4) sends focus as it
+ * closes. The rail sits outside the page and the inert view, so it takes focus at once, before the page goes. Matched
+ * on the attribute, not in the selector: an `&` inside an attribute selector is not matched by every engine. */
+export function focusRailOpener(label: string): void {
+  [...document.querySelectorAll<HTMLElement>('nav[aria-label="Workspace"] button')]
+    .find((button) => button.getAttribute("aria-label") === label)
+    ?.focus();
+}
+
 export function LeftRail({
   items,
   more = [],
@@ -120,7 +132,7 @@ export function LeftRail({
           aria-label={item.label}
           aria-pressed={item.expanded !== undefined || item.pressed === undefined ? undefined : item.pressed}
           aria-expanded={item.expanded}
-          aria-haspopup={item.expanded === undefined ? undefined : "dialog"}
+          aria-haspopup={item.expanded === undefined || item.opensPage ? undefined : "dialog"}
           title={expanded ? undefined : item.label}
           onClick={item.onSelect}
         >

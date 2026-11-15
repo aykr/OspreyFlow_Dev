@@ -27,7 +27,8 @@ import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
 import { initialInvestigationId } from "../src/investigation/investigationId";
 import { placesFor, type PlaceId } from "../src/shell/places";
-import { LeftRail } from "../src/shell/LeftRail";
+import { focusRailOpener, LeftRail } from "../src/shell/LeftRail";
+import { AskPage } from "../src/questions/AskPage";
 import { TopBar } from "../src/shell/TopBar";
 
 declare global {
@@ -161,17 +162,34 @@ function Harness() {
               {...splitRail(ON_THE_RAIL.map((id) => ({
                 id, label: RAIL_LABELS[id], icon: id,
                 onSelect: () => toggle(id),
+                // Ask & Chat opens a page over the view, not a drawer (v0.6.0 #4), as `App.tsx` marks it.
+                opensPage: id === "questions",
                 // Marked by the same `railMark` as `App.tsx`, never a copy: expanded while its panel is open.
                 ...railMark(id, { view, open: panels }),
               })))}
               onHelp={() => undefined}
             />
           )}
-          <main aria-label="Place content">
-            <p>{`${place}, ${view}, on case ${caseId}`}</p>
-          </main>
-          {/* Each open panel is a real drawer, as `App.tsx`'s are, so closing it returns focus to its opener. */}
-          {[...panels].map((id) => (
+          {/* `position: relative`, as `App.tsx`'s main area is, so Ask & Chat's page fills it; the view beneath is
+              inert while the page shows, as there. */}
+          <div style={{ flex: 1, position: "relative", minHeight: "60vh" }}>
+            <main aria-label="Place content" inert={panels.has("questions") ? true : undefined}>
+              <p>{`${place}, ${view}, on case ${caseId}`}</p>
+            </main>
+            {place === "glass" && panels.has("questions") && (
+              <AskPage
+                backLabel={VIEW_LABELS[view as keyof typeof VIEW_LABELS] ?? "Graph"}
+                onBack={() => {
+                  focusRailOpener(RAIL_LABELS.questions);
+                  toggle("questions");
+                }}
+              >
+                <p>{`${RAIL_LABELS.questions}'s questions and answers.`}</p>
+              </AskPage>
+            )}
+          </div>
+          {/* Each open drawer is a real drawer, as `App.tsx`'s are, so closing it returns focus to its opener. */}
+          {[...panels].filter((id) => id !== "questions").map((id) => (
             <Drawer
               key={id}
               open
@@ -191,14 +209,16 @@ function Harness() {
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 // `?open=views`: the top bar's More views drawn open; `?open=explore` or `?open=cases`: the Explore panel, or the Cases
-// panel from *Views in this case*, drawn open (ADR-145 Amendment 15), so the accessibility scan sees each
-// (`a11y/every-harness.spec.ts`).
+// panel from *Views in this case*, drawn open (ADR-145 Amendment 15), and `?open=questions` Ask & Chat's page (ADR-145
+// Amendment 18), so the accessibility scan sees each (`a11y/every-harness.spec.ts`).
 const opening = params.get("open");
 if (opening) {
   const press = () => {
     const button =
-      opening === "explore"
-        ? document.querySelector<HTMLButtonElement>('nav[aria-label="Workspace"] button[aria-label="Explore"]')
+      opening === "explore" || opening === "questions"
+        ? [...document.querySelectorAll<HTMLButtonElement>('nav[aria-label="Workspace"] button')].find(
+            (b) => b.getAttribute("aria-label") === (opening === "explore" ? "Explore" : "Ask & Chat"),
+          )
         : opening === "cases"
           ? [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("Saved views"))
           : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More"));

@@ -181,7 +181,9 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
   test("the Ask line opens Ask & Chat with the words carried over, and nothing is asked of a model", async () => {
     await openResults();
     fireEvent.click(await screen.findByRole("button", { name: "Ask a question about 'Kestrel' instead" }));
-    const panel = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    // Ask & Chat's page replaces the results (v0.6.0 #4).
+    const panel = await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull();
     const question = within(panel).getByRole("textbox") as HTMLTextAreaElement;
     expect(question.value).toBe("Kestrel");
     expect(document.activeElement).toBe(question);
@@ -277,12 +279,53 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
   test("the words carried to Ask & Chat are carried once: closed and opened again from the rail, its box is empty", async () => {
     await openResults();
     fireEvent.click(await screen.findByRole("button", { name: "Ask a question about 'Kestrel' instead" }));
-    const panel = await screen.findByRole("dialog", { name: "Ask & Chat" });
-    fireEvent.click(within(panel).getByRole("button", { name: "Close Ask & Chat" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull());
+    const panel = await screen.findByRole("region", { name: "Ask & Chat" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Back to Graph" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    const again = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    const again = await screen.findByRole("region", { name: "Ask & Chat" });
     expect((within(again).getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
+  });
+
+  // ADR-145 Amendment 18 (v0.6.0 #4): Ask & Chat is a page over the view, and the two pages replace each other.
+  test("the rail's Ask & Chat over the results replaces them, its heading focused, the view inert beneath; Back returns to the view, not the results", async () => {
+    await openResults();
+    const rail = screen.getByRole("navigation", { name: "Workspace" });
+    fireEvent.click(within(rail).getByRole("button", { name: "Ask & Chat" }));
+    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(page).getByRole("heading", { name: "Ask & Chat" })));
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+    // The Back link is the page's first control.
+    expect(page.querySelector("button, a, textarea, input, select")).toBe(within(page).getByRole("button", { name: "Back to Graph" }));
+    fireEvent.click(within(page).getByRole("button", { name: "Back to Graph" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull();
+    expect(pressed()).toEqual(["Graph"]);
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).toBeNull();
+    expect(document.activeElement).toBe(within(rail).getByRole("button", { name: "Ask & Chat" }));
+  });
+
+  test("a search from the Ask & Chat page replaces it with the results", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
+    await screen.findByRole("region", { name: "Ask & Chat" });
+    fireEvent.change(box(), { target: { value: "Kestrel" } });
+    fireEvent.keyDown(box(), { key: "Enter" });
+    await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
+    expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull();
+  });
+
+  test("choosing a view leaves the Ask & Chat page, that view current", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
+    await screen.findByRole("region", { name: "Ask & Chat" });
+    fireEvent.click(within(group()).getByRole("button", { name: "Map" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    expect(pressed()).toEqual(["Map"]);
   });
 
   test("the same words searched again ask again and take focus back to the heading", async () => {

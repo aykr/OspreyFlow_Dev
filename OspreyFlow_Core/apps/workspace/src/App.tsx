@@ -55,7 +55,7 @@ import { AnswersForSection } from "./home/AnswersForSection";
 import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
-import { LeftRail } from "./shell/LeftRail";
+import { focusRailOpener, LeftRail } from "./shell/LeftRail";
 import { MORE_VIEWS, offeredViews, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH, viewToLandOn } from "./shell/railLayout";
 
 const ALL_SWITCH_VIEWS = [...VIEW_SWITCH, ...MORE_VIEWS];
@@ -102,6 +102,7 @@ import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi
 import { GlobalSearch } from "./search/GlobalSearch";
 import { SearchResults } from "./search/SearchResults";
 import { useSearchResultsOverlay } from "./search/useSearchResultsOverlay";
+import { AskPage } from "./questions/AskPage";
 import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
@@ -1099,6 +1100,24 @@ export function App() {
   // with the keyboard harness (`search/useSearchResultsOverlay.ts`). A document read from the results hides them.
   const results = useSearchResultsOverlay(readerDocumentId !== null);
   const searching = results.searching;
+  // v0.6.0 #4: Ask & Chat is a page over the view, as the results page is; the two replace each other, and whatever
+  // leaves the results (a view chosen, another place, a saved view opened) leaves it too. The view beneath is out of
+  // reach while it shows, except while a document read from an answer is open over the view.
+  const askOver = questionsOpen && readerDocumentId === null;
+  const pageOver = results.viewInert || askOver;
+  function leavePages(): void {
+    results.leave();
+    setQuestionsOpen(false);
+  }
+  /** *Back to ‹view›*: the view as it was, focus on the rail's Ask & Chat, which opened the page. */
+  function leaveAskPage(): void {
+    focusRailOpener(RAIL_LABELS.questions);
+    setQuestionsOpen(false);
+  }
+  function openAskPage(): void {
+    results.leave();
+    setQuestionsOpen(true);
+  }
   // ADR-093: every node selected on the canvas, for the Inspector's list.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   // The selection made where no canvas is drawn (the Matrix view): the same state the canvas reports
@@ -1174,7 +1193,7 @@ export function App() {
     // The view's window, or none: a view keeps no window of the case's.
     timeline?.setWindow(lensWindow(opened));
     // A saved view opened over the search results leaves them (Part A).
-    results.leave();
+    leavePages();
     setView("graph");
   }
 
@@ -1730,11 +1749,11 @@ export function App() {
           openCase,
           browseCases: () => setBrowsingCases(true),
           openStudio: () => {
-            results.leave();
+            leavePages();
             setView("ingest");
           },
           openRules: () => {
-            results.leave();
+            leavePages();
             setView("alerts");
           },
           openAlert: (alertId) => navigate(alertPath(alertId)),
@@ -1833,7 +1852,7 @@ export function App() {
   const mark = (id: RailEntry) => railMark(id, { view, open: railOpen });
   const railTools = [
     { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen((open) => !open), ...mark("explore") },
-    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => setQuestionsOpen((open) => !open), ...mark("questions") },
+    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => (questionsOpen ? leaveAskPage() : openAskPage()), opensPage: true, ...mark("questions") },
     { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen((open) => !open), ...mark("history") },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   const railSplit = splitRail(railTools);
@@ -1852,12 +1871,12 @@ export function App() {
         onSelect:
           id === "boards"
             ? () => {
-                results.leave();
+                leavePages();
                 setBoardToOpen(null);
                 setView("boards");
               }
             : () => {
-                results.leave();
+                leavePages();
                 setView(id);
               },
       })),
@@ -1884,7 +1903,7 @@ export function App() {
             counts={{ rules: alertCount }}
             onChoose={(place) => {
               // Another place leaves the search results (Part A); back in the Glass, they are gone.
-              results.leave();
+              leavePages();
               if (place === "admin") setStartChoice("admin");
               else if (place === "ingest") setView("ingest");
               else if (place === "rules") setView("alerts");
@@ -1903,9 +1922,10 @@ export function App() {
               entityTypes={ontologySchema?.entity_types.map((e) => e.name) ?? []}
               onApplyDelta={applyStarterDelta}
               // Part A: Enter on the typed words opens the results page over the view on screen.
-              onSearch={(query) =>
-                results.open(query, view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph")
-              }
+              onSearch={(query) => {
+                setQuestionsOpen(false); // the results replace Ask & Chat's page (v0.6.0 #4)
+                results.open(query, view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph");
+              }}
               screenNodes={() => {
                 const graph = workingSetRef.current.graph;
                 return graph.nodes().map((id) => graph.getNodeAttribute(id, "data"));
@@ -1927,7 +1947,7 @@ export function App() {
                 ...(mainViews.length > 0 ? mainViews : otherViews),
                 ...(dossierNodeId
                   ? [{ id: "dossier", label: "Messages", pressed: view === "dossier" && searching === null, onSelect: () => {
-                      results.leave();
+                      leavePages();
                       setView("dossier");
                     } }]
                   : []),
@@ -1993,11 +2013,11 @@ export function App() {
         datasets={app === "glass" ? caseContext.datasets : null}
         crossLink={crossLinkFor(app, startPlaces(rights), caseContext.name, caseContext.datasets, {
           toStudio: () => {
-            results.leave();
+            leavePages();
             setView("ingest");
           },
           toGlass: () => {
-            results.leave();
+            leavePages();
             setView(lastGlassView());
           },
         })}
@@ -2016,10 +2036,10 @@ export function App() {
       {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
       {/* Part A: the view left stays as it was beneath the search results, out of reach while they show. */}
-      <div style={{ display: "contents" }} inert={app === "glass" && results.viewInert ? true : undefined}>
+      <div style={{ display: "contents" }} inert={app === "glass" && pageOver ? true : undefined}>
       {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
           (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
-      {welcomeOpen && !inCanvasArea && !results.viewInert && welcomePanel}
+      {welcomeOpen && !inCanvasArea && !pageOver && welcomePanel}
       {(view === "graph" || view === "map") && (
         // ADR-097 step 1: what belongs to this view alone, docked above it.
         <div role="toolbar" aria-label={view === "graph" ? "Graph view" : "Map view"} className="view-toolbar">
@@ -2238,7 +2258,7 @@ export function App() {
             )}
             {/* ADR-145 Amendment 12: the keys panel under the canvas toolbar, on the graph, the map and the
                 matrix alike; any other view has it in the column (above). */}
-            {welcomeOpen && !results.viewInert && welcomePanel}
+            {welcomeOpen && !pageOver && welcomePanel}
             {view === "graph" && (
               <GlassCanvas
                 // A view opened or closed draws a different working set: the canvas starts afresh.
@@ -2277,7 +2297,7 @@ export function App() {
                 onAskInView={(saved) => {
                   setViewsRead((n) => n + 1);
                   setQuestionsView({ id: saved.id, name: saved.name });
-                  setQuestionsOpen(true);
+                  openAskPage();
                 }}
                 lens={lens !== null}
                 // ADR-144 Amendment 6: the toolbar's *Views* menu (Amendment 3) is withdrawn on the owner's word; the case
@@ -2715,6 +2735,51 @@ export function App() {
       )}
       </div>
       {/* Part A: the results fill the main area, over the view left, hidden (kept) while a document is read from them. */}
+      {/* v0.6.0 #4: Ask & Chat as a page over the view, as the results page is (`questions/AskPage.tsx`). */}
+      {app === "glass" && questionsOpen && (
+        <AskPage
+          backLabel={view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph"}
+          onBack={leaveAskPage}
+          hidden={readerDocumentId !== null}
+          beside={welcomeOpen && welcome === "asked" ? welcomePanel : null}
+          takeFocus={questionDraft === null}
+        >
+          <QuestionsPanel
+            // v0.6.0 #5: under each answer, Show all on graph and Save as a view.
+            onShowAll={(ids) => void showAnswerOnGraph(ids)}
+            onSaveAsView={saveAnswerAsView}
+           
+            apiBaseUrl={API_BASE_URL}
+            bearerToken={bearerToken}
+            investigationId={investigationId}
+            onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta)}
+            onOpenDocument={(id) => {
+              setReaderFallback(undefined);
+              setReaderDocumentId(id);
+            }}
+            // ADR-129: the graph facts asked about are what is selected and one link around it, and
+            // inside the timeline window when one is set; a `[G-n]` chosen in an answer selects what
+            // it stands for on the canvas and brings it into view.
+            selection={{
+              nodeIds: selectedNodeIds,
+              linkIds: selectedLink ? [selectedLink.id] : [],
+            }}
+            getTimelineWindow={() => crossFilterRef.current?.store.getState().window ?? null}
+            // A marker shows its fact on the graph: the page gives the view back, on the Graph, and the fact is
+            // brought into view there once the canvas is in reach again.
+            onSelectFacts={(citation) => {
+              leavePages();
+              setView("graph");
+              setTimeout(() => {
+                if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
+              }, 0);
+            }}
+            view={questionsView}
+            onLeaveView={() => setQuestionsView(null)}
+            draft={questionDraft}
+          />
+        </AskPage>
+      )}
       {app === "glass" && searching !== null && investigationId && bearerToken && (
         <SearchResults
           key={searching.at}
@@ -2732,7 +2797,7 @@ export function App() {
           onShow={(nodes) => {
             void seedToCanvas(nodes, []);
             setSelectedNode(nodes[0] ?? null);
-            results.leave();
+            leavePages();
             setView("graph");
             // Focus follows to the graph, once the view is back in reach (never left on the button that went).
             setTimeout(() => document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus(), 0);
@@ -2743,7 +2808,7 @@ export function App() {
           }}
           onAsk={railEntries(rights).includes("questions") ? (words) => {
             setQuestionDraft({ text: words, at: Date.now() });
-            setQuestionsOpen(true);
+            openAskPage(); // from the results page: Ask & Chat's page replaces it
           } : undefined}
         />
       )}
@@ -2849,35 +2914,6 @@ export function App() {
             }}
           />
         )}
-      </Drawer>
-      <Drawer open={questionsOpen} onClose={() => setQuestionsOpen(false)} title={RAIL_LABELS.questions}>
-        <QuestionsPanel
-          // v0.6.0 #5: under each answer, Show all on graph and Save as a view.
-          onShowAll={(ids) => void showAnswerOnGraph(ids)}
-          onSaveAsView={saveAnswerAsView}
-          apiBaseUrl={API_BASE_URL}
-          bearerToken={bearerToken}
-          investigationId={investigationId}
-          onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta)}
-          onOpenDocument={(id) => {
-            setReaderFallback(undefined);
-            setReaderDocumentId(id);
-          }}
-          // ADR-129: the graph facts asked about are what is selected and one link around it, and
-          // inside the timeline window when one is set; a `[G-n]` chosen in an answer selects what
-          // it stands for on the canvas and brings it into view.
-          selection={{
-            nodeIds: selectedNodeIds,
-            linkIds: selectedLink ? [selectedLink.id] : [],
-          }}
-          getTimelineWindow={() => crossFilterRef.current?.store.getState().window ?? null}
-          onSelectFacts={(citation) => {
-            if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
-          }}
-          view={questionsView}
-          onLeaveView={() => setQuestionsView(null)}
-          draft={questionDraft}
-        />
       </Drawer>
       {/* ADR-144 decision 5: the open case's saved views, then every case once with its views. ADR-145 Amendment 17
           (the owner's exception, 14 November 2026): opened from the case line's *Saved views*, it is *Saved views*,

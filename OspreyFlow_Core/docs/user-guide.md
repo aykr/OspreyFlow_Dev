@@ -930,6 +930,14 @@ Enter on it, to open that answer, and again to close it; opening one closes no o
 closes every earlier one. A closed answer's markers and buttons are not reached by Tab until it is open; if
 it holds proposals you have not yet accepted or rejected, its line says so: "2 proposals to decide".
 
+**A page of its own.** Ask & Chat opens as a page filling the main area, as the search results do,
+with the view you left kept beneath it, unchanged. **Back to** the view (*Back to Map*, say) is its
+first link and puts that view back, as does pressing Ask & Chat on the rail again; focus returns to
+Ask & Chat on the rail. A search from the page shows the results in its place, and the results' *Ask a
+question about '…' instead* opens it in theirs; Back from either goes to the view, not to the other.
+Choosing a view, a saved view or another place leaves it too. Selecting a marker in an answer shows the
+graph with that item in view.
+
 **Graph facts.** Along with the documents, the model is given a numbered, plain account of the graph
 around what you have selected and one link beyond it (the whole view when nothing is selected). A
 timeline period, if one is set, limits the links and events to it. The account lists each entity by type

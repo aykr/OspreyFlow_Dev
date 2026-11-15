@@ -141,3 +141,28 @@ def test_section_6_says_earlier_questions_close_to_their_line_as_the_panel_does(
     assert '`${toDecide} proposals to decide`' in PANEL and '"2 proposals to decide"' in text
     assert "hidden={!open}" in PANEL and "not reached by Tab until it is open" in text
 
+
+def test_section_6_says_ask_and_chat_is_a_page_with_its_way_back_as_the_glass_draws_it() -> None:
+    """ADR-145 Amendment 18 (v0.6.0 #4): the guide says Ask & Chat is a page, not a drawer, with its
+    *Back to* the view, the rail's second press, and the results page in its place, each read from
+    the code that draws it."""
+    page = (SRC / "questions" / "AskPage.tsx").read_text(encoding="utf-8")
+    app = (SRC / "App.tsx").read_text(encoding="utf-8")
+    m = re.search(r"^\*\*A page of its own\.\*\*(.*?)(?:\n\n)", GUIDE, re.MULTILINE | re.DOTALL)
+    assert m, "§6's paragraph on Ask & Chat's page"
+    text = re.sub(r"\s+", " ", m.group(1))
+    # The page's way back is named as the page names it, and the drawer is gone from App.
+    assert "{`Back to ${backLabel}`}" in page
+    assert "**Back to** the view (*Back to Map*, say)" in text
+    assert re.search(r"<Drawer[^>]*title=\{?\"Ask & Chat\"", app) is None
+    assert "<AskPage" in app
+    # The rail's second press closes it, and focus returns to the rail's opener.
+    assert "questionsOpen ? leaveAskPage() : openAskPage()" in app
+    assert "focusRailOpener(RAIL_LABELS.questions)" in app
+    assert "pressing Ask & Chat on the rail again" in text
+    assert "focus returns to Ask & Chat on the rail" in text
+    # The two pages replace each other: a search leaves the page, and the page leaves the results.
+    assert re.search(r"function openAskPage\(\): void \{\s*results\.leave\(\);", app)
+    assert "shows the results in its place" in text
+    assert "Back from either goes to the view, not to the other" in text
+

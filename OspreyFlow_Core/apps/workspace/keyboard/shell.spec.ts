@@ -109,7 +109,8 @@ test("each rail panel is opened and closed by keyboard, the view kept and focus 
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  for (const name of ["Explore", "Ask & Chat", "History"]) {
+  // Ask & Chat is a page over the view, not a drawer (v0.6.0 #4): its own case follows.
+  for (const name of ["Explore", "History"]) {
     const opener = rail.getByRole("button", { name, exact: true });
     await opener.focus();
     await page.keyboard.press("Enter");
@@ -129,6 +130,45 @@ test("each rail panel is opened and closed by keyboard, the view kept and focus 
   }
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
   registerCovered(REGISTRY, "rail-panels-by-keyboard");
+});
+
+// v0.6.0 #4 (ADR-145 Amendment 18, rule 13): Ask & Chat fills the main area as the search results do. The rail's
+// Ask & Chat opens it with focus on its heading and the view beneath out of reach; Shift+Tab reaches *Back to Map*,
+// which puts the view back as it was with focus on the opener; a second Enter on the opener closes it too.
+test("Ask & Chat opens as a page over the view by keyboard, and Back to the view or the rail closes it", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,ask_model");
+  const rail = page.getByRole("navigation", { name: "Workspace" });
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const view = page.getByText("glass, map, on case kestrel");
+  await expect(view).toBeVisible();
+  const opener = rail.getByRole("button", { name: "Ask & Chat", exact: true });
+  await expect(opener).not.toHaveAttribute("aria-haspopup");
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  for (const leave of ["Back to Map", "the rail"] as const) {
+    await opener.focus();
+    await page.keyboard.press("Enter");
+    await expect(askPage).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toHaveCount(0);
+    await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+    await expect(opener).toHaveAttribute("aria-expanded", "true");
+    // The view beneath is kept, but out of reach while the page shows.
+    await expect(page.getByRole("main", { name: "Place content" })).toHaveAttribute("inert", "");
+    if (leave === "Back to Map") {
+      await page.keyboard.press("Shift+Tab");
+      await expect(askPage.getByRole("button", { name: "Back to Map" })).toBeFocused();
+      await page.keyboard.press("Enter");
+    } else {
+      await opener.focus();
+      await page.keyboard.press("Enter");
+    }
+    await expect(askPage).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    await expect(opener).toHaveAttribute("aria-expanded", "false");
+    await expect(view).toBeVisible();
+    await expect(page.getByRole("main", { name: "Place content" })).not.toHaveAttribute("inert", "");
+  }
+  registerCovered(REGISTRY, "ask-and-chat-page-by-keyboard");
 });
 
 test("each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views", async ({ page }) => {

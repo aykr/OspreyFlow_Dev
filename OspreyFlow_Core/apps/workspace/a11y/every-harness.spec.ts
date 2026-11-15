@@ -81,7 +81,7 @@ const EXTRA_STATES: Record<string, string[]> = {
   // The page frame as main.tsx and App.tsx draw it, a drawer's long body and the start overlay open (15 Nov 2026).
   "frame-harness.html": ["drawer=1", "overlay=1"],
   "places-harness.html": [
-    "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "banner=1", "banner=1&place=rules",
+    "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "open=questions", "banner=1", "banner=1&place=rules",
     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
     "place=rules&rights=investigate,triage_alerts,read_alert_queue",
   ],
