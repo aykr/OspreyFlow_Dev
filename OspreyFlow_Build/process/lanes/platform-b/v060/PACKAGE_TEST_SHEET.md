@@ -49,7 +49,7 @@ and the run starts again from the row the orchestrator names. Every row's output
 | --- | --- | --- | --- |
 | 0 | `bash $G/r1_kind.sh tools`, `up`, `py platform` | the cluster (a 32 GiB node), the stand-ins, the domain's engine; `registry: osprey-r1-registry started (empty)` | R1's |
 | 0m | `bash $L/r1_live.sh memory start` | the sampler running, every 15 s | `memory-sampler.log` |
-| 1 | `bash $G/r1_kind.sh py runbook INSTALL`, block by block, then `memory mark installed` | v0.6.0 installed by its own runbook, cold: its step 3 builds and pushes our images; INSTALL's own checks (section 6's Entra settings, section 7's `/healthz` through the Glass) | `INSTALL.log` |
+| 1 | `bash $G/r1_kind.sh py runbook INSTALL`, block by block, then `memory mark installed` | v0.6.0 installed by its own runbook, cold: step 1's fresh-only block passing on the new namespace (platform's `rf`); its step 3 builds and pushes our images; INSTALL's own checks (section 6's Entra settings, section 7's `/healthz` through the Glass) | `INSTALL.log` |
 | 2 | `bash $G/r1_kind.sh py check` | R1's checks: the door, the Entra refusals, the first administrator, a case, a hotlist, a load and its alert, and the domain (`search: opensearch`) | `check.log` |
 | 3 | `bash $L/r1_live.sh dashboards run` | Superset's sign-in through Entra for each role; building (Admin and Alpha may, Gamma may not); the report sync's identity and its first pull; the embed; the board's rows through the guest token (row-level security, rules 3 and 4), another identity's row never shown | `dashboards.log` |
 | 4 | `bash $L/r1_live.sh spec08 run` | spec 08's cases that apply to poc, dispositioned both ways | `spec08.log` |
@@ -60,13 +60,13 @@ and the run starts again from the row the orchestrator names. Every row's output
 | 7 | `py memory`; `memory mark soak`; 20 minutes idle; `memory stop`; `memory report --steady-from soak` | the node's and each pod's working set now (R1's snapshot), then the sampler's table over rows 1 to 7: each container's peak, p95, median, steady (the soak), restarts and OOMKills, the node's peak | `memory.log`, `memory-sampled.txt` |
 | 8 | `R1_BACKUPS=unset bash $G/r1_kind.sh py runbook DECOMMISSION`, then `BACKUPS=keep BACKUP_RETENTION_DAYS=30 bash $G/r1_kind.sh py runbook DECOMMISSION --from 7` | the operator must choose (audit ruling 3): blocks 1 to 6, then step 7's refusal in the product's words; then the keep path, step 8 naming only the kept bucket and key | `DECOMMISSION-unset.log`, `DECOMMISSION-keep.log` |
 | 9 | `bash $G/r1_kind.sh remake`, `py platform`, `py runbook INSTALL`, `py check` | the cluster made again with the registry and images kept (`kept: the registry …`, `registry: osprey-r1-registry kept, reused`); the second INSTALL warm; R1's checks green on it | `remake.log`, `INSTALL-2.log`, `check-2.log` |
+| 9b | **the token version, live** (ADR-148 Amendment 18; the orchestrator's ruling, 15 November: a check against a real defect class): `R1_ENTRA_TOKEN_VERSION=1.0 bash $G/r1_kind.sh py entra` (the Entra stand-in alone re-applied, its tokens for the API as v1.0; never `py platform` mid-deployment, which rewrites CoreDNS without the search domain's name and loses OpenSearch until the domain step runs again), then `kubectl -n ospreyflow-poc rollout restart deploy/api` and wait on it (the stand-in's key is new at each start, and a key the Conduit does not hold yet gives the plain refusal, never the words); one Glass sign-in (`py check`, expected to stop at its first sign-in); then INSTALL step 6's token-version block; then `bash $G/r1_kind.sh py entra` without the variable (2.0 again) and the Conduit restarted again, and `py check` green | the sign-in refused in Amendment 18's words ("issues v1.0 access tokens … set requestedAccessTokenVersion to 2 …"), and step 6's block stopping with the same words from the Conduit's log; then 2.0 again, R1's checks green | `tokver-live.log` |
 | 10 | `py backup`, then `BACKUPS=destroy bash $G/r1_kind.sh py runbook DECOMMISSION` | the destroy path in step 7's order (the bucket's policy, every object, the bucket; the key's deletion scheduled 30 days out; the Terraform's removal); step 8 says "backups: destroyed" | `DECOMMISSION-destroy.log` |
 | 11 | `bash $G/r1_kind.sh down` | nothing of the run left: no `osprey-r1-*` container, the registry and our images gone | — |
 | 12 | `memory report` again from the kept record if row 7's was lost; the QUEUE line deleted; the lease released | — | — |
 
-**Not in the package test** (the rulings): the upgrade and survival rows; the full suite (main's Test stage); the
-token version's live row (v0.5.2's 11b′; Amendment 18's offline tests and CI hold it). Say if it should come back:
-it adds about 20 minutes before row 10.
+**Not in the package test** (the rulings): the upgrade and survival rows; the full suite (main's Test stage).
+The token version's live row came back as row 9b at the orchestrator's ruling (15 November).
 
 ## Times
 
@@ -86,9 +86,10 @@ check about 6 min; the check to the restore about 1.5 min; a decommission about 
 | 7 | the snapshot, the 20-minute soak, the report | 25 min | — |
 | 8 | the unchosen decommission, then keep | 8–10 min | M + E |
 | 9 | remake, platform, INSTALL warm, checks | 35–45 min | E (INSTALL warm ≤ 6 min, M) |
+| 9b | the token version live: v1.0, the refusal and step 6's block, then 2.0 and the checks | 15–20 min | E |
 | 10 | a set, then destroy | 10 min | M + E |
 | 11, 12 | down, the queue, the lease | 10 min | E |
 
-**About 4 to 5 hours with no FAIL.** A FAIL costs its fix and the rows from the one named again. The cold build (row
+**About 4.5 to 5.5 hours with no FAIL.** A FAIL costs its fix and the rows from the one named again. The cold build (row
 1) is the largest unknown, and the warm one (row 9) is the first measure of what keeping the images saves: both go in
 the record.
