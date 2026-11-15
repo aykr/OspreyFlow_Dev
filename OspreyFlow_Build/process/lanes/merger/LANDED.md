@@ -227,3 +227,4 @@ ff494d4 74e6c25 rules v060-superset-cves+upgrade-cache
 b81fe0b 6fd6c1c rules-b v060-i10-basemap
 6975e02 11fc245 docs v060-demo-papers
 a9bf5df 95206eb platform-b v060-release-path
+4009779 3bb45dd admin v060-i18-run-app-role+cli-scope
