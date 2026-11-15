@@ -22,12 +22,14 @@ SI = "OspreyFlow_Core/services/api/service_identity.py"
 APP = "OspreyFlow_Core/services/api/app.py"
 TEST = "tests/services/api/test_service_identity_entra.py"
 REFUSED = f"{TEST}::test_an_app_only_token_without_the_run_role_is_refused_in_words"
+DOOR = f"{TEST}::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity"
 CASES = ("no-roles-claim", "no-role", "another-role", "another-case", "a-string-not-a-list", "nested")
 
 PLANTS = [
     ("no role required (main's shape)",
      [(SI, "        if RUN_APP_ROLE not in held:\n            raise ServiceIdentityRefused(RUN_ROLE_NOT_HELD, status=403, client=client)\n", "")],
-     [f"{REFUSED}[{i}]" for i in CASES] + [f"{TEST}::test_a_v1_app_only_token_without_the_run_role_is_refused_in_words"]),
+     [f"{REFUSED}[{i}]" for i in CASES] + [f"{TEST}::test_a_v1_app_only_token_without_the_run_role_is_refused_in_words",
+                                           f"{DOOR}[no-role-not-a-dashboard]"]),
     ("the role compared without its case",
      [(SI, "        if RUN_APP_ROLE not in held:", "        if RUN_APP_ROLE.lower() not in [r.lower() for r in held]:")],
      [f"{REFUSED}[another-case]"]),
@@ -39,10 +41,12 @@ PLANTS = [
        '        roles = claims.get("roles")\n'
        "        if RUN_APP_ROLE not in (roles if isinstance(roles, list) else []):\n"
        "            raise ServiceIdentityRefused(RUN_ROLE_NOT_HELD, status=403)\n")],
-     [f"{TEST}::test_a_dashboard_identity_holding_its_role_alone_is_told_it_is_a_dashboards"]),
+     # the planted refusal names no client, so a registered dashboard holding no role is not told it is one either
+     [f"{TEST}::test_a_dashboard_identity_holding_its_role_alone_is_told_it_is_a_dashboards",
+      f"{DOOR}[no-role-registered-dashboard]"]),
     ("a registered dashboard holding no role told to grant itself the run role",
      [(APP, "        if refused.client is not None:\n            await _refuse_a_registered_dashboard(request, refused.client)\n", "")],
-     [f"{TEST}::test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity[no-role-registered-dashboard]"]),
+     [f"{DOOR}[no-role-registered-dashboard]"]),
     # The role's name is not planted: renamed, it fails nearly every case of the file (the words name it, every
     # admitted token holds it), so a plant could not tell its own red from the rest. The name's own case guards it.
 ]
