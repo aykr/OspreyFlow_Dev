@@ -160,3 +160,4 @@ admin	v052-panel-type-scale	S	done	v0.5.2 (the owner's exception, 14 Nov) (V4): 
 docs	v052-guide-saved-views	S	done	v0.5.2 (the owner's exception, 14 Nov) (V5): The user guide follows the saved-views words; the sweep's navigation items re-run (the owner's exception)	lane/docs-v052-saved-views
 case	v052-results-over-canvas	S	done	v0.5.2 (the owner's yes, 15 Nov): the search results page drawn over the graph's toolbar and zoom in every look (z-index 5 to 19, red first)	lane/case-results-over-canvas
 rules-b	route-collapse-makefile	S	done	make lanes-check runs the heartbeat's route view cases (the owner's yes, 15 Nov)	-
+platform	v052-r1domainguard	S	done	Step 6: R1 probes the OpenSearch domain only when the release searches with it (copy A is v0.5.1, postgres-fulltext)	lane/platform-v052-r1domainguard
