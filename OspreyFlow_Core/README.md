@@ -158,7 +158,8 @@ Run it whenever you like, or add it to this computer's scheduler (`0 8 * * 1 osp
 --check` in cron, each Monday). A private repository needs `GITHUB_TOKEN` set to a token that can
 read it.
 
-**Updating** depends on how you installed:
+**Updating** depends on how you installed. v0.6.0 itself is installed fresh: no earlier deployment
+is moved to it, and what follows is how a v0.6.0 deployment moves to a later release.
 
 | Your install | Update it with |
 | --- | --- |
