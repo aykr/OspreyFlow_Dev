@@ -17,8 +17,9 @@ QHARN=$WS/keyboard/questions-harness.tsx
 CHARN=$WS/keyboard/harness.tsx
 SRHARN=$WS/keyboard/search-results-harness.tsx
 SHOW=$WS/src/questions/showAnswer.ts
+OVER=$WS/src/search/useSearchResultsOverlay.ts
 REG=$WS/keyboard/actionRegistry.ts
-FILES=("$APP" "$RAIL" "$PAGE" "$CSS" "$HOOK" "$HARN" "$QHARN" "$CHARN" "$SRHARN" "$SHOW" "$REG")
+FILES=("$APP" "$RAIL" "$PAGE" "$CSS" "$HOOK" "$HARN" "$QHARN" "$CHARN" "$SRHARN" "$SHOW" "$OVER" "$REG")
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
 SAVED="$(mktemp -d)"
 for f in "${FILES[@]}"; do cp "$f" "$SAVED/$(basename "$f")"; done
@@ -32,6 +33,8 @@ js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/App.help.test.tsx
 kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts shell.spec.ts questions.spec.ts --workers=2 --reporter=line 2>&1); }
 # The stacking case (lane review 2 item 2): nothing of the canvas drawn over the Ask page, in the three looks.
 st() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts search-results.spec.ts -g "Ask & Chat's page is drawn over" --workers=1 --reporter=line 2>&1); }
+# A page opened while a document is read (the orchestrator, 15 November 2026), by keyboard on the results harness.
+sr() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts search-results.spec.ts -g "while a document is read" --workers=2 --reporter=line 2>&1); }
 ax() { (cd "$WS" && npx playwright test --config a11y/playwright.config.ts every-harness.spec.ts -g "places-harness.html open=questions" --workers=1 --reporter=line 2>&1); }
 guide() { (cd OspreyFlow_Core && env -u OSPREY_LANE ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 POSTGRES_PASSWORD=throwaway \
   .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rf ../OspreyFlow_Build/tests/test_user_guide_ask_chat.py 2>&1); }
@@ -113,6 +116,20 @@ plant "Show all on graph leaving the page and showing nothing (App, the hook han
 Show all on graph closes a saved view open beneath the page first"
 plant "the cap's words pointing at Save as a view without saying where, the page gone (keyboard)" "$SHOW" 's/Save as a view, under the answer in Ask & Chat, keeps them all\./Save as a view keeps them all./' kb \
   "Show all on graph on Ask & Chat's page past the cap leaves the page"
+# The orchestrator's two fixes before merge (15 November 2026): a page opened while a document is read shows at once,
+# and Help's panel takes focus only as it is asked for.
+plant "the Ask page opened over a document read, left hidden behind the reader (jsdom)" "$HOOK" 's/      stopReading\(\);\n//' js \
+  "the rail's Ask & Chat while a document read from the results is open shows the page at once"
+plant "the Ask page opened over a document read, left hidden behind the reader (keyboard)" "$HOOK" 's/      stopReading\(\);\n//' sr \
+  "Ask & Chat opened while a document is read over the view shows its page at once"
+plant "a search over a document read, its results left hidden behind the reader (jsdom)" "$OVER" 's/      if \(reading\) stopReading\?\.\(\);\n//' js \
+  "a search while a document read from an answer is open shows the results at once"
+plant "a search over a document read, its results left hidden behind the reader (keyboard)" "$OVER" 's/      if \(reading\) stopReading\?\.\(\);\n//' sr \
+  "a search while a document is read over the view shows the results at once"
+plant "Help's panel taking focus whenever it is drawn (App, as it was)" "$APP" 's/takeFocus=\{welcome === "asked" && helpJustAskedRef\.current\}/takeFocus={welcome === "asked"}/' js \
+  "a document read from an answer with Help's panel open keeps focus in the reader"
+plant "Help's panel handed App's changing takeFocus (the wrapper passing it through)" "$APP" 's/  const \[takeFocus\] = useState\(props\.takeFocus \?\? false\);\n  return <WorkspaceWelcome \{\.\.\.props\} takeFocus=\{takeFocus\} \/>;/  return <WorkspaceWelcome {...props} \/>;/' js \
+  "Help's panel keeps the focus it took through App's later renders"
 plant "the cross-link leaving the page showing, both ways" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/; s/(          toGlass: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
   "the case line's cross-link to the Ingest Studio leaves the page"
 plant "Escape closing the page as a dialog would" "$PAGE" 's/<section className=/<section onKeyDown={(e) => { if (e.key === "Escape") onBack(); }} className=/' js \
@@ -139,16 +156,18 @@ places-harness.html open=questions (light)
 places-harness.html open=questions (govuk)"
 
 echo "== unplanted"
-j="$(js)"; k="$(kb)"; a="$(ax)"; g="$(guide)"; t="$(st)"
+j="$(js)"; k="$(kb)"; a="$(ax)"; g="$(guide)"; t="$(st)"; r="$(sr)"
 if grep -qE "Tests  [0-9]+ passed" <<<"$j" && ! grep -qE "Tests .*failed" <<<"$j" \
   && grep -qE "^\s+[0-9]+ passed" <<<"$k" && ! grep -qE "^\s+[0-9]+ failed" <<<"$k" \
   && grep -qE "^\s+[0-9]+ passed" <<<"$a" && ! grep -qE "^\s+[0-9]+ failed" <<<"$a" \
   && grep -qE "^\s+3 passed" <<<"$t" && ! grep -qE "^\s+[0-9]+ failed" <<<"$t" \
+  && grep -qE "^\s+2 passed" <<<"$r" && ! grep -qE "^\s+[0-9]+ failed" <<<"$r" \
   && grep -qE "[0-9]+ passed" <<<"$g" && ! grep -qE "failed" <<<"$g"; then
-  echo "unplanted: $(grep 'Tests ' <<<"$j" | xargs); keyboard $(grep -E '^\s+[0-9]+ passed' <<<"$k" | xargs); axe $(grep -E '^\s+[0-9]+ passed' <<<"$a" | xargs); stacking $(grep -E '^\s+[0-9]+ passed' <<<"$t" | xargs); guide $(tail -1 <<<"$g")"
+  echo "unplanted: $(grep 'Tests ' <<<"$j" | xargs); keyboard $(grep -E '^\s+[0-9]+ passed' <<<"$k" | xargs); axe $(grep -E '^\s+[0-9]+ passed' <<<"$a" | xargs); stacking $(grep -E '^\s+[0-9]+ passed' <<<"$t" | xargs); over a reader $(grep -E '^\s+[0-9]+ passed' <<<"$r" | xargs); guide $(tail -1 <<<"$g")"
 else echo "UNPLANTED NOT GREEN"; grep -E "×|Tests |^\s+[0-9]+\) |^\s+[0-9]+ (passed|failed)|^FAILED|passed|failed" <<<"$j
 $k
 $a
 $t
+$r
 $g" | head -12; fails=1; fi
 [ "$fails" = 0 ] && echo "every plant red for its reason, unplanted green" || { echo "SOME PLANT WRONG"; exit 1; }
