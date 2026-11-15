@@ -22,7 +22,7 @@ from typing import Any
 import pytest
 import scripts.build_local_basemap as script
 from schemas.mapconfig import MapConfig
-from services.api import map_admin
+from services.api import map_admin, map_places
 from services.api.map_admin import (
     PLANETILER_JAR,
     InMemoryMapAdminAudit,
@@ -35,7 +35,6 @@ from services.api.map_admin import (
 )
 
 from tests.scenarios.fixtures.osm_extract import build_synthetic_osm_pbf
-from tests.test_gazetteer_build_registration_order import _Events, events  # noqa: F401
 
 OSM = {
     "id": "osm-local", "label": "OSM", "kind": "vector", "source": "file:///data/tiles/gb.pmtiles",
@@ -155,22 +154,46 @@ def test_the_command_line_takes_a_stage() -> None:
     assert map_admin.PLACES_FILE.format(region="rutland") == "rutland.places.json"
 
 
-async def test_the_tiles_stage_from_the_command_line_opens_no_graph_and_no_store(
-    events: _Events,  # noqa: F811
-    monkeypatch: pytest.MonkeyPatch,
+async def test_the_tiles_stage_from_the_command_line_needs_no_settings_and_no_database(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Run beside the live demo: the Conduit's graph and analytics store are never opened."""
-    stages: list[str | None] = []
+    """P3, the rebuild's rehearsal (process/lanes/demo/REBUILD_2026-11-18.md): the tiles stage runs as
+    a bare `docker run` of the Conduit's image beside a running deployment, with only the tiles folder
+    mounted. The image holds no `osprey.yaml` and the container reaches no database, so the stage reads
+    neither: not the maps settings or audit (`open_admin`), not the unit's check, not the graph or the
+    analytics store. The unit is checked by the places stage, which loads into it."""
+    tiles = tmp_path / "tiles"
+    (tiles / PLANETILER_JAR).parent.mkdir(parents=True)
+    (tiles / PLANETILER_JAR).write_bytes(b"PK synthetic jar")
+    seen: list[Any] = []
 
-    async def build(_admin: object, *, stage: str | None, **_kwargs: Any) -> tuple[str, int, int, int]:
-        stages.append(stage)
+    async def refused(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("the tiles stage reached for the settings or the database")
+
+    async def build(admin: object, *, stage: str | None, tiles_root: Path, **_kw: Any) -> Any:
+        seen.append((admin, stage, tiles_root))
         return ("rutland.pmtiles", 0, 0, 0)
 
-    async def no_store(_scheme: object) -> Any:
-        raise AssertionError("the analytics store was opened")
-
+    monkeypatch.setattr(map_admin, "open_admin", refused)
+    monkeypatch.setattr(map_admin, "_analytics_if_free", refused)
+    monkeypatch.setattr(map_places, "check_unit_from_env", refused)
     monkeypatch.setattr(map_admin, "build_basemap", build)
-    monkeypatch.setattr(map_admin, "_analytics_if_free", no_store)
-    code = await map_admin._build_here(object(), "cli:owner", "rutland", "unit-7", "tiles")  # type: ignore[arg-type]
-    assert (code, stages) == (0, ["tiles"])
-    assert events.seen == ["check unit-7"]  # no begin, no load, no registration
+    monkeypatch.setattr(map_admin, "TILES_CONTAINER_PATH", str(tiles))
+    code = await map_admin._main(["build", "rutland", "--by", "cli:x", "--unit", "u", "--stage", "tiles"])
+    assert code == 0 and seen == [(None, "tiles", tiles)]
+
+
+async def test_the_bare_tiles_stage_says_in_words_when_the_builder_is_missing(tmp_path: Path) -> None:
+    """With no admin, the builder is checked from the tiles folder alone, before anything is fetched."""
+    seen = _Seen()
+    with pytest.raises(MapAdminRefused) as refused:
+        await build_basemap(
+            None, by="cli:x", region="rutland", load_places=seen.load_places,
+            downloader=seen.downloader, planetiler_runner=seen.planetiler,
+            tiles_root=tmp_path / "tiles", stage="tiles", progress=lambda _line: None,
+        )  # fmt: skip
+    # Java may or may not be on this machine's path; either way the words are the builder's own.
+    assert refused.value.words == map_admin.builder_state(tmp_path / "tiles")[0] and seen.steps == []
+    with pytest.raises(ValueError, match="tiles stage"):
+        await build_basemap(None, by="cli:x", region="rutland", load_places=seen.load_places,
+                            tiles_root=tmp_path / "tiles", stage="places")  # fmt: skip

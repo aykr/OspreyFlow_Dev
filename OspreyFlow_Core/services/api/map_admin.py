@@ -722,29 +722,10 @@ class MapAdmin:
             except OSError:
                 basemaps.append(LocalBasemap(provider_id=provider.id, file=local.name, built=False))
         fonts = [f for f in GLYPH_FONTS if (self._tiles_root / "fonts" / f / "0-255.pbf").is_file()]
-        java = self._java("java") is not None
-        jar = (self._tiles_root / PLANETILER_JAR).is_file()
-        if java and jar:
-            builder = "Ready: Java and the map builder are installed."
-        elif not java and os.environ.get("OSPREY_PROFILE") == "cloud-platform":
-            # ADR-148 decision 12: this profile's Conduit is built without Java. `ospreyflow map
-            # build` runs in a local deployment's Conduit and the tiles bucket and its upload do
-            # not exist yet (ADR-148 Amendment 1, "Left"), so neither is offered as a route.
-            builder = (
-                "On this platform the Conduit has no Java, so the basemap cannot be built here, "
-                "and a basemap built elsewhere cannot yet be brought onto the platform. Until it "
-                "can, the map uses its providers alone."
-            )
-        elif not java:
-            builder = "Java is not installed in the Conduit, so the map cannot be built here."
-        else:
-            builder = (
-                "The map builder (planetiler) is not in the tiles folder. Run `ospreyflow map "
-                "build <region> --unit <unit> --planetiler-jar <path>` once to place it."
-            )
+        builder, ready = builder_state(self._tiles_root, self._java)
         return BasemapState(
             basemaps=basemaps, glyphs_installed=len(fonts) == len(GLYPH_FONTS),
-            glyph_fonts=list(GLYPH_FONTS), builder_ready=java and jar, builder_state=builder,
+            glyph_fonts=list(GLYPH_FONTS), builder_ready=ready, builder_state=builder,
             regions=sorted(GEOFABRIK_REGIONS),
         )  # fmt: skip
 
@@ -1146,8 +1127,36 @@ class PrefetchScheduler:
 # --- the build, in the Conduit ------------------------------------------------------------------
 
 
+def builder_state(
+    tiles_root: Path, java_lookup: Callable[[str], str | None] = shutil.which
+) -> tuple[str, bool]:
+    """Whether the basemap can be built here, in words: Java and the planetiler jar in the tiles
+    folder. Read from the tiles folder alone, so the tiles stage can ask it with no settings."""
+    java = java_lookup("java") is not None
+    jar = (tiles_root / PLANETILER_JAR).is_file()
+    if java and jar:
+        builder = "Ready: Java and the map builder are installed."
+    elif not java and os.environ.get("OSPREY_PROFILE") == "cloud-platform":
+        # ADR-148 decision 12: this profile's Conduit is built without Java. `ospreyflow map
+        # build` runs in a local deployment's Conduit and the tiles bucket and its upload do
+        # not exist yet (ADR-148 Amendment 1, "Left"), so neither is offered as a route.
+        builder = (
+            "On this platform the Conduit has no Java, so the basemap cannot be built here, "
+            "and a basemap built elsewhere cannot yet be brought onto the platform. Until it "
+            "can, the map uses its providers alone."
+        )
+    elif not java:
+        builder = "Java is not installed in the Conduit, so the map cannot be built here."
+    else:
+        builder = (
+            "The map builder (planetiler) is not in the tiles folder. Run `ospreyflow map "
+            "build <region> --unit <unit> --planetiler-jar <path>` once to place it."
+        )
+    return builder, java and jar
+
+
 async def build_basemap(
-    admin: MapAdmin,
+    admin: MapAdmin | None,
     *,
     by: str,
     region: str,
@@ -1186,11 +1195,17 @@ async def build_basemap(
             f"Known regions: {', '.join(sorted(GEOFABRIK_REGIONS))}.",
             status=422,
         )
-    builder = admin.basemap()
-    if not builder.builder_ready:
-        # Said before anything is fetched: Java is in the Conduit image (ADR-147 Amendment 2), but a
-        # deployment built without it, or with no jar placed by the command line, says so here.
-        raise MapAdminRefused(builder.builder_state, status=409)
+    if admin is None and stage != "tiles":
+        raise ValueError("only the tiles stage builds with no maps admin: it registers nothing")
+    # Said before anything is fetched: Java is in the Conduit image (ADR-147 Amendment 2), but a
+    # deployment built without it, or with no jar placed by the command line, says so here.
+    words, ready = (
+        (admin.basemap().builder_state, admin.basemap().builder_ready)
+        if admin is not None
+        else builder_state(tiles_root)
+    )
+    if not ready:
+        raise MapAdminRefused(words, status=409)
     if stage is not None and stage not in STAGES:
         raise MapAdminRefused(f"{_shown(stage)} is not a stage of the build: tiles or places.")
     jar = tiles_root / PLANETILER_JAR
@@ -1234,6 +1249,7 @@ async def build_basemap(
     )
     provider_id = f"osm-local-{region}"
     progress(f"Registering provider {provider_id}...")
+    assert admin is not None  # the tiles stage returned above
     await admin.register_local(by, provider_id, f"OpenStreetMap ({region})", pmtiles.name)
     return pmtiles.name, created, referenced, rejected
 
@@ -1298,6 +1314,9 @@ def command_parser() -> argparse.ArgumentParser:
 
 async def _main(argv: Sequence[str]) -> int:
     args = command_parser().parse_args(argv)
+    if args.verb == "build" and args.stage == "tiles":
+        # Before the settings and the audit are opened: the tiles stage reads neither (P3).
+        return await _tiles_here(args.region)
     admin, close = await open_admin()
     try:
         if args.verb == "list":
@@ -1326,6 +1345,31 @@ async def _main(argv: Sequence[str]) -> int:
     finally:
         await close()
     return 1
+
+
+async def _tiles_here(region: str) -> int:
+    """`build --stage tiles` from the command line (v0.6.0 item 10; P3, the rebuild's rehearsal):
+    the extract, planetiler and the saved settlements, into the tiles folder alone. It reads no
+    `osprey.yaml`, maps settings or audit, checks no unit and opens no graph or store, so it runs
+    as a bare `docker run` of the Conduit's image beside a running deployment, with only the
+    tiles folder mounted. The places stage checks the unit, loads and registers."""
+
+    async def never(_source: Path) -> tuple[int, int, int]:
+        raise AssertionError("the tiles stage loads no places")
+
+    try:
+        name, _created, _referenced, _rejected = await build_basemap(
+            None, by="", region=region, load_places=never, stage="tiles",
+            tiles_root=Path(TILES_CONTAINER_PATH),
+        )  # fmt: skip
+    except MapAdminRefused as refused:
+        print(refused.words, file=sys.stderr)
+        return 1
+    except Exception as error:  # noqa: BLE001 - said in words, exit 1
+        print(f"The build stopped ({type(error).__name__}): {error}", file=sys.stderr)
+        return 1
+    print(f"Built {name} and saved its settlements; run --stage places to load them.")
+    return 0
 
 
 async def _analytics_if_free(
@@ -1365,23 +1409,6 @@ async def _build_here(
     except (UnknownUnit, DatasetsUnreachable) as refused:
         print(str(refused), file=sys.stderr)
         return 1
-    if stage == "tiles":
-        # No graph and no analytics store: the tiles and the saved settlements alone, safe beside a
-        # running deployment (v0.6.0 item 10).
-        async def never(_source: Path) -> tuple[int, int, int]:
-            raise AssertionError("the tiles stage loads no places")
-
-        try:
-            name, _c, _r, _x = await build_basemap(
-                admin, by=by, region=region, load_places=never, stage=stage
-            )
-        except MapAdminRefused:
-            raise  # said in words by `_main`
-        except Exception as error:  # noqa: BLE001 - said in words, exit 1
-            print(f"The build stopped ({type(error).__name__}): {error}", file=sys.stderr)
-            return 1
-        print(f"Built {name} and saved its settlements; run --stage places to load them.")
-        return 0
     from scripts.build_local_basemap import load_gazetteer
     from services.resolve.trigger import service_principal
 
