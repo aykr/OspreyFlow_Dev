@@ -2222,7 +2222,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
 | `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret, its first sign-in (refusing, or joining by email when `trust_email` is on) and the record of refused sign-ins Admin → People and roles lists (section 5a.1); safe to run again, and prints no secret |
 | `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
-| `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; writes it to `deployment.env` alone and restarts the model gateway (and the Conduit when the key's presence changes) |
+| `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt; hands it to the model gateway's own key store, the path *Admin › Models* uses (ADR-135 Amendment 2); nothing is restarted |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
 | `ospreyflow grading change --to <scheme> --mapping <file> --dry-run` | Says how many drawn items each line of the mapping (every grade of the old scheme to one of the new) would move, writes nothing, and gives the token the change needs. `--to` is `5x5x5`, `3x5x2` or a scheme file: a YAML file with `scheme` (a name of its own), `source`, `intelligence` and `handling`, each its list of grades. Runs beside a running deployment |
 | `ospreyflow grading change --to <scheme> --mapping <file> --confirm <token> [--stop-api]` | Changes every live drawn item's grade, each keeping the grade it had before beside the new one; refused unless the token is the dry run's for the items as they are now, and while the Conduit runs unless `--stop-api` says to stop it. After the change it sets `grading.scheme` (a scheme file kept beside `osprey.yaml`), applies the settings and starts the Conduit. A refusal names the items it concerns and changes nothing; a run stopped part way leaves the Conduit stopped: run the dry run and the change again |
@@ -2804,9 +2804,13 @@ its key stops the install, and a later install keeps a key already given. To ena
 running deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes
 its key from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt. On a running deployment,
 `ospreyflow models key <name>` sets or replaces a key and `ospreyflow models remove-key <name>`
-removes it (section 8); `ospreyflow models` says whether each is present. A key is kept in
-`deployment.env` alone and read only by the deployment's model gateway — never by the Conduit,
-never written to `osprey.yaml`, never shown in the Admin area or any page of the Glass.
+removes it (section 8); `ospreyflow models` says whether each is present. A key given before the
+install waits in `deployment.env` only until it is moved into the model gateway's own store, sealed
+under the deployment's own salt (ADR-135 Amendment 2 decision 3). From then on the gateway alone keeps
+and reads it: it is never written to `osprey.yaml`, never logged and never in the audit. It is
+**managed** in *Admin › Models* (section 10.1), write-only: set, replaced or removed there, never shown
+back, to anyone. On its way from the screen it passes through the Conduit in transit only, and the
+Conduit keeps nothing of it (ADR-135 Amendments 2 and 14).
 
 **On the guided install page** (section 4.1), the Models screen has a key field for each enabled
 provider. A key typed there is sent only to the install page, on this computer — a request from
@@ -2864,12 +2868,41 @@ line, which stays for headless use and recovery. **What the installer declared**
 deployment is local-only (`local_only` in `osprey.yaml`). **Engines** lists each engine, its jobs and
 models, whether it is under a privacy contract, its key, its limits and **Edit**, **Set limits**,
 **Enter key** or **Rotate key**, **Remove key**, **Test the connection** and **Remove**; **Add an
-engine** adds one. A key is **write-only**: its field says "not shown, never sent back", and the
+engine** adds one, and is described below. A key is **write-only**: its field says "not shown, never sent back", and the
 screen says only *Key set*, *No key*, or *Key lost: enter it again*. **Each job's default engine**
 sets the engine for extraction and Ask, image description, transcription and embeddings. **Limits**
 are requests a minute, tokens a minute and a token budget for a period, applied by the gateway on
 the engine's own key. **Usage** gives each engine's calls, failures and tokens by job, from the
 gateway's own records, never by person. Every change is in **History** and the audit log.
+
+**Adding an engine** (ADR-135 Amendment 14). Choose the **Provider** from the list: Google Gemini,
+OpenAI, Anthropic, Azure OpenAI, Amazon Bedrock (on a cloud platform only), or *Another provider or
+your own gateway*. The form then knows the provider:
+
+- **Label analysts see** is filled from the provider's name; change it if you like. A label that looks
+  like a key is refused, since analysts see it.
+- **Address.** The provider's own address is shown; **Change** sets the address of a gateway that
+  stands in front of it. Azure OpenAI and *Another provider or your own gateway* ask for their address.
+  Amazon Bedrock has neither key nor address: it is reached by the deployment's own role, in London.
+- **Jobs.** Only the jobs the provider can do are offered (Anthropic and Bedrock take no
+  transcription). Type each model's name as the provider gives it, beside a current example; the
+  provider's prefix (`gemini/`, `openai/` …) is the form's business, and is taken off if you type it.
+  A job left empty uses this deployment's own model.
+- **Key** (or **Token**, for your own gateway): write-only, never auto-completed, emptied once sent.
+- **Under a privacy contract**, and when ticked the agreement's reference, as before.
+- **Analysts will see** shows the engine exactly as analysts' engine list will, "Google Gemini (no
+  contract)" or "(under contract)", and that it is offered only for cases whose data may leave this
+  deployment.
+
+**Check** sends the key once to the model gateway, which asks each typed model one call of at most
+one token. Each answer is said in fixed words at the field it concerns: the key refused, at the key;
+a model not offered, at that job. **Nothing is added unchecked:** a refused check keeps nothing, and
+only a passed check offers **Add the engine**, which adds it from the check without sending the key
+again. A passed check not added within 15 minutes is removed, key and all, and **Cancel** removes it
+at once. Until then it is listed under **Being checked**, with when it lapses and **Cancel the
+check**, and is offered to no analyst. Each check, its outcome, its cancelling and its lapsing are in
+**History** and the audit log, never the key. Listing the models a key may use is not built yet: the
+model names are typed.
 
 **On a cloud platform** (`profile: cloud-platform`), an engine is reached only once the deployment's
 render has made its way out of the namespace, and for Amazon Bedrock the gateway's own IAM role,
