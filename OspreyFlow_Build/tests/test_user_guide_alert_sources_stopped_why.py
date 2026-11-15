@@ -1,7 +1,7 @@
 """The user guide's §7.5 sentence on *What raises alerts* and a stopped hotlist or watch (v0.6.0
-#14), held to the code: the panel shows `stopped_why` under *Stopped* for a stopped row, the inventory
-fills it for hotlists and watched patterns only, and a rule's row carries none (the orchestrator's
-ruling, 15 November 2026). Red first: the guide's plant in
+#14), held to the code: the panel shows `stopped_why` under *Stopped* for a stopped row, the
+inventory fills it for hotlists and watched patterns only, and a rule's row carries none (the
+orchestrator's ruling, 15 November 2026). Red first: the guide's plant in
 `process/lanes/rules/v060-i14-stopped-why/plants.py`."""
 
 from __future__ import annotations
@@ -23,7 +23,8 @@ def test_the_guide_says_what_raises_alerts_shows_why_and_a_rule_says_nothing_mor
         "hotlists and watched patterns." in guide
     )
     assert (
-        "A rule there that is *Stopped* says nothing more, as a rule's retirement records no reason."
+        "A rule there that is *Stopped* says nothing more, as a rule's retirement records "
+        "no reason."
         in guide
     )
 
