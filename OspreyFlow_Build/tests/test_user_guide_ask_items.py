@@ -56,8 +56,10 @@ def test_save_as_a_view_names_the_view_as_the_code_does() -> None:
     assert "words.length > 72 ? `${words.slice(0, 72).replace(/\\s+\\S*$/, \"\")}…` : words;" in actions
     assert 'return cut ? `Answer: ${cut}` : "Answer from Ask & Chat";' in actions
     app = screen("App.tsx")
-    assert "setToast(`Saved as a view: ${saved.view.name}. Open it from Saved views.`);" in app
-    assert "setViewsRead((n) => n + 1);" in app, "the case line's Saved views (n) counts it"
+    save = app[app.index("const saveAnswerAsView = async") :]
+    save = save[: save.index("return null; };") + len("return null; };")]
+    assert "setToast(`Saved as a view: ${saved.view.name}. Open it from Saved views.`);" in save
+    assert "setViewsRead((n) => n + 1);" in save, "the case line's Saved views (n) counts it"
     text = six()
     assert ('named "Answer: " and the question (cut at a word after 72 characters), or "Answer from Ask & Chat" when '
             'there is no question; saving says "Saved as a view: ‹name›. Open it from Saved views."') in text  # fmt: skip
