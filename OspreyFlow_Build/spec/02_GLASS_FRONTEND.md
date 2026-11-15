@@ -245,7 +245,8 @@ closed answer hides them):
   reader may see them (`POST …/working-set/add-by-ids`, `03_CONDUIT_MIDDLEWARE.md`). What it cannot show is said as a
   count, "n of this answer's items could not be shown.", and never named: a node hidden from the reader or no longer
   held, and a link whose two ends the reader cannot both see (the orchestrator's ruling, 15 November 2026). Past the
-  working set's cap nothing is added, and the refusal says its figures and points to *Save as a view* (rule 2).
+  working set's cap nothing is added, and the refusal says its figures and points to *Save as a view* "under the answer
+  in Ask & Chat" (rule 2): said over the graph, after the page has gone (§2.0d), it names where that action is.
 - **Save as a view** opens the *Save as a view* form under the answer, named after its question ("Answer: …", cut at a
   word past 72 characters), and saves the answer's nodes as a saved view of the case, private until shared (ADR-144;
   the case line's *Saved views (n)* counts it). It isn't offered for an answer that stands for links alone.
@@ -738,14 +739,15 @@ harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
 - The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`).
 
 Proved by `App.chrome.test.tsx` (the rail's openers), `App.search.test.tsx` (the two pages replacing each other, the
-reader, a marker, *Show all on graph*, Help, another place, a saved view, the cross-link, Escape doing nothing, the
-hand-off's `view=questions`, *Ask the model about these…*), `App.batchExpand.test.tsx`, `keyboard/shell.spec.ts`
-(`ask-and-chat-page-by-keyboard`, `SHELL_ACTIONS`, on `places-harness.html`), `keyboard/questions.spec.ts`
-(`back-from-ask-and-chat-by-keyboard` on `questions-harness.html`, which mounts the panel in the page; and
-`select-a-graph-fact-from-the-ask-page-by-keyboard` and `show-all-from-the-ask-page-by-keyboard` on
-`harness.html?questions=page`, the page over the real canvas), `keyboard/search-results.spec.ts` (nothing of the
-canvas drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the three looks) and the every-harness
-scans of `places-harness.html?open=questions` and `questions-harness.html` in the three looks.
+reader, a marker, *Show all on graph* and its saved view closed first, Help, another place, a saved view, the
+cross-link, Escape doing nothing, the hand-off's `view=questions`, *Ask the model about these…*),
+`App.batchExpand.test.tsx`, `keyboard/shell.spec.ts` (`ask-and-chat-page-by-keyboard`, `SHELL_ACTIONS`, on
+`places-harness.html`), `keyboard/questions.spec.ts` (`back-from-ask-and-chat-by-keyboard` on `questions-harness.html`,
+which mounts the panel in the page; and `select-a-graph-fact-from-the-ask-page-by-keyboard` and
+`show-all-from-the-ask-page-by-keyboard` on `harness.html?questions=page`, the page over the real canvas, with *Show all
+on graph*'s refusal past the cap there), `keyboard/search-results.spec.ts` (nothing of the canvas drawn over the page,
+on `search-results-harness.html?canvas=1&ask=1`, in the three looks) and the every-harness scans of
+`places-harness.html?open=questions` and `questions-harness.html` in the three looks.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

@@ -23,7 +23,7 @@ export async function showAnswerOnCanvas(context: ConnectionsContext, ids: Answe
     if (!now) return;
     if (added.kind === "limit_exceeded") {
       now.say(
-        `Too many for the canvas: ${added.wouldBe.toLocaleString("en-GB")} ${added.capKind === "edges" ? "links" : "nodes"} against a limit of ${added.cap.toLocaleString("en-GB")}. Nothing was added; Save as a view keeps them all.`,
+        `Too many for the canvas: ${added.wouldBe.toLocaleString("en-GB")} ${added.capKind === "edges" ? "links" : "nodes"} against a limit of ${added.cap.toLocaleString("en-GB")}. Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.`,
       );
       return;
     }

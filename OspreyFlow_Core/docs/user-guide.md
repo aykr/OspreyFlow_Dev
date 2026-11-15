@@ -19,7 +19,7 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0). Held by `tests/test_user_guide_ask_chat.py`. Version set at merge. PDF made by the orchestrator at merge. |
+| 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0); *Show all on graph*'s words past the limit say *Save as a view* is under the answer in Ask & Chat, since the page has gone. Held by `tests/test_user_guide_ask_chat.py` and `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.71 | 2026-11-15 | §6, *An answer's items* (v0.6.0 item 5, the owner's closed list): **Show all on graph** puts an answer's items on the case's graph, selected, a saved view closed first, what it cannot show a count and past the limit nothing; **Save as a view** names the view from the question and saves it as a saved view of the case. Held by `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.70 | 2026-11-15 | §7.5: **What raises alerts** says why a hotlist or watch stopped, in the same words under *Stopped*; a stopped rule says nothing more (v0.6.0 #14, ADR-044 Amendment 1). Held by `tests/test_user_guide_alert_sources_stopped_why.py`. PDF made by the orchestrator at merge. |
 | 1.69 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November); v0.5.2 is not published. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -918,7 +918,8 @@ item they stand for on the case's graph and selects them together, the view move
 view that is open is closed first, since the items go on the case. What it cannot show, a record you may
 not see or no longer held, or a link whose two ends you cannot both see, is told only as a count ("3 of
 this answer's items could not be shown."), never which. Past the graph's limit it adds nothing and says
-so ("Too many for the canvas: … Nothing was added; Save as a view keeps them all."). **Save as a view**
+so ("Too many for the canvas: … Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.").
+**Save as a view**
 opens the *Save as a view* form under the answer, named "Answer: " and the question (cut at a word after
 72 characters), or "Answer from Ask & Chat" when there is no question; saving says "Saved as a view:
 ‹name›. Open it from Saved views." It is a saved view of the case, private to you until shared, and

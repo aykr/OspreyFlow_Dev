@@ -464,13 +464,46 @@ test("Show all on graph on Ask & Chat's page leaves it, selects the answer's ite
       }),
     "/keyboard/harness.html?questions=page",
   );
-  await page.getByRole("region", { name: "Ask & Chat" }).getByRole("button", { name: "Show all on graph", exact: true }).focus();
+  // Reached by Tab from the question, as a person would (rule 13), not focused by the test.
+  await page.getByLabel("Your question").focus();
+  await tabToText(page, "Show all on graph");
   await page.keyboard.press("Enter");
   await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
   await expect.poll(() => added).toEqual([{ node_ids: ["n2", "n3", "n9", "hidden-1"], link_ids: ["e2"] }]);
   await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selection.slice().sort())).toEqual(["n2", "n3", "n9"]);
   await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
   registerCovered(REGISTRY, "show-all-from-the-ask-page-by-keyboard");
+});
+
+/** Tab until the focused control's own text is `text` (a button named by its words, not an aria-label). */
+async function tabToText(page: Page, text: string, max = 40) {
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press("Tab");
+    if ((await page.evaluate(() => document.activeElement?.textContent?.trim() ?? "")) === text) return;
+  }
+  throw new Error(`Tab never reached ${text}`);
+}
+
+test("Show all on graph on Ask & Chat's page past the cap leaves the page, adds nothing, and its words say where Save as a view is (rule 2)", async ({ page }) => {
+  await askForAll(
+    page,
+    (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50003, options: [] }),
+      }),
+    "/keyboard/harness.html?questions=page",
+  );
+  await page.getByLabel("Your question").focus();
+  await tabToText(page, "Show all on graph");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__!.said ?? ""))
+    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.");
+  // The canvas focused selects its first node, as any arrival there does; nothing of the answer is selected.
+  expect(await page.evaluate(() => window.__KEYBOARD__!.selection.slice())).toEqual(["n0"]);
 });
 
 test("Show all on graph past the working set's cap adds nothing and says the cap's own figures (rule 2)", async ({ page }) => {
@@ -486,7 +519,7 @@ test("Show all on graph past the working set's cap adds nothing and says the cap
   await page.keyboard.press("Enter");
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__!.said ?? ""))
-    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view keeps them all.");
+    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.");
   expect(await page.evaluate(() => window.__KEYBOARD__!.selection.slice())).toEqual(before);
 });
 
