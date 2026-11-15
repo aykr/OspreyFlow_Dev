@@ -317,12 +317,16 @@ class _Dashboards:
 
 
 @pytest.mark.parametrize("registered", [True, False], ids=["registered-dashboard", "not-a-dashboard"])
+@pytest.mark.parametrize("roles", [[RUN_APP_ROLE], _ABSENT], ids=["run-role", "no-role"])
 def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
-    jwks_url, keypair, registered
+    jwks_url, keypair, registered, roles
 ) -> None:
     """Through the real `get_service_identity`: a client Admin › Dashboards registered is refused
-    before anything is read, though its token holds no dashboard role; any other gets past this
-    door (to whatever the route's own dependencies then answer, here without the app's start)."""
+    as a dashboard's before anything is read, though its token holds no dashboard role, and also
+    when it holds no role at all (Amendment 20 would otherwise send it to grant itself
+    `OspreyFlow.Run`); any other gets past this door with the run role (to whatever the route's
+    own dependencies then answer, here without the app's start), and without it is refused in the
+    run role's words."""
     from fastapi.testclient import TestClient
     from services.api.app import app
 
@@ -331,13 +335,17 @@ def test_the_run_api_refuses_a_client_registered_as_a_dashboard_identity(
     app.state.people_store = _Dashboards() if registered else None
     try:
         answered = TestClient(app, raise_server_exceptions=False).post(
-            "/v1/runs", json={}, headers={"Authorization": f"Bearer {_app_token(keypair)}"}
+            "/v1/runs",
+            json={},
+            headers={"Authorization": f"Bearer {_app_token(keypair, roles=roles)}"},
         )
     finally:
         for key, value in before.items():
             setattr(app.state, key, value)
     refused = answered.status_code == 403 and "dashboard identity" in answered.text
     assert refused is registered, (answered.status_code, answered.text)
+    if not registered and roles is _ABSENT:
+        assert answered.status_code == 403 and "OspreyFlow.Run app role" in answered.text
 
 
 class _AnswersNone(_Dashboards):

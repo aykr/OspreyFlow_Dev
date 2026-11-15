@@ -52,11 +52,14 @@ def is_deployment_client(client: str) -> bool:
 class ServiceIdentityRefused(Exception):
     """A token that is not a service identity's, said in words that name no claim's value.
     `status`: 401 for a sign-in that could not be verified, 403 for a verified one that is not a
-    service identity's (a person's)."""
+    service identity's (a person's). `client`: the application a verified app-only token names,
+    where the refusal is of that application (ADR-148 Amendment 20's role), so the run API can
+    still tell a dashboard identity registered in Admin › Dashboards that it is one."""
 
-    def __init__(self, words: str, *, status: int) -> None:
+    def __init__(self, words: str, *, status: int, client: str | None = None) -> None:
         super().__init__(words)
         self.status = status
+        self.client = client
 
 
 NOT_A_SERVICE_IDENTITY = (
@@ -191,5 +194,5 @@ class ServiceIdentityVerifier:
         # never an error.
         held = [r for r in roles if isinstance(r, str)] if isinstance(roles, list) else []
         if RUN_APP_ROLE not in held:
-            raise ServiceIdentityRefused(RUN_ROLE_NOT_HELD, status=403)
+            raise ServiceIdentityRefused(RUN_ROLE_NOT_HELD, status=403, client=client)
         return client

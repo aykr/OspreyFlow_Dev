@@ -898,14 +898,15 @@ def principal_from_claims(
 #: token is no dashboard; and the routes alone such a principal is admitted to.
 DASHBOARD_APP_ROLE = "Dashboard.Read"
 
-#: ADR-148 Amendment 20 (v0.6.0 #18): the app role this API defines for an orchestrator, which
-#: the run API requires of an app-only token on Entra ID. Assigned to the orchestrator's
-#: application under the API's registration; Entra then puts it in the token's `roles`, and
-#: leaves `roles` out when no app role is assigned.
-RUN_APP_ROLE = "OspreyFlow.Run"
 DASHBOARD_ROUTES = frozenset(
     {"GET /v1/investigations", "GET /v1/investigations/{investigation_id}/reports/feed"}
 )
+
+#: ADR-148 Amendment 20 (v0.6.0 #18): the app role this API defines for an orchestrator, which
+#: the run API requires of an app-only token on Entra ID. Granted to the orchestrator's own
+#: registration as an application permission with admin consent; Entra then puts it in the
+#: token's `roles`, and leaves `roles` out when no app role is granted.
+RUN_APP_ROLE = "OspreyFlow.Run"
 
 
 #: ADR-148 Amendment 9: what a person's delegated token issued to Superset's own registration is

@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
-index 3e8f19b..567dd24 100644
+index 3e8f19b..5c5f10f 100644
 --- a/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
 +++ b/OspreyFlow_Build/process/lanes/platform/gates/r1_kind.py
 @@ -278,9 +278,13 @@ def domain_text() -> str:
@@ -39,7 +39,7 @@ index 3e8f19b..567dd24 100644
          },
          "user": admin,
          # The people v052-r1's dashboards check signs in to Superset by `login_hint` (platform-b): a
-@@ -991,6 +1001,58 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
+@@ -991,6 +1001,75 @@ def domain_checks(ok: Callable[[str, bool, Any], None]) -> None:
         and any(line.endswith("403 anonymous") for line in logged), logged[-6:])
  
  
@@ -76,6 +76,15 @@ index 3e8f19b..567dd24 100644
 +    return (int(parts[0]), int(parts[1])) >= (0, 6)
 +
 +
++#: The Conduit's own words for a run it has no record of (app.py), so a 404 from anything else (an ingress, the
++#: Glass's page) is never read as the door let through; and the run API's words for the role it refuses and for a
++#: dashboard identity (service_identity.py RUN_ROLE_NOT_HELD, DASHBOARD_IS_NO_SERVICE_IDENTITY), held to those
++#: constants by tests/test_r1_kind_domain_guard.py.
++RUN_NOT_FOUND = "no run this service identity triggered has that id"
++RUN_ROLE_WORDS = "does not hold this API's OspreyFlow.Run app role"
++DASHBOARD_WORDS = "dashboard identity"
++
++
 +def run_api_role_checks(c: Any, ok: Any) -> None:
 +    """ADR-148 Amendment 20 on the live Conduit, with tokens the stand-in issues: the run API takes an orchestrator
 +    holding OspreyFlow.Run past its door (a run that does not exist is then a 404), and refuses in words an
@@ -83,22 +92,30 @@ index 3e8f19b..567dd24 100644
 +    extra = yaml.safe_load((HERE / "r1_kind_entra.yaml").read_text())
 +    made = entra_clients()
 +    o, u, d = extra["orchestrator"], extra["orchestrator-unassigned"], extra["report-sync"]
-+    ask = lambda bearer: c.get("/v1/runs/r1-no-such-run", headers={"Authorization": f"Bearer {bearer}"})  # noqa: E731
-+    r = ask(standin_token(o["client_id"], made["orchestrator"]))
++    def ask(name: str, client_id: str) -> Any:
++        # A token the stand-in will not issue is said in the record, as any check is: a stand-in started before the
++        # two orchestrators were added refuses them (700016) until `entra` applies it again.
++        try:
++            bearer = standin_token(client_id, made[name])
++        except SystemExit as refused:
++            ok(f"the Entra stand-in issues {name} its token", False, str(refused)[:300])
++        return c.get("/v1/runs/r1-no-such-run", headers={"Authorization": f"Bearer {bearer}"})
++
++    r = ask("orchestrator", o["client_id"])
 +    ok("the run API takes an orchestrator holding OspreyFlow.Run past its door (the run is not found)",
-+       r.status_code == 404, (r.status_code, r.text[:200]))
-+    r = ask(standin_token(u["client_id"], made["orchestrator-unassigned"]))
++       r.status_code == 404 and RUN_NOT_FOUND in r.text, (r.status_code, r.text[:200]))
++    r = ask("orchestrator-unassigned", u["client_id"])
 +    ok("the run API refuses an application holding no app role, in words",
-+       r.status_code == 403 and "does not hold this API's OspreyFlow.Run app role" in r.text, (r.status_code, r.text[:200]))
-+    r = ask(standin_token(d["client_id"], made["report-sync"]))
++       r.status_code == 403 and RUN_ROLE_WORDS in r.text, (r.status_code, r.text[:200]))
++    r = ask("report-sync", d["client_id"])
 +    ok("the run API refuses the report sync's dashboard identity, as a dashboard's",
-+       r.status_code == 403 and "dashboard identity" in r.text, (r.status_code, r.text[:200]))
++       r.status_code == 403 and DASHBOARD_WORDS in r.text, (r.status_code, r.text[:200]))
 +
 +
  def checks() -> None:
      """The check list (CHECKS.md), each with its expected answer; stops at the first that fails."""
      log = record("check")
-@@ -1094,6 +1156,14 @@ def checks() -> None:
+@@ -1094,6 +1173,14 @@ def checks() -> None:
          print(line)
          lines.append(line)
          log.write_text("\n".join(lines) + "\n")
@@ -174,10 +191,10 @@ index 0e880c2..6b35762 100644
      status, answer = _post(_token_url(standin), {
          "grant_type": "client_credentials", "client_id": REPORTS, "client_secret": REPORTS_SECRET,
 diff --git a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
-index 39ebd04..af33350 100644
+index 39ebd04..627f8b7 100644
 --- a/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
 +++ b/OspreyFlow_Build/tests/test_r1_kind_domain_guard.py
-@@ -10,6 +10,14 @@ What a mistake would do, and the case that catches it (rule 12):
+@@ -10,6 +10,18 @@ What a mistake would do, and the case that catches it (rule 12):
    `test_a_release_without_opensearch_passes_its_checks_with_the_domain_skipped`;
  - the domain skipped on a release with one: `test_a_release_with_opensearch_has_its_domain_checked`.
  
@@ -186,18 +203,30 @@ index 39ebd04..af33350 100644
 +  `test_a_release_before_v060_skips_the_run_api_role_in_words`;
 +- skipped on a release that has it, or on one whose version cannot be read:
 +  `test_a_v060_release_has_its_run_api_role_checked_with_the_standins_tokens`;
-+- a run API that lets an application holding no app role past its door passes the checks:
-+  `test_a_run_api_letting_an_application_without_the_role_in_fails_the_checks`.
++- a run API that lets an application holding no app role past its door, refuses the orchestrator
++  holding the role, or lets the report sync's dashboard identity in, or a 404 that is not the
++  Conduit's, passes the checks:
++  `test_a_run_api_answering_wrongly_fails_the_checks`;
++- the checks' words drift from the Conduit's own:
++  `test_the_checks_words_are_the_conduits_own`.
 +
  Each runs the real `r1_kind.checks()`, the door, the tokens and the record stood in for, and the
  domain's own checks (`domain_checks`, held by the domain's tests) recorded rather than run."""
  
-@@ -45,9 +53,19 @@ class _Answer:
+@@ -45,9 +57,29 @@ class _Answer:
          return self._body
  
  
-+RUN_ROLE_WORDS = "the orchestrator's application does not hold this API's OspreyFlow.Run app role"
-+DASHBOARD_WORDS = "the sign-in is a dashboard identity's"
++def _conduit_words() -> tuple[str, str, str]:
++    """The Conduit's own refusals, and its 404 for a run it has no record of, read from its code."""
++    import re
++
++    from services.api.service_identity import DASHBOARD_IS_NO_SERVICE_IDENTITY, RUN_ROLE_NOT_HELD
++
++    app = (Path(__file__).parents[2] / "OspreyFlow_Core/services/api/app.py").read_text(encoding="utf-8")
++    found = re.search(r'"(no run this service identity triggered[^"]*)"', app)
++    assert found, "the run API's own 404 for an unknown run"
++    return RUN_ROLE_NOT_HELD, DASHBOARD_IS_NO_SERVICE_IDENTITY, found.group(1)
 +
 +
  class _Door:
@@ -208,12 +237,14 @@ index 39ebd04..af33350 100644
 +    `unassigned_in` makes the run API let an application holding no app role past its door."""
 +
 +    version: Any = "v0.6.0"
-+    unassigned_in = False
++    #: What the run API gets wrong, if anything: "unassigned-in", "orchestrator-out", "dashboard-in", or
++    #: "ingress-404" (the path reaches no Conduit, so a 404 in another's words).
++    wrong = ""
 +    runs: list[str] = []
  
      def get(self, path: str, headers: dict[str, str] | None = None, **_: Any) -> _Answer:
          who = (headers or {}).get("Authorization", "").removeprefix("Bearer ")
-@@ -63,6 +81,15 @@ class _Door:
+@@ -63,6 +95,19 @@ class _Door:
              return _Answer(200)
          if path.endswith("/alert-queue"):
              return _Answer(200, [{"rule_id": "hotlist:h1"}])
@@ -221,34 +252,38 @@ index 39ebd04..af33350 100644
 +            return _Answer(200, {"version": self.version}) if who == "admin" else _Answer(403)
 +        if path == "/v1/runs/r1-no-such-run":
 +            self.runs.append(who)
-+            if who == "orchestrator" or (who == "orchestrator-unassigned" and self.unassigned_in):
-+                return _Answer(404, {"detail": "no such run"})
-+            if who == "report-sync":
-+                return _Answer(403, {"detail": f"{DASHBOARD_WORDS}: a dashboard reads the report feed"})
-+            return _Answer(403, {"detail": f"{RUN_ROLE_WORDS}: in Entra ID, add it"})
++            role, dashboard, not_found = _conduit_words()
++            let_in = {"orchestrator": self.wrong != "orchestrator-out",
++                      "orchestrator-unassigned": self.wrong == "unassigned-in",
++                      "report-sync": self.wrong == "dashboard-in"}
++            if who == "orchestrator" and self.wrong == "ingress-404":
++                return _Answer(404, {"detail": "Not Found"})
++            if let_in.get(who):
++                return _Answer(404, {"detail": not_found})
++            return _Answer(403, {"detail": dashboard if who == "report-sync" else role})
          raise AssertionError(f"an unexpected GET {path}")
  
      def post(self, path: str, headers: dict[str, str] | None = None, **_: Any) -> _Answer:
-@@ -87,8 +114,17 @@ class _Door:
+@@ -87,8 +132,17 @@ class _Door:
          return _Answer(200)
  
  
 -def _checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, search: str) -> tuple[list[str], str]:
 +def _checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, search: str, version: Any = "v0.6.0",
-+            unassigned_in: bool = False) -> tuple[list[str], str]:
++            wrong: str = "", issue: Any = None) -> tuple[list[str], str]:
      r1 = _r1_kind()
 +    monkeypatch.setattr(_Door, "version", version)
-+    monkeypatch.setattr(_Door, "unassigned_in", unassigned_in)
++    monkeypatch.setattr(_Door, "wrong", wrong)
 +    monkeypatch.setattr(_Door, "runs", [])
 +    # The stand-in's issuing (held by tests/test_r1_entra_standin.py) stood in by the application's name.
 +    names = {v["client_id"]: k for k, v in yaml.safe_load((GATES / "r1_kind_entra.yaml").read_text()).items()
 +             if isinstance(v, dict) and "client_id" in v}
-+    monkeypatch.setattr(r1, "standin_token", lambda client_id, secret: names[client_id])
++    monkeypatch.setattr(r1, "standin_token", issue or (lambda client_id, secret: names[client_id]))
 +    monkeypatch.setattr(r1, "entra_clients", lambda: {n: f"{n}-secret" for n in names.values()})
      config = tmp_path / "r1_kind_osprey.yaml"
      config.write_text(yaml.safe_dump({
          "components": {"search": search},
-@@ -123,3 +159,28 @@ def test_a_release_with_opensearch_has_its_domain_checked(
+@@ -123,3 +177,55 @@ def test_a_release_with_opensearch_has_its_domain_checked(
      probed, log = _checks(tmp_path, monkeypatch, "opensearch")
      assert probed == ["domain"]
      assert "SKIP the domain" not in log
@@ -272,8 +307,35 @@ index 39ebd04..af33350 100644
 +    assert "PASS the run API refuses an application holding no app role, in words" in log
 +
 +
-+def test_a_run_api_letting_an_application_without_the_role_in_fails_the_checks(
++@pytest.mark.parametrize(("wrong", "check"), [
++    ("unassigned-in", "refuses an application holding no app role"),
++    ("orchestrator-out", "takes an orchestrator holding OspreyFlow.Run past its door"),
++    ("dashboard-in", "refuses the report sync's dashboard identity"),
++    ("ingress-404", "takes an orchestrator holding OspreyFlow.Run past its door"),
++], ids=["unassigned-in", "orchestrator-out", "dashboard-in", "ingress-404"])  # fmt: skip
++def test_a_run_api_answering_wrongly_fails_the_checks(
++    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, wrong: str, check: str
++) -> None:
++    with pytest.raises(SystemExit, match=check):
++        _checks(tmp_path, monkeypatch, "opensearch", wrong=wrong)
++
++
++def test_the_checks_words_are_the_conduits_own() -> None:
++    r1 = _r1_kind()
++    role, dashboard, not_found = _conduit_words()
++    assert r1.RUN_ROLE_WORDS in role and r1.DASHBOARD_WORDS in dashboard and r1.RUN_NOT_FOUND == not_found
++
++
++def test_a_token_the_standin_will_not_issue_is_a_fail_in_the_record(
 +    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 +) -> None:
-+    with pytest.raises(SystemExit, match="refuses an application holding no app role"):
-+        _checks(tmp_path, monkeypatch, "opensearch", unassigned_in=True)
++    """A stand-in started before the orchestrators were added refuses them (700016): said in the
++    record as a FAIL, never a bare exit the record does not show."""
++
++    def refused(client_id: str, secret: str) -> str:
++        raise SystemExit("AADSTS700016: Application with identifier was not found")
++
++    with pytest.raises(SystemExit, match="issues orchestrator its token"):
++        _checks(tmp_path, monkeypatch, "opensearch", issue=refused)
++    log = (tmp_path / "check.log").read_text()
++    assert "FAIL the Entra stand-in issues orchestrator its token: AADSTS700016" in log, log[-300:]
