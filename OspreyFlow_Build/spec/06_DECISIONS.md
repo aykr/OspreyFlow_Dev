@@ -39140,6 +39140,15 @@ measure is taken where it can be (below) and what is left of it is said.
    registrations is unchanged.
 3. **Keycloak is unchanged.** There a service identity is its client's service account (ADR-141 decision 10),
    and the deployment's own clients are refused by name.
+4. **`ospreyflow run` asks Entra ID for the API's scope** (the owner's word, beside #18). Entra issues an app-only
+   token only for a resource's `/.default` scope, and refuses a request without one (AADSTS1002012). The CLI's
+   `service_token` sent none, so on Entra it could never sign an orchestrator in. It now sends
+   `OSPREY_TOKEN_SCOPE` when it is set: `api://<the API's application id>/.default`, which the install's *What it
+   needs* renders for the deployment, with the token URL. With it unset, the request is the three fields it always
+   was, which is Keycloak's. Entra's two refusals of a scope are said in words naming the setting: none or a bare
+   one (1002012), and another API's (500011). The tests are in `tests/cli/test_conduit_client.py`, against a fake
+   that refuses what Entra refuses. `OspreyFlow_Build/process/lanes/admin/v060_cli_scope/` has the red record and
+   four plants.
 
 **The measure, where it can be taken** (rule 15). The Conduit's tests and R1's driver tests run against
 fixtures. The live proof runs on R1 on kind, through the Entra stand-in's own issuing:

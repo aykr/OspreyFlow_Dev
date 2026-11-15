@@ -28,7 +28,8 @@ before answering (`app.py`). Keycloak is unchanged.
   - A new test file in the diff, `test_admin_guide_run_app_role`, ties the guide's quote to `RUN_ROLE_NOT_HELD`,
     ties the guide's and the manifest's role to `RUN_APP_ROLE`, and refuses the first draft's words. The poc
     harness test gains a case: the install says how the role is granted, with reporting on and off.
-  - Applied at f6c7cd3, the guide, guide-copy and poc harness tests pass (252). There is no Terraform: the client's
+  - Applied at 69c40ba, the guide, guide-copy and poc harness tests pass (253). The diff also carries the CLI
+    scope's install and guide text (`../v060_cli_scope/`). There is no Terraform: the client's
     administrator makes the registrations by hand.
 - `r1_proof.diff`: platform's R1.
   - Two orchestrator applications are added in the Entra stand-in, one granted `OspreyFlow.Run` and one granted
@@ -60,14 +61,15 @@ before answering (`app.py`). Keycloak is unchanged.
 - `red_before_code.log`: the test file at f6c7cd3, run against 97dc544's code. 9 red, each at its named assertion:
   the role's name, the six shapes refused in words, the v1.0 token, and a client that is no dashboard with no role
   (let in on the base). The dashboard cases pass on the base, as they should: it already refuses a dashboard.
-- `plants.py` and `plants.log`: 16 plants at f6c7cd3, each red only where it must be.
+- `plants.py` and `plants.log`: 18 plants at 69c40ba, each red only where it must be.
   - The Conduit's five: the role not required, compared without its case, a roles string taken for a list, the
     run role asked before the dashboards', and a registered dashboard holding no role sent to grant itself it.
   - R1's eight, with `r1_proof.diff` applied: no gate by release, skipped on every release, an unreadable version
     taken for an old one, the unassigned application let in, any answer or any 404 taken for the granted
     orchestrator, the dashboard identity let in, and an unissued token exiting unrecorded.
-  - The guide's three, with `registration_and_guide.diff` applied: the first draft's words, the manifest without
-    the role, and the runbook's paragraph said only with reporting on.
+  - The guide's five, with `registration_and_guide.diff` applied: the first draft's words, the manifest without
+    the role, the runbook's paragraph said only with reporting on, and (for the CLI's scope, `../v060_cli_scope/`)
+    the guide's `run` row and the install without `OSPREY_TOKEN_SCOPE`.
 - `tests.log`: `tests/services/api`, `tests/cli` and the poc harness test at f6c7cd3 and at 97dc544 (with the
   branch's test file).
 - A flake for platform: on 15 November one plant run at d24317e read six of `tests/test_r1_entra_standin.py`'s
