@@ -213,6 +213,34 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
   });
 }
 
+// The orchestrator, 15 November 2026: a page opened while a document is read over the view shows at once, the reader
+// closed, as the page takes the view's place; focus on the page's heading.
+test("a search while a document is read over the view shows the results at once, the reader closed, focus on their heading", async ({ page }) => {
+  await page.goto("/keyboard/search-results-harness.html");
+  await page.getByRole("button", { name: "Read a document from the graph" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Reading: a document from the graph" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Search entities, identifiers, documents" }).focus();
+  await page.keyboard.type("Kestrel");
+  await page.keyboard.press("Enter");
+  const heading = page.getByRole("heading", { name: "Search results for 'Kestrel'" });
+  await expect(heading).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /^Reading/ })).toHaveCount(0);
+  await expect(heading).toBeFocused();
+});
+
+test("Ask & Chat opened while a document is read over the view shows its page at once, the reader closed, focus on its heading", async ({ page }) => {
+  await page.goto("/keyboard/search-results-harness.html");
+  await page.getByRole("button", { name: "Read a document from the graph" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Reading: a document from the graph" })).toBeVisible();
+  await page.getByRole("button", { name: "Ask & Chat" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Ask & Chat" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /^Reading/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+});
+
 // v0.6.0 #4 (ADR-145 Amendment 18): Ask & Chat's page sits in the results' place and layer, so the same must hold of it:
 // nothing of the Graph beneath (its toolbar, its zoom column) is drawn over any point of the page, in each look; and the
 // search box's suggestions stay above it.

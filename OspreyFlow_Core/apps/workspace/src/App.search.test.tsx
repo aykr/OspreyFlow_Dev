@@ -430,6 +430,59 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     await waitFor(() => expect(sent.some((s) => s.url.endsWith("/inv-1/working-set/add-by-ids"))).toBe(true));
   });
 
+  // The orchestrator, 15 November 2026: a page opened while a document is read over the view shows at once; the reader
+  // closes, as the page takes the view's place (the results page the same).
+  test("the rail's Ask & Chat while a document read from the results is open shows the page at once, the reader closed", async () => {
+    await openResults();
+    fireEvent.click(await screen.findByRole("button", { name: "Open Invoice 44" }));
+    await screen.findByRole("dialog", { name: /^Reading/ });
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
+    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(screen.queryByRole("dialog", { name: /^Reading/ })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(page).getByRole("heading", { name: "Ask & Chat" })));
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+  });
+
+  test("a search while a document read from an answer is open shows the results at once, the reader closed", async () => {
+    const page = await openAsk();
+    fireEvent.click(await within(page).findByRole("button", { name: "Invoice 44" }));
+    await screen.findByRole("dialog", { name: /^Reading/ });
+    fireEvent.change(box(), { target: { value: "Kestrel" } });
+    fireEvent.keyDown(box(), { key: "Enter" });
+    const heading = await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
+    expect(screen.queryByRole("dialog", { name: /^Reading/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+
+  // The orchestrator, 15 November 2026: focus stays where the analyst put it. Help asked over the page, then a document
+  // read from an answer: the reader has focus, not Help's panel drawn again beside the view.
+  test("a document read from an answer with Help's panel open keeps focus in the reader", async () => {
+    const page = await openAsk();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));
+    await screen.findByRole("dialog", { name: "Welcome back" });
+    fireEvent.click(await within(page).findByRole("button", { name: "Invoice 44" }));
+    const reader = await screen.findByRole("dialog", { name: /^Reading/ });
+    await waitFor(() => expect(reader.contains(document.activeElement)).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(reader.contains(document.activeElement)).toBe(true);
+  });
+
+  test("Help's panel keeps the focus it took through App's later renders (it takes focus once, as it is asked for)", async () => {
+    const { rerender } = render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    // Pressed as a person presses it, focus on Help first, so the panel has an opener to give focus back to on closing.
+    const help = within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" });
+    help.focus();
+    fireEvent.click(help);
+    const keys = await screen.findByRole("dialog", { name: "Welcome back" });
+    await waitFor(() => expect(keys.contains(document.activeElement)).toBe(true));
+    // Any later render of App (a fetch landing, a count changing), here the same App drawn again.
+    rerender(<App />);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(keys.contains(document.activeElement)).toBe(true);
+  });
+
   test("Help's keys panel opens over the page, in reach", async () => {
     await openAsk();
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));

@@ -37,18 +37,30 @@ export interface AskPageState {
   pageHidden: boolean;
 }
 
-/** `reading`: a document is open in the reader over the view (the page is hidden, the view in reach). */
-export function useAskPage(reading: boolean, other: OtherPage, initial = false): AskPageState {
+/** `reading`: a document is open in the reader over the view (the page is hidden, the view in reach). `stopReading`
+ * closes it: the page, opened while a document is read, takes the view's place and shows at once (the orchestrator,
+ * 15 November 2026), as the results page does. */
+export function useAskPage(reading: boolean, other: OtherPage, initial = false, stopReading?: () => void): AskPageState {
   const [open, setOpen] = useState(initial);
   // A document read from an answer has closed: focus goes back to the page, never to the view beneath (inert again).
+  // Not when the page itself closed the reader on opening: the page's own opening says where focus goes.
   const wasReading = useRef(reading);
+  const openedOverReader = useRef(false);
   useEffect(() => {
     const was = wasReading.current;
     wasReading.current = reading;
+    if (openedOverReader.current) {
+      openedOverReader.current = false;
+      return;
+    }
     if (was && !reading && open) document.querySelector<HTMLElement>(ASK_HEADING)?.focus();
   }, [reading, open]);
   const openPage = () => {
     other.leave();
+    if (reading && stopReading) {
+      openedOverReader.current = true;
+      stopReading();
+    }
     setOpen(true);
   };
   const back = () => {

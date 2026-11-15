@@ -1,5 +1,5 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentProps, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "zustand/react";
 
 import type {
@@ -846,11 +846,20 @@ export function App() {
   const shownWelcomeRef = useRef(false);
   const closeWelcomeRef = useRef<() => void>(() => undefined);
   const helpHereRef = useRef(false);
+  // Help's panel takes focus when it is asked for, and only then (the orchestrator, 15 November 2026: focus stays where
+  // the analyst put it): drawn again elsewhere later, as when a page it sat over is hidden for the reader, it does not.
+  const helpJustAskedRef = useRef(false);
   const toggleWelcome = useCallback(() => {
     if (!helpHereRef.current) return;
     if (shownWelcomeRef.current) closeWelcomeRef.current();
-    else setWelcome("asked");
+    else {
+      helpJustAskedRef.current = true;
+      setWelcome("asked");
+    }
   }, []);
+  useEffect(() => {
+    helpJustAskedRef.current = false;
+  });
   useHelpKey(toggleWelcome);
   // ADR-097 Amendment 1: the cases, and the views of each (ADR-144 decision 5), reached from the case line.
   // The Cases panel, and where it opened (Amendment 15): at its views list from *Views in this case*, or whole from
@@ -1097,14 +1106,18 @@ export function App() {
   const [readerFallback, setReaderFallback] = useState<DocumentReaderView | undefined>(undefined);
   // The search results page (ADR-145 Amendment 15 Part A), over the view left, which stays as it was beneath it: shared
   // with the keyboard harness (`search/useSearchResultsOverlay.ts`). A document read from the results hides them.
-  const results = useSearchResultsOverlay(readerDocumentId !== null);
+  const stopReading = () => {
+    setReaderDocumentId(null);
+    setReaderFallback(undefined);
+  };
+  const results = useSearchResultsOverlay(readerDocumentId !== null, stopReading);
   const searching = results.searching;
   // v0.6.0 #4: Ask & Chat is a page over the view, as the results page is; the two replace each other, and whatever
   // leaves the results (a view chosen, another place, a saved view opened) leaves it too. The view beneath is out of
   // reach while it shows, except while a document read from an answer is open over the view.
   // Shared with the keyboard harnesses (`questions/useAskPage.ts`). ADR-098 decision 4: open at once when the case
   // was opened on its questions.
-  const ask = useAskPage(readerDocumentId !== null, results, handoff.view === "questions");
+  const ask = useAskPage(readerDocumentId !== null, results, handoff.view === "questions", stopReading);
   const questionsOpen = ask.open;
   // Part A: the search's words are carried into Ask & Chat once; a later opening starts with an empty box.
   useEffect(() => {
@@ -1816,7 +1829,7 @@ export function App() {
   shownWelcomeRef.current = welcomeOpen;
   helpHereRef.current = app === "glass";
   const welcomePanel = (
-    <WorkspaceWelcome
+    <WelcomeFocusedOnce
       apiBaseUrl={API_BASE_URL}
       bearerToken={bearerToken}
       investigationId={investigationId}
@@ -1825,8 +1838,8 @@ export function App() {
         applyRestoredSnapshot(workingSetRef.current.store, resyncFromNothing, snapshot)
       }
       onClose={() => closeWelcomeRef.current()}
-      // Asked for by Help or `?`, it takes focus, so Esc closes it at once.
-      takeFocus={welcome === "asked"}
+      // Asked for by Help or `?`, it takes focus, so Esc closes it at once; only as it is asked for (above).
+      takeFocus={welcome === "asked" && helpJustAskedRef.current}
       // The user guide, as Home's Glass card links it (ADR-145 Amendment 10); the route checks
       // the person's rights itself.
       guide={{
@@ -3031,4 +3044,12 @@ export function App() {
       {sessionPromptShown}
     </div>
   );
+}
+
+/** The welcome panel (`welcome/WorkspaceWelcome.tsx`), its `takeFocus` fixed as it is drawn: the panel focuses itself in
+ * an effect that runs again whenever `takeFocus` changes, so App's "only as it is asked for" must not reach a panel
+ * already drawn. */
+function WelcomeFocusedOnce(props: ComponentProps<typeof WorkspaceWelcome>) {
+  const [takeFocus] = useState(props.takeFocus ?? false);
+  return <WorkspaceWelcome {...props} takeFocus={takeFocus} />;
 }

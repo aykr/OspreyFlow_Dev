@@ -100,8 +100,10 @@ function Harness() {
   // The App's own wiring (`search/useSearchResultsOverlay.ts`): when the results show, the view's reach, Back's focus,
   // and focus back into the results when a document read from them closes. The reader here is a stand-in.
   const [reading, setReading] = useState<string | null>(null);
-  const results = useSearchResultsOverlay(reading !== null);
-  const ask = useAskPage(reading !== null, results, wantsAsk);
+  // As `App.tsx` hands them: a page opened while a document is read closes the reader and shows at once.
+  const stopReading = () => setReading(null);
+  const results = useSearchResultsOverlay(reading !== null, stopReading);
+  const ask = useAskPage(reading !== null, results, wantsAsk, stopReading);
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current || !params.get("open")) return;
@@ -113,6 +115,10 @@ function Harness() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-app)", color: "var(--text-primary)" }}>
       <div className="top-bar" style={{ padding: "var(--sp-8)" }}>
         <GlobalSearch apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="c1" onSelect={() => undefined} onSearch={(q) => results.open(q, "Graph")} />
+        {/* A stand-in for the rail's Ask & Chat, which `App.tsx` gives `ask.toggle`. */}
+        <button type="button" className="btn" aria-expanded={ask.open} onClick={ask.toggle}>
+          Ask & Chat
+        </button>
       </div>
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
         <div style={{ display: "contents" }} inert={results.viewInert || ask.viewInert ? true : undefined}>
@@ -133,6 +139,10 @@ function Harness() {
             <main style={{ padding: "var(--sp-16)" }}>
               <h1 style={{ margin: 0 }}>The graph</h1>
               <button type="button" className="btn">A control on the graph</button>
+              {/* A document read from the view itself, not from either page (the reader here is a stand-in). */}
+              <button type="button" className="btn" onClick={() => setReading("a document from the graph")}>
+                Read a document from the graph
+              </button>
             </main>
           )}
           {reading !== null && (
