@@ -1,0 +1,29 @@
+# v0.6.0, the model keys corrected in the administration guide: red-first run, 15 November 2026
+Tree: lane/docs-v060-model-keys 8cc8809 on main 13b17de, the branch itself. Each plant is an edit at the real file, made, run and taken back with git checkout; a fresh PYTHONPYCACHEPREFIX each run; the offline ports 59991-59994.
+
+unplanted: 5 passed in 0.79s
+RED  Enter key renamed
+     OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx: '"Rotate key" : "Enter key"' -> '"Rotate key" : "Add key"'
+     failed: test_a_key_is_entered_in_admin_models_as_the_guide_says
+RED  Set the key renamed
+     OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx: '"Rotate the key" : "Set the key"' -> '"Rotate the key" : "Save"'
+     failed: test_a_key_is_entered_in_admin_models_as_the_guide_says
+RED  a key offered for an IAM-role engine
+     OspreyFlow_Core/apps/workspace/src/admin/sections/Models.tsx: '{engine.key_state !== "iam_role" && (' -> '{true && ('
+     failed: test_a_key_is_entered_in_admin_models_as_the_guide_says
+RED  models key restarts the gateway
+     OspreyFlow_Core/cli/ospreyflow/main.py: 'code, out = ctx.capture([*in_conduit, "api", *engine_keys.KEY_PATH, "status"])' -> 'ctx.capture([*_compose_of(directory), "restart", "litellm"])\n    code, out = ctx.capture([*in_conduit, "api", *engine_keys.KEY_PATH, "status"])'
+     failed: test_models_key_runs_the_conduit_s_key_path_and_restarts_nothing
+RED  the key's line kept after the move
+     OspreyFlow_Core/harness/apply.py: '            line.startswith("OSPREY_MODEL_KEY_") or line.startswith("OSPREY_MODEL_PROVIDER_KEY=")' -> '            line.startswith("OSPREY_UNUSED_")'
+     failed: test_the_install_hands_the_key_to_the_gateway_and_removes_its_line
+RED  the old sentence back in the Core copy
+     OspreyFlow_Core/docs/administration-guide.md: '**From the command line**, for headless use' -> 'A key is kept in `deployment.env` alone. **From the command line**, for headless use'
+     failed: test_the_guide_s_old_words_are_gone_both_copies
+RED  the old CLI row back in spec/10
+     OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md: 'the key is kept by the model gateway alone, and nothing is restarted.' -> 'writes it to `deployment.env` alone and restarts the model gateway.'
+     failed: test_the_guide_s_old_words_are_gone_both_copies
+RED  the guide: no Admin › Models
+     OspreyFlow_Core/docs/administration-guide.md: '**On a running deployment, a key is entered in Admin › Models**' -> '**On a running deployment, a key is given at the command line**'
+     failed: test_a_key_is_entered_in_admin_models_as_the_guide_says
+restored: 5 passed in 0.65s
