@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.38** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
+**Version 1.39** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.39 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November); §9's example release tag is `v0.6.0`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.38 | 2026-11-15 | The header names v0.5.2 (step 5's sweep, §2, at the cut); §9's example release tag is `v0.5.2`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.37 | 2026-11-14 | §7.6: an influencer's `note` example is "set from the 2026 calibration", never a setting still to be confirmed, and the `client_parity` composition is called *Rarity plus adds*, as the Glass labels it (studio's V3, the owner's exception). Held by `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.36 | 2026-11-14 | Step 5's wording sweep, early part. §1: the third narrow port, `IndexFeedSource`, apart from GraphPort so that no route reaches its unfiltered read (ADR-150). §7.5: the ten writers that read in full, from the code. §7.8 adds who may merge: through the drawing's home case, into a dataset of its unit. §7.8: a drawn dataset merged into another, as built (its four steps, who may merge, what follows), no longer *Coming*. §8: list alerts pointed at the user guide. §9: Ask & Chat for Ask the case. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
@@ -840,7 +841,7 @@ it did not exist.
 
 **The OpenAPI document** describes every route: `GET /v1/openapi.json` at the deployment's own address,
 signed in like every other route. Its `info.version` is the release the deployment runs (for example
-`v0.5.2`, or `dev-<commit>` off a release), the same version Admin → System shows.
+`v0.6.0`, or `dev-<commit>` off a release), the same version Admin → System shows.
 
 | Method and path | Needs |
 | --- | --- |

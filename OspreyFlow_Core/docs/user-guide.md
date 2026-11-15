@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.68** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
+**Version 1.69** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.69 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November); v0.5.2 is not published. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.68 | 2026-11-15 | Ask & Chat (§6), "Earlier questions": each earlier question collapses to its line, the newest answer open, a closed line counting its proposals to decide (v0.6.0 item 3, the owner, 15 Nov). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.67 | 2026-11-15 | Ask & Chat (§6): a marker sits after its words and is named "Show on the graph:" and what it shows; the line under an answer with markers; the engine named in lower case after "Answered by" (the owner, 15 Nov; ADR-129 Amendment 6). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.66 | 2026-11-15 | The header names v0.5.2, the release this guide describes (step 5's sweep, §2, at the cut). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
