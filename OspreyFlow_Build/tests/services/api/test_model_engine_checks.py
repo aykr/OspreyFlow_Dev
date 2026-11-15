@@ -85,6 +85,37 @@ def _credentials(world: Any) -> list[str]:
     return sorted(world.gateway._creds)
 
 
+def _nowhere(
+    world: Any,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    capfd: pytest.CaptureFixture[str],
+    seen: list[str],
+    fragments: tuple[str, ...],
+) -> dict[str, str]:
+    """Where each fragment was found: the answers, every log record formatted whole (message, args,
+    traceback, stack: P4), the process's own output (P4), the audit, every file under the test's
+    folder, the lock and any temporary included (P5), and the gateway's rows."""
+    formatter = logging.Formatter("%(levelname)s %(name)s %(message)s")
+    records = []
+    for r in caplog.records:
+        whole = formatter.format(r) + repr(r.args)
+        records.append(whole + str(r.exc_text or "") + str(r.stack_info))
+    out, err = capfd.readouterr()
+    files = "\n".join(
+        p.read_bytes().decode("utf-8", "replace") for p in tmp_path.rglob("*") if p.is_file()
+    )
+    where = {
+        "answers": "\n".join(seen),
+        "log records": "\n".join(records),
+        "stdout and stderr": out + err,
+        "audit": json.dumps([e.model_dump(mode="json") for e in world.audit.entries]),
+        "files": files,
+        "gateway rows": "\n".join(world.gateway.raw_rows()),
+    }
+    return {w: f for w, text in where.items() for f in fragments if f in text}
+
+
 def test_a_good_key_and_model_pass_and_add_makes_the_engine_from_the_check(
     client: TestClient, world: Any
 ) -> None:
@@ -178,7 +209,12 @@ def test_a_check_for_an_engine_already_added_is_refused(client: TestClient, worl
 
 
 def test_the_key_appears_nowhere_it_must_not(
-    client: TestClient, world: Any, clock: _Clock, caplog: pytest.LogCaptureFixture
+    client: TestClient,
+    world: Any,
+    clock: _Clock,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    capfd: pytest.CaptureFixture[str],
 ) -> None:
     """The owner's key test (ruling 7, pattern 3), across every step of the check: a planted key is
     in no response, header, log record, audit entry, the models file or a gateway row in plaintext,
@@ -218,15 +254,9 @@ def test_the_key_appears_nowhere_it_must_not(
     send("GET", "/v1/admin/models/history")
 
     fragments = (PLANTED, PLANTED[:12], "W3R8", "leak")
-    where = {
-        "responses, headers and URLs": "\n".join(seen),
-        "logs": "\n".join(r.getMessage() + repr(r.args) for r in caplog.records),
-        "audit": json.dumps([e.model_dump(mode="json") for e in world.audit.entries]),
-        "models file": (world.folder / "models.yaml").read_text(),
-        "gateway rows": "\n".join(world.gateway.raw_rows()),
-    }
-    leaked = {w: f for w, text in where.items() for f in fragments if f in text}
-    assert leaked == {}
+    # P4 and P5 (the owner's review): every record formatted whole, the process's own output,
+    # and every file under the test's folder, not the models file alone.
+    assert _nowhere(world, tmp_path, caplog, capfd, seen, fragments) == {}
     # And it did reach the gateway, so the test cannot pass by sending nothing: the added engine's
     # credential holds it, as the gateway itself reads it.
     assert world.gateway.credential("osprey-gemini") == PLANTED
@@ -540,7 +570,11 @@ def test_a_key_moved_from_deployment_env_is_moved_unchecked(tmp_path: Path) -> N
 
 
 def test_the_key_appears_nowhere_through_an_edit_or_a_new_key(
-    client: TestClient, world: Any, caplog: pytest.LogCaptureFixture
+    client: TestClient,
+    world: Any,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+    capfd: pytest.CaptureFixture[str],
 ) -> None:
     """The owner's key test extended to ruling 19: a planted key sent with a moved address, as a new
     key, refused, and in malformed edits, is in no response, header, log record, audit entry, the
@@ -577,13 +611,7 @@ def test_the_key_appears_nowhere_through_an_edit_or_a_new_key(
     send("GET", "/v1/admin/models/history")
 
     fragments = (PLANTED, PLANTED[:12], "W3R8", "leak")
-    where = {
-        "responses, headers and URLs": "\n".join(seen),
-        "logs": "\n".join(r.getMessage() + repr(r.args) for r in caplog.records),
-        "audit": json.dumps([e.model_dump(mode="json") for e in world.audit.entries]),
-        "models file": _file(world),
-        "gateway rows": "\n".join(world.gateway.raw_rows()),
-    }
-    leaked = {w: f for w, text in where.items() for f in fragments if f in text}
-    assert leaked == {}
+    # P4 and P5 (the owner's review): every record formatted whole, the process's own output,
+    # and every file under the test's folder, not the models file alone.
+    assert _nowhere(world, tmp_path, caplog, capfd, seen, fragments) == {}
     assert world.gateway.credential("osprey-gemini") == PLANTED and _probes(world) == []

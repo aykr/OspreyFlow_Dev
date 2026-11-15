@@ -28,6 +28,7 @@ credentials back (`GET /credentials` answers with two characters at each end of 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import fcntl
 import hashlib
 import json
@@ -124,6 +125,10 @@ class PendingCheck(BaseModel):
     provider: ModelProviderConfig
     by: str
     at: datetime
+    #: False from before the key goes to the gateway until every model has answered (the owner's
+    #: ruling 25): a Conduit stopped between the two leaves this record, which the sweep removes
+    #: with its credential after `CHECK_LIFE`, so no credential is ever read back to find it.
+    passed: bool = True
 
 
 class ModelSettings(BaseModel):
@@ -676,6 +681,80 @@ _EDITABLE = (
 #: never like a key. Everything else a person sent is replaced by "…" in what the Conduit says back.
 _NAMEABLE = re.compile(r"[a-z][a-z0-9_]{0,23}")
 
+#: Each job as the screen names it (`Models.tsx`'s `ALL_JOBS`): a refusal says the job, never the
+#: model name typed there (the owner's ruling 22).
+JOB_WORDS = {
+    "extraction": "Extraction and Ask",
+    "vision": "Image description",
+    "transcription": "Transcription",
+    "embedding": "Embeddings",
+}
+#: What a model name looks like, generously (the owner's ruling 23): letters, digits and
+#: . _ - : / @, up to 128 characters. It is not a key detector (an Azure deployment's or a client
+#: gateway's model is named freely, so a lower-case hyphenated key has a model's shape); a refused
+#: name is never echoed (ruling 22), and one the provider answers for is a model, not a key.
+_MODEL_NAME = re.compile(r"[A-Za-z0-9._\-:/@]{1,128}")
+#: A UUID is a key's shape and never a model's (the owner's review, Fix A).
+_UUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+#: Each field a refusal may name, in fixed words (the owner's review, Fix C): a validator's own
+#: words may quote what it refused in another form (`repr` escapes a quote), which redaction
+#: cannot find.
+FIELD_WORDS = {
+    "provider.name": "The engine's name is lower-case letters, digits and _, such as openai, and "
+    "not local.",
+    "provider.label": "The label is the words analysts see, on one line.",
+    "provider.roles": "a model name is letters, digits and . _ - : / @, with no spaces, up to 128 "
+    "characters.",
+    "provider.api_base": "The address must be https://, so case content is encrypted.",
+    "provider.contract_reference": "The agreement's reference is one line of letters, digits, "
+    "spaces and . , ; : / ( ) & ' _ + -, and not a key.",
+    "provider.privacy_contract": "The privacy contract is ticked or not.",
+    "provider.kind": "This kind of engine is not one this form takes.",
+    "provider.auth": "This way of signing in is not one this form takes.",
+    "provider.region": "This region is not one this form takes.",
+    "provider": "This engine's kind, sign-in and address do not fit together.",
+    "key": "Give the key as text, with no spaces, at most 4096 characters.",
+}
+JOBS_ARE = "The jobs are extraction, vision, transcription and embedding."
+
+
+def model_name_refusal(role: str, name: str) -> str | None:
+    """Fixed words refusing `name` for `role`'s job, or None when it looks like a model name and not
+    like a key. Never quotes the name."""
+    job = JOB_WORDS.get(role, role)
+    if not _MODEL_NAME.fullmatch(name):
+        return f"{job}: {FIELD_WORDS['provider.roles']}"
+    # Judged part by part between `:`, `/` and `@`, as a model's own tags are written
+    # (`moondream:1.8b-v2-q4_K_M`); a key prefix starts the first part, a JWT has no such separator.
+    parts = re.split(r"[:/@]", name)
+    if any(model_looks_like_a_key(part) for part in parts) or _UUID.fullmatch(name):
+        return (
+            f"{job}: the model name looks like a key. Type the model's name in its job's field, "
+            "and the key in the key field"
+        )
+    return None
+
+
+def refused_field(loc: Sequence[object], words: str) -> tuple[str, str] | None:
+    """The field a validation error names, and its fixed words, from `FIELD_WORDS` alone; None for a
+    field not on the list (a name that was sent is never echoed: the owner's review, Fix B)."""
+    parts = [str(p) for p in loc]
+    words = words.removeprefix("Value error, ")
+    if parts[:2] == ["provider", "roles"]:
+        job: str | None = None
+        if len(parts) > 2:
+            if parts[2] not in JOB_WORDS:
+                return "provider.roles", JOBS_ARE
+            job = parts[2]
+        elif found := re.match(r"the (\w+) model ", words):
+            # The roles' rule names the job it refuses ("the vision model … is not a model name").
+            job = found.group(1) if found.group(1) in JOB_WORDS else None
+        if job is None:
+            return "provider.roles", JOBS_ARE
+        return f"provider.roles.{job}", f"{JOB_WORDS[job]}: {FIELD_WORDS['provider.roles']}"
+    field = ".".join(parts[:2]) if parts[:1] == ["provider"] else ".".join(parts[:1])
+    return (field, FIELD_WORDS[field]) if field in FIELD_WORDS and len(parts) <= 2 else None
+
 
 def sent_values(value: object) -> set[str]:
     """Every string a request carried, wherever it sits."""
@@ -928,7 +1007,9 @@ class ModelAdmin:
                     expires_at=c.at + CHECK_LIFE,
                 )
                 for i, c in current.checks.items()
-                if self._now() - c.at <= CHECK_LIFE
+                # One not yet passed is a check still running, or one stopped mid-way (ruling 25):
+                # never offered for Add.
+                if c.passed and self._now() - c.at <= CHECK_LIFE
             ],
         )
 
@@ -1485,8 +1566,10 @@ class ModelAdmin:
             finally:
                 await self._gateway.delete_entry(entry_id(named, model))
             roles: list[str] = [r for r, m in provider.roles.items() if m == model]
+            # By job, never the typed name (the owner's ruling 22).
+            jobs = ", ".join(JOB_WORDS.get(r, r) for r in roles)
             checked.append(
-                ModelCheck(model=model, roles=roles, outcome=outcome, ok=ok, words=words)
+                ModelCheck(roles=roles, outcome=outcome, ok=ok, words=f"{jobs}: {words}")
             )
         return checked
 
@@ -1531,9 +1614,7 @@ class ModelAdmin:
                 await self._gateway.delete_credential(probe)
         failed = [m for m in checked if not m.ok]
         if failed:
-            said = " ".join(
-                f"{m.model}: {m.words}" if len(checked) > 1 else m.words for m in failed
-            )
+            said = " ".join(m.words for m in failed)
             raise ModelAdminRefused(
                 f"{said} Nothing was changed: {provider.label or provider.name} keeps {kept}."
             )
@@ -1603,35 +1684,46 @@ class ModelAdmin:
                     raise ModelAdminRefused(
                         "Give the key, with no spaces or line breaks in it; nothing was checked."
                     )
-                assert key is not None
-                await self._gateway.put_credential(provider.name, key)
+            # The owner's ruling 25: the check is on record before its key reaches the gateway, so a
+            # Conduit stopped at any point after leaves a record the sweep removes, with its key.
+            check_id = secrets.token_urlsafe(12)
+            record = PendingCheck(provider=provider, by=by, at=self._now(), passed=False)
+            current = current.model_copy(
+                update={"checks": {**current.checks, check_id: record}}, deep=True
+            )
+            self._save(current)
+            unchecked = current.model_copy(
+                update={"checks": {i: c for i, c in current.checks.items() if i != check_id}},
+                deep=True,
+            )
             try:
+                if not provider.keyless:
+                    assert key is not None
+                    await self._gateway.put_credential(provider.name, key)
                 models = await self._prove(
                     provider, list(provider.roles.values()),
                     named=probe_entries(provider.name), credential=provider.name,
                 )  # fmt: skip
-            except BaseException:
-                if not provider.keyless:
-                    await self._gateway.delete_credential(provider.name)
-                raise
-            if not models or not all(m.ok for m in models):
-                if not provider.keyless:
-                    await self._gateway.delete_credential(provider.name)
-                first = next((m for m in models if not m.ok), None)
-                return EngineCheckResult(
-                    engine=provider.name, ok=False, check=None, models=models,
-                    words=(first.words if first else "Name a model for at least one job.")
-                    + " Nothing was kept: correct it and check again.",
-                )  # fmt: skip
-            check_id = secrets.token_urlsafe(12)
-            checks = {**current.checks,
-                      check_id: PendingCheck(provider=provider, by=by, at=self._now())}  # fmt: skip
-            try:
+                if not models or not all(m.ok for m in models):
+                    if not provider.keyless:
+                        await self._gateway.delete_credential(provider.name)
+                    self._save(unchecked)
+                    first = next((m for m in models if not m.ok), None)
+                    return EngineCheckResult(
+                        engine=provider.name, ok=False, check=None, models=models,
+                        words=(first.words if first else "Name a model for at least one job.")
+                        + " Nothing was kept: correct it and check again.",
+                    )  # fmt: skip
+                passed = record.model_copy(update={"passed": True})
+                checks = {**current.checks, check_id: passed}
                 self._save(current.model_copy(update={"checks": checks}, deep=True))
             except BaseException:
-                # Unrecorded, nothing would ever remove it: the key goes with the refusal.
+                # Its key goes with the refusal; the record too, where it can still be written
+                # (else the sweep removes it, and nothing else of it is left).
                 if not provider.keyless:
                     await self._gateway.delete_credential(provider.name)
+                with contextlib.suppress(OSError):
+                    self._save(unchecked)
                 raise
             return EngineCheckResult(
                 engine=provider.name, ok=True, check=check_id, models=models,
@@ -1641,7 +1733,8 @@ class ModelAdmin:
 
         result: EngineCheckResult = await self._change(by, "engine_checked", provider.name, work)
         await self._audit_expired(expired)
-        outcomes = ", ".join(f"{m.model}: {m.outcome}" for m in result.models)
+        # Each job and its outcome, never the typed name (the owner's ruling 22).
+        outcomes = ", ".join(f"{r}: {m.outcome}" for m in result.models for r in m.roles)
         await self._audited(
             by, "engine_checked", provider.name,
             outcome=("passed" if result.ok else "refused") + (f" ({outcomes})" if outcomes else ""),
@@ -1657,6 +1750,8 @@ class ModelAdmin:
 
         async def work(current: ModelSettings) -> None:
             pending = current.checks.get(check_id)
+            if pending is not None and not pending.passed:
+                pending = None  # still running, or stopped mid-way (ruling 25): nothing to add
             current, gone = await self._expired(current)
             expired.extend(gone)
             if pending is not None and check_id not in current.checks:
@@ -1723,11 +1818,9 @@ def _no_key_shown(provider: ModelProviderConfig, then: str) -> None:
     """The form's own rule, on every profile, for an engine checked or edited: what analysts are
     shown never holds a key, so a key pasted into a model name, the label or the agreement's
     reference is refused before anything is kept."""
-    if any(model_looks_like_a_key(m) for m in provider.roles.values()):
-        raise ModelAdminRefused(
-            "A model name looks like a key. Type the model's name in its job's field, and the key "
-            f"in the key field; {then}."
-        )
+    for role, model in provider.roles.items():
+        if refused := model_name_refusal(role, model):
+            raise ModelAdminRefused(f"{refused}; {then}.")
     for field_name, shown in (("label", provider.label),
                               ("agreement reference", provider.contract_reference)):  # fmt: skip
         if shown and label_looks_like_a_key(shown):
