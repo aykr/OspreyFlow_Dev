@@ -2749,7 +2749,8 @@ export function App() {
           backLabel={view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph"}
           onBack={ask.back}
           hidden={ask.pageHidden}
-          beside={welcomeOpen && welcome === "asked" ? welcomePanel : null}
+          // Not while the page is hidden for the reader: App draws Help over the view then, one panel, never two.
+          beside={welcomeOpen && welcome === "asked" && !ask.pageHidden ? welcomePanel : null}
           takeFocus={questionDraft === null}
         >
           <QuestionsPanel
@@ -2799,8 +2800,9 @@ export function App() {
           onBack={results.back}
           // Help's keys panel over the results, not beneath them where nothing can reach it.
           // Only when asked for (Help or `?`): the panel shown by itself on a first visit belongs to the graph and lay over
-          // the first result's actions (the live check, 14 November 2026); it is there again on Back.
-          beside={welcomeOpen && welcome === "asked" ? welcomePanel : null}
+          // the first result's actions (the live check, 14 November 2026); it is there again on Back. Not while the results
+          // are hidden for the reader: App draws it over the view then, and one panel is mounted, never two.
+          beside={welcomeOpen && welcome === "asked" && !results.resultsHidden ? welcomePanel : null}
           onShow={(nodes) => {
             void seedToCanvas(nodes, []);
             setSelectedNode(nodes[0] ?? null);

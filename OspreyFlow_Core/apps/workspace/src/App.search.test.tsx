@@ -468,6 +468,34 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     expect(reader.contains(document.activeElement)).toBe(true);
   });
 
+  // Case's review of 052e265 (n1): while a document read from an answer is open, the hidden page kept a Help panel in
+  // its `beside` and App drew another over the view. One is mounted, never two, and one again when the reader closes.
+  test("Help's panel is mounted once while a document read from an answer is open, and once when it closes", async () => {
+    const page = await openAsk();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));
+    await screen.findByRole("dialog", { name: "Welcome back" });
+    expect(document.querySelectorAll(".workspace-welcome")).toHaveLength(1);
+    fireEvent.click(await within(page).findByRole("button", { name: "Invoice 44" }));
+    const reader = await screen.findByRole("dialog", { name: /^Reading/ });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    expect(document.querySelectorAll(".workspace-welcome")).toHaveLength(1);
+    fireEvent.click(within(reader).getByRole("button", { name: "Close" }));
+    const again = await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(document.querySelectorAll(".workspace-welcome")).toHaveLength(1);
+    expect(within(again).getByRole("dialog", { name: "Welcome back" })).toBeTruthy();
+    await waitFor(() => expect(document.activeElement).toBe(within(again).getByRole("heading", { name: "Ask & Chat" })));
+  });
+
+  test("Help's panel is mounted once while a document read from the results is open", async () => {
+    await openResults();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));
+    await screen.findByRole("dialog", { name: "Welcome back" });
+    fireEvent.click(await screen.findByRole("button", { name: "Open Invoice 44" }));
+    await screen.findByRole("dialog", { name: /^Reading/ });
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull());
+    expect(document.querySelectorAll(".workspace-welcome")).toHaveLength(1);
+  });
+
   test("Help's panel keeps the focus it took through App's later renders (it takes focus once, as it is asked for)", async () => {
     const { rerender } = render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
