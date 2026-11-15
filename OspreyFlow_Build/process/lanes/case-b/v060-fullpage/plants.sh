@@ -74,13 +74,13 @@ plant "focus not returned to the rail's opener" "$RAIL" 's/\?\.focus\(\);\n\}/;\
   "Ask & Chat opens its panel without changing the view"
 plant "the opener still announcing a dialog" "$RAIL" 's/item\.expanded === undefined \|\| item\.opensPage \?/item.expanded === undefined ?/' js \
   "the rail holds the panel openers alone"
-plant "the view beneath left in reach" "$APP" 's/const pageOver = results\.viewInert \|\| askOver;/const pageOver = results.viewInert;/' js \
+plant "the view beneath left in reach" "$APP" 's/const pageOver = results\.viewInert \|\| ask\.viewInert;/const pageOver = results.viewInert;/' js \
   "the rail's Ask & Chat over the results replaces them"
-plant "the Ask page opened over the results, both showing" "$APP" 's/(function openAskPage\(\): void \{\n)    results\.leave\(\);\n/$1/' js \
+plant "the Ask page opened over the results, both showing" "$HOOK" 's/(const openPage = \(\) => \{\n)    other\.leave\(\);\n/$1/' js \
   "the Ask line opens Ask & Chat with the words carried over"
-plant "a search leaving the Ask page showing" "$APP" 's/ *setQuestionsOpen\(false\); \/\/ the results replace Ask & Chat.s page[^\n]*\n//' js \
+plant "a search leaving the Ask page showing" "$APP" 's/ *ask\.leave\(\); \/\/ the results replace Ask & Chat.s page[^\n]*\n//' js \
   "a search from the Ask & Chat page replaces it with the results"
-plant "choosing a view leaving the Ask page showing" "$APP" 's/(function leavePages\(\): void \{\n    results\.leave\(\);\n)    setQuestionsOpen\(false\);\n/$1/' js \
+plant "choosing a view leaving the Ask page showing" "$HOOK" 's/(    leaveBoth: \(\) => \{\n      other\.leave\(\);\n)      setOpen\(false\);\n/$1/' js \
   "choosing a view leaves the Ask & Chat page"
 plant "focus left on the view beneath when a document read from an answer closes" "$HOOK" 's/if \(was && !reading && open\) document\.querySelector<HTMLElement>\(ASK_HEADING\)\?\.focus\(\);/void ASK_HEADING;/' js \
   "a document opened from an answer is read over the view, the page hidden"
@@ -93,7 +93,7 @@ plant "the harness's page without its back link focus (keyboard)" "$RAIL" 's/\?\
 plant "a marker on the page leaving it open (keyboard, the real canvas)" "$HOOK" 's/    showOnGraph: \(show\) => \{\n      setOpen\(false\);\n/    showOnGraph: (show) => {\n/' kb \
   "a [G-n] chosen on Ask & Chat's page leaves it"
 plant "a drawer titled Ask & Chat put back in App's own shape (the guide's case)" "$APP" 's/(      <Drawer open=\{exploreOpen\})/      <Drawer open={questionsOpen} onClose={() => ask.leave()} title={RAIL_LABELS.questions}><p \/><\/Drawer>\n$1/' guide \
-  "test_section_6_says_ask_and_chat_is_a_page" "match='title={RAIL_LABELS.questions}'"
+  "test_section_6_says_ask_and_chat_is_a_page" "match='title={RAIL_LABELS.questions'"
 plant "the back link's words in the page's own background token (no contrast; axe, three looks)" "$CSS" 's/(\.ask-page__back \{[^}]*?)color: var\(--text-primary\);/$1color: var(--surface-app);/s' ax \
   "places-harness.html open=questions (dark)
 places-harness.html open=questions (light)
