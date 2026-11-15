@@ -30,6 +30,10 @@ around: one view switch, a case line that says what is open, and "view" kept for
   registrations of their own, and `INSTALL.md` counts them.
 - **Hosted model engines are bounded at 120 seconds a call, and the deployment's own model at 900**
   (administration guide §10), set in `deployment.env` on Lite and Small.
+- **A model engine's key is entered in Admin › Models** (**Enter key**, then **Set the key**), write-only,
+  kept by the model gateway alone and used with nothing restarted. `ospreyflow models key` does the same
+  from the command line. A key given at install is handed to the gateway, and its line leaves
+  `deployment.env`.
 
 **Search (ADR-149, ADR-150).**
 - **Search on OpenSearch**, with the reader's clearance, handling codes, the case's datasets and a
@@ -72,6 +76,9 @@ around: one view switch, a case line that says what is open, and "view" kept for
 - **The administrator fallback:** where Entra sends no clearance, unit or handling codes, an
   administrator sets them, never above their own. **Guest accounts** are refused until a people manager
   turns them on for the tenant. **A token of the other version** is refused in words.
+- **Amazon Bedrock is London-only:** the models AWS serves in-Region there (Amazon Nova and the Titan
+  embeddings), not current Claude models, which London serves only through AWS's EU and global profiles.
+  Claude through the EU profile is not offered.
 - **The poc manifest:** one source for the shape's containers, Jobs, images, registry, managed services,
   Entra registrations and egress, held to the render both ways. `seed_poc` seeds the named case with the
   first administrator as its author.
@@ -102,8 +109,12 @@ around: one view switch, a case line that says what is open, and "view" kept for
   give the administrator role.
 - **Ask & Chat's earlier questions** collapse to their lines, the newest answer open; asking a new
   question closes the earlier ones, and a closed line says how many proposals in it are left to decide.
+- **Under an Ask & Chat answer, Show all on graph** puts every item its markers stand for on the case's
+  graph, selected together; what cannot be shown is counted, never named. **Save as a view** saves them
+  as a saved view of the case, named from the question.
 
 **Rules and watches.**
+- **What raises alerts** says why a hotlist or watch stopped, in the same words as under *Stopped*.
 - **A watch stays active** until three unreachable evaluations in a row (ADR-044 Amendment 2), and a
   stopped hotlist or watch shows why beside its badge.
 
