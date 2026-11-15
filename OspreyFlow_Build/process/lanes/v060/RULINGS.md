@@ -36,3 +36,4 @@ out and counted, never named; item 10 moves from platform to rules-b; the demo's
 - Item 7, two demos on one server (ospreyflow.app, Part 3), and the certificates' automatic renewal
 - Item 23, the cloud-platform shape's memory sizes from measured use
 - The websites ospreyflow.org and ospreyflow.net published (finish.tsv p3)
+- Bedrock beyond London (AWS's EU profile, for current Claude models): to decide (ruling 17)

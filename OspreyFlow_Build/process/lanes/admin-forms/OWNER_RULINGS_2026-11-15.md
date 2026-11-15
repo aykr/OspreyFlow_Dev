@@ -69,3 +69,5 @@ already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Adm
     records the change to Amendment 7 decision 1, under the same check before adding.
 16. **After v0.6.0, platform builds the second demo (ospreyflow.app, Part 3) first**, about 28 h ±5 with each demo
     keeping its own model beside Gemini; the rest of the forms after it.
+17. **Bedrock stays London-only in v0.6.0** (the owner, 15 Nov): in London that means Amazon Nova, not Claude; the guide
+    says so. Allowing AWS's EU profile for Claude is a v0.6.1 decision.

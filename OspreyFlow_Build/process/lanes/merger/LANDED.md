@@ -217,3 +217,4 @@ a048648 9c7acb0 platform v060-rf-fresh-only
 a464871 551d725 platform-b v060-tokver-row
 f35a717 a180bde case-b v060-i3-accordion
 5f19bde b3097ef docs v060-i9-rename
+a7638b0 5891213 docs v060-model-keys-guide
