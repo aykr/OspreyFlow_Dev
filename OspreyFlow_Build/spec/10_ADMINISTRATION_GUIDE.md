@@ -160,13 +160,6 @@ ospreyflow switch default       # back to the checkout's own
 
 A Lite computer runs one deployment at a time by default, which is what `ospreyflow switch` is for.
 
-**The deployment installed in the checkout** — every install before v0.4.2, with its
-`osprey.yaml` in the checkout and its files in `deploy/generated/` — is listed as `default` and works
-exactly as before: no command moves, renames or changes it. It could later be moved under
-`~/.ospreyflow/deployments/` (install a named deployment, restore a backup of the checkout's into it,
-check it, then uninstall the checkout's with `--keep-data` until you are sure); that is a step for
-the administrator to take deliberately, never something an update does.
-
 ### 1a.2 Adding a public dataset
 
 A public dataset you download yourself can be added to any deployment, at install or later:
@@ -942,7 +935,9 @@ on a kind cluster (R1, 13 November 2026)**, with stand-ins for the platform's pa
 and KMS, EKS's pod identity, RDS, ElastiCache and Entra ID); neither has run against a real account
 or tenant. The standard shape has no rendered runbook yet.
 
-**Moving to a new release (poc shape).** There is no separate upgrade runbook. A new release is
+**Moving to a new release (poc shape).** v0.6.0 itself is installed fresh, into a namespace of its own: a
+namespace on an earlier release stays on it (section 14). For a release after v0.6.0 there is no separate
+upgrade runbook. A new release is
 installed by running `INSTALL.md` again from the new release's copy: its `helm upgrade --install` moves
 the deployment onto the new release's images and values. In order:
 
@@ -955,15 +950,13 @@ the deployment onto the new release's images and values. In order:
    install are the new release's pinned render, never the old one's. A release that needs a change in
    the Terraform says so in its notes, and the Terraform is this render's `terraform/` folder: its pull
    request is applied now, before the install, as at the first install.
-4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces each pod on the new release, the search index is rebuilt from the
-   graph as on a fresh install (an index made before v0.5.2 is not one v0.5.2 writes to), and its own checks
+4. **Run `INSTALL.md` again from that copy**, block by block. Its `helm upgrade --install` replaces each pod on the new release, the search index is rebuilt from the graph as on a fresh install, and its own checks
    follow, as at the first install: section 6's check
    that the Conduit reads Entra's settings, and section 7's `/healthz` through the Glass. Then start the Conduit and the workers again at the copy counts noted in
    step 1, if the install has not.
 
-**What will check it.** v0.5.2's install test, planned before its release, on a kind cluster, is to
-install v0.5.1, then the candidate by these steps over it, and check that the data made before the
-upgrade is still there. It has not run yet. **Going back to the previous release** (installing its copy again the same way and
+**Not yet rehearsed.** No deployment has yet been moved to a new release by these steps: v0.6.0's own
+package test is a fresh install. **Going back to the previous release** (installing its copy again the same way and
 restoring step 1's backup) **has not been rehearsed**: until it has, treat step 1's backup as the way
 back, and test the new release on the development namespace before production.
 
@@ -2251,8 +2244,7 @@ and they see what that role allows.
 **The first administrator** (`admin`, on a deployment with no demo accounts) holds both the
 **Admin** and the **Analyst** roles from the start, whether or not demo packs are loaded. The Admin
 role alone does not open a case's graph, and the first administrator is the Author of every demo
-pack's case there. An `admin` made by v0.4.6 or earlier holds Admin alone: add the Analyst role in
-People and roles.
+pack's case there. 
 
 ### 9.3 Inviting someone
 
@@ -2287,15 +2279,7 @@ live**: give the person an Analyst role as well, or the **Super user** preset (A
 Engineer and Rule author, given as three roles). An administrator alone holds none of these. **No new
 rule covers the whole deployment**: a rule watches one dataset, chosen once in the editor.
 
-**After updating to v0.5.0.** No one holds Rule author: give it in Admin → People and roles to whoever
-writes rules. `scripts.migrate_rules_to_datasets` (in the update's one-off steps) turns each rule that
-covered the whole deployment into one rule per dataset, in that dataset's home case, with the same
-conditions, owner and name: a running rule keeps running, and one still waiting for its first
-approval becomes a draft, to be tested and made live. Run it with `--dry-run` first: it says what it
-would do and writes nothing. The original rule is then retired, with a version saying why. **A dataset
-with no home case is reported, never guessed**: that rule is left whole and running, converted to no
-dataset, so that no alert is raised twice and no dataset goes unwatched. Make the dataset's home case
-and run the script again; the second run converts it. **A rule runs as its author**: on every run (a
+**A rule runs as its author**: on every run (a
 load, a schedule, a list's refresh, *Test*) its author must still hold `author_rules` or
 `deploy_rules`, or it raises nothing and the run says why ("the rule's author, ‹owner›, no longer holds
 author_rules or deploy_rules"). Check that each rule's owner holds one, and transfer the rules of
@@ -2441,8 +2425,7 @@ second person; that too is audited. Give the right singly (`right:manage_strengt
 someone who should set influencers without the rest of a role.
 
 Every proposal, approval and rejection is in the case's rule audit, and every rule keeps its versions
-— who proposed each and who decided it. **After updating to v0.5.0**, a rule that covered the whole deployment is turned into one rule per
-dataset (section 9.4).
+— who proposed each and who decided it. 
 
 ### 9.7 Removing someone, and joining an organisation account
 
@@ -2633,10 +2616,7 @@ deployment has no local model for the role. Material whose datasets are not know
 the unit that holds it and its egress; choose the setting and press Save beside it. Each change is
 recorded in the audit log — who made it, when, and from what to what.
 
-> **After upgrading from a release before v0.4.2, hosted engines receive nothing** until an administrator sets
-> a dataset's egress to `contracted` or `any`. Every existing dataset, demo packs included, starts
-> at `none`; until you change one, every question runs on the deployment's own models, whatever
-> engine an analyst chooses. Set only the datasets you are entitled to send.
+
 
 **How long a model is waited for.** A call to a hosted engine (any engine but the deployment's own) is waited
 for 120 seconds, `OSPREY_HOSTED_MODEL_TIMEOUT_SECONDS`; a call to the deployment's own model 900 seconds,
@@ -2753,9 +2733,7 @@ Choose them at install (`demo_packs`), or later: `ospreyflow demo list`, `osprey
 <id>`. Each loads into its own case, with the installing administrator as Author: the demo
 administrator where there are demo accounts (the demo analyst its Editor), and otherwise the first
 administrator, `admin`, in their own unit, with no Editor (section 1a); they hold the Analyst role
-as well as Admin, so the case opens for them. Adding **HMP**
-again is safe: a deployment that loaded it before v0.2.0 gains only its prison network, in the same
-case, and one that already has the network is left as it is. **PaySim** is a
+as well as Admin, so the case opens for them. Adding **HMP** again is safe: a deployment that already has its prison network is left as it is. **PaySim** is a
 download: get `PS_20174392719_1491204439457_log.csv` from its Kaggle page and pass it with
 `ospreyflow demo add paysim --file <path>`; it is checked by size and checksum before anything
 starts. PaySim is CC BY-SA 4.0 (E. A. Lopez-Rojas, A. Elmir and S. Axelsson, 2016); its licence and
@@ -2878,9 +2856,7 @@ records, the accounts, the audit log), `<project>_arcadedb-databases` and `<proj
 `<project>_objectstore-data`. `<project>` is `osprey-local-lite`, `osprey-small`, or the
 `deployment.name` you gave; `docker volume ls` lists them. They outlive a stopped, recreated or
 removed container, so a restart, `ospreyflow apply`, an update and `uninstall --keep-data` keep them;
-`ospreyflow uninstall` without `--keep-data` removes them. A deployment installed with v0.4.10 or
-earlier kept PostgreSQL and ArcadeDB in unnamed volumes, and Valkey and OpenSearch inside their
-containers; its data is moved into the named volumes once (section 14). A backup reads each store through its own
+`ospreyflow uninstall` without `--keep-data` removes them.  A backup reads each store through its own
 running server, so it is the same wherever the data is kept. **Not in a backup:** Valkey's working
 sets and queues, and OpenSearch's search index, which is rebuilt from the graph instead: a restore's
 last step, once the graph and the texts are back, runs `python -m scripts.rebuild_search_index` in the
@@ -2900,19 +2876,9 @@ settings' placeholder, is refused at setup except on Small on your own server. A
 installed by name cannot be called `local-lite`, `small` or `cluster`, or the checkout's own
 `deployment.name`, since the checkout's own deployment keeps its backups under that name. Give two
 checkouts on one machine different backups folders: both deployments are `local-lite`, so they would
-otherwise share a subfolder. An `osprey.yaml` from v0.4.x or earlier names no backups folder (or the
-placeholder `/var/lib/osprey/backups`), so its sets go to `~/OspreyFlow/backups/<deployment>/`,
-and the backup's first line says so. Name a folder as `components.storage.backups` to stop that
-line.
+otherwise share a subfolder. 
 
-Sets taken before v0.5.0 may still be in the checkout's `backups/`, in a named
-deployment's `~/.ospreyflow/deployments/<name>/backups/`, or directly in a server's backups
-folder. `ospreyflow doctor` names each such folder, with the sets' total size and the one command
-that moves them (`mkdir -p <folder>/<deployment> && mv <sets> <folder>/<deployment>/`). It never
-moves or deletes a set itself. Until they are moved, `ospreyflow restore` with no set lists them
-beside the deployment's own sets, each with its move command, and `ospreyflow restore <set name>`
-still restores one, looking in the deployment's folder first. A set the doctor cannot read all of
-(a server's are the owner's only) is given as "at least" its size, and its move needs `sudo`.
+
 
 **A synced folder.** A set holds the deployment's data and any real-data exception it was given.
 `ospreyflow doctor` warns when the backups folder is under a folder a sync client copies: on
@@ -2931,8 +2897,7 @@ the install.
 `ospreyflow restore` accepts.
 
 **Once the object store holds files** (a demo pack or an upload has put some there), it is copied
-as the account that runs `ospreyflow backup`, so that account can remove its working copy. With
-v0.4.8 and earlier on Linux such a backup failed with "Permission denied" (section 16).
+as the account that runs `ospreyflow backup`, so that account can remove its working copy. 
 
 **Enterprise.** The cloud protects its managed services as for Small. **The graph store and the
 analytics database run in the cluster, and nothing backs them up yet**: `ospreyflow backup` drives
@@ -2946,6 +2911,14 @@ and shares its retention.
 
 Releases are tagged `vMAJOR.MINOR.PATCH`, with signed images and a signed list of every image by
 digest. Each release's notes are its section of `CHANGELOG.md`.
+
+**v0.6.0 is installed fresh.** No earlier deployment is moved to it: a deployment made by an earlier
+release stays on that release, and v0.6.0 is installed as a new deployment. `ospreyflow update`, an
+install over an existing deployment, and on `cloud-platform` the rendered `INSTALL.md` each refuse an
+earlier one before anything is changed: "v0.6.0 is installed fresh; this deployment is ‹release›, and
+nothing moves it onto v0.6.0. Install v0.6.0 as a new deployment, in a place of its own (a folder, or on
+a cluster a namespace); this one is left on ‹release›, unchanged." What follows is how a v0.6.0
+deployment moves to a later release.
 
 **Which installs `update` moves, and how the others are updated:**
 
@@ -2974,8 +2947,7 @@ that can read it first; without one the check cannot answer, and says so.
   nothing). It checks every image's signature first and changes nothing if one fails; refuses if a
   local change to a file would be overwritten ("commit or undo them first"); **backs everything up**;
   moves the checkout to the tag; starts the release's images and checks each service runs them; and,
-  where the deployment searches with OpenSearch, rebuilds the search index from the graph (an index made
-  before v0.5.2 is not one v0.5.2 writes to). If anything fails after the backup it **rolls back** — the previous release and its data restored
+  where the deployment searches with OpenSearch, rebuilds the search index from the graph. If anything fails after the backup it **rolls back** — the previous release and its data restored
   from the backup just taken — and says so.
 - **Without internet**: on a machine with it, `ospreyflow update --make-bundle <file> --to
   vX.Y.Z` writes the release, verified, to one file; carry it over and run
@@ -2989,67 +2961,9 @@ that can read it first; without one the check cannot answer, and says so.
     anything, and says what to run instead, for example: "this bundle carries the images for
     linux/arm64, and this machine is linux/amd64; nothing was verified or loaded. Make one for it
     on any machine that reaches the release: ospreyflow update --make-bundle FILE --platform
-    linux/amd64". A bundle made before v0.4.12 names no platform: it carries the platform of
-    the machine that made it, and on another it is refused when its cosign image is checked.
+    linux/amd64". 
 
 An update moves forward only.
-
-**The stores' one-time move to named volumes.** A deployment installed with v0.4.10 or earlier keeps
-its PostgreSQL and ArcadeDB data in unnamed volumes, and Valkey's and OpenSearch's inside their
-containers (section 13). The first `ospreyflow update` after that — after its backup and before anything
-starts — moves the data into the stores' named volumes, once; so does the first `ospreyflow start`,
-`start --build`, `apply` or `install` that brings such a deployment up from a newer checkout. The
-deployment is stopped while it moves: each store is started alone on its old data and asked what it
-holds, its data is copied with its own image keeping every owner and permission (Valkey's from its
-container, through a temporary image of it that is removed afterwards), the copy is checked file by
-file against the original, and the store is started on its named volume in a container of its own,
-apart from the deployment's, and must hold the same as before. Only then does the command start the
-deployment on the named volumes. It says, for example:
-
-```
-The stores' data moves to named volumes, once: postgres, arcadedb, valkey, opensearch. The deployment is stopped while it moves; the old volumes are kept.
-  postgres: the databases keycloak, osprey, postgres, superset.
-  postgres: copying /var/lib/postgresql/data from 3f9c…e1 to osprey-small_postgres-data…
-  postgres: /var/lib/postgresql/data copied and checked (2114 entries, the same owners, modes and contents).
-  …
-  valkey: keys that do not expire db0: 1.
-  valkey: copying /data from valkey's container to osprey-small_valkey-data…
-  …
-  opensearch: holds no index of its own, so nothing is copied; it starts on its named volume empty.
-  postgres: on its named volume it holds the databases keycloak, osprey, postgres, superset, as before.
-  …
-The stores' data is in their named volumes, checked; they start on them next.
-The old volumes are left in place: 3f9c…e1, 7a20…4b, c51d…90, 0be8…7f. Once the deployment works as before, remove them with:
-  docker volume rm 3f9c…e1 7a20…4b c51d…90 0be8…7f
-```
-
-Run again, it does nothing. It needs room for a second copy of the stores' data on the disk where
-Docker keeps its volumes (`ospreyflow doctor` shows that disk). **If the move fails**, it says why and
-removes nothing: the named volumes it filled are removed, each store's data is where it was, no
-container of the deployment's has been replaced, and every file the command wrote is put back as it
-was, so the deployment still runs from the files that name its old data. An update then rolls back
-to the previous release on that data, with nothing restored ("rolled back to … on its own data,
-which was never moved"). `apply`, `install` and `start --build` stop, saying "…, and the
-deployment's files are as they were. The deployment is stopped; ospreyflow start starts it on that
-data." — or "Nothing was stopped." when the move refused before it stopped anything — and
-`ospreyflow start` then brings the deployment up on its old data. If an update fails after a move
-that succeeded, it rolls back as for any other failure (the backup restored) and removes the named
-volumes the move filled; the old volumes are kept either way.
-
-### 14.1 Removing the old store volumes
-
-After the move, each store's old volume is left as it was — a long hexadecimal name — and nothing
-uses it. Check the deployment first: sign in, open a case, and take a backup (`ospreyflow backup`,
-section 13). Then remove the volumes the move named, with the command it printed:
-
-```
-docker volume rm <name> <name> …
-```
-
-Docker refuses to remove a volume a container still uses, so nothing in use can be removed this way.
-If the move's words are lost, `docker volume ls --filter dangling=true` lists the volumes no
-container uses; this deployment's are among them, but so may be other programs', so do not remove
-them all (`docker volume prune` would). Until they are removed they cost only disk.
 
 ## 15. Scheduled and watched pipelines
 
@@ -3072,7 +2986,7 @@ Admin → Operations lists every one.
 | Nobody can sign in | `ospreyflow logs keycloak`; that the address in `osprey.yaml` is the one in the browser; then `ospreyflow repair-sign-in` |
 | Rules say "the rule's deployer could not be resolved", a hotlist reads **Stopped** with "Its owner's sign-in could not be checked at three loads in a row. It is tried again at the next." beside it, or a list refresh re-screens 0 customers — typically after the stores were wiped; Admin → System's **Acting for people** says "The Conduit cannot act for people" | The Conduit cannot act for people: the identity provider no longer holds its client secret. Run `ospreyflow repair-sign-in`, then run the rule again. The System line turns green within half a minute |
 | Someone signing in through the organisation is told "This email address already belongs to an OspreyFlow account" | An account you made holds their email, and OspreyFlow does not join the two by itself (section 5a.1). Join them in Admin → People and roles' *Refused organisation sign-ins*, or remove that account and they arrive again, or they sign in with that account (section 9.7) |
-| *Refused organisation sign-ins* does not list someone who was refused | It lists the last seven days, from a deployment updated to the release after v0.4.10 and repaired since (`ospreyflow repair-sign-in`, which also makes the identity provider record the refusals). Someone refused before that, or more than seven days ago, is not listed: ask them to sign in through the organisation once more, then look again. Someone already joined to an account is not listed either |
+| *Refused organisation sign-ins* does not list someone who was refused | It lists the last seven days. Someone refused more than seven days ago is not listed: ask them to sign in through the organisation once more, then look again. Someone already joined to an account is not listed either |
 | Admin → People and roles says "the identity provider refused the Conduit — its account needs manage-users, manage-clients and view-events" | Run `ospreyflow repair-sign-in`, which grants the Conduit's account what it needs |
 | Removing someone is refused: "the only enabled person who can manage people" | Give someone else the Admin role (or the `manage_people` right) first, so the deployment is never left with no administrator. Your own account cannot be removed either: another administrator removes it |
 | `doctor`, the install or `repair-sign-in` warns "Sign-in through the organisation joins by email" | `sign_in.organisation.trust_email` is on (section 5a.1). Keep it only with the security officer's written sign-off; otherwise set `trust_email: false` in `osprey.yaml` and run `ospreyflow apply` |
@@ -3085,13 +2999,9 @@ Admin → Operations lists every one.
 | `doctor`, `install` or `apply` refuses the GPU | Each reason is named, and nothing was changed: install the NVIDIA driver and restart until `nvidia-smi` lists the GPU; install the NVIDIA Container Toolkit and run `sudo nvidia-ctk runtime configure --runtime=docker` and `sudo systemctl restart docker`; on macOS or Windows, set the GPU to `none` (section 5a.4) |
 | `ospreyflow update --from` says "this bundle carries the images for linux/arm64, and this machine is linux/amd64", or "the bundle's cosign image is not the one pinned for linux/amd64" | The bundle was made for another platform: the second words are a bundle made with v0.4.10 or earlier, before `--platform`, which carried the platform of the machine that made it (an Apple-silicon Mac's is arm64). Nothing was verified or loaded. Make it again with `ospreyflow update --make-bundle <file> --platform linux/amd64` (the default) on any machine that reaches the release (section 14) |
 | `ospreyflow demo add` or an upload fails with "Permission denied: '/var/lib/osprey/ingest/uploaded/…'", or `install`, `apply`, `start` or `update` says "the Conduit (uid 10001) cannot write …/uploaded" | Linux only: the Conduit's upload folder in `server.ingest` (Lite: `components.storage.ingest`) is not its own. A deployment installed or updated with v0.4.8 or earlier has it so: run `ospreyflow apply` or `ospreyflow start` once with a later version, which gives the folder over (section 5a). When giving it over fails, the command names Docker's reason; or give it over yourself, `sudo chown 10001:10001 <server.ingest>/uploaded`, and run the command again |
-| `ospreyflow backup` fails with "Permission denied" on a file under `.objects-staging`, or a folder named `….incomplete` is left where backups are written | Linux, v0.4.8 or earlier, once the object store holds files: the object store's copy belonged to the Conduit's user. Update, then back up again. Remove what was left as root (`sudo rm -rf <folder>`); a folder with an `INCOMPLETE` file in it is not a backup, and `restore` refuses it (section 13) |
 | Ask on the local engine fails after the extraction model was changed (the GPU switched on, or `models.extraction`) | `ospreyflow apply` fetches the newly chosen model, and waits for it, before anything that uses it starts again; if the download fails it stops with nothing changed, saying "the model download (ollama-models) did not finish": `ospreyflow logs ollama-models` says why, then run `ospreyflow apply` again. With v0.4.8 or earlier, `apply` never fetched it: `docker compose --env-file <deployment>/deployment.env -f <deployment>/compose.yaml up -d --force-recreate --no-deps ollama-models` fetches it (the 14b is about 9 GB) |
 | A Small server never answered | Its log, `/var/log/ospreyflow-first-boot.log` (Session Manager on AWS) |
 | An update rolled back | Its own words say why, and where its backup is |
-| `start`, `apply`, `install` or `update` says "the stores' data could not be moved to named volumes" | Nothing was removed, and the deployment's files are as they were: `ospreyflow start` runs it on its old data (section 14). "both its current volume … and the named volume … hold data": the named volume is left from an earlier attempt — look at it, and remove it (`docker volume rm <name>`) only if it holds nothing you need; then run the command again. "holds the indexes …": OpenSearch holds an index OspreyFlow did not write, which would not survive the move; snapshot or remove it first. "No space left on device": free room for a second copy of the stores' data where Docker keeps its volumes. "is not the same as the original": the copy did not keep an owner or a permission; say so, with the line it names |
-| Old unnamed volumes after the move | Expected: section 14.1 says how to remove them once the deployment works as before |
-| `restore` fails on 'identity' with "could not authenticate to Keycloak: 500" | The identity provider was running on a database replaced under it, and builds its tables only when it starts. From the release after v0.4.10 the restore starts it again itself before that step. With v0.4.10 or earlier, everything before the accounts is restored: run `ospreyflow stop` then `ospreyflow start`, and ask for the accounts to be brought back from the same set (the restore's identity step on its own); do not run the whole restore again, which refuses a deployment that is no longer empty |
 | The model download stopped with `rename …-partial …: no such file or directory` | A model server restarted mid-download and removed the half-fetched file (fixed from the release after 15 October 2026). Run `ospreyflow start` while the deployment is up: it starts the download again and the server keeps running, so it completes |
 
 ---
