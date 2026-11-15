@@ -15,7 +15,7 @@ dashboards' role and the deployment's own clients are refused as before. Keycloa
   the manifest:
   - the poc manifest's API registration lists `OspreyFlow.Run` beside `Dashboard.Read`;
   - the runbook's *What it needs* says how the client's Entra administrator defines and grants it;
-  - the administration guide's §6a.7 says it with the refusal's words, §6a.2's tables follow (2.20, version set at
+  - the administration guide's §6a.7 says it with the refusal's words, §6a.2's tables follow (2.22 on this main, version set at
     merge), and spec/10 follows the guide.
   The orchestrator's application is the client's own, not a registration of the deployment's, so INSTALL's count is
   unchanged. Applied, the harness and guide tests pass (112). There is no Terraform: the client's administrator
