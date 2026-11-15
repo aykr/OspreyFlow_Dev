@@ -10,6 +10,7 @@ registry is the person's own (`aws ecr get-login-password | docker login …`), 
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,19 @@ def read_plan(product: Path, folder: Path | None = None) -> dict[str, Any]:
     return plan
 
 
+#: `harness.upgrade_stamp`'s build arg and day (the owner's cached-upgrade ruling, v0.6.0,
+#: 15 November 2026): each of ours is built with the day's stamp, so its distribution-upgrade
+#: layer is never a cached copy from another day. This command depends on nothing but the
+#: standard library and PyYAML (ADR-114 decision 3), so it computes the day itself;
+#: `tests/test_upgrade_stamp.py` holds the two to one value.
+UPGRADE_STAMP_ARG = "OSPREY_UPGRADE_STAMP"
+
+
+def upgrade_stamp(now: datetime | None = None) -> str:
+    """Today's date in UTC, `YYYY-MM-DD`, as `harness.upgrade_stamp.upgrade_stamp` gives it."""
+    return (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%d")
+
+
 #: The platform's nodes (ADR-148: a shared EKS cluster): an image of ours built for another
 #: platform, as on an arm64 Mac without one, never starts there (`exec format error`).
 PLATFORM = "linux/amd64"
@@ -41,12 +55,14 @@ def steps(plan: dict[str, Any], platform: str = PLATFORM) -> list[tuple[str, lis
     """Each step in order, in words and as its command: ours built for the platform's nodes and
     pushed, theirs copied (their index whole, so every platform it holds)."""
     out: list[tuple[str, list[str]]] = []
+    stamp = upgrade_stamp()
     for image in plan["images"]:
         target = image["target"]
         if "dockerfile" in image:
             build = ["docker", "build", "--platform", platform, "-f", image["dockerfile"]]
             for name, value in sorted(image.get("build_args", {}).items()):
                 build += ["--build-arg", f"{name}={value}"]
+            build += ["--build-arg", f"{UPGRADE_STAMP_ARG}={stamp}"]
             out.append((f"build {target}", [*build, "-t", target, image["context"]]))
             out.append((f"push {target}", ["docker", "push", target]))
         else:
