@@ -1,0 +1,14 @@
+127.73s setup    tests/cloud_platform_backup/test_restore_graph.py::test_a_failed_put_back_says_where_each_copy_is_and_never_that_it_was_put_back
+========= 14708 passed, 45 skipped, 124 warnings in 557.65s (0:09:17) ==========
+make live-collect || touch /root/osprey-runs/rules-b/OspreyFlow_Build/.make-test-failed
+make -C ../OspreyFlow_Core test-js || touch /root/osprey-runs/rules-b/OspreyFlow_Build/.make-test-failed
+     ✓ offers no second try of a failed job once a view is open 3104ms
+ Test Files  398 passed (398)
+      Tests  3593 passed (3593)
+  3104 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > offers no second try of a failed job once a view is open
+ Test Files  3 passed (3)
+      Tests  3 passed (3)
+ Test Files  7 passed (7)
+      Tests  51 passed (51)
+Wall time: 628 s, exit 0 (no stack, no lease; set-up before it 6 s)
+exit 0

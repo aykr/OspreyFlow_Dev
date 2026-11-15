@@ -30,6 +30,8 @@ code before building:
 | Plants | 10 of 10 red, each on its named case; control 17 passed (`plants.txt`) |
 | Offline suites: the new files, the connector, registration order, the build script, the Admin route, dataset registration, the set-up console, the shipped profiles | 85 passed |
 | Core `ruff check .` and mypy on the changed modules | clean |
+| make test | server, offline, at 1abec56 | 14,708 passed and 45 skipped in Python; 398 files with 3,593 tests in the workspace, and the two smaller JavaScript suites, all passed; exit 0 (`make-test.txt`) |
+| make -k ci | server, offline, at 1abec56 | every target but `trivy-image-superset`: 192 HIGH, 0 CRITICAL in the Superset image, main's own (rules' v0.6.0 Superset CVE item); exit 2 (`make-ci.txt`) |
 | Live: `tests/ingest/test_gazetteer_batches_live.py` (12 settlements over three batches, a cafe and a farm left out, a rebuild finding all 12 held) | written. It runs in the live suite, not under this item's lease, which was the measurement's |
 
 Tests adapted, each with its reason in the test:
