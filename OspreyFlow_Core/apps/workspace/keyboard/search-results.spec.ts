@@ -213,6 +213,52 @@ for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], [
   });
 }
 
+// v0.6.0 #4 (ADR-145 Amendment 18): Ask & Chat's page sits in the results' place and layer, so the same must hold of it:
+// nothing of the Graph beneath (its toolbar, its zoom column) is drawn over any point of the page, in each look; and the
+// search box's suggestions stay above it.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  test(`${brand} ${theme}: Ask & Chat's page is drawn over the whole of the view it covers, the canvas's toolbar and zoom column included`, async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`/keyboard/search-results-harness.html?canvas=1&ask=1${brand === "govuk" ? "&brand=govuk" : ""}`);
+    await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+    await expect(page.getByRole("heading", { name: "Ask & Chat" })).toBeVisible();
+    await expect(page.locator(".canvas-toolbar")).toHaveCount(1);
+    await expect(page.locator(".canvas-corner")).toHaveCount(1);
+    const covered = await page.evaluate(() => {
+      const ask = document.querySelector<HTMLElement>(".ask-page")!;
+      // `inert` takes the view out of hit testing, never out of painting: lifted while the points are asked.
+      const view = [...document.querySelectorAll<HTMLElement>("[inert]")];
+      for (const element of view) element.inert = false;
+      const box = ask.getBoundingClientRect();
+      const points: [string, number, number][] = [];
+      for (const selector of [".canvas-toolbar", ".canvas-corner"]) {
+        const r = document.querySelector(selector)!.getBoundingClientRect();
+        points.push([selector, r.left + r.width / 2, r.top + r.height / 2]);
+      }
+      const heading = ask.querySelector("h2")!.getBoundingClientRect();
+      points.push(["the heading", heading.left + heading.width / 2, heading.top + heading.height / 2]);
+      for (let i = 1; i < 10; i++)
+        for (let j = 1; j < 10; j++) points.push([`${i},${j}`, box.left + (box.width * i) / 10, box.top + (box.height * j) / 10]);
+      const found = points
+        .filter(([, x, y]) => !ask.contains(document.elementFromPoint(x, y)))
+        .map(([what, x, y]) => `${what} (${Math.round(x)},${Math.round(y)}): ${(document.elementFromPoint(x, y) as HTMLElement | null)?.className ?? "nothing"}`);
+      for (const element of view) element.inert = true;
+      return found;
+    });
+    expect(covered, "drawn over Ask & Chat's page").toEqual([]);
+    const box = page.getByRole("combobox", { name: "Search entities, identifiers, documents" });
+    await box.focus();
+    await page.keyboard.type("Ke");
+    const option = page.getByRole("option").first();
+    await expect(option).toBeVisible();
+    const onTop = await option.evaluate((element) => {
+      const r = element.getBoundingClientRect();
+      return element.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+    });
+    expect(onTop, "the suggestions drawn over Ask & Chat's page").toBe(true);
+  });
+}
+
 test("every registered search results action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, SEARCH_RESULTS_ACTIONS);
 });

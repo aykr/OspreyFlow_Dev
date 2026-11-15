@@ -19,6 +19,8 @@ import { createWorkingSet } from "../src/workingset/store";
 import { GlobalSearch } from "../src/search/GlobalSearch";
 import { SearchResults } from "../src/search/SearchResults";
 import { useSearchResultsOverlay } from "../src/search/useSearchResultsOverlay";
+import { AskPage } from "../src/questions/AskPage";
+import { useAskPage } from "../src/questions/useAskPage";
 import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
@@ -81,6 +83,10 @@ await applyHarnessBrand();
 // Graph out (`flex: 1; position: relative`, beside the results in the same main area): the live demo of 15 November 2026
 // drew the canvas's toolbar and zoom over the results page, which a stand-in main area could never show.
 const wantsCanvas = params.get("canvas") === "1";
+// `?ask=1`: Ask & Chat's page (ADR-145 Amendment 18) open at load where `App.tsx` draws it, in the same main area and
+// the same layer as the results, with App's own hook (`questions/useAskPage.ts`), so the stacking case can see the
+// canvas's toolbar and zoom column drawn over it if they ever are.
+const wantsAsk = params.get("ask") === "1";
 const CANVAS_SCHEMA: OntologySchema = {
   version: 1,
   entity_types: [{ name: "Person", pole_class: "person", channel: "indigo", shape: "circle", icon: "person", identifiers: [] }],
@@ -95,6 +101,7 @@ function Harness() {
   // and focus back into the results when a document read from them closes. The reader here is a stand-in.
   const [reading, setReading] = useState<string | null>(null);
   const results = useSearchResultsOverlay(reading !== null);
+  const ask = useAskPage(reading !== null, results, wantsAsk);
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current || !params.get("open")) return;
@@ -108,7 +115,7 @@ function Harness() {
         <GlobalSearch apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="c1" onSelect={() => undefined} onSearch={(q) => results.open(q, "Graph")} />
       </div>
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{ display: "contents" }} inert={results.viewInert ? true : undefined}>
+        <div style={{ display: "contents" }} inert={results.viewInert || ask.viewInert ? true : undefined}>
           {wantsCanvas ? (
             <div style={{ flex: 1, position: "relative" }}>
               <GlassCanvas
@@ -136,6 +143,11 @@ function Harness() {
             </div>
           )}
         </div>
+        {ask.open && (
+          <AskPage backLabel="Graph" onBack={ask.back} hidden={ask.pageHidden}>
+            <p>Ask a question about this case.</p>
+          </AskPage>
+        )}
         {searching !== null && (
           <SearchResults
             key={searching.at}
