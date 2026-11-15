@@ -2150,3 +2150,4 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
   pushes to main (ADR-142), CI checks, rulings and the owner's messages.
 - **Stage 2 run before #4 merges (the orchestrator, ~18:00Z):** #4 is Glass-only (no route, store, schema or search change), so the
   server measurements (leak test, never-join, timings) run now on main and stand for v0.6.0; CI green on main follows the final push.
+- **#4 merged (15 Nov ~19:00Z):** map-view.spec's camera case failed once in the whole suite at merge and passed 30 of 30 alone; #4 does not touch the map; recorded as load timing, as case-b saw before.
