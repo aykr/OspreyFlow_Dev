@@ -19,6 +19,9 @@ around: one view switch, a case line that says what is open, and "view" kept for
 **Before you install.**
 - **A new deployment, not an earlier one moved.** Install v0.6.0 where no OspreyFlow deployment is, or
   into a new namespace on `cloud-platform`. A deployment made by an earlier release stays on that release.
+  `ospreyflow update`, an install over an existing deployment and the rendered `INSTALL.md` each refuse
+  an earlier one, in words, before anything is changed ("v0.6.0 is installed fresh; this deployment is
+  v0.5.1, and nothing moves it onto v0.6.0…"). A deployment at v0.6.0 or later is not refused.
 - **The search index is built from the graph** on `install`, by `ospreyflow start --build` (its last
   step) and after a restore, wherever the deployment searches with OpenSearch (`components.search:
   opensearch`, the default). A build that fails fails the install, saying so.
@@ -27,6 +30,10 @@ around: one view switch, a case line that says what is open, and "view" kept for
   registrations of their own, and `INSTALL.md` counts them.
 - **Hosted model engines are bounded at 120 seconds a call, and the deployment's own model at 900**
   (administration guide §10), set in `deployment.env` on Lite and Small.
+- **A model engine's key is entered in Admin › Models** (**Enter key**, then **Set the key**), write-only,
+  kept by the model gateway alone and used with nothing restarted. `ospreyflow models key` does the same
+  from the command line. A key given at install is handed to the gateway, and its line leaves
+  `deployment.env`.
 
 **Search (ADR-149, ADR-150).**
 - **Search on OpenSearch**, with the reader's clearance, handling codes, the case's datasets and a
@@ -69,6 +76,17 @@ around: one view switch, a case line that says what is open, and "view" kept for
 - **The administrator fallback:** where Entra sends no clearance, unit or handling codes, an
   administrator sets them, never above their own. **Guest accounts** are refused until a people manager
   turns them on for the tenant. **A token of the other version** is refused in words.
+- **Amazon Bedrock is London-only:** the models AWS serves in-Region there (Amazon Nova and the Titan
+  embeddings), not current Claude models, which London serves only through AWS's EU and global profiles.
+  Claude through the EU profile is not offered.
+- **The run API admits an orchestrator only with this API's app role `OspreyFlow.Run`** (ADR-148
+  Amendment 20). The client's Entra administrator defines it on the API's registration (allowed member
+  types: Applications) and grants it to the orchestrator's own application with admin consent, as the
+  rendered `INSTALL.md`'s *What it needs* says. Any other application of the tenant is refused (403), in
+  words saying where to grant it.
+- **`ospreyflow run` on Entra ID sends the API's scope,** `OSPREY_TOKEN_SCOPE`: the API's application ID
+  URI followed by `/.default`. Without it Entra ID issues no token (AADSTS1002012), and the command says
+  so. Keycloak needs none.
 - **The poc manifest:** one source for the shape's containers, Jobs, images, registry, managed services,
   Entra registrations and egress, held to the render both ways. `seed_poc` seeds the named case with the
   first administrator as its author.
@@ -97,10 +115,43 @@ around: one view switch, a case line that says what is open, and "view" kept for
   not set, a token-version mismatch or a guest; an analytics field refused with a 422; the Ingest Studio's
   messages saying *pipeline*; a Studio SQL step stopped at its time limit; and only an administrator may
   give the administrator role.
+- **Ask & Chat's earlier questions** collapse to their lines, the newest answer open; asking a new
+  question closes the earlier ones, and a closed line says how many proposals in it are left to decide.
+- **Under an Ask & Chat answer, Show all on graph** puts every item its markers stand for on the case's
+  graph, selected together; what cannot be shown is counted, never named. **Save as a view** saves them
+  as a saved view of the case, named from the question.
 
 **Rules and watches.**
+- **What raises alerts** says why a hotlist or watch stopped, in the same words as under *Stopped*.
 - **A watch stays active** until three unreachable evaluations in a row (ADR-044 Amendment 2), and a
   stopped hotlist or watch shows why beside its badge.
+
+**The local basemap (ADR-147), for operators building one.**
+- **The gazetteer holds settlements alone:** OSM's `place` of city, borough, town, village, hamlet,
+  isolated_dwelling, suburb, quarter or neighbourhood. For Great Britain that is 56,486 places of about
+  1.06 million named points; farms, localities and points of interest are left out.
+- **The places load 5,000 to a transaction.** A failed batch is rolled back alone and stops the load, and
+  the gazetteer's dataset is registered only once the whole load is in. planetiler runs with a 2 GB heap.
+- **The places' points are written when the Conduit is stopped.** The build opens the analytics store as
+  the Conduit does; while a running Conduit holds DuckDB, the build goes on without the points and says so.
+- **Two stages, so most of a build runs beside a working deployment:** `python -m services.api.map_admin
+  build <region> --unit <unit> --by <who> --stage tiles` downloads the extract, runs planetiler and saves
+  the settlements beside it, registering nothing. `--stage places`, with the Conduit stopped, loads that
+  file with its points and registers the provider; without the first stage's files it is refused in words.
+  Each runs in a one-off container of the Conduit's image. `ospreyflow map build` is still the whole build.
+- **What Great Britain takes** (measured on a 16-core server): a 2.1 GB download, planetiler 7 min 18 s
+  at a peak of 3.0 GB of memory, the load 37 min at 2.4 GB, and about 5 GB of disk, 3.5 GB of which can be
+  removed afterwards.
+
+**Images and the release.**
+- **Every image's distribution upgrade is made again each day wherever it is built:** `ospreyflow start
+  --build`, install and apply, `ospreyflow images push`, the Makefiles, CI and the release workflow each
+  pass the day's date (`OSPREY_UPGRADE_STAMP`), so a builder's cached copy of that layer can no longer keep
+  a distribution's older fixes.
+- **The Superset image's PostgreSQL client libraries** (libpq, libecpg and libpgtypes) are at
+  15.20-0+deb12u1, which fixes 192 HIGH CVEs found at 15.19, and its build stops, in words, if any is older.
+- **A release is made by the product repository's own workflow,** which stops if the tag is not the
+  code's own `VERSION`.
 
 **Fixed.**
 - **The Glass no longer throws its page away** when a search draws under React's StrictMode.
