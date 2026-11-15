@@ -15,6 +15,7 @@ const NAMES: [string, string, string][] = [
   ["help/RolesHelpPage.tsx", "{p.name}", "a place's name"],
   ["help/RolesHelpPage.tsx", "{r.name}", "a role's name"],
   ["help/RolesHelpPage.tsx", "{l.name}", "a level's name"],
+  ["help/RolesHelpPage.tsx", "{rightName(right)}", "a right's name"],
   ["ingest/checks/ChecksScreen.tsx", "{rule.name}", "a load rule's name"],
   ["reports/DataFeedsTab.tsx", "{f.label}", "a data feed's label"],
   ["matrix/MatrixView.tsx", "{row.name}", "an entity's name, a row's header"],

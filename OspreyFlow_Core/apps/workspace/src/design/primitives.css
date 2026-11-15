@@ -57,6 +57,10 @@
   background: var(--surface-sunken);
   color: var(--text-primary);
 }
+/* A field holding a value to copy (the Studio's SQL and pipeline YAML editors) keeps the value's mono: `.input`'s
+   `font: inherit` comes after tokens.css's `.value` at the same weight, so it is said again here, after it (v0.6.0 #6,
+   case's review of 1b0f225). */
+.input.value, .select.value { font-family: var(--mono); }
 .input::placeholder { color: var(--text-tertiary); }
 .input:disabled { color: var(--text-disabled); }
 

@@ -8,3 +8,9 @@
 :where(h3, h4) { font-size: var(--fs-16); line-height: var(--lh-16); }
 :where(h5, h6) { font-size: var(--fs-12); line-height: var(--lh-12); }
 :where(button, input, select, textarea) { font: inherit; }
+/* A heading drawn as a label stays the label's size, the page's body, never above what it labels (case's ruling of
+   15 November 2026, under ruling (1)); after the sizes above, so it wins their tie. */
+:where(h1, h2, h3, h4, h5, h6):where(.label) { font-size: var(--fs-13); line-height: var(--lh-13); }
+/* Code, keys and output are values to copy, in mono (tokens.css: "Mono means: this is a value you can copy"), never
+   the browser's own monospace (v0.6.0 #6, the gate's reverse check). */
+:where(code, kbd, samp, pre) { font-family: var(--mono); }
