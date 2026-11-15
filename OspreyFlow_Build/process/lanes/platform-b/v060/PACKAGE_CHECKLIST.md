@@ -64,6 +64,30 @@ runs, short of every push, signature and publication (printed as `[would] …`):
     PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.release_local --dry-run --tag v0.6.0 \
         --out ~/osprey-runs/platform-b.dry
 
+## Stage 3 on the candidate: done, 15 November 2026 (~21:30Z)
+
+**`C` is main's `09f1fbe`** (09f1fbe8c28f5557b5431f219c81116bcd5e39ef), the orchestrator's trigger under the owner's
+word in advance (`process/lanes/v060/OWNER_WORD_IN_ADVANCE_2026-11-15.md`): every closed-list item merged, stage 2 met
+with no figure waived. CI run 43756479074 is green on it, read with `gh run view`: headSha 09f1fbe, attempt 1, 41 of
+41 jobs succeeded. Main after it touches only `OspreyFlow_Build/process/`. Steps 1 to 3 needed no change under
+`OspreyFlow_Core`, so no candidate commit was made. The release steps that follow are
+[`RELEASE_STEPS.md`](RELEASE_STEPS.md), the orchestrator's.
+
+| # | Checked on `09f1fbe` itself (a detached scratch worktree) | Result |
+| --- | --- | --- |
+| 1 | `cat OspreyFlow_Core/VERSION` | **v0.6.0** |
+| 2 | `## v0.6.0 — 2026-11-18` (the tag day, the orchestrator's word); `scripts.changelog_check --tag v0.6.0` | **PASS**: "v0.6.0 has its section"; v0.6.1 refused in words |
+| 3 | `grep 'For OspreyFlow v' docs/*.md`; `python -m tools.docs_pdf` (check) | **PASS**: all four guides say v0.6.0 (architecture 1.6, user 1.72, developer 1.39, administration 2.23, each of 15 Nov); the check silent, so no PDF reprinted. Shown red first: one line planted in `user-guide.md` drew both refusals (PDF out of step, content changed without a version); restored, silent |
+| 4 | `tools.release_local --dry-run --tag v0.6.0` on the test server, a `git archive 09f1fbe` copy (hash-checked), its QUEUE line | **PASS**, 21:23:32–21:25:29Z, rc 0: seven images built amd64 with `OSPREY_UPGRADE_STAMP=2026-11-15`, each passing trivy; the lock refusing exactly our five; the install page; `ospreyflow-0.6.0.tgz`. Warm (the server's cache). Nothing pushed; the scan tags removed. Record: `~/osprey-runs/platform-b.c/` |
+
+**A cold build, measured the same day** (main a06f952, a fresh buildx builder of the docker-container driver,
+`--pull`): **6 min 47 s** for everything, rc 0; peak disk 14.2 GB above the start. Per image (build, then scan):
+workspace 43 s (<1 s), api 1:42 (11 s), ingest 41 s (7 s), ner 1:44 (15 s), superset 1:01 (7 s). Worker (4 s) and
+report-sync (3 s) reused ingest's layers from the same run, which GitHub's separate runners cannot. GitHub's two-platform
+push and its 4-vCPU runners were not measured. Record: `~/osprey-runs/platform-b.cold/`. Afterwards the builder, its
+cache, the buildkit image and the seven images were removed, leaving disk 5 MB above the start; the default builder's
+cache was never touched.
+
 ## The package step, in order
 
 Run on the candidate `C`: the development commit the package test (stage 4) passed on, with main's CI green on it.
