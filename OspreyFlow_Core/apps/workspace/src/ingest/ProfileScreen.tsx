@@ -168,7 +168,7 @@ export function ProfileScreen({ apiBaseUrl,
         <span style={{ color: "var(--warning)" }}>⚠</span>{" "}
         <strong>{ANOMALY_LABELS[a.kind]}</strong>
         {a.column && <> — column <code>{a.column}</code></>} — {a.count} row(s)
-        <div className="value" style={{ color: "var(--text-tertiary)", fontFamily: "var(--mono)" }}>{a.sample}</div>
+        <div className="value" style={{ color: "var(--text-tertiary)" }}>{a.sample}</div>
       </li>
     );
   }
