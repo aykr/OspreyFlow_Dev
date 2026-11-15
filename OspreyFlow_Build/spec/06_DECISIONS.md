@@ -39129,7 +39129,10 @@ measure is taken where it can be (below) and what is left of it is said.
    OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API permissions, this API,
    Application permissions) and grant admin consent, then ask for a new token". The order is kept: the
    deployment's own clients are refused first whatever roles they hold, then the dashboards' role (Amendment 10,
-   whatever else the token holds, so a dashboard identity is told it is a dashboard's), then this one.
+   whatever else the token holds, so a dashboard identity is told it is a dashboard's), then this one. A client
+   registered in Admin › Dashboards whose token holds no role at all is told it is a dashboard's too, never sent
+   to grant itself `OspreyFlow.Run`: the refusal carries its client, and the run API reads the registrations
+   before it answers.
 2. **The client's Entra administrator grants it.** The API's registration lists the role beside `Dashboard.Read`,
    and the orchestrator's own registration is granted it as an application permission with admin consent: the
    runbook's *What it needs* and the administration guide's §6a.7 say so, and §6a.2's poc tables list it. The
@@ -39144,8 +39147,10 @@ fixtures. The live proof runs on R1 on kind, through the Entra stand-in's own is
   out when there are none, as Entra does (its test holds both).
 - Two orchestrator applications are registered in it, one granted `OspreyFlow.Run` and one granted none. R1's
   checks fetch each one's token from the stand-in, in its own pod, in the run's access-token version. Against the
-  live Conduit, the first gets past the run API's door (a run that does not exist is then a 404), the second is
-  refused in the words above, and the report sync's dashboard identity is refused as a dashboard's.
+  live Conduit, the first gets past the run API's door (a run that does not exist is then the Conduit's own 404,
+  in its words, so a 404 from anything else is no pass), the second is refused in the words above, and the report
+  sync's dashboard identity is refused as a dashboard's. A token the stand-in will not issue is a FAIL in R1's
+  record: a stand-in started before the two applications were added refuses them until `entra` applies it again.
 - The checks run on a release from v0.6.0. An earlier release is skipped in words, in R1's record; a version that
   cannot be read is not taken as an earlier release.
 - **Pending:** the live run itself, under a lease the orchestrator queues. Until it has run, this amendment
@@ -39163,11 +39168,20 @@ fixtures. The live proof runs on R1 on kind, through the Entra stand-in's own is
 - the role never lets the deployment's own clients in;
 - the dashboards' role is refused beside it, and a dashboard identity holding its role alone is told it is a
   dashboard's;
-- R1's (platform's files, applied from the lane's diff): `tests/test_r1_entra_standin.py`, a token without
-  `roles` for an application granted none; `tests/test_r1_kind_domain_guard.py`, the checks gated by release, run
-  with the stand-in's tokens, and failing when the run API lets the unassigned application in.
+- through the real `get_service_identity`, a client registered as a dashboard is refused as one with the run role
+  and with no role, and any other without the role is refused in the run role's words.
 
-`OspreyFlow_Build/process/lanes/admin/v060_i18/` has the red record and the plants (eight, each red where it must
+In the lane's diffs, for the orchestrator (platform's files and the guide):
+- `tests/test_r1_entra_standin.py`: a token without `roles` for an application granted none;
+- `tests/test_r1_kind_domain_guard.py`: the checks gated by release, run with the stand-in's tokens, failing when
+  the run API lets the unassigned application or the dashboard identity in, refuses the granted orchestrator, or
+  answers a 404 in other words, recording a token the stand-in will not issue, and holding its words to the
+  Conduit's;
+- `tests/test_admin_guide_run_app_role.py`: the guide quotes `RUN_ROLE_NOT_HELD`, and the guide and the manifest
+  name `RUN_APP_ROLE`;
+- `tests/harness/test_cloud_platform_poc.py`: the install says how the role is granted, with reporting and without.
+
+`OspreyFlow_Build/process/lanes/admin/v060_i18/` has the red record and the plants (sixteen, each red where it must
 be).
 
 ### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
