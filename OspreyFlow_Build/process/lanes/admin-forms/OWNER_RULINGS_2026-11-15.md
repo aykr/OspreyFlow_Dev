@@ -65,3 +65,7 @@ already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Adm
     for Esri or OpenStreetMap's own servers.
 14. **The administration guide's model-key passages are corrected in v0.6.0** (docs, with item 9's pass): a key has been
     entered in Admin › Models since ADR-135 Amendment 2.
+15. **"Another provider or your own gateway" is offered on every profile**, a Small included; ADR-135 Amendment 14
+    records the change to Amendment 7 decision 1, under the same check before adding.
+16. **After v0.6.0, platform builds the second demo (ospreyflow.app, Part 3) first**, about 28 h ±5 with each demo
+    keeping its own model beside Gemini; the rest of the forms after it.
