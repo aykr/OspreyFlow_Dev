@@ -2122,3 +2122,10 @@ cut, from the same prompt, as its own prompt later: the history accordion, Ask &
   publishing and ospreyflow.app (Part 3) are queued after the cut (finish.tsv p3, p4).
 - **AD review (the owner, 15 Nov):** the classification strip stays **always in view** under GOV.UK while Admin scrolls
   (ADR-115 decision 2); the other Admin mono words go after the cut (finish.tsv p5).
+
+## 15 November 2026, ~10:20Z: one stable release, v0.6.0 (the owner)
+
+The owner's plan (`v060/OWNER_PLAN_2026-11-15.md`) replaces every earlier v0.5.2 plan: v0.5.2 is never published; one
+release, v0.6.0, fresh install only; a closed list; scope before date; one package, one CI run, one package test, one
+release. The remade candidate and step 6 were cancelled at ~10:20Z (platform-b told; its lease to be released). AD was
+merged first (eb78042), as the owner asked. Estimates requested from every owning lane.
