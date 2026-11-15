@@ -9,7 +9,7 @@ set -u
 SCR="$(cd ../.. && pwd)/rules-b.scratch/v060-basemap"
 IMAGE=ospreyflow/api:ci
 JAR_URL=https://github.com/onthegomap/planetiler/releases/download/v0.10.2/planetiler.jar
-PBF_URL="$(cd ../OspreyFlow_Core && .venv/bin/python -c 'from scripts.build_local_basemap import GEOFABRIK_REGIONS as G; print(G["great-britain"])')"
+PBF_URL="$(cd ../OspreyFlow_Core && PYTHONPATH=.:packages .venv/bin/python -c 'from scripts.build_local_basemap import GEOFABRIK_REGIONS as G; print(G["great-britain"])')"
 mkdir -p "$SCR/out"
 echo "== START $(date -u +%FT%TZ)"; uptime; free -m | head -2; df -h / | tail -1; nproc
 echo "== image"; docker image inspect "$IMAGE" --format '{{.Id}} {{.Created}}'
