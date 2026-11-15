@@ -37,3 +37,21 @@ amendments to be drafted: **ADR-147** (maps) and **ADR-135** (models; it changes
 
 The owner's key rules 1 to 6 in the prompt stand as written. "Exposed through the admin interface" in the owner's
 reply means **managed** there (set, replace, remove), never displayed (rule 1).
+
+## After rules-b's findings (the owner, 15 November 2026)
+
+8. **MapTiler is dropped** from the list: its terms require the browser to call it unless MapTiler agrees in writing
+   (ruling 2). It can come back for a client who holds that written agreement.
+9. **Bedrock's read-only listing grant is approved**: `bedrock:ListFoundationModels` and `bedrock:ListInferenceProfiles`
+   on the deployment's role, and the Bedrock control-plane host on the allowed-out list, in the Terraform.
+10. **The model store's salt is never changed silently.** No in-place rotation in this build: a salt change is refused
+    in words unless the operator confirms that every engine's key must be re-entered, and the engines are named; the
+    guide documents it.
+11. **OS premium: the obligation is said at the tick.** Its licence tick states, in words, that the organisation keeps a
+    list of everyone with access to premium data and passes OS's end-user terms on; Admin › People's map access is the
+    list's source. No new feature.
+
+Also settled from the terms (PREBUILD_FINDINGS §9): Esri is live-only with no cache shared between analysts; OS premium
+is live-only with a cache of at most 24 hours; OS Open Zoomstack may be prefetched. Correction recorded: ruling 7 is
+already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Admin, sealed in the gateway); the guide's
+"never in the Admin area" is the part to correct.
