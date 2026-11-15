@@ -1,0 +1,37 @@
+== red on main: main's App.tsx, LeftRail.tsx and places harness
+AS IT MUST BE (red): main's App (jsdom)
+    Ask & Chat opens its panel without changing the view
+    Ask & Chat opens its page under its own name
+    the Ask line opens Ask & Chat with the words carried over
+    the rail's Ask & Chat over the results replaces them
+    the rail holds the panel openers alone
+AS IT MUST BE (red): main's harness (keyboard)
+    Ask & Chat opens as a page over the view by keyboard
+AS IT MUST BE (red): main's App (the guide's case)
+    test_section_6_says_ask_and_chat_is_a_page
+== plants
+AS IT MUST BE (red): the heading not focused on opening
+    the rail's Ask & Chat over the results replaces them
+AS IT MUST BE (red): the heading focused even with words carried (the question box loses focus)
+    the Ask line opens Ask & Chat with the words carried over
+AS IT MUST BE (red): focus not returned to the rail's opener
+    Ask & Chat opens its panel without changing the view
+AS IT MUST BE (red): the opener still announcing a dialog
+    the rail holds the panel openers alone
+AS IT MUST BE (red): the view beneath left in reach
+    the rail's Ask & Chat over the results replaces them
+AS IT MUST BE (red): the Ask page opened over the results, both showing
+    the Ask line opens Ask & Chat with the words carried over
+AS IT MUST BE (red): a search leaving the Ask page showing
+    a search from the Ask & Chat page replaces it with the results
+AS IT MUST BE (red): choosing a view leaving the Ask page showing
+    choosing a view leaves the Ask & Chat page
+AS IT MUST BE (red): the harness's page without its back link focus (keyboard)
+    Ask & Chat opens as a page over the view by keyboard
+AS IT MUST BE (red): the back link's words in the page's own background token (no contrast; axe, three looks)
+    places-harness.html open=questions (dark)
+    places-harness.html open=questions (light)
+    places-harness.html open=questions (govuk)
+== unplanted
+unplanted: Tests 65 passed (65); keyboard 64 passed (13.3s); axe 4 passed (5.1s); guide 9 passed in 0.53s
+every plant red for its reason, unplanted green
