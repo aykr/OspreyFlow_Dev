@@ -27,15 +27,19 @@ def _run(tmp_path: Path, *args: str, repositories: str | None = None) -> subproc
     return subprocess.run(["sh", str(here / "publish_pages.sh"), *args], check=False, capture_output=True, text=True, timeout=30)
 
 
-def test_the_committed_repositories_file_gives_no_address_yet() -> None:
-    """The owner writes the two addresses once the repositories exist; until then every line is a comment."""
-    lines = [line for line in REPOSITORIES.read_text().splitlines() if line.strip() and not line.startswith("#")]
-    assert lines == []
+def test_the_committed_repositories_file_names_each_site_s_own_repository() -> None:
+    """The owner created both repositories on 15 November 2026 (aykr/ospreyflow.org and aykr/ospreyflow.net); the file
+    names each once, and neither is the product's."""
+    lines = [line.split() for line in REPOSITORIES.read_text().splitlines() if line.strip() and not line.startswith("#")]
+    assert dict(lines) == {
+        "org": "https://github.com/aykr/ospreyflow.org",
+        "net": "https://github.com/aykr/ospreyflow.net",
+    }
 
 
 @pytest.mark.parametrize("site", ["org", "net"])
 def test_a_site_with_no_repository_written_is_refused_in_words(tmp_path: Path, site: str) -> None:
-    run = _run(tmp_path, "--site", site)
+    run = _run(tmp_path, "--site", site, repositories="# no addresses yet\n")
     assert run.returncode == 1
     assert run.stderr.strip() == (
         f"STOP: sites/REPOSITORIES gives no repository for {site} yet; the owner creates it and writes it there."
@@ -50,7 +54,7 @@ def test_an_address_not_on_github_is_refused(tmp_path: Path, site: str) -> None:
 
 
 def test_the_push_can_come_first(tmp_path: Path) -> None:
-    run = _run(tmp_path, "--push", "--site", "net")
+    run = _run(tmp_path, "--push", "--site", "net", repositories="# no addresses yet\n")
     assert run.returncode == 1 and "gives no repository for net yet" in run.stderr
 
 
