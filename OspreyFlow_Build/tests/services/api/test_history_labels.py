@@ -27,6 +27,8 @@ SITES = {
     "seed": "Seeded",
     # ADR-128 decision 1: a list of identifiers added to the canvas, as a seed.
     "add_by_identifiers_route": "Seeded",
+    # v0.6.0 #5: *Show all on graph* under an Ask & Chat answer puts its items on the canvas, as a seed.
+    "add_by_ids_route": "Seeded",
     "expand": "Expanded",
     "links_among_route": "Showed links among the view",
     "remove_nodes": "Removed",
