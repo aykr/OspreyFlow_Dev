@@ -28,7 +28,7 @@ before answering (`app.py`). Keycloak is unchanged.
   - A new test file in the diff, `test_admin_guide_run_app_role`, ties the guide's quote to `RUN_ROLE_NOT_HELD`,
     ties the guide's and the manifest's role to `RUN_APP_ROLE`, and refuses the first draft's words. The poc
     harness test gains a case: the install says how the role is granted, with reporting on and off.
-  - Applied at 69c40ba, the guide, guide-copy and poc harness tests pass (253). The diff also carries the CLI
+  - Applied at adabc4b, the guide, guide-copy and poc harness tests pass (255). The diff also carries the CLI
     scope's install and guide text (`../v060_cli_scope/`). There is no Terraform: the client's
     administrator makes the registrations by hand.
 - `r1_proof.diff`: platform's R1.
@@ -43,7 +43,8 @@ before answering (`app.py`). Keycloak is unchanged.
     so an ingress's 404 is no pass), the unassigned one is refused in the words, and the report sync's dashboard
     identity is refused as a dashboard's.
   - A token the stand-in will not issue is a FAIL line in R1's record, not a bare exit. A stand-in started from a
-    state folder before the two applications were added refuses them (700016): re-apply it (`entra`, or
+    state folder before the two applications were added refuses them (700016), and the FAIL line says so: the
+    in-pod script writes Entra's error and AADSTS words, and the record keeps them. Re-apply it (`entra`, or
     `platform`) before the checks.
   - The checks run last, after the domain's, and only on a release from v0.6.0 (Admin › System's version). An
     earlier release (step 6's copy A, v0.5.1) gets a SKIP line in the record. A version that cannot be read runs
@@ -54,24 +55,27 @@ before answering (`app.py`). Keycloak is unchanged.
     answers a 404 in other words; and records a token the stand-in will not issue. It holds R1's words to the
     Conduit's own constants and 404.
   - Offline, the stand-in's issuing is stood in for; `STANDIN_TOKEN` itself runs only live.
-  - Applied at f6c7cd3, R1's driver tests pass (36 in the two changed files, 101 across R1's seven test files).
+  - Applied at adabc4b, R1's driver tests pass (37 in the two changed files, 102 across R1's seven test files).
   - **The live run is pending.** It needs R1 on kind, under a lease the orchestrator queues.
 
 **Records** (the branch's base is main 97dc544):
-- `red_before_code.log`: the test file at f6c7cd3, run against 97dc544's code. 9 red, each at its named assertion:
-  the role's name, the six shapes refused in words, the v1.0 token, and a client that is no dashboard with no role
-  (let in on the base). The dashboard cases pass on the base, as they should: it already refuses a dashboard.
-- `plants.py` and `plants.log`: 18 plants at 69c40ba, each red only where it must be.
-  - The Conduit's five: the role not required, compared without its case, a roles string taken for a list, the
-    run role asked before the dashboards', and a registered dashboard holding no role sent to grant itself it.
-  - R1's eight, with `r1_proof.diff` applied: no gate by release, skipped on every release, an unreadable version
+- `red_before_code.log`: the test file at adabc4b, run against 97dc544's code. 11 red, each at its named
+  assertion: the role's name, the six shapes refused in words, the v1.0 token, and a client that is no dashboard
+  with no role, also when the registrations answer nothing or too slowly (let in on the base). The dashboard cases
+  pass on the base, as they should: it already refuses a dashboard.
+- `plants.py` and `plants.log`: 22 plants at adabc4b, each red only where it must be.
+  - The Conduit's six: the role not required, compared without its case, a roles string taken for a list, the
+    run role asked before the dashboards', a registered dashboard holding no role sent to grant itself it, and a
+    run-role refusal turned into a 503 when the registrations cannot be read.
+  - R1's ten, with `r1_proof.diff` applied: no gate by release, skipped on every release, an unreadable version
     taken for an old one, the unassigned application let in, any answer or any 404 taken for the granted
-    orchestrator, the dashboard identity let in, and an unissued token exiting unrecorded.
-  - The guide's five, with `registration_and_guide.diff` applied: the first draft's words, the manifest without
-    the role, the runbook's paragraph said only with reporting on, and (for the CLI's scope, `../v060_cli_scope/`)
-    the guide's `run` row and the install without `OSPREY_TOKEN_SCOPE`.
-- `tests.log`: `tests/services/api`, `tests/cli` and the poc harness test at f6c7cd3 and at 97dc544 (with the
-  branch's test file).
+    orchestrator, the dashboard identity let in, an unissued token exiting unrecorded, the record keeping `sh()`'s
+    command instead of the refusal, and the in-pod fetch letting a refusal out as a traceback.
+  - The guide diff's six, with `registration_and_guide.diff` applied: the first draft's words, the manifest without
+    the role, the runbook's paragraph said only with reporting on, the guide's `run` row and the install without
+    `OSPREY_TOKEN_SCOPE`, and the install's scope forced to `api://<id>` whatever the ID URI.
+- `tests.log`: `tests/services/api`, `tests/cli` and the poc harness test at adabc4b and at 97dc544 (with the
+  branch's test files).
 - A flake for platform: on 15 November one plant run at d24317e read six of `tests/test_r1_entra_standin.py`'s
   sign-in cases (`test_the_person_signed_in_is_the_one_the_hint_names[…]`, `test_an_unknown_hint_is_refused_on_entras_own_page`,
   `test_a_v1_api_registration_gets_v1_access_tokens_as_entra_issues_them`) as failed under a plant that does not

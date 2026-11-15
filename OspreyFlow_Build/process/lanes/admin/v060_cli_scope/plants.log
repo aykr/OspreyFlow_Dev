@@ -1,4 +1,4 @@
-# v0.6.0 CLI scope plants at 69c40ba
+# v0.6.0 CLI scope plants at adabc4b
 == no scope sent (main's shape): RED where it must be; failed: ['tests/cli/test_conduit_client.py::test_on_entra_the_service_identity_asks_for_the_apis_default_scope', 'tests/cli/test_conduit_client.py::test_on_entra_another_apis_scope_is_refused_in_words_naming_the_setting']
 == a scope always sent, empty with none set: RED where it must be; failed: ['tests/cli/test_conduit_client.py::test_keycloak_is_asked_as_before_with_no_scope']
 == Entra's missing-scope refusal in the generic words: RED where it must be; failed: ['tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[unset]', 'tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[empty]', 'tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[no-default-suffix]', 'tests/cli/test_conduit_client.py::test_on_entra_a_missing_or_bare_scope_is_refused_in_words_naming_the_setting[a-delegated-scope]']

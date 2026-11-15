@@ -11,20 +11,21 @@ resource's `/.default` scope), so on `cloud-platform` the command could never si
   (500011). Any other refusal keeps the old words, which never show the secret.
 - The install's *What it needs* (platform's runbook, in #18's `registration_and_guide.diff`) renders the
   deployment's own values: `OSPREY_TOKEN_URL` `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token` and
-  `OSPREY_TOKEN_SCOPE` `api://<api_client_id>/.default`.
+  `OSPREY_TOKEN_SCOPE`, the API's application ID URI and `/.default` (`api_id_uri` where the deployment sets one,
+  `api://<api_client_id>` by default).
 - The guide's §6a.7 and its `run` row in §8 say the same, in the same diff.
 
 **Red first** (rule 15: a fake that refuses what Entra refuses). `tests/cli/test_conduit_client.py` gains an Entra
 token endpoint shaped as R1's stand-in. It refuses a missing or bare scope (1002012), another resource (500011) and
 a wrong secret (7000215), and grants `api://<api>/.default`.
-- `red_before_code.log`: against 97dc544's client, 6 red, each at its named assertion. The wrong secret and
+- `red_before_code.log`: the tests at adabc4b against 97dc544's client, 6 red, each at its named assertion. The wrong secret and
   Keycloak's unchanged request pass on the base, as they should.
-- `plants.py` and `plants.log`: 4 plants, each red only where it must be.
+- `plants.py` and `plants.log`: 4 plants at adabc4b, each red only where it must be.
   - No scope sent (main's shape).
   - An empty scope always sent (Keycloak's request changed).
   - Each of Entra's two refusals in the generic words.
-- The guide and install text have two plants of their own in `../v060_i18/plants.py`, since they travel in that
-  diff.
+- The guide and install text have three plants of their own in `../v060_i18/plants.py` (counted among #18's 22),
+  since they travel in that diff.
 
 **Not measured:** a real Entra tenant. Its refusal is modelled from Microsoft's documented AADSTS1002012, as R1's
 stand-in models it. R1's live run of #18 fetches its tokens with a scope and does not run the CLI.
