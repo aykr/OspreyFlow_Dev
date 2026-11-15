@@ -52,7 +52,7 @@ The pass is now a gate in the keyboard suite: any finding fails its page. `GOVUK
 ## 5. Suites (local slot 5, the orchestrator's)
 
 - `keyboard.log`: the whole keyboard suite at 9db7d73: 1338 passed, 5 skipped.
-- `a11y.log`: the whole a11y suite (every-harness in the dark, light and GOV.UK looks, and the others) at 9db7d73.
+- `a11y.log`: the whole a11y suite at 9db7d73, every-harness in the dark, light and GOV.UK looks among it: 1158 passed.
 - `make -k ci`: on the server, in the queue (third).
 
 ## Not measured
