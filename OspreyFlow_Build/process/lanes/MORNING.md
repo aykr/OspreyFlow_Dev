@@ -2138,3 +2138,4 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **The GB basemap measured (rules-b, stack b):** tiles 7 min 18 s at 3.0 GB peak (pmtiles 1.58 GB); 56,486 settlements loaded
   in 37 min 19 s at 2.4 GB peak. **The owner: go ahead, the basemap before the window.** The tiles are built before Wed 18
   07:00 UK with the demo up; the settlements load in the window after the fresh install (about 07:00-08:15).
+- **Stage 5 rebuild, docs' findings (15 Nov ~13:15Z):** (F1) the basemap's tiles step needs v0.6.0's image, so it runs ahead from that image once packaged, rehearsed on the test server, else in the window (~07:00-08:25); (F2) v0.6.0 into /opt/ospreyflow-v0.6.0 after a verified backup and `uninstall --keep-data`, the old folder kept as the way back; (F3) the owner re-enters the Gemini key in the window, and the demo datasets' egress is set to `any` so Gemini can be chosen.
