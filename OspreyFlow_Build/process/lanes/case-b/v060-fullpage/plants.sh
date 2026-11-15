@@ -130,11 +130,16 @@ plant "Help's panel taking focus whenever it is drawn (App, as it was)" "$APP" '
   "a document read from an answer with Help's panel open keeps focus in the reader"
 plant "Help's panel handed App's changing takeFocus (the wrapper passing it through)" "$APP" 's/  const \[takeFocus\] = useState\(props\.takeFocus \?\? false\);\n  return <WorkspaceWelcome \{\.\.\.props\} takeFocus=\{takeFocus\} \/>;/  return <WorkspaceWelcome {...props} \/>;/' js \
   "Help's panel keeps the focus it took through App's later renders"
+# Case's review of 052e265, n1: one Help panel mounted while a document is read over either page, never two.
+plant "Help's panel kept in the hidden Ask page beside the one App draws over the view" "$APP" 's/ && !ask\.pageHidden \? welcomePanel/ ? welcomePanel/' js \
+  "Help's panel is mounted once while a document read from an answer is open"
+plant "Help's panel kept in the hidden results beside the one App draws over the view" "$APP" 's/ && !results\.resultsHidden \? welcomePanel/ ? welcomePanel/' js \
+  "Help's panel is mounted once while a document read from the results is open"
 plant "the cross-link leaving the page showing, both ways" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/; s/(          toGlass: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
   "the case line's cross-link to the Ingest Studio leaves the page"
 plant "Escape closing the page as a dialog would" "$PAGE" 's/<section className=/<section onKeyDown={(e) => { if (e.key === "Escape") onBack(); }} className=/' js \
   "Escape on the page does nothing"
-plant "the hand-off's view=questions not opening the page" "$APP" 's/useAskPage\(readerDocumentId !== null, results, handoff\.view === "questions"\)/useAskPage(readerDocumentId !== null, results, false)/' js \
+plant "the hand-off's view=questions not opening the page" "$APP" 's/useAskPage\(readerDocumentId !== null, results, handoff\.view === "questions", stopReading\)/useAskPage(readerDocumentId !== null, results, false, stopReading)/' js \
   "a case opened to ask the model (the hand-off's view=questions"
 plant "the batch job's panel left showing under the page" "$APP" 's/searching !== null \|\| questionsOpen \|\| readerDocumentId/searching !== null || readerDocumentId/' js \
   "the panel is hidden under the Ask & Chat page"
