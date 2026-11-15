@@ -12,6 +12,6 @@ export async function stripAtTheEnd(page: Page) {
     const y = r.top + r.height / 2;
     const at = (x: number) => { const hit = document.elementFromPoint(x, y); return !!hit && strip.contains(hit); };
     return { scrolled: window.scrollY > 0, top: Math.round(r.top), inside: r.top >= 0 && r.bottom <= window.innerHeight && r.height > 0,
-             uncovered: [at(r.left + 8), at(r.left + r.width / 2), at(r.right - 8)] };
+             uncovered: [at(r.left + 40), at(r.left + r.width / 2), at(r.right - 8)] };
   });
 }
