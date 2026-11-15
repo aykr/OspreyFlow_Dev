@@ -40089,3 +40089,80 @@ views; *All cases* still lists each case's saved views. `views/ViewsMenu.tsx`, i
 `open-a-view-from-views-by-the-graph-by-keyboard` becomes
 `open-a-saved-view-from-the-case-line-and-back-to-the-whole-case-by-keyboard` (`keyboard/views.spec.ts`).
 `src/App.views.test.tsx` holds that the toolbar has no *Views*.
+
+### ADR-135, Amendment 14 (15 November 2026) — Add a model engine from the screen alone, first slice: a provider chosen from a list, a typed model name proven with the key by one call in the gateway before the engine exists, the analysts' preview; your own gateway on every profile; the guide's "never in the Admin area" brought to Amendment 2
+
+Status: written 15 November 2026 by the platform lane under the reservation (`spec/ADR_RESERVATIONS.md`), from the
+owner's prompt and rulings of 15 November 2026 (`process/lanes/admin-forms/OWNER_PROMPT_2026-11-15.md`,
+`OWNER_RULINGS_2026-11-15.md`) and `PREBUILD_FINDINGS.md` §5.3's draft, **cut to the owner's first slice** (the
+owner, 15 November 2026): the provider list, the label, the address shown and changeable, only the provider's jobs,
+a typed model name with a current example, the preview, the existing write-only key field, and the key and each
+typed name proved by one call before **Add**. **Not in it:** listing the models a key may use (the draft's wildcard
+route and `check_provider_endpoint`), Bedrock's listing grant (ruling 9), and the map form (ADR-147's amendment). It
+amends decisions 2 and 5 as Amendment 2 left them, and **changes Amendment 7 decision 1**. It reverses nothing
+further: ruling 2's "never in the Admin area" was reversed by Amendment 2 on 8 November; this amendment corrects
+the guide's lines that were not updated then.
+
+1. **A provider is chosen from a list** (`services/api/model_catalogue.py`), in the owner's order: Google Gemini,
+   OpenAI, Anthropic, Azure OpenAI, Amazon Bedrock, and *Another provider or your own gateway*. Each brings its
+   label, its own address or that it asks one, whether it signs in by a key, its jobs alone (Anthropic and Bedrock
+   take no transcription, `PREBUILD_FINDINGS.md` §3.1), a current model as the example beside the typed name, and
+   LiteLLM's prefix, which is the form's business: the form takes it off a name typed with it. `GET
+   /v1/admin/models` carries the profile's list as `providers` (`CatalogueEntry`); the hosts a check calls stay in
+   the Conduit. The label is filled from the provider and can be edited. The provider's own address is shown, with
+   **Change** for a gateway in front of it; Azure and *another* ask for theirs. Bedrock shows neither key nor
+   address, says it uses the deployment's own role in London, and is listed on `cloud-platform` alone. The
+   examples were checked against each provider's own list on 15 November 2026: `gemini-3.8-flash` (never the
+   deprecated `gemini-2.5-flash`), `gpt-6.1-sol`, `claude-sonnet-5-5`, and on Bedrock `amazon.nova-pro-v1:0`, since
+   no current Anthropic model is served in-Region in London (only through `eu.`/`global.` profiles, which
+   Amendment 7 decision 2 refuses; raised with the owner).
+2. **Your organisation's own gateway on every profile** (the owner's ruling of 15 November 2026). This changes
+   Amendment 7 decision 1: `engine_kinds_offered` gives `provider` and `gateway` on every profile, and `bedrock`
+   on `cloud-platform` alone. Off the cloud platform a gateway engine is reached at its address alone and by a
+   token; Bedrock and the gateway's own IAM role stay the cloud platform's.
+3. **The key and each typed model are checked before the engine exists, in the gateway** (the owner's ruling 7).
+   `POST /v1/admin/models/checks` takes the engine and its key once (`SecretStr`; the body read by hand, so a
+   refused body is never echoed). The Conduit hands the key straight to the gateway as the engine's own credential
+   and keeps nothing; for each typed model it makes an entry no route offers, asks today's one call of at most one
+   token (decision 5's fixed words), and removes the entry. A refusal keeps nothing, credential included. A pass
+   is held in the models file (`checks`) for 15 minutes and shown in Admin under **Being checked** (`HeldCheck`:
+   who, when, when it lapses, **Cancel the check**), never as an engine and never offered to analysts. **Add**
+   (`POST …/checks/{id}/add`) makes the engine from the check and never takes the key again; a check that did not
+   pass gives nothing to add. **Cancel** (`DELETE …/checks/{id}`), or 15 minutes, removes the credential. A label
+   or agreement reference that looks like a key is refused on every profile before anything is kept. This takes
+   the draft's way (b) in substance (the key crosses once) but holds the check, not a held engine row.
+4. **The preview** says "Analysts will see: <the analysts' engine list's own text>", that is `engineOptionText`'s
+   "<label> (no contract)" or "<label> (under contract)", and that it is offered only for cases whose data may
+   leave. **Correction to the draft:** the draft's "(under contract: <reference>)" is not what analysts see; the
+   reference is shown in Admin alone, so the preview does not show it to them.
+5. **On the screen** (`apps/workspace/src/admin/sections/Models.tsx`): **Check** is the add form's one way
+   forward; the key field is `type="password"`, `autocomplete="off"` (the form's too), never filled, and emptied
+   once sent whatever the answer; each refusal is tied to its field (`aria-invalid`, `aria-describedby`): a key
+   refused at the key, a model not offered or not enabled at its job, and the Conduit's refusal of a key-shaped
+   label or reference at that field. Once a check passes the fields are locked; **Add the engine** or **Cancel**
+   follows. The older `POST /v1/admin/models/engines` is left in place, and its tests with it; the screen no
+   longer calls it. So an engine can still be added unchecked by calling that route directly, with
+   `manage_models`: raised with the owner, not closed in this slice.
+6. **Audited**: `engine_checked` (passed or refused, with each model's outcome), `engine_added`,
+   `engine_check_cancelled`, `engine_check_expired`, and the key's own actions as before. Who and when, never the key.
+7. **What weakens how a key is held today**, brought to the owner: the key reaches the gateway before an
+   administrator commits to the engine, for at most 15 minutes if it is not added, in the gateway's sealed store
+   as every key is. Nothing else changes: the Conduit's transit is Amendment 2's, already accepted.
+8. **The guide** (`10_ADMINISTRATION_GUIDE.md` and `OspreyFlow_Core/docs/administration-guide.md`): §8's `models
+   key` row says the key goes to the gateway's own store and nothing is restarted (it said `deployment.env` and a
+   restart, against `cli/ospreyflow/models.py`); §10's key paragraph says a key is managed in *Admin › Models*,
+   write-only, never shown back, in place of "never shown in the Admin area"; §10.1 describes adding an engine.
+
+Held by: `tests/services/api/test_model_catalogue.py` (the list, its order, jobs, addresses, examples, prefixes, the
+profiles); `test_model_engine_kinds.py` (decision 1 as changed); `test_model_engine_checks.py` (**Add** refused
+without a passed check; a refused key or model leaves nothing in the gateway; nothing offered until **Add**; the
+15 minutes; **Cancel**; the view's `providers` and `checks`; and `test_the_key_appears_nowhere_it_must_not`, the
+owner's key test, across check, refusal, cancel, expiry and **Add**: responses, headers, URLs, logs, audit, the
+models file and the gateway's rows, against a stand-in that refuses what LiteLLM refuses); the Glass's
+`Models.test.tsx` (the list, the jobs, the addresses, Bedrock's absence and its form, the preview equal to
+`engineOptionText`, the check before **Add** sending the key once and **Add** never, each refusal at its field,
+**Cancel**, **Being checked**, and the key test's browser half: no `localStorage`, `sessionStorage`, cookie, URL
+or page text holds it, the form and field never auto-complete); and `keyboard/admin-models.spec.ts` (rule 13: add,
+cancel, change the address, a refusal, Bedrock and your own gateway, by keyboard). The Conduit's and the Glass's
+cases were shown red first and their plants red (`process/lanes/platform/v061-admin-forms/red-first.txt`); the
+keyboard cases and the axe scan of the new states wait for a browser slot.
