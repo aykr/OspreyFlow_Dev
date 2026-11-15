@@ -1,0 +1,7 @@
+# The GOV.UK scroll and type step's gates at 373331f (the code; the records commit follows), on this Mac, Playwright slot 1
+keyboard/frame-scroll.spec.ts and keyboard/admin-frame.spec.ts: 14 passed
+the whole keyboard suite: 1065 passed, 5 skipped
+axe (a11y/every-harness.spec.ts) on admin, frame, places, shell, views, top-bar, explore, export-panel and ingest-studio harnesses, every state, dark, light and GOV.UK: 402 passed
+vitest src/brand, src/admin, src/design, src/shell: 467 passed; tsc and eslint clean
+design-check (DESIGN.md mirrored to OspreyFlow_Core), citation-check, product-tree-link-check, test-file-coverage-check, ui-words-check: clean
+red_before_code.log: 6 of 14 red on the base's code; plants.log: 13 plants, 0 missed

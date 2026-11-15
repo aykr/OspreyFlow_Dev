@@ -1,0 +1,15 @@
+# GOV.UK scroll and type plants at 373331f
+== the rule never installed (main's shape): RED where it must be; failed 2: ['the page did not move', 'the page did not move']
+== a box at its end left to move the page: RED where it must be; failed 2: ['the page did not move', 'the page did not move']
+== every wheel inside a box held, wherever the box stands: RED where it must be; failed 4: ["a drawer's body itself scrolled to its end", "the empty canvas's start overlay itself scrolled to its end", 'the drawer scrolled', 'the list scrolled to its end']
+== overscroll-behavior on every box under GOV.UK (the first fix's shape: a sideways table swallows a vertical wheel): RED where it must be; failed 3: ["a drawer's body itself scrolled to its end", 'the drawer scrolled', 'then the drawer scrolled']
+== Admin's place left a scroll box under GOV.UK (the side list then sticks to it, not to the page): RED where it must be; failed 1: ['the side list stays in view, above the footer']
+== Admin's one-scroller rule reaching the standard look: RED where it must be; failed 2: ['the one scroller', 'the one scroller']
+== App's root left at the window's height under GOV.UK (Admin drawn over the footer): RED where it must be; failed 1: ["the footer follows Admin's place"]
+== the side list not kept in view: RED where it must be; failed 1: ['the side list stays in view, above the footer']
+== a part's name back in mono: RED where it must be; failed 3: ["the parts' names in the page's face", "the parts' names in the page's face", "the parts' names in the page's face"]
+== the version back in mono: RED where it must be; failed 3: ["the version in the page's face", "the version in the page's face", "the version in the page's face"]
+== the marking ceiling back in mono: RED where it must be; failed 3: ["the marking ceiling in the page's face", "the marking ceiling in the page's face", "the marking ceiling in the page's face"]
+== the converted views back in mono: RED where it must be; failed 3: ["the converted views in the page's face", "the converted views in the page's face", "the converted views in the page's face"]
+== a model's id back as main drew it (the browser's monospace, not the token): RED where it must be; failed 3: ["a model's id in mono, a value to copy", "a model's id in mono, a value to copy", "a model's id in mono, a value to copy"]
+plants: 13, missed: 0
