@@ -102,6 +102,6 @@ for (const width of [1440, 640]) {
     expect(m.scrolled, "the page scrolled to the footer").toBe(true);
     expect(m.top, "the strip's top is the window's").toBe(0);
     expect(m.inside, "the strip is inside the window").toBe(true);
-    expect(m.uncovered, "nothing paints over the strip").toEqual([true, true]);
+    expect(m.uncovered, "nothing paints over the strip").toEqual([true, true, true]);
   });
 }
