@@ -37,15 +37,15 @@ The docs lane, prepared 14 November 2026 at the orchestrator's word, against mai
 
 ## 2. The version headers (the orchestrator's ruling: at the cut)
 
-- [ ] Every guide's header from "For OspreyFlow v0.5.0" to v0.5.2:
+- [x] Every guide's header from "For OspreyFlow v0.5.0" to v0.5.2 (done at the cut, 15 November: UG 1.66, AG 2.18, DG 1.38, ArchG 1.5, held by `tests/test_guides_release_header.py`):
   - the administration guide (2.09, line 17);
   - the user guide (1.60, line 18);
   - the developer guide (1.35, line 17);
   - the architecture guide (1.3, line 19).
-- [ ] "from v0.5.2" used consistently up to the cut, then read again. Administration guide line 1123 holds one ("Superset
+- [x] "from v0.5.2" used consistently up to the cut, then read again (done: none, since the guides now describe v0.5.2; the one marker, §6a's Superset copies, removed). Administration guide line 1123 holds one ("Superset
   and the report sync (from v0.5.2: …"). The survey also found reporting, Entra's runs and the search rebuild
   unmarked, so mark them all or none.
-- [ ] Version-bound phrases, each checked against v0.5.2. In the administration guide:
+- [x] Version-bound phrases, each checked against v0.5.2 (done: each traced by `git log -S` to the release that brought it and named, v0.4.2, v0.4.12 or v0.5.0; "which this release does not ask for" is true of v0.5.2 and stays; the developer guide's example tag is `v0.5.2`). In the administration guide:
   - "After updating to v0.5.0" (line 2369 and one more);
   - "every install before this version" (360);
   - "which this release does not ask for" (1720);
@@ -97,7 +97,7 @@ and the sites were not.
 
 ## 6. The sites
 
-- [ ] At the cut, re-check every release-marked claim against v0.5.2 and set `CHECKED_AGAINST` to `v0.5.2`. `build.py`
+- [x] At the cut, re-check every release-marked claim against v0.5.2 and set `CHECKED_AGAINST` to `v0.5.2` (done 15 November: `process/lanes/docs/sites-v052-facts.md`). `build.py`
   refuses to build until then.
   - "On main, coming next" moves into the release, or out: scheduled runs, reporting and the data-safety fixes.
   - The second extraction engine's "no screen uses it yet": check.

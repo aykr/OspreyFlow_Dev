@@ -160,7 +160,7 @@ ospreyflow switch default       # back to the checkout's own
 
 A Lite computer runs one deployment at a time by default, which is what `ospreyflow switch` is for.
 
-**The deployment installed in the checkout** — every install before this version, with its
+**The deployment installed in the checkout** — every install before v0.4.2, with its
 `osprey.yaml` in the checkout and its files in `deploy/generated/` — is listed as `default` and works
 exactly as before: no command moves, renames or changes it. It could later be moved under
 `~/.ospreyflow/deployments/` (install a named deployment, restore a backup of the checkout's into it,
@@ -929,7 +929,7 @@ and its step 2 checks the certificate Secret `cloud_platform.tls_secret` names, 
 The install's *What it needs* names the `ospreyflow` command's own install (`uv tool install ./cli`)
 and the managed PostgreSQL's `max_connections` of 1000, set in its parameter group. The least it must
 allow is 834 in the poc and development shapes and 918 in production: two Conduits side by side in an
-update, the worker, the gateway and a reserve, with Superset and the report sync (from v0.5.2: one copy
+update, the worker, the gateway and a reserve, with Superset and the report sync (one copy
 of each in poc and development, two in production) doubled by an upgrade in progress. 1000, set in every
 shape, leaves 166 and 82 to spare. The Terraform renders RDS as a `db.t4g.large` (8 GiB) in every shape, with a
 parameter group setting it; with MoJ's `cloud-platform-terraform-rds-instance` module the install gives
@@ -2631,7 +2631,7 @@ deployment has no local model for the role. Material whose datasets are not know
 the unit that holds it and its egress; choose the setting and press Save beside it. Each change is
 recorded in the audit log — who made it, when, and from what to what.
 
-> **After upgrading to this release, hosted engines receive nothing** until an administrator sets
+> **After upgrading from a release before v0.4.2, hosted engines receive nothing** until an administrator sets
 > a dataset's egress to `contracted` or `any`. Every existing dataset, demo packs included, starts
 > at `none`; until you change one, every question runs on the deployment's own models, whatever
 > engine an analyst chooses. Set only the datasets you are entitled to send.
@@ -2903,7 +2903,7 @@ placeholder `/var/lib/osprey/backups`), so its sets go to `~/OspreyFlow/backups/
 and the backup's first line says so. Name a folder as `components.storage.backups` to stop that
 line.
 
-Sets taken before this release may still be in the checkout's `backups/`, in a named
+Sets taken before v0.5.0 may still be in the checkout's `backups/`, in a named
 deployment's `~/.ospreyflow/deployments/<name>/backups/`, or directly in a server's backups
 folder. `ospreyflow doctor` names each such folder, with the sets' total size and the one command
 that moves them (`mkdir -p <folder>/<deployment> && mv <sets> <folder>/<deployment>/`). It never
@@ -2987,7 +2987,7 @@ that can read it first; without one the check cannot answer, and says so.
     anything, and says what to run instead, for example: "this bundle carries the images for
     linux/arm64, and this machine is linux/amd64; nothing was verified or loaded. Make one for it
     on any machine that reaches the release: ospreyflow update --make-bundle FILE --platform
-    linux/amd64". A bundle made before this version names no platform: it carries the platform of
+    linux/amd64". A bundle made before v0.4.12 names no platform: it carries the platform of
     the machine that made it, and on another it is refused when its cosign image is checked.
 
 An update moves forward only.
