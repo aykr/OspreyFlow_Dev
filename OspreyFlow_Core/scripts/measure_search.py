@@ -294,15 +294,23 @@ def _answer_strings(answer: dict[str, Any], sent: str) -> list[str]:
     return list(_strings(answer))
 
 
-#: The share of a file's cases whose control must reach its record on page 1 for M10 to count as
-#: measured (the orchestrator's ruling of 14 November 2026, on rules' M10 analysis).
+#: The share of a file's cases whose control must reach its record within `REACH_PAGES` for M10 to
+#: count as measured (the orchestrator's ruling of 14 November 2026, on rules' M10 analysis).
 REACHED_AT_LEAST = 0.9
+#: How far a search case's control looks for its hidden record: the first `REACH_PAGES` pages of
+#: `LEAK_PAGE_SIZE` results, so the first 60 (the orchestrator's ruling of 15 November 2026, after
+#: stage 2's rehearsal: never-join met its floor exactly on page 1 alone; the floor and the file are
+#: kept and the reach widened). The part-cleared principal is asked every page its control read, so
+#: a hidden record the control found on page 2 is looked for on page 2 of the answer too. A
+#: suggestion has one page.
+REACH_PAGES = 3
+LEAK_PAGE_SIZE = 20
 
 
-def _leak_request(case: str, leak: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def _leak_request(case: str, leak: dict[str, Any], page: int = 1) -> tuple[str, dict[str, Any]]:
     if leak.get("route", "search") == "suggest":
         return f"/v1/investigations/{case}/suggest", {"query": leak["query"], "limit": 10}
-    body: dict[str, Any] = {"query": leak["query"], "page": 1, "page_size": 20}
+    body: dict[str, Any] = {"query": leak["query"], "page": page, "page_size": LEAK_PAGE_SIZE}
     if "filters" in leak:
         body["filters"] = leak["filters"]
     return f"/v1/investigations/{case}/search", body
@@ -321,7 +329,8 @@ def measure_leaks(
     request as the case's control (`controls[case["control"]]`, a principal cleared for SECRET
     with code R in the hidden record's owning unit: a restricted code is read only in its own
     unit, so one principal cannot be the control for every unit; for a never-join case, asked in
-    its `partner_case`) must name every `never_ids`, or the case reaches nothing hidden and
+    its `partner_case`) must name every `never_ids` within its first `REACH_PAGES` pages (the part-
+    cleared principal is then asked each of those pages), or the case reaches nothing hidden and
     proves nothing: it is reported apart, `indeterminate`, never a pass and never a leak, and the
     file is `unmeasured` unless the controls of at least `REACHED_AT_LEAST` of its cases reach their
     record (the orchestrator's ruling of 14 November 2026). A case whose control is missing, not
@@ -331,9 +340,11 @@ def measure_leaks(
         raise SystemExit("M10: no leak cases: the test would pass having asked nothing")
     failures: list[str] = []
     indeterminate: list[str] = []
+    reached_on: dict[int, int] = {}
     for i, leak in enumerate(cases):
         name = leak.get("name") or f"case {i + 1} ({leak.get('route', 'search')} {leak['query']!r})"
         path, body = _leak_request(case, leak)
+        search = path.endswith("/search")
         unit = leak.get("control")
         if unit not in controls:
             failures.append(
@@ -344,12 +355,22 @@ def measure_leaks(
         # A never-join case's hidden record is in another dataset: its control asks the same query
         # in the partner's own case, which the cleared subject is granted (the orchestrator's
         # ruling (a), 14 November), and the test asks in the measured case.
-        control_path = path
-        if leak.get("partner_case"):
-            control_path, _body = _leak_request(str(leak["partner_case"]), leak)
-        _ms, control, error = _send(base, control_path, body, controls[unit])
-        seen = set(_strings(control)) if control is not None else set()
-        unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
+        control_case = str(leak.get("partner_case") or case)
+        seen: set[str] = set()
+        control: dict[str, Any] | None = None
+        error = ""
+        pages = 0
+        unreached = list(leak["never_ids"])
+        for page in range(1, (REACH_PAGES if search else 1) + 1):
+            control_path, control_body = _leak_request(control_case, leak, page)
+            _ms, control, error = _send(base, control_path, control_body, controls[unit])
+            if control is None:
+                break
+            pages = page
+            seen |= set(_strings(control))
+            unreached = [n for n in leak["never_ids"] if not any(n in t for t in seen)]
+            if not unreached or (search and not control.get("results")):
+                break  # reached, or past the last result
         if control is None:
             failures.append(
                 f"{name}: the cleared principal's answer does not name {error}, so "
@@ -357,19 +378,31 @@ def measure_leaks(
             )
             continue
         if unreached:
+            within = f"within its first {REACH_PAGES} pages" if search else "in its suggestions"
             indeterminate.append(
-                f"{name}: the cleared principal's answer does not name {unreached} on page 1, so "
+                f"{name}: the cleared principal's answer does not name {unreached} {within}, so "
                 "the case reaches nothing hidden and proves nothing"
             )
             continue
-        _ms, answer, error = _send(base, path, body, token)
-        if answer is None:
+        reached_on[pages] = reached_on.get(pages, 0) + 1
+        answers: list[dict[str, Any]] = []
+        for page in range(1, pages + 1):
+            page_path, page_body = _leak_request(case, leak, page)
+            _ms, answer, error = _send(base, page_path, page_body, token)
+            if answer is None:
+                break
+            answers.append(answer)
+        if len(answers) < pages:
             failures.append(f"{name}: an error from the Conduit ({error})")
             continue
-        if path.endswith("/search") and answer.get("source", "index") != "index":
-            failures.append(f"{name}: answered from the {answer.get('source')}, not the index")
+        answer = answers[0]
+        off_index = [
+            a.get("source") for a in answers if search and a.get("source", "index") != "index"
+        ]
+        if off_index:
+            failures.append(f"{name}: answered from the {off_index[0]}, not the index")
             continue
-        texts = _answer_strings(answer, leak["query"])
+        texts = [t for a in answers for t in _answer_strings(a, leak["query"])]
         for node in leak["never_ids"]:
             if any(node in t for t in texts):
                 failures.append(f"{name}: the hidden record {node} is in the answer")
@@ -398,6 +431,8 @@ def measure_leaks(
         "measure": "M10",
         "cases": len(cases),
         "reached": reached,
+        "reach_bound": f"the first {REACH_PAGES} pages of {LEAK_PAGE_SIZE} results",
+        "reached_on_page": {str(k): v for k, v in sorted(reached_on.items())},
         "verdict": verdict,
         "failures": failures,
         "indeterminate": indeterminate,

@@ -30,7 +30,7 @@ refuses to write over an existing folder. If the step was run before, move the o
 | 2 | `… run.sh budgets` | 4 min | **M1** p95 ≤ 300 ms and none over 2 s; **M3** p95 ≤ 1 s; **M4** p95 ≤ 1.5 s; **M5** p95 ≤ 1 s; **M6** p95 ≤ 5 s. Between the budget and the failure figure (M3 2 s, M4 3 s, M5 2 s, M6 30 s), a measure is *over budget*, not failed; past the failure figure, the pytest case fails |
 | 3 | `… run.sh m9` | 2 min | M9 met: every answer arrives in under 5 s with OpenSearch stopped, and the bar says so. Afterwards `osprey-test-d-opensearch` is up again (the step prints its status) |
 | 4 | `… run.sh leaks` | 4 min | M10 met: 500 of 500 controls reached, 0 failures, 0 indeterminate, the words check measured |
-| 5 | `… run.sh never-join` | 3 min | M10 met: at least 450 of 500 controls reached (the 90% floor, the orchestrator's ruling), 0 failures. **It met the floor exactly on 14 November (450).** One more unreached control makes it *unmeasured*, not failed: the pytest case fails on "unmeasured", and the record says so. Never trim the file to pass. The rehearsal's first 20 cases reached 17 (below) |
+| 5 | `… run.sh never-join` | 4 min | M10 met: at least 450 of 500 controls reached (the 90% floor, the orchestrator's ruling), 0 failures. On 14 November it reached exactly 450, on page 1 alone. Under the orchestrator's ruling of 15 November, a control now looks within **the bound: the first 3 pages of 20 results (60)**, and the part-cleared principal is asked every page its control read. Under 450 is *unmeasured*, not failed, and is recorded so. Never trim the file and never lower the floor to pass |
 | 6 | `… run.sh control` | 1 min | `positive control: the words check fired on 5 of 5` |
 | 7 | `… run.sh table` | 10 s | the table prints every measure; M2, M7, M8 and M11 say "not measured here" |
 | 8 | `OspreyFlow_Build/scripts/stack_lease.sh down <lane>`, then `… release <lane>`; delete your QUEUE line | 1 min | `status` shows d free |
@@ -45,7 +45,9 @@ before step 4. It writes `stage2/m10-regen/`. Read its counts (`leaks_words.meas
 which go into the record.
 
 ## Where the record goes
-`process/lanes/v060/stage2/RESULTS.md` holds the table from step 7, with each step's run id (`remote`'s
+`process/lanes/v060/stage2/RESULTS.md` holds the table from step 7. **It states the reach bound,** "the first 3
+pages of 20 results" (`measure_search.REACH_PAGES`, `LEAK_PAGE_SIZE`), and each M10 file's `reached_on_page`
+(steps 4, 5 and 7 print both). It also holds with each step's run id (`remote`'s
 `logged at …/runs/<id>/log`), the lease and its time, the branch head measured, and the comparison with the
 14 November figures (RESULTS.md's "The shipping code's figures"). Keep the raw logs beside it as
 `stage2/<step>.txt`. The results folders stay on d's host under `~/osprey-load/stage2/`.

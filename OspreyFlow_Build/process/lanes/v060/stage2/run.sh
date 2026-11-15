@@ -40,7 +40,7 @@ short_file() {  # the rehearsal's first 20 cases of an M10 file
 summary() {
   for f in "$1"/M*.json; do
     [ -e "$f" ] || continue
-    python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print({k: d.get(k) for k in ("measure","class","n","p50_ms","p95_ms","max_ms","budget_ms","cases","reached","verdict")})' "$f"
+    python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print({k: d.get(k) for k in ("measure","class","n","p50_ms","p95_ms","max_ms","budget_ms","cases","reached","reach_bound","reached_on_page","verdict")})' "$f"
   done
 }
 echo "stage 2 step $STEP, $( [ "$SHORT" = 1 ] && echo "SHORT (rehearsal, not a measurement)" || echo "official" ), $(date -u +%FT%TZ), run copy $(git -C .. log -1 --format=%h 2>/dev/null || echo '?'), results $OUT"
