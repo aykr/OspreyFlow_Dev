@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.64** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.65** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.65 | 2026-11-14 | "View" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6). §3: the case line's **Saved views (n)** (*Saved views* while unread), and "› Saved view: ‹name›" while one is open. §4 and §5: the Cases panel's saved views, **More** in place of More views with its name for a screen reader, the case line's parts in their order; §5.2, **Clear the graph**. §5.13, *Saved views*: the strip's **Back to the whole case** first and its words, the list's **The whole case** row and *Open now*, a view saved under the Glass's default name told apart by its first item and when it was saved, focus to the strip and back, the canvas's notice in a saved view, and the graph toolbar's Views menu gone. §5.12, the client's words gone (studio's V3): the composition is **Rarity plus adds**, its scale the raw-sum scale, the measure the **share of pair links**, and the influencers' "to be confirmed" note struck. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py`, `tests/test_user_guide_saved_views.py` and `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.64 | 2026-11-14 | §5.2: a batch result, and a view, up to the view's limit saved and opened with its links, and *Show links among all* on a large canvas, since the links among a set are found a thousand records at a time (ADR-124 Amendment 20). Held by `tests/test_user_guide_am20.py`. PDF made by the orchestrator at merge. |
 | 1.63 | 2026-11-14 | A watch whose owner is not held in *People and roles* quotes the stopped reason's new words ("Its owner is not held in Admin › People and roles.", ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.62 | 2026-11-14 | §7.5: a watch stays active through two unreachable evaluations in a row, with a note saying so, and stops at the third (ADR-044 Amendment 2). |
@@ -193,14 +194,16 @@ The OspreyFlow mark at the top left always brings you back.
 
 **Moving between places.** The **place switcher** in the top bar lists the same places; under the
 GOV.UK theme it sits inside the GOV.UK header. Under it, a **context banner** says where you are. In
-the Glass it is the **case line**: "You are in the Glass · Case ‹name› ▾ · Views in this case · reads
+the Glass it is the **case line**: "You are in the Glass · Case ‹name› ▾ · Saved views (n) · reads
 ‹dataset›". The case switcher lists your cases, and its last entry, **All cases**, opens the **Cases**
-panel; **Views in this case** opens the same panel at the case's views (section 5.13); and the line
-names the dataset the case reads, or says "reads no dataset". Graph, Map, Drawing board and Reports are
+panel; **Saved views (n)**, n being how many saved views you may see (**Saved views** alone while they are still
+being read), opens the **Saved views** panel
+(section 5.13); and the line names the dataset the case reads, or says "reads no dataset". While a saved
+view is open, the line shows it after the case's name: "› Saved view: ‹name›". Graph, Map, Drawing board and Reports are
 in the top bar's view switch, not here (section 5). Elsewhere it says "You are in the Ingest Studio",
 "You are in Rules and Monitoring" or "You are in Admin". If you can open both the Glass and the Ingest
 Studio, the banner offers **Open this case's data in the Ingest Studio ↗**, and from there **← Back to
-case ‹name› in the Glass**, which brings you back to the same case and view.
+case ‹name› in the Glass**, which brings you back to the same case.
 
 **Under the GOV.UK theme**, on every screen but Home and the sign-in page, the GOV.UK header and the
 phase banner are slim, and the context banner, a GOV.UK notification banner, is folded into one row,
@@ -255,7 +258,7 @@ each to a member (**Give to**) or sets it aside with **Suppress until…**. *Com
 given to a team.
 
 The case switcher on the case line (section 3) lists your cases. Its last entry, **All cases**, opens
-the **Cases** panel, which lists them too, with the case's **views** (section 5.13), **Browse all
+the **Cases** panel, which lists them too, with the case's **saved views** (section 5.13), **Browse all
 cases**, and **Who can open this case**, which the Author manages. A link to a case opens it directly.
 
 **The case brief.** The **Cases** panel also holds the case's **Brief**: what the case is for.
@@ -303,8 +306,8 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 
 | Part | What it is |
 | --- | --- |
-| **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More views**, those your rights allow), **Build a report (opens in new tab)** (section 9), Export, and your account |
-| **Context banner** | The case line: the case switcher, **Views in this case** and the dataset the case reads (section 3) |
+| **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More**, those your rights allow; for a screen reader **More** is *More ways to show the case*, and while one of its own is open it shows that one's name), **Build a report (opens in new tab)** (section 9), Export, and your account |
+| **Context banner** | The case line: the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads (section 3) |
 | **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow, each opening its panel beside the view and closing it again with a second press; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
@@ -329,7 +332,7 @@ selection bar then offers **Expand**, **Show links** (for two or more, with how 
 or "within 2" to "within 6", stepped by − and +), **Ask the model about these…** (section 6), **Save as
 a view** (section 5.13), **Remove from view** and **Clear** (Esc), and **Undo select what is lit**
 after a selection made by what is lit. Past one degree, **Show links** draws the routes between the
-selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear view** take nodes off the canvas; a node you put back brings
+selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear the graph** take nodes off the canvas; a node you put back brings
 its links in the view back with it.
 
 **Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`, the menu
@@ -339,14 +342,13 @@ each kind of relationship with how many links it has, so you can draw just one; 
 fold into one line ("7 types with no links") that opens in place. **Actions** holds what the item
 offers, as its type allows: Explain cluster, View messages, Expand group, Read full screen, Add files
 held by this…, Set picture… and Mark for suppression (hides nothing yet); with two selected, only the pair's own: Link
-to…, Split from… and Find paths to…. In a view, the menu offers only what changes nothing in the
-case. An expansion that would add more than
+to…, Split from… and Find paths to…. In a saved view, the menu offers only what changes nothing in the case. An expansion that would add more than
 **500** nodes asks first, offering one relationship at a time, all of them, or nothing. An expansion
 past the working set's own limit is refused; reduce what is drawn, save a smaller view, or **Run as a
 batch job**. A batch job runs the same expansion on the server as you, reading only what you may see,
 and saves what it finds as a private view of the case; nothing is added to the case's own graph. When
-it is done, its result opens as your private view; if it cannot be opened, it stays in *Views in this
-case*. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
+it is done, its result opens as your private view; if it cannot be opened, it stays in
+**Saved views**. A result too large for a view to show, more than **50,000** nodes or **250,000** links, is
 refused with its figures and saves nothing: narrow it by link type, depth or dates. The links among
 the records are found a thousand records at a time, so a result up to that limit is saved with its links and its
 view opens with them, and **Show links among all** on a large canvas keeps working as it grows. A batch job needs the Editor level on the case, since its result is saved as a view of it, and the right to
@@ -705,7 +707,7 @@ OspreyFlow ships two. **Direct link**: calls, money transfers, visits and cell s
 stronger than links that are only inferred or shared. **Evidenced by an assault, disorder or find**:
 a role in such an incident, and a conflict, association or cell share between people in one, are drawn
 stronger. Their sizes are calibrated so that a boost moves an ordinary link about as far as doubling
-its count would, and are marked "to be confirmed with the client". Boosts add up.
+its count would. Boosts add up.
 
 **An influencer applies only if you may see the record that evidences the link,** or, for a dataset,
 only if your case reads that dataset. An assault report above your clearance never thickens a line
@@ -715,8 +717,7 @@ weight never changes: influencers are applied as the link is read, so a change t
 
 **3. Shared-attribute rarity.** Two people who share something few others share are more interesting
 than two who share what everyone does. A thing two people of one kind share (a cell, a phone number, a
-visitor, a report, a group) is a **shared value**. By default rarity is worked out as the client works
-it out: a value held by *k* people links *k × (k − 1) / 2* pairs, and its rarity is one less its share
+visitor, a report, a group) is a **shared value**. By default rarity is worked out as the **share of pair links**: a value held by *k* people links *k × (k − 1) / 2* pairs, and its rarity is one less its share
 of all the pairs linked through values of its kind. A phone two people share, among phones that link
 few pairs, scores near 1; the prison everyone is held in scores near 0. Two people take the rarity of
 the rarest value they share. Your installation may choose the earlier measure instead, **inverse
@@ -724,7 +725,7 @@ frequency**, which adds, for each thing two people share, the logarithm of how m
 over how many share it; the legend says which is in force. It is worked out per dataset unless you
 choose across the case's datasets, and **only over what you may see**: if two analysts have different
 access, they can see different rarity for the same pair, and both are right for what each may see.
-Rarity is its own measure, never folded into the strength, except under client parity (below).
+Rarity is its own measure, never folded into the strength, except under rarity plus adds (below).
 
 **Two compositions.** How the three ideas make a strength is the installation's choice, shown in the
 legend:
@@ -732,14 +733,13 @@ legend:
 | Composition | Strength is | Drawn on |
 | --- | --- | --- |
 | **Standard** (shipped) | the link's stored weight, from its own count and recency, with the influencers applied | 0 to 1 |
-| **Client parity** | rarity plus the influencers' added boosts, with no count and no recency: the client's own sum | 0 to 1, through a curve that keeps the sums' order; the Inspector also shows the **raw sum on the client's scale** |
+| **Rarity plus adds** | rarity plus the influencers' added boosts, with no count and no recency: a raw sum | 0 to 1, through a curve that keeps the sums' order; the Inspector also shows the **raw sum on the raw-sum scale** |
 
-Under client parity, a stored link's rarity is that of the link itself among the links of its type you
+Under rarity plus adds, a stored link's rarity is that of the link itself among the links of its type you
 can see in its dataset (one less one over how many there are), and a pair linked through a shared
 value takes that value's rarity. Only added boosts count in the sum: a multiplier, floor or exclusion
-is left out, and the legend says so. Because rarity is worked out over what you may see, so is a
-client-parity strength. An installation chooses its composition in the same way as its influencers (a
-proposal and a second person's approval); a case's Author may switch one case to client parity, to
+is left out, and the legend says so. Because rarity is worked out over what you may see, so is a strength under rarity plus adds. An installation chooses its composition in the same way as its influencers (a
+proposal and a second person's approval); a case's Author may switch one case to rarity plus adds, to
 compare the two on the same case, and back.
 
 **Where you see it:**
@@ -762,12 +762,11 @@ compare the two on the same case, and back.
 - **The Inspector** explains a selected link under **Connection strength**: its count against what is
   heavy for its type, when it was last seen, the rule and weights version it was worked out under,
   each influencer that changed it and the kind of record (or the dataset) that evidenced it, and what
-  its two ends share, rarest first, with the measure named. Under client parity it shows instead the
-  link's rarity term, each boost added, and the **raw sum on the client's scale**, beside the strength
+  its two ends share, rarest first, with the measure named. Under rarity plus adds it shows instead the link's rarity term, each boost added, and the **raw sum on the raw-sum scale**, beside the strength
   it is drawn at. With two people selected, **What these two share** does the same for them.
 
 **Who changes influencers.** An installation-wide set is proposed in the Glass's **Connection
-strength** (under **More views**) by someone holding the right to manage influencers, and takes effect only when **another**
+strength** (under **More**) by someone holding the right to manage influencers, and takes effect only when **another**
 person with that right approves it; the proposer can withdraw it but never approve it, and every
 version is kept; a version may also choose the composition and the rarity measure. A case's **Author**
 may add influencers for that case, switch off installation-wide ones in it, or choose its composition
@@ -776,29 +775,38 @@ that case, and the legend marks it. Both are recorded in the audit.
 
 **Rules on strength.** A rule written as a sentence (§7.6) may say "and the connection strength
 between it and … reaches X", or "… the shared-attribute rarity between it and another … reaches X". A
-strength figure is on the drawn scale (0 to 1) or **on the client's scale** (the raw sum, which only
-client parity has: under the standard composition such a rule raises nothing). It is previewed like
+strength figure is on the drawn scale (0 to 1) or **on the raw-sum scale** (the raw sum, which only rarity plus adds has: under the standard composition such a rule raises nothing). It is previewed like
 any other, and judged as its author, on what its author may see: it never raises an alert on evidence
 its author could not read.
 
-### 5.13 Case views
+### 5.13 Saved views
 
-A **view** is a saved lens on the case: what was drawn, its filters and its period. It is never a
-copy: there are no branches, and nothing in a view changes the case.
+A **saved view** is a saved lens on the case: what was drawn, its filters and its period. It is never a
+copy: there are no branches, and nothing in a saved view changes the case.
 
 - **Saving.** Select what matters and choose **Save as a view** in the selection bar; name it under
-  **View name** and **Save view**. A new view is yours alone.
-- **Finding them.** **Views ▾**, in the graph's toolbar beside *Clear view*, lists the views you may
-  see, each marked *Private* or *Shared*, the one open now marked too; choose one to open it. Before
-  you have any it says "No saved views yet. Select nodes and choose Save as a view." **Views in this
-  case**, on the case line, opens the **Cases** panel at them: each view's name and its *Private* or
-  *Shared* tag, the one open now marked "open now", and under them **Open**, **Share with the case**
-  and **Delete** ("Delete this view? Nothing on the case is deleted
-  with it."). Only the person who saved a view shares or deletes it. Before you have any it says "No
-  views yet. Select nodes on the canvas and choose *Save as a view*."
-- **Opening one** reads the case through it, read-only. A banner says "View: ‹name›", whether it is
-  shared or private, and "Nothing in a view changes the case.", with **Back to the case**. A view
-  opened from an alert also says "Opened from an alert" and offers **← Back to the alert**.
+  **View name** and **Save view**. A new saved view is yours alone.
+- **Finding them.** **Saved views (n)**, on the case line, opens the **Saved views** panel: on the case's
+  own screen it is the one route to them, and the **Cases** panel, from **All cases**, still lists each
+  case's saved views. The list starts with **The whole case**,
+  marked *Open now* when no saved view is open, and offering **Open** (*Open the whole case*, to a screen
+  reader) while one is, which does what **Back to the whole case** does. Then each saved view you may see,
+  with its *Private* or *Shared* tag. One saved under the name the Glass gives a selection ("Selection of
+  3 nodes") is told apart by a second line: its first item, as you may see it, and when it was saved
+  ("‹first item› · saved 14 Nov 2026, 12:01"), or when it was saved alone ("Saved 14 Nov 2026, 12:01").
+  The one open now is marked *Open now* and offers no **Open**; the others offer **Open**, and to the
+  person who saved them **Share with the case** and **Delete** ("Delete this view? Nothing on the case is
+  deleted with it."). Before you have any it says "No views yet. Select nodes on the canvas and choose
+  *Save as a view*."
+- **Opening one** reads the case through it, read-only. The strip above the graph starts with **Back to the
+  whole case** (the GOV.UK back link in that look), then "Saved view: ‹name›", its *Private* or *Shared*
+  tag, how many of its items could not be shown when any could not, and "Nothing in a saved view changes
+  the case."; the case line shows "› Saved view: ‹name›". A saved view opened from an alert says "Opened
+  from an alert" straight after the way back, and offers **← Back to the alert** after the note. Focus
+  moves to the strip, **Back to the whole case** is the next Tab, and it returns focus to **Saved views
+  (n)**. An action that would change the case says instead "This is a saved view: nothing in it changes
+  the case. Go back to the whole case to change it." With no saved view open the strip says "You are
+  looking at the whole case."
 
 ### 5.14 Drawing boards
 
@@ -975,7 +983,7 @@ none open, it says "Open a case to see its alerts and what raises them." Its tab
 - **Held rows**: the rows a rule held before they loaded. You see it as an Editor or Author of the case;
 - **Changes**: the rule audit. You see it as an Author of the case, or as an administrator.
 
-**Connection strength** is not here: it is a view of the Glass, under **More views** (section 5).
+**Connection strength** is not here: it is in the Glass, under **More** (section 5).
 
 **One queue holds every alert you may see.** **Kind** names its five kinds:
 
@@ -1243,8 +1251,7 @@ understood.
 - **How often.** Optionally, a number of times, a total amount or a first time, within some days
   (§7.7).
 - **How strongly connected.** Optionally: *the connection strength* between the subject and something
-  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1, or *on
-  the client's scale* a raw sum up to 10 (met only under client parity); or *the
+  it is linked to (by a link type, or any; to a type, or anything) *reaches* a figure up to 1, or *on the raw-sum scale* a raw sum up to 10 (met only under rarity plus adds); or *the
   shared-attribute rarity* between it and another of its type *reaches* a figure, per dataset or across
   the case's datasets (§5.12). Both are read from the stored graph, so the rule runs after commit or on
   a schedule, and both are worked out as you, the rule's author, may see them.
@@ -1450,7 +1457,7 @@ audit.
 
 ![Ownership: who stands behind an organisation, and its due diligence](images/user/10-ownership-due-diligence.png)
 
-**Ownership**, under **More views** in the Glass, traces who stands behind an organisation or account: every beneficial owner
+**Ownership**, under **More** in the Glass, traces who stands behind an organisation or account: every beneficial owner
 at or above the threshold (25% by default), their cumulative share through each chain, and anyone
 holding control whatever their share. A circle of cross-holdings is traced once, and said so. **Due
 diligence** gives the verification status, risk band and score with each factor's weight, and the
@@ -1461,7 +1468,7 @@ verifying documents. All of it is worked out as you read, from what you can see,
 
 ![The case's Figures](images/user/07-reports-figures.png)
 
-**Figures** (under **More views** in the view switch)
+**Figures** (under **More** in the view switch)
 shows the case's own counts over a **Period** of the last 4, 12, 26 or 52 weeks: an **Alerts** panel
 (open alerts by source and age, and the newest), alerts raised each week, open alerts by age,
 outcomes (open, claimed, each closing reason, and closed with no outcome), customers by KYC status, a

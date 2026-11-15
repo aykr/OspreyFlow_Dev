@@ -6,8 +6,9 @@ words turns the guide red (rule 12):
 
 - the rail's entries, in order, by their names (`ON_THE_RAIL`, `RAIL_LABELS`), and nothing said to be on
   the rail that is not;
-- the view switch and its More views, in order, by their names (`VIEW_SWITCH`, `MORE_VIEWS`, `VIEW_LABELS`);
-- the case line's parts and its cross-link (`ContextBanner.tsx`);
+- the view switch and its **More**, in order, by their names (`VIEW_SWITCH`, `MORE_VIEWS`, `VIEW_LABELS`, and the
+  More button's own label, `MORE_LABEL`, ADR-145 Amendment 17);
+- the case line's parts, its *Saved views (n)* and the open saved view, and its cross-link (`ContextBanner.tsx`);
 - the selection bar's words in order (`SELECTION_WORDS`), the node menu's heading and the keys that open it
   (`GlassCanvas.tsx`).
 """
@@ -23,6 +24,7 @@ RAIL = (SRC / "shell/railLayout.ts").read_text(encoding="utf-8")
 BANNER = (SRC / "shell/ContextBanner.tsx").read_text(encoding="utf-8")
 WORDS = (SRC / "canvas/selectionActions.ts").read_text(encoding="utf-8")
 CANVAS = (SRC / "canvas/GlassCanvas.tsx").read_text(encoding="utf-8")
+TOPBAR = (SRC / "shell/TopBar.tsx").read_text(encoding="utf-8")
 
 
 def _list(source: str, name: str) -> list[str]:
@@ -57,6 +59,15 @@ def view_names() -> tuple[list[str], list[str]]:
     return [labels[v] for v in _list(RAIL, "VIEW_SWITCH")], [labels[v] for v in _list(RAIL, "MORE_VIEWS")]
 
 
+def more_label() -> str:
+    """The top bar's More button as it reads when none of its views is open (ADR-145 Amendment 17: "More", its
+    accessible name "More ways to show the case")."""
+    assert "label={moreOpen ? moreOpen.label : MORE_LABEL}" in TOPBAR and "buttonName={moreOpen ? undefined : MORE_NAME}" in TOPBAR
+    m = re.search(r'^export const MORE_LABEL = "([^"]+)";$', RAIL, re.MULTILINE)
+    assert m, "railLayout.ts's MORE_LABEL"
+    return m.group(1)
+
+
 def off_the_rail_said_on_it(guide: str) -> list[str]:
     """Each of the Glass's names that is not on the rail, where the guide puts it on the rail."""
     on = set(rail_names())
@@ -88,29 +99,43 @@ def test_no_guide_passage_puts_on_the_rail_what_is_not_there() -> None:
 
 
 def test_the_rail_check_flags_a_view_said_to_be_on_the_rail() -> None:
-    planted = USER.replace("**Ownership**, under **More views** in the Glass,", "The rail's **Ownership**")
+    planted = USER.replace(f"**Ownership**, under **{more_label()}** in the Glass,", "The rail's **Ownership**")
     assert off_the_rail_said_on_it(planted) == ["Ownership"]
 
 
 def test_section_5_names_the_view_switch_and_more_views_in_order() -> None:
     switch, more = view_names()
     row = _row("Top bar")
-    m = re.search(r"the view switch \((.*?) under \*\*More views\*\*", row)
+    more_name = more_label()
+    assert more_name == "More" and 'export const MORE_NAME = "More ways to show the case";' in RAIL
+    assert ("for a screen reader **More** is *More ways to show the case*, and while one of its own is open it shows "
+            "that one's name") in row  # fmt: skip
+    m = re.search(rf"the view switch \((.*?) under \*\*{re.escape(more_name)}\*\*", row)
     assert m, "the top bar's view switch"
     named = _bold_in_order(m.group(1))
     assert named == switch + more
 
 
 def test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it() -> None:
+    """ADR-145 Amendment 17: *Saved views (n)*, n the saved views this reader may see, in place of *Views in this
+    case*; and, while one is open, "› Saved view: ‹name›" after the case's name."""
     three = re.sub(r"\s+", " ", section(USER, "## 3"))
-    assert "Views in this case" in BANNER and "**Views in this case**" in three
+    # What the banner can put on screen: its code without its comments.
+    banner = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*//.*$", " ", re.sub(r"/\*.*?\*/", " ", BANNER, flags=re.DOTALL)))
+    assert "Views in this case" not in banner and "Saved views (" in banner and "Saved view: " in banner
     assert '"reads no dataset"' in BANNER and '"reads no dataset"' in three
-    assert "Case</span>" in BANNER and '"You are in the Glass · Case ‹name› ▾ · Views in this case · reads ‹dataset›"' in three
+    assert "Case</span>" in BANNER and '"You are in the Glass · Case ‹name› ▾ · Saved views (n) · reads ‹dataset›"' in three
+    assert ("**Saved views (n)**, n being how many saved views you may see (**Saved views** alone while they are still "
+            "being read), opens the **Saved views** panel") in three  # fmt: skip
+    assert 'While a saved view is open, the line shows it after the case\'s name: "› Saved view: ‹name›".' in three
     cross = re.search(r'label: "(Open this case[^"]+)"', BANNER)
     assert cross and f"**{cross.group(1)}**" in three
     assert "mode toggle" not in three and "Graph: the case's data" not in three
     assert ("**All cases**, opens the **Cases** panel" in three) is ("All cases" in (SRC / "App.tsx").read_text(encoding="utf-8"))
-    assert "the case switcher, **Views in this case** and the dataset the case reads" in _row("Context banner")
+    # The banner's own order: the case, the open saved view, then its button.
+    assert banner.index("› Saved view: {openView}") < banner.index("{savedViewsLabel(savedViews)}")
+    assert 'return typeof count === "number" ? `Saved views (${count.toLocaleString("en-GB")})` : "Saved views";' in banner
+    assert "the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads" in _row("Context banner")
 
 
 def test_section_5_2_gives_the_selection_bar_in_its_words_and_order() -> None:

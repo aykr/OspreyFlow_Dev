@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.16** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 2.17** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.17 | 2026-11-14 | §9.6 and §12: *Connection strength* is under the top bar's **More**, and neither it nor *Reports* is called a view, which means a saved view alone (ADR-145 Amendment 17). Held by `tests/test_guide_navigation_words.py`. Appendix A regenerated from the schema's descriptions without the client's words (studio's V3): the gateway is *your organisation's own*, and so is the Entra tenant id. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.16 | 2026-11-14 | §10: *How long a model is waited for*, a hosted engine 120 seconds and the deployment's own model 900, each set in `deployment.env` on Lite and Small; a call past its bound stopped, and a provider's refusal said, naming the engine, nothing recorded (ADR-135 Amendment 13, D2). On Enterprise and §6a.9's shared platform both are rendered at their defaults, with no `osprey.yaml` setting. Held by `tests/test_admin_guide_model_timeouts.py`. PDF made by the orchestrator at merge. |
 | 2.15 | 2026-11-14 | The refusals quoted in §6a.7 and §9 name *Admin › People and roles* as the side list names it ("is not held in Admin › People and roles", "the people store behind …"), and on Entra ID a value Entra sends is refused in words, saying which values are set here (ADR-148 Amendment 19). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.14 | 2026-11-14 | The Lite row: `ospreyflow start --build` rebuilds the search index from the graph as its last step (ADR-150 Amendment 2). |
@@ -2640,8 +2641,7 @@ engineer attaches rules to pipelines (Checks on load) but does not write them.
 **So a dataset that asks for a second person needs at least two Authors of the case who hold
 `deploy_rules` and open Rules and Monitoring (Analysts)**; with one, a rule there can be tested but never made live.
 
-**Approving influencers.** In the Glass's **Connection strength** view (the top bar's view switch, under **More views**, or in
-the switch itself for someone offered no other view, as the built-in Administrator is), a version waiting for a second
+**Approving influencers.** In the Glass's **Connection strength** (the top bar's view switch, under **More**, or in the switch itself for someone offered nothing else there, as the built-in Administrator is), a version waiting for a second
 person shows what it would put in force, who proposed it and why. Another holder of the right chooses
 **Approve version N**, or **Send it back** with words; its proposer sees the approval withheld and may
 withdraw it. Until a version is approved, the influencers shipped in the weights file are in force.
@@ -3042,7 +3042,7 @@ A typology rule is named by its typology, never by its own name, which an analys
 feed does not carry. Every figure is counted as the dashboard's account may see it; a hotlist kept
 "only me" is counted for its owner alone, so never on a dashboard.
 
-**In the Glass**, the **Reports** view (the top bar's view switch) draws an **Alert monitoring** board itself, first among the
+**In the Glass**, **Reports** (the top bar's view switch) draws an **Alert monitoring** board itself, first among the
 boards, from the same figures counted as the person reading it: raised each week and by rule, closed
 by outcome, time to close, hotlist matches and the team view. A Reports Viewer's *Open the dashboard*
 opens it filtered to an alert's rule and period. It needs
@@ -3347,7 +3347,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
 | `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
-| `models.provider.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
+| `models.provider.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
 | `models.provider.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key. |
 | `models.provider.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
@@ -3357,7 +3357,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
 | `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
-| `models.providers.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (the client's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
+| `models.providers.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
 | `models.providers.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key. |
 | `models.providers.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.defaults` | mapping | — | Each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it). |
@@ -3396,7 +3396,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.egress_nets` | mapping | — | For each host the namespace reaches (a model provider, a proxied map provider, the mail server, a connector host, S3 and STS unless the platform's settings name theirs), the networks (CIDR) its traffic is allowed to; a host with none is refused at render. No network wider than /16 (IPv4) or /48 (IPv6), and never a default route |
 | `cloud_platform.tls_secret` | str or none | none | The platform's own certificate. The Kubernetes Secret holding the certificate for the deployment's name (the Glass's: the profile renders no sign-in or reporting name), where the platform's wildcard does not cover it |
 | `cloud_platform.claims` | section or none | none | How people sign in with Entra ID (ADR-148 Amendment 8): the tenant, the Glass's and the API's app registrations, where each claim comes from and the first administrators. |
-| `cloud_platform.claims.tenant_id` | str | required | The client's Entra tenant id |
+| `cloud_platform.claims.tenant_id` | str | required | Your organisation's Entra tenant id |
 | `cloud_platform.claims.client_id` | str | required | The Glass's own app registration (application id) |
 | `cloud_platform.claims.api_client_id` | str | required | This API's app registration (application id): the token's audience |
 | `cloud_platform.claims.superset_client_id` | str or none | none | Superset's own app registration (application id), when reporting.superset is on: people sign in to Superset with it, and its delegated token reads the Conduit's GET /v1/me and /v1/me/rights alone |

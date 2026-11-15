@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.36** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
+**Version 1.37** · 2026-11-14 · For OspreyFlow v0.5.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.37 | 2026-11-14 | §7.6: an influencer's `note` example is "set from the 2026 calibration", never a setting still to be confirmed, and the `client_parity` composition is called *Rarity plus adds*, as the Glass labels it (studio's V3, the owner's exception). Held by `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.36 | 2026-11-14 | Step 5's wording sweep, early part. §1: the third narrow port, `IndexFeedSource`, apart from GraphPort so that no route reaches its unfiltered read (ADR-150). §7.5: the ten writers that read in full, from the code. §7.8 adds who may merge: through the drawing's home case, into a dataset of its unit. §7.8: a drawn dataset merged into another, as built (its four steps, who may merge, what follows), no longer *Coming*. §8: list alerts pointed at the user guide. §9: Ask & Chat for Ask the case. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guide_navigation_words.py`. PDF made by the orchestrator at merge. |
 | 1.35 | 2026-11-14 | §6.3: where people sign in with Entra ID, a schedule or watched folder runs as the person who set it while they have signed in within the last 24 hours (administration guide §6a.7; ADR-148 Amendment 16). PDF made by the orchestrator at merge. |
 | 1.34 | 2026-11-13 | §6.3: where people sign in with Entra ID (a shared platform), neither a schedule nor a watched folder runs: loads are started by hand (administration guide §6a.7; docs' v0.5.2 sweep, part one). PDF made by the orchestrator at merge. |
@@ -604,7 +605,7 @@ It comes from the link alone (ADR-123): no other link's count reaches it.
 | `link_types` | The link types it changes. `SHARED_VALUE` (reserved; no ontology declares it) is a pair linked through a shared value, the client's `dup_*` rows; it takes an `add` triggered by a dataset or by nothing |
 | `change`, `size` | `add` (a boost to the pre-logistic score, above 0 and at most 2), `multiply` (0.1 to 5), `floor` (a strength, above 0 and at most 1) or `exclude` (size 0: no stronger than the stored weight) |
 | `enabled` | `false` in a later layer switches off the influencer of the same id beneath it |
-| `note` | Shown beside it, such as "to be confirmed with the client" |
+| `note` | Shown beside it, such as "set from the 2026 calibration" |
 
 Applied to a link of stored weight `w` (`ontology/influencers.py`, `connection_strength`):
 
@@ -673,7 +674,7 @@ client_parity:  raw_sum  = rarity term + Σ add   (no count, no recency; no mult
 `connection_strengths(…, composition="client_parity")` returns each link's `rarity_term`, `raw_sum`
 and the `dataset` it was worked out in (the highest-scoring of those it belongs to and the reader may
 read); `shared_attribute_rarity(…, influencers=…, composition="client_parity")` returns each pair's
-`parity_raw`, `parity_strength` and `parity_applied`. Client parity always reads the `share` measure.
+`parity_raw`, `parity_strength` and `parity_applied`. Rarity plus adds (`client_parity`) always reads the `share` measure.
 The routes pass the case's resolved composition and measure; the legend carries them
 (`composition`, `composition_layer`, `rarity_measure`) and names a dataset trigger only by the
 datasets the reader may read.
@@ -688,7 +689,7 @@ influencers:
     link_types: [COMMUNICATED_WITH, TRANSACTED, VISITED, SHARED_CELL_WITH]
     change: add
     size: 0.1348
-    note: to be confirmed with the client
+        note: set from the 2026 calibration
 rarity:
   exclude_types: [Alert]
   measure: share          # or idf

@@ -756,12 +756,11 @@ and the Studio it carries the way across, *Open … in the Ingest Studio ↗* an
 Glass*, which replaces the Studio rail's *Back to the investigation*. In the Glass the same line carries
 *Case · Boards · Monitoring*, renamed *Graph · Drawing board* on 13 November 2026 (ADR-145 Amendment
 13), with a line under it saying which is open: "Graph: the case's data. Saved views are under Views or
-Cases." or "Drawing board: your sketch; it does not change the case's data."; the graph's toolbar has
-**Views ▾**, the case's saved views one click away (ADR-144 Amendment 3). Since ADR-145 Amendment 2
+Cases." or "Drawing board: your sketch; it does not change the case's data."; the graph's toolbar had a menu of the case's saved views (ADR-144 Amendment 3, withdrawn by its Amendment 6 on 14
+November 2026, when ADR-145 Amendment 17 kept "view" for saved views: the case line's *Saved views (n)* opens them). Since ADR-145 Amendment 2
 (the case screen lightened, 7 November 2026) *Monitoring*, with its open-alert count, is reached from
 that line; the rail keeps *Cases*, *Explore*, *Ask & Chat* and *Dashboards*, with *History*,
-*Ownership* and *Connection strength* under its ⋯ *Explore Details* (ADR-145 Amendment 12); the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports*
-under *More views*; and the right-hand column opens with the Inspector only. Each account is offered
+*Ownership* and *Connection strength* under its ⋯ *Explore Details* (ADR-145 Amendment 12); the view switch keeps *Graph* and *Map*, with *Matrix* and *Reports* under *More* (so named since ADR-145 Amendment 17); and the right-hand column opens with the Inspector only. Each account is offered
 exactly the places its rights open and can use (table below; ADR-145 Amendment 1): the Studio for
 whoever may read its pipelines (`edit_pipelines`), Admin for whoever holds the right of one of its built sections,
 the Glass for whoever holds a right a case's routes need. A place an account is not offered refuses
@@ -785,7 +784,7 @@ granted on a real dataset (rule 9).
 
 **The reporting walkthrough** (all synthetic, on "Operation Ledger — AML review"):
 
-1. **As the analyst** — *More views → Reports* in the top bar (ADR-145 Amendment 2): the case's
+1. **As the analyst** — *Reports* in the top bar's view switch (ADR-145 Amendments 2 and 15): the case's
    figures, counted for the reader.
 2. **As the admin** — *Admin* in the place switcher, then *Dashboard identities* in its side list (under *People*): register a dashboard identity (its secret is shown once;
    put it in `REPORT_SYNC_DASHBOARDS`); its *Figures* column says when it last pulled.
