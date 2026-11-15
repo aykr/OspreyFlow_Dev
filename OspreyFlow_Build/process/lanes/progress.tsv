@@ -175,7 +175,7 @@ admin	v060-i6-govuk-type	M	todo	v0.6.0 (the owner, 15 Nov): The GOV.UK look's ty
 docs	v060-i9-rename	M	done	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0	lane/docs-v060-rename
 rules-b	v060-i10-basemap	M	building	v0.6.0 (the owner, 15 Nov): The basemap as a step of the demo's install recipe
 platform-b	v060-i11-package-test	M	done	v0.6.0 (the owner, 15 Nov): The package test reshaped, fresh install only	lane/platform-b-v060-package-test
-rules	v060-i14-stopped-why	M	building	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped
+rules	v060-i14-stopped-why	M	done	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped	lane/rules-v060-stopped-why
 admin	v060-i18-run-app-role	M	building	v0.6.0 (the owner, 15 Nov): The run service's app role
 platform	v060-rf-fresh-only	M	done	v0.6.0 (the owner, 15 Nov): Fresh install only, held by a refusal	lane/platform-v060-fresh-only
 platform	v061-admin-forms	L	building	v0.6.1 (the owner, 15 Nov): the model form's FIRST SLICE only (screen, typed-name check, ADR-135 Am 14 cut down; the owner, 15 Nov), then stop; the map form waits until the owner has used it on the demo; lane/platform-admin-forms beside the release; nothing merges before v0.6.0; no server queue until the package test has finished
