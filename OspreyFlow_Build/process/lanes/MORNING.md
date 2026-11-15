@@ -2151,3 +2151,4 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **Stage 2 run before #4 merges (the orchestrator, ~18:00Z):** #4 is Glass-only (no route, store, schema or search change), so the
   server measurements (leak test, never-join, timings) run now on main and stand for v0.6.0; CI green on main follows the final push.
 - **#4 merged (15 Nov ~19:00Z):** map-view.spec's camera case failed once in the whole suite at merge and passed 30 of 30 alone; #4 does not touch the map; recorded as load timing, as case-b saw before.
+- **Build complete (15 Nov ~19:05Z):** #4 and the CHANGELOG merged and pushed (213ac3e, CI run 43749993930). CI on 33a7c9f failed one keyboard case, ingest-studio.spec.ts:509 (an autosave poll of 5 s under load; seen intermittently on the Mac today too): a fragile test, not a product fault, so it is being made robust (case), not rerun to green; the candidate waits on a commit with CI green.
