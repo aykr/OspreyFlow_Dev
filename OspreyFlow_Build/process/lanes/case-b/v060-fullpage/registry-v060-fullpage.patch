@@ -1,8 +1,21 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 74da0b9..30171f8 100644
+index 74da0b9..a934a08 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -885,6 +885,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+@@ -768,8 +768,10 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
+   "open-a-cited-document-by-keyboard",
+   "accept-a-proposal-by-keyboard",
+   "reject-a-proposal-by-keyboard",
+-  // The drawer's visible Close (the owner, 9 October 2026).
+-  "close-the-questions-drawer-by-keyboard",
++  // The page's visible Back to ‹view› (the owner, 9 October 2026; a drawer's Close until ADR-145 Amendment 18).
++  "back-from-ask-and-chat-by-keyboard",
++  // ADR-145 Amendment 18 decision 5: a cited graph fact chosen on the page leaves it for the canvas, focus there.
++  "select-a-graph-fact-from-the-ask-page-by-keyboard",
+   // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
+   "select-a-graph-fact-from-an-answer-by-keyboard",
+   // ADR-129 Amendment 5: a source Whole case's search found ([S-n]) selects its records.
+@@ -885,6 +887,8 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
    // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
    // opened with one keypress.
    "rail-panels-by-keyboard",

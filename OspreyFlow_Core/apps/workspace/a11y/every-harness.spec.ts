@@ -420,6 +420,8 @@ for (const name of pages) {
             "aria-label",
             state === "menu=two" ? "2 selected" : "n0",
           );
+        // Ask & Chat's page open before the scan (ADR-145 Amendment 18): the harness presses the rail after it loads.
+        if (state === "open=questions") await expect(page.getByRole("region", { name: "Ask & Chat" })).toBeVisible();
         if (variant === "light") {
           await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
         }

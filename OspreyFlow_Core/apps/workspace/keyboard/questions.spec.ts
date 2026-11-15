@@ -118,15 +118,35 @@ test("a proposal is accepted by keyboard, and its change reaches the view", asyn
   registerCovered(REGISTRY, "accept-a-proposal-by-keyboard");
 });
 
-test("the drawer closes from its visible Close button, reached by keyboard", async ({ page }) => {
-  // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing.
+test("Ask & Chat's page is left by its visible Back to Graph, its first control, reached by keyboard", async ({ page }) => {
+  // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing. ADR-145 Amendment 18:
+  // the panel is a page over the view, and its way out is Back to ‹view›, reached by Shift+Tab from the heading.
   await serve(page, [ANSWER]);
-  // ADR-145 Amendment 12: the drawer is Ask & Chat (Questions renamed), its Close named after it.
-  const close = page.getByRole("button", { name: "Close Ask & Chat" });
-  await close.focus();
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await askPage.getByRole("heading", { name: "Ask & Chat" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(askPage.getByRole("button", { name: "Back to Graph" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__QUESTIONS__?.closed ?? 0)).toBe(1);
-  registerCovered(REGISTRY, "close-the-questions-drawer-by-keyboard");
+  await expect(askPage).toHaveCount(0);
+  registerCovered(REGISTRY, "back-from-ask-and-chat-by-keyboard");
+});
+
+test("a [G-n] chosen on Ask & Chat's page leaves it, selects what it stands for on the real canvas, and focus is on the canvas", async ({ page }) => {
+  // ADR-145 Amendment 18 decision 5 (rule 13), against the real canvas and App's own hook (harness.html?questions=page).
+  await serve(page, [], GRAPH_FACTS, "/keyboard/harness.html?questions=page");
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who is connected to n0?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByRole("button", { name: "Show on the graph: graph fact 1, [G-1]" })).toHaveCount(2);
+  await page.getByLabel("Your question").focus();
+  await tabToLabel(page, "Show on the graph: graph fact 1, [G-1]");
+  await page.keyboard.press("Enter");
+  await expect(askPage).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selectedEdge)).toBe("e0");
+  await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
+  registerCovered(REGISTRY, "select-a-graph-fact-from-the-ask-page-by-keyboard");
 });
 
 test("a proposal is rejected by keyboard, and nothing reaches the view", async ({ page }) => {

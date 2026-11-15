@@ -22,6 +22,8 @@ import { bringFactIntoView } from "../src/questions/graphFacts";
 import { showAnswerOnCanvas } from "../src/questions/showAnswer";
 import { saveView } from "../src/views/viewsApi";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
+import { AskPage } from "../src/questions/AskPage";
+import { useAskPage } from "../src/questions/useAskPage";
 import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
@@ -264,6 +266,9 @@ const SCHEMA: OntologySchema = wantsSameAs
 // chosen `[G-n]` goes to the canvas through `bringFactIntoView` (ADR-129, rule 13), so
 // `questions.spec.ts` proves the selection on the real canvas, not on a recording fake.
 const wantsQuestions = new URLSearchParams(window.location.search).get("questions") === "1";
+// `?questions=page`: the panel inside Ask & Chat's real page over the canvas, by App's own hook (ADR-145 Amendment 18):
+// a marker leaves the page, brings its fact into view on the real canvas and puts focus on it.
+const wantsAskPage = new URLSearchParams(window.location.search).get("questions") === "page";
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -563,6 +568,7 @@ createRoot(container).render(
     )}
     <HarnessSelectionList />
     {wantsBatch === "panel" && <HarnessBatchPanel />}
+    {wantsAskPage && <AskPageOverCanvas />}
     {wantsQuestions && (
       <QuestionsPanel
         apiBaseUrl="http://keyboard-test.invalid"
@@ -595,6 +601,30 @@ createRoot(container).render(
     )}
   </Mount>,
 );
+
+function AskPageOverCanvas() {
+  const ask = useAskPage(false, { leave: () => undefined }, true);
+  if (!ask.open) return null;
+  return (
+    <div style={{ position: "fixed", inset: 0 }}>
+      <AskPage backLabel="Graph" onBack={ask.back}>
+        <QuestionsPanel
+          apiBaseUrl="http://keyboard-test.invalid"
+          bearerToken="unused"
+          investigationId="keyboard-fixture"
+          onDelta={() => undefined}
+          selection={{ nodeIds: [], linkIds: [] }}
+          // As `App.tsx`'s: the page left, the fact brought into view, focus on the canvas.
+          onSelectFacts={(citation) =>
+            ask.showOnGraph(() => {
+              if (canvasHandle.current) bringFactIntoView(canvasHandle.current, citation);
+            })
+          }
+        />
+      </AskPage>
+    </div>
+  );
+}
 
 // a11y/every-harness.spec.ts (ADR-078 Amendment 1): the canvas's menu open, by the keyboard's own route — the
 // canvas focused (n0 selected), then `\` on one node, or ArrowRight and Space first for two.

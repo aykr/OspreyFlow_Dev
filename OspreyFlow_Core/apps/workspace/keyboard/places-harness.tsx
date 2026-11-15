@@ -27,8 +27,9 @@ import { useLastGlassView } from "../src/shell/placeMemory";
 import { openCase } from "../src/investigation/cases";
 import { initialInvestigationId } from "../src/investigation/investigationId";
 import { placesFor, type PlaceId } from "../src/shell/places";
-import { focusRailOpener, LeftRail } from "../src/shell/LeftRail";
+import { LeftRail } from "../src/shell/LeftRail";
 import { AskPage } from "../src/questions/AskPage";
+import { useAskPage } from "../src/questions/useAskPage";
 import { TopBar } from "../src/shell/TopBar";
 
 declare global {
@@ -62,9 +63,16 @@ function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
   const [admin, setAdmin] = useState(start === "admin");
   const [view, setView] = useState<View>(start === "ingest" ? "ingest" : start === "rules" ? "alerts" : "graph");
+  // Ask & Chat's page by App's own hook (ADR-145 Amendment 18): no results page here, and no reader.
+  const ask = useAskPage(false, { leave: () => undefined });
+  // A view chosen, another place or the cross-link leaves the page, as App's `leavePages` does.
+  const goTo = (id: View) => {
+    ask.leaveBoth();
+    setView(id);
+  };
   // The views `App.tsx` offers this person (`offeredViews`), never a copy.
   const switched = splitViews(
-    offeredViews(rights).map((id) => ({ id, label: VIEW_LABELS[id], pressed: view === id, onSelect: () => setView(id) })),
+    offeredViews(rights).map((id) => ({ id, label: VIEW_LABELS[id], pressed: view === id, onSelect: () => goTo(id) })),
   );
   // The rail's panels, open or not (ADR-145 Amendment 14): each opener toggles its own, as `App.tsx`'s do.
   const [panels, setPanels] = useState<ReadonlySet<RailEntry>>(new Set());
@@ -92,6 +100,7 @@ function Harness() {
   const place: PlaceId = admin ? "admin" : view === "ingest" ? "ingest" : view === "alerts" ? "rules" : "glass";
   const choose = (to: PlaceId) => {
     window.__PLACES__!.chosen.push(to);
+    ask.leaveBoth();
     setAdmin(to === "admin");
     if (to === "ingest") setView("ingest");
     else if (to === "rules") setView("alerts");
@@ -122,7 +131,7 @@ function Harness() {
           place === "glass"
             ? [
                 ...switched.main,
-                { id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => setView("dossier") },
+                { id: "dossier", label: "Messages", pressed: view === "dossier", onSelect: () => goTo("dossier") },
               ]
             : []
         }
@@ -144,10 +153,12 @@ function Harness() {
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {
           toStudio: () => {
             window.__PLACES__!.crossed.push("to-studio");
+            ask.leaveBoth();
             setView("ingest");
           },
           toGlass: () => {
             window.__PLACES__!.crossed.push("to-glass");
+            ask.leaveBoth();
             setView(lastGlassView());
           },
         })}
@@ -161,11 +172,11 @@ function Harness() {
             <LeftRail
               {...splitRail(ON_THE_RAIL.map((id) => ({
                 id, label: RAIL_LABELS[id], icon: id,
-                onSelect: () => toggle(id),
-                // Ask & Chat opens a page over the view, not a drawer (v0.6.0 #4), as `App.tsx` marks it.
+                // Ask & Chat opens a page over the view, not a drawer (v0.6.0 #4), by App's own hook.
+                onSelect: id === "questions" ? ask.toggle : () => toggle(id),
                 opensPage: id === "questions",
                 // Marked by the same `railMark` as `App.tsx`, never a copy: expanded while its panel is open.
-                ...railMark(id, { view, open: panels }),
+                ...railMark(id, { view, open: ask.open ? new Set([...panels, "questions" as RailEntry]) : panels }),
               })))}
               onHelp={() => undefined}
             />
@@ -173,23 +184,17 @@ function Harness() {
           {/* `position: relative`, as `App.tsx`'s main area is, so Ask & Chat's page fills it; the view beneath is
               inert while the page shows, as there. */}
           <div style={{ flex: 1, position: "relative", minHeight: "60vh" }}>
-            <main aria-label="Place content" inert={panels.has("questions") ? true : undefined}>
+            <main aria-label="Place content" inert={ask.viewInert ? true : undefined}>
               <p>{`${place}, ${view}, on case ${caseId}`}</p>
             </main>
-            {place === "glass" && panels.has("questions") && (
-              <AskPage
-                backLabel={VIEW_LABELS[view as keyof typeof VIEW_LABELS] ?? "Graph"}
-                onBack={() => {
-                  focusRailOpener(RAIL_LABELS.questions);
-                  toggle("questions");
-                }}
-              >
+            {place === "glass" && ask.open && (
+              <AskPage backLabel={VIEW_LABELS[view as keyof typeof VIEW_LABELS] ?? "Graph"} onBack={ask.back} hidden={ask.pageHidden}>
                 <p>{`${RAIL_LABELS.questions}'s questions and answers.`}</p>
               </AskPage>
             )}
           </div>
           {/* Each open drawer is a real drawer, as `App.tsx`'s are, so closing it returns focus to its opener. */}
-          {[...panels].filter((id) => id !== "questions").map((id) => (
+          {[...panels].map((id) => (
             <Drawer
               key={id}
               open

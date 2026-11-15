@@ -168,6 +168,14 @@ test("Ask & Chat opens as a page over the view by keyboard, and Back to the view
     await expect(view).toBeVisible();
     await expect(page.getByRole("main", { name: "Place content" })).not.toHaveAttribute("inert", "");
   }
+  // A view chosen leaves the page, that view current (App's `leaveBoth`, by the same hook).
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(askPage).toBeVisible();
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Graph", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(askPage).toHaveCount(0);
+  await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
   registerCovered(REGISTRY, "ask-and-chat-page-by-keyboard");
 });
 

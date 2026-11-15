@@ -55,7 +55,7 @@ import { AnswersForSection } from "./home/AnswersForSection";
 import { requestOpening, takeOpening } from "./admin/needsYou/openings";
 import { AccountMenu } from "./auth/AccountMenu";
 import { ClassificationStrip, screenMarking } from "./shell/ClassificationStrip";
-import { focusRailOpener, LeftRail } from "./shell/LeftRail";
+import { LeftRail } from "./shell/LeftRail";
 import { MORE_VIEWS, offeredViews, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS, VIEW_SWITCH, viewToLandOn } from "./shell/railLayout";
 
 const ALL_SWITCH_VIEWS = [...VIEW_SWITCH, ...MORE_VIEWS];
@@ -103,6 +103,7 @@ import { GlobalSearch } from "./search/GlobalSearch";
 import { SearchResults } from "./search/SearchResults";
 import { useSearchResultsOverlay } from "./search/useSearchResultsOverlay";
 import { AskPage } from "./questions/AskPage";
+import { useAskPage } from "./questions/useAskPage";
 import { drawSearchResult } from "./search/drawSearchResult";
 import { BoundaryFilterTool } from "./map/BoundaryFilterTool";
 import { IngestStudio } from "./ingest/IngestStudio";
@@ -885,12 +886,6 @@ export function App() {
   // ADR-128 decision 3: opening a saved trend from the case brief starts the Reports view on Trends;
   // the count re-mounts the place so a second open starts there again.
   const [reportsStart, setReportsStart] = useState<{ tab?: "trends"; opened: number }>({ opened: 0 });
-  // ADR-098 decision 4: the case's questions to the model, open at once when the case was opened on them.
-  const [questionsOpen, setQuestionsOpen] = useState(handoff.view === "questions");
-  // Part A: the search's words are carried into Ask & Chat once; a later opening starts with an empty box.
-  useEffect(() => {
-    if (!questionsOpen) setQuestionDraft(null);
-  }, [questionsOpen]);
   // ADR-100: where to start in a case's data, from the rail (and over an empty canvas).
   const [exploreOpen, setExploreOpen] = useState(false);
   // ADR-097 step 1 (review item 16): the deployment's classifications, lowest first, for the strip.
@@ -1103,21 +1098,17 @@ export function App() {
   // v0.6.0 #4: Ask & Chat is a page over the view, as the results page is; the two replace each other, and whatever
   // leaves the results (a view chosen, another place, a saved view opened) leaves it too. The view beneath is out of
   // reach while it shows, except while a document read from an answer is open over the view.
-  const askOver = questionsOpen && readerDocumentId === null;
-  const pageOver = results.viewInert || askOver;
-  function leavePages(): void {
-    results.leave();
-    setQuestionsOpen(false);
-  }
-  /** *Back to ‹view›*: the view as it was, focus on the rail's Ask & Chat, which opened the page. */
-  function leaveAskPage(): void {
-    focusRailOpener(RAIL_LABELS.questions);
-    setQuestionsOpen(false);
-  }
-  function openAskPage(): void {
-    results.leave();
-    setQuestionsOpen(true);
-  }
+  // Shared with the keyboard harnesses (`questions/useAskPage.ts`). ADR-098 decision 4: open at once when the case
+  // was opened on its questions.
+  const ask = useAskPage(readerDocumentId !== null, results, handoff.view === "questions");
+  const questionsOpen = ask.open;
+  // Part A: the search's words are carried into Ask & Chat once; a later opening starts with an empty box.
+  useEffect(() => {
+    if (!questionsOpen) setQuestionDraft(null);
+  }, [questionsOpen]);
+  const pageOver = results.viewInert || ask.viewInert;
+  const leavePages = ask.leaveBoth;
+  const openAskPage = ask.openPage;
   // ADR-093: every node selected on the canvas, for the Inspector's list.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   // The selection made where no canvas is drawn (the Matrix view): the same state the canvas reports
@@ -1852,7 +1843,7 @@ export function App() {
   const mark = (id: RailEntry) => railMark(id, { view, open: railOpen });
   const railTools = [
     { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen((open) => !open), ...mark("explore") },
-    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: () => (questionsOpen ? leaveAskPage() : openAskPage()), opensPage: true, ...mark("questions") },
+    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: ask.toggle, opensPage: true, ...mark("questions") },
     { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen((open) => !open), ...mark("history") },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   const railSplit = splitRail(railTools);
@@ -1923,7 +1914,7 @@ export function App() {
               onApplyDelta={applyStarterDelta}
               // Part A: Enter on the typed words opens the results page over the view on screen.
               onSearch={(query) => {
-                setQuestionsOpen(false); // the results replace Ask & Chat's page (v0.6.0 #4)
+                ask.leave(); // the results replace Ask & Chat's page (v0.6.0 #4)
                 results.open(query, view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph");
               }}
               screenNodes={() => {
@@ -2739,8 +2730,8 @@ export function App() {
       {app === "glass" && questionsOpen && (
         <AskPage
           backLabel={view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph"}
-          onBack={leaveAskPage}
-          hidden={readerDocumentId !== null}
+          onBack={ask.back}
+          hidden={ask.pageHidden}
           beside={welcomeOpen && welcome === "asked" ? welcomePanel : null}
           takeFocus={questionDraft === null}
         >
@@ -2768,11 +2759,11 @@ export function App() {
             // A marker shows its fact on the graph: the page gives the view back, on the Graph, and the fact is
             // brought into view there once the canvas is in reach again.
             onSelectFacts={(citation) => {
-              leavePages();
               setView("graph");
-              setTimeout(() => {
+              // The page left, the item brought into view, focus on the canvas (ADR-145 Amendment 18).
+              ask.showOnGraph(() => {
                 if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
-              }, 0);
+              });
             }}
             view={questionsView}
             onLeaveView={() => setQuestionsView(null)}
@@ -2829,7 +2820,7 @@ export function App() {
           draws another tree (Home, Admin, All cases) the panel goes, and the job it started is kept here, so the
           panel drawn again follows it rather than starting another; the job runs on the server either way. */}
       {bearerToken && batchExpansion.asked && (
-        <div hidden={view !== "graph" || searching !== null || readerDocumentId !== null}>
+        <div hidden={view !== "graph" || searching !== null || questionsOpen || readerDocumentId !== null}>
           <BatchExpansion
             key={batchExpansion.asked.n}
             request={batchExpansion.asked.request}

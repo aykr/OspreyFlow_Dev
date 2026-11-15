@@ -19,6 +19,7 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.71 | 2026-11-15 | §6, *An answer's items* (v0.6.0 item 5, the owner's closed list): **Show all on graph** puts an answer's items on the case's graph, selected, a saved view closed first, what it cannot show a count and past the limit nothing; **Save as a view** names the view from the question and saves it as a saved view of the case. Held by `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.70 | 2026-11-15 | §7.5: **What raises alerts** says why a hotlist or watch stopped, in the same words under *Stopped*; a stopped rule says nothing more (v0.6.0 #14, ADR-044 Amendment 1). Held by `tests/test_user_guide_alert_sources_stopped_why.py`. PDF made by the orchestrator at merge. |
 | 1.69 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November); v0.5.2 is not published. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -314,7 +315,7 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 | --- | --- |
 | **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More**, those your rights allow; for a screen reader **More** is *More ways to show the case*, and while one of its own is open it shows that one's name), **Build a report (opens in new tab)** (section 9), Export, and your account |
 | **Context banner** | The case line: the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads (section 3) |
-| **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow, each opening its panel beside the view and closing it again with a second press; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
+| **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow: Explore and History each open their panel beside the view, and Ask & Chat opens as a page over it (§6); a second press closes each again; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
@@ -893,7 +894,7 @@ the case's analyst layer.
 
 ## 6. Ask & Chat: questions to the model
 
-<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15, and Ask & Chat as a drawer before Amendment 18 -->
 ![Ask & Chat (named Questions in this picture): ask about the documents in this case](images/user/12-questions.png)
 
 **Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose

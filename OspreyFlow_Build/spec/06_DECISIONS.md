@@ -40204,14 +40204,24 @@ the search results page does (Amendment 15 Part A, spec 02 §2.0c). The orchestr
 4. **No Escape of its own**, as the results page has none: a page is a place the person is in, and Escape inside it
    belongs to the control with focus (the engine's menu, a proposal's dialog). The drawer's Escape is withdrawn with the
    drawer. Recorded here because it is a change a keyboard user will notice.
-5. **What it keeps.** A marker leaves the page for the graph with the item in view, as it closed the drawer; a document
-   opened from an answer is read over the view with the page hidden and shown again on closing, as the results are; the
-   keys panel opens over the page when asked for.
+5. **What it keeps.** A marker leaves the page for the graph with the item in view, as it closed the drawer, and focus
+   goes to the canvas once it is in reach (the drawer left it on the marker; a page that goes takes the marker with it);
+   a document opened from an answer is read over the view with the page hidden and shown again on closing, focus on its
+   heading, as the results are; the keys panel opens over the page when asked for; the batch job's panel at the
+   canvas's foot is hidden under it, as under the results.
+6. **One hook.** `questions/useAskPage.ts` holds when the page shows, where focus goes and what is inert, and App and
+   the keyboard harnesses all use it, so a harness's case proves App's behaviour, not a copy
+   (`search/useSearchResultsOverlay.ts`'s pattern). The registry's `close-the-questions-drawer-by-keyboard` becomes
+   `back-from-ask-and-chat-by-keyboard`.
 
 **Tests.** `src/App.chrome.test.tsx` (the rail's three openers: Ask & Chat a region with *Back to Map*, no dialog, no
-`aria-haspopup`, focus back on the opener), `src/App.help.test.tsx`, `src/App.search.test.tsx` (the Ask line replaces
-the results; the words carried once; Back to Graph), `keyboard/shell.spec.ts`'s `ask-and-chat-page-by-keyboard`
-(rule 13: by keyboard alone the rail opens the page, focus on its heading, the view inert; Shift+Tab reaches *Back to
-Map*; Back and the rail each close it, focus on the opener, the view kept) on `keyboard/places-harness.html`, which
-draws the real `AskPage` as App does, and `a11y/every-harness.spec.ts`'s `places-harness.html` `open=questions` in the
-dark, light and GOV.UK looks. The red record is `process/lanes/case-b/v060-fullpage/`.
+`aria-haspopup`, focus back on the opener), `src/App.help.test.tsx`, `src/App.search.test.tsx` (the Ask line and the
+rail replace the results, the heading focused, the view inert; a search replaces the page; a view, another place or a
+saved view leaves it; a document from an answer hides it and closing puts focus on its heading; a marker leaves it for
+the graph, focus on the canvas; Help over it; *Ask the model about these…* opens it), `src/App.batchExpand.test.tsx`;
+by keyboard alone (rule 13), `keyboard/shell.spec.ts`'s `ask-and-chat-page-by-keyboard` on `places-harness.html`
+(the rail opens the page, focus on its heading, the view inert; Shift+Tab reaches *Back to Map*; Back and the rail
+each close it, focus on the opener; a view chosen leaves it) and `keyboard/questions.spec.ts`'s
+`back-from-ask-and-chat-by-keyboard` and `select-a-graph-fact-from-the-ask-page-by-keyboard` (the page over the real
+canvas), each harness on `useAskPage`; and `a11y/every-harness.spec.ts`'s `places-harness.html` `open=questions` and
+`questions-harness.html` (the real panel inside the page) in the dark, light and GOV.UK looks. The red record is `process/lanes/case-b/v060-fullpage/`.
