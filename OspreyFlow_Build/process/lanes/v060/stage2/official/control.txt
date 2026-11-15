@@ -1,0 +1,32 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261115T181356Z-8c3b3385/log: bash OspreyFlow_Build/process/lanes/v060/stage2/run.sh control
+stage 2 step control, official, 2026-11-15T18:13:56Z, run copy cf2942e, results /root/osprey-load/stage2
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+== cs-intel-doc-10063 | control: m10-cleared-unit-intel | never_text: ['2025-01-21T03:17:22Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-01-21T03:17:22Z']
+   .nodes[0].properties.sent_at: '2025-01-21T03:17:22Z'
+   result: ['cs-intel-doc-10063'] 2025-01-21 name_exact
+   result: ['cs-intel-doc-7963'] 2026-11-01 name_typo
+== cs-intel-doc-10127 | control: m10-cleared-unit-intel | never_text: ['2026-08-27T23:08:54Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2026-08-27T23:08:54Z']
+   .nodes[0].properties.sent_at: '2026-08-27T23:08:54Z'
+   result: ['cs-intel-doc-10127'] 2026-08-27 name_exact
+   result: ['cs-intel-doc-38392'] 2026-11-01 name_typo
+== cs-intel-doc-10255 | control: m10-cleared-unit-intel | never_text: ['2025-07-06T11:23:30Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-07-06T11:23:30Z']
+   .nodes[0].properties.sent_at: '2025-07-06T11:23:30Z'
+   result: ['cs-intel-doc-10255'] 2025-07-06 name_exact
+   result: ['cs-intel-doc-8042'] 2026-11-01 name_typo
+== cs-intel-doc-10265 | control: m10-cleared-unit-intel | never_text: ['2025-07-13T01:29:19Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-07-13T01:29:19Z']
+   .nodes[0].properties.sent_at: '2025-07-13T01:29:19Z'
+   result: ['cs-intel-doc-10265'] 2025-07-13 name_exact
+   result: ['cs-intel-doc-6861'] 2026-11-01 name_typo
+== cs-intel-doc-10312 | control: m10-cleared-unit-intel | never_text: ['2025-01-31T19:18:41Z'] | error: 
+   the hidden report in the answer: True; the words check fires on: ['2025-01-31T19:18:41Z']
+   .nodes[0].properties.sent_at: '2025-01-31T19:18:41Z'
+   result: ['cs-intel-doc-10312'] 2025-01-31 name_exact
+   result: ['cs-intel-doc-9560'] 2026-11-01 name_typo
+positive control: the words check fired on 5 of 5
+Wall time: 70 s, exit 0 (stack d, the lease rules-b took at 2026-11-15T18:00:53Z; set-up before it 6 s)

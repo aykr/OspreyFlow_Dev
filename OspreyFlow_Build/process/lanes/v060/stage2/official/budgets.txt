@@ -1,0 +1,32 @@
+Running on ospreyflow-test (stack d, osprey-runs/rules-b/), logged at osprey-runs/rules-b.meta/runs/20261115T180118Z-78c28d03/log: bash OspreyFlow_Build/process/lanes/v060/stage2/run.sh budgets
+stage 2 step budgets, official, 2026-11-15T18:01:19Z, run copy a487c8e, results /root/osprey-load/stage2
+step4: the realm is up with its subjects
+step4: the Conduit and the worker are up at the poc's limits ('2', '4g')
+step4: preflight: m10-measure and m10-part open the case; a subject granted nothing is refused
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /root/osprey-runs/rules-b/OspreyFlow_Build
+configfile: pytest.ini
+plugins: anyio-4.15.1, asyncio-1.4.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 7 items / 2 deselected / 5 selected
+
+../OspreyFlow_Build/tests/perf/test_search_budget_live.py .....          [100%]
+
+============================= slowest 30 durations =============================
+75.52s call     tests/perf/test_search_budget_live.py::test_m6_a_drawn_node_reaches_the_index_within_its_failure_figure
+32.46s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M4-fulltext]
+31.07s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M5-exact]
+25.28s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M3-names]
+12.84s call     tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M1-suggest]
+0.31s setup    tests/perf/test_search_budget_live.py::test_the_class_is_within_its_failure_figure_on_the_load[M5-exact]
+
+(9 durations < 0.005s hidden.  Use -vv to show these durations.)
+================= 5 passed, 2 deselected in 177.61s (0:02:57) ==================
+{'measure': 'M1', 'class': 'suggest', 'n': 200, 'p50_ms': 55.9, 'p95_ms': 61.5, 'max_ms': 254.2, 'budget_ms': 300.0, 'cases': None, 'reached': None, 'reach_bound': None, 'reached_on_page': None, 'verdict': 'met'}
+{'measure': 'M3', 'class': 'names', 'n': 200, 'p50_ms': 112.3, 'p95_ms': 131.8, 'max_ms': 234.2, 'budget_ms': 1000.0, 'cases': None, 'reached': None, 'reach_bound': None, 'reached_on_page': None, 'verdict': 'met'}
+{'measure': 'M4', 'class': 'fulltext', 'n': 200, 'p50_ms': 140.8, 'p95_ms': 187.9, 'max_ms': 268.0, 'budget_ms': 1500.0, 'cases': None, 'reached': None, 'reach_bound': None, 'reached_on_page': None, 'verdict': 'met'}
+{'measure': 'M5', 'class': 'exact', 'n': 200, 'p50_ms': 122.8, 'p95_ms': 159.4, 'max_ms': 275.8, 'budget_ms': 1000.0, 'cases': None, 'reached': None, 'reach_bound': None, 'reached_on_page': None, 'verdict': 'met'}
+{'measure': 'M6', 'class': None, 'n': 50, 'p50_ms': 1049.1, 'p95_ms': 2113.4, 'max_ms': 2142.7, 'budget_ms': 5000.0, 'cases': None, 'reached': None, 'reach_bound': None, 'reached_on_page': None, 'verdict': 'met'}
+Wall time: 240 s, exit 0 (stack d, the lease rules-b took at 2026-11-15T18:00:53Z; set-up before it 6 s)
