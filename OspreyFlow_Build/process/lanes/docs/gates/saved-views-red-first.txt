@@ -1,9 +1,9 @@
-# Saved views (ADR-145 Am 17, ADR-144 Am 6) and no client words (studio's V3): red-first run, 14 November 2026
-Tree: lane/docs-v052-saved-views 467ceb7, rebased on main f7e9606 (case-b's V2 and studio's V3 landed), merged with lane/case-saved-views 14dfbeb (its three App.*.test.tsx conflicts taken from case; no file a test here reads), in a scratch worktree. Not yet the shipping tree: taken again on main once case lands.
+# Saved views (ADR-145 Am 17, ADR-144 Am 6) and no client words (studio's V3): red-first run, 15 November 2026
+Tree: lane/docs-v052-saved-views 2de2256 on main 7933eed, which holds case's V1, case-b's V2 and studio's V3: the shipping tree, nothing else merged in.
 Command: python3 saved-views-plants.py <tree> <venv python>; a fresh PYTHONPYCACHEPREFIX each run; the offline ports 59991-59994. A plant whose old text is a list applies each pair in turn (a part moved within the real file).
-Earlier runs, each fixed before this one: the strip's reworded note passed (the order check sorted a missing part last); Clear the graph renamed passed (its confirmation's name held the words).
+Earlier runs on main with case's and studio's branches merged in (14 November), each miss fixed before the next: the strip's reworded note passed (the order check sorted a missing part last); Clear the graph renamed passed (its confirmation's name held the words). After V1 landed, the whole case's Open is the back link's own handler, and its plant follows it.
 
-unplanted: 31 passed in 2.28s
+unplanted: 31 passed in 1.38s
 RED  the strip's note in its old words
      OspreyFlow_Core/apps/workspace/src/views/ViewLensBanner.tsx: 'Nothing in a saved view changes the case.' -> 'Nothing in a view changes the case.'
      failed: test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order, test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says, test_view_means_a_saved_view_in_every_guide_and_in_the_glass
@@ -89,7 +89,7 @@ RED  the drawer titled Cases from the case line
      OspreyFlow_Core/apps/workspace/src/App.tsx: 'title={casesOpen === "views" ? "Saved views" : "Cases"}' -> 'title="Cases"'
      failed: test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says
 RED  the whole case's Open not wired
-     OspreyFlow_Core/apps/workspace/src/App.tsx: 'onOpenWholeCase={() => {' -> 'onSomethingElse={() => {'
+     OspreyFlow_Core/apps/workspace/src/App.tsx: 'onOpenWholeCase={backToTheWholeCase}' -> 'onOpenWholeCase={closeLens}'
      failed: test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says
 RED  the whole-case strip not drawn
      OspreyFlow_Core/apps/workspace/src/App.tsx: '<WholeCaseStrip />}' -> 'null}'
