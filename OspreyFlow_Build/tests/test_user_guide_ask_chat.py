@@ -161,7 +161,7 @@ def test_section_6_says_ask_and_chat_is_a_page_with_its_way_back_as_the_glass_dr
     assert "<AskPage" in app
     # The rail's second press closes it, and focus returns to the rail's opener.
     assert "onSelect: ask.toggle" in app
-    assert "toggle: () => (open ? back() : openPage())" in hook
+    assert "toggle: () => (open && !reading ? back() : openPage())" in hook
     assert "focusRailOpener(RAIL_LABELS.questions)" in hook
     assert "pressing Ask & Chat on the rail again" in text
     assert "focus returns to Ask & Chat on the rail" in text
