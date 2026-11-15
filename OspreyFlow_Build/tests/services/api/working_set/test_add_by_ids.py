@@ -81,6 +81,19 @@ async def test_a_link_whose_ends_the_reader_cannot_both_see_is_left_out_and_coun
     assert "a-hidden" not in added.model_dump_json()
 
 
+async def test_a_link_to_a_node_neither_on_the_canvas_nor_in_the_add_is_left_out_and_counted() -> None:
+    """The service's own check, past the Vault's: both ends readable, but one neither on the canvas nor
+    asked for, so the link would hang from nothing."""
+    store = FakeWorkingSetStore()
+    service, _ = _service(store, [_real("a"), _real("b")], [edge("ab", "a", "b")])
+
+    added = await service.add_by_ids(CASE, ["a"], ["ab"], OFFICIAL_READER)
+
+    assert [n.id for n in added.outcome.delta.nodes] == ["a"]
+    assert added.outcome.delta.edges == []
+    assert added.not_shown == 1
+
+
 async def test_repeated_ids_are_asked_and_counted_once() -> None:
     store = FakeWorkingSetStore()
     service, _ = _service(store, [_real("a")])

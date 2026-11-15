@@ -1,0 +1,54 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261115T103453Z-8bd2a0ba/log: sh -c export PATH=$HOME/.local/node/bin:$PATH && PLANT_HEAD=785bf0b python3 OspreyFlow_Build/process/lanes/case/gates/show_all_reds.py
+# show-all reds at 785bf0b (the local checkout's, passed in); each plant restored from the file's own text
+## 1. what was not shown never counted
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_add_by_ids.py::test_a_node_the_reader_may_not_see_is_left_out_counted_and_never_named; exit 1
+        assert [n.id for n in added.outcome.delta.nodes] == ["a"]
+>       assert added.not_shown == 1
+E       AssertionError: assert 0 == 1
+tests/services/api/working_set/test_add_by_ids.py:51: AssertionError
+FAILED tests/services/api/working_set/test_add_by_ids.py::test_a_node_the_reader_may_not_see_is_left_out_counted_and_never_named
+1 failed in 2.41s
+## 2. a link put on with an end the reader cannot see
+plant in OspreyFlow_Core/services/api/working_set/service.py; -p no:cacheprovider -q tests/services/api/working_set/test_add_by_ids.py::test_a_link_whose_ends_the_reader_cannot_both_see_is_left_out_and_counted; exit 0
+1 passed in 2.37s
+STAYED GREEN
+## 3. the answer's items added but not selected
+plant in OspreyFlow_Core/apps/workspace/src/questions/showAnswer.ts; keyboard/questions.spec.ts -g Show\ all\ on\ graph\ under\ an\ answer\ puts\ every\ item --workers=1; exit 1
+  ✘  1 keyboard/questions.spec.ts:380:1 › Show all on graph under an answer puts every item it stands for on the real canvas and selects them, by keyboard, saying how many could not be shown (6.9s)
+    Error: expect(received).toEqual(expected) // deep equality
+    - Expected  - 5
+    + Received  + 1
+  1 failed
+## 4. how many could not be shown never said
+plant in OspreyFlow_Core/apps/workspace/src/questions/showAnswer.ts; keyboard/questions.spec.ts -g Show\ all\ on\ graph\ under\ an\ answer\ puts\ every\ item --workers=1; exit 1
+  ✘  1 keyboard/questions.spec.ts:380:1 › Show all on graph under an answer puts every item it stands for on the real canvas and selects them, by keyboard, saying how many could not be shown (2.7s)
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: "1 of this answer's items could not be shown."
+    Received: null
+  1 failed
+## 5. the cap's refusal said as a bare error, its figures lost
+plant in OspreyFlow_Core/apps/workspace/src/questions/showAnswer.ts; keyboard/questions.spec.ts -g Show\ all\ on\ graph\ past\ the\ working\ set's\ cap --workers=1; exit 1
+  ✘  1 keyboard/questions.spec.ts:400:1 › Show all on graph past the working set's cap adds nothing and says the cap's own figures (rule 2) (7.5s)
+    Error: expect(received).toBe(expected) // Object.is equality
+    Expected: "Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view keeps them all."
+    Received: "Something went wrong."
+  1 failed
+## 6. the records a search found left out of the answer's items
+plant in OspreyFlow_Core/apps/workspace/src/questions/AnswerActions.tsx; run src/questions/AnswerActions.test.tsx -t are every id its markers stand for; exit 1
+ [31m❯[39m src/questions/AnswerActions.test.tsx [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m5 skipped[39m[2m)[22m[32m 14[2mms[22m[39m
+[31m     [31m×[31m are every id its markers stand for, each once, facts first then sources[39m[32m 11[2mms[22m[39m
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m5 skipped[39m[90m (6)[39m
+[31m[1mAssertionError[22m: expected { nodeIds: [ 'n2', 'n3', 'n9' ], …(1) } to deeply equal { nodeIds: [ 'n2', 'n3', …(2) ], …(1) }[39m
+[32m- Expected[39m
+[31m+ Received[39m
+## 7. the saved view offered no name of the question's
+plant in OspreyFlow_Core/apps/workspace/src/questions/AnswerActions.tsx; keyboard/questions.spec.ts -g Save\ as\ a\ view\ under\ an\ answer\ saves\ its\ items --workers=1; exit 1
+  ✘  1 keyboard/questions.spec.ts:417:1 › Save as a view under an answer saves its items as a saved view, by keyboard (7.6s)
+    Error: expect(locator).toHaveValue(expected) failed
+    Expected: "Answer: Who is near n2?"
+    Received: ""
+        14 × locator resolved to <input value="" class="input" maxlength="200" id="save-view-name" aria-describedby="save-view-hint"/>
+  1 failed
+# 6 of 7 red
+Wall time: 47 s, exit 1 (no stack, no lease; set-up before it 15 s)
