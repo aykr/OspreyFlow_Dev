@@ -37518,19 +37518,25 @@ decommission:**
    domain's address alone. The recovery runbook's restore ends with the rebuild and the drift check, with their healthy
    last lines. The domain is removed with the namespace's Terraform at decommission, and named if left in the state.
 4. **The shared claim's parts join the backup set and its restore**: the published pipelines (`data/recipes`), the model
-   settings and the map settings with the map key file (ADR-147), each a part of the set's claims part beside the Ingest
-   root, read-only to the backup; the pods that mount them are writers a restore refuses to run beside. The tiles and the
-   uploads' scratch are made again, and are not. *Amended 14 November 2026 (MORNING item 6, option (a), decided under
-   the owner's standing rule):* this point was written with poc's own Ingest claim in view. Outside poc the Ingest root
-   (the uploads and the drop folder) is the shared volume's `ingest` folder and was in no set, so a restore brought
-   back loads citing uploads no longer there, or drop-folder files without the loads that read them: the disagreement
-   ruling 3 exists to prevent. **Wherever the Ingest root is not a claim of its own, its folder is a fourth shared
-   part** (`shared-ingest`, `cloud_platform_backups.INGEST_PART`), read-only to the backup and put back by
-   `restore-claims`; whether it is a claim is read from the render's own mounts (`shared_parts`), never from the
-   shape's name. Every pod mounting it, or a folder inside it (`ingest/uploaded`), is a writer. The cost: uploads can
-   be large, so the claims run's size and time grow with them. Option (b), recording it as a known limit, was declined.
-   Held by `tests/harness/test_cloud_platform_data_safety.py` (the parts in each shape, poc's not doubled, the
-   writers, the recovery runbook's words), `tests/cp_policy_check/test_cp_egress_order.py` and
+   settings and the map settings (ADR-147), each a part of the set's claims part beside the Ingest root, read-only to
+   the backup; the pods that mount them are writers a restore refuses to run beside. The tiles and the uploads' scratch
+   are made again, and are not. *Amended 15 November 2026 (rules-b's find; the owner: in the candidate):* the map
+   settings' part holds the maps file and never the map key file beside it (ADR-147 decision 1; 05_DEPLOYMENT.md §6.1),
+   which the words before this said it held and the claims run took: the claims run leaves it out
+   (`platform_backup.LEFT_OUT`), a restore never puts one back from a set (one taken before holds it) and leaves the
+   claim's own key file where it is, and `restore-claims` names each provider whose key the restored maps file says was
+   set (`keys_held`), to be entered again in *Admin › Maps*, as the standard shapes' restore does. Held by
+   `tests/cloud_platform_backup/test_platform_backup_map_keys.py`. *Amended 14 November 2026 (MORNING item 6, option
+   (a), decided under the owner's standing rule):* this point was written with poc's own Ingest claim in view. Outside
+   poc the Ingest root (the uploads and the drop folder) is the shared volume's `ingest` folder and was in no set, so a
+   restore brought back loads citing uploads no longer there, or drop-folder files without the loads that read them: the
+   disagreement ruling 3 exists to prevent. **Wherever the Ingest root is not a claim of its own, its folder is a fourth
+   shared part** (`shared-ingest`, `cloud_platform_backups.INGEST_PART`), read-only to the backup and put back by
+   `restore-claims`; whether it is a claim is read from the render's own mounts (`shared_parts`), never from the shape's
+   name. Every pod mounting it, or a folder inside it (`ingest/uploaded`), is a writer. The cost: uploads can be large,
+   so the claims run's size and time grow with them. Option (b), recording it as a known limit, was declined. Held by
+   `tests/harness/test_cloud_platform_data_safety.py` (the parts in each shape, poc's not doubled, the writers, the
+   recovery runbook's words), `tests/cp_policy_check/test_cp_egress_order.py` and
    `tests/cloud_platform_backup/test_backups_chart.py` (Helm's own output: read-only to the backup, writable to the
    restore, named to the runner).
 5. **RDS keeps point in time for 35 days** (`backup_retention_period`, `cloud_platform_backups.POINT_IN_TIME_DAYS`;

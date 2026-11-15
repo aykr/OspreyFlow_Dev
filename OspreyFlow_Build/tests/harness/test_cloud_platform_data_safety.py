@@ -1,7 +1,7 @@
 """The ADR-148 audit's ruling 3, data safety (the owner, 13 November 2026; in v0.5.2):
 
 1. **The shared claim joins the backup set and its restore**: the published pipelines (the recipes
-   repository, `data/recipes`), the model settings and the map settings (with the map key file), each
+   repository, `data/recipes`), the model settings and the map settings (never the map key file, `test_platform_backup_map_keys.py`), each
    a part of the set's claims part beside the Ingest root;
 2. **RDS's point-in-time restore reaches every set**: `backup_retention_period` is 35 days, AWS's
    maximum (`cloud_platform_backups.POINT_IN_TIME_DAYS`), and the sets expire a day sooner, at 34
