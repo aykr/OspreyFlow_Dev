@@ -357,7 +357,10 @@
    ],
    "places": [],
    "answered_hidden": [
+    "models_admin_add_checked_route",
     "models_admin_add_engine_route",
+    "models_admin_cancel_check_route",
+    "models_admin_check_route",
     "models_admin_defaults_route",
     "models_admin_edit_engine_route",
     "models_admin_history_route",

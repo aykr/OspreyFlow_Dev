@@ -61,10 +61,12 @@ from schemas.deployment import (
 )
 from schemas.model_admin import (
     AdminEngine,
+    CatalogueEntry,
     ConnectionOutcome,
     ConnectionTestResult,
     EngineCheckResult,
     EngineLimits,
+    HeldCheck,
     KeyState,
     ModelAdminAction,
     ModelAdminEntry,
@@ -72,6 +74,7 @@ from schemas.model_admin import (
     ModelsAdminView,
 )
 
+from . import model_catalogue
 from .config import DeploymentModels
 from .model_routing import LOCAL, ROLES, Engine, ModelRoutes, Role
 
@@ -872,6 +875,34 @@ class ModelAdmin:
             source="models file" if self._settings is not None else "osprey.yaml",
             engine_kinds=engine_kinds_offered(self._file.profile),
             extraction_engine=self._installed.extraction_engine,
+            providers=[
+                CatalogueEntry(
+                    id=e.id,
+                    label=e.label,
+                    kind=e.kind,
+                    address=e.address,
+                    address_asked=e.address_asked,
+                    key=e.key,
+                    example=e.example,
+                    jobs=list(e.jobs),
+                    prefix=e.prefix,
+                    note=e.note,
+                )
+                for e in model_catalogue.providers(self._file.profile)
+            ],
+            # A check past its 15 minutes is not shown, though the next change removes it.
+            checks=[
+                HeldCheck(
+                    id=i,
+                    engine=c.provider.name,
+                    label=c.provider.label or c.provider.name,
+                    by=c.by,
+                    at=c.at,
+                    expires_at=c.at + CHECK_LIFE,
+                )
+                for i, c in current.checks.items()
+                if self._now() - c.at <= CHECK_LIFE
+            ],
         )
 
     @property

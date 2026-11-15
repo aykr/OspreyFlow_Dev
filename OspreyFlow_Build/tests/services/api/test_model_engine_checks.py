@@ -212,3 +212,55 @@ def test_the_key_appears_nowhere_it_must_not(
     # And it did reach the gateway, so the test cannot pass by sending nothing: the added engine's
     # credential holds it, as the gateway itself reads it.
     assert world.gateway.credential("osprey-gemini") == PLANTED
+
+
+def test_the_view_offers_this_profile_s_providers_for_the_form(client: TestClient) -> None:
+    """The form's provider list comes from the Conduit (Amendment 14 point 1), in the owner's order,
+    each with what the form shows: its address or that it asks one, whether it takes a key, its jobs
+    alone, its example and its prefix. Off the cloud platform, Bedrock is not among them."""
+    providers = client.get("/v1/admin/models").json()["providers"]
+    assert [p["id"] for p in providers] == ["gemini", "openai", "anthropic", "azure", "gateway"]
+    gemini = providers[0]
+    assert gemini["address"] == "https://generativelanguage.googleapis.com"
+    assert gemini["address_asked"] is False and gemini["key"] is True
+    assert gemini["example"] == "gemini-3.8-flash" and gemini["prefix"] == "gemini"
+    anthropic = next(p for p in providers if p["id"] == "anthropic")
+    assert anthropic["jobs"] == ["extraction", "vision"], "no transcription offered"
+    azure = next(p for p in providers if p["id"] == "azure")
+    assert azure["address"] is None and azure["address_asked"] is True and azure["example"] is None
+    assert all("hosts" not in p for p in providers), "the form is told what it shows, no more"
+
+
+def test_on_the_cloud_platform_bedrock_is_offered_with_no_key_and_no_address(
+    client: TestClient, world: Any
+) -> None:
+    world.admin._file.profile = "cloud-platform"
+    providers = client.get("/v1/admin/models").json()["providers"]
+    bedrock = next(p for p in providers if p["id"] == "bedrock")
+    assert bedrock["key"] is False and bedrock["address"] is None
+    assert bedrock["address_asked"] is False and "London" in bedrock["note"]
+
+
+def test_a_passed_check_is_shown_as_being_checked_until_added_cancelled_or_15_minutes(
+    client: TestClient, world: Any, clock: _Clock
+) -> None:
+    """Amendment 14 point 2: a passed check waiting for **Add** is shown in Admin as being checked,
+    with when it lapses, so an administrator who left the form can cancel it; never as an engine."""
+    check = _check(client).json()["check"]
+    held = client.get("/v1/admin/models").json()["checks"]
+    assert held == [
+        {
+            "id": check,
+            "engine": "gemini",
+            "label": "Google Gemini",
+            "by": ADMIN.id,
+            "at": "2026-11-15T12:00:00Z",
+            "expires_at": "2026-11-15T12:15:00Z",
+        }
+    ]
+    assert client.delete(f"{CHECKS}/{check}").json()["checks"] == []
+    _check(client)
+    clock.at += timedelta(minutes=15, seconds=1)
+    assert client.get("/v1/admin/models").json()["checks"] == [], "a lapsed check is not shown"
+    added = client.post(f"{CHECKS}/{_check(client).json()['check']}/add").json()
+    assert added["checks"] == [] and added["engines"][0]["provider"]["name"] == "gemini"
