@@ -11,7 +11,10 @@
 FROM apache/superset@sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88
 USER root
 # The base image's Debian packages brought up to date at build (the release scan, 15 October 2026).
-RUN apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
+# The day's stamp (`harness/upgrade_stamp.py`): every build passes today's date, so this upgrade's
+# layer is made again each day and a builder's cached copy cannot keep the distribution's old fixes.
+ARG OSPREY_UPGRADE_STAMP=
+RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP:-an unstamped build}" && apt-get update && apt-get upgrade -y --no-install-recommends && rm -rf /var/lib/apt/lists/*
 # The PostgreSQL client libraries named, upgraded and checked (v0.6.0: 192 HIGH CVEs in libpq,
 # libecpg, libecpg-compat and libpgtypes at 15.19-0+deb12u1, each fixed in 15.20-0+deb12u1). The step
 # above is one layer whose text never changes, so a build reusing its cached copy keeps whatever

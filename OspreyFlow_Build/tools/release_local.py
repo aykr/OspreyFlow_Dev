@@ -25,6 +25,7 @@ import argparse
 import subprocess
 import sys
 
+from harness import upgrade_stamp
 from harness.render import REPO_ROOT, git_sha
 
 REGISTRY = "ghcr.io/ospreyflow"
@@ -56,7 +57,7 @@ def build_and_scan(sha: str) -> list[str]:
     for service, dockerfile, build_arg_name, context in SERVICES:
         sha_tag = f"{REGISTRY}/{service}:{sha}"
         latest_tag = f"{REGISTRY}/{service}:latest"
-        cmd = ["docker", "build", "--pull", "-f", dockerfile]
+        cmd = ["docker", "build", "--pull", *upgrade_stamp.build_args(), "-f", dockerfile]
         if build_arg_name is not None:
             cmd += ["--build-arg", f"{build_arg_name}={sha}"]
         cmd += ["-t", sha_tag, str(REPO_ROOT / context)]

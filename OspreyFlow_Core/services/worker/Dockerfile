@@ -18,7 +18,10 @@ COPY services ./services
 FROM python:3.12-slim
 
 # Current Debian security patches at build time, so `trivy image` stays a real gate.
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+# The day's stamp (`harness/upgrade_stamp.py`): every build passes today's date, so this upgrade's
+# layer is made again each day and a builder's cached copy cannot keep the distribution's old fixes.
+ARG OSPREY_UPGRADE_STAMP=
+RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP:-an unstamped build}" && apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 RUN useradd --create-home --uid 10001 osprey
 WORKDIR /app

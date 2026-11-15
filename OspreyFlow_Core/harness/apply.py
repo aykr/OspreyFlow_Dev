@@ -67,6 +67,7 @@ from harness import (
     model_downloads,
     store_volumes,
     tls_check,
+    upgrade_stamp,
 )
 from harness.keycloak_admin import (
     grant_service_account_roles,
@@ -1656,7 +1657,10 @@ def main(
         if args.no_build:
             result.record("build", "skipped (--no-build): using the images already in the daemon")
         else:
-            _run(_compose(compose_file) + ["build", "--pull"], stage="build")
+            _run(
+                _compose(compose_file) + ["build", "--pull", *upgrade_stamp.build_args()],
+                stage="build",
+            )
             result.record("build", "owned images built from this checkout")
 
         # 3b. The Ingest Studio's upload folder, the Conduit's to write before anything starts

@@ -7,7 +7,10 @@ WORKDIR /srv
 
 # Debian's fixes that the base image does not carry yet, as every other image takes them (5 November:
 # apt's CVE-2026-109518 stopped v0.4.11's release on this image alone).
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+# The day's stamp (`harness/upgrade_stamp.py`): every build passes today's date, so this upgrade's
+# layer is made again each day and a builder's cached copy cannot keep the distribution's old fixes.
+ARG OSPREY_UPGRADE_STAMP=
+RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP:-an unstamped build}" && apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # The CPU build of the runtime: a fraction of the size of the default, which carries GPU libraries.
 # 2.6.0, not 2.5.1: CVE-2025-32434, a weights-only load that was not (the release scan, 15 October

@@ -8,7 +8,10 @@ ENV PIP_NO_CACHE_DIR=1 PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /srv
 
 # Debian's fixes that the base image does not carry yet, as every other image takes them.
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+# The day's stamp (`harness/upgrade_stamp.py`): every build passes today's date, so this upgrade's
+# layer is made again each day and a builder's cached copy cannot keep the distribution's old fixes.
+ARG OSPREY_UPGRADE_STAMP=
+RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP:-an unstamped build}" && apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # Every package pinned by hash (requirements.txt, compiled from requirements.in for 3.13 on
 # manylinux_2_28): Laurium from PyPI's 0.6.0 artefacts, never its repository's main; spaCy's

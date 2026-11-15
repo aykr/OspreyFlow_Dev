@@ -82,7 +82,10 @@ FROM runtime-${CONDUIT_JAVA}
 # on packages this service does not touch. In the final stage
 # (`tests/test_images_built_fresh.py`), before the code's layers, so a code
 # change does not repeat it.
-RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+# The day's stamp (`harness/upgrade_stamp.py`): every build passes today's date, so this upgrade's
+# layer is made again each day and a builder's cached copy cannot keep the distribution's old fixes.
+ARG OSPREY_UPGRADE_STAMP=
+RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP:-an unstamped build}" && apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 # No `git`: publishing commits a recipe in-process with dulwich (Apache-2.0), so nothing this image
 # carries execs the binary, which is GPL-2.0-only (the owner's ruling of 9 November 2026; ADR-140

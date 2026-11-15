@@ -55,7 +55,10 @@ FROM nginx:1.30-alpine
 # release; picking up current Alpine security patches at build time is
 # what keeps `trivy image` a real gate rather than permanently red on
 # packages this image does not use.
-RUN apk upgrade --no-cache
+# The day's stamp (`harness/upgrade_stamp.py`): every build passes today's date, so this upgrade's
+# layer is made again each day and a builder's cached copy cannot keep the distribution's old fixes.
+ARG OSPREY_UPGRADE_STAMP=
+RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP:-an unstamped build}" && apk upgrade --no-cache
 
 # A single-page application: every unknown path is the app's own route,
 # not a 404, or a deep link into an investigation breaks on refresh.

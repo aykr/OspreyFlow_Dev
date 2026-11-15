@@ -1,0 +1,107 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index ea38720..6e3b276 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -227,7 +227,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f services/ingest/Dockerfile -t ospreyflow/ingest:ci .
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -247,7 +247,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f apps/workspace/Dockerfile -t ospreyflow/workspace:ci .
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -265,7 +265,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f harness/Dockerfile -t ospreyflow/harness:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f harness/Dockerfile -t ospreyflow/harness:ci .
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -283,7 +283,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f services/api/Dockerfile -t ospreyflow/api:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f services/api/Dockerfile -t ospreyflow/api:ci .
+       # ADR-147 Amendment 2: trivy does not see the image's jlinked Java, so the image just built
+       # must run the Java its Dockerfile declares (`/opt/java/release`, `java -version`), shown red
+       # over a Temurin 21.0.1 image on the test server (process/lanes/platform/gates/).
+@@ -308,7 +308,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f services/ner/Dockerfile -t ospreyflow/ner:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f services/ner/Dockerfile -t ospreyflow/ner:ci .
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -325,7 +325,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f services/worker/Dockerfile -t ospreyflow/worker:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f services/worker/Dockerfile -t ospreyflow/worker:ci .
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -342,7 +342,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f services/report_sync/Dockerfile -t ospreyflow/report-sync:ci .
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -383,7 +383,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+@@ -400,7 +400,7 @@ jobs:
+     runs-on: ubuntu-latest
+     steps:
+       - uses: actions/checkout@v4
+-      - run: docker build -f services/laurium/Dockerfile -t ospreyflow/laurium:ci services/laurium
++      - run: docker build --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" -f services/laurium/Dockerfile -t ospreyflow/laurium:ci services/laurium
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+           version: v0.76.1
+diff --git a/OspreyFlow_Core/.github/workflows/release.yml b/OspreyFlow_Core/.github/workflows/release.yml
+index 1f76ebb..aa99971 100644
+--- a/OspreyFlow_Core/.github/workflows/release.yml
++++ b/OspreyFlow_Core/.github/workflows/release.yml
+@@ -69,7 +69,7 @@ jobs:
+       # Scanned first, as the amd64 image, before anything is pushed.
+       - name: Build for the scan
+         run: |
+-          docker buildx build --pull --platform linux/amd64 --load -f ${{ matrix.dockerfile }} \
++          docker buildx build --pull --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" --platform linux/amd64 --load -f ${{ matrix.dockerfile }} \
+             -t "${{ steps.name.outputs.image }}:scan" "${{ matrix.context || '.' }}"
+       - uses: aquasecurity/trivy-action@v0.24.0
+         with:
+@@ -86,7 +86,7 @@ jobs:
+       - name: Build both platforms and push
+         id: push
+         run: |
+-          docker buildx build --pull --platform linux/amd64,linux/arm64 --push \
++          docker buildx build --pull --build-arg OSPREY_UPGRADE_STAMP="$(date -u +%F)" --platform linux/amd64,linux/arm64 --push \
+             -f ${{ matrix.dockerfile }} -t "${{ steps.name.outputs.image }}:$GITHUB_SHA" \
+             --metadata-file meta.json "${{ matrix.context || '.' }}"
+           echo "ref=${{ steps.name.outputs.image }}@$(jq -r '."containerimage.digest"' meta.json)" >> "$GITHUB_OUTPUT"
