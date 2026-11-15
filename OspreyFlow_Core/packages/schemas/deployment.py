@@ -592,8 +592,8 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
             if not _BEDROCK_MODEL_ID.fullmatch(model):
                 return (
                     f"Bedrock is used in London only: the {role} model is not a model's own id "
-                    "(such as anthropic.…). A cross-region inference profile's id (eu.…, us.…, "
-                    "apac.…, global.…) or an ARN may send the call outside London"
+                    "(such as amazon.nova-pro-v1:0). A cross-region inference profile's id "
+                    "(eu.…, us.…, apac.…, global.…) or an ARN may send the call outside London"
                 )
         return None
     if provider.name == "bedrock":

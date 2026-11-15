@@ -1,0 +1,20 @@
+# v0.6.0, §6a.9's Bedrock in London (ruling 17): red-first run, 15 November 2026
+Tree: lane/docs-v060-bedrock-london 215670c on main 97dc544, the branch itself. Each plant is an edit at the real file, made, run and taken back with git checkout; a fresh PYTHONPYCACHEPREFIX each run; the offline ports 59991-59994.
+
+unplanted: 3 passed in 1.09s
+RED  the guide's old Claude example back
+     OspreyFlow_Core/docs/administration-guide.md: 'roles: {extraction: amazon.nova-pro-v1:0}' -> 'roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}'
+     failed: test_the_example_is_a_model_the_schema_admits_and_london_serves
+RED  spec/10's example an EU profile
+     OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md: 'roles: {extraction: amazon.nova-pro-v1:0}' -> 'roles: {extraction: eu.amazon.nova-pro-v1:0}'
+     failed: test_the_example_is_a_model_the_schema_admits_and_london_serves
+RED  the schema admits only one provider's ids
+     OspreyFlow_Core/packages/schemas/deployment.py: '_BEDROCK_MODEL_ID = re.compile(r"[a-z0-9-]+\\.[^.\\s:]+(:[^.\\s]+)?")' -> '_BEDROCK_MODEL_ID = re.compile(r"cohere\\.[^.\\s:]+(:[^.\\s]+)?")'
+     failed: test_the_example_is_a_model_the_schema_admits_and_london_serves
+RED  the London sentence gone
+     OspreyFlow_Core/docs/administration-guide.md: "Claude through AWS's EU profile is not offered in v0.6.0.**" -> '**'
+     failed: test_the_guide_says_what_bedrock_in_london_means
+RED  the old not-yet-tried line back
+     OspreyFlow_Core/docs/administration-guide.md: '(current Claude models are not among the models here:' -> '; newer Claude models are offered in London only through inference profiles (current Claude models are not among the models here:'
+     failed: test_the_guide_says_what_bedrock_in_london_means
+restored: 3 passed in 1.25s

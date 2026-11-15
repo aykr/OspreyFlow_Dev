@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.21** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 2.22** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.22 | 2026-11-15 | §6a.9, Bedrock in London (the owner's ruling 17): the example's model is `amazon.nova-pro-v1:0`, a model AWS serves in-Region in London; Bedrock in London means Amazon Nova and the Titan embeddings, not current Claude models, which London serves only through the EU and global profiles the region rule refuses; Claude through AWS's EU profile is not offered in v0.6.0. Held by `tests/test_admin_guide_bedrock_london.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.21 | 2026-11-15 | §10's *Keys*, §8's `models key` row and §4.1's guided install, as the code has done since ADR-135 Amendment 2 (the owner followed the guide on 15 November and it was wrong): a key is entered in *Admin › Models* with **Enter key** (**Rotate key**) and **Set the key**, write-only, kept by the model gateway alone and used with nothing restarted; **Remove key** beside it; neither for an engine on the gateway's IAM role. The install hands a key from `deployment.env` to the gateway and removes its line; `ospreyflow models key` runs the Conduit's own key path and restarts nothing. Held by `tests/test_admin_guide_model_keys.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.20 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November: one release, installed fresh). §6a.1's *Moving to a new release* is for a release after v0.6.0, which is installed fresh into a namespace of its own, and the move is not yet rehearsed; §14 opens with the same rule. Passages for deployments only an earlier release could have made are struck: the checkout's deployment from before v0.4.2, an `admin` from v0.4.6, the rules' move at v0.5.0, the hosted engines' egress after an upgrade, HMP loaded before v0.2.0, the stores' move to named volumes and §14.1, an `osprey.yaml` from v0.4.x, sets from before v0.5.0, v0.4.8's backups on Linux, a bundle from before v0.4.12, and their rows in §16. Held by `tests/test_guides_release_header.py`, `tests/test_guide_6a_upgrade.py` and `tests/test_guides_v060_fresh.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.19 | 2026-11-15 | §6a.8: a backup set never holds the map key file on cloud-platform either (the claims run took it with the map settings before; the owner, 15 Nov, a fix in v0.5.2), and a restore names each provider whose key must be entered again (ADR-148 Amendment 13 point 4, corrected). Version set at merge. PDF made by the orchestrator at merge. |
@@ -1996,7 +1997,7 @@ models:
     - name: bedrock                          # Amazon Bedrock in London
       kind: bedrock                          # auth: iam_role and region: eu-west-2 by default
       # a model's own id: check your account is offered it on demand in London
-      roles: {extraction: anthropic.claude-3-haiku-20240307-v1:0}
+            roles: {extraction: amazon.nova-pro-v1:0}
   defaults: {extraction: orggateway}
 cloud_platform:
   egress_nets:                               # each engine's host, by its networks
@@ -2005,10 +2006,13 @@ cloud_platform:
 ```
 
 **The region answer is London, and only London.** `region` is Bedrock's alone and takes only
-`eu-west-2`, its default. A Bedrock model is named by its own id (`anthropic.…`); a cross-region
+`eu-west-2`, its default. A Bedrock model is named by its own id (`amazon.nova-pro-v1:0`); a cross-region
 inference profile's id (`eu.…`, `us.…`, `apac.…`, `global.…`, or any other part before the
 provider's) and an ARN are refused, since either may send the call outside London. A model Bedrock
-offers in London only through an inference profile cannot therefore be used here.
+offers in London only through an inference profile cannot therefore be used here. **So Bedrock in
+London means the models AWS serves in-Region there: Amazon Nova and the Titan embeddings, not current
+Claude models, which AWS serves from London only through its EU and global profiles. Claude through
+AWS's EU profile is not offered in v0.6.0.**
 
 **Refused in words**, each naming the field and never its value, wherever an engine is read
 (`osprey.yaml` at render, the Conduit's start, the models file and *Admin › Models*): Bedrock by a
@@ -2091,8 +2095,8 @@ first install:
 - whether the gateway's AWS client uses STS's regional endpoint: only `sts.eu-west-2` is allowed out,
   and the gateway's account carries no regional-endpoint annotation;
 - whether a model's first use needs an administrator to enable it in Bedrock's *Model access*, or
-  AWS Marketplace actions, first; newer Claude models are offered in London only through inference
-  profiles, which are refused here;
+  AWS Marketplace actions, first (current Claude models are not among the models here: London serves
+  them only through inference profiles, which are refused);
 - Bedrock's own words for a model not enabled, an invalid id and a model not offered on demand, which
   AWS does not document and *Test the connection* reads (none has been measured against Bedrock);
 - any call through your organisation's own gateway, by its token, and whatever stands in front of it;
