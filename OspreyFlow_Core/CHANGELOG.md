@@ -6,26 +6,25 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
-## v0.5.2 — 2026-11-15
+## v0.6.0 — 2026-11-18
+
+**v0.6.0 is installed fresh: there is no upgrade to it from any earlier version.**
 
 The release that searches. Search runs on OpenSearch, with each reader's access inside every query, and
 every change to the graph reaches the index in the graph's own transaction. It was measured on a
 client-size synthetic load of about 281,000 people, and each search met its budget. On the `cloud-platform`
-profile, scheduled runs, reporting and the data-safety fixes that v0.5.1 promised are in. The Glass is
-easier to find your way around: one view switch, a case line that says what is open, and "view" kept for
-saved views alone.
+profile, scheduled runs, reporting and the data-safety fixes are in. The Glass is easier to find your way
+around: one view switch, a case line that says what is open, and "view" kept for saved views alone.
 
-**Before you update.**
-- **Back up first,** as for every update: `ospreyflow update` takes its own backup and rolls back if
-  anything fails.
-- **The search index is rebuilt from the graph** on `install`, on `update`, by `ospreyflow start
-  --build` (its last step) and after a restore, wherever the deployment searches with OpenSearch
-  (`components.search: opensearch`, the default). An index made before v0.5.2 is not one v0.5.2 writes
-  to. A rebuild that fails fails the install, and rolls an update back.
-- **On `cloud-platform`, `INSTALL.md` runs again from v0.5.2's copy** (administration guide §6a.1,
-  *Moving to a new release*). It rebuilds the index by a Job once the Conduit and the workers are rolled
-  out. With reporting on, Superset and the report sync need Entra registrations of their own, and
-  `INSTALL.md` counts them.
+**Before you install.**
+- **A new deployment, not an earlier one moved.** Install v0.6.0 where no OspreyFlow deployment is, or
+  into a new namespace on `cloud-platform`. A deployment made by an earlier release stays on that release.
+- **The search index is built from the graph** on `install`, by `ospreyflow start --build` (its last
+  step) and after a restore, wherever the deployment searches with OpenSearch (`components.search:
+  opensearch`, the default). A build that fails fails the install, saying so.
+- **On `cloud-platform`, `INSTALL.md` builds the index by a Job** once the Conduit and the workers are
+  rolled out (administration guide §6a.1). With reporting on, Superset and the report sync need Entra
+  registrations of their own, and `INSTALL.md` counts them.
 - **Hosted model engines are bounded at 120 seconds a call, and the deployment's own model at 900**
   (administration guide §10), set in `deployment.env` on Lite and Small.
 
