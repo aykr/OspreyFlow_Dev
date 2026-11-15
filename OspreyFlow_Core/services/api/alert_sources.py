@@ -60,8 +60,10 @@ def _counts(rows: Sequence[QueuedAlert]) -> dict[str, _Held]:
         if suppressed_today(alert) and alert.suppressed_until is not None:
             held.suppressed.append(
                 SuppressedAlert(
-                    alert_id=alert.id, until=alert.suppressed_until,
-                    reason=alert.suppress_reason or "", by=alert.suppressed_by or "",
+                    alert_id=alert.id,
+                    until=alert.suppressed_until,
+                    reason=alert.suppress_reason or "",
+                    by=alert.suppressed_by or "",
                 )  # fmt: skip
             )
     return by
