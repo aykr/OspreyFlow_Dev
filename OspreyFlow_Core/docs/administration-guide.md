@@ -2886,9 +2886,12 @@ your own gateway*. The form then knows the provider:
   Amazon Bedrock has neither key nor address: it is reached by the deployment's own role, in London.
 - **Jobs.** Only the jobs the provider can do are offered (Anthropic and Bedrock take no
   transcription). Type each model's name as the provider gives it, beside a current example; the
-  provider's prefix (`gemini/`, `openai/` …) is the form's business, and is taken off if you type it.
+  provider's prefix (`gemini/`, `openai/` …) is the form's business, and is taken off if you type it (for your
+  own gateway the name is kept exactly as you type it). A name that looks like a key is refused.
   A job left empty uses this deployment's own model.
-- **Key** (or **Token**, for your own gateway): write-only, never auto-completed, emptied once sent.
+- **Key** (or **Token**, for your own gateway): write-only, emptied once sent and when you change the provider.
+  The page never stores it and asks the browser not to fill or save it; if your browser's password manager
+  still offers to save it, decline.
 - **Under a privacy contract**, and when ticked the agreement's reference, as before.
 - **Analysts will see** shows the engine exactly as analysts' engine list will, "Google Gemini (no
   contract)" or "(under contract)", and that it is offered only for cases whose data may leave this
@@ -2896,10 +2899,12 @@ your own gateway*. The form then knows the provider:
 
 **Check** sends the key once to the model gateway, which asks each typed model one call of at most
 one token. Each answer is said in fixed words at the field it concerns: the key refused, at the key;
-a model not offered, at that job. **Nothing is added unchecked:** a refused check keeps nothing, and
-only a passed check offers **Add the engine**, which adds it from the check without sending the key
-again. A passed check not added within 15 minutes is removed, key and all, and **Cancel** removes it
-at once. Until then it is listed under **Being checked**, with when it lapses and **Cancel the
+a model not offered, at that job; an address that is not `https://`, at the address. **This form adds
+nothing unchecked:** a refused check keeps nothing, and only a passed check offers **Add the engine**,
+which adds it from the check without sending the key again, recording the key as set by whoever
+checked it. A passed check not added within 15 minutes is removed, key and all, within a minute after
+that, and **Cancel** removes it at once. **Edit** does not check yet: after changing an engine's model
+or address, use **Test the connection**. Each provider can be added once here. Until then it is listed under **Being checked**, with when it lapses and **Cancel the
 check**, and is offered to no analyst. Each check, its outcome, its cancelling and its lapsing are in
 **History** and the audit log, never the key. Listing the models a key may use is not built yet: the
 model names are typed.

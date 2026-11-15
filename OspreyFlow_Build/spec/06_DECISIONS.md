@@ -40116,7 +40116,10 @@ the guide's lines that were not updated then.
    deprecated `gemini-2.5-flash`), `gpt-6.1-sol`, `claude-sonnet-5-5`, and on Bedrock `amazon.nova-pro-v1:0`, since
    no current Anthropic model is served in-Region in London (only through `eu.`/`global.` profiles, which
    Amendment 7 decision 2 refuses; raised with the owner).
-2. **Your organisation's own gateway on every profile** (the owner's ruling of 15 November 2026). This changes
+2. **Your organisation's own gateway on every profile** (the owner's ruling of 15 November 2026, given to the
+   platform lane in its session and carried in its handoff; **its written source is not yet in
+   `process/lanes/admin-forms/OWNER_RULINGS_2026-11-15.md`**, whose rulings 1 to 11 do not include it, and is to be
+   added there before this amendment merges, since it changes an accepted decision). This changes
    Amendment 7 decision 1: `engine_kinds_offered` gives `provider` and `gateway` on every profile, and `bedrock`
    on `cloud-platform` alone. Off the cloud platform a gateway engine is reached at its address alone and by a
    token; Bedrock and the gateway's own IAM role stay the cloud platform's.
@@ -40128,26 +40131,43 @@ the guide's lines that were not updated then.
    is held in the models file (`checks`) for 15 minutes and shown in Admin under **Being checked** (`HeldCheck`:
    who, when, when it lapses, **Cancel the check**), never as an engine and never offered to analysts. **Add**
    (`POST …/checks/{id}/add`) makes the engine from the check and never takes the key again; a check that did not
-   pass gives nothing to add. **Cancel** (`DELETE …/checks/{id}`), or 15 minutes, removes the credential. A label
-   or agreement reference that looks like a key is refused on every profile before anything is kept. This takes
+   pass gives nothing to add. **Cancel** (`DELETE …/checks/{id}`) removes the credential at once; a check past its
+   15 minutes is removed, credential and all, by a sweep the Conduit runs from its start every minute
+   (`ModelAdmin.sweep_checks`), so with no later request at all, and also before any check, **Add** or older add.
+   Its key is held unadded for at most 15 minutes and one sweep. A label, agreement reference or model name that
+   looks like a key is refused on every profile before anything is kept (a model name as a path segment is
+   judged, `model_looks_like_a_key`). The key's record is who typed it at the check, and when (the owner's key
+   rule 3), not who pressed **Add**. The older add route refuses a name that is being checked. This takes
    the draft's way (b) in substance (the key crosses once) but holds the check, not a held engine row.
 4. **The preview** says "Analysts will see: <the analysts' engine list's own text>", that is `engineOptionText`'s
    "<label> (no contract)" or "<label> (under contract)", and that it is offered only for cases whose data may
    leave. **Correction to the draft:** the draft's "(under contract: <reference>)" is not what analysts see; the
    reference is shown in Admin alone, so the preview does not show it to them.
 5. **On the screen** (`apps/workspace/src/admin/sections/Models.tsx`): **Check** is the add form's one way
-   forward; the key field is `type="password"`, `autocomplete="off"` (the form's too), never filled, and emptied
-   once sent whatever the answer; each refusal is tied to its field (`aria-invalid`, `aria-describedby`): a key
-   refused at the key, a model not offered or not enabled at its job, and the Conduit's refusal of a key-shaped
-   label or reference at that field. Once a check passes the fields are locked; **Add the engine** or **Cancel**
-   follows. The older `POST /v1/admin/models/engines` is left in place, and its tests with it; the screen no
+   forward. The key field is `type="password"` with `autocomplete="new-password"` (browsers ignore `off` on a
+   password field) and the password managers' own opt-outs (1Password, LastPass, Bitwarden); it is never filled
+   from anything, emptied once sent whatever the answer, and emptied when the provider is changed, so a key is
+   never sent to a provider or address it was not typed for. What this guarantees: the page never stores the key,
+   and asks the browser not to; a browser's own password manager may still offer to save it, and the guide says to
+   decline. Each refusal is tied to its field (`aria-invalid`, `aria-describedby`): a key refused at the key, a
+   model not offered or not enabled at its job, a value the engine's rules refuse at the field the Conduit names
+   (`fields`: `provider.api_base`, `provider.roles.<job>`, `provider.label`, `provider.contract_reference`), and
+   the Conduit's own refusal of a key-shaped label, reference or model name at that field. The label sent is the
+   label the preview shows (the provider's own when the field is emptied). The prefix is taken off a typed name,
+   except for your own gateway, whose prefix is only LiteLLM's way to it. **Cancel** is not offered while a check
+   is out. Once a check passes the fields are locked; **Add the engine** or **Cancel** follows. The read-only
+   extraction-engine line shows on the cloud platform alone (the profile offering Bedrock), as before this
+   amendment let the gateway onto every profile. The older `POST /v1/admin/models/engines` is left in place, and its tests with it; the screen no
    longer calls it. So an engine can still be added unchecked by calling that route directly, with
-   `manage_models`: raised with the owner, not closed in this slice.
+   `manage_models`, and **Edit** still saves a changed model name or address without a check (the owner's first
+   complaint, for a later slice): both raised with the owner, not closed here. A provider can be added once from
+   the screen, since the engine's name is the provider's id (a second Azure resource or gateway is refused as
+   already added): raised with the owner.
 6. **Audited**: `engine_checked` (passed or refused, with each model's outcome), `engine_added`,
    `engine_check_cancelled`, `engine_check_expired`, and the key's own actions as before. Who and when, never the key.
 7. **What weakens how a key is held today**, brought to the owner: the key reaches the gateway before an
-   administrator commits to the engine, for at most 15 minutes if it is not added, in the gateway's sealed store
-   as every key is. Nothing else changes: the Conduit's transit is Amendment 2's, already accepted.
+   administrator commits to the engine, for at most 15 minutes and one sweep (a minute) if it is not added, in the
+   gateway's sealed store as every key is. Nothing else changes: the Conduit's transit is Amendment 2's, already accepted.
 8. **The guide** (`10_ADMINISTRATION_GUIDE.md` and `OspreyFlow_Core/docs/administration-guide.md`): §8's `models
    key` row says the key goes to the gateway's own store and nothing is restarted (it said `deployment.env` and a
    restart, against `cli/ospreyflow/models.py`); §10's key paragraph says a key is managed in *Admin › Models*,
@@ -40158,11 +40178,19 @@ profiles); `test_model_engine_kinds.py` (decision 1 as changed); `test_model_eng
 without a passed check; a refused key or model leaves nothing in the gateway; nothing offered until **Add**; the
 15 minutes; **Cancel**; the view's `providers` and `checks`; and `test_the_key_appears_nowhere_it_must_not`, the
 owner's key test, across check, refusal, cancel, expiry and **Add**: responses, headers, URLs, logs, audit, the
-models file and the gateway's rows, against a stand-in that refuses what LiteLLM refuses); the Glass's
+models file and the gateway's rows, against the stand-in gateway; the sweep with no request and from start; the
+older route refusing a name being checked; a key-shaped model name; the key recorded as the checker's; each
+refused field named, never echoed; and, in `test_model_engine_kinds.py`, the cloud-platform refusal before the
+key reaches the gateway). **Not yet shown (rule 15):** the stand-in does not refuse a second credential of the same
+name (it overwrites; its own docstring records that as not measured), nor model `/v1/models` with discovery off,
+and the check's sequence (credential, entry, one call, entry removed, credential kept for **Add**) has not run
+against the pinned LiteLLM: that live run, under a lease, is owed before the slice is relied on. The Glass's
 `Models.test.tsx` (the list, the jobs, the addresses, Bedrock's absence and its form, the preview equal to
 `engineOptionText`, the check before **Add** sending the key once and **Add** never, each refusal at its field,
-**Cancel**, **Being checked**, and the key test's browser half: no `localStorage`, `sessionStorage`, cookie, URL
-or page text holds it, the form and field never auto-complete); and `keyboard/admin-models.spec.ts` (rule 13: add,
-cancel, change the address, a refusal, Bedrock and your own gateway, by keyboard). The Conduit's and the Glass's
+**Cancel** and none while a check is out, **Being checked**, the key emptied on a change of provider, each named
+field's refusal at its field, the label sent equal to the preview's, your own gateway's names kept whole, and the key
+test's browser half: no `localStorage`, `sessionStorage`, cookie, URL
+or page text holds it, the field asks no autofill); and `keyboard/admin-models.spec.ts` (rule 13: add, cancel from
+the form, cancel from **Being checked**, change the address, a refusal, Bedrock and your own gateway, by keyboard). The Conduit's and the Glass's
 cases were shown red first and their plants red (`process/lanes/platform/v061-admin-forms/red-first.txt`); the
 keyboard cases and the axe scan of the new states wait for a browser slot.

@@ -1,0 +1,29 @@
+plant 1: Add after a refused check goes ahead
+  -k 'refused_without_a_passed_check': RED (1 failed, 20 deselected in 5.46s)
+plant 2: a refused check keeps its key in the gateway
+  -k 'leaves_nothing_in_the_gateway': RED (2 failed, 19 deselected in 5.62s)
+plant 3: a check lives for ever
+  -k 'not_added_in_15_minutes': RED (1 failed, 20 deselected in 5.11s)
+plant 4: a checked model's entry is left in the gateway
+  -k 'offers_nothing_until_add': RED (1 failed, 20 deselected in 5.94s)
+plant 5: a refused body is echoed back
+  -k 'appears_nowhere': RED (1 failed, 20 deselected in 5.46s)
+plant 6: a refused field's words not redacted
+  -k 'refused_field_is_named': RED (1 failed, 3 passed, 17 deselected in 4.86s)
+plant 7: a key pasted into the label is taken
+  -k 'appears_nowhere': RED (1 failed, 20 deselected in 4.83s)
+plant 8: Cancel leaves the key in the gateway
+  -k 'cancel_removes': RED (1 failed, 20 deselected in 4.95s)
+plant 9: a lapsed check's key kept until someone asks (no sweep at start)
+  -k 'sweep_runs_by_itself': RED (1 failed, 20 deselected in 6.04s)
+plant 10: the old add route takes a name being checked
+  -k 'being_checked_is_not_added': RED (1 failed, 20 deselected in 5.09s)
+plant 11: a key pasted into a model name is checked
+  -k 'pasted_into_a_model_name': RED (1 failed, 20 deselected in 5.07s)
+plant 12: the key recorded as set by whoever pressed Add
+  -k 'recorded_as_set_by': RED (1 failed, 20 deselected in 4.95s)
+plant 13: a refused job not named, only the roles
+  -k 'refused_field_is_named': RED (2 failed, 2 passed, 17 deselected in 4.99s)
+plant 14: the key handed to the gateway before the render's refusal
+  -k 'render_did_not_make': RED (1 failed, 8 passed, 116 deselected in 5.67s)
+14/14 red

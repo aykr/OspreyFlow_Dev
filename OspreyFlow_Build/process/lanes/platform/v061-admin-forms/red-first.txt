@@ -44,3 +44,32 @@ so that guard is not the defence; replaced by the plant above, which is.)
 
 Not run here: keyboard/admin-models.spec.ts and the axe scan of the new states (the every-harness diff): a browser
 run needs a slot from the orchestrator (Prompt L), and was refused here.
+
+The lane review of 506ad53 (my own lane-reviewer, 15 November 2026): 22 items. Fixed with red first, offline on closed
+ports 59991-59999, no stack, no browser:
+
+Conduit, test_model_engine_checks.py: 5 new cases red before the fix (the sweep with no request; the sweep from
+start; the older add route and a name being checked; a key-shaped model name; the key recorded as the checker's),
+then the refused-field cases (KeyError 'fields', 3 red); test_model_engine_kinds.py's cloud-platform refusal before
+the key reaches the gateway passed at once (it guards the order as built) and is shown red by plant 14. After: 21 and
+126 passed. Catalogue: its dead routed/bare/engine_fields/hosts removed; the prefix test, which could not fail for
+its five cases without "/", now asserts the engine's own route.
+
+plants_check.py, re-run at this head: 14/14 red (plants_run.txt). Plant 1 now takes a real bypass's shape (a refused
+check still held for Add; the first version crashed instead). Plant 5 first went GREEN after the review's fixes:
+every malformed body now reaches _check_refusal, so the old echo branch was dead; it was removed and the plant moved
+to the live branch. A new redaction plant was GREEN until a case quoting a planted key through the roles' rule was
+added.
+
+Glass, Models.test.tsx: run against Models.tsx and ModelsApi.ts as at 506ad53:
+     × sends the key once, clears the field, and never shows it again 36ms
+     × checks the key and the typed model before Add, adds from the check, and never sends the key again 18ms
+     × empties a typed key when the provider is changed, so it is never sent where it was not typed for 17ms
+     × ties each field the Conduit's rules refused to that field, in the Conduit's words 28ms
+     × sends the label the preview shows, the provider's own when the field is emptied 28ms
+     × offers no Cancel while a check is out, so none can pass unseen after the form has closed 19ms
+     × keeps your own gateway's model names whole, its prefix being only LiteLLM's way to it 30ms
+     × says nothing of it on a profile that offers no Laurium 5ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  8 failed | 20 passed (28)
+After: 28 passed. (The Glass plants are run by hand, as recorded above; no script.)
