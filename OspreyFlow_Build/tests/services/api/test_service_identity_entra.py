@@ -39,8 +39,8 @@ MAPPING = ClaimMapping(
 
 _ABSENT = object()
 
-#: ADR-148 Amendment 20: the app role this API defines for an orchestrator (v0.6.0 #18), as Entra puts it in an
-#: app-only token's `roles` once it is assigned to the orchestrator's application.
+#: ADR-148 Amendment 20: the app role this API defines for an orchestrator (v0.6.0 #18), as Entra
+#: puts it in an app-only token's `roles` once it is granted to the orchestrator's application.
 RUN_APP_ROLE = "OspreyFlow.Run"
 
 
@@ -400,7 +400,7 @@ def test_a_client_claim_that_is_a_list_is_refused_on_the_run_api_not_an_error(
         _verifier(jwks_url).client_of(token)
 
 
-# --- ADR-148 Amendment 20: the run API's own app role (v0.6.0 #18; CARRIES row 202) --------------------------
+# --- ADR-148 Amendment 20: the run API's own app role (v0.6.0 #18; CARRIES row 202) ----------
 
 
 def test_the_run_app_role_is_principal_auths_own_name() -> None:
@@ -412,20 +412,52 @@ def test_the_run_app_role_is_principal_auths_own_name() -> None:
 @pytest.mark.parametrize(
     "roles",
     [_ABSENT, [], ["Runs.Trigger"], ["ospreyflow.run"], "OspreyFlow.Run", [["OspreyFlow.Run"]]],
-    ids=["no-roles-claim", "no-role", "another-role", "another-case", "a-string-not-a-list", "nested"],
+    ids=[
+        "no-roles-claim",
+        "no-role",
+        "another-role",
+        "another-case",
+        "a-string-not-a-list",
+        "nested",
+    ],
 )
-def test_an_app_only_token_without_the_run_role_is_refused_in_words(jwks_url, keypair, roles) -> None:
-    """Before Amendment 20 any app-only token of the pinned tenant could call the run API. Now its application must
-    hold `OspreyFlow.Run`; Entra leaves `roles` out of the token when no app role is assigned, so its absence is the
-    common shape. Refused in words saying which role, and where it is assigned; never an error."""
+def test_an_app_only_token_without_the_run_role_is_refused_in_words(
+    jwks_url, keypair, roles
+) -> None:
+    """Before Amendment 20 any app-only token of the pinned tenant could call the run API. Now its
+    application must hold `OspreyFlow.Run`; Entra leaves `roles` out of the token when no app role
+    is granted, so its absence is the common shape. Refused in words saying which role, and where
+    it is granted; never an error."""
     token = _app_token(keypair, roles=roles)
     with pytest.raises(ServiceIdentityRefused) as refused:
         _verifier(jwks_url).client_of(token)
     assert refused.value.status == 403
     assert str(refused.value) == (
-        "the orchestrator's application does not hold this API's OspreyFlow.Run app role: in Entra ID, assign it "
-        "to the application (the API's registration, App roles), then sign in again"
+        "the orchestrator's application does not hold this API's OspreyFlow.Run app role: in "
+        "Entra ID, add it to the orchestrator's own registration (API permissions, this API, "
+        "Application permissions) and grant admin consent, then ask for a new token"
     )
+
+
+def test_a_v1_app_only_token_without_the_run_role_is_refused_in_words(jwks_url, keypair) -> None:
+    token = _app_token(
+        keypair, azp=_ABSENT, azpacr=_ABSENT, appid=AIRFLOW, ver="1.0", idtyp=_ABSENT, roles=_ABSENT
+    )
+    with pytest.raises(ServiceIdentityRefused, match="OspreyFlow.Run app role") as refused:
+        _verifier(jwks_url).client_of(token)
+    assert refused.value.status == 403
+
+
+def test_a_dashboard_identity_holding_its_role_alone_is_told_it_is_a_dashboards(
+    jwks_url, keypair
+) -> None:
+    """Amendment 10 before Amendment 20: a dashboard identity holding `Dashboard.Read` alone is
+    told it is a dashboard's, never sent to grant itself `OspreyFlow.Run`."""
+    from principal_auth import DASHBOARD_APP_ROLE
+
+    with pytest.raises(ServiceIdentityRefused) as refused:
+        _verifier(jwks_url).client_of(_app_token(keypair, roles=[DASHBOARD_APP_ROLE]))
+    assert refused.value.status == 403 and "dashboard identity" in str(refused.value)
 
 
 def test_an_app_only_token_holding_the_run_role_names_its_client(jwks_url, keypair) -> None:

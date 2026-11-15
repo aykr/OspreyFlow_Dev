@@ -75,8 +75,8 @@ DASHBOARD_IS_NO_SERVICE_IDENTITY = (
 #: ADR-148 Amendment 20: an orchestrator's application must hold this API's own app role.
 RUN_ROLE_NOT_HELD = (
     f"the orchestrator's application does not hold this API's {RUN_APP_ROLE} app role: in "
-    "Entra ID, assign it to the application (the API's registration, App roles), then sign in "
-    "again"
+    "Entra ID, add it to the orchestrator's own registration (API permissions, this API, "
+    "Application permissions) and grant admin consent, then ask for a new token"
 )
 
 
