@@ -1,11 +1,11 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index 74da0b9..e772154 100644
+index 7c120ae..7ed870f 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -783,6 +783,9 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
-   // ADR-098 Amendment 7: what to read from (Selected items, Everything on the graph; Whole case
+@@ -784,6 +784,9 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
    // disabled with why) is chosen by arrow keys, and the question sends the choice.
    "choose-what-to-read-from-by-keyboard",
+   "open-an-earlier-answer-by-keyboard",
 +  // v0.6.0 #5: under an answer, every item its markers stand for put on the canvas and selected, and saved as a view.
 +  "show-all-of-an-answers-items-on-the-graph-by-keyboard",
 +  "save-an-answers-items-as-a-view-by-keyboard",
