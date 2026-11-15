@@ -2105,3 +2105,7 @@ cut, from the same prompt, as its own prompt later: the history accordion, Ask &
 - **The case line's fold (the owner, 15 Nov):** "ellipsis to keep one line". When the row runs out of room the
   cross-link first takes its short words ("Open in the Ingest Studio ↗"), then the open saved view's name and
   "reads …" ellipsize (full words in the page and title); the row wraps only below the widths the top bar holds one line.
+- **GOV.UK Admin's scroll and fonts (the owner, 15 Nov, from a screenshot of Admin › System):** two scrollers clip the
+  menu and top bar; monospace in sentences. Ruled: **in v0.5.2 as a fix after step 6.** Step 6 runs on 0246f9b; the fix
+  (admin, Glass CSS) merges after it; the v0.5.2 tag goes on a later commit with its own green CI, which step 6 did not
+  run (the owner accepted this). Route row AD; step 7 waits on 6 and AD.
