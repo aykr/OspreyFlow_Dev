@@ -1,0 +1,11 @@
+== gates at b7c0cb9, on main 4116208 (registry patch applied, uncommitted)
+ Test Files  400 passed (400)
+      Tests  3641 passed (3641)
+  5 skipped
+  1365 passed (5.8m)
+  1152 passed (17.1m)
+typecheck (npm run typecheck): exit 0
+lint (npm run lint): exit 0
+ruff check . (OspreyFlow_Core): All checks passed!
+guide tests: 13 passed in 0.64s
+0c10422 after it changes only tests/test_user_guide_ask_chat.py (the toggle's line); the guide tests 13 passed there, and the plants' run at 0c10422 (plants-0c10422.txt) is green unplanted. Rebased onto main cbae84d: no file of this lane's met main's commits.

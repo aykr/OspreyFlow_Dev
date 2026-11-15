@@ -1,0 +1,109 @@
+== red on main (4116208): main's App.tsx, LeftRail.tsx and the four harnesses
+AS IT MUST BE (red): main's App (jsdom)
+    Ask & Chat opens its panel without changing the view
+    Ask & Chat opens its page under its own name
+    the Ask line opens Ask & Chat with the words carried over
+    the rail's Ask & Chat over the results replaces them
+    the rail holds the panel openers alone
+    a document opened from an answer is read over the view, the page hidden
+    a marker in an answer leaves the page for the graph, focus on the canvas
+    the case line's cross-link to the Ingest Studio leaves the page
+    Escape on the page does nothing
+    Show all on graph closes a saved view open beneath the page first
+    a case opened to ask the model (the hand-off's view=questions
+    the panel is hidden under the Ask & Chat page
+AS IT MUST BE (red): main's harnesses (keyboard)
+    Ask & Chat opens as a page over the view by keyboard
+    Ask & Chat's page is left by its visible Back to Graph
+    a [G-n] chosen on Ask & Chat's page leaves it
+    Show all on graph on Ask & Chat's page leaves it
+    Show all on graph on Ask & Chat's page past the cap leaves the page
+AS IT MUST BE (red): main's results harness (the stacking case)
+    ospreyflow dark: Ask & Chat's page is drawn over
+    ospreyflow light: Ask & Chat's page is drawn over
+    govuk light: Ask & Chat's page is drawn over
+AS IT MUST BE (red): main's App (the guide's case)
+    test_section_6_says_ask_and_chat_is_a_page
+== plants
+AS IT MUST BE (red): the heading not focused on opening
+    the rail's Ask & Chat over the results replaces them
+AS IT MUST BE (red): the heading focused even with words carried (the question box loses focus)
+    the Ask line opens Ask & Chat with the words carried over
+AS IT MUST BE (red): focus not returned to the rail's opener
+    Ask & Chat opens its panel without changing the view
+AS IT MUST BE (red): the opener still announcing a dialog
+    the rail holds the panel openers alone
+AS IT MUST BE (red): the view beneath left in reach
+    the rail's Ask & Chat over the results replaces them
+AS IT MUST BE (red): the Ask page opened over the results, both showing
+    the Ask line opens Ask & Chat with the words carried over
+AS IT MUST BE (red): a search leaving the Ask page showing
+    a search from the Ask & Chat page replaces it with the results
+AS IT MUST BE (red): choosing a view leaving the Ask page showing
+    choosing a view leaves the Ask & Chat page
+AS IT MUST BE (red): focus left on the view beneath when a document read from an answer closes
+    a document opened from an answer is read over the view, the page hidden
+AS IT MUST BE (red): focus lost with the marker when the page goes
+    a marker in an answer leaves the page for the graph, focus on the canvas
+AS IT MUST BE (red): Show all on graph leaving the page over the graph it changed (App off the hook)
+    Show all on graph under an answer leaves the page for the graph
+AS IT MUST BE (red): Show all on graph leaving a saved view open beneath (App)
+    Show all on graph closes a saved view open beneath the page first
+AS IT MUST BE (red): Show all on graph leaving the view the page was opened over current (App)
+    Show all on graph under an answer leaves the page for the graph, reads the answer
+AS IT MUST BE (red): Show all on graph leaving the page and showing nothing (App, the hook handed a no-op)
+    Show all on graph under an answer leaves the page for the graph, reads the answer
+    Show all on graph closes a saved view open beneath the page first
+AS IT MUST BE (red): the cap's words pointing at Save as a view without saying where, the page gone (keyboard)
+    Show all on graph on Ask & Chat's page past the cap leaves the page
+AS IT MUST BE (red): the Ask page opened over a document read, left hidden behind the reader (jsdom)
+    the rail's Ask & Chat while a document read from the results is open shows the page at once
+AS IT MUST BE (red): the Ask page opened over a document read, left hidden behind the reader (keyboard)
+    Ask & Chat opened while a document is read over the view shows its page at once
+AS IT MUST BE (red): a search over a document read, its results left hidden behind the reader (jsdom)
+    a search while a document read from an answer is open shows the results at once
+AS IT MUST BE (red): a search over a document read, its results left hidden behind the reader (keyboard)
+    a search while a document is read over the view shows the results at once
+AS IT MUST BE (red): Help's panel taking focus whenever it is drawn (App, as it was)
+    a document read from an answer with Help's panel open keeps focus in the reader
+AS IT MUST BE (red): Help's panel handed App's changing takeFocus (the wrapper passing it through)
+    Help's panel keeps the focus it took through App's later renders
+AS IT MUST BE (red): Help's panel kept in the hidden Ask page beside the one App draws over the view
+    Help's panel is mounted once while a document read from an answer is open
+AS IT MUST BE (red): Help's panel kept in the hidden results beside the one App draws over the view
+    Help's panel is mounted once while a document read from the results is open
+AS IT MUST BE (red): the rail's toggle going back from a hidden page (as it was; jsdom)
+    the rail's Ask & Chat while a document read from an answer is open shows the page in one press
+AS IT MUST BE (red): the rail's toggle going back from a hidden page (as it was; keyboard)
+    Ask & Chat pressed while a document read from an answer is open shows its page in one press
+AS IT MUST BE (red): the opener marked expanded while the page is hidden (App)
+    the rail's Ask & Chat while a document read from an answer is open shows the page in one press
+AS IT MUST BE (red): focus left off the heading when a hidden page is shown again (the skip applied to it)
+    the rail's Ask & Chat while a document read from an answer is open shows the page in one press
+AS IT MUST BE (red): the cross-link leaving the page showing, both ways
+    the case line's cross-link to the Ingest Studio leaves the page
+AS IT MUST BE (red): Escape closing the page as a dialog would
+    Escape on the page does nothing
+AS IT MUST BE (red): the hand-off's view=questions not opening the page
+    a case opened to ask the model (the hand-off's view=questions
+AS IT MUST BE (red): the batch job's panel left showing under the page
+    the panel is hidden under the Ask & Chat page
+AS IT MUST BE (red): the harness's page without its back link focus (keyboard)
+    Ask & Chat opens as a page over the view by keyboard
+AS IT MUST BE (red): a marker on the page leaving it open (keyboard, the real canvas)
+    a [G-n] chosen on Ask & Chat's page leaves it
+AS IT MUST BE (red): Show all on graph on the harness's page off the hook (keyboard, the real canvas)
+    Show all on graph on Ask & Chat's page leaves it
+AS IT MUST BE (red): the Ask page below the canvas's toolbar (the stacking case, three looks)
+    ospreyflow dark: Ask & Chat's page is drawn over
+    ospreyflow light: Ask & Chat's page is drawn over
+    govuk light: Ask & Chat's page is drawn over
+AS IT MUST BE (red): a drawer titled Ask & Chat put back in App's own shape (the guide's case)
+    test_section_6_says_ask_and_chat_is_a_page
+AS IT MUST BE (red): the back link's words in the page's own background token (no contrast; axe, three looks)
+    places-harness.html open=questions (dark)
+    places-harness.html open=questions (light)
+    places-harness.html open=questions (govuk)
+== unplanted
+unplanted: Tests 94 passed (94); keyboard 84 passed (13.3s); axe 4 passed (4.4s); stacking 3 passed (3.3s); over a reader 3 passed (1.4s); guide 10 passed in 0.46s
+every plant red for its reason, unplanted green

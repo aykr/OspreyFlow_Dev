@@ -37,6 +37,14 @@ it at the merge; each id has its `registerCovered`.
 - The page title on `var(--lh-19)` (case's n3); no gate checks line-height tokens, so no test holds it.
 - The CARRIES rows (the shared frame; Show all's canvas half) are the orchestrator's, on main.
 
+## Case's re-check of 8153cae: one must-fix, built
+
+- The rail's Ask & Chat over a page hidden for a document read from an answer shows it in one press, the reader
+  closed, focus on its heading, and is not expanded while it is hidden (the hook's `shown`). jsdom and keyboard cases;
+  plants for the old toggle, the opener marked from `open`, and the focus skip. Gates at b7c0cb9 (`gates-b7c0cb9.txt`):
+  vitest 3641, keyboard 1365, every-harness 1152; plants at 0c10422 (`plants-0c10422.txt`): red on main (4) and 37
+  plants, unplanted green (its first run caught the guide test still holding the old toggle's line).
+
 ## For the orchestrator at the merge
 
 - **Outside the map, to ratify:** `OspreyFlow_Core/docs/user-guide.md` (§6's words and the 1.72 row: docs' file);
