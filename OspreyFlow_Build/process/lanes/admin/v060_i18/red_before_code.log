@@ -1,13 +1,4 @@
-# tests/services/api/test_service_identity_entra.py at the branch's head, against the base 7dd860e's code
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:118: assert 503 == 403
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:409: AssertionError: assert None == 'OspreyFlow.Run'
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:422: Failed: DID NOT RAISE ServiceIdentityRefused
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:422: Failed: DID NOT RAISE ServiceIdentityRefused
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:422: Failed: DID NOT RAISE ServiceIdentityRefused
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:422: Failed: DID NOT RAISE ServiceIdentityRefused
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:422: Failed: DID NOT RAISE ServiceIdentityRefused
-/private/tmp/claude-502/-Users-ayankar-dev-osprey-wt-admin/f9384bcf-e6a2-4167-b976-aa8c032154c3/scratchpad/i18-base-wt/OspreyFlow_Build/tests/services/api/test_service_identity_entra.py:422: Failed: DID NOT RAISE ServiceIdentityRefused
-FAILED tests/services/api/test_service_identity_entra.py::test_what_is_no_service_identity_on_entra_is_refused[no-client]
+# tests/services/api/test_service_identity_entra.py at the branch's head d24317e, against the base 97dc544's code (main's, before #18)
 FAILED tests/services/api/test_service_identity_entra.py::test_the_run_app_role_is_principal_auths_own_name
 FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-roles-claim]
 FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[no-role]
@@ -15,4 +6,5 @@ FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token
 FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[another-case]
 FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[a-string-not-a-list]
 FAILED tests/services/api/test_service_identity_entra.py::test_an_app_only_token_without_the_run_role_is_refused_in_words[nested]
-8 failed, 34 passed in 31.79s
+FAILED tests/services/api/test_service_identity_entra.py::test_a_v1_app_only_token_without_the_run_role_is_refused_in_words
+8 failed, 36 passed in 29.22s

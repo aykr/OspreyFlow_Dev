@@ -39108,46 +39108,67 @@ is false for the values set here.
 
 ### ADR-148, Amendment 20 (15 November 2026) — The run API's own app role: an orchestrator holds OspreyFlow.Run
 
-*v0.6.0 #18 (the owner's closed list; CARRIES row 202). By admin.*
+*v0.6.0 #18 (the owner's closed list; CARRIES row 202). By admin. It supersedes Amendment 8 point 9's last carry
+(the app-role check measured on the client's tenant first) and the orchestrator's ruling (b) of 13 November that
+kept it so; it extends Amendment 8 point 5's list.*
 
 **Context.** On Entra ID a service identity's token is an app-only token of the pinned tenant (Amendment 8). The run
 API refused only the deployment's own clients (the Glass's and this API's registrations) and, since Amendment 10, a
 client holding the dashboards' role. Any other application of the client's tenant (any program its administrators
 had registered for anything) could sign in by client credentials for this API's audience and trigger a pipeline:
-the tenant was pinned, the application was not.
+the tenant was pinned, the application was not. Amendment 8 point 9 carried the fix until it was measured on the
+client's tenant. v0.6.0's closed list asks for it now, and no client tenant is reachable from this build, so the
+measure is taken where it can be (below) and what is left of it is said.
 
 **Decisions.**
 1. **The run API requires its own app role.** This API's registration defines an app role, `OspreyFlow.Run`
-   (allowed member types: Applications; `principal_auth.RUN_APP_ROLE`). An app-only token is a service identity's
-   only while its `roles` holds it, as a string, exactly. Entra puts an assigned app role in `roles` and leaves
-   the claim out when none is assigned. A token without it, with a `roles` of another shape, or with the role in
-   another case, is refused (403) in words: "the orchestrator's application does not hold this API's
-   OspreyFlow.Run app role: in Entra ID, assign it to the application (the API's registration, App roles), then
-   sign in again". The dashboards' role is refused first, as Amendment 10 says, whatever else the token holds,
-   and the deployment's own clients are refused whatever roles they hold.
+   (allowed member types: Applications; `principal_auth.RUN_APP_ROLE`). Amendment 8 point 5's list gains one more
+   condition: the token's `roles` holds it, as a string, exactly. Entra puts a granted app role in `roles` and
+   leaves the claim out when none is granted. A token without it, with a `roles` of another shape, or with the role
+   in another case, is refused (403) in words: "the orchestrator's application does not hold this API's
+   OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API permissions, this API,
+   Application permissions) and grant admin consent, then ask for a new token". The order is kept: the
+   deployment's own clients are refused first whatever roles they hold, then the dashboards' role (Amendment 10,
+   whatever else the token holds, so a dashboard identity is told it is a dashboard's), then this one.
 2. **The client's Entra administrator grants it.** The API's registration lists the role beside `Dashboard.Read`,
-   and the orchestrator's own application is granted it with admin consent: the runbook's *What it needs* and the
-   administration guide's §6a.7 say so, and §6a.2's poc tables list it. The orchestrator's application is the
-   client's, not one of the deployment's registrations, so INSTALL's count of registrations is unchanged.
+   and the orchestrator's own registration is granted it as an application permission with admin consent: the
+   runbook's *What it needs* and the administration guide's §6a.7 say so, and §6a.2's poc tables list it. The
+   orchestrator's application is the client's, not one of the deployment's registrations, so INSTALL's count of
+   registrations is unchanged.
 3. **Keycloak is unchanged.** There a service identity is its client's service account (ADR-141 decision 10),
    and the deployment's own clients are refused by name.
 
-**Proof without the client's tenant** (rule 15): R1's Entra stand-in issues `roles` on a client-credentials token
-from a client's configured roles, and leaves the claim out when there are none, as Entra does. On R1, two
-orchestrator applications are registered in the stand-in, one granted `OspreyFlow.Run` and one not. Against the
-live Conduit on kind, the first's run is admitted and the second refused in the words above, and a dashboard
-identity and the Glass's client are refused still. That the client's real tenant assigns the role stays one check
-at install.
+**The measure, where it can be taken** (rule 15). The Conduit's tests and R1's driver tests run against
+fixtures. The live proof runs on R1 on kind, through the Entra stand-in's own issuing:
+- The stand-in issues a client-credentials token's `roles` from the client's configured roles, and leaves the claim
+  out when there are none, as Entra does (its test holds both).
+- Two orchestrator applications are registered in it, one granted `OspreyFlow.Run` and one granted none. R1's
+  checks fetch each one's token from the stand-in, in its own pod, in the run's access-token version. Against the
+  live Conduit, the first gets past the run API's door (a run that does not exist is then a 404), the second is
+  refused in the words above, and the report sync's dashboard identity is refused as a dashboard's.
+- The checks run on a release from v0.6.0. An earlier release is skipped in words, in R1's record; a version that
+  cannot be read is not taken as an earlier release.
+- **Pending:** the live run itself, under a lease the orchestrator queues. Until it has run, this amendment
+  records it as pending, not proved.
+- **Not measured, and carried as such:** that a real Entra tenant puts a granted role in an app-only token's
+  `roles` is Microsoft's documented behaviour. No tenant of the client's has been asked. Install checks nothing of
+  it: install_verify reads no `app_roles`. The first measure is the run API's own refusal: an orchestrator not
+  granted the role is told so, in words, on its first run.
 
 **Tests** (rule 12): `tests/services/api/test_service_identity_entra.py`:
 - the role's name is `principal_auth`'s;
 - no `roles` claim, no role, another role, another case, a string and a nested list are each refused in the
-  words;
+  words, and a v1.0 token without it too;
 - the role, alone or beside another, names the client;
 - the role never lets the deployment's own clients in;
-- the dashboards' role is refused beside it.
+- the dashboards' role is refused beside it, and a dashboard identity holding its role alone is told it is a
+  dashboard's;
+- R1's (platform's files, applied from the lane's diff): `tests/test_r1_entra_standin.py`, a token without
+  `roles` for an application granted none; `tests/test_r1_kind_domain_guard.py`, the checks gated by release, run
+  with the stand-in's tokens, and failing when the run API lets the unassigned application in.
 
-`OspreyFlow_Build/process/lanes/admin/v060_i18/` has the red record and the plants.
+`OspreyFlow_Build/process/lanes/admin/v060_i18/` has the red record and the plants (eight, each red where it must
+be).
 
 ### ADR-044, Amendment 1 (14 November 2026) — A stopped hotlist or watch says why
 

@@ -1,5 +1,5 @@
 diff --git a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
-index abfa41f..55959fe 100644
+index abfa41f..8306a22 100644
 --- a/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 +++ b/OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md
 @@ -1141,7 +1141,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
@@ -11,7 +11,20 @@ index abfa41f..55959fe 100644
  | superset | web application, with a client secret | redirect: https://bi.<the deployment's name>/oauth-authorized/<provider>; grants: the API's access_as_user (delegated) |
  | report-sync | application (client credentials), with a client secret | grants: the API's Dashboard.Read (application) |
  
-@@ -1538,7 +1538,12 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
+@@ -1503,8 +1503,10 @@ manage people is a guest.
+ On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
+ words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
+ 
+-**Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
+-assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator. Roles are
++**A person's roles are not read from an Entra token.** Its `roles` are app roles an Entra
++administrator assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator.
++(Two app roles of this API's own are read, from an application's token, never a person's: a
++dashboard identity's `Dashboard.Read` and an orchestrator's `OspreyFlow.Run`, below.) Roles are
+ assigned in *Admin › People and roles*, which keeps them in the deployment's own Postgres, by tenant and
+ `oid`:
+ 
+@@ -1538,7 +1540,13 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
    account could not be read, offers *Try again*, and keeps *Sign out* within reach.
  - **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
    pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
@@ -20,13 +33,63 @@ index abfa41f..55959fe 100644
 +  client's Entra administrator defines the role on the API's registration (allowed member types:
 +  Applications) and grants it to the orchestrator's application with admin consent. Any other
 +  application of the tenant is refused (403): "the orchestrator's application does not hold this
-+  API's OspreyFlow.Run app role: in Entra ID, assign it to the application (the API's registration,
-+  App roles), then sign in again".
++  API's OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API
++  permissions, this API, Application permissions) and grant admin consent, then ask for a new
++  token".
  
  - **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
    for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
+diff --git a/OspreyFlow_Build/tests/test_admin_guide_run_app_role.py b/OspreyFlow_Build/tests/test_admin_guide_run_app_role.py
+new file mode 100644
+index 0000000..ae250d9
+--- /dev/null
++++ b/OspreyFlow_Build/tests/test_admin_guide_run_app_role.py
+@@ -0,0 +1,43 @@
++"""The administration guide's §6a.7 on the run API's app role as the code has it (ADR-148 Amendment 20, v0.6.0 #18;
++rule 12): the refusal the guide quotes is the Conduit's own words, the role it names is `principal_auth`'s, and the poc
++manifest's API registration lists it. Each read from the code, so a change of words or name in one place and not the
++other fails here, and the guide's first draft, which sent an administrator to the wrong Entra blade, is refused.
++"""
++
++from __future__ import annotations
++
++import re
++from pathlib import Path
++
++import yaml
++
++CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
++#: The first draft's words, which named the API's own registration (App roles) instead of the orchestrator's.
++OLD_WORDS = "assign it to the application (the API's registration, App roles), then sign in again"
++
++
++def fold(text: str) -> str:
++    return re.sub(r"\s+", " ", text)
++
++
++def guide() -> str:
++    text = (CORE / "docs" / "administration-guide.md").read_text(encoding="utf-8")
++    return fold(re.sub(r"<!-- document-control:begin -->.*?<!-- document-control:end -->", " ", text, flags=re.DOTALL))
++
++
++def test_the_guide_quotes_the_run_apis_own_refusal() -> None:
++    from services.api.service_identity import RUN_ROLE_NOT_HELD
++
++    assert f'"{RUN_ROLE_NOT_HELD}"' in guide()
++
++
++def test_the_guide_and_the_manifest_name_principal_auths_role() -> None:
++    from principal_auth import RUN_APP_ROLE
++
++    assert f"app role `{RUN_APP_ROLE}`" in guide()
++    manifest = yaml.safe_load((CORE / "harness/cloud_platform/poc_manifest.yaml").read_text(encoding="utf-8"))
++    assert RUN_APP_ROLE in manifest["entra"]["api"]["app_roles"]
++
++
++def test_the_first_drafts_wrong_blade_is_gone() -> None:
++    assert OLD_WORDS not in guide()
 diff --git a/OspreyFlow_Core/docs/administration-guide.md b/OspreyFlow_Core/docs/administration-guide.md
-index 09640b7..0e98a45 100644
+index 09640b7..334e5b6 100644
 --- a/OspreyFlow_Core/docs/administration-guide.md
 +++ b/OspreyFlow_Core/docs/administration-guide.md
 @@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
@@ -51,7 +114,20 @@ index 09640b7..0e98a45 100644
  | superset | web application, with a client secret | redirect: https://bi.<the deployment's name>/oauth-authorized/<provider>; grants: the API's access_as_user (delegated) |
  | report-sync | application (client credentials), with a client secret | grants: the API's Dashboard.Read (application) |
  
-@@ -1750,7 +1751,12 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
+@@ -1715,8 +1716,10 @@ manage people is a guest.
+ On a deployment using the fixed names (Keycloak), a token carrying `tid` is refused, in these
+ words: "token carries tid: an Entra ID token is refused without an Entra claim mapping".
+ 
+-**Roles are not read from an Entra token.** Its `roles` are app roles an Entra administrator
+-assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator. Roles are
++**A person's roles are not read from an Entra token.** Its `roles` are app roles an Entra
++administrator assigns; an app role named `osprey-admin` makes nobody an OspreyFlow administrator.
++(Two app roles of this API's own are read, from an application's token, never a person's: a
++dashboard identity's `Dashboard.Read` and an orchestrator's `OspreyFlow.Run`, below.) Roles are
+ assigned in *Admin › People and roles*, which keeps them in the deployment's own Postgres, by tenant and
+ `oid`:
+ 
+@@ -1750,7 +1753,13 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
    account could not be read, offers *Try again*, and keeps *Sign out* within reach.
  - **A service identity** (an orchestrator's `ospreyflow run`) signs in with an app-only token of the
    pinned tenant, carrying an expiry. Its client must be neither the Glass's nor this API's own
@@ -60,8 +136,9 @@ index 09640b7..0e98a45 100644
 +  client's Entra administrator defines the role on the API's registration (allowed member types:
 +  Applications) and grants it to the orchestrator's application with admin consent. Any other
 +  application of the tenant is refused (403): "the orchestrator's application does not hold this
-+  API's OspreyFlow.Run app role: in Entra ID, assign it to the application (the API's registration,
-+  App roles), then sign in again".
++  API's OspreyFlow.Run app role: in Entra ID, add it to the orchestrator's own registration (API
++  permissions, this API, Application permissions) and grant admin consent, then ask for a new
++  token".
  
  - **Superset** (ADR-148 Amendment 9) signs a person in as its own app registration and asks Entra ID
    for a token for this API's scope, issued to Superset, which the Conduit admits for `GET /v1/me` and
@@ -88,19 +165,32 @@ index ad5181f..e208681 100644
      kind: web application, with a client secret
      redirect: "https://bi.<the deployment's name>/oauth-authorized/<provider>"
 diff --git a/OspreyFlow_Core/harness/cloud_platform/runbooks.py b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
-index 9deda9f..0ab6118 100644
+index 9deda9f..66e869e 100644
 --- a/OspreyFlow_Core/harness/cloud_platform/runbooks.py
 +++ b/OspreyFlow_Core/harness/cloud_platform/runbooks.py
-@@ -81,6 +81,12 @@ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> st
-             f"the person's rights here: `administer_system` is Superset's Admin, `manage_dashboards` its\n"
-             f"builder (Alpha), `read_reports` its read-only Gamma, and a person with none of them is not let in."
+@@ -67,7 +67,8 @@ def entra_registrations(config: OspreyConfig) -> int:
+ 
+ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> str:
+     """ADR-148 Amendments 9 and 10: what the client's Entra administrator registers for Superset and
+-    the report sync, before step 2 (whose Terraform asks for their secrets)."""
++    the report sync, before step 2 (whose Terraform asks for their secrets); and Amendment 20's app
++    role for an orchestrator's own registration."""
+     cp = config.cloud_platform
+     assert cp is not None and cp.claims is not None
+     claims, parts = cp.claims, []
+@@ -88,6 +89,15 @@ def _reporting_registrations(config: OspreyConfig, values: dict[str, Any]) -> st
+             "registration of its own with a client secret, granted `Dashboard.Read` with admin consent;\n"
+             "step 6a registers it here. Until there is one, step 2's `report_sync_dashboards` is `[]`."
          )
++    # ADR-148 Amendment 20: the orchestrator's registration is the client's own, not one of the
++    # deployment's (entra_registrations does not count it), so it is said whatever reporting renders.
 +    parts.append(
 +        "**For an orchestrator that runs pipelines** (ADR-141 decision 10, ADR-148 Amendment 20): on this API's\n"
 +        "registration, an app role `OspreyFlow.Run` (allowed member types: Applications). The orchestrator's\n"
-+        "own app registration signs in with the client-credentials grant and is granted `OspreyFlow.Run`\n"
-+        "with admin consent; without it the run API refuses its token, in words saying which role to assign."
++        "own app registration, the client's and not one of this deployment's counted registrations, signs in\n"
++        "with the client-credentials grant and is granted `OspreyFlow.Run` as an application permission with\n"
++        "admin consent; without it the run API refuses its token, in words saying where to grant it."
 +    )
-     if config.reporting.sync:
-         parts.append(
-             "**For the report sync, before step 2** (ADR-148 Amendment 10): on this API's registration, an app role\n"
+     return ("\n" + "\n\n".join(parts) + "\n") if parts else ""
+ 
+ 

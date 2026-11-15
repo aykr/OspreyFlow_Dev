@@ -1,0 +1,4 @@
+# tests/test_admin_guide_run_app_role.py with the guide's first-draft words planted back in §6a.7 (registration_and_guide.diff applied)
+FAILED tests/test_admin_guide_run_app_role.py::test_the_guide_quotes_the_run_apis_own_refusal
+FAILED tests/test_admin_guide_run_app_role.py::test_the_first_drafts_wrong_blade_is_gone
+2 failed, 1 passed in 2.92s
