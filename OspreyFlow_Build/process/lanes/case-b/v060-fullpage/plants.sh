@@ -15,8 +15,9 @@ HOOK=$WS/src/questions/useAskPage.ts
 HARN=$WS/keyboard/places-harness.tsx
 QHARN=$WS/keyboard/questions-harness.tsx
 CHARN=$WS/keyboard/harness.tsx
+SRHARN=$WS/keyboard/search-results-harness.tsx
 REG=$WS/keyboard/actionRegistry.ts
-FILES=("$APP" "$RAIL" "$PAGE" "$CSS" "$HOOK" "$HARN" "$QHARN" "$CHARN" "$REG")
+FILES=("$APP" "$RAIL" "$PAGE" "$CSS" "$HOOK" "$HARN" "$QHARN" "$CHARN" "$SRHARN" "$REG")
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
 SAVED="$(mktemp -d)"
 for f in "${FILES[@]}"; do cp "$f" "$SAVED/$(basename "$f")"; done
@@ -28,6 +29,8 @@ cp "$REG" "$SAVED/actionRegistry.ts"
 fails=0
 js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/App.help.test.tsx src/App.search.test.tsx src/App.batchExpand.test.tsx 2>&1); }
 kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts shell.spec.ts questions.spec.ts --workers=2 --reporter=line 2>&1); }
+# The stacking case (lane review 2 item 2): nothing of the canvas drawn over the Ask page, in the three looks.
+st() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts search-results.spec.ts -g "Ask & Chat's page is drawn over" --workers=1 --reporter=line 2>&1); }
 ax() { (cd "$WS" && npx playwright test --config a11y/playwright.config.ts every-harness.spec.ts -g "places-harness.html open=questions" --workers=1 --reporter=line 2>&1); }
 guide() { (cd OspreyFlow_Core && env -u OSPREY_LANE ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 POSTGRES_PASSWORD=throwaway \
   .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rf ../OspreyFlow_Build/tests/test_user_guide_ask_chat.py 2>&1); }
@@ -51,8 +54,8 @@ plant() { # name, file, perl substitution, runner, cases (newline-separated), an
 
 # The branch's base, not main as it is now: a later main's App imports what this branch never had.
 BASE="$(git merge-base HEAD main)"
-echo "== red on main ($(git rev-parse --short "$BASE")): main's App.tsx, LeftRail.tsx and the three harnesses"
-for f in "$APP" "$RAIL" "$HARN" "$QHARN" "$CHARN"; do git show "$BASE":"$f" >"$f"; done
+echo "== red on main ($(git rev-parse --short "$BASE")): main's App.tsx, LeftRail.tsx and the four harnesses"
+for f in "$APP" "$RAIL" "$HARN" "$QHARN" "$CHARN" "$SRHARN"; do git show "$BASE":"$f" >"$f"; done
 check "main's App (jsdom)" "$(js)" "Ask & Chat opens its panel without changing the view
 Ask & Chat opens its page under its own name
 the Ask line opens Ask & Chat with the words carried over
@@ -60,10 +63,17 @@ the rail's Ask & Chat over the results replaces them
 the rail holds the panel openers alone
 a document opened from an answer is read over the view, the page hidden
 a marker in an answer leaves the page for the graph, focus on the canvas
+the case line's cross-link to the Ingest Studio leaves the page
+Escape on the page does nothing
+a case opened to ask the model (the hand-off's view=questions
 the panel is hidden under the Ask & Chat page"
 check "main's harnesses (keyboard)" "$(kb)" "Ask & Chat opens as a page over the view by keyboard
 Ask & Chat's page is left by its visible Back to Graph
-a [G-n] chosen on Ask & Chat's page leaves it"
+a [G-n] chosen on Ask & Chat's page leaves it
+Show all on graph on Ask & Chat's page leaves it"
+check "main's results harness (the stacking case)" "$(st)" "ospreyflow dark: Ask & Chat's page is drawn over
+ospreyflow light: Ask & Chat's page is drawn over
+govuk light: Ask & Chat's page is drawn over"
 check "main's App (the guide's case)" "$(guide)" "test_section_6_says_ask_and_chat_is_a_page"
 restore
 
@@ -88,14 +98,26 @@ plant "focus left on the view beneath when a document read from an answer closes
   "a document opened from an answer is read over the view, the page hidden"
 plant "focus lost with the marker when the page goes" "$HOOK" 's/        document\.querySelector<HTMLElement>\(CANVAS\)\?\.focus\(\);\n//' js \
   "a marker in an answer leaves the page for the graph, focus on the canvas"
-plant "Show all on graph leaving the page over the graph it changed" "$APP" 's/(    if \(lens\) closeLens\(\);\n(?:    \/\/[^\n]*\n)*)    leavePages\(\);\n/$1    results.leave();\n/' js \
+plant "Show all on graph leaving the page over the graph it changed (App off the hook)" "$APP" 's/    ask\.showOnGraph\(\n      \(\) =>\n        void showAnswerOnCanvas\(/    ((show: () => void) => show())(\n      () =>\n        void showAnswerOnCanvas(/' js \
   "Show all on graph under an answer leaves the page for the graph"
+plant "the cross-link leaving the page showing" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
+  "the case line's cross-link to the Ingest Studio leaves the page"
+plant "Escape closing the page as a dialog would" "$PAGE" 's/<section className=/<section onKeyDown={(e) => { if (e.key === "Escape") onBack(); }} className=/' js \
+  "Escape on the page does nothing"
+plant "the hand-off's view=questions not opening the page" "$APP" 's/useAskPage\(readerDocumentId !== null, results, handoff\.view === "questions"\)/useAskPage(readerDocumentId !== null, results, false)/' js \
+  "a case opened to ask the model (the hand-off's view=questions"
 plant "the batch job's panel left showing under the page" "$APP" 's/searching !== null \|\| questionsOpen \|\| readerDocumentId/searching !== null || readerDocumentId/' js \
   "the panel is hidden under the Ask & Chat page"
 plant "the harness's page without its back link focus (keyboard)" "$RAIL" 's/\?\.focus\(\);\n\}/;\n}/' kb \
   "Ask & Chat opens as a page over the view by keyboard"
 plant "a marker on the page leaving it open (keyboard, the real canvas)" "$HOOK" 's/    showOnGraph: \(show\) => \{\n      setOpen\(false\);\n/    showOnGraph: (show) => {\n/' kb \
   "a [G-n] chosen on Ask & Chat's page leaves it"
+plant "Show all on graph on the harness's page off the hook (keyboard, the real canvas)" "$CHARN" 's/onShowAll=\{\(ids\) => ask\.showOnGraph\(\(\) => void showAllOnCanvas\(ids\)\)\}/onShowAll={(ids) => void showAllOnCanvas(ids)}/' kb \
+  "Show all on graph on Ask & Chat's page leaves it"
+plant "the Ask page below the canvas's toolbar (the stacking case, three looks)" "$CSS" 's/  z-index: 19;/  z-index: 1;/' st \
+  "ospreyflow dark: Ask & Chat's page is drawn over
+ospreyflow light: Ask & Chat's page is drawn over
+govuk light: Ask & Chat's page is drawn over" ".canvas-toolbar ("
 plant "a drawer titled Ask & Chat put back in App's own shape (the guide's case)" "$APP" 's/(      <Drawer open=\{exploreOpen\})/      <Drawer open={questionsOpen} onClose={() => ask.leave()} title={RAIL_LABELS.questions}><p \/><\/Drawer>\n$1/' guide \
   "test_section_6_says_ask_and_chat_is_a_page" "match='title={RAIL_LABELS.questions'"
 plant "the back link's words in the page's own background token (no contrast; axe, three looks)" "$CSS" 's/(\.ask-page__back \{[^}]*?)color: var\(--text-primary\);/$1color: var(--surface-app);/s' ax \
@@ -104,14 +126,16 @@ places-harness.html open=questions (light)
 places-harness.html open=questions (govuk)"
 
 echo "== unplanted"
-j="$(js)"; k="$(kb)"; a="$(ax)"; g="$(guide)"
+j="$(js)"; k="$(kb)"; a="$(ax)"; g="$(guide)"; t="$(st)"
 if grep -qE "Tests  [0-9]+ passed" <<<"$j" && ! grep -qE "Tests .*failed" <<<"$j" \
   && grep -qE "^\s+[0-9]+ passed" <<<"$k" && ! grep -qE "^\s+[0-9]+ failed" <<<"$k" \
   && grep -qE "^\s+[0-9]+ passed" <<<"$a" && ! grep -qE "^\s+[0-9]+ failed" <<<"$a" \
+  && grep -qE "^\s+3 passed" <<<"$t" && ! grep -qE "^\s+[0-9]+ failed" <<<"$t" \
   && grep -qE "[0-9]+ passed" <<<"$g" && ! grep -qE "failed" <<<"$g"; then
-  echo "unplanted: $(grep 'Tests ' <<<"$j" | xargs); keyboard $(grep -E '^\s+[0-9]+ passed' <<<"$k" | xargs); axe $(grep -E '^\s+[0-9]+ passed' <<<"$a" | xargs); guide $(tail -1 <<<"$g")"
+  echo "unplanted: $(grep 'Tests ' <<<"$j" | xargs); keyboard $(grep -E '^\s+[0-9]+ passed' <<<"$k" | xargs); axe $(grep -E '^\s+[0-9]+ passed' <<<"$a" | xargs); stacking $(grep -E '^\s+[0-9]+ passed' <<<"$t" | xargs); guide $(tail -1 <<<"$g")"
 else echo "UNPLANTED NOT GREEN"; grep -E "×|Tests |^\s+[0-9]+\) |^\s+[0-9]+ (passed|failed)|^FAILED|passed|failed" <<<"$j
 $k
 $a
+$t
 $g" | head -12; fails=1; fi
 [ "$fails" = 0 ] && echo "every plant red for its reason, unplanted green" || { echo "SOME PLANT WRONG"; exit 1; }
