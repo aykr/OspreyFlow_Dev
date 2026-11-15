@@ -1,0 +1,11 @@
+# plants.py at a30a11e, 2026-11-15T11:27:36Z, offline on the Mac (closed ports, slot 9, no stack, fresh pycache)
+built: GREEN - 18 passed in 0.76s
+U1 a Dockerfile without the stamp (Superset's ARG gone): RED - 1 failed in 0.27s
+U2 an upgrade step not naming the stamp (the worker's): RED - 1 failed in 0.26s
+U3 a Makefile build without the stamp: RED - 1 failed in 0.26s
+U4 a CI workflow build without the stamp (in the owner's diff): RED - 1 failed in 0.30s
+U5 ospreyflow start --build without the stamp: RED - 1 failed in 0.28s
+U6 the harness's apply building without the stamp: RED - 1 failed in 0.33s
+U7 the local release building without the stamp: RED - 1 failed in 0.28s
+restored: GREEN - 18 passed in 0.41s
+exit=0
