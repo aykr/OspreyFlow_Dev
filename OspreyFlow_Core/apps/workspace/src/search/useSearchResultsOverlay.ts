@@ -30,8 +30,10 @@ export interface SearchResultsOverlay {
   resultsHidden: boolean;
 }
 
-/** `reading`: a document is open in the reader over the view (the results are hidden, the view in reach). */
-export function useSearchResultsOverlay(reading: boolean): SearchResultsOverlay {
+/** `reading`: a document is open in the reader over the view (the results are hidden, the view in reach). `stopReading`
+ * closes it: a search while a document is read shows its results at once, in the view's place (the orchestrator,
+ * 15 November 2026). */
+export function useSearchResultsOverlay(reading: boolean, stopReading?: () => void): SearchResultsOverlay {
   const [searching, setSearching] = useState<SearchShowing | null>(null);
   const searches = useRef(0);
   const focusBox = useRef(false);
@@ -50,6 +52,7 @@ export function useSearchResultsOverlay(reading: boolean): SearchResultsOverlay 
   return {
     searching,
     open: (query, left) => {
+      if (reading) stopReading?.();
       searches.current += 1;
       setSearching({ query, left, at: searches.current });
     },

@@ -32,6 +32,9 @@ OVERLAY = _read(SRC / "search" / "useSearchResultsOverlay.ts")
 COMBOBOX = _read(SRC / "design" / "primitives" / "Combobox.tsx")
 BOX = _read(SRC / "search" / "GlobalSearch.tsx")
 PANEL = _read(SRC / "questions" / "QuestionsPanel.tsx")
+# Ask & Chat's page (ADR-145 Amendment 18): the results and it replace each other through this hook, so App's results
+# wiring goes through it (`leavePages` is its `leaveBoth`, which leaves the results as its `other`).
+ASK_HOOK = _read(SRC / "questions" / "useAskPage.ts")
 SERVICE = (API / "search_service.py").read_text(encoding="utf-8")
 ROUTES = (API / "app.py").read_text(encoding="utf-8")
 
@@ -87,7 +90,10 @@ def test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggesti
     chosen = '} else if (e.key === "Enter") { e.preventDefault(); const option = filtered[Math.min(highlighted, filtered.length - 1)]; if (option) select(option);'
     assert chosen in COMBOBOX, "Enter on a suggestion moved to chooses it"
     assert "onSubmit={onSearch}" in BOX
-    assert "onSearch={(query) => results.open(query," in APP
+    # Enter on the typed words opens the results page (leaving Ask & Chat's page first, which they replace).
+    search = re.search(r"onSearch=\{\(query\) => \{(.*?)\}\} screenNodes=", APP)
+    assert search, "App's onSearch"
+    assert "results.open(query," in search.group(1) and "ask.leave();" in search.group(1)
     text = results_text()
     assert "Press Enter on the words you typed, with no suggestion moved to, and the results fill the main area" in text
     assert "a suggestion moved to with the arrow keys is still chosen by Enter" in text
@@ -97,7 +103,9 @@ def test_section_5_5_says_enter_on_the_typed_words_opens_the_page_and_a_suggesti
 
 def test_section_5_5_says_the_view_waits_beneath_out_of_reach_and_back_returns_to_it() -> None:
     assert "viewInert: searching !== null && !reading," in OVERLAY
-    assert 'inert={app === "glass" && results.viewInert ? true : undefined}' in APP
+    # The view beneath is inert while the results show (or Ask & Chat's page, which takes the same place).
+    assert 'inert={app === "glass" && pageOver ? true : undefined}' in APP
+    assert "const pageOver = results.viewInert || ask.viewInert;" in APP
     assert "back: () => { focusBox.current = true; setSearching(null); }," in OVERLAY
     assert "onBack={results.back}" in APP and "{`Back to ${backLabel}`}" in PAGE
     text = results_text()
@@ -189,8 +197,12 @@ def test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and
     assert unread and "const unread = result.node_ids.length - nodes.length;" in PAGE
     show = re.search(r"onShow=\{\(nodes\) => \{(.*?)\}\} onOpenDocument=", APP)
     assert show, "App's Show on graph"
-    for step in ("void seedToCanvas(nodes, []);", "setSelectedNode(nodes[0] ?? null);", "results.leave();", 'setView("graph");'):
+    for step in ("void seedToCanvas(nodes, []);", "setSelectedNode(nodes[0] ?? null);", "leavePages();", 'setView("graph");'):
         assert step in show.group(1), step
+    # `leavePages` leaves the results: it is the Ask page hook's leaveBoth, which leaves its `other`, the results.
+    assert "const leavePages = ask.leaveBoth;" in APP
+    assert 'useAskPage(readerDocumentId !== null, results, handoff.view === "questions", stopReading)' in APP
+    assert "leaveBoth: () => { other.leave(); setOpen(false); }," in ASK_HOOK
     text = results_text()
     assert "**Show on graph** puts the records the result stands for on the graph, selects the first and takes you there" in text
     example = re.search(r'a record the result names that could not be read is said, as in "((\d+) of its (\d+) records could not be read\.)"', text)
@@ -212,7 +224,13 @@ def test_section_5_5_says_open_sets_the_results_aside_and_reads_the_document_ove
 def test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_sends_nothing() -> None:
     m = re.search(r'onAsk=\{railEntries\(rights\)\.includes\("questions"\) \? \(words\) => \{(.*?)\} : undefined\}', APP)
     assert m, "App gives the page onAsk only where the rail offers Ask & Chat"
-    assert m.group(1).strip() == "setQuestionDraft({ text: words, at: Date.now() }); setQuestionsOpen(true);", "and it sends nothing"
+    # It carries the words and opens Ask & Chat's page (which leaves the results), and sends nothing.
+    body = re.sub(r"//[^\n]*?(?= \}|$)", "", m.group(1)).strip()
+    assert body == "setQuestionDraft({ text: words, at: Date.now() }); openAskPage();", "and it sends nothing"
+    assert "const openAskPage = ask.openPage;" in APP
+    opened = re.search(r"const openPage = \(\) => \{(.*?)\};", ASK_HOOK)
+    assert opened and "other.leave();" in opened.group(1) and "setOpen(true);" in opened.group(1)
+    assert "fetch" not in opened.group(1) and "ask(" not in opened.group(1)
     # Ask & Chat puts the words in its box and focuses it; asking stays the person's, by Ask.
     assert "useEffect(() => { if (!draft) return; setQuestion(draft.text); questionBox.current?.focus(); }, [draft]);" in PANEL
     assert "const askLine = onAsk && (" in PAGE

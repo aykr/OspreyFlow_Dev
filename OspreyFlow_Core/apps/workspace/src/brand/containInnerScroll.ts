@@ -1,10 +1,10 @@
 // Inner scrollers never move the page under GOV.UK (the owner's ruling, 15 November 2026, keeping ADR-132's frame).
 // Under that brand the footer stands below the workspace and the page scrolls to reach it (`BrandFrame.tsx`). A wheel
-// that starts inside a box that scrolls (a drawer's body, where Ask & Chat, Explore and History are drawn; the empty
-// canvas's start overlay; the Studio's pane; a list) is the box's: once no box on its path can move further that way,
-// it stops there and never moves the page, which once took the top bar half off the top of the window. Boxes still
-// hand off to the box around them as before, and a wheel over a part of the page that does not scroll (the top bar,
-// the canvas's chrome) still scrolls the page to the footer.
+// that starts inside a box that scrolls (a drawer's body, where Explore and History are drawn; Ask & Chat's page; the
+// empty canvas's start overlay; the Studio's pane; a list) is the box's: once no box on its path can move further that
+// way, it stops there and never moves the page, which once took the top bar half off the top of the window. Boxes
+// still hand off to the box around them as before, and a wheel over a part of the page that does not scroll (the top
+// bar, the canvas's chrome) still scrolls the page to the footer.
 //
 // A script, not `overscroll-behavior`: Chromium stops a scroll at a box with `overscroll-behavior: contain` even on an
 // axis the box cannot scroll, so the property on every box would stop a sideways table swallowing a vertical wheel

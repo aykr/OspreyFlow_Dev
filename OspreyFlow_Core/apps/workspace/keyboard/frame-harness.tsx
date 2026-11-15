@@ -2,7 +2,7 @@
 // and `App.tsx` draw it, for measuring how it scrolls. The brand frame (GOV.UK's header and footer under that brand),
 // App's root at the window's height less what the frame shows above (`--workspace-height`), the classification strip,
 // the top bar, and the Glass's body as `App.tsx` lays it: a row filling what is left, the canvas filling the row.
-// `?drawer=1` opens a drawer whose body is taller than it (a real `Drawer`, as Ask & Chat's, Explore's and History's
+// `?drawer=1` opens a drawer whose body is taller than it (a real `Drawer`, as Explore's and History's
 // are), with two boxes of its own at its top, as a drawer's content has: a table wider than the drawer (`sideways`) and
 // a short list that scrolls (`short-list`); `?overlay=1` draws the empty canvas's start overlay with more than it can
 // show (`App.tsx`'s explore overlay). The fonts are `main.tsx`'s, so heights are the page's.
@@ -50,7 +50,7 @@ createRoot(document.getElementById("root")!).render(
         </div>
       </div>
       {params.get("drawer") === "1" && (
-        <Drawer open onClose={() => undefined} title="Ask & Chat">
+        <Drawer open onClose={() => undefined} title="Explore">
           <div data-box="sideways" style={{ overflowX: "auto" }}>
             <table><tbody><tr><td style={{ whiteSpace: "nowrap", minWidth: 2000 }}>A row wider than the drawer</td></tr></tbody></table>
           </div>

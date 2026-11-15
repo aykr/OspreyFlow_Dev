@@ -118,15 +118,35 @@ test("a proposal is accepted by keyboard, and its change reaches the view", asyn
   registerCovered(REGISTRY, "accept-a-proposal-by-keyboard");
 });
 
-test("the drawer closes from its visible Close button, reached by keyboard", async ({ page }) => {
-  // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing.
+test("Ask & Chat's page is left by its visible Back to Graph, its first control, reached by keyboard", async ({ page }) => {
+  // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing. ADR-145 Amendment 18:
+  // the panel is a page over the view, and its way out is Back to ‹view›, reached by Shift+Tab from the heading.
   await serve(page, [ANSWER]);
-  // ADR-145 Amendment 12: the drawer is Ask & Chat (Questions renamed), its Close named after it.
-  const close = page.getByRole("button", { name: "Close Ask & Chat" });
-  await close.focus();
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await askPage.getByRole("heading", { name: "Ask & Chat" }).focus();
+  await page.keyboard.press("Shift+Tab");
+  await expect(askPage.getByRole("button", { name: "Back to Graph" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__QUESTIONS__?.closed ?? 0)).toBe(1);
-  registerCovered(REGISTRY, "close-the-questions-drawer-by-keyboard");
+  await expect(askPage).toHaveCount(0);
+  registerCovered(REGISTRY, "back-from-ask-and-chat-by-keyboard");
+});
+
+test("a [G-n] chosen on Ask & Chat's page leaves it, selects what it stands for on the real canvas, and focus is on the canvas", async ({ page }) => {
+  // ADR-145 Amendment 18 decision 5 (rule 13), against the real canvas and App's own hook (harness.html?questions=page).
+  await serve(page, [], GRAPH_FACTS, "/keyboard/harness.html?questions=page");
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who is connected to n0?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByRole("button", { name: "Show on the graph: graph fact 1, [G-1]" })).toHaveCount(2);
+  await page.getByLabel("Your question").focus();
+  await tabToLabel(page, "Show on the graph: graph fact 1, [G-1]");
+  await page.keyboard.press("Enter");
+  await expect(askPage).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selectedEdge)).toBe("e0");
+  await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
+  registerCovered(REGISTRY, "select-a-graph-fact-from-the-ask-page-by-keyboard");
 });
 
 test("a proposal is rejected by keyboard, and nothing reaches the view", async ({ page }) => {
@@ -352,7 +372,8 @@ test("an earlier answer is opened from its question's line by keyboard, its mark
   await expect(proposals).toContainText("2 proposals to decide");
   await expect(page.getByRole("button", { name: /^Who called Callum\?/ })).toHaveAttribute("aria-expanded", "true");
   // Every stop Tab makes through the panel, from its start: none is a closed answer's marker or proposal.
-  await page.locator("[role='dialog']").focus();
+  // From the page's heading, its start (ADR-145 Amendment 18: the panel is on Ask & Chat's page, not in a drawer).
+  await page.getByRole("region", { name: "Ask & Chat" }).getByRole("heading", { name: "Ask & Chat" }).focus();
   const stops: string[] = [];
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press("Tab");
@@ -397,13 +418,13 @@ const N9 = {
   audit: { created_at: "2026-01-01T00:00:00Z", created_by: "fixture" },
 }; // prettier-ignore
 
-async function askForAll(page: Page, addAnswer: (route: import("@playwright/test").Route) => Promise<void>) {
+async function askForAll(page: Page, addAnswer: (route: import("@playwright/test").Route) => Promise<void>, at = "/keyboard/harness.html?questions=1") {
   const added: unknown[] = [];
   await page.route("**/v1/investigations/*/working-set/add-by-ids", async (route) => {
     added.push(route.request().postDataJSON());
     await addAnswer(route);
   });
-  await serve(page, [], SHOW_ALL, "/keyboard/harness.html?questions=1");
+  await serve(page, [], SHOW_ALL, at);
   await page.getByLabel("Your question").focus();
   await page.keyboard.type("Who is near n2?");
   await page.keyboard.press("Control+Enter");
@@ -431,6 +452,60 @@ test("Show all on graph under an answer puts every item it stands for on the rea
   registerCovered(REGISTRY, "show-all-of-an-answers-items-on-the-graph-by-keyboard");
 });
 
+test("Show all on graph on Ask & Chat's page leaves it, selects the answer's items on the real canvas, and focus is on the canvas", async ({ page }) => {
+  // ADR-145 Amendment 18 (rule 13), against the real canvas and App's own hook (harness.html?questions=page).
+  const added = await askForAll(
+    page,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ outcome: { delta: { seq: 9, op: "add", nodes: [N9], edges: [] }, links_among: "not_asked" }, not_shown: 1 }),
+      }),
+    "/keyboard/harness.html?questions=page",
+  );
+  // Reached by Tab from the question, as a person would (rule 13), not focused by the test.
+  await page.getByLabel("Your question").focus();
+  await tabToText(page, "Show all on graph");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
+  await expect.poll(() => added).toEqual([{ node_ids: ["n2", "n3", "n9", "hidden-1"], link_ids: ["e2"] }]);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selection.slice().sort())).toEqual(["n2", "n3", "n9"]);
+  await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
+  registerCovered(REGISTRY, "show-all-from-the-ask-page-by-keyboard");
+});
+
+/** Tab until the focused control's own text is `text` (a button named by its words, not an aria-label). */
+async function tabToText(page: Page, text: string, max = 40) {
+  for (let i = 0; i < max; i++) {
+    await page.keyboard.press("Tab");
+    if ((await page.evaluate(() => document.activeElement?.textContent?.trim() ?? "")) === text) return;
+  }
+  throw new Error(`Tab never reached ${text}`);
+}
+
+test("Show all on graph on Ask & Chat's page past the cap leaves the page, adds nothing, and its words say where Save as a view is (rule 2)", async ({ page }) => {
+  await askForAll(
+    page,
+    (route) =>
+      route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50003, options: [] }),
+      }),
+    "/keyboard/harness.html?questions=page",
+  );
+  await page.getByLabel("Your question").focus();
+  await tabToText(page, "Show all on graph");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__!.said ?? ""))
+    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.");
+  // The canvas focused selects its first node, as any arrival there does; nothing of the answer is selected.
+  expect(await page.evaluate(() => window.__KEYBOARD__!.selection.slice())).toEqual(["n0"]);
+});
+
 test("Show all on graph past the working set's cap adds nothing and says the cap's own figures (rule 2)", async ({ page }) => {
   await askForAll(page, (route) =>
     route.fulfill({
@@ -444,7 +519,7 @@ test("Show all on graph past the working set's cap adds nothing and says the cap
   await page.keyboard.press("Enter");
   await expect
     .poll(() => page.evaluate(() => window.__KEYBOARD__!.said ?? ""))
-    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view keeps them all.");
+    .toBe("Too many for the canvas: 50,003 nodes against a limit of 50,000. Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.");
   expect(await page.evaluate(() => window.__KEYBOARD__!.selection.slice())).toEqual(before);
 });
 

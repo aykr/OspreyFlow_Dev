@@ -39,15 +39,15 @@ def test_the_two_actions_and_when_each_is_offered() -> None:
 def test_what_show_all_cannot_show_is_a_count_and_past_the_limit_nothing() -> None:
     show = screen("questions/showAnswer.ts")
     assert "now.say(`${added.notShown.toLocaleString(\"en-GB\")} of this answer's items could not be shown.`);" in show
-    assert "Nothing was added; Save as a view keeps them all.`" in show and "`Too many for the canvas: " in show
+    assert "Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.`" in show and "`Too many for the canvas: " in show
     assert "drawn.highlightNodes(ids.nodeIds);" in show and "if (first) drawn.centreOn(first);" in show
     app = screen("App.tsx")
-    body = app[app.index("const showAnswerOnGraph = async") :][:400]
+    body = app[app.index("const showAnswerOnGraph = (") :][:400]
     assert "if (lens) closeLens();" in body, "a saved view open is closed first"
     text = six()
     assert '("3 of this answer\'s items could not be shown."), never which' in text
     assert ('Past the graph\'s limit it adds nothing and says so ("Too many for the canvas: … Nothing was added; Save as '
-            'a view keeps them all.")') in text  # fmt: skip
+            'a view, under the answer in Ask & Chat, keeps them all.")') in text  # fmt: skip
     assert "a saved view that is open is closed first, since the items go on the case" in text
 
 

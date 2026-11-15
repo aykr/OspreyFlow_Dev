@@ -97,7 +97,7 @@ export async function dismissWelcome(page: Page): Promise<void> {
 }
 
 /** A left-rail entry by its name: Explore, Ask & Chat or History, the panels the rail opens (the owner's navigation
- * decision, ADR-145 Amendment 15). Exact, so "Explore" never matches another name. */
+ * decision, ADR-145 Amendment 15; Ask & Chat a page over the view since Amendment 18). Exact, so "Explore" never matches another name. */
 export const rail = (page: Page, name: "Explore" | "Ask & Chat" | "History") =>
   page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name, exact: true });
 

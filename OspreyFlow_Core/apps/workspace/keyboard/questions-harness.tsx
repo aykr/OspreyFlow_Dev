@@ -1,5 +1,5 @@
-// Questions keyboard harness (ADR-098 decision 4): the case's questions to the model, mounted on
-// its own as the Questions drawer renders it. `questions.spec.ts` intercepts the routes at the
+// Questions keyboard harness (ADR-098 decision 4): the case's questions to the model, mounted inside
+// Ask & Chat's real page as `App.tsx` renders it (ADR-145 Amendment 18), by App's own hook. `questions.spec.ts` intercepts the routes at the
 // transport; what the panel hands back (a change to the view, a document to open) is exposed on
 // `window.__QUESTIONS__`. A chosen `[G-n]` is proved against the real canvas in `harness.html?questions=1`.
 import { useState } from "react";
@@ -7,8 +7,9 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
-import { Drawer } from "../src/design/primitives/Drawer";
+import { AskPage } from "../src/questions/AskPage";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
+import { useAskPage } from "../src/questions/useAskPage";
 import { applyHarnessBrand } from "./brandHarness";
 
 // The every-harness axe scan reads this call to scan GOV.UK too (`?brand=govuk`, ADR-132).
@@ -140,9 +141,26 @@ if (new URLSearchParams(window.location.search).get("save") === "1") {
   setTimeout(press, 50);
 }
 
+function Page() {
+  const ask = useAskPage(false, { leave: () => undefined }, true);
+  if (!ask.open) return <p>The view.</p>;
+  return (
+    <AskPage
+      backLabel="Graph"
+      onBack={() => {
+        window.__QUESTIONS__!.closed = (window.__QUESTIONS__!.closed ?? 0) + 1;
+        ask.back();
+      }}
+    >
+      <Panel />
+    </AskPage>
+  );
+}
+
 createRoot(container).render(
-  // Inside the Drawer, as `App.tsx` mounts it, so closing the drawer is provable here (rule 13).
-  <Drawer open onClose={() => { window.__QUESTIONS__!.closed = (window.__QUESTIONS__!.closed ?? 0) + 1; }} title="Ask & Chat">
-    <Panel />
-  </Drawer>,
+  // Inside Ask & Chat's page, as `App.tsx` mounts it, so its Back is provable here (rule 13). `position: relative`, as
+  // App's main area is, so the page fills it.
+  <div style={{ position: "relative", minHeight: "100vh" }}>
+    <Page />
+  </div>,
 );

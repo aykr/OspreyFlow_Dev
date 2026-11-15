@@ -196,9 +196,10 @@ current view, and only those (the owner's navigation decision of 13 November 202
 Amendments 2 and 12): *Explore* (where to start in the case's data, ADR-100, §3.1), *Ask & Chat* (the case's questions
 to the model, ADR-098, §3.1; named *Questions* until Amendment 12) and *History*, then *Help* and *Show names*. *Cases*,
 *Dashboards* (now the view switch's *Reports*) and *⋯ Explore Details* (whose *Ownership* and *Connection strength* are
-now under *More*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`,
-`aria-haspopup="dialog"`), a second press closes it, and opening or closing a panel never changes the view
+now under *More*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`;
+`aria-haspopup="dialog"` for a drawer's), a second press closes it, and opening or closing a panel never changes the view
 (`shell/railLayout.ts`'s `railMark`). Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener.
+*Ask & Chat* is the exception to the drawers: it opens as a page over the view (§2.0d, ADR-145 Amendment 18).
 Every drawer opens under the top bar and the context row, never over the navigation they carry (ADR-145 Amendment 14
 decision 2, `design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
 guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
@@ -244,7 +245,8 @@ closed answer hides them):
   reader may see them (`POST …/working-set/add-by-ids`, `03_CONDUIT_MIDDLEWARE.md`). What it cannot show is said as a
   count, "n of this answer's items could not be shown.", and never named: a node hidden from the reader or no longer
   held, and a link whose two ends the reader cannot both see (the orchestrator's ruling, 15 November 2026). Past the
-  working set's cap nothing is added, and the refusal says its figures and points to *Save as a view* (rule 2).
+  working set's cap nothing is added, and the refusal says its figures and points to *Save as a view* "under the answer
+  in Ask & Chat" (rule 2): said over the graph, after the page has gone (§2.0d), it names where that action is.
 - **Save as a view** opens the *Save as a view* form under the answer, named after its question ("Answer: …", cut at a
   word past 72 characters), and saves the answer's nodes as a saved view of the case, private until shared (ADR-144;
   the case line's *Saved views (n)* counts it). It isn't offered for an answer that stands for links alone.
@@ -694,8 +696,9 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
 - **Each result:** its name as the canvas names it (`nodeLabel`), its type, why it matched (the Conduit's words), its
   date, and for a document the passage with the matched words bold and underlined. *Show on graph: ‹name›* seeds every
   record it stands for and returns to the graph, focus on it; *Open*, for a document, reads it over the view, the
-  results kept and shown again when it closes, focus on their heading. A record a result names that the answer does
-  not hold is said, never dropped.
+  results kept and shown again when it closes, focus on their heading. A search made while a document is read over
+  the view shows its results at once, the reader closed (§2.0d). A record a result names that the answer does not
+  hold is said, never dropped.
 - **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat with
   the words in the question box, focused, once, and sends nothing.
 - **No results** says "No records match '…'." with *Clear filters* where a filter is on. **The fallback** shows the
@@ -709,6 +712,51 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
 
 Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,
 `keyboard/search-results.spec.ts` (`SEARCH_RESULTS_ACTIONS`) and the every-harness scan of `search-results-harness.html`.
+
+### 2.0d The Ask & Chat page (ADR-145 Amendment 18; v0.6.0, the owner's list of 15 November 2026)
+
+The rail's *Ask & Chat* opens the case's questions (§3.1, ADR-098) as a page that fills the main area, as the search
+results do (§2.0c), over the view the person left, which stays as it was beneath it and out of reach (`inert`)
+(`questions/AskPage.tsx`; when it shows and where focus goes, `questions/useAskPage.ts`, shared by App and the keyboard
+harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
+
+- **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and returns to the view exactly as it
+  was, focus on the rail's *Ask & Chat*. A second press of the rail's *Ask & Chat* does the same. The page has no Escape
+  of its own, as the results page has none: Escape inside it stays with the control that has focus.
+- **The heading**, "Ask & Chat", takes focus on opening; when the page opens with words carried into the question (the
+  results page's Ask line), the question box takes it instead.
+- **The results page and the Ask & Chat page replace each other**: the Ask line, or the rail's *Ask & Chat*, while the
+  results show, leaves them for the Ask page; a search from the Ask page leaves it for the results. Back from either
+  returns to the view beneath, never to the other page. Choosing any view, a saved view, another place or the
+  cross-link leaves it, as it leaves the results.
+- **A marker** in an answer (*Show on the graph: …*) leaves the page and shows the graph, the item brought into view,
+  focus on the canvas once it is back in reach (never left on the marker that went with the page), as the results'
+  *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) leaves it the same way, through the same hook.
+  **A document** opened from an answer is read over the view, the page hidden and shown again when it closes, focus on
+  its heading, never on the view beneath. *Ask the model about these…* opens the page, as a case opened to ask the
+  model does (ADR-098 decision 4).
+- **Opened while a document is read** over the view (from the results, from the view itself, from an answer before a
+  search), either page shows at once: the reader closes, as the page takes the view's place, and focus goes to the
+  page's heading (the orchestrator, 15 November 2026; `stopReading`, handed to both hooks by App and the harness).
+- Help's keys panel opens over the page when asked for, as over the results. It takes focus as it is asked for and
+  only then: drawn again elsewhere (beside the view, when the page it sat over is hidden for the reader) or drawn again
+  by App, it leaves focus where the analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the
+  canvas's foot is hidden under the page, as under the results, and back when it closes.
+- The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`). While
+  the page is hidden for a document read from an answer it is not expanded, and one press shows the page again, the
+  reader closed, focus on its heading (case's re-check, 15 November 2026; the hook's `shown`).
+
+Proved by `App.chrome.test.tsx` (the rail's openers), `App.search.test.tsx` (the two pages replacing each other, the
+reader, a page opened over a document read, a marker, *Show all on graph* and its saved view closed first, Help and its
+focus, another place, a saved view, the cross-link, Escape doing nothing, the hand-off's `view=questions`, *Ask the
+model about these…*), `App.batchExpand.test.tsx`, `keyboard/shell.spec.ts` (`ask-and-chat-page-by-keyboard`,
+`SHELL_ACTIONS`, on `places-harness.html`), `keyboard/questions.spec.ts` (`back-from-ask-and-chat-by-keyboard` on
+`questions-harness.html`, which mounts the panel in the page; and `select-a-graph-fact-from-the-ask-page-by-keyboard`
+and `show-all-from-the-ask-page-by-keyboard` on `harness.html?questions=page`, the page over the real canvas, with *Show
+all on graph*'s refusal past the cap there), `keyboard/search-results.spec.ts` (either page opened while a document is
+read, by keyboard; nothing of the canvas drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the
+three looks) and the every-harness scans of `places-harness.html?open=questions` and `questions-harness.html` in the
+three looks.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

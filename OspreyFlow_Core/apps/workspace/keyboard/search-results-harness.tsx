@@ -19,6 +19,8 @@ import { createWorkingSet } from "../src/workingset/store";
 import { GlobalSearch } from "../src/search/GlobalSearch";
 import { SearchResults } from "../src/search/SearchResults";
 import { useSearchResultsOverlay } from "../src/search/useSearchResultsOverlay";
+import { AskPage } from "../src/questions/AskPage";
+import { useAskPage } from "../src/questions/useAskPage";
 import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
@@ -81,6 +83,10 @@ await applyHarnessBrand();
 // Graph out (`flex: 1; position: relative`, beside the results in the same main area): the live demo of 15 November 2026
 // drew the canvas's toolbar and zoom over the results page, which a stand-in main area could never show.
 const wantsCanvas = params.get("canvas") === "1";
+// `?ask=1`: Ask & Chat's page (ADR-145 Amendment 18) open at load where `App.tsx` draws it, in the same main area and
+// the same layer as the results, with App's own hook (`questions/useAskPage.ts`), so the stacking case can see the
+// canvas's toolbar and zoom column drawn over it if they ever are.
+const wantsAsk = params.get("ask") === "1";
 const CANVAS_SCHEMA: OntologySchema = {
   version: 1,
   entity_types: [{ name: "Person", pole_class: "person", channel: "indigo", shape: "circle", icon: "person", identifiers: [] }],
@@ -94,7 +100,10 @@ function Harness() {
   // The App's own wiring (`search/useSearchResultsOverlay.ts`): when the results show, the view's reach, Back's focus,
   // and focus back into the results when a document read from them closes. The reader here is a stand-in.
   const [reading, setReading] = useState<string | null>(null);
-  const results = useSearchResultsOverlay(reading !== null);
+  // As `App.tsx` hands them: a page opened while a document is read closes the reader and shows at once.
+  const stopReading = () => setReading(null);
+  const results = useSearchResultsOverlay(reading !== null, stopReading);
+  const ask = useAskPage(reading !== null, results, wantsAsk, stopReading);
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current || !params.get("open")) return;
@@ -106,9 +115,13 @@ function Harness() {
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "var(--surface-app)", color: "var(--text-primary)" }}>
       <div className="top-bar" style={{ padding: "var(--sp-8)" }}>
         <GlobalSearch apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="c1" onSelect={() => undefined} onSearch={(q) => results.open(q, "Graph")} />
+        {/* A stand-in for the rail's Ask & Chat, which `App.tsx` gives `ask.toggle`. */}
+        <button type="button" className="btn" aria-expanded={ask.shown} onClick={ask.toggle}>
+          Ask & Chat
+        </button>
       </div>
       <div style={{ flex: 1, position: "relative", display: "flex", flexDirection: "column", minHeight: 0 }}>
-        <div style={{ display: "contents" }} inert={results.viewInert ? true : undefined}>
+        <div style={{ display: "contents" }} inert={results.viewInert || ask.viewInert ? true : undefined}>
           {wantsCanvas ? (
             <div style={{ flex: 1, position: "relative" }}>
               <GlassCanvas
@@ -126,6 +139,10 @@ function Harness() {
             <main style={{ padding: "var(--sp-16)" }}>
               <h1 style={{ margin: 0 }}>The graph</h1>
               <button type="button" className="btn">A control on the graph</button>
+              {/* A document read from the view itself, not from either page (the reader here is a stand-in). */}
+              <button type="button" className="btn" onClick={() => setReading("a document from the graph")}>
+                Read a document from the graph
+              </button>
             </main>
           )}
           {reading !== null && (
@@ -136,6 +153,15 @@ function Harness() {
             </div>
           )}
         </div>
+        {ask.open && (
+          <AskPage backLabel="Graph" onBack={ask.back} hidden={ask.pageHidden}>
+            <p>Ask a question about this case.</p>
+            {/* A document cited by an answer, read over the view, the page hidden meanwhile (the reader is a stand-in). */}
+            <button type="button" className="btn" onClick={() => setReading("a document from an answer")}>
+              Read a document from an answer
+            </button>
+          </AskPage>
+        )}
         {searching !== null && (
           <SearchResults
             key={searching.at}

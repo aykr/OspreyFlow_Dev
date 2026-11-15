@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.71** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 1.72** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0); *Show all on graph*'s words past the limit say *Save as a view* is under the answer in Ask & Chat, since the page has gone. Held by `tests/test_user_guide_ask_chat.py` and `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.71 | 2026-11-15 | §6, *An answer's items* (v0.6.0 item 5, the owner's closed list): **Show all on graph** puts an answer's items on the case's graph, selected, a saved view closed first, what it cannot show a count and past the limit nothing; **Save as a view** names the view from the question and saves it as a saved view of the case. Held by `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.70 | 2026-11-15 | §7.5: **What raises alerts** says why a hotlist or watch stopped, in the same words under *Stopped*; a stopped rule says nothing more (v0.6.0 #14, ADR-044 Amendment 1). Held by `tests/test_user_guide_alert_sources_stopped_why.py`. PDF made by the orchestrator at merge. |
 | 1.69 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November); v0.5.2 is not published. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -314,7 +315,7 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 | --- | --- |
 | **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More**, those your rights allow; for a screen reader **More** is *More ways to show the case*, and while one of its own is open it shows that one's name), **Build a report (opens in new tab)** (section 9), Export, and your account |
 | **Context banner** | The case line: the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads (section 3) |
-| **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow, each opening its panel beside the view and closing it again with a second press; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
+| **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow: Explore and History each open their panel beside the view, and Ask & Chat opens as a page over it (§6); a second press closes each again; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
 | **Timeline** | Folded at the bottom until opened |
@@ -893,7 +894,7 @@ the case's analyst layer.
 
 ## 6. Ask & Chat: questions to the model
 
-<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15 -->
+<!-- needs a new capture: shows the rail and banner before ADR-145 Amendment 15, and Ask & Chat as a drawer before Amendment 18 -->
 ![Ask & Chat (named Questions in this picture): ask about the documents in this case](images/user/12-questions.png)
 
 **Ask & Chat** (on the rail; it was named *Questions*) asks the deployment's model about what you choose
@@ -917,7 +918,8 @@ item they stand for on the case's graph and selects them together, the view move
 view that is open is closed first, since the items go on the case. What it cannot show, a record you may
 not see or no longer held, or a link whose two ends you cannot both see, is told only as a count ("3 of
 this answer's items could not be shown."), never which. Past the graph's limit it adds nothing and says
-so ("Too many for the canvas: … Nothing was added; Save as a view keeps them all."). **Save as a view**
+so ("Too many for the canvas: … Nothing was added; Save as a view, under the answer in Ask & Chat, keeps them all.").
+**Save as a view**
 opens the *Save as a view* form under the answer, named "Answer: " and the question (cut at a word after
 72 characters), or "Answer from Ask & Chat" when there is no question; saving says "Saved as a view:
 ‹name›. Open it from Saved views." It is a saved view of the case, private to you until shared, and
@@ -929,6 +931,14 @@ newest open with its answer and each earlier one closed to its question's line. 
 Enter on it, to open that answer, and again to close it; opening one closes no other. Asking a new question
 closes every earlier one. A closed answer's markers and buttons are not reached by Tab until it is open; if
 it holds proposals you have not yet accepted or rejected, its line says so: "2 proposals to decide".
+
+**A page of its own.** Ask & Chat opens as a page filling the main area, as the search results do,
+with the view you left kept beneath it, unchanged. **Back to** the view (*Back to Map*, say) is its
+first link and puts that view back, as does pressing Ask & Chat on the rail again; focus returns to
+Ask & Chat on the rail. A search from the page shows the results in its place, and the results' *Ask a
+question about '…' instead* opens it in theirs; Back from either goes to the view, not to the other.
+Choosing a view, a saved view or another place leaves it too. Selecting a marker in an answer, or
+**Show all on graph** under it, leaves the page and shows the graph with those items in view.
 
 **Graph facts.** Along with the documents, the model is given a numbered, plain account of the graph
 around what you have selected and one link beyond it (the whole view when nothing is selected). A

@@ -1,0 +1,9 @@
+== gates at 37e19cb (registry patch applied, uncommitted)
+ Test Files  399 passed (399)
+      Tests  3619 passed (3619)
+  5 skipped
+  1079 passed (4.1m)
+  1152 passed (17.6m)
+typecheck (npm run typecheck): exit 0
+lint (npm run lint): exit 0
+ruff check . (OspreyFlow_Core): All checks passed!

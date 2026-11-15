@@ -318,6 +318,27 @@ describe("an expansion the cap refused, run as a batch job (ADR-151)", () => {
     expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
   }, 15_000);
 
+  // ADR-145 Amendment 18: Ask & Chat's page draws no view either, so the panel at the canvas's foot is hidden under it.
+  test("the panel is hidden under the Ask & Chat page, and back when it closes", async () => {
+    answerFirst = (url) =>
+      url.endsWith("/inv-1/batch-expansions/j1")
+        ? new Response(JSON.stringify({ id: "j1", state: "running", words: "Expanding from 1 node.", view: null, nodes: null, links: null, refusal: null }))
+        : null;
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    await waitFor(() => expect(canvasProps.current?.onRunExpansionAsBatch).toBeTypeOf("function"));
+    act(() => canvasProps.current!.onRunExpansionAsBatch!(ASKED));
+    await screen.findByText("Expanding from 1 node.", undefined, { timeout: 5000 });
+    const rail = screen.getByRole("navigation", { name: "Workspace" });
+    fireEvent.click(within(rail).getByRole("button", { name: "Ask & Chat" }));
+    await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(panel()).toBeNull();
+    expect(document.querySelector(".batch-expansion")?.closest("[hidden]")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Back to / }));
+    expect(await screen.findByRole("region", { name: "Batch job: the whole expansion" })).toBeTruthy();
+    expect(sent.filter((s) => s.url.endsWith("/inv-1/batch-expansions"))).toHaveLength(1);
+  }, 15_000);
+
   test("going Home and back on the same page follows the job already started, never starting it again", async () => {
     let reads = 0;
     answerFirst = (url) => {

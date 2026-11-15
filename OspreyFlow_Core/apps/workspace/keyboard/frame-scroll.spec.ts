@@ -1,6 +1,6 @@
 // Inner scrollers never move the page under GOV.UK (the owner's ruling, 15 November 2026, keeping ADR-132's frame):
 // under that brand the page scrolls to reach the footer, as any GOV.UK page does, and a wheel that starts in a box that
-// scrolls (a drawer's body, where Ask & Chat, Explore and History are drawn; the empty canvas's start overlay) stops
+// scrolls (a drawer's body, where Explore and History are drawn; the empty canvas's start overlay) stops
 // at that box's end and never moves the page, which once took the top bar off the top of the window
 // (`src/brand/containInnerScroll.ts`). Nothing else changes: a box inside another still hands the wheel on when it is
 // at its end (a short list to its drawer), a box that scrolls only sideways never swallows a vertical wheel, a wheel

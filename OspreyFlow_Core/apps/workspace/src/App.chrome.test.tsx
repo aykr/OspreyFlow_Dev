@@ -277,6 +277,8 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
       const opener = within(rail()).getByRole("button", { name });
       expect(opener.getAttribute("aria-pressed")).toBeNull();
       expect(opener.getAttribute("aria-expanded")).toBe("false");
+      // Ask & Chat opens a page, not a dialog (v0.6.0 #4); Explore and History open drawers.
+      expect(opener.getAttribute("aria-haspopup")).toBe(name === "Ask & Chat" ? null : "dialog");
     }
   });
 
@@ -289,14 +291,17 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
       opener.focus();
       fireEvent.click(opener);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
-      expect(screen.getAllByRole("dialog", { name: new RegExp(title) }).length).toBeGreaterThan(0);
+      // Explore and History are drawers; Ask & Chat is a page over the view (v0.6.0 #4).
+      const shown = name === "Ask & Chat" ? "region" : "dialog";
+      expect(screen.getAllByRole(shown, { name: new RegExp(title) }).length).toBeGreaterThan(0);
       expect(pressedViews()).toEqual(["Map"]);
       fireEvent.click(opener);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
       expect(document.activeElement).toBe(opener);
       fireEvent.click(opener);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
-      fireEvent.click(screen.getAllByRole("button", { name: new RegExp(`^Close ${title}`) })[0]!);
+      const close = name === "Ask & Chat" ? /^Back to Map$/ : new RegExp(`^Close ${title}`);
+      fireEvent.click(screen.getAllByRole("button", { name: close })[0]!);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
       expect(document.activeElement).toBe(opener);
       expect(pressedViews()).toEqual(["Map"]);
