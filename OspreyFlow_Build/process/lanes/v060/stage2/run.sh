@@ -83,7 +83,7 @@ case "$STEP" in
   profile)
     # Diagnosis only, when a figure is over its budget (the sheet): read-only, one page of each kind timed in
     # process and over the wire, and M9's graph fallback query beside its variants.
-    names=$(python3 -c 'import json,sys; q=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; print("\n".join(x["query"] for x in q if x["class"]=="names"][:5]))' "$QUERIES")
+    names=$(python3 -c 'import json,sys; q=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]; print("\n".join([x["query"] for x in q if x["class"]=="names"][:5]))' "$QUERIES")
     mapfile -t NAMES <<< "$names"
     "${RUNNER[@]}" .venv/bin/python "$MEASURE/profile_page.py" --database ospreyflow --queries "$QUERIES" \
       --repeat "$( [ "$SHORT" = 1 ] && echo 2 || echo 10 )" --warm "$( [ "$SHORT" = 1 ] && echo 1 || echo 2 )"

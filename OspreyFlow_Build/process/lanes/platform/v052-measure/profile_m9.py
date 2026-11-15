@@ -3,7 +3,7 @@ name search answered from the graph in 5.3-5.5 s at 642,460 nodes against the 5 
 `GraphPort.search_nodes`' own query (`SearchNodesBuilder`, as `_from_graph` sends it: one past
 `FALLBACK_DEPTH`) beside variants that each take one part away, to find what dominates:
 
-- `current`: the query as sent (every identifier and indexed field in one `or()`, no label, the
+- `before_am21`: the query as it was sent before Amendment 21 (every identifier and indexed field in one `or()`, no label, the
   access filter, `limit(101)`);
 - `no_access`: the same without the access filter's `has` steps;
 - `limit_20`: the same with `limit(20)` (the one-past read's cost);
@@ -17,7 +17,7 @@ name search answered from the graph in 5.3-5.5 s at 642,460 nodes against the 5 
   <f> = :q`, the value bound, each answered from that type's index), sent together, then Gremlin
   from those record ids with `match_any_field`'s gazetteer guard on the non-name matches and the
   access filter, `dedup().limit(101)` (two Gremlin calls, names and others, merged); timed whole,
-  and its ids compared with `current`'s, so a fix of this shape is known to answer the same;
+  and its ids compared with `shipping`'s, so a fix of this shape is known to answer the same;
 - and the database's own list of indexes, so `by_label` and `by_sql` are read against what is
   indexed.
 
@@ -34,8 +34,13 @@ It prints one line per query and variant (each repeat's ms, then the median) and
 
 **A record of what ran, not a tool to run again.** Rules ran it on d at cbb7ad9 and at 6208ee7 (14
 November 2026, `STEP4_RECORD.md`'s M9 profile). ADR-124 Amendment 21 makes `SearchNodesBuilder` take
-the candidates' `record_ids`, so `current` here raises `TypeError` once that lands; the old query
-word for word is `process/lanes/rules/adr124-am21/equivalence.py`'s `old_query`.
+the candidates' `record_ids`, so `current` here raised `TypeError` once that landed (found by v0.6.0
+stage 2's rehearsal, rules-b, 15 November 2026). Since then `shipping` is the query as built,
+`GraphPort.search_nodes` timed whole (its SQL candidates, then the traversal from them), and every
+other variant is built from `before_am21`, the query before Amendment 21 word for word (as
+`process/lanes/rules/adr124-am21/equivalence.py`'s `old_query`); each variant's ids are compared with
+`shipping`'s. `tests/test_profile_m9.py` renders every variant offline, so a change to the builder
+breaks a test, not the next profile.
 """
 
 from __future__ import annotations
@@ -53,7 +58,7 @@ sys.path[:0] = [str(CORE), str(CORE / "packages")]
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter  # noqa: E402
 from adapters.graph_arcadedb.builders import (  # noqa: E402
     GAZETTEER_MATCH_FIELDS,
-    SearchNodesBuilder,
+    match_any_field,
 )
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig  # noqa: E402
 from adapters.graph_arcadedb.gremlin_literals import (  # noqa: E402
@@ -80,16 +85,27 @@ MEASURE = Principal(
 )
 
 
-def variants(adapter: GraphArcadeDBAdapter, query: str) -> dict[str, str]:
+def before_am21(adapter: GraphArcadeDBAdapter, query: str) -> str:
+    """`SearchNodesBuilder` before ADR-124 Amendment 21, word for word, at the fallback's depth: every
+    identifier and indexed field in one `or()` over the whole store (`equivalence.py`'s `old_query`)."""
     schema = adapter._require_schema()
     fields = sorted(
         {f for e in schema.entity_types for f in e.identifiers}
         | {p.name for e in schema.entity_types for p in e.properties if p.indexed}
     )
-    access = adapter._access
-    current = SearchNodesBuilder(tuple(fields), query, limit=ONE_PAST).render_gremlin(
-        access, MEASURE
+    value = groovy_string_literal(query)
+    matched = match_any_field(
+        lambda field: f"__.has({groovy_string_literal(field)},{value})", tuple(fields), MEASURE
     )
+    has_access = adapter._access.gremlin_has_step(MEASURE)
+    return f"g.V().{matched}.{has_access}.dedup().limit({ONE_PAST}).elementMap()"
+
+
+def variants(adapter: GraphArcadeDBAdapter, query: str) -> dict[str, str]:
+    """The Gremlin variants, each the pre-Amendment-21 query with one part taken away."""
+    schema = adapter._require_schema()
+    access = adapter._access
+    current = before_am21(adapter, query)
     has_access = access.gremlin_has_step(MEASURE)
     value = groovy_string_literal(query)
     matched = current.removeprefix("g.V().").split(f".{has_access}.")[0]
@@ -99,7 +115,7 @@ def variants(adapter: GraphArcadeDBAdapter, query: str) -> dict[str, str]:
         label = groovy_string_literal(physical_type_name(entity.name))
         pairs += [f"__.V().hasLabel({label}).has({groovy_string_literal(f)},{value})" for f in own]
     return {
-        "current": current,
+        "before_am21": current,
         "no_access": f"g.V().{matched}.dedup().limit({ONE_PAST}).elementMap()",
         "limit_20": current.replace(f".limit({ONE_PAST}).", ".limit(20)."),
         "count": f"g.V().{matched}.count()",
@@ -116,6 +132,13 @@ async def _timed(client: ArcadeDBClient, gremlin: str) -> tuple[float, set[str]]
     took = (time.perf_counter() - started) * 1000
     # `count` answers one number, not rows: it is shown as `count=<n>`.
     return took, {str(r.get("id")) if isinstance(r, dict) else f"count={r}" for r in rows}
+
+
+async def _shipping(adapter: GraphArcadeDBAdapter, query: str) -> tuple[float, set[str]]:
+    """The fallback's query as built (ADR-124 Amendment 21), timed whole, as `_from_graph` calls it."""
+    started = time.perf_counter()
+    nodes = await adapter.search_nodes(query, MEASURE, limit=ONE_PAST)
+    return (time.perf_counter() - started) * 1000, {n.id for n in nodes}
 
 
 async def _by_sql(adapter: GraphArcadeDBAdapter, query: str) -> tuple[float, set[str]]:
@@ -171,7 +194,8 @@ async def _run(database: str, repeat: int, queries: list[str]) -> int:
     for row in indexes:
         print(f"  {row.get('typeName')} {row.get('properties')} ({row.get('name')})")
     for query in queries:
-        timed = {
+        timed = {"shipping": lambda q=query: _shipping(adapter, q)}
+        timed |= {
             name: (lambda g=gremlin: _timed(client, g))
             for name, gremlin in variants(adapter, query).items()
         }
@@ -185,11 +209,11 @@ async def _run(database: str, repeat: int, queries: list[str]) -> int:
                 continue
             ms = [round(t) for t, _ids in runs]
             ids = runs[-1][1]
-            current = ids if name == "current" else current
+            current = ids if name == "shipping" else current
             same = (
                 ""
-                if name in ("current", "count") or current is None
-                else (f", ids {'the same as' if ids == current else 'NOT the same as'} current's")
+                if name in ("shipping", "count") or current is None
+                else (f", ids {'the same as' if ids == current else 'NOT the same as'} shipping's")
             )
             shown = next(iter(ids)) if name == "count" and ids else f"rows {len(ids)}"
             print(f"{query!r} {name}: {ms} ms, median {statistics.median(ms):.0f} ms, "
