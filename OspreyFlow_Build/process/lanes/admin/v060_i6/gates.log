@@ -1,0 +1,4 @@
+# #6's gate at 7a61ca7 (on main 582bab2), on the test server through stack_lease.sh offline (the QUEUE's first line),
+# 15 November 2026, run 20261115T145455Z-6d9e0618: make -k ci, exit 0, wall 987 s.
+# Local, on the orchestrator's slot 5: the whole keyboard suite 1352 passed (keyboard.log), the whole a11y suite 1166
+# passed (a11y.log), at ba4bf1c, whose code 7a61ca7 keeps (records only since).
