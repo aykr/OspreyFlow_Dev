@@ -78,3 +78,6 @@ already the rule as built (ADR-135 Amendment 2, 8 Nov: model keys entered in Adm
 19. **Editing an engine is checked too**: a changed model name, address or key runs the same check before it is saved.
 20. **One engine per provider from the screen is acceptable for now**; a second instance of a provider comes in a later slice.
 (Bedrock's example stays amazon.nova-pro-v1:0, ruling 17. "Your own gateway on every profile" is ruling 15.)
+21. **The installer's key moved from `deployment.env` at install stays unchecked** (the owner, 15 Nov ~17:10Z): it is the same
+    key moving, not a changed one, and a check would need the provider reachable during the install. (Separate from the
+    review's question 1, whether the key is removed from `deployment.env` after the move, which still needs its answer.)
