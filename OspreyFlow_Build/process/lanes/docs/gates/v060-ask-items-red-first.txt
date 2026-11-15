@@ -1,0 +1,33 @@
+# v0.6.0 item 5 in the user guide (§6, an answer's items): red-first run, 15 November 2026
+Tree: lane/docs-v060-ask-items e41c2b2 on main cc0e898, merged with case's lane/case-v060-show-all fed6bf1 (three keyboard and panel files that conflict with main's accordion taken from case; none is read here), in a scratch worktree. Taken again on main once item 5 lands.
+The first run had one miss: the case line's count removed from the save path still passed, since another setViewsRead in App.tsx matched; the assertion now reads saveAnswerAsView's own body.
+
+unplanted: 3 passed in 0.54s
+RED  Save offered for links alone
+     OspreyFlow_Core/apps/workspace/src/questions/AnswerActions.tsx: 'const canSave = onSaveAsView !== undefined && ids.nodeIds.length > 0;' -> 'const canSave = onSaveAsView !== undefined;'
+     failed: test_the_two_actions_and_when_each_is_offered
+RED  Show all on graph renamed
+     OspreyFlow_Core/apps/workspace/src/questions/AnswerActions.tsx: '            Show all on graph' -> '            Put all on the graph'
+     failed: test_the_two_actions_and_when_each_is_offered
+RED  what is not shown, said in other words
+     OspreyFlow_Core/apps/workspace/src/questions/showAnswer.ts: "of this answer's items could not be shown." -> 'items were hidden from you.'
+     failed: test_what_show_all_cannot_show_is_a_count_and_past_the_limit_nothing
+RED  a saved view left open
+     OspreyFlow_Core/apps/workspace/src/App.tsx: '    if (lens) closeLens();\n    results.leave();' -> '    results.leave();'
+     failed: test_what_show_all_cannot_show_is_a_count_and_past_the_limit_nothing
+RED  the view named otherwise
+     OspreyFlow_Core/apps/workspace/src/questions/AnswerActions.tsx: '"Answer from Ask & Chat"' -> '"An answer"'
+     failed: test_save_as_a_view_names_the_view_as_the_code_does
+RED  the saved message changed
+     OspreyFlow_Core/apps/workspace/src/App.tsx: 'Open it from Saved views.`);' -> 'Find it in Saved views.`);'
+     failed: test_save_as_a_view_names_the_view_as_the_code_does
+RED  the case line's count not raised
+     OspreyFlow_Core/apps/workspace/src/App.tsx: '    setViewsRead((n) => n + 1);\n    setToast(`Saved as a view:' -> '    setToast(`Saved as a view:'
+     failed: test_save_as_a_view_names_the_view_as_the_code_does
+RED  the guide: links alone offer Save too
+     OspreyFlow_Core/docs/user-guide.md: 'An answer whose markers stand for links alone offers only **Show all on graph**.' -> 'Every answer offers both.'
+     failed: test_the_two_actions_and_when_each_is_offered
+RED  the guide names what it cannot show
+     OspreyFlow_Core/docs/user-guide.md: '), never which.' -> '), each named.'
+     failed: test_what_show_all_cannot_show_is_a_count_and_past_the_limit_nothing
+restored: 3 passed in 0.58s
