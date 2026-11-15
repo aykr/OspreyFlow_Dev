@@ -237,3 +237,4 @@ dcfa54c c547f4e admin v060-i6-govuk-type
 e776b37 fb3653f rules-b v060-stage2-margin
 9e37aa1 4578ac7 rules-b v060-stage2-official
 97aa954 f5fdab9 case-b v060-i4-fullpage
+d7cf5a0 6be00be docs v060-changelog-i4-i6
