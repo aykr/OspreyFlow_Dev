@@ -468,6 +468,22 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     expect(reader.contains(document.activeElement)).toBe(true);
   });
 
+  // Case's re-check of 8153cae (must-fix): the page hidden for a document read from an answer is not shown, so the
+  // rail's Ask & Chat says so (not expanded) and one press shows it, the reader closed, focus on its heading.
+  test("the rail's Ask & Chat while a document read from an answer is open shows the page in one press, the reader closed", async () => {
+    const page = await openAsk();
+    fireEvent.click(await within(page).findByRole("button", { name: "Invoice 44" }));
+    await screen.findByRole("dialog", { name: /^Reading/ });
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    const opener = within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" });
+    expect(opener.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(opener);
+    const again = await screen.findByRole("region", { name: "Ask & Chat" });
+    expect(screen.queryByRole("dialog", { name: /^Reading/ })).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(within(again).getByRole("heading", { name: "Ask & Chat" })));
+    expect(opener.getAttribute("aria-expanded")).toBe("true");
+  });
+
   // Case's review of 052e265 (n1): while a document read from an answer is open, the hidden page kept a Help panel in
   // its `beside` and App drew another over the view. One is mounted, never two, and one again when the reader closes.
   test("Help's panel is mounted once while a document read from an answer is open, and once when it closes", async () => {

@@ -1853,7 +1853,8 @@ export function App() {
   // panel and marked expanded while it is open, never pressed (`railMark`); opening or closing one never changes
   // the view.
   const railOpen = new Set<RailEntry>(
-    ([["explore", exploreOpen], ["questions", questionsOpen], ["history", historyOpen]] as const)
+    // Ask & Chat's opener is expanded while its page shows, not while it is hidden for a document read from an answer.
+    ([["explore", exploreOpen], ["questions", ask.shown], ["history", historyOpen]] as const)
       .filter(([, open]) => open)
       .map(([id]) => id),
   );

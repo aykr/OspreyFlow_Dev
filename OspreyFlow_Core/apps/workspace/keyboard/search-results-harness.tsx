@@ -116,7 +116,7 @@ function Harness() {
       <div className="top-bar" style={{ padding: "var(--sp-8)" }}>
         <GlobalSearch apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" investigationId="c1" onSelect={() => undefined} onSearch={(q) => results.open(q, "Graph")} />
         {/* A stand-in for the rail's Ask & Chat, which `App.tsx` gives `ask.toggle`. */}
-        <button type="button" className="btn" aria-expanded={ask.open} onClick={ask.toggle}>
+        <button type="button" className="btn" aria-expanded={ask.shown} onClick={ask.toggle}>
           Ask & Chat
         </button>
       </div>
@@ -156,6 +156,10 @@ function Harness() {
         {ask.open && (
           <AskPage backLabel="Graph" onBack={ask.back} hidden={ask.pageHidden}>
             <p>Ask a question about this case.</p>
+            {/* A document cited by an answer, read over the view, the page hidden meanwhile (the reader is a stand-in). */}
+            <button type="button" className="btn" onClick={() => setReading("a document from an answer")}>
+              Read a document from an answer
+            </button>
           </AskPage>
         )}
         {searching !== null && (

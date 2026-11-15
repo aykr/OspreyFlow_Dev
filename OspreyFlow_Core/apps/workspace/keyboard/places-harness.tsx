@@ -176,7 +176,7 @@ function Harness() {
                 onSelect: id === "questions" ? ask.toggle : () => toggle(id),
                 opensPage: id === "questions",
                 // Marked by the same `railMark` as `App.tsx`, never a copy: expanded while its panel is open.
-                ...railMark(id, { view, open: ask.open ? new Set([...panels, "questions" as RailEntry]) : panels }),
+                ...railMark(id, { view, open: ask.shown ? new Set([...panels, "questions" as RailEntry]) : panels }),
               })))}
               onHelp={() => undefined}
             />

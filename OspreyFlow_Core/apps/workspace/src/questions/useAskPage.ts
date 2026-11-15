@@ -19,11 +19,14 @@ export interface OtherPage {
 
 export interface AskPageState {
   open: boolean;
+  /** Open and drawn: not hidden for a document read from an answer. What the rail's opener marks as expanded. */
+  shown: boolean;
   /** The rail's Ask & Chat, the results' Ask line, *Ask the model about these…*: leaves the results for the page. */
   openPage: () => void;
   /** *Back to ‹view›*, or the rail's second press: the view as it was, focus on the rail's Ask & Chat. */
   back: () => void;
-  /** The rail's Ask & Chat: opens the page, or goes back from it. */
+  /** The rail's Ask & Chat: goes back from the page when it shows; otherwise opens it, or shows it again when it is
+   * hidden for a document read from an answer (the reader closed, focus on its heading), in one press. */
   toggle: () => void;
   /** A search, which shows the results in the page's place. */
   leave: () => void;
@@ -58,7 +61,9 @@ export function useAskPage(reading: boolean, other: OtherPage, initial = false, 
   const openPage = () => {
     other.leave();
     if (reading && stopReading) {
-      openedOverReader.current = true;
+      // A page already open (hidden for the reader) is not drawn again, so its own opening focuses nothing: the effect
+      // above takes focus to its heading as the reader closes. A page opening now focuses its heading itself.
+      if (!open) openedOverReader.current = true;
       stopReading();
     }
     setOpen(true);
@@ -72,7 +77,8 @@ export function useAskPage(reading: boolean, other: OtherPage, initial = false, 
     open,
     openPage,
     back,
-    toggle: () => (open ? back() : openPage()),
+    shown: open && !reading,
+    toggle: () => (open && !reading ? back() : openPage()),
     leave: () => setOpen(false),
     leaveBoth: () => {
       other.leave();

@@ -241,6 +241,22 @@ test("Ask & Chat opened while a document is read over the view shows its page at
   await expect(page.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
 });
 
+test("Ask & Chat pressed while a document read from an answer is open shows its page in one press, the reader closed, focus on its heading", async ({ page }) => {
+  // Case's re-check of 8153cae: the hidden page is not shown, so the opener is not expanded and one press shows it.
+  await page.goto("/keyboard/search-results-harness.html?ask=1");
+  await page.getByRole("button", { name: "Read a document from an answer" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Reading: a document from an answer" })).toBeVisible();
+  const opener = page.getByRole("button", { name: "Ask & Chat" });
+  await expect(opener).toHaveAttribute("aria-expanded", "false");
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Ask & Chat" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: /^Reading/ })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+  await expect(opener).toHaveAttribute("aria-expanded", "true");
+});
+
 // v0.6.0 #4 (ADR-145 Amendment 18): Ask & Chat's page sits in the results' place and layer, so the same must hold of it:
 // nothing of the Graph beneath (its toolbar, its zoom column) is drawn over any point of the page, in each look; and the
 // search box's suggestions stay above it.

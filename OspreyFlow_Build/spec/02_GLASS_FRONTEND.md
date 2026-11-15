@@ -742,7 +742,9 @@ harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
   only then: drawn again elsewhere (beside the view, when the page it sat over is hidden for the reader) or drawn again
   by App, it leaves focus where the analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the
   canvas's foot is hidden under the page, as under the results, and back when it closes.
-- The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`).
+- The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`). While
+  the page is hidden for a document read from an answer it is not expanded, and one press shows the page again, the
+  reader closed, focus on its heading (case's re-check, 15 November 2026; the hook's `shown`).
 
 Proved by `App.chrome.test.tsx` (the rail's openers), `App.search.test.tsx` (the two pages replacing each other, the
 reader, a page opened over a document read, a marker, *Show all on graph* and its saved view closed first, Help and its
