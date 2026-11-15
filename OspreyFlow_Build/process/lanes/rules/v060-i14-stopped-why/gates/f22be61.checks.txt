@@ -1,0 +1,33 @@
+rules-v060-stopped-why checks at f22be61 (on main 7dd860e), on the Mac in the worktree, slot 9 and closed ports, no stack, no server
+== own tests
+.....                                                                    [100%]
+5 passed in 4.26s
+-- own tests exit=0
+== panel (vitest)
+     9 ms  src/alerts/OneQueue.test.tsx > made in the Glass > saves a saved pattern as a watch, and offers nothing before it is saved
+     8 ms  src/alerts/OneQueue.test.tsx > What raises alerts > names the owner and the suppressor, never by their identity-provider ids (ADR-106, rule 7)
+     7 ms  src/alerts/OneQueue.test.tsx > made in the Glass > watches an entity by its identifier, and offers nothing for one with none
+     4 ms  src/alerts/OneQueue.test.tsx > the one queue's markings > marks an alert taken back by a revert, and a suppressed one until its day (G12, Amendment 1)
+-- panel (vitest) exit=0
+== schema drift (generated TS)
+-- schema drift (generated TS) exit=0
+== citation-check
+doc-citations-check: 3029 file(s) scanned, every cited path exists.
+-- citation-check exit=0
+== test-file-coverage-check
+test-file-coverage-check: 1154 test file(s), 0 allowlisted, no new drift.
+-- test-file-coverage-check exit=0
+== ruff check .
+All checks passed!
+-- ruff check . exit=0
+== ruff format --check (the branch's Core files)
+2 files already formatted
+-- ruff format --check (the branch's Core files) exit=0
+== mypy packages services harness
+Success: no issues found in 493 source files
+-- mypy packages services harness exit=0
+== typecheck (tsc --noEmit, as npm run typecheck)
+-- typecheck (tsc --noEmit, as npm run typecheck) exit=0
+== eslint (the changed files)
+-- eslint (the changed files) exit=0
+checks rc=0
