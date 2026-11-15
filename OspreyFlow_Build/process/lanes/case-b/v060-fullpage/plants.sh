@@ -34,7 +34,7 @@ kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts s
 # The stacking case (lane review 2 item 2): nothing of the canvas drawn over the Ask page, in the three looks.
 st() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts search-results.spec.ts -g "Ask & Chat's page is drawn over" --workers=1 --reporter=line 2>&1); }
 # A page opened while a document is read (the orchestrator, 15 November 2026), by keyboard on the results harness.
-sr() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts search-results.spec.ts -g "while a document is read" --workers=2 --reporter=line 2>&1); }
+sr() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts search-results.spec.ts -g "while a document" --workers=2 --reporter=line 2>&1); }
 ax() { (cd "$WS" && npx playwright test --config a11y/playwright.config.ts every-harness.spec.ts -g "places-harness.html open=questions" --workers=1 --reporter=line 2>&1); }
 guide() { (cd OspreyFlow_Core && env -u OSPREY_LANE ARCADEDB_HTTP_PORT=59991 POSTGRES_PORT=59992 VALKEY_PORT=59993 CLICKHOUSE_HTTP_PORT=59994 POSTGRES_PASSWORD=throwaway \
   .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -q -p no:cacheprovider -rf ../OspreyFlow_Build/tests/test_user_guide_ask_chat.py 2>&1); }
@@ -135,6 +135,15 @@ plant "Help's panel kept in the hidden Ask page beside the one App draws over th
   "Help's panel is mounted once while a document read from an answer is open"
 plant "Help's panel kept in the hidden results beside the one App draws over the view" "$APP" 's/ && !results\.resultsHidden \? welcomePanel/ ? welcomePanel/' js \
   "Help's panel is mounted once while a document read from the results is open"
+# Case's re-check of 8153cae (must-fix): the rail's Ask & Chat over a page hidden for a document read from an answer.
+plant "the rail's toggle going back from a hidden page (as it was; jsdom)" "$HOOK" 's/toggle: \(\) => \(open && !reading \? back\(\) : openPage\(\)\)/toggle: () => (open ? back() : openPage())/' js \
+  "the rail's Ask & Chat while a document read from an answer is open shows the page in one press"
+plant "the rail's toggle going back from a hidden page (as it was; keyboard)" "$HOOK" 's/toggle: \(\) => \(open && !reading \? back\(\) : openPage\(\)\)/toggle: () => (open ? back() : openPage())/' sr \
+  "Ask & Chat pressed while a document read from an answer is open shows its page in one press"
+plant "the opener marked expanded while the page is hidden (App)" "$APP" 's/\["questions", ask\.shown\]/["questions", questionsOpen]/' js \
+  "the rail's Ask & Chat while a document read from an answer is open shows the page in one press"
+plant "focus left off the heading when a hidden page is shown again (the skip applied to it)" "$HOOK" 's/      if \(!open\) openedOverReader\.current = true;/      openedOverReader.current = true;/' js \
+  "the rail's Ask & Chat while a document read from an answer is open shows the page in one press"
 plant "the cross-link leaving the page showing, both ways" "$APP" 's/(          toStudio: \(\) => \{\n)            leavePages\(\);\n/$1/; s/(          toGlass: \(\) => \{\n)            leavePages\(\);\n/$1/' js \
   "the case line's cross-link to the Ingest Studio leaves the page"
 plant "Escape closing the page as a dialog would" "$PAGE" 's/<section className=/<section onKeyDown={(e) => { if (e.key === "Escape") onBack(); }} className=/' js \
@@ -166,7 +175,7 @@ if grep -qE "Tests  [0-9]+ passed" <<<"$j" && ! grep -qE "Tests .*failed" <<<"$j
   && grep -qE "^\s+[0-9]+ passed" <<<"$k" && ! grep -qE "^\s+[0-9]+ failed" <<<"$k" \
   && grep -qE "^\s+[0-9]+ passed" <<<"$a" && ! grep -qE "^\s+[0-9]+ failed" <<<"$a" \
   && grep -qE "^\s+3 passed" <<<"$t" && ! grep -qE "^\s+[0-9]+ failed" <<<"$t" \
-  && grep -qE "^\s+2 passed" <<<"$r" && ! grep -qE "^\s+[0-9]+ failed" <<<"$r" \
+  && grep -qE "^\s+3 passed" <<<"$r" && ! grep -qE "^\s+[0-9]+ failed" <<<"$r" \
   && grep -qE "[0-9]+ passed" <<<"$g" && ! grep -qE "failed" <<<"$g"; then
   echo "unplanted: $(grep 'Tests ' <<<"$j" | xargs); keyboard $(grep -E '^\s+[0-9]+ passed' <<<"$k" | xargs); axe $(grep -E '^\s+[0-9]+ passed' <<<"$a" | xargs); stacking $(grep -E '^\s+[0-9]+ passed' <<<"$t" | xargs); over a reader $(grep -E '^\s+[0-9]+ passed' <<<"$r" | xargs); guide $(tail -1 <<<"$g")"
 else echo "UNPLANTED NOT GREEN"; grep -E "×|Tests |^\s+[0-9]+\) |^\s+[0-9]+ (passed|failed)|^FAILED|passed|failed" <<<"$j
