@@ -178,3 +178,4 @@ admin	v060-i18-run-app-role	Four places, the Glass and Admin	Client install
 platform	v060-rf-fresh-only	Four places, the Glass and Admin	Client install
 platform	v061-admin-forms	Four places, the Glass and Admin	After the client's install
 docs	v060-model-keys-guide	Four places, the Glass and Admin	Client install
+rules	v060-superset-cves	Housekeeping	Client install
