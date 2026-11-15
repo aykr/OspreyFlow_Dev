@@ -20,3 +20,5 @@
 10b	The guides corrected for the cloud profile as v0.5.1 is (docs; the owner's exception, 13 Nov), merged	docs	Fri 13 Nov	-	done
 p1	After the v0.5.2 cut: run `graphify update .` from the repository root (not urgent; the owner, 14 Nov)	any idle lane	Thu 19 Nov, after the cut	-	todo
 p2	Admin forms (the owner, 15 Nov; admin-forms/OWNER_PROMPT_2026-11-15.md): add a model engine or a map provider from the screen alone. The five pre-build answers now (rules-b, research only); the build after the cut	rules-b, then a lane after the cut	after the cut	-	todo
+p3	ospreyflow.org and ospreyflow.net published (the owner, 15 Nov: repositories aykr/ospreyflow.org and aykr/ospreyflow.net made 15 Nov): item 6 screenshots on the post-cut stack, the owner's three wording points, then publish_pages.sh --site org|net; the owner points each domain's DNS at GitHub Pages	docs	after the cut	-	todo
+p4	ospreyflow.app, the standard-look demo beside the GOV.UK one (Part 3, ADR-114 Am 44): proved on a test stack, then the cutover in a window the owner names; needs the owner's DNS names and registrar keys (also renews govuk.ospreyflow.app's certificate)	platform	after the cut	-	todo
