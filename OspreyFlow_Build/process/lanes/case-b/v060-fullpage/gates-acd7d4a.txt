@@ -1,0 +1,11 @@
+== gates at acd7d4a, rebased on main 7723025 (registry patch applied, uncommitted)
+ Test Files  399 passed (399)
+      Tests  3626 passed (3626)
+  5 skipped
+  1082 passed (3.6m)
+  1152 passed (17.9m)
+typecheck (npm run typecheck): exit 0
+lint (npm run lint): exit 0
+ruff check . (OspreyFlow_Core): All checks passed!
+guide tests: 13 passed in 0.60s
+Rebased onto main 70e0ff8 as 28695dc: the workspace, user guide, guide tests, spec 02 and this folder are identical to acd7d4a's (git diff --stat over them is empty).

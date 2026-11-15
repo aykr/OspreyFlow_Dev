@@ -1,6 +1,6 @@
 # v0.6.0 #4, Ask & Chat as a page: ready to merge (15 November 2026)
 
-Branch `lane/case-b-v060-fullpage`, worktree `~/dev/osprey-wt/case-b`, rebased on main 582bab2. Playwright slot
+Branch `lane/case-b-v060-fullpage`, worktree `~/dev/osprey-wt/case-b`, rebased on main 70e0ff8. Playwright slot
 `OSPREY_PORTS_SLOT=3`; offline pytest on ports 59991–59994 with `OSPREY_LANE` unset.
 
 **Uncommitted, deliberately:** `keyboard/actionRegistry.ts`, as `registry-v060-fullpage.patch` (four ids:
@@ -8,10 +8,10 @@ Branch `lane/case-b-v060-fullpage`, worktree `~/dev/osprey-wt/case-b`, rebased o
 `select-a-graph-fact-from-the-ask-page-by-keyboard`; `show-all-from-the-ask-page-by-keyboard`). The orchestrator applies
 it at the merge; each id has its `registerCovered`.
 
-## The gates (`gates-8cc287d.txt`, `plants-8cc287d.txt`)
+## The gates (`gates-acd7d4a.txt`, `plants-acd7d4a.txt`; the earlier round's at 8cc287d)
 
-- Red on main (4 checks) and 25 plants, each red for its own named case, unplanted green.
-- vitest 3620/3620; the keyboard suite with the patch 1080 passed and 5 skipped; every-harness 1152 passed;
+- Red on main (4 checks) and 33 plants, each red for its own named case, unplanted green.
+- vitest 3626/3626; the keyboard suite with the patch 1082 passed and 5 skipped; every-harness 1152 passed;
   typecheck, lint and ruff clean; the two guide tests 13 passed.
 - Not run here: `make -k ci`, `make test` (Docker is down on this machine; the step changes no route, store or
   schema; its Python is the two guide tests, run above). No live run: nothing on the Conduit changed.
@@ -27,6 +27,16 @@ it at the merge; each id has its `registerCovered`.
   by Tab on the page; pid-capture's Back pressed only when the page is there. Found on the way: the guide test
   `test_user_guide_ask_items.py` read `const showAnswerOnGraph = async`, which item 1 removed; it follows the code now.
 
+## The orchestrator's fix round (15 November 2026), and case's review of 052e265
+
+- Either page opened while a document is read shows at once, the reader closed, focus on its heading (`stopReading`,
+  handed to both hooks by App and the harness); jsdom and keyboard cases.
+- Help's panel takes focus as it is asked for and only then (`App.tsx`'s `WelcomeFocusedOnce`; `welcome/` untouched);
+  and one panel is mounted while a document is read over either page, never two (case's n1).
+- `containInnerScroll.ts`'s comment says Ask & Chat is a page (on the orchestrator's word; admin to be told).
+- The page title on `var(--lh-19)` (case's n3); no gate checks line-height tokens, so no test holds it.
+- The CARRIES rows (the shared frame; Show all's canvas half) are the orchestrator's, on main.
+
 ## For the orchestrator at the merge
 
 - **Outside the map, to ratify:** `OspreyFlow_Core/docs/user-guide.md` (§6's words and the 1.72 row: docs' file);
@@ -34,8 +44,4 @@ it at the merge; each id has its `registerCovered`.
   `OspreyFlow_Build/tests/test_user_guide_ask_items.py` (case-b's #5, the cap's words and the `async`).
 - **Rebase:** ADR_RESERVATIONS.md met ADR-114 Amendment 48 and ADR-148 Amendment 20 at the same place; both rows kept
   with Amendment 18's.
-- **Carried:** `src/brand/containInnerScroll.ts:3` still says Ask & Chat is drawn in a drawer's body (admin's file;
-  reverted on your word, now untrue); a page opened while a document from elsewhere is open shows nothing until the
-  reader closes (the results page does the same); Help's panel can take focus from the reader (inherited from the
-  results page); AskPage repeats the results page's frame; App's `showAnswerOnGraph` is proven in jsdom, the canvas
-  half (selection, camera) only in the keyboard harness's own wiring.
+- **Carried:** in CARRIES.md (the orchestrator's rows).
