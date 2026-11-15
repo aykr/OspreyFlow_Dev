@@ -78,13 +78,17 @@ def test_the_omitted_image_does_not_declare_java() -> None:
 
 
 def test_the_final_stage_upgrades_before_the_code_and_as_root() -> None:
-    """The round-2 review of P7, item 5: the Debian upgrade is the final stage's first instruction
+    """The round-2 review of P7, item 5: the Debian upgrade is the final stage's first instruction after the day's stamp
     (`tests/test_images_built_fresh.py` needs it in that stage), run as the image's root before any
     code layer, so a code change does not repeat it and no `USER root` is needed after the Conduit's
     user is set; the user is set once, last."""
     instructions = _instructions(_final())
-    assert instructions[1].startswith("RUN apt-get update && apt-get upgrade -y"), instructions[1]
+    # v0.6.0: the day's stamp the upgrade is keyed on comes just before it, so a builder's cached
+    # copy of the layer cannot keep the distribution's old fixes (`harness/upgrade_stamp.py`).
+    assert instructions[1] == "ARG OSPREY_UPGRADE_STAMP=", instructions[1]
+    assert instructions[2].startswith('RUN echo "distribution fixes as of ${OSPREY_UPGRADE_STAMP')
+    assert "&& apt-get update && apt-get upgrade -y" in instructions[2], instructions[2]
     first_copy = next(n for n, i in enumerate(instructions) if i.startswith("COPY"))
-    assert 1 < first_copy
+    assert 2 < first_copy
     users = [i for i in instructions if i.startswith("USER")]
     assert users == ["USER 10001:10001"]

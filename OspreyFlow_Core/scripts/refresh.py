@@ -65,6 +65,7 @@ from harness import (
     search_rebuild,
     store_volumes,
     update,
+    upgrade_stamp,
 )
 from harness.apply import _compose, release_registry
 from harness.atomic import replace_whole
@@ -926,7 +927,7 @@ def _refresh(
     owed_before = _pending(directory)  # what an earlier run that died still owes
     changed = files_up_to_date(repo_root)
     theme_changed, proxy_changed = changed["theme_changed"], changed["proxy_changed"]
-    run([*compose, "build", "--pull"])
+    run([*compose, "build", "--pull", *upgrade_stamp.build_args()])
     _uploads_ready(directory / "compose.yaml", run)
     # ADR-114 Amendment 35: a store's data moved into its named volume, once, before anything
     # starts on it. `docker` is Docker itself unless a test stands one in.
