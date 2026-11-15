@@ -29,9 +29,9 @@ registry change.
 2. **Stacking.** Copy `search-results.spec.ts:165–214` for the Ask page. Add an Ask mode to
    `search-results-harness.tsx?canvas=1` drawing `AskPage` where App draws it, not in a fixed box, and check in three
    looks that no point of the page shows the canvas toolbar or `.canvas-corner`.
-3. **Ownership.** Revert the comment in `src/brand/containInnerScroll.ts`, which is Rules' file. Ask the orchestrator
-   about `live/pid-capture.spec.ts` and `live/capture-kit.ts`, which are in no lane's row. Scope pid-capture's Back to the
-   page: `getByRole("region", { name: "Ask & Chat" }).getByRole("button", { name: /^Back to / })`.
+3. **Ownership** (the orchestrator, 12:10Z). Revert the comment in `src/brand/containInnerScroll.ts`, which is admin's
+   file (from AD), not Rules'. The orchestrator approved keeping `live/pid-capture.spec.ts` and the `live/capture-kit.ts`
+   comment and records them as #4's. Scope pid-capture's Back to the page: `getByRole("region", { name: "Ask & Chat" }).getByRole("button", { name: /^Back to / })`.
 4. **Minor, in the same pass:**
    - fix the friction counts (plants and App.search cases, from the file);
    - add jsdom cases for the cross-link leaving the page, Escape doing nothing on the page, and `handoff.view ===
