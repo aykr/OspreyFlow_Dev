@@ -30,6 +30,7 @@ from adapters.model_litellm.stand_in import StandInGateway, StandInProvider
 from adapters.model_litellm.usage import engine_key
 from schemas.deployment import ModelProviderConfig
 from schemas.model_admin import EngineLimits
+from tests.services.api.test_model_admin_routes import added
 
 OLD_MASTER = "sk-stand-in-master-OLD1"
 NEW_MASTER = "sk-stand-in-master-NEW2"
@@ -43,7 +44,9 @@ def _gateway() -> StandInGateway:
         master_key=OLD_MASTER,
         salt_key="salt-one",
         providers={
-            "gemini": StandInProvider(GOOD, frozenset({"gemini-2.5-flash"}), 17, 5),
+            "gemini": StandInProvider(
+                GOOD, frozenset({"gemini-2.5-flash", "gemini-2.5-pro"}), 17, 5
+            ),
             "openai": StandInProvider(GOOD, frozenset({"gpt-4.1-mini"}), 17, 5),
         },
     )
@@ -76,7 +79,7 @@ async def test_one_engine_s_key_is_refused_on_another_engine_s_models(tmp_path: 
     gateway = _gateway()
     admin = _admin(tmp_path, gateway, OLD_MASTER)
     for engine in (GEMINI, OPENAI):
-        await admin.add_engine("admin-1", ModelProviderConfig.model_validate(engine))
+        await added(admin, engine, GOOD)
     gemini_key = engine_key(OLD_MASTER, "gemini")
     held = gateway.virtual_key(gemini_key)
     assert held is not None and held.models == ["gemini/gemini-2.5-flash"]
@@ -98,7 +101,7 @@ async def test_a_changed_master_key_revokes_every_engine_key_the_new_one_would_n
     gateway = _gateway()
     old = _admin(tmp_path, gateway, OLD_MASTER)
     for engine in (GEMINI, OPENAI):
-        await old.add_engine("admin-1", ModelProviderConfig.model_validate(engine))
+        await added(old, engine, GOOD)
     async with httpx.AsyncClient(base_url="http://litellm:4000", transport=gateway.transport(),
                                  headers={"Authorization": f"Bearer {OLD_MASTER}"}) as master:
         await master.post("/key/generate", json={"key": "sk-not-ours-0001",
@@ -125,7 +128,7 @@ async def test_every_page_of_the_gateway_s_keys_is_read_before_revoking(tmp_path
     """More stale keys than one page holds (measured: at most 100): every page is read first."""
     gateway = _gateway()
     admin = _admin(tmp_path, gateway, OLD_MASTER)
-    await admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await added(admin, GEMINI, GOOD)
     async with httpx.AsyncClient(base_url="http://litellm:4000", transport=gateway.transport(),
                                  headers={"Authorization": f"Bearer {OLD_MASTER}"}) as master:
         for i in range(150):
@@ -139,8 +142,7 @@ async def test_a_garbled_first_answer_never_stops_the_conduit_starting(tmp_path:
     """A 200 that is not JSON on the very first reconcile: `start` returns, and the retry finishes
     the work once the gateway answers properly."""
     gateway = _gateway()
-    await _admin(tmp_path, gateway, OLD_MASTER).add_engine(
-        "admin-1", ModelProviderConfig.model_validate(GEMINI))  # fmt: skip
+    await added(_admin(tmp_path, gateway, OLD_MASTER), GEMINI, GOOD)
     gateway._keys.clear()
     state = {"garbled": 3}
     real = gateway.transport()
@@ -181,8 +183,9 @@ def test_a_hosted_engine_named_local_is_refused() -> None:
 async def test_test_the_connection_is_tagged_as_the_engine_s_test_job(tmp_path: Path) -> None:
     gateway = _gateway()
     admin = _admin(tmp_path, gateway, OLD_MASTER)
-    await admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await added(admin, GEMINI, GOOD)
     await admin.set_key("admin-1", "gemini", SecretStr(GOOD))
     await admin.test("admin-1", "gemini")
     tags = [body.get("metadata", {}).get("tags") for _token, body in gateway.received]
-    assert tags == [["osprey:gemini/test"]]
+    # The check before Add, the new key's check (ruling 19) and the test: each the engine's `test`.
+    assert tags == [["osprey:gemini/test"]] * 3

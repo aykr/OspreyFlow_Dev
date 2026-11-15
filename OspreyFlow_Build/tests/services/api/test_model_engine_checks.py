@@ -31,6 +31,7 @@ from typing import Any
 import httpx
 import pytest
 import yaml
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from services.api.app import app, get_principal
 
@@ -106,6 +107,7 @@ def test_a_passed_check_offers_nothing_until_add(client: TestClient, world: Any)
     view = client.get("/v1/admin/models").json()
     assert all(e["provider"]["name"] != "gemini" for e in view["engines"]), "not an engine yet"
     assert world.gateway.entry_for("gemini/gemini-2.5-flash") is None, "no entry left routable"
+    assert world.gateway.stored_ids() == set(), "nor any under the check's own name"
     assert "gemini" not in world.admin.routes().engines
 
 
@@ -145,6 +147,20 @@ def test_a_check_not_added_in_15_minutes_is_removed(
     assert late.status_code == 410 and "15 minutes" in late.json()["detail"]["detail"]
     assert _credentials(world) == []
     assert "engine_check_expired" in [e.action for e in world.audit.entries]
+
+
+def test_a_corrected_key_checked_again_at_once_is_not_held_back_by_the_refused_one(
+    client: TestClient, world: Any
+) -> None:
+    """The gateway cools a refused entry down for about a minute, and its name with it, even once
+    deleted (measured on 8 November; the stand-in does the same). Each check's entries are named
+    for that check alone, so a key corrected and checked again at once is asked, and the engine
+    added after it answers at once under its own name."""
+    assert _check(client, key="sk-wrong-key-for-tests").json()["ok"] is False
+    again = _check(client).json()
+    assert again["ok"] is True, again["models"]
+    assert client.post(f"{CHECKS}/{again['check']}/add").status_code == 200
+    assert client.post("/v1/admin/models/engines/gemini/test").json()["outcome"] == "ok"
 
 
 def test_cancel_removes_the_credential(client: TestClient, world: Any) -> None:
@@ -319,19 +335,23 @@ def _key() -> Any:
     return SecretStr(GOOD)
 
 
-def test_an_engine_being_checked_is_not_added_unchecked_nor_its_key_lost_to_the_sweep(
-    client: TestClient, world: Any, clock: _Clock
-) -> None:
-    """The older add route refuses a name being checked; once that check has lapsed it is swept
-    first, so the sweep can never later remove the key of an engine added by that route."""
-    _check(client)
-    held = client.post("/v1/admin/models/engines", json={"provider": ENGINE})
-    assert held.status_code == 422 and "being checked" in held.json()["detail"]["detail"]
-    clock.at += timedelta(minutes=16)
-    assert client.post("/v1/admin/models/engines", json={"provider": ENGINE}).status_code == 200
-    assert client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD}).status_code == 200
-    asyncio.run(world.admin.sweep_checks())
-    assert _credentials(world) == ["osprey-gemini"], "the live engine keeps its key"
+def test_no_route_adds_an_engine_without_a_passed_check(client: TestClient, world: Any) -> None:
+    """The owner's ruling 18: an engine is added only from a passed check, by its id, under 15
+    minutes old. The older add route is gone, and no other `POST` under the section adds one."""
+    posts = sorted(
+        r.path for r in app.routes
+        if isinstance(r, APIRoute) and "POST" in r.methods and r.path.startswith("/v1/admin/models")
+    )  # fmt: skip
+    assert posts == [
+        CHECKS,
+        f"{CHECKS}/{{check_id}}/add",
+        "/v1/admin/models/engines/{name}/test",
+    ]
+    old = client.post("/v1/admin/models/engines", json={"provider": ENGINE})
+    assert old.status_code in (404, 405)
+    assert client.get("/v1/admin/models").json()["engines"] == []
+    assert world.gateway.stored_ids() == set() and _credentials(world) == []
+    assert not hasattr(world.admin, "add_engine"), "no unchecked add left to route to"
 
 
 def test_a_key_pasted_into_a_model_name_is_refused_before_anything_is_kept(
@@ -387,3 +407,183 @@ def test_a_refused_field_is_named_so_the_form_can_say_it_there(
     assert detail["fields"][0]["words"] and "Send the engine" not in detail["detail"]
     assert PLANTED not in refused.text and "W3R8" not in refused.text
     assert _credentials(world) == []
+
+
+# --- the owner's ruling 19: an edit is checked too ----------------------------------------------
+
+ENGINES = "/v1/admin/models/engines"
+WRONG = "sk-wrong-key-for-tests"
+PROXY = "https://proxy.example.org/v1"
+
+
+def _added(client: TestClient, key: str | None = GOOD, **engine: Any) -> dict[str, Any]:
+    check = _check(client, key=key, **engine).json()
+    assert check["ok"], check
+    added = client.post(f"{CHECKS}/{check['check']}/add")
+    assert added.status_code == 200, added.text
+    return dict(added.json())
+
+
+def _probes(world: Any) -> list[str]:
+    """Anything an edit's check left in the gateway: a credential or an entry under its own name."""
+    return sorted(
+        [c for c in world.gateway._creds if ".check" in c]
+        + [i for i in world.gateway.stored_ids() if ".check" in i]
+    )
+
+
+def _file(world: Any) -> str:
+    return str((world.folder / "models.yaml").read_text())
+
+
+def test_an_edited_model_name_is_checked_before_it_is_saved(client: TestClient, world: Any) -> None:
+    """Ruling 19: a changed model name runs the check's one call first; a refused one changes
+    nothing, the live engine still answering as it did."""
+    _added(client)
+    before = _file(world)
+    nope = {**ENGINE, "roles": {"extraction": "gemini-nope"}}
+    refused = client.put(f"{ENGINES}/gemini", json={"provider": nope})
+    assert refused.status_code == 422, refused.text
+    assert "Nothing was changed" in refused.json()["detail"]["detail"]
+    assert _file(world) == before
+    assert world.gateway.entry_for("gemini/gemini-2.5-flash") is not None
+    assert world.gateway.entry_for("gemini/gemini-nope") is None
+    assert world.gateway.credential("osprey-gemini") == GOOD and _probes(world) == []
+    asked = len(world.gateway.asked)
+    wider = {
+        **ENGINE,
+        "roles": {"extraction": "gemini-2.5-flash", "vision": "gemini-2.5-pro"},
+    }
+    assert client.put(f"{ENGINES}/gemini", json={"provider": wider}).status_code == 200
+    probed = world.gateway.asked[asked:]
+    assert [a.split("/", 1)[1] for a in probed] == ["gemini-2.5-pro"], "only the new model"
+    assert probed[0].startswith("gemini.check-"), "under the probe's name, never the live one"
+    assert world.gateway.entry_for("gemini/gemini-2.5-pro") is not None and _probes(world) == []
+
+
+def test_a_label_or_contract_changed_alone_is_saved_with_no_call(
+    client: TestClient, world: Any
+) -> None:
+    _added(client)
+    asked = len(world.gateway.asked)
+    shown = {
+        **ENGINE,
+        "label": "Google",
+        "privacy_contract": True,
+        "contract_reference": "DPA 7",
+    }
+    assert client.put(f"{ENGINES}/gemini", json={"provider": shown}).status_code == 200
+    assert world.gateway.asked[asked:] == []
+
+
+def test_a_changed_address_takes_its_key_with_it_and_is_checked_there(
+    client: TestClient, world: Any
+) -> None:
+    """Ruling 19 with the owner's earlier ruling (the address decides where the key goes): a moved
+    engine needs its key in the same edit, checked at the new address; until it passes, the engine
+    keeps its address and its key."""
+    _added(client)
+    before = _file(world)
+    moved = {**ENGINE, "api_base": PROXY}
+    keyless = client.put(f"{ENGINES}/gemini", json={"provider": moved})
+    assert keyless.status_code == 422 and "key" in keyless.json()["detail"]["detail"]
+    wrong = client.put(f"{ENGINES}/gemini", json={"provider": moved, "key": WRONG})
+    assert wrong.status_code == 422, wrong.text
+    assert _file(world) == before and world.gateway.credential("osprey-gemini") == GOOD
+    assert _probes(world) == []
+    sent = len(world.gateway.sent)
+    assert client.put(f"{ENGINES}/gemini", json={"provider": moved, "key": GOOD}).status_code == 200
+    assert (PROXY, GOOD) in world.gateway.sent[sent:], "checked at the new address"
+    entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
+    assert entry and world.gateway.stored_params(entry)["api_base"] == PROXY
+    view = client.get("/v1/admin/models").json()
+    assert view["engines"][0]["key_state"] == "set" and _probes(world) == []
+
+
+def test_a_new_key_is_checked_before_it_replaces_the_one_held(
+    client: TestClient, world: Any
+) -> None:
+    """Ruling 19: a changed key, from the screen or the command line (both `set_key`), is proved
+    against each of the engine's models first; a refused one leaves the held key working."""
+    _added(client)
+    wrong = client.put(f"{ENGINES}/gemini/key", json={"key": WRONG})
+    assert wrong.status_code == 422, wrong.text
+    assert "keeps" in wrong.json()["detail"]["detail"] and WRONG not in wrong.text
+    assert world.gateway.credential("osprey-gemini") == GOOD and _probes(world) == []
+    assert client.get("/v1/admin/models").json()["engines"][0]["key_state"] == "set"
+    assert world.audit.entries[-1].outcome.startswith("refused")
+    from pydantic import SecretStr
+    from services.api.model_admin import ModelAdminRefused
+
+    with pytest.raises(ModelAdminRefused):  # the command line's route, `ospreyflow models key`
+        asyncio.run(world.admin.set_key("cli:ayan", "gemini", SecretStr(WRONG)))
+    assert world.gateway.credential("osprey-gemini") == GOOD
+    second = "sk-second-good-key-for-tests"
+    world.gateway.providers = {"gemini": StandInProvider(second, frozenset({"gemini-2.5-flash"}))}
+    assert client.put(f"{ENGINES}/gemini/key", json={"key": second}).status_code == 200
+    assert world.gateway.credential("osprey-gemini") == second and _probes(world) == []
+
+
+def test_a_key_moved_from_deployment_env_is_moved_unchecked(tmp_path: Path) -> None:
+    """Amendment 14's one exception to ruling 19: `ospreyflow` moving the installer's own key out
+    of `deployment.env` changes no key, so nothing is asked of the provider at install."""
+    from schemas.deployment import ModelProviderConfig
+    from services.api.model_keys import move_keys
+
+    from tests.services.api.test_model_admin_routes import World as RoutesWorld
+
+
+    w = RoutesWorld(tmp_path, providers=[ModelProviderConfig.model_validate(ENGINE)])
+    moved, _ = asyncio.run(move_keys(w.admin, [f"GEMINI={WRONG}"], "cli:ayan"))
+    assert moved == ["gemini"] and w.gateway.credential("osprey-gemini") == WRONG
+    assert w.gateway.asked == []
+
+
+def test_the_key_appears_nowhere_through_an_edit_or_a_new_key(
+    client: TestClient, world: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The owner's key test extended to ruling 19: a planted key sent with a moved address, as a new
+    key, refused, and in malformed edits, is in no response, header, log record, audit entry, the
+    models file or a gateway row in plaintext; and it did reach the gateway."""
+    caplog.set_level(logging.DEBUG)
+    _added(client)
+    seen: list[str] = []
+
+    def send(method: str, path: str, **kw: Any) -> httpx.Response:
+        response = client.request(method, path, **kw)
+        seen.append(
+            f"{method} {path} {response.status_code} {response.text} {dict(response.headers)}"
+        )
+        return response
+
+    moved = {**ENGINE, "api_base": PROXY}
+    # Refused: the provider does not take it yet.
+    assert (
+        send("PUT", f"{ENGINES}/gemini", json={"provider": moved, "key": PLANTED}).status_code
+        == 422
+    )
+    assert send("PUT", f"{ENGINES}/gemini/key", json={"key": PLANTED}).status_code == 422
+    world.gateway.providers = {"gemini": StandInProvider(PLANTED, frozenset({"gemini-2.5-flash"}))}
+    for malformed in ({"provider": moved, "key": PLANTED, "extra": 1},
+                      {"provider": moved, "key": PLANTED * 300},
+                      {"provider": {**moved, "label": PLANTED}, "key": PLANTED}):  # fmt: skip
+        assert send("PUT", f"{ENGINES}/gemini", json=malformed).status_code == 422
+    assert (
+        send("PUT", f"{ENGINES}/gemini", json={"provider": moved, "key": PLANTED}).status_code
+        == 200
+    )
+    assert send("PUT", f"{ENGINES}/gemini/key", json={"key": PLANTED}).status_code == 200
+    send("GET", "/v1/admin/models")
+    send("GET", "/v1/admin/models/history")
+
+    fragments = (PLANTED, PLANTED[:12], "W3R8", "leak")
+    where = {
+        "responses, headers and URLs": "\n".join(seen),
+        "logs": "\n".join(r.getMessage() + repr(r.args) for r in caplog.records),
+        "audit": json.dumps([e.model_dump(mode="json") for e in world.audit.entries]),
+        "models file": _file(world),
+        "gateway rows": "\n".join(world.gateway.raw_rows()),
+    }
+    leaked = {w: f for w, text in where.items() for f in fragments if f in text}
+    assert leaked == {}
+    assert world.gateway.credential("osprey-gemini") == PLANTED and _probes(world) == []

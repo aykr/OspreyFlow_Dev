@@ -86,6 +86,7 @@ class World:
             salt_key="salt-one",
             providers={
                 "gemini": StandInProvider(GOOD, frozenset({"gemini-2.5-flash", "gemini-2.5-pro"})),
+                "openai": StandInProvider(GOOD, frozenset({"gpt-4o-mini"})),
             },
         )
         self.audit = InMemoryModelAdminAudit()
@@ -118,6 +119,39 @@ def client(world: World) -> TestClient:
     return TestClient(app)
 
 
+def add(client: TestClient, provider: dict[str, Any], key: str | None = GOOD) -> httpx.Response:
+    """An engine added as the screen adds one, the only way there is (the owner's ruling 18):
+    checked with its key (none for an IAM-role engine), then added from the check. A check refused,
+    or one that did not pass, is answered as it came; else Add's answer."""
+    try:
+        keyless = ModelProviderConfig.model_validate(provider).keyless
+    except ValueError:
+        keyless = False
+    body: dict[str, Any] = {"provider": provider}
+    if key is not None and not keyless:
+        body["key"] = key
+    checked = client.post("/v1/admin/models/checks", json=body)
+    if checked.status_code != 200 or not checked.json()["ok"]:
+        return checked
+    return client.post(f"/v1/admin/models/checks/{checked.json()['check']}/add")
+
+
+async def added(
+    admin: ModelAdmin,
+    provider: dict[str, Any],
+    key: str | None = GOOD,
+    by: str = "admin-1",
+) -> None:
+    """`add`, on the `ModelAdmin` itself."""
+    from pydantic import SecretStr
+
+    engine = ModelProviderConfig.model_validate(provider)
+    sent = None if engine.keyless or key is None else SecretStr(key)
+    result = await admin.check(by, engine, sent)
+    assert result.ok and result.check, result
+    await admin.add_checked(by, result.check)
+
+
 def _as(principal: Principal) -> None:
     app.dependency_overrides[get_principal] = lambda: principal
 
@@ -137,14 +171,16 @@ def _call(client: TestClient, route: APIRoute) -> httpx.Response:
 # --- rule 4 ------------------------------------------------------------------------------------
 
 
-def test_there_are_fourteen_models_routes() -> None:
+def test_there_are_thirteen_models_routes() -> None:
     # P1's nine, ADR-135 Amendment 3's limits and usage, and Amendment 14's check, its Add and its
-    # Cancel.
-    assert len(_models_routes()) == 14
+    # Cancel; P1's own add is gone (the owner's ruling 18: no engine is added unchecked).
+    assert len(_models_routes()) == 13
 
 
 @pytest.mark.parametrize(
-    "principal", [ANALYST, EVERY_OTHER_ADMIN_RIGHT], ids=["analyst", "every-other-admin-right"]
+    "principal",
+    [ANALYST, EVERY_OTHER_ADMIN_RIGHT],
+    ids=["analyst", "every-other-admin-right"],
 )
 def test_every_models_route_refuses_a_principal_without_manage_models(
     client: TestClient, world: World, principal: Principal
@@ -181,13 +217,13 @@ def test_a_planted_key_appears_in_no_response_log_audit_file_or_gateway_row(
         bodies.append(f"{response.status_code} {response.text} {dict(response.headers)}")
         return response
 
-    assert send("POST", "/v1/admin/models/engines", json={"provider": GEMINI}).status_code == 200
+    assert add(client, GEMINI).status_code == 200
     key = "/v1/admin/models/engines/gemini/key"
-    assert send("PUT", key, json={"key": PLANTED}).status_code == 200
-    # The stand-in refuses it and echoes part of it, as the real provider did.
-    tested = send("POST", "/v1/admin/models/engines/gemini/test")
-    assert tested.json()["outcome"] == "key_refused"
-    assert send("PUT", key, json={"key": PLANTED}).status_code == 200  # a rotation
+    # Checked first (ruling 19): the stand-in refuses it and echoes part of it, as the real provider
+    # did, so it replaces nothing; twice, as a rotation would be.
+    for _ in range(2):
+        assert send("PUT", key, json={"key": PLANTED}).status_code == 422
+    assert send("POST", "/v1/admin/models/engines/gemini/test").json()["outcome"] == "ok"
     assert (
         send("PUT", "/v1/admin/models/engines/nope/key", json={"key": PLANTED}).status_code == 404
     )
@@ -218,7 +254,7 @@ def test_a_planted_key_appears_in_no_response_log_audit_file_or_gateway_row(
 def test_the_key_reaches_the_gateway_credential_and_a_removal_takes_it_away(
     client: TestClient, world: World
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+    add(client, GEMINI)
     client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
     assert world.gateway.credential("osprey-gemini") == GOOD
     entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
@@ -248,12 +284,12 @@ def test_routing_follows_a_change_with_no_restart(client: TestClient, world: Wor
         _as(ADMIN)
         return names
 
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
-    assert offered() == ["local"]  # no key yet: not offered
-    client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
+    add(client, GEMINI)
     assert offered() == ["local", "gemini"]
     client.delete("/v1/admin/models/engines/gemini/key")
-    assert offered() == ["local"]
+    assert offered() == ["local"]  # no key: not offered
+    client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
+    assert offered() == ["local", "gemini"]
 
 
 # --- the models file, the refusals, the audit --------------------------------------------------
@@ -268,7 +304,7 @@ def test_the_models_file_replaces_osprey_yaml_s_engines_whole_and_is_600(tmp_pat
         client = TestClient(app)
         assert client.get("/v1/admin/models").json()["source"] == "osprey.yaml"
         client.delete("/v1/admin/models/engines/openai")
-        client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+        add(client, GEMINI)
         view = client.get("/v1/admin/models").json()
         assert [e["provider"]["name"] for e in view["engines"]] == ["gemini"]
         assert view["source"] == "models file"
@@ -285,7 +321,7 @@ def test_an_engine_beside_local_only_true_is_refused_in_words(tmp_path: Path) ->
     app.state.model_admin = w.admin
     app.dependency_overrides[get_principal] = lambda: ADMIN
     try:
-        answer = TestClient(app).post("/v1/admin/models/engines", json={"provider": GEMINI})
+        answer = add(TestClient(app), GEMINI)
     finally:
         app.dependency_overrides.clear()
         app.state.model_admin = None
@@ -295,8 +331,10 @@ def test_an_engine_beside_local_only_true_is_refused_in_words(tmp_path: Path) ->
     assert w.audit.entries[-1].outcome.startswith("refused")
 
 
-def test_removing_a_role_s_default_engine_is_refused_naming_the_role(client: TestClient) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+def test_removing_a_role_s_default_engine_is_refused_naming_the_role(
+    client: TestClient,
+) -> None:
+    add(client, GEMINI)
     assert (
         client.put(
             "/v1/admin/models/defaults", json={"defaults": {"extraction": "gemini"}}
@@ -308,9 +346,11 @@ def test_removing_a_role_s_default_engine_is_refused_naming_the_role(client: Tes
 
 
 def test_every_change_is_audited_with_who_and_what(client: TestClient, world: World) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
-    client.put("/v1/admin/models/engines/gemini", json={"provider": {**GEMINI, "label": "Google"}})
-    client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
+    add(client, GEMINI)
+    client.put(
+        "/v1/admin/models/engines/gemini",
+        json={"provider": {**GEMINI, "label": "Google"}},
+    )
     client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
     client.put("/v1/admin/models/defaults", json={"defaults": {"extraction": "gemini"}})
     client.post("/v1/admin/models/engines/gemini/test")
@@ -319,8 +359,8 @@ def test_every_change_is_audited_with_who_and_what(client: TestClient, world: Wo
     client.delete("/v1/admin/models/engines/gemini")
     history = client.get("/v1/admin/models/history").json()["entries"]
     assert [e["action"] for e in reversed(history)] == [
-        "engine_added", "engine_edited", "key_set", "key_rotated", "default_changed",
-        "connection_tested", "default_changed", "key_removed", "engine_removed",
+        "engine_checked", "engine_added", "key_set", "engine_edited", "key_rotated",
+        "default_changed", "connection_tested", "default_changed", "key_removed", "engine_removed",
     ]  # fmt: skip
     assert {e["by"] for e in history} == {"admin-1"}
     edited = next(e for e in history if e["action"] == "engine_edited")
@@ -329,7 +369,7 @@ def test_every_change_is_audited_with_who_and_what(client: TestClient, world: Wo
 
 async def test_a_key_the_gateway_lost_is_shown_lost_and_not_offered(tmp_path: Path) -> None:
     w = World(tmp_path)
-    await w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await added(w.admin, GEMINI)
     from pydantic import SecretStr
 
     await w.admin.set_key("admin-1", "gemini", SecretStr(GOOD))
@@ -365,7 +405,7 @@ async def test_a_second_conduit_replica_follows_a_change_made_through_the_first(
 
     w = World(tmp_path)
     other = w.make_admin()
-    await w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await added(w.admin, GEMINI)
     await w.admin.set_key("admin-1", "gemini", SecretStr(GOOD))
     path = w.folder / "models.yaml"
     os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 1_000_000))
@@ -381,11 +421,11 @@ def test_no_route_echoes_a_key_shaped_value_in_a_refusal(client: TestClient) -> 
     back. Every Models route reads its own body, so the refusal names the field, never the value."""
     shaped = "sk-proj-ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcd"
     for method, path in (
-        ("POST", "/v1/admin/models/engines"),
+        ("POST", "/v1/admin/models/checks"),
         ("PUT", "/v1/admin/models/engines/gemini"),
     ):
-        answer = client.request(method, path, json={"provider": {
-            **GEMINI, "privacy_contract": True, "contract_reference": shaped}})  # fmt: skip
+        contracted = {**GEMINI, "privacy_contract": True, "contract_reference": shaped}
+        answer = client.request(method, path, json={"provider": contracted, "key": GOOD})
         assert answer.status_code == 422, answer.text
         assert shaped not in answer.text and "contract_reference" in answer.text
     answer = client.put("/v1/admin/models/defaults", json={"defaults": [shaped]})
@@ -400,7 +440,7 @@ def test_a_lost_key_is_lost_for_every_process_and_entering_it_again_clears_it(
     from pydantic import SecretStr
 
     w = World(tmp_path)
-    asyncio.run(w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI)))
+    asyncio.run(added(w.admin, GEMINI))
     asyncio.run(w.admin.set_key("admin-1", "gemini", SecretStr(GOOD)))
     w.gateway.restart(salt_key="salt-two")  # a restore onto another deployment
     first = w.make_admin()
@@ -418,7 +458,7 @@ def test_a_lost_key_is_lost_for_every_process_and_entering_it_again_clears_it(
 def test_a_gateway_that_refuses_leaves_the_models_file_and_routing_as_they_were(
     client: TestClient, world: World
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+    add(client, GEMINI)
     before = (world.folder / "models.yaml").read_text()
     world.gateway.master_key = "rotated-elsewhere"  # every admin call now refused
     answer = client.put("/v1/admin/models/engines/gemini",
@@ -433,12 +473,13 @@ def test_clearing_an_engine_s_address_leaves_nothing_of_the_old_one(
     client: TestClient, world: World
 ) -> None:
     based = {**GEMINI, "api_base": "https://proxy.example.org/v1"}
-    client.post("/v1/admin/models/engines", json={"provider": based})
+    add(client, based)
     entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
     assert (
         entry and world.gateway.stored_params(entry)["api_base"] == "https://proxy.example.org/v1"
     )
-    client.put("/v1/admin/models/engines/gemini", json={"provider": GEMINI})
+    # A cleared address is a changed one: its key goes with it (the owner's ruling 19).
+    client.put("/v1/admin/models/engines/gemini", json={"provider": GEMINI, "key": GOOD})
     entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
     assert entry and "api_base" not in world.gateway.stored_params(entry)
     assert world.gateway.patches == []
@@ -452,7 +493,7 @@ def test_engines_in_the_models_file_are_not_offered_while_osprey_yaml_says_local
     from pydantic import SecretStr
 
     w = World(tmp_path)
-    asyncio.run(w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI)))
+    asyncio.run(added(w.admin, GEMINI))
     asyncio.run(w.admin.set_key("admin-1", "gemini", SecretStr(GOOD)))
     w.installed = _installed(local_only=True)  # the installer declared local only since
     assert w.make_admin().routes().engines == {}
@@ -463,38 +504,60 @@ def test_engines_in_the_models_file_are_not_offered_while_osprey_yaml_says_local
 KEY_SHAPED = "sk-proj-Zq81-PLANTED key-shaped value"
 
 
-def test_changing_an_engine_s_address_removes_its_key_and_sends_it_nowhere_new(
+def test_an_address_changed_without_its_key_is_refused_and_the_old_key_goes_nowhere_new(
     client: TestClient, world: World
 ) -> None:
-    """The owner's ruling (decision 1): the address decides where the key is sent, so a changed
-    address removes the key; nothing reaches the new address with the old key."""
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
-    client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
+    """The owner's ruling (decision 1): the address decides where the key is sent, so a key entered
+    for one address is never sent to another. Since ruling 19 a changed address takes its key with
+    it, checked there; without one the edit is refused and the engine keeps its address and key."""
+    add(client, GEMINI)
     elsewhere = {**GEMINI, "api_base": "https://collector.example.net/v1"}
-    assert (
-        client.put("/v1/admin/models/engines/gemini", json={"provider": elsewhere}).status_code
-        == 200
-    )
+    answer = client.put("/v1/admin/models/engines/gemini", json={"provider": elsewhere})
+    assert answer.status_code == 422 and "give its key with it" in answer.json()["detail"]["detail"]
     view = client.get("/v1/admin/models").json()
-    assert view["engines"][0]["key_state"] == "none"
-    assert world.gateway.credential("osprey-gemini") is None
-    tested = client.post("/v1/admin/models/engines/gemini/test").json()
-    assert tested["outcome"] == "key_refused"
-    assert all(
-        not (base and "collector" in base and key == GOOD) for base, key in world.gateway.sent
-    )
-    history = client.get("/v1/admin/models/history").json()["entries"]
-    removed = [e for e in history if e["action"] == "key_removed"]
-    assert removed and "address changed" in removed[0]["outcome"]
+    assert view["engines"][0]["key_state"] == "set"
+    assert view["engines"][0]["provider"]["api_base"] is None
+    assert world.gateway.credential("osprey-gemini") == GOOD
+    assert all(not (base and "collector" in base) for base, _key in world.gateway.sent)
 
 
-def test_a_rotation_the_gateway_refuses_is_recorded_as_lost_and_not_offered(
+def test_a_new_key_the_gateway_will_not_store_replaces_nothing(
     client: TestClient, world: World
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
-    client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
+    """Ruling 19's check holds the new key as its own credential first: a gateway that stores no
+    credential refuses there, and the engine keeps its key, still offered."""
+    add(client, GEMINI)
     world.gateway.refuse_credentials = 500
     answer = client.put("/v1/admin/models/engines/gemini/key", json={"key": "sk-new-but-refused"})
+    assert answer.status_code == 502 and "nothing was changed" in answer.json()["detail"]["detail"]
+    assert client.get("/v1/admin/models").json()["engines"][0]["key_state"] == "set"
+    assert world.gateway.credential("osprey-gemini") == GOOD
+    assert world.admin.routes().engines["gemini"].key_present is True
+
+
+def test_a_checked_key_the_gateway_then_refuses_is_recorded_as_lost_and_not_offered(
+    client: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check passed, the old key was removed, and the gateway refused the new one under the
+    engine's own name: the engine's key is then lost, recorded so and offered to no analyst."""
+    from services.api.model_admin import KeyRemovedNotReplaced
+
+    add(client, GEMINI)
+    gateway = world.admin._gateway  # noqa: SLF001
+    put = gateway.put_credential
+
+    async def refused_for_the_engine(provider: str, key: Any) -> None:
+        if provider != "gemini":
+            return await put(provider, key)
+        await gateway.delete_credential(provider)
+        raise KeyRemovedNotReplaced(
+            "The model gateway refused the new key (HTTP 500) after the old one was removed: the "
+            "engine has no key now and is offered to no analyst.",
+            status=502,
+        )
+
+    monkeypatch.setattr(gateway, "put_credential", refused_for_the_engine)
+    answer = client.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD})
     assert answer.status_code == 502 and "has no key now" in answer.json()["detail"]["detail"]
     assert client.get("/v1/admin/models").json()["engines"][0]["key_state"] == "lost"
     assert world.admin.routes().engines["gemini"].key_present is False
@@ -506,8 +569,8 @@ def test_a_refusal_names_the_field_never_the_value_in_the_answer_or_the_audit(
     bad_roles = {**GEMINI, "roles": {"extraction": KEY_SHAPED}}
     bad_name = {**GEMINI, "name": KEY_SHAPED}
     answers = [
-        client.post("/v1/admin/models/engines", json={"provider": bad_roles}),
-        client.post("/v1/admin/models/engines", json={"provider": bad_name}),
+        add(client, bad_roles),
+        add(client, bad_name),
         client.put("/v1/admin/models/defaults", json={"defaults": {"extraction": KEY_SHAPED}}),
     ]
     assert [a.status_code for a in answers] == [422, 422, 422]
@@ -521,7 +584,7 @@ def test_a_refusal_names_the_field_never_the_value_in_the_answer_or_the_audit(
 def test_a_change_that_fails_part_way_puts_the_gateway_back_and_saves_nothing(
     client: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+    add(client, GEMINI)
     before = (world.folder / "models.yaml").read_text()
     made = world.admin._gateway.add_entry  # noqa: SLF001
     calls = {"n": 0}
@@ -544,16 +607,17 @@ def test_a_change_that_fails_part_way_puts_the_gateway_back_and_saves_nothing(
 def test_a_models_file_that_cannot_be_written_is_a_refusal_audited_with_the_gateway_put_back(
     client: TestClient, world: World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+    add(client, GEMINI)
 
     def full(_settings: object) -> None:
         raise OSError(28, "No space left on device")
 
     monkeypatch.setattr(world.admin._file, "save", full)  # noqa: SLF001
-    answer = client.post("/v1/admin/models/engines", json={"provider": {
-        "name": "openai", "roles": {"extraction": "gpt-4o-mini"}}})  # fmt: skip
+    answer = add(client, {"name": "openai", "roles": {"extraction": "gpt-4o-mini"}})
     assert answer.status_code == 500 and "not saved" in answer.json()["detail"]["detail"]
     assert world.gateway.entry_for("openai/gpt-4o-mini") is None
+    # The check's key is not left in the gateway with nothing on record to remove it.
+    assert world.gateway.credential("osprey-openai") is None
     assert world.audit.entries[-1].outcome.startswith("refused")
 
 
@@ -575,13 +639,12 @@ def test_two_changes_at_once_from_two_processes_both_land(tmp_path: Path) -> Non
 
     async def both() -> None:
         await asyncio.gather(
-            w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI)),
-            other.add_engine(
-                "admin-2",
-                ModelProviderConfig.model_validate(
-                    {"name": "openai", "roles": {"extraction": "gpt-4o-mini"}}
-                ),
-            ),  # fmt: skip
+            added(w.admin, GEMINI),
+            added(
+                other,
+                {"name": "openai", "roles": {"extraction": "gpt-4o-mini"}},
+                by="admin-2",
+            ),
         )
 
     asyncio.run(both())
@@ -590,7 +653,7 @@ def test_two_changes_at_once_from_two_processes_both_land(tmp_path: Path) -> Non
 
 
 def test_a_key_with_spaces_or_only_spaces_is_refused(client: TestClient) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": GEMINI})
+    add(client, GEMINI)
     for key in ("   ", "sk-has a space"):
         answer = client.put("/v1/admin/models/engines/gemini/key", json={"key": key})
         assert answer.status_code == 422 and "no spaces" in answer.json()["detail"]["detail"]
@@ -599,12 +662,10 @@ def test_a_key_with_spaces_or_only_spaces_is_refused(client: TestClient) -> None
 def test_a_local_only_deployment_keeps_no_hosted_entry_and_asks_no_engine(tmp_path: Path) -> None:
     import asyncio
 
-    from pydantic import SecretStr
-
     w = World(tmp_path)
-    asyncio.run(w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI)))
-    asyncio.run(w.admin.set_key("admin-1", "gemini", SecretStr(GOOD)))
+    asyncio.run(added(w.admin, GEMINI))
     w.installed = _installed(local_only=True)
+    w.gateway.asked.clear()  # the check before Add asked once; nothing may be asked from here
     local = w.make_admin()
     asyncio.run(local.start())
     assert w.gateway.stored_ids() == set()

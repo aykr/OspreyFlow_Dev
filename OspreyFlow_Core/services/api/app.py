@@ -20168,25 +20168,13 @@ async def models_admin_history_route(admin: ModelAdminDep) -> ModelAdminHistory:
     return ModelAdminHistory(entries=await admin.history())
 
 
-@app.post("/v1/admin/models/engines", dependencies=_MANAGE_MODELS)
-async def models_admin_add_engine_route(
-    request: Request, principal: PrincipalDep, admin: ModelAdminDep
-) -> ModelsAdminView:
-    body = await _model_admin_body(request, EngineInput)
-    try:
-        await admin.add_engine(principal.id, body.provider)
-    except model_admin_module.ModelAdminRefused as refused:
-        raise _model_admin_refused(refused) from None
-    return admin.view()
-
-
 @app.put("/v1/admin/models/engines/{name}", dependencies=_MANAGE_MODELS)
 async def models_admin_edit_engine_route(
     name: str, request: Request, principal: PrincipalDep, admin: ModelAdminDep
 ) -> ModelsAdminView:
     body = await _model_admin_body(request, EngineInput)
     try:
-        await admin.edit_engine(principal.id, name, body.provider)
+        await admin.edit_engine(principal.id, name, body.provider, body.key)
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
     return admin.view()

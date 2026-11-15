@@ -65,6 +65,8 @@ from adapters.model_litellm.stand_in import (
 )
 from schemas.deployment import ModelProviderConfig, OspreyConfig
 from schemas.domain import Principal
+from tests.services.api.test_model_admin_routes import add as routes_add
+from tests.services.api.test_model_admin_routes import added as routes_added
 from tests.services.api.test_model_engines import _config as engines_config
 
 MASTER = "sk-stand-in-master"
@@ -117,6 +119,22 @@ GEMINI = {"name": "gemini", "roles": {"extraction": "g-flash"}}
 #: by its key (ADR-135 decision 1).
 BEDROCK_BY_KEY = {"name": "bedrock", "roles": {"extraction": CLAUDE}}
 KINDS = {"gateway": GATEWAY, "bedrock": BEDROCK}
+
+
+def _key_of(provider: dict[str, Any]) -> str:
+    """The key the stand-in's provider takes for an engine of this shape: a client gateway's token,
+    else the provider's own key."""
+    return TOKEN if provider.get("kind") == "gateway" else GEMINI_KEY
+
+
+def add(client: TestClient, provider: dict[str, Any], key: str | None = None) -> httpx.Response:
+    """Added as the screen adds one: checked, then added from the check (the owner's ruling 18)."""
+    return routes_add(client, provider, key or _key_of(provider))
+
+
+async def added(admin: ModelAdmin, provider: dict[str, Any], key: str | None = None) -> None:
+    await routes_added(admin, provider, key or _key_of(provider))
+
 
 #: Every name a stored key could go by in a LiteLLM entry.
 KEY_PARAMS = {"api_key", "litellm_credential_name", "aws_access_key_id", "aws_secret_access_key",
@@ -287,7 +305,7 @@ def test_off_the_cloud_platform_profile_bedrock_is_a_provider_by_its_key_as_befo
 ) -> None:
     w = World(tmp_path, profile=profile)
     client = serve(w)
-    added = client.post("/v1/admin/models/engines", json={"provider": BEDROCK_BY_KEY})
+    added = add(client, BEDROCK_BY_KEY)
     assert added.status_code == 200, added.text
     keyed = client.put("/v1/admin/models/engines/bedrock/key", json={"key": GEMINI_KEY})
     assert keyed.status_code == 200
@@ -308,14 +326,20 @@ def test_off_the_cloud_platform_profile_bedrock_is_a_provider_by_its_key_as_befo
     ids=["bedrock", "gateway-by-role", "provider-by-role", "provider-with-a-region"],
 )
 def test_off_the_cloud_platform_profile_bedrock_and_the_role_are_neither_offered_nor_taken(
-    tmp_path: Path, serve: Callable[[World], TestClient], profile: str, body: dict[str, Any]
+    tmp_path: Path,
+    serve: Callable[[World], TestClient],
+    profile: str,
+    body: dict[str, Any],
 ) -> None:
     """ADR-135 Amendment 7 decision 1, as Amendment 14 leaves it: Bedrock and signing in by the
     gateway's own role stay the cloud platform's."""
     w = World(tmp_path, profile=profile)
     client = serve(w)
-    assert client.get("/v1/admin/models").json()["engine_kinds"] == ["provider", "gateway"]
-    refused = client.post("/v1/admin/models/engines", json={"provider": body})
+    assert client.get("/v1/admin/models").json()["engine_kinds"] == [
+        "provider",
+        "gateway",
+    ]
+    refused = add(client, body)
     assert refused.status_code == 422, refused.text
     assert "profile: cloud-platform" in _refusal(refused)
     assert w.gateway.entry_for(f"{body['name']}/{next(iter(body['roles'].values()))}") is None
@@ -330,10 +354,10 @@ def test_off_the_cloud_platform_profile_the_client_s_own_gateway_is_offered_and_
     own gateway" on every profile, a Small's included, at its address alone and by a token."""
     w = World(tmp_path, profile=profile)
     client = serve(w)
-    added = client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
+    added = add(client, GATEWAY)
     assert added.status_code == 200, added.text
     keyed = {**GATEWAY, "name": "acme_keyed", "api_base": f"{BASE}?api-key=x"}
-    refused = client.post("/v1/admin/models/engines", json={"provider": keyed})
+    refused = add(client, keyed)
     assert refused.status_code == 422, "an address is an address alone, on every profile"
 
 
@@ -384,7 +408,7 @@ def test_off_the_cloud_platform_profile_the_models_file_and_render_are_written_a
 ) -> None:
     w = World(tmp_path, profile="small")
     client = serve(w)
-    assert client.post("/v1/admin/models/engines", json={"provider": GEMINI}).status_code == 200
+    assert add(client, GEMINI).status_code == 200
     written = yaml.safe_load(w.models_file())
     assert set(written["providers"][0]) == {
         "name", "label", "roles", "api_base", "privacy_contract", "contract_reference",
@@ -452,7 +476,7 @@ def _bedrock_model(model: str) -> dict[str, Any]:
 def test_the_cloud_platform_profile_refuses_each_shape_amendment_7_does_not_allow(
     client: TestClient, world: World, body: dict[str, Any], words: str
 ) -> None:
-    refused = client.post("/v1/admin/models/engines", json={"provider": body})
+    refused = add(client, body)
     assert refused.status_code == 422, refused.text
     assert words in _refusal(refused)
     # Refused before the gateway was asked anything, and nothing written.
@@ -497,14 +521,16 @@ def _models_routes() -> list[APIRoute]:
 
 @pytest.mark.parametrize("kind", sorted(KINDS))
 @pytest.mark.parametrize(
-    "principal", [ANALYST, EVERY_OTHER_ADMIN_RIGHT], ids=["analyst", "every-other-admin-right"]
+    "principal",
+    [ANALYST, EVERY_OTHER_ADMIN_RIGHT],
+    ids=["analyst", "every-other-admin-right"],
 )
 def test_every_models_route_refuses_a_principal_without_manage_models_for_each_kind(
     client: TestClient, world: World, principal: Principal, kind: str
 ) -> None:
     body = KINDS[kind]
     _as(ADMIN)
-    assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
+    assert add(client, body).status_code == 200
     seen_before, audited_before = len(world.gateway.seen), len(world.audit.entries)
     _as(principal)
     answers = {
@@ -514,7 +540,8 @@ def test_every_models_route_refuses_a_principal_without_manage_models_for_each_k
         )
         for r in _models_routes()
     }  # fmt: skip
-    assert len(answers) == 14  # with Amendment 14's check, its Add and its Cancel
+    # With Amendment 14's check, its Add and its Cancel; no add without a check (ruling 18).
+    assert len(answers) == 13
     assert {k: v.status_code for k, v in answers.items() if v.status_code != 403} == {}
     assert all(v.json()["detail"]["right"] == "manage_models" for v in answers.values())
     # Nothing reached the gateway or the audit for the refused principal.
@@ -528,8 +555,7 @@ def test_every_models_route_refuses_a_principal_without_manage_models_for_each_k
 def test_the_gateway_s_token_reaches_its_credential_and_is_sent_to_its_address_alone(
     client: TestClient, world: World
 ) -> None:
-    assert client.post("/v1/admin/models/engines", json={"provider": GATEWAY}).status_code == 200
-    assert client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN}).status_code == 200
+    assert add(client, GATEWAY).status_code == 200  # checked with its token, then added
     params = world.params("acme/gpt-4o-mini")
     assert params["model"] == "openai/gpt-4o-mini"
     assert params["api_base"] == BASE
@@ -537,7 +563,7 @@ def test_the_gateway_s_token_reaches_its_credential_and_is_sent_to_its_address_a
     assert "api_key" not in params
     assert world.gateway.credential("osprey-acme") == TOKEN
     assert client.post("/v1/admin/models/engines/acme/test").json()["outcome"] == "ok"
-    assert world.gateway.sent == [(BASE, TOKEN)]
+    assert world.gateway.sent == [(BASE, TOKEN)] * 2, "the check's call, then the test's"
     assert world.gateway.credential_reads == 0
 
 
@@ -545,7 +571,7 @@ def test_the_gateway_answers_at_its_address_written_with_a_trailing_slash(
     client: TestClient, world: World
 ) -> None:
     body = {**GATEWAY, "api_base": f"{BASE}/"}
-    assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
+    assert add(client, body).status_code == 200
     assert client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN}).status_code == 200
     assert client.post("/v1/admin/models/engines/acme/test").json()["outcome"] == "ok"
 
@@ -605,8 +631,11 @@ PASTED = [
 def test_a_token_in_a_field_that_is_shown_or_kept_is_refused_and_never_echoed(
     client: TestClient, world: World, field: str, value: str
 ) -> None:
-    for body in ({**GATEWAY, field: value}, {**GATEWAY, "name": "acme_two", field: value}):
-        refused = client.post("/v1/admin/models/engines", json={"provider": body})
+    for body in (
+        {**GATEWAY, field: value},
+        {**GATEWAY, "name": "acme_two", field: value},
+    ):
+        refused = add(client, body)
         assert refused.status_code == 422, (field, refused.text)
         assert "Q7Z4" not in refused.text and "eyJ" not in refused.text
     assert world.models_file() == ""
@@ -639,7 +668,7 @@ def test_the_engines_as_context_frees_only_a_cluster_translation(profile: str) -
                                   "/deployments/claude-3-haiku-london/chat"])  # fmt: skip
 def test_an_address_s_ordinary_path_is_taken(client: TestClient, path: str) -> None:
     body = {**GATEWAY, "api_base": f"https://ai-gateway.client.example{path}"}
-    assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
+    assert add(client, body).status_code == 200
 
 
 def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
@@ -653,22 +682,28 @@ def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
         bodies.append(f"{response.status_code} {response.text} {dict(response.headers)}")
         return response
 
-    assert send("POST", "/v1/admin/models/engines", json={"provider": GATEWAY}).status_code == 200
+    assert add(client, GATEWAY).status_code == 200
     key = "/v1/admin/models/engines/acme/key"
-    assert send("PUT", key, json={"key": PLANTED}).status_code == 200
-    # The client's gateway refuses it, and its refusal echoes part of it.
-    assert send("POST", "/v1/admin/models/engines/acme/test").json()["outcome"] == "key_refused"
-    assert send("PUT", key, json={"key": PLANTED}).status_code == 200  # a rotation
-    for malformed in ({"key": PLANTED, "extra": 1}, {"key": PLANTED * 300}, {"secret": PLANTED}):
+    # Checked first (ruling 19): the client's gateway refuses it, its refusal echoing part of it,
+    # so it replaces nothing; twice, as a rotation would be.
+    for _ in range(2):
+        assert send("PUT", key, json={"key": PLANTED}).status_code == 422
+    assert send("POST", "/v1/admin/models/engines/acme/test").json()["outcome"] == "ok"
+    for malformed in (
+        {"key": PLANTED, "extra": 1},
+        {"key": PLANTED * 300},
+        {"secret": PLANTED},
+    ):
         assert send("PUT", key, json=malformed).status_code == 422
     # A token pasted where a paste really lands is refused, on an edit and on an add, never echoed.
     for field, value in PASTED:
         edited = send("PUT", "/v1/admin/models/engines/acme",
                       json={"provider": {**GATEWAY, field: value}})  # fmt: skip
         assert edited.status_code == 422, (field, value)
-        added = send("POST", "/v1/admin/models/engines",
-                     json={"provider": {**GATEWAY, "name": "acme_two", field: value}})  # fmt: skip
-        assert added.status_code == 422, (field, value)
+        checked = send("POST", "/v1/admin/models/checks",
+                       json={"provider": {**GATEWAY, "name": "acme_two", field: value},
+                             "key": TOKEN})  # fmt: skip
+        assert checked.status_code == 422, (field, value)
     send("GET", "/v1/admin/models")
     send("GET", "/v1/admin/models/history")
     assert send("DELETE", key).status_code == 200
@@ -692,6 +727,12 @@ def test_a_planted_token_appears_in_no_response_log_audit_file_or_gateway_row(
 # --- Test the connection: each refusal of the two kinds, in their own words (rule 15) ----------
 
 
+def _check_body(provider: dict[str, Any]) -> dict[str, Any]:
+    """`POST …/checks`' body for `provider`, with the key its kind takes (none by the IAM role)."""
+    keyless = provider.get("kind") == "bedrock" or provider.get("auth") == "iam_role"
+    return {"provider": provider} if keyless else {"provider": provider, "key": _key_of(provider)}
+
+
 def _tested(client: TestClient, name: str) -> dict[str, Any]:
     return dict(client.post(f"/v1/admin/models/engines/{name}/test").json())
 
@@ -699,18 +740,16 @@ def _tested(client: TestClient, name: str) -> dict[str, Any]:
 def test_the_gateway_s_policy_refusal_names_the_policy_as_well_as_the_token(
     client: TestClient, world: World
 ) -> None:
+    assert add(client, GATEWAY).status_code == 200  # added while it answered
     world.client_gateway.refused_by_policy = frozenset({"gpt-4o-mini"})
-    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
-    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
     result = _tested(client, "acme")
     assert result["outcome"] == "key_refused"
     assert "policy" in result["words"] and "gateway's owners" in result["words"]
 
 
 def test_the_gateway_s_rate_limit_is_said_as_its_own(client: TestClient, world: World) -> None:
+    assert add(client, GATEWAY).status_code == 200  # added while it answered
     world.client_gateway.rate_limited = True
-    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
-    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
     result = _tested(client, "acme")
     assert result["outcome"] == "rate_limited"
     assert "Your organisation's AI gateway is limiting" in result["words"]
@@ -725,9 +764,8 @@ def test_the_gateway_s_rate_limit_is_said_as_its_own(client: TestClient, world: 
 def test_the_gateway_s_refusal_in_another_shape_is_said_as_refused_never_unreachable(
     client: TestClient, world: World, refusal: tuple[int, str]
 ) -> None:
+    assert add(client, GATEWAY).status_code == 200  # added while it answered
     world.client_gateway.refusal = refusal
-    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
-    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
     result = _tested(client, "acme")
     assert result["outcome"] in ("request_refused", "key_refused")
     assert "could not be reached" not in result["words"]
@@ -738,8 +776,8 @@ def test_bedrock_s_model_not_enabled_is_said_as_the_model_s_access_not_the_role_
     client_with_identity: TestClient, world_with_identity: World
 ) -> None:
     client, world = client_with_identity, world_with_identity
+    assert add(client, BEDROCK).status_code == 200  # added while it answered
     world.bedrock.enabled_models = frozenset()
-    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
     result = _tested(client, "bedrock")
     assert result["outcome"] == "model_not_enabled"
     assert "Model access" in result["words"] and "not the role's permissions" in result["words"]
@@ -750,8 +788,8 @@ def test_bedrock_s_expired_credentials_are_said_as_expired(
     client_with_identity: TestClient, world_with_identity: World
 ) -> None:
     client, world = client_with_identity, world_with_identity
+    assert add(client, BEDROCK).status_code == 200  # added while it answered
     world.bedrock.expired = True
-    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
     result = _tested(client, "bedrock")
     assert result["outcome"] == "sign_in_expired"
     assert "expired" in result["words"] and "restart the gateway" in result["words"]
@@ -766,7 +804,7 @@ def test_an_iam_role_engine_keeps_no_key_anywhere(
     caplog.set_level(logging.DEBUG)
     body = BEDROCK
     name = str(body["name"])
-    assert client.post("/v1/admin/models/engines", json={"provider": body}).status_code == 200
+    assert add(client, body).status_code == 200
     refused = client.put(f"/v1/admin/models/engines/{name}/key", json={"key": PLANTED})
     assert refused.status_code == 409
     assert "IAM role" in _refusal(refused)
@@ -790,19 +828,20 @@ def test_an_iam_role_engine_keeps_no_key_anywhere(
     assert removed.status_code == 409 and "IAM role" in _refusal(removed)
     # And the call to Bedrock carried no key of any kind.
     assert client.post(f"/v1/admin/models/engines/{name}/test").json()["outcome"] == "ok"
-    assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
+    keys = [k for where, k in world.gateway.sent if where.startswith("bedrock:")]
+    assert keys == [None, None], "the check's call and the test's, neither with a key"
 
 
 def test_bedrock_answers_through_the_gateway_pod_s_role_in_london(
     client: TestClient, world: World
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    add(client, BEDROCK)
     params = world.params(f"bedrock/{CLAUDE}")
     assert params["model"] == f"bedrock/{CLAUDE}"
     assert params["aws_region_name"] == "eu-west-2"
     result = client.post("/v1/admin/models/engines/bedrock/test").json()
     assert result["outcome"] == "ok"
-    assert world.gateway.signed == [(ROLE, "eu-west-2")]
+    assert world.gateway.signed == [(ROLE, "eu-west-2")] * 2, "the check's call, then the test's"
     # Offered to analysts with no key (the role is its sign-in).
     assert world.admin.routes().engines["bedrock"].key_present is True
 
@@ -810,8 +849,9 @@ def test_bedrock_answers_through_the_gateway_pod_s_role_in_london(
 def test_bedrock_with_no_role_on_the_gateway_pod_says_so_in_words_of_the_role(
     tmp_path: Path,
 ) -> None:
-    w = World(tmp_path, role=None)
-    asyncio.run(w.admin.add_engine("admin-1", ModelProviderConfig.model_validate(BEDROCK)))
+    w = World(tmp_path)
+    asyncio.run(added(w.admin, BEDROCK))  # added while the pod held its role
+    w.gateway.workload_role = None
     result = asyncio.run(w.admin.test("admin-1", "bedrock"))
     assert result.outcome == "key_refused"
     assert "IAM role" in result.words and "key" not in result.words.lower().replace("keep", "")
@@ -820,8 +860,12 @@ def test_bedrock_with_no_role_on_the_gateway_pod_says_so_in_words_of_the_role(
 def test_an_engine_s_kind_is_fixed_once_added_so_its_contract_never_moves_to_another(
     client: TestClient, world: World
 ) -> None:
-    contracted = {**GATEWAY, "privacy_contract": True, "contract_reference": "DPA 2026/07"}
-    client.post("/v1/admin/models/engines", json={"provider": contracted})
+    contracted = {
+        **GATEWAY,
+        "privacy_contract": True,
+        "contract_reference": "DPA 2026/07",
+    }
+    add(client, contracted)
     client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
     to_bedrock = {**contracted, "kind": "bedrock", "api_base": None, "auth": None}
     for other in ({**contracted, "kind": "provider"}, to_bedrock):
@@ -832,23 +876,27 @@ def test_an_engine_s_kind_is_fixed_once_added_so_its_contract_never_moves_to_ano
     assert world.gateway.credential("osprey-acme") == TOKEN
 
 
-def test_a_refused_reconcile_after_an_address_change_says_no_key_rather_than_key_set(
+def test_a_refused_address_change_leaves_the_engine_its_address_and_its_key(
     tmp_path: Path, serve: Callable[[World], TestClient]
 ) -> None:
+    """Ruling 19: the new address is checked, with the key sent beside it, before anything of the
+    engine changes; a gateway that refuses the check's entry leaves the address and the key as they
+    were, never an engine with no key."""
     # The new address's host is one the render opened (a second engine declared on it).
     world = World(tmp_path, rendered_with=(*RENDERED_WITH, "acme_two"))
     client = serve(world)
-    client.post("/v1/admin/models/engines", json={"provider": GATEWAY})
-    client.put("/v1/admin/models/engines/acme/key", json={"key": TOKEN})
+    assert add(client, GATEWAY).status_code == 200
     world.gateway.refuse_model_new = 500
     moved = {**GATEWAY, "api_base": "https://ai-gateway-2.client.example/v1"}
-    assert client.put("/v1/admin/models/engines/acme", json={"provider": moved}).status_code == 502
-    assert world.gateway.credential("osprey-acme") is None
-    assert world.admin.key_state("acme") == "none"
+    answer = client.put("/v1/admin/models/engines/acme", json={"provider": moved, "key": TOKEN})
+    assert answer.status_code == 502, answer.text
+    assert world.gateway.credential("osprey-acme") == TOKEN
+    assert world.admin.key_state("acme") == "set"
+    assert world.admin.settings.providers[0].api_base == BASE
 
 
 def test_the_command_line_moves_no_key_for_an_iam_role_engine(world: World) -> None:
-    asyncio.run(world.admin.add_engine("admin-1", ModelProviderConfig.model_validate(BEDROCK)))
+    asyncio.run(added(world.admin, BEDROCK))
     moved, skipped = asyncio.run(move_keys(world.admin, [f"BEDROCK={PLANTED}"], "cli:root"))
     assert (moved, skipped) == ([], ["bedrock"])
     assert world.gateway._creds == {}  # noqa: SLF001
@@ -908,7 +956,7 @@ def test_each_kind_s_limits_are_its_own_gateway_key_s(
 ) -> None:
     body = KINDS[kind]
     name, model = str(body["name"]), next(iter(body["roles"].values()))
-    client.post("/v1/admin/models/engines", json={"provider": body})
+    add(client, body)
     limits = {"requests_per_minute": 5, "tokens_per_minute": 900, "budget_tokens": 10_000,
               "budget_period": "day"}  # fmt: skip
     path = f"/v1/admin/models/engines/{name}/limits"
@@ -1071,12 +1119,15 @@ def test_the_gateway_workload_carries_no_static_aws_key(declared: list[dict[str,
 def test_an_engine_added_in_admin_models_gives_the_gateway_no_static_aws_key(
     client: TestClient, world: World
 ) -> None:
-    client.post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    add(client, BEDROCK)
     params = world.params(f"bedrock/{CLAUDE}")
     assert not {p.lower() for p in STATIC_AWS} & set(params)
     assert not any("AWS_" in str(v) for v in params.values())
     assert client.post("/v1/admin/models/engines/bedrock/test").json()["outcome"] == "ok"
-    assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [None]
+    assert [k for where, k in world.gateway.sent if where.startswith("bedrock:")] == [
+        None,
+        None,
+    ]
 
 
 def test_the_install_page_offers_no_key_field_for_an_iam_role_engine(tmp_path: Path) -> None:
@@ -1113,7 +1164,7 @@ def test_an_engine_the_render_did_not_make_is_refused_in_words(
     neither until a re-render and the platform's Terraform apply, so it is refused, in words, before
     the gateway is asked, never left to fail silently."""
     world = World(tmp_path, rendered_with=rendered_with)
-    refused = serve(world).post("/v1/admin/models/engines", json={"provider": body})
+    refused = serve(world).post("/v1/admin/models/checks", json=_check_body(body))
     assert refused.status_code == 422, refused.text
     said = _refusal(refused)
     assert REDO in said
@@ -1128,7 +1179,7 @@ def test_an_address_moved_to_a_host_the_render_did_not_open_is_refused(
 ) -> None:
     world = World(tmp_path, rendered_with=("acme",))
     client = serve(world)
-    assert client.post("/v1/admin/models/engines", json={"provider": GATEWAY}).status_code == 200
+    assert add(client, GATEWAY).status_code == 200
     moved = {**GATEWAY, "api_base": "https://ai-gateway-2.client.example/v1"}
     refused = client.put("/v1/admin/models/engines/acme", json={"provider": moved})
     assert refused.status_code == 422 and REDO in _refusal(refused)
@@ -1143,7 +1194,7 @@ def test_bedrock_with_none_declared_has_no_role_and_is_refused_not_signed(
     gateway would not hold (my own lane review of part 2, item 1)."""
     world = World(tmp_path, rendered_with=("gemini",))
     assert world.gateway.workload_role is None
-    refused = serve(world).post("/v1/admin/models/engines", json={"provider": BEDROCK})
+    refused = serve(world).post("/v1/admin/models/checks", json=_check_body(BEDROCK))
     assert refused.status_code == 422 and "the gateway's own IAM role" in _refusal(refused)
 
 
@@ -1228,7 +1279,7 @@ def test_on_cloud_platform_with_no_word_from_the_render_every_engine_is_closed(
     is known to be made, so nothing is enabled, written or offered (fails closed)."""
     world = World(tmp_path)
     world.admin._installed = dataclasses.replace(world.installed, made=None)  # noqa: SLF001
-    refused = serve(world).post("/v1/admin/models/engines", json={"provider": GEMINI})
+    refused = serve(world).post("/v1/admin/models/checks", json=_check_body(GEMINI))
     assert refused.status_code == 422 and REDO in _refusal(refused)
     _restored(world, GEMINI)
     asyncio.run(world.admin.start())

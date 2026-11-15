@@ -348,6 +348,20 @@ def gateway_model_name(provider: str, model: str) -> str:
     return f"{provider}/{model}"
 
 
+def probe_name(provider: str) -> str:
+    """An edit's check's own credential (the owner's ruling 19; ADR-135 Amendment 14), beside the
+    live engine's, which it never touches. No engine can be named so: an engine's name has no dot
+    (`schemas.deployment`)."""
+    return f"{provider}.check"
+
+
+def probe_entries(provider: str) -> str:
+    """The name one check's entries are made and asked under, used once: the gateway cools a refused
+    entry down for about a minute, its name with it even once deleted (measured on 8 November), so
+    a check under a name used again would hold back the next check, or the engine itself."""
+    return f"{probe_name(provider)}-{secrets.token_hex(4)}"
+
+
 #: Every hosted entry's price: one unit a token, prompt and completion alike, so the gateway's spend
 #: on an engine's key is the tokens it used and a budget is set in tokens (ADR-135 Amendment 3).
 TOKEN_PRICE = 1
@@ -420,17 +434,26 @@ class GatewayAdmin:
                 )
         return held
 
-    async def add_entry(self, provider: ModelProviderConfig, model: str) -> None:
+    async def add_entry(
+        self,
+        provider: ModelProviderConfig,
+        model: str,
+        *,
+        named: str | None = None,
+        credential: str | None = None,
+    ) -> None:
         """`POST /model/new` (measured). An entry is never patched: an edited engine's entries are
         deleted and made again, so no unmeasured partial update is relied on, and a cleared
-        address leaves nothing of the old one behind."""
+        address leaves nothing of the old one behind. `named` and `credential` are an edit's check's
+        (`probe_name`): its entry under its own name, using its own key or the engine's."""
+        named = named or provider.name
         params: dict[str, object] = {
             "model": provider.route(model),
             "input_cost_per_token": TOKEN_PRICE,
             "output_cost_per_token": TOKEN_PRICE,
         }
         if not provider.keyless:
-            params["litellm_credential_name"] = credential_name(provider.name)
+            params["litellm_credential_name"] = credential_name(credential or provider.name)
         # An IAM-role engine names no credential and carries no key of any kind (ADR-135
         # Amendment 4): Bedrock's calls are signed by the gateway pod's own identity, in London.
         if provider.region:
@@ -441,9 +464,9 @@ class GatewayAdmin:
             "POST",
             "/model/new",
             {
-                "model_name": gateway_model_name(provider.name, model),
+                "model_name": gateway_model_name(named, model),
                 "litellm_params": params,
-                "model_info": {"id": entry_id(provider.name, model)},
+                "model_info": {"id": entry_id(named, model)},
             },
         )
         if resp.status_code != 200:
@@ -647,7 +670,6 @@ _EDITABLE = (
     "label", "roles", "api_base", "privacy_contract", "contract_reference",
     "kind", "auth", "region",  # ADR-135 Amendment 4
 )  # fmt: skip
-
 
 
 #: A value that may be named in a refusal: shaped like a provider or a job (lower-case, short),
@@ -1017,6 +1039,11 @@ class ModelAdmin:
                     if any(not entries.get(entry_id(p.name, m), True) for m in p.roles.values())
                 )  # fmt: skip
                 await self._reconcile(self.settings, held, rebuilt=unpriced)
+                # An edit's check removes its own credential whatever the answer; one cut short (the
+                # process stopped mid-check) is removed here, so no key outlives its check.
+                for p in self.settings.providers:
+                    if not p.keyless:
+                        await self._gateway.delete_credential(probe_name(p.name))
             return True
         except (ModelAdminRefused, OSError) as failed:
             log.warning("model engines not reconciled with the gateway: %s", _said(failed))
@@ -1175,45 +1202,18 @@ class ModelAdmin:
                 raise await self._refusing(by, action, engine, unsaved) from None
             return result
 
-    async def add_engine(self, by: str, provider: ModelProviderConfig) -> None:
-        sent = sent_values(provider)
-        expired: list[str] = []
-
-        async def work(current: ModelSettings) -> None:
-            if any(p.name == provider.name for p in current.providers):
-                raise ModelAdminRefused(f"An engine named {provider.name} already exists.")
-            # ADR-135 Amendment 14: a lapsed check is swept first, so its sweep can never later
-            # remove this engine's key; a live one keeps its name.
-            current, gone = await self._expired(current)
-            expired.extend(gone)
-            if any(c.provider.name == provider.name for c in current.checks.values()):
-                raise ModelAdminRefused(
-                    f"An engine named {provider.name} is being checked; add it from its check, or "
-                    "cancel the check first."
-                )
-            proposed = self._validated(current.model_copy(
-                update={"providers": [*current.providers, provider]}, deep=True), sent)  # fmt: skip
-            self._made_by_the_render(provider)
-            await self._reconcile(proposed)
-            self._save(proposed)
-
-        try:
-            await self._change(by, "engine_added", provider.name, work)
-        finally:
-            await self._audit_expired(expired)
-        # A plain provider's entry is as before Amendment 4: its kind fields are not named.
-        named = [f for f in _EDITABLE if not (provider.plain and f in _KIND_FIELDS)]
-        await self._audited(
-            by, "engine_added", provider.name,
-            {f: {"from": None, "to": _plain(getattr(provider, f))} for f in named},
-        )  # fmt: skip
-
-    async def edit_engine(self, by: str, name: str, provider: ModelProviderConfig) -> str | None:
-        """Save an edited engine. **Changing its address removes its key** (the owner's ruling,
-        decision 1): the address decides where the key is sent, so a key entered for one address
-        is never sent to another; it is asked for again, in words. Returns those words, if so."""
-        sent = sent_values(provider)
-        moved: list[bool] = []
+    async def edit_engine(
+        self, by: str, name: str, provider: ModelProviderConfig, key: SecretStr | None = None
+    ) -> None:
+        """Save an edited engine. **A changed model name, address or key is checked first** (the
+        owner's ruling 19; ADR-135 Amendment 14): each new model, or every model where the address
+        or the key changed, is asked the check's one call under `probe_name`, and nothing is saved
+        unless every one answers. **A changed address takes its key with it** (the owner's ruling,
+        decision 1): a key entered for one address is never sent to another, so the new address is
+        checked with a key typed for it, and the engine keeps its address and key until it passes.
+        A label or an agreement changed alone asks nothing."""
+        sent = sent_values(provider) | ({key.get_secret_value()} if key is not None else set())
+        rotated: list[ModelAdminAction] = []
 
         async def work(current: ModelSettings) -> ModelProviderConfig:
             if provider.name != name:
@@ -1227,20 +1227,38 @@ class ModelAdmin:
                 raise ModelAdminRefused(
                     "An engine's kind cannot change; remove it and add one of the other kind."
                 )
+            _no_key_shown(provider, "nothing was changed")
             proposed = self._validated(current.model_copy(
                 update={"providers": [provider if p.name == name else p
                                       for p in current.providers]}, deep=True), sent)  # fmt: skip
             self._made_by_the_render(provider)
+            if provider.keyless and key is not None:
+                raise ModelAdminRefused(
+                    f"{name} signs in by the gateway's own IAM role, so no key is kept for it; "
+                    "send none. Nothing was changed."
+                )
             # Only the address decides where a key goes: the kind is fixed above, each kind has
             # one sign-in and Bedrock one region (ADR-135 Amendment 7 decision 4).
-            if (before.api_base or None) != (provider.api_base or None):
-                await self._gateway.delete_credential(name)
-                moved.append(True)
-                kept = {k: v for k, v in proposed.keys.items() if k != name}
-                proposed = proposed.model_copy(update={"keys": kept}, deep=True)
-                # The credential is gone now, whatever follows: the file says so before anything
-                # else can fail, so a refused reconcile never leaves "key set" over no key.
-                self._save(current.model_copy(update={"keys": kept}, deep=True))
+            moved = (before.api_base or None) != (provider.api_base or None)
+            if moved and not provider.keyless and key is None:
+                raise ModelAdminRefused(
+                    f"{provider.label or name}'s address changed: give its key with it, so the key "
+                    "is checked at the new address and never sent where it was not entered for. "
+                    "Nothing was changed."
+                )
+            if key is not None:
+                _plain_key(key)
+            models = list(provider.roles.values())
+            if not (moved or key is not None):
+                models = [m for m in models if m not in set(before.roles.values())]
+            if models:
+                await self._checked(provider, key, models, kept="its models, address and key")
+            if key is not None:
+                record = current.keys.get(name)
+                rotated.append("key_rotated" if record and not record.lost else "key_set")
+                await self._put_key(current, name, key)
+                keys = {**proposed.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
+                proposed = proposed.model_copy(update={"keys": keys}, deep=True)
             await self._reconcile(proposed, rebuilt=frozenset({name}))
             self._save(proposed)
             return before
@@ -1252,15 +1270,8 @@ class ModelAdmin:
             if getattr(before, f) != getattr(provider, f)
         }
         await self._audited(by, "engine_edited", name, changes)
-        if moved:
-            await self._audited(
-                by, "key_removed", name, outcome="done: the engine's address changed"
-            )
-            return (
-                f"{provider.label or name}'s address changed, so its key was removed: the key "
-                "is never sent to an address it was not entered for. Enter it again."
-            )
-        return None
+        if rotated:
+            await self._audited(by, rotated[0], name)
 
     async def remove_engine(self, by: str, name: str) -> None:
         async def work(current: ModelSettings) -> None:
@@ -1314,9 +1325,9 @@ class ModelAdmin:
         """Set, rotate or enter again `name`'s key. `action` names it otherwise in the audit
         (`key_moved`, from `deployment.env`, ADR-135 Amendment 2 decision 3). **A rotation the
         gateway refuses after the old key was removed is recorded truthfully**: the engine's key
-        is then lost, and it is offered to no analyst until a key is entered again."""
+        is then lost, and it is offered to no analyst until a key is entered again. **Checked
+        first** (the owner's ruling 19): a key the provider refuses replaces nothing."""
         said: list[ModelAdminAction] = [action or "key_set"]
-        text = key.get_secret_value()
 
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
@@ -1335,19 +1346,17 @@ class ModelAdmin:
                     "This deployment's osprey.yaml declares local_only: true, so no key for an "
                     "engine outside it is taken here."
                 )
-            if not text.strip() or any(ch.isspace() for ch in text):
-                raise ModelAdminRefused(
-                    "A key has no spaces or line breaks in it; nothing was changed."
-                )
+            _plain_key(key)
             record = current.keys.get(name)
             said[0] = action or ("key_rotated" if record and not record.lost else "key_set")
-            try:
-                await self._gateway.put_credential(name, key)
-            except KeyRemovedNotReplaced as gone:
-                if record is not None:
-                    keys = {**current.keys, name: record.model_copy(update={"lost": True})}
-                    self._save(current.model_copy(update={"keys": keys}, deep=True))
-                raise ModelAdminRefused(gone.words, status=gone.status) from None
+            if action != "key_moved":
+                # The owner's ruling 19: a new key is proved against each of the engine's models
+                # before it replaces the one held. A key moved out of `deployment.env` at install
+                # is the installer's own, moved, not changed (ADR-135 Amendment 14's one exception).
+                engine = next(p for p in current.providers if p.name == name)
+                kept = "the key it holds" if record and not record.lost else "no key"
+                await self._checked(engine, key, list(engine.roles.values()), kept=kept)
+            await self._put_key(current, name, key)
             await self._reconcile(current)
             keys = {**current.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
             self._save(current.model_copy(update={"keys": keys}, deep=True))
@@ -1445,12 +1454,12 @@ class ModelAdmin:
     # --- the check before Add (ADR-135 Amendment 14) --------------------------------------------
 
     async def _one_call(
-        self, provider: ModelProviderConfig, model: str
+        self, provider: ModelProviderConfig, model: str, *, named: str | None = None
     ) -> tuple[ConnectionOutcome, bool, str]:
-        """Decision 5's call of at most one token to `model`, through the gateway, and its outcome
-        in fixed words."""
+        """Decision 5's call of at most one token to `model`, through the gateway (under `named`,
+        an edit's probe, when given), and its outcome in fixed words."""
         check = await check_connection(
-            self._gateway.http, gateway_model_name(provider.name, model),
+            self._gateway.http, gateway_model_name(named or provider.name, model),
             tag=usage_tag(provider.name, "test"),
         )  # fmt: skip
         outcome = check.outcome
@@ -1462,6 +1471,84 @@ class ModelAdmin:
         ):
             outcome = "request_refused"  # the client's gateway was reached, and refused
         return outcome, check.ok, KIND_WORDS.get((provider.kind, outcome), WORDS[outcome])
+
+    async def _prove(
+        self, provider: ModelProviderConfig, models: Sequence[str], *, named: str, credential: str
+    ) -> list[ModelCheck]:
+        """Each of `models` given a passing entry under `named` that no route offers, using
+        `credential`'s key, asked once, and the entry removed (decision 5's call)."""
+        checked: list[ModelCheck] = []
+        for model in dict.fromkeys(models):
+            await self._gateway.add_entry(provider, model, named=named, credential=credential)
+            try:
+                outcome, ok, words = await self._one_call(provider, model, named=named)
+            finally:
+                await self._gateway.delete_entry(entry_id(named, model))
+            roles: list[str] = [r for r, m in provider.roles.items() if m == model]
+            checked.append(
+                ModelCheck(model=model, roles=roles, outcome=outcome, ok=ok, words=words)
+            )
+        return checked
+
+    async def _checked(
+        self,
+        provider: ModelProviderConfig,
+        key: SecretStr | None,
+        models: Sequence[str],
+        *,
+        kept: str,
+    ) -> None:
+        """The owner's ruling 19: an edit's or a new key's check, run under `probe_name` beside the
+        live engine, which it never touches. A new key is the probe's own credential, removed
+        whatever the answer; without one the engine's own key is used. Refused, in the check's
+        words, unless every model answers: the engine then keeps `kept`."""
+        if self._installed.local_only:
+            raise ModelAdminRefused(
+                "This deployment is local only: no engine outside it is asked anything, so the "
+                "change cannot be checked. Nothing was changed."
+            )
+        probe = probe_name(provider.name)
+        own = key is not None and not provider.keyless
+        if own:
+            assert key is not None
+            try:
+                await self._gateway.put_credential(probe, key)
+            except KeyRemovedNotReplaced:  # the probe held no key before: none is lost
+                raise ModelAdminRefused(
+                    "The model gateway refused the key; nothing was changed. Run ospreyflow "
+                    "doctor.",
+                    status=502,
+                ) from None
+        try:
+            checked = await self._prove(
+                provider,
+                models,
+                named=probe_entries(provider.name),
+                credential=probe if own else provider.name,
+            )
+        finally:
+            if own:
+                await self._gateway.delete_credential(probe)
+        failed = [m for m in checked if not m.ok]
+        if failed:
+            said = " ".join(
+                f"{m.model}: {m.words}" if len(checked) > 1 else m.words for m in failed
+            )
+            raise ModelAdminRefused(
+                f"{said} Nothing was changed: {provider.label or provider.name} keeps {kept}."
+            )
+
+    async def _put_key(self, current: ModelSettings, name: str, key: SecretStr) -> None:
+        """A checked key as the engine's own credential. **A replacement the gateway refuses after
+        the old key was removed is recorded truthfully**: the engine's key is then lost."""
+        try:
+            await self._gateway.put_credential(name, key)
+        except KeyRemovedNotReplaced as gone:
+            record = current.keys.get(name)
+            if record is not None:
+                keys = {**current.keys, name: record.model_copy(update={"lost": True})}
+                self._save(current.model_copy(update={"keys": keys}, deep=True))
+            raise ModelAdminRefused(gone.words, status=gone.status) from None
 
     async def _expired(self, current: ModelSettings) -> tuple[ModelSettings, list[str]]:
         """`current` without the checks older than `CHECK_LIFE`, their credentials removed."""
@@ -1501,23 +1588,7 @@ class ModelAdmin:
                     f"An engine named {provider.name} is already added or being checked; change "
                     "its key on the engine itself."
                 )
-            # The form's own rule, on every profile: what analysts are shown never holds a key, so a
-            # key pasted into the label or the agreement's reference is refused before it is kept.
-            shown_fields = (
-                ("label", provider.label),
-                ("agreement reference", provider.contract_reference),
-            )
-            if any(model_looks_like_a_key(m) for m in provider.roles.values()):
-                raise ModelAdminRefused(
-                    "A model name looks like a key. Type the model's name in its job's field, and "
-                    "the key in the key field; nothing was checked."
-                )
-            for field_name, shown in shown_fields:
-                if shown and label_looks_like_a_key(shown):
-                    raise ModelAdminRefused(
-                        f"The {field_name} looks like a key. It is shown to analysts, so give it "
-                        "in words, and the key in the key field; nothing was checked."
-                    )
+            _no_key_shown(provider, "nothing was checked")
             self._validated(current.model_copy(
                 update={"providers": [*current.providers, provider]}, deep=True), sent)  # fmt: skip
             self._made_by_the_render(provider)
@@ -1534,17 +1605,11 @@ class ModelAdmin:
                     )
                 assert key is not None
                 await self._gateway.put_credential(provider.name, key)
-            models: list[ModelCheck] = []
             try:
-                for model in dict.fromkeys(provider.roles.values()):
-                    await self._gateway.add_entry(provider, model)
-                    try:
-                        outcome, ok, words = await self._one_call(provider, model)
-                    finally:
-                        await self._gateway.delete_entry(entry_id(provider.name, model))
-                    roles: list[str] = [r for r, m in provider.roles.items() if m == model]
-                    models.append(ModelCheck(model=model, roles=roles, outcome=outcome, ok=ok,
-                                             words=words))  # fmt: skip
+                models = await self._prove(
+                    provider, list(provider.roles.values()),
+                    named=probe_entries(provider.name), credential=provider.name,
+                )  # fmt: skip
             except BaseException:
                 if not provider.keyless:
                     await self._gateway.delete_credential(provider.name)
@@ -1561,7 +1626,13 @@ class ModelAdmin:
             check_id = secrets.token_urlsafe(12)
             checks = {**current.checks,
                       check_id: PendingCheck(provider=provider, by=by, at=self._now())}  # fmt: skip
-            self._save(current.model_copy(update={"checks": checks}, deep=True))
+            try:
+                self._save(current.model_copy(update={"checks": checks}, deep=True))
+            except BaseException:
+                # Unrecorded, nothing would ever remove it: the key goes with the refusal.
+                if not provider.keyless:
+                    await self._gateway.delete_credential(provider.name)
+                raise
             return EngineCheckResult(
                 engine=provider.name, ok=True, check=check_id, models=models,
                 words="The key and every model answered. Add the engine within 15 minutes to "
@@ -1646,6 +1717,30 @@ class ModelAdmin:
 
         await self._change(by, "engine_check_cancelled", None, work)
         await self._audited(by, "engine_check_cancelled", cancelled[0])
+
+
+def _no_key_shown(provider: ModelProviderConfig, then: str) -> None:
+    """The form's own rule, on every profile, for an engine checked or edited: what analysts are
+    shown never holds a key, so a key pasted into a model name, the label or the agreement's
+    reference is refused before anything is kept."""
+    if any(model_looks_like_a_key(m) for m in provider.roles.values()):
+        raise ModelAdminRefused(
+            "A model name looks like a key. Type the model's name in its job's field, and the key "
+            f"in the key field; {then}."
+        )
+    for field_name, shown in (("label", provider.label),
+                              ("agreement reference", provider.contract_reference)):  # fmt: skip
+        if shown and label_looks_like_a_key(shown):
+            raise ModelAdminRefused(
+                f"The {field_name} looks like a key. It is shown to analysts, so give it in words, "
+                f"and the key in the key field; {then}."
+            )
+
+
+def _plain_key(key: SecretStr) -> None:
+    text = key.get_secret_value()
+    if not text.strip() or any(ch.isspace() for ch in text):
+        raise ModelAdminRefused("A key has no spaces or line breaks in it; nothing was changed.")
 
 
 def _said(failed: BaseException) -> str:
