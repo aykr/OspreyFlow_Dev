@@ -251,6 +251,11 @@ function answer(path: string, search: URLSearchParams): unknown {
   // ADR-146 decisions 5 and 8 (L2.10): the inventory and the teams a rule may go to.
   if (local === "alert-sources")
     return { sources: [
+      // v0.6.0 #14 (ADR-044 Amendment 1): `?stopped=1` adds a stopped hotlist saying why, as the
+      // Conduit's fixed words, so both looks are scanned with the reason under *Stopped*.
+      ...(new URLSearchParams(window.location.search).get("stopped") === "1"
+        ? [{ id: "hl-stopped", rule_id: "hotlist:hl-stopped", name: "Hotlist 07700 900919", source: "watch", kind: "hotlist", maker: "analyst-1", owner: "analyst-1", state: "stopped", stopped_why: "Its owner can no longer sign in to OspreyFlow.", alerts_30_days: 0, suppressed: [] }]
+        : []),
       { id: "r-daily", rule_id: "typology:r-daily", name: "Listed people", source: "rule", kind: "rule", maker: "analyst-1", maker_name: "Ana Lyst", owner: "Prison intel", state: "live", alerts_30_days: 4, not_of_interest: 0.25, last_fired_at: hoursAgo(30), suppressed: [{ alert_id: "a1", until: "2026-12-01", reason: "A known pattern", by: "analyst-1" }] },
       { id: "hl-1", rule_id: "hotlist:hl-1", name: "Hotlist 07700 900918", source: "watch", kind: "hotlist", maker: "analyst-1", owner: "analyst-1", state: "live", expires_on: "2027-01-31", alerts_30_days: 1, suppressed: [] },
     ] };  // prettier-ignore
