@@ -20,8 +20,8 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parent
 SOURCE = OUT / 'source'
 CHANGELOG = OUT.parents[2] / 'OspreyFlow_Core' / 'CHANGELOG.md'
-#: The release every claim on the pages was last checked against (docs lane, 14 November 2026: sites-v051-facts.md).
-CHECKED_AGAINST = 'v0.5.1'
+#: The release every claim on the pages was last checked against (docs lane, 15 November 2026: sites-v052-facts.md).
+CHECKED_AGAINST = 'v0.5.2'
 sys.path.insert(0, str(OUT))
 import overview as OV, govanim as GV  # noqa: E402
 
@@ -321,12 +321,13 @@ def org_index():
 
 def org_features():
     b = hero(f'Features · release {RELEASE}', 'Everything in OspreyFlow today',
-             f'Everything on this page is built and in release {RELEASE}, except the section headed "On main, coming with the next release". '
+             f'Everything on this page is built and in release {RELEASE}. '
              'Screens are from demonstration deployments with synthetic data, and are being replaced.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
     toc = [('glass', 'The Glass'), ('studio', 'Ingest Studio'), ('monitoring', 'Rules and Monitoring'), ('boards', 'Drawing boards'),
-           ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture'), ('coming', 'On main, coming next')]
+           ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture')]
     b += '<nav class="toc wrap" aria-label="On this page"><ul>' + ''.join(f'<li><a href="#{i}">{t}</a></li>' for i, t in toc) + '</ul></nav>'
     b += sec('The Glass: analysis', split(ul([
+        '<strong>Search.</strong> Names found with typos, variants and sounds-like matches, full text with the passage highlighted, and suggestions as you type, with your access inside every query.',
         '<strong>Network.</strong> Radial, organic and clustered layouts; communities; ranking by betweenness and other measures; expand from any node.',
         '<strong>Find connections.</strong> The shortest routes between two people, each step backed by its records.',
         '<strong>Connection strength.</strong> How strongly a link is drawn rests on its count and its recency. How rare a shared value is is shown beside it, explained in the Inspector and usable in a rule.',
@@ -377,17 +378,12 @@ def org_features():
         ('Audit', 'Who did what and when, including every export, every approval and every change to what may leave the deployment.'),
         ('Dashboards', 'Apache Superset embedded in a case with the same sign-in, reading a reporting feed.'),
         ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.'),
-        ('A shared government platform', "A profile for shared government Kubernetes platforms: one namespace, the platform's managed services, non-root containers and a single-copy shape for a proof of concept, with sign-in through Microsoft Entra ID. Installed and checked on a test cluster, not yet on a platform. In this release, loads there are started by hand and reporting is not on it; the administration guide's section 6a has every limit.")]), 'tint', 'admin')
+        ('A shared government platform', "A profile for shared government Kubernetes platforms: one namespace, the platform's managed services, non-root containers and a single-copy shape for a proof of concept, with sign-in through Microsoft Entra ID. Installed and checked on a test cluster, not yet on a platform. There, scheduled runs act as their owner while the owner has signed in within the last 24 hours, and reporting runs through Apache Superset; the administration guide's section 6a has every limit.")]), 'tint', 'admin')
     b += sec('Architecture', '<p class="intro">Three tiers, separated by four typed ports, so an engine can be swapped without touching what sits above it.</p>' + cards([
         ('The Glass', 'React and TypeScript. Sigma.js and Graphology for the network, MapLibre GL with PMTiles for maps, Apache ECharts for charts, GOV.UK Frontend for the GOV.UK theme.'),
         ('The Conduit', 'Python and FastAPI. The API, access control, entity resolution, extraction and model routing. Stateless.'),
         ('The Vault', 'ArcadeDB for the graph, DuckDB or ClickHouse for analytics, OpenSearch for search, PostgreSQL for cases, roles and audit, Valkey, S3-compatible object storage or Azure Blob, LiteLLM as the model gateway.')]) +
         '<p>The four ports are the graph, analytics, compute and models. An adapter is supported once it passes the same conformance suite as every other adapter behind that port.</p>', ident='architecture')
-    b += sec('On main, coming with the next release', ul([
-        'On the shared-platform profile, scheduled runs: a pipeline\'s schedule and watched folder, rules, watches and list refreshes running as their owner, while the owner has signed in within the last 24 hours.',
-        'Reporting on the shared-platform profile, through Apache Superset.',
-        'The shared-platform profile\'s data-safety fixes, to its backups and restore.']) +
-        f'<p>These are merged in development and not in release {RELEASE}. They arrive with the next release.</p>', 'tint', 'coming')
     return page('org', 'features.html', 'Features · OspreyFlow', 'Every feature in the current OspreyFlow release: analysis, ingest, monitoring, drawing boards, models and administration.', b)
 
 def org_public_sector():
