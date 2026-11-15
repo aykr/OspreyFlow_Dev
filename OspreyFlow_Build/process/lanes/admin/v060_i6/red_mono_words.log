@@ -1,0 +1,47 @@
+# keyboard/admin-words-face.spec.ts at bc4ac31, before the fix: main's code
+  1) keyboard/admin-words-face.spec.ts:36:5 › People and roles in the dark look sets its words in the page's face 
+    -   "Analyst": "atkinson hyperlegible next",
+    -   "Levels in a case": "atkinson hyperlegible next",
+    -   "pat.example": "atkinson hyperlegible next",
+    +   "Analyst": "ibm plex mono",
+    +   "Levels in a case": "ibm plex mono",
+    +   "pat.example": "ibm plex mono",
+  2) keyboard/admin-words-face.spec.ts:36:5 › Roles in the dark look sets its words in the page's face 
+    -   "Intel desk": "atkinson hyperlegible next",
+    -   "Super user": "atkinson hyperlegible next",
+    +   "Intel desk": "ibm plex mono",
+    +   "Super user": "ibm plex mono",
+  3) keyboard/admin-words-face.spec.ts:36:5 › Operations in the dark look sets its words in the page's face 
+    -   "Daily custody export": "atkinson hyperlegible next",
+    +   "Daily custody export": "ibm plex mono",
+  4) keyboard/admin-words-face.spec.ts:36:5 › People and roles in the light look sets its words in the page's face 
+    -   "Analyst": "atkinson hyperlegible next",
+    -   "Levels in a case": "atkinson hyperlegible next",
+    -   "pat.example": "atkinson hyperlegible next",
+    +   "Analyst": "ibm plex mono",
+    +   "Levels in a case": "ibm plex mono",
+    +   "pat.example": "ibm plex mono",
+  5) keyboard/admin-words-face.spec.ts:36:5 › Roles in the light look sets its words in the page's face 
+    -   "Intel desk": "atkinson hyperlegible next",
+    -   "Super user": "atkinson hyperlegible next",
+    +   "Intel desk": "ibm plex mono",
+    +   "Super user": "ibm plex mono",
+  6) keyboard/admin-words-face.spec.ts:36:5 › Operations in the light look sets its words in the page's face 
+    -   "Daily custody export": "atkinson hyperlegible next",
+    +   "Daily custody export": "ibm plex mono",
+  7) keyboard/admin-words-face.spec.ts:36:5 › People and roles in the govuk look sets its words in the page's face 
+    -   "Analyst": "gds transport",
+    -   "Levels in a case": "gds transport",
+    -   "pat.example": "gds transport",
+    +   "Analyst": "ibm plex mono",
+    +   "Levels in a case": "ibm plex mono",
+    +   "pat.example": "ibm plex mono",
+  8) keyboard/admin-words-face.spec.ts:36:5 › Roles in the govuk look sets its words in the page's face 
+    -   "Intel desk": "gds transport",
+    -   "Super user": "gds transport",
+    +   "Intel desk": "ibm plex mono",
+    +   "Super user": "ibm plex mono",
+  9) keyboard/admin-words-face.spec.ts:36:5 › Operations in the govuk look sets its words in the page's face 
+    -   "Daily custody export": "gds transport",
+    +   "Daily custody export": "ibm plex mono",
+  9 failed
