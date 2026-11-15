@@ -1,0 +1,86 @@
+# Superset RED then GREEN on the server, offline, no stack, the rules queue line, 12:06-12:08Z, at fc179af (run 20261115T12*). RED: main 7a5830b's Dockerfile built as main's make built it (docker build --pull, no stamp): libpq5 and family 15.19-0+deb12u1 from the cached upgrade layer; trivy 230 HIGH/CRITICAL fixed-version findings, 192 of them the six PostgreSQL client packages. GREEN: the branch's make trivy-image-superset (--build-arg OSPREY_UPGRADE_STAMP=2026-11-15): every one 15.20-0+deb12u1; make trivy-image-superset exit 0. The direct scans here do not read .trivyignore, so both list the 38 Python findings it defers until Superset (pillow, cryptography, dnspython, msgpack, pyOpenSSL, pyarrow); the make target reads it and passes.
+== start 12:07:12Z at fc179af
+Running on ospreyflow-test (stack offline, osprey-runs/rules/), logged at osprey-runs/rules.meta/runs/20261115T120724Z-d1c8df2e/log: bash -c 
+set -o pipefail; cd OspreyFlow_Core/deploy/superset
+pg() { docker run --rm --entrypoint dpkg-query "$1" -W -f="\${Package} \${Version}\n" "libpq5" "libecpg*" "libpgtypes*" 2>/dev/null; }
+scan() { trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --format json -o /tmp/rules-trivy-$2.json "$1"; c=$?; python3 -c "
+import json,collections,sys
+d=json.load(open(\"/tmp/rules-trivy-$2.json\")); v=[x for r in d.get(\"Results\",[]) for x in (r.get(\"Vulnerabilities\") or [])]
+print(\"trivy $2:\", len(v), \"HIGH/CRITICAL fixed-version findings\", dict(collections.Counter(x[\"Severity\"] for x in v)))
+print(\"  by package:\", dict(collections.Counter(x[\"PkgName\"] for x in v).most_common(12)))"; echo "trivy $2 exit=$c"; }
+echo "== RED: main 7a5830b's Dockerfile, built as make builds it (docker build --pull)"
+docker build --pull -q -f Dockerfile.main-7a5830b -t ospreyflow/superset:rules-red . && pg ospreyflow/superset:rules-red && scan ospreyflow/superset:rules-red red
+echo "== GREEN: the branch's Dockerfile, built by the branch's own make target (it passes the day's stamp)"
+(cd ../.. && make -n trivy-image-superset | head -1 && make trivy-image-superset 2>&1 | tail -3; echo "make trivy-image-superset exit=${PIPESTATUS[0]}")
+docker tag ospreyflow/superset:ci ospreyflow/superset:rules-green && pg ospreyflow/superset:rules-green && scan ospreyflow/superset:rules-green green
+echo "== the image starts: its version, its packages, its user"
+docker run --rm --entrypoint sh ospreyflow/superset:rules-green -c "id; /app/.venv/bin/superset version 2>&1 | tail -2; /app/.venv/bin/python -c \"import superset, psycopg2, authlib; print(\\\"imports ok\\\", superset.__version__ if hasattr(superset, \\\"__version__\\\") else \\\"\\\")\""
+docker rmi -f ospreyflow/superset:rules-red ospreyflow/superset:rules-green ospreyflow/superset:ci >/dev/null 2>&1; rm -f /tmp/rules-trivy-*.json
+
+== RED: main 7a5830b's Dockerfile, built as make builds it (docker build --pull)
+sha256:c0826251d523766dcc1dd11098008b1ff2204b2d277a096267469db768149cb3
+libecpg-compat3 15.19-0+deb12u1
+libecpg-dev 15.19-0+deb12u1
+libecpg6 15.19-0+deb12u1
+libpgtypes3 15.19-0+deb12u1
+libpq5 15.19-0+deb12u1
+2026-11-15T12:07:26Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-15T12:07:26Z	INFO	[secret] Secret scanning is enabled
+2026-11-15T12:07:26Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-15T12:07:26Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-15T12:07:26Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-15T12:07:26Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
+2026-11-15T12:07:26Z	INFO	Number of language-specific files	num=4
+2026-11-15T12:07:26Z	INFO	[node-pkg] Detecting vulnerabilities...
+2026-11-15T12:07:26Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-15T12:07:26Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-15T12:07:26Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+trivy red: 230 HIGH/CRITICAL fixed-version findings {'HIGH': 225, 'CRITICAL': 5}
+  by package: {'libecpg-compat3': 32, 'libecpg-dev': 32, 'libecpg6': 32, 'libpgtypes3': 32, 'libpq-dev': 32, 'libpq5': 32, 'pillow': 29, 'cryptography': 3, 'dnspython': 2, 'msgpack': 2, 'pyOpenSSL': 1, 'pyarrow': 1}
+trivy red exit=1
+== GREEN: the branch's Dockerfile, built by the branch's own make target (it passes the day's stamp)
+docker build --pull --build-arg OSPREY_UPGRADE_STAMP=2026-11-15 -f deploy/superset/Dockerfile -t ospreyflow/superset:ci deploy/superset
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+make trivy-image-superset exit=0
+libecpg-compat3 15.20-0+deb12u1
+libecpg-dev 15.20-0+deb12u1
+libecpg6 15.20-0+deb12u1
+libpgtypes3 15.20-0+deb12u1
+libpq5 15.20-0+deb12u1
+2026-11-15T12:08:07Z	INFO	[vuln] Vulnerability scanning is enabled
+2026-11-15T12:08:07Z	INFO	[secret] Secret scanning is enabled
+2026-11-15T12:08:07Z	INFO	[secret] If your scanning is slow, please try '--scanners vuln' to disable secret scanning
+2026-11-15T12:08:07Z	INFO	[secret] Please see https://trivy.dev/docs/v0.76/guide/scanner/secret#recommendation for faster secret detection
+2026-11-15T12:08:08Z	INFO	Detected OS	family="debian" version="12.15"
+2026-11-15T12:08:08Z	INFO	[debian] Detecting vulnerabilities...	os_version="12" pkg_num=134
+2026-11-15T12:08:08Z	INFO	Number of language-specific files	num=4
+2026-11-15T12:08:08Z	INFO	[node-pkg] Detecting vulnerabilities...
+2026-11-15T12:08:08Z	INFO	[python-pkg] Detecting vulnerabilities...
+2026-11-15T12:08:08Z	INFO	[rustbinary] Detecting vulnerabilities...
+2026-11-15T12:08:08Z	WARN	Using severities from other vendors for some vulnerabilities. Read https://trivy.dev/docs/v0.76/guide/scanner/vulnerability#severity-selection for details.
+
+📣 [34mNotices:[0m
+  - Version 0.76.2 of Trivy is now available, current version is 0.76.1
+
+To suppress version checks, run Trivy scans with the --skip-version-check flag
+
+trivy green: 38 HIGH/CRITICAL fixed-version findings {'HIGH': 33, 'CRITICAL': 5}
+  by package: {'pillow': 29, 'cryptography': 3, 'dnspython': 2, 'msgpack': 2, 'pyOpenSSL': 1, 'pyarrow': 1}
+trivy green exit=1
+== the image starts: its version, its packages, its user
+uid=10001(superset) gid=10001(superset) groups=10001(superset)
+    raise KeyError(key) from None
+KeyError: 'POSTGRES_USER'
+imports ok 
+Wall time: 52 s, exit 0 (no stack, no lease; set-up before it 12 s)
+== end 12:08:18Z
+
+[exited with code 0]
