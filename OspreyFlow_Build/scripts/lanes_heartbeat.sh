@@ -849,7 +849,11 @@ for my $r (@route) {
   my @said = ($staged ? "$state, $staged" : $state);
   push @said, plural($late, "day") . " behind" if $state ne "done" && $late > 0;
   push @said, "after $after" if $state ne "done" && $state !~ /^ready/ && $after ne "-" && $after ne "";
-  my $line = sprintf("  %-3s %s %-12s %-9s %s %s · %s", $id, ($crit eq "y" ? "★" : " "), $lane, $dates,
+  # Which account runs the step (the owner, 15 November 2026), read from the lane account file, as the lanes view reads it.
+  my $acct = "";
+  if (open(my $af, "<", "$ENV{P_DIR}/$lane.account")) { chomp($acct = <$af> // ""); close $af }
+  my $who = $acct ne "" ? "$lane·$acct" : $lane;
+  my $line = sprintf("  %-3s %s %-17s %-9s %s %s · %s", $id, ($crit eq "y" ? "★" : " "), $who, $dates,
     bar($frac, 6), join(" · ", @said), $title);
   push @rows, [cut($line, 120), $listed];
 }
