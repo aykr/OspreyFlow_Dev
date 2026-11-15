@@ -182,3 +182,4 @@ platform	v061-admin-forms	L	building	v0.6.1 (the owner, 15 Nov): the model form'
 docs	v060-model-keys-guide	S	done	v0.6.0 (the owner, 15 Nov): the administration guide corrected, a model key is entered in Admin › Models (Enter key / Set the key) since ADR-135 Am 2, not deployment.env alone	lane/docs-v060-model-keys
 rules	v060-superset-cves	S	building	v0.6.0 Test stage: the Superset image's 192 HIGH PostgreSQL client CVEs fixed by upgrading to 15.20 in its Dockerfile (no ignore)
 rules	v060-upgrade-cache	S	building	v0.6.0 (the owner, 15 Nov): every image's upgrade layer cache-busted in the Makefile, ci.yml and release.yml (owner diff) and a deployment's own build, so a security fix is never hidden by a cached layer
+admin	v060-cli-scope	S	building	v0.6.0 (the owner, 15 Nov): `ospreyflow run` on Entra sends the scope Entra requires (AADSTS1002012 without it), beside #18

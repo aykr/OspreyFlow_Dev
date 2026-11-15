@@ -13,6 +13,8 @@ On the plan of record (`OWNER_PLAN_2026-11-15.md`), after the orchestrator's est
    Britain); or the map tiles alone if that is simpler.
 6. **The cached-upgrade trap is fixed in v0.6.0** (the owner, ~11:30Z): every image's upgrade layer is cache-busted in
    the Makefile, both workflows (an owner's diff) and a deployment's own build; rules, with the Superset CVE fix.
+7. **`ospreyflow run` on Entra joins v0.6.0** (the owner, ~11:45Z): the CLI's service token sends the scope Entra
+   requires; admin, beside #18.
 5. **Item 8 is done**: the profile's fixed cost was `edges_among`, fixed by ADR-124 Amendment 20 on 14 Nov.
 
 The orchestrator's rulings under the standing rule, reported to the owner: item 3, a new question closes the earlier
@@ -39,3 +41,6 @@ out and counted, never named; item 10 moves from platform to rules-b; the demo's
 - Item 23, the cloud-platform shape's memory sizes from measured use
 - The websites ospreyflow.org and ospreyflow.net published (finish.tsv p3)
 - Bedrock beyond London (AWS's EU profile, for current Claude models): to decide (ruling 17)
+
+The orchestrator's rulings on #6's confirming pass (standing rule): headings and form controls on the token scale in both
+looks (DESIGN.md's one scale); GOV.UK Frontend's own classes kept; the Studio's em sizes, the mono glyphs and D2's values in scope.
