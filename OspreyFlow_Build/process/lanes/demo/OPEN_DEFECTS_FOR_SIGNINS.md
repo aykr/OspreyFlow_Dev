@@ -36,4 +36,4 @@ their own case over the shared demo data) could meet it.
 | B10 | govuk.ospreyflow.app's certificate does not renew itself (expires 10 Feb 2027) | the whole site | platform | Part 3, needs the registrar's keys |
 | B11 | On a ClickHouse deployment the public seeds' events go to a DuckDB file, so their timelines show nothing | ClickHouse deployments (not the demo) | platform | partly fixed for the POC's seeders |
 | B12 | Operator-only: cloud-platform INSTALL.md step 6 doesn't run helm upgrade; a mail: section asks for unused networks; a refusal names the build step "P10"; Admin › Models' refusals leave out helm upgrade | cloud-platform | platform, platform-b | carried |
-| B13 | A Studio SQL step past its time limit while its rows are read shows a raw "OSError: INTERRUPT" | the Ingest Studio's expert SQL | studio | fix held for the owner's word (lane/studio-sql-interrupt 345c457) |
+| B13 | A Studio SQL step past its time limit while its rows are read shows a raw "OSError: INTERRUPT" | the Ingest Studio's expert SQL | studio | fixed in the candidate 574a05c (studio-sql-interrupt 345c457) |
