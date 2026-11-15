@@ -1128,11 +1128,12 @@ class PrefetchScheduler:
 
 
 def builder_state(
-    tiles_root: Path, java_lookup: Callable[[str], str | None] = shutil.which
+    tiles_root: Path, java_lookup: Callable[[str], str | None] | None = None
 ) -> tuple[str, bool]:
     """Whether the basemap can be built here, in words: Java and the planetiler jar in the tiles
-    folder. Read from the tiles folder alone, so the tiles stage can ask it with no settings."""
-    java = java_lookup("java") is not None
+    folder. Read from the tiles folder alone, so the tiles stage can ask it with no settings.
+    `shutil.which` is looked up when called, not bound at import, so a test can stand in for it."""
+    java = (java_lookup or shutil.which)("java") is not None
     jar = (tiles_root / PLANETILER_JAR).is_file()
     if java and jar:
         builder = "Ready: Java and the map builder are installed."
@@ -1199,11 +1200,11 @@ async def build_basemap(
         raise ValueError("only the tiles stage builds with no maps admin: it registers nothing")
     # Said before anything is fetched: Java is in the Conduit image (ADR-147 Amendment 2), but a
     # deployment built without it, or with no jar placed by the command line, says so here.
-    words, ready = (
-        (admin.basemap().builder_state, admin.basemap().builder_ready)
-        if admin is not None
-        else builder_state(tiles_root)
-    )
+    if admin is not None:
+        state = admin.basemap()  # read once, so the words and the readiness cannot disagree
+        words, ready = state.builder_state, state.builder_ready
+    else:
+        words, ready = builder_state(tiles_root)
     if not ready:
         raise MapAdminRefused(words, status=409)
     if stage is not None and stage not in STAGES:
@@ -1307,7 +1308,11 @@ def command_parser() -> argparse.ArgumentParser:
     build = sub.add_parser("build")
     build.add_argument("region")
     build.add_argument("--by", required=True)
-    build.add_argument("--unit", required=True)
+    build.add_argument(
+        "--unit", required=True,
+        help="the unit that holds the gazetteer; checked by the places stage and a whole build, "
+        "not by --stage tiles, which registers nothing and reaches no database",
+    )  # fmt: skip
     build.add_argument("--stage", choices=STAGES, default=None)
     return parser
 
