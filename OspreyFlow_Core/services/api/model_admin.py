@@ -34,10 +34,11 @@ import json
 import logging
 import os
 import re
+import secrets
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, Protocol, cast
 from urllib.parse import urlsplit
@@ -56,14 +57,18 @@ from schemas.deployment import (
     ModelsConfig,
     engine_kinds_offered,
     engine_refusal,
+    label_looks_like_a_key,
 )
 from schemas.model_admin import (
     AdminEngine,
+    ConnectionOutcome,
     ConnectionTestResult,
+    EngineCheckResult,
     EngineLimits,
     KeyState,
     ModelAdminAction,
     ModelAdminEntry,
+    ModelCheck,
     ModelsAdminView,
 )
 
@@ -103,6 +108,20 @@ class KeyRecord(BaseModel):
     lost: bool = False
 
 
+#: How long a passed check waits for **Add** (ADR-135 Amendment 14 point 2).
+CHECK_LIFE = timedelta(minutes=15)
+
+
+class PendingCheck(BaseModel):
+    """A passed check, waiting for **Add**: the engine as it was checked, who checked it and when.
+    Its key is the gateway's own credential, never here. Kept in the models file, so **Add** on
+    another Conduit replica finds it."""
+
+    provider: ModelProviderConfig
+    by: str
+    at: datetime
+
+
 class ModelSettings(BaseModel):
     """What the models file holds. `providers` and `defaults` replace `osprey.yaml`'s whole."""
 
@@ -111,6 +130,9 @@ class ModelSettings(BaseModel):
     keys: dict[str, KeyRecord] = Field(default_factory=dict)
     #: Each engine's limits (ADR-135 Amendment 3); an engine not here has none.
     limits: dict[str, EngineLimits] = Field(default_factory=dict)
+    #: Passed checks waiting for **Add**, by their id (ADR-135 Amendment 14). An engine here is not
+    #: an engine: it is offered to nobody and routed nowhere.
+    checks: dict[str, PendingCheck] = Field(default_factory=dict)
 
 
 #: The fields Amendment 4 added to an engine. Off `cloud-platform` every engine is a plain provider
@@ -1343,6 +1365,201 @@ class ModelAdmin:
             )
         await self._audited(by, "connection_tested", name, outcome=result.outcome)
         return result
+
+    # --- the check before Add (ADR-135 Amendment 14) --------------------------------------------
+
+    async def _one_call(
+        self, provider: ModelProviderConfig, model: str
+    ) -> tuple[ConnectionOutcome, bool, str]:
+        """Decision 5's call of at most one token to `model`, through the gateway, and its outcome
+        in fixed words."""
+        check = await check_connection(
+            self._gateway.http, gateway_model_name(provider.name, model),
+            tag=usage_tag(provider.name, "test"),
+        )  # fmt: skip
+        outcome = check.outcome
+        if (
+            provider.kind == "gateway"
+            and outcome == "unreachable"
+            and check.status is not None
+            and 400 <= check.status < 500
+        ):
+            outcome = "request_refused"  # the client's gateway was reached, and refused
+        return outcome, check.ok, KIND_WORDS.get((provider.kind, outcome), WORDS[outcome])
+
+    async def _expired(self, current: ModelSettings) -> tuple[ModelSettings, list[str]]:
+        """`current` without the checks older than `CHECK_LIFE`, their credentials removed."""
+        now = self._now()
+        late = {i: c for i, c in current.checks.items() if now - c.at > CHECK_LIFE}
+        for pending in late.values():
+            if not pending.provider.keyless:
+                await self._gateway.delete_credential(pending.provider.name)
+        kept = {i: c for i, c in current.checks.items() if i not in late}
+        return current.model_copy(update={"checks": kept}, deep=True), [
+            c.provider.name for c in late.values()
+        ]
+
+    async def _audit_expired(self, engines: list[str]) -> None:
+        for engine in engines:
+            await self._audited("system", "engine_check_expired", engine)
+
+    async def check(
+        self, by: str, provider: ModelProviderConfig, key: SecretStr | None
+    ) -> EngineCheckResult:
+        """The key and each typed model proved by one call in the gateway, before the engine
+        exists (ADR-135 Amendment 14 point 2; the owner's ruling 7). The key goes straight to the
+        gateway as the engine's own credential and the Conduit keeps nothing; each model is given
+        a passing entry that no route offers, asked once, and the entry removed. A refusal keeps
+        nothing; a pass is held for **Add** for `CHECK_LIFE`."""
+        sent = sent_values(provider) | ({key.get_secret_value()} if key is not None else set())
+        expired: list[str] = []
+
+        async def work(current: ModelSettings) -> EngineCheckResult:
+            current, gone = await self._expired(current)
+            expired.extend(gone)
+            if gone:
+                self._save(current)
+            held = [c.provider.name for c in current.checks.values()]
+            if any(p.name == provider.name for p in current.providers) or provider.name in held:
+                raise ModelAdminRefused(
+                    f"An engine named {provider.name} is already added or being checked; change "
+                    "its key on the engine itself."
+                )
+            # The form's own rule, on every profile: what analysts are shown never holds a key, so a
+            # key pasted into the label or the agreement's reference is refused before it is kept.
+            shown_fields = (
+                ("label", provider.label),
+                ("agreement reference", provider.contract_reference),
+            )
+            for field_name, shown in shown_fields:
+                if shown and label_looks_like_a_key(shown):
+                    raise ModelAdminRefused(
+                        f"The {field_name} looks like a key. It is shown to analysts, so give it "
+                        "in words, and the key in the key field; nothing was checked."
+                    )
+            self._validated(current.model_copy(
+                update={"providers": [*current.providers, provider]}, deep=True), sent)  # fmt: skip
+            self._made_by_the_render(provider)
+            if provider.keyless and key is not None:
+                raise ModelAdminRefused(
+                    f"{provider.name} signs in by the gateway's own IAM role, so no key is kept "
+                    "for it; send none."
+                )
+            if not provider.keyless:
+                text = key.get_secret_value() if key is not None else ""
+                if not text.strip() or any(ch.isspace() for ch in text):
+                    raise ModelAdminRefused(
+                        "Give the key, with no spaces or line breaks in it; nothing was checked."
+                    )
+                assert key is not None
+                await self._gateway.put_credential(provider.name, key)
+            models: list[ModelCheck] = []
+            try:
+                for model in dict.fromkeys(provider.roles.values()):
+                    await self._gateway.add_entry(provider, model)
+                    try:
+                        outcome, ok, words = await self._one_call(provider, model)
+                    finally:
+                        await self._gateway.delete_entry(entry_id(provider.name, model))
+                    roles: list[str] = [r for r, m in provider.roles.items() if m == model]
+                    models.append(ModelCheck(model=model, roles=roles, outcome=outcome, ok=ok,
+                                             words=words))  # fmt: skip
+            except BaseException:
+                if not provider.keyless:
+                    await self._gateway.delete_credential(provider.name)
+                raise
+            if not models or not all(m.ok for m in models):
+                if not provider.keyless:
+                    await self._gateway.delete_credential(provider.name)
+                first = next((m for m in models if not m.ok), None)
+                return EngineCheckResult(
+                    engine=provider.name, ok=False, check=None, models=models,
+                    words=(first.words if first else "Name a model for at least one job.")
+                    + " Nothing was kept: correct it and check again.",
+                )  # fmt: skip
+            check_id = secrets.token_urlsafe(12)
+            checks = {**current.checks,
+                      check_id: PendingCheck(provider=provider, by=by, at=self._now())}  # fmt: skip
+            self._save(current.model_copy(update={"checks": checks}, deep=True))
+            return EngineCheckResult(
+                engine=provider.name, ok=True, check=check_id, models=models,
+                words="The key and every model answered. Add the engine within 15 minutes to "
+                "offer it to analysts.",
+            )  # fmt: skip
+
+        result: EngineCheckResult = await self._change(by, "engine_checked", provider.name, work)
+        await self._audit_expired(expired)
+        outcomes = ", ".join(f"{m.model}: {m.outcome}" for m in result.models)
+        await self._audited(
+            by, "engine_checked", provider.name,
+            outcome=("passed" if result.ok else "refused") + (f" ({outcomes})" if outcomes else ""),
+        )  # fmt: skip
+        return result
+
+    async def add_checked(self, by: str, check_id: str) -> None:
+        """**Add**: the engine made from a passed check, whose key the gateway already holds; the
+        key is never sent again. Refused for a check that does not exist or is past `CHECK_LIFE`."""
+        expired: list[str] = []
+        added: list[ModelProviderConfig] = []
+
+        async def work(current: ModelSettings) -> None:
+            pending = current.checks.get(check_id)
+            current, gone = await self._expired(current)
+            expired.extend(gone)
+            if pending is not None and check_id not in current.checks:
+                self._save(current)
+                raise ModelAdminRefused(
+                    "This check is more than 15 minutes old, so its key was removed. Check the "
+                    "key again, then add the engine.",
+                    status=410,
+                )
+            if pending is None:
+                raise ModelAdminRefused(
+                    "There is no check of that name. Check the key first, then add the engine.",
+                    status=404,
+                )
+            provider = pending.provider
+            rest = {i: c for i, c in current.checks.items() if i != check_id}
+            proposed = self._validated(current.model_copy(
+                update={"providers": [*current.providers, provider], "checks": rest}, deep=True),
+                sent_values(provider))  # fmt: skip
+            self._made_by_the_render(provider)
+            await self._reconcile(proposed)
+            keys = dict(proposed.keys)
+            if not provider.keyless:
+                keys[provider.name] = KeyRecord(set_at=self._now(), set_by=by)
+            self._save(proposed.model_copy(update={"keys": keys}, deep=True))
+            added.append(provider)
+
+        try:
+            await self._change(by, "engine_added", None, work)
+        finally:
+            await self._audit_expired(expired)
+        provider = added[0]
+        named = [f for f in _EDITABLE if not (provider.plain and f in _KIND_FIELDS)]
+        await self._audited(
+            by, "engine_added", provider.name,
+            {f: {"from": None, "to": _plain(getattr(provider, f))} for f in named},
+        )  # fmt: skip
+        if not provider.keyless:
+            await self._audited(by, "key_set", provider.name)
+
+    async def cancel_check(self, by: str, check_id: str) -> None:
+        """**Cancel**: a passed check removed, and its key with it."""
+        cancelled: list[str] = []
+
+        async def work(current: ModelSettings) -> None:
+            pending = current.checks.get(check_id)
+            if pending is None:
+                raise ModelAdminRefused("There is no check of that name.", status=404)
+            if not pending.provider.keyless:
+                await self._gateway.delete_credential(pending.provider.name)
+            rest = {i: c for i, c in current.checks.items() if i != check_id}
+            self._save(current.model_copy(update={"checks": rest}, deep=True))
+            cancelled.append(pending.provider.name)
+
+        await self._change(by, "engine_check_cancelled", None, work)
+        await self._audited(by, "engine_check_cancelled", cancelled[0])
 
 
 def _said(failed: BaseException) -> str:

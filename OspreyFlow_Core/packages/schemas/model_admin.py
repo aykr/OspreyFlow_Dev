@@ -31,6 +31,10 @@ ModelAdminAction = Literal[
     "key_moved",
     "connection_tested",
     "limits_changed",
+    # ADR-135 Amendment 14: the check before Add, and a passed check cancelled or left 15 minutes.
+    "engine_checked",
+    "engine_check_cancelled",
+    "engine_check_expired",
 ]
 ConnectionOutcome = Literal[
     "ok",
@@ -120,6 +124,39 @@ class EngineInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     provider: ModelProviderConfig
+
+
+class EngineCheckInput(BaseModel):
+    """`POST /v1/admin/models/checks` (ADR-135 Amendment 14): an engine not yet added, with its key
+    where it has one, proved before **Add**. Read by hand, as `KeyInput` is, so a refusal never
+    echoes the key."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: ModelProviderConfig
+    key: SecretStr | None = Field(default=None, min_length=1, max_length=4096)
+
+
+class ModelCheck(BaseModel):
+    """One typed model's answer to the check's one call, in fixed words."""
+
+    model: str
+    roles: list[str]
+    outcome: ConnectionOutcome
+    ok: bool
+    words: str
+
+
+class EngineCheckResult(BaseModel):
+    """The check's answer: `check` names a passed check for **Add**, `None` when anything was
+    refused (and then nothing of it is kept)."""
+
+    engine: str
+    ok: bool
+    check: str | None
+    models: list[ModelCheck]
+    #: Fixed words for the whole: what to do next, never the gateway's or the provider's.
+    words: str
 
 
 class DefaultsInput(BaseModel):

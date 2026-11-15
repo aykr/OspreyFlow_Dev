@@ -511,6 +511,12 @@ def _address_refusal(address: str) -> str | None:
     return None
 
 
+def label_looks_like_a_key(text: str) -> bool:
+    """`_label_looks_like_a_key`, for *Admin › Models*' check before Add, which refuses a key-shaped
+    label or reference on every profile (ADR-135 Amendment 14)."""
+    return _label_looks_like_a_key(text)
+
+
 def _label_looks_like_a_key(text: str) -> bool:
     """A label or contract reference shaped like a key, or holding one among its words: each word
     checked as a whole one is (my own lane review of round 2, item 6; the reference too since P11

@@ -395,6 +395,8 @@ from schemas.model import OfferedEngines
 from schemas.model_admin import (
     ConnectionTestResult,
     DefaultsInput,
+    EngineCheckInput,
+    EngineCheckResult,
     EngineInput,
     KeyInput,
     LimitsInput,
@@ -20287,6 +20289,55 @@ async def models_admin_test_route(
         return await admin.test(principal.id, name)
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
+
+
+_CHECK_BODY_REFUSED = (
+    'Send the engine and its key as JSON, {"provider": {…}, "key": "…"}, the key at most 4096 '
+    "characters. Nothing was checked."
+)
+
+
+@app.post("/v1/admin/models/checks", dependencies=_MANAGE_MODELS)
+async def models_admin_check_route(
+    request: Request, principal: PrincipalDep, admin: ModelAdminDep
+) -> EngineCheckResult:
+    """ADR-135 Amendment 14: the key and each typed model proved before **Add**. The body is read
+    here rather than by FastAPI, whose validation errors carry the input back, so neither the key
+    nor any other value of a refused body is echoed."""
+    raw = await request.body()
+    try:
+        body = EngineCheckInput.model_validate_json(raw)
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail={"error": "check_refused", "detail": _CHECK_BODY_REFUSED}
+        ) from None
+    try:
+        return await admin.check(principal.id, body.provider, body.key)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+
+
+@app.post("/v1/admin/models/checks/{check_id}/add", dependencies=_MANAGE_MODELS)
+async def models_admin_add_checked_route(
+    check_id: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    """**Add**: the engine made from a passed check; the key is never sent again."""
+    try:
+        await admin.add_checked(principal.id, check_id)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.delete("/v1/admin/models/checks/{check_id}", dependencies=_MANAGE_MODELS)
+async def models_admin_cancel_check_route(
+    check_id: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.cancel_check(principal.id, check_id)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
 
 
 @app.get("/v1/models/engines")

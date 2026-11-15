@@ -514,7 +514,7 @@ def test_every_models_route_refuses_a_principal_without_manage_models_for_each_k
         )
         for r in _models_routes()
     }  # fmt: skip
-    assert len(answers) == 11
+    assert len(answers) == 14  # with Amendment 14's check, its Add and its Cancel
     assert {k: v.status_code for k, v in answers.items() if v.status_code != 403} == {}
     assert all(v.json()["detail"]["right"] == "manage_models" for v in answers.values())
     # Nothing reached the gateway or the audit for the refused principal.

@@ -137,9 +137,10 @@ def _call(client: TestClient, route: APIRoute) -> httpx.Response:
 # --- rule 4 ------------------------------------------------------------------------------------
 
 
-def test_there_are_eleven_models_routes() -> None:
-    # P1's nine, and ADR-135 Amendment 3's limits and usage.
-    assert len(_models_routes()) == 11
+def test_there_are_fourteen_models_routes() -> None:
+    # P1's nine, ADR-135 Amendment 3's limits and usage, and Amendment 14's check, its Add and its
+    # Cancel.
+    assert len(_models_routes()) == 14
 
 
 @pytest.mark.parametrize(

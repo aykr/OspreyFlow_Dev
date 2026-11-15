@@ -112,7 +112,9 @@ def test_no_write_routes_body_takes_the_extraction_engine() -> None:
         source = inspect.getsource(r.endpoint)
         names = re.findall(r"_model_admin_body\(request, (\w+)\)", source)
         names += re.findall(r"(\w+)\.model_validate_json\(", source)
-        if not names and r.methods != {"DELETE"} and not r.path.endswith("/test"):
+        # A route with no `request` reads no body at all (a delete, the test, **Add** a check).
+        takes_a_body = "request" in inspect.signature(r.endpoint).parameters
+        if not names and takes_a_body:
             unread.append(r.path)
         for name in names:
             if "extraction_engine" in _fields(getattr(inputs, name)):
