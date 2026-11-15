@@ -11,12 +11,13 @@
    made two scrollers, and the side list and the section were cut at the footer's edge. Here the document is Admin's
    one scroller: the place grows with its content, App's root (sized to the window by an inline height) grows to hold
    it, and the footer follows. The side list stays in view as the section scrolls, never past the place's end. The
-   standard look, with no footer, keeps the place's own box. `keyboard/admin-frame.spec.ts` holds it. */
-[data-brand="govuk"] .admin-place { flex: none; overflow-y: visible; }
-[data-brand="govuk"] :has(> .admin-place) { height: auto !important; min-height: var(--workspace-height, 100vh); }
-[data-brand="govuk"] .admin-place .admin-nav {
-  position: sticky; top: 0; max-height: 100vh; overflow-y: auto;
-}
+   standard look, with no footer, keeps the place's own box; so does Admin drawn outside the page's frame
+   (`#main-content`, `brand/BrandFrame.tsx`), as a harness of the place alone draws it. `keyboard/admin-frame.spec.ts`
+   holds it. */
+[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }
+[data-brand="govuk"] #main-content :has(> .admin-place) { height: auto !important; min-height: var(--workspace-height, 100vh); }
+/* Sticky alone: a scrolling box of its own would be a scroller no key reaches (axe's scrollable-region-focusable). */
+[data-brand="govuk"] #main-content .admin-place .admin-nav { position: sticky; top: 0; }
 
 /* The page's one heading is the open section's (the GOV.UK pass, 14 Nov): "Admin" a caption over it,
    the help page a link in the same row. Outside GOV.UK, the section heading keeps its old size. */

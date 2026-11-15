@@ -19,7 +19,10 @@ import { applyHarnessBrand } from "./brandHarness";
 
 const brand = await applyHarnessBrand();
 const params = new URLSearchParams(location.search);
-const lines = (what: string) => Array.from({ length: 60 }, (_, i) => <p key={i}>{`${what}, line ${i + 1}.`}</p>);
+// Controls, as a real drawer's and overlay's are, so the box that scrolls is reached by keyboard as theirs is.
+const lines = (what: string) => Array.from({ length: 60 }, (_, i) => (
+  <p key={i}><button type="button" className="btn btn--quiet">{`${what}, line ${i + 1}`}</button></p>
+));
 
 createRoot(document.getElementById("root")!).render(
   <BrandFrame

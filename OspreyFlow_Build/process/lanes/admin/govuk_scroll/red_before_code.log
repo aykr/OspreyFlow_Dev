@@ -1,0 +1,22 @@
+# The step's specs at 2b15119 (on 0246f9b), before any fix: main's code
+  1) keyboard/admin-frame.spec.ts:52:3 › Admin › System in the dark look sets names in the page's face and a model's id in mono 
+    - Expected  - 2
+    + Received  + 2
+  2) keyboard/frame-scroll.spec.ts:30:3 › under GOV.UK, wheeling past a drawer's body's end leaves the page where it was 
+    Expected: 0
+    Received: 95
+  3) keyboard/admin-frame.spec.ts:52:3 › Admin › System in the light look sets names in the page's face and a model's id in mono 
+    - Expected  - 2
+    + Received  + 2
+  4) keyboard/admin-frame.spec.ts:25:3 › Admin in the page's frame in the govuk look scrolls in one place, cut nowhere 
+    Expected length: 1
+    Received length: 2
+    Received array:  ["section.admin-place", "the document"]
+  5) keyboard/frame-scroll.spec.ts:30:3 › under GOV.UK, wheeling past the empty canvas's start overlay's end leaves the page where it was 
+    Expected: 0
+    Received: 95
+  6) keyboard/admin-frame.spec.ts:52:3 › Admin › System in the govuk look sets names in the page's face and a model's id in mono 
+    - Expected  - 2
+    + Received  + 2
+  6 failed
+  3 passed (5.1s)
