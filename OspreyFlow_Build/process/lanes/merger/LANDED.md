@@ -235,3 +235,4 @@ bc6e73c a8d643b docs v060-changelog-i10
 dcfa54c c547f4e admin v060-i6-govuk-type
 307be97 9516541 rules-b v060-stage2-sheet
 e776b37 fb3653f rules-b v060-stage2-margin
+9e37aa1 4578ac7 rules-b v060-stage2-official

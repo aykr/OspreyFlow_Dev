@@ -184,4 +184,4 @@ rules	v060-superset-cves	S	done	v0.6.0 Test stage: the Superset image's 192 HIGH
 rules	v060-upgrade-cache	S	done	v0.6.0 (the owner, 15 Nov): every image's upgrade layer cache-busted in the Makefile, ci.yml and release.yml (owner diff) and a deployment's own build, so a security fix is never hidden by a cached layer	lane/rules-v060-superset-cves
 admin	v060-cli-scope	S	done	v0.6.0 (the owner, 15 Nov): `ospreyflow run` on Entra sends the scope Entra requires (AADSTS1002012 without it), beside #18	lane/admin-v060-i18-run-app-role
 platform-b	v060-release-path	S	done	v0.6.0: images push passes the upgrade stamp; the dev release.yml retired and release_local following the product workflow; the tag check in the product workflow (owner diffs)	lane/platform-b-v060-stamp-release
-rules-b	v060-stage2-official	M	building	v0.6.0 stage 2: the official leak test, never-join and client-size timings on stack d (run before #4 merges; #4 is Glass-only)
+rules-b	v060-stage2-official	M	done	v0.6.0 stage 2: the official leak test, never-join and client-size timings on stack d (run before #4 merges; #4 is Glass-only)	lane/rules-b-stage2-official
