@@ -1,0 +1,11 @@
+== gates at 8cc287d, rebased on main 582bab2 (registry patch applied, uncommitted)
+ Test Files  399 passed (399)
+      Tests  3620 passed (3620)
+  5 skipped
+  1080 passed (4.2m)
+  1152 passed (17.1m)
+typecheck (npm run typecheck): exit 0
+lint (npm run lint): exit 0
+ruff check . (OspreyFlow_Core): All checks passed!
+guide tests: 13 passed in 1.66s
+Rebased again onto main 582bab2 as a275cfb: the workspace, user guide, guide tests and this folder are identical to 8cc287d's (git diff --stat 8cc287d a275cfb over them is empty); main's new commits were the API, the CLI and the changelog, and ADR_RESERVATIONS.md's rows (both kept).
