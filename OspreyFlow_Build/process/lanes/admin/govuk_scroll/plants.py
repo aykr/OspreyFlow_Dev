@@ -11,30 +11,49 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[5]
 WS = ROOT / "OspreyFlow_Core/apps/workspace"
-PRIMS = "OspreyFlow_Core/apps/workspace/src/design/primitives.css"
-FRAME = "OspreyFlow_Core/apps/workspace/src/design/frame.css"
+FRAME = "OspreyFlow_Core/apps/workspace/src/brand/BrandFrame.tsx"
+HOLD = "OspreyFlow_Core/apps/workspace/src/brand/containInnerScroll.ts"
 ADMIN = "OspreyFlow_Core/apps/workspace/src/admin/admin.css"
 SYSTEM = "OspreyFlow_Core/apps/workspace/src/admin/sections/System.tsx"
-DRAWER = "wheeling past a drawer's body's end"
-OVERLAY = "wheeling past the empty canvas's start overlay's end"
-SCROLL = "Admin in the page's frame in the govuk look"
-FACE = [f"Admin › System in the {look} look" for look in ("dark", "light", "govuk")]
 
-#: (name, [(file, site, replacement)], the cases that must fail, by the start of their titles)
+#: (name, [(file, site, replacement)], the assertion messages that must fail, and no other assertion)
 PLANTS = [
-    ("the inner-scroll sheet not loaded", [(PRIMS, '@import "./frame.css";\n', "")], [DRAWER, OVERLAY]),
-    ("inner scrollers left to chain to the page", [(FRAME, "overscroll-behavior: contain;", "overscroll-behavior: auto;")],
-     [DRAWER, OVERLAY]),
+    ("the rule never installed (main's shape)",
+     [(FRAME, '(appearance.brand === "govuk" ? containInnerScroll() : undefined)', "(undefined)")],
+     ["the page did not move"]),
+    ("a box at its end left to move the page", [(HOLD, "  return inside; //", "  return false && inside; //")],
+     ["the page did not move"]),
+    ("every wheel inside a box held, wherever the box stands", [(HOLD, "    if (further) return false;", "    if (further) inside = true;")],
+     ["the drawer scrolled", "then the drawer scrolled", "itself scrolled to its end", "the drawer scrolled to its end, the page stayed"]),
+    ("a box counted on any axis (a sideways box swallowing a vertical wheel)",
+     [(HOLD, "  const overflow = vertical ? cs.overflowY : cs.overflowX;", "  const overflow = cs.overflowX === \"auto\" ? \"auto\" : cs.overflowY;"),
+      (HOLD, "  const size = vertical ? el.scrollHeight - el.clientHeight : el.scrollWidth - el.clientWidth;",
+       "  const size = Math.max(el.scrollHeight - el.clientHeight, el.scrollWidth - el.clientWidth);")],
+     ["the drawer scrolled"]),
     ("Admin left scrolling in its own box under GOV.UK",
-     [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }\n', "")], [SCROLL]),
+     [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }\n', "")], ["the one scroller"]),
+    ("Admin's one-scroller rule reaching the standard look",
+     [(ADMIN, '[data-brand="govuk"] #main-content .admin-place { flex: none; overflow-y: visible; }',
+       '#main-content .admin-place { flex: none; overflow-y: visible; }'),
+      (ADMIN, '[data-brand="govuk"] #main-content :has(> .admin-place)', '#main-content :has(> .admin-place)')],
+     ["the one scroller"]),
     ("App's root left at the window's height under GOV.UK (Admin drawn over the footer)",
      [(ADMIN, '[data-brand="govuk"] #main-content :has(> .admin-place) { height: auto !important; min-height: var(--workspace-height, 100vh); }\n', "")],
-     [SCROLL]),
-    ("the side list not kept in view", [(ADMIN, "[data-brand=\"govuk\"] #main-content .admin-place .admin-nav { position: sticky; top: 0; }\n", "")], [SCROLL]),
-    ("a part's name back in mono", [(SYSTEM, '<span className="admin-system__name">{c.name}</span>', '<span className="value">{c.name}</span>')], FACE),
-    ("the version back in mono", [(SYSTEM, '<p className="admin-system__version" style', '<p className="value" style')], FACE),
-    ("the marking ceiling back in mono", [(SYSTEM, '<p className="admin-system__marking" style', '<p className="value" style')], FACE),
-    ("a model's id no longer marked a value", [(SYSTEM, '<code className="identifier">{m.model}</code>', "<span>{m.model}</span>")], FACE),
+     ["the footer follows Admin's place"]),
+    ("the side list not kept in view",
+     [(ADMIN, '  [data-brand="govuk"] #main-content .admin-place .admin-nav { position: sticky; top: 0; }\n', "")],
+     ["the side list stays in view"]),
+    ("a part's name back in mono", [(SYSTEM, '<span className="admin-system__name">{c.name}</span>', '<span className="value">{c.name}</span>')],
+     ["the parts' names in the page's face"]),
+    ("the version back in mono", [(SYSTEM, '<p className="admin-system__version" style', '<p className="value" style')],
+     ["the version in the page's face"]),
+    ("the marking ceiling back in mono", [(SYSTEM, '<p className="admin-system__marking" style', '<p className="value" style')],
+     ["the marking ceiling in the page's face"]),
+    ("the converted views back in mono", [(SYSTEM, '<p className="admin-system__converted" style', '<p className="value" style')],
+     ["the converted views in the page's face"]),
+    ("a model's id back as main drew it (the browser's monospace, not the token)",
+     [(SYSTEM, '<code className="identifier">{m.model}</code>', "<code>{m.model}</code>")],
+     ["a model's id in mono, a value to copy"]),
 ]
 
 
@@ -56,13 +75,16 @@ def main() -> int:
         finally:
             subprocess.run(["git", "checkout", "--", *{p for p, _, _ in sites}], cwd=ROOT, check=True)
         failed = re.findall(r"^\s+\d+\) \S+ › (.+?)\s*$", out, re.M)
+        said = re.findall(r"^\s+Error: (.+?)\n", out, re.M)
         if not failed and "passed" not in out:
             sys.exit(f"{name}: nothing ran:\n{out[-1500:]}")
-        missing = [m for m in must if not any(f.startswith(m) or m in f for f in failed)]
-        stray = [f for f in failed if not any(f.startswith(m) or m in f for m in must)]
-        red = not missing and not stray
+        # Each failure is one of the assertions the plant must fail, by its message, and each of those failed.
+        missing = [m for m in must if not any(m in e for e in said)]
+        stray = [e for e in said if not any(m in e for m in must)]
+        red = bool(failed) and not missing and not stray
         missed += not red
-        print(f"== {name}: {'RED where it must be' if red else 'MISSED'}; failed: {failed}" + (f"; not failed: {missing}" if missing else ""))
+        print(f"== {name}: {'RED where it must be' if red else 'MISSED'}; failed {len(failed)}: {said}"
+              + (f"; not failed: {missing}" if missing else ""))
     print(f"plants: {len(PLANTS)}, missed: {missed}")
     return 1 if missed else 0
 
