@@ -2141,3 +2141,6 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **Stage 5 rebuild, docs' findings (15 Nov ~13:15Z):** (F1) the basemap's tiles step needs v0.6.0's image, so it runs ahead from that image once packaged, rehearsed on the test server, else in the window (~07:00-08:25); (F2) v0.6.0 into /opt/ospreyflow-v0.6.0 after a verified backup and `uninstall --keep-data`, the old folder kept as the way back; (F3) the owner re-enters the Gemini key in the window, and the demo datasets' egress is set to `any` so Gemini can be chosen.
 - **Accounts (the owner, ~13:55Z):** sol up to about 65%. rules, rules-b and platform move to sol at clean points; admin
   (items 6, 18 and the CLI scope, on the critical path) and the orchestrator stay on ayan.
+- **Stage 2, the never-join reach (the orchestrator, ~16:45Z):** 14 Nov met the 90% floor exactly (450/500). The floor and the 500
+  cases stay; the check looks past page 1 to a fixed recorded bound so more cases are reached (red-first test, rehearsed).
+  profile_m9.py fixed on main (it crashed after Am 21); the shipping search 59-212 ms against ~5 s for the old query.
