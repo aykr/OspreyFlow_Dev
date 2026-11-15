@@ -2093,3 +2093,12 @@ Also asked by the lanes:
 
 The owner's exception to the closed list, built tonight and in the candidate: "view" means a saved view only; the way back to the whole case; two defects seen on the same screen (an internal note on screen; panels and menus off the type scale). Split by file ownership: case V1 (wording, case line, strip, back link, toolbar menu withdrawn; ADR-145 Am 17, ADR-144 Am 6), case-b V2 (the saved views panel), studio V3 (internal notes, a guard), admin V4 (type scale by measurement), docs V5 (the user guide; the sweep's navigation items re-run). The candidate ad2725f is superseded; C is remade after V1–V5, and the demo update waits on it. M10, a green CI run and step 6 stand unchanged.
 - **The owner's default for the night (14 Nov, ~22:15Z):** if any of V1–V5 can't land tonight, hold the candidate for it. It isn't remade until all five are in; if that runs past Sunday evening, step 6 moves to the next 08:00Z (Tue 17) and the cut follows step 6. The owner hears first thing.
+
+## 15 November 2026, morning: two fixes join the candidate (the owner)
+
+The owner's prompt "Two small fixes for the candidate, if they fit": (1) the case line on one type size, (2) Ask & Chat's
+answer wording and markers; in the candidate only if step 6 still starts by Mon 16 08:00Z. Both fit, and the owner chose:
+**both in the candidate; step 6 starts as soon as the remade candidate is green** (expected ~15:00Z Sun, overnight run,
+stop on FAIL). ebcba42 (CI 43686794335) is no longer the candidate. case builds L1, case-b L2, due ~12:00Z. After the
+cut, from the same prompt, as its own prompt later: the history accordion, Ask & Chat full page, "Show all on graph" with
+"Save as a view", the provider-specific model form, and the GOV.UK look's full type pass.

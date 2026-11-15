@@ -162,3 +162,6 @@ case	v052-results-over-canvas	S	done	v0.5.2 (the owner's yes, 15 Nov): the searc
 rules-b	route-collapse-makefile	S	done	make lanes-check runs the heartbeat's route view cases (the owner's yes, 15 Nov)	-
 platform	v052-r1domainguard	S	done	Step 6: R1 probes the OpenSearch domain only when the release searches with it (copy A is v0.5.1, postgres-fulltext)	lane/platform-v052-r1domainguard
 docs	v052-cut	M	done	Step 7 docs: v0.5.2 CHANGELOG (the release notes), guide headers UG 1.66 AG 2.18 DG 1.38 ArchG 1.5, sites checked against v0.5.2	lane/docs-v052-cut
+case	v052-case-line-size	S	todo	v0.5.2 (the owner, 15 Nov): the case line on the top bar's type size in both looks, held by measurement
+case-b	v052-ask-markers	S	todo	v0.5.2 (the owner, 15 Nov): Ask & Chat's markers, their names and the answer's words
+orchestrator	v052-candidate2	S	todo	v0.5.2 step C again: the candidate remade with L1 and L2 (the owner, 15 Nov), CI green; step 6 starts on it as soon as green
