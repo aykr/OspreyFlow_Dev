@@ -43,7 +43,7 @@ window.fetch = async () => new Response(JSON.stringify(NEEDS), { status: 200 });
 function Harness() {
   return (
     <header className="app-header top-bar" data-app="glass">
-      <h1 className="label" style={{ margin: 0 }}>
+      <h1 className="label" style={{ margin: 0 }} data-harness-only="">
         Needs you harness
       </h1>
       <div className="app-header__account" style={{ display: "flex", alignItems: "center", gap: "var(--sp-8)", marginLeft: "auto" }}>

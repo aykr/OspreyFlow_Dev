@@ -156,8 +156,8 @@ function Harness() {
   const [height, setHeight] = useState(700);
   return (
     <main>
-      <h1 style={{ position: "absolute", left: -10000 }}>Map view harness</h1>
-      <button type="button" onClick={() => setHeight(560)}>
+      <h1 style={{ position: "absolute", left: -10000 }} data-harness-only="">Map view harness</h1>
+      <button type="button" data-harness-only="" onClick={() => setHeight(560)}>
         Shrink the map
       </button>
       <div style={{ width: 1000, height, position: "relative" }}>
