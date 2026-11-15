@@ -1,0 +1,18 @@
+Running on ospreyflow-test (stack offline, osprey-runs/case/), logged at osprey-runs/case.meta/runs/20261115T031020Z-705a1ea9/log: sh -c export PATH=$HOME/.local/node/bin:$PATH && PLANT_HEAD=ad4f141 python3 OspreyFlow_Build/process/lanes/case/gates/results_over_canvas_reds.py
+# results-over-canvas reds at ad4f141 (the local checkout's, passed in); each plant restored from the file's own text
+## 1. the results page at 5 again, under the view's docked controls (the candidate's)
+plant in OspreyFlow_Core/apps/workspace/src/search/searchResults.css; keyboard/search-results.spec.ts -g govuk\ light:\ the\ results\ page\ is\ drawn\ over\ the\ whole\ of\ the\ view\ it\ covers --workers=1; exit 1
+  ✘  1 keyboard/search-results.spec.ts:170:3 › govuk light: the results page is drawn over the whole of the view it covers, the canvas's toolbar and zoom column included (1.0s)
+    Error: drawn over the results page
+    - Expected  - 1
+    + Received  + 3
+  1 failed
+## 2. the results page over the search box's own suggestions
+plant in OspreyFlow_Core/apps/workspace/src/search/searchResults.css; keyboard/search-results.spec.ts -g govuk\ light:\ the\ results\ page\ is\ drawn\ over\ the\ whole\ of\ the\ view\ it\ covers --workers=1; exit 1
+  ✘  1 keyboard/search-results.spec.ts:170:3 › govuk light: the results page is drawn over the whole of the view it covers, the canvas's toolbar and zoom column included (1.4s)
+    Error: the suggestions drawn over the results page
+    Expected: true
+    Received: false
+  1 failed
+# 2 of 2 red
+Wall time: 7 s, exit 0 (no stack, no lease; set-up before it 11 s)
