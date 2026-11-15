@@ -75,7 +75,7 @@ plant "choosing a view leaving the Ask page showing" "$APP" 's/(function leavePa
   "choosing a view leaves the Ask & Chat page"
 plant "the harness's page without its back link focus (keyboard)" "$RAIL" 's/\?\.focus\(\);\n\}/;\n}/' kb \
   "Ask & Chat opens as a page over the view by keyboard"
-plant "the back link's words in a colour that fails contrast (axe, three looks)" "$CSS" 's/(\.ask-page__back \{[^}]*?)color: var\(--text-primary\);/$1color: #b8b8b8;/s' ax \
+plant "the back link's words in the page's own background token (no contrast; axe, three looks)" "$CSS" 's/(\.ask-page__back \{[^}]*?)color: var\(--text-primary\);/$1color: var(--surface-app);/s' ax \
   "places-harness.html open=questions (dark)
 places-harness.html open=questions (light)
 places-harness.html open=questions (govuk)"
