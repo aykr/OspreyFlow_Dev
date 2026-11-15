@@ -2102,3 +2102,6 @@ answer wording and markers; in the candidate only if step 6 still starts by Mon 
 stop on FAIL). ebcba42 (CI 43686794335) is no longer the candidate. case builds L1, case-b L2, due ~12:00Z. After the
 cut, from the same prompt, as its own prompt later: the history accordion, Ask & Chat full page, "Show all on graph" with
 "Save as a view", the provider-specific model form, and the GOV.UK look's full type pass.
+- **The case line's fold (the owner, 15 Nov):** "ellipsis to keep one line". When the row runs out of room the
+  cross-link first takes its short words ("Open in the Ingest Studio ↗"), then the open saved view's name and
+  "reads …" ellipsize (full words in the page and title); the row wraps only below the widths the top bar holds one line.
