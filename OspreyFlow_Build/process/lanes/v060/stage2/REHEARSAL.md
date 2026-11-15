@@ -69,3 +69,14 @@ runs on today's main against B's load.
   60 results.
 - **What it means for the full file:** if the 500 behave like these 20, the official run gains some cases above
   450. 20 cases are too few to say how many.
+
+## The full never-join, for the margin (the orchestrator, 15 November)
+- **The run:** all 500 cases, the official step's command, written to `~/osprey-load/stage2-margin-20261115T1720/`
+  so the official folder stays free. Main 5653d1e (stage 2 merged), stack d under rules-b's lease from 17:20:49Z,
+  rules-b's own QUEUE turn, run 20261115T172057Z-aa977d33, 192 s, read-only. Log in `margin-never-join.txt`.
+  The first ssh session dropped and `remote-log` reattached; the run itself was not interrupted.
+- **The result: met.**
+  - **466 of 500 reached (93.2%)**, 16 above the 450 floor.
+  - Reached on page 1: 450, the same as 14 November. On page 2: 12. On page 3: 4.
+  - 0 failures; 34 indeterminate (beyond 60 results).
+- **This is not the official measurement.** That run follows #4's merge.
