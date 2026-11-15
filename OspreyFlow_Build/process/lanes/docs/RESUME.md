@@ -6,7 +6,7 @@ merges.
 ## Open
 
 - **`lane/docs-v060-changelog`, at 5538953 or later.** This is v0.6.0's CHANGELOG section. Add one line for each item
-  as the orchestrator says it merged: **i4, i6, i10, i18, sc, us and cs** are still to come. Lines already in: rf
+  as the orchestrator says it merged: **i4 and i6** are still to come. Lines already in: i10, i18, cs, sc, us and rp (15 Nov), rf
   (Before you install), i3, i5, i14, model keys in Admin › Models, and Bedrock London-only. i11 is process only, so it
   gets no line. Items 7 and 23 are out of v0.6.0, so nothing about them goes in. The orchestrator takes this branch
   last, at the end of Build. After each line, run `tests/test_changelog_check.py`, `test_guides_v060_fresh.py`,

@@ -79,6 +79,14 @@ around: one view switch, a case line that says what is open, and "view" kept for
 - **Amazon Bedrock is London-only:** the models AWS serves in-Region there (Amazon Nova and the Titan
   embeddings), not current Claude models, which London serves only through AWS's EU and global profiles.
   Claude through the EU profile is not offered.
+- **The run API admits an orchestrator only with this API's app role `OspreyFlow.Run`** (ADR-148
+  Amendment 20). The client's Entra administrator defines it on the API's registration (allowed member
+  types: Applications) and grants it to the orchestrator's own application with admin consent, as the
+  rendered `INSTALL.md`'s *What it needs* says. Any other application of the tenant is refused (403), in
+  words saying where to grant it.
+- **`ospreyflow run` on Entra ID sends the API's scope,** `OSPREY_TOKEN_SCOPE`: the API's application ID
+  URI followed by `/.default`. Without it Entra ID issues no token (AADSTS1002012), and the command says
+  so. Keycloak needs none.
 - **The poc manifest:** one source for the shape's containers, Jobs, images, registry, managed services,
   Entra registrations and egress, held to the render both ways. `seed_poc` seeds the named case with the
   first administrator as its author.
@@ -117,6 +125,33 @@ around: one view switch, a case line that says what is open, and "view" kept for
 - **What raises alerts** says why a hotlist or watch stopped, in the same words as under *Stopped*.
 - **A watch stays active** until three unreachable evaluations in a row (ADR-044 Amendment 2), and a
   stopped hotlist or watch shows why beside its badge.
+
+**The local basemap (ADR-147), for operators building one.**
+- **The gazetteer holds settlements alone:** OSM's `place` of city, borough, town, village, hamlet,
+  isolated_dwelling, suburb, quarter or neighbourhood. For Great Britain that is 56,486 places of about
+  1.06 million named points; farms, localities and points of interest are left out.
+- **The places load 5,000 to a transaction.** A failed batch is rolled back alone and stops the load, and
+  the gazetteer's dataset is registered only once the whole load is in. planetiler runs with a 2 GB heap.
+- **The places' points are written when the Conduit is stopped.** The build opens the analytics store as
+  the Conduit does; while a running Conduit holds DuckDB, the build goes on without the points and says so.
+- **Two stages, so most of a build runs beside a working deployment:** `python -m services.api.map_admin
+  build <region> --unit <unit> --by <who> --stage tiles` downloads the extract, runs planetiler and saves
+  the settlements beside it, registering nothing. `--stage places`, with the Conduit stopped, loads that
+  file with its points and registers the provider; without the first stage's files it is refused in words.
+  Each runs in a one-off container of the Conduit's image. `ospreyflow map build` is still the whole build.
+- **What Great Britain takes** (measured on a 16-core server): a 2.1 GB download, planetiler 7 min 18 s
+  at a peak of 3.0 GB of memory, the load 37 min at 2.4 GB, and about 5 GB of disk, 3.5 GB of which can be
+  removed afterwards.
+
+**Images and the release.**
+- **Every image's distribution upgrade is made again each day wherever it is built:** `ospreyflow start
+  --build`, install and apply, `ospreyflow images push`, the Makefiles, CI and the release workflow each
+  pass the day's date (`OSPREY_UPGRADE_STAMP`), so a builder's cached copy of that layer can no longer keep
+  a distribution's older fixes.
+- **The Superset image's PostgreSQL client libraries** (libpq, libecpg and libpgtypes) are at
+  15.20-0+deb12u1, which fixes 192 HIGH CVEs found at 15.19, and its build stops, in words, if any is older.
+- **A release is made by the product repository's own workflow,** which stops if the tag is not the
+  code's own `VERSION`.
 
 **Fixed.**
 - **The Glass no longer throws its page away** when a search draws under React's StrictMode.
