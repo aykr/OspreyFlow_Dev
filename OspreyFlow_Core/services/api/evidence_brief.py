@@ -74,6 +74,10 @@ class GraphFact:
     number: int
     node_ids: tuple[str, ...]
     link_ids: tuple[str, ...]
+    #: What the fact says, in the canvas's names ("SHAH, Rohan – associated with – MERCER, Dana"),
+    #: for the Glass's marker (the owner's word, 15 November 2026). Written from the brief's own
+    #: nodes, which are the reader's (rule 3); never sent to the model.
+    about: str = ""
 
     @property
     def label(self) -> str:
@@ -168,6 +172,15 @@ def _day(when: datetime | None) -> str:
     return when.date().isoformat() if when is not None else "not recorded"
 
 
+def _fact_about(edge: Edge, source: Node, target: Node) -> str:
+    """A fact as the Glass names it beside its marker: its two ends as the canvas names them, and
+    the link's type in words. Only the brief's nodes, which are the reader's."""
+    from .questions import canvas_label
+
+    link = edge.type.replace("_", " ").lower()
+    return f"{canvas_label(source)} – {link} – {canvas_label(target)}"
+
+
 def _fact_line(
     number: int, edge: Edge, held: Mapping[str, Node], dataset_labels: Mapping[str, str]
 ) -> str:
@@ -208,7 +221,14 @@ def write_brief(
         lines.append("Links among them (cite a fact by its number, as [G-n]):")
         for number, edge in enumerate(scope.edges, start=1):
             lines.append(_fact_line(number, edge, held, dataset_labels))
-            facts.append(GraphFact(number, (edge.source, edge.target), (edge.id,)))
+            facts.append(
+                GraphFact(
+                    number,
+                    (edge.source, edge.target),
+                    (edge.id,),
+                    _fact_about(edge, held[edge.source], held[edge.target]),
+                )
+            )
     if events_per_month:
         lines.append("")
         lines.append("Events per month on those links:")

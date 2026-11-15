@@ -38760,6 +38760,23 @@ Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)) w
    - Test: `QuestionsPanel.test.tsx`, *shows each [S-n] as a button that selects its records*; the keyboard case
      above, red with the button selecting nothing (`keyboard-plant.txt`).
 
+### ADR-129, Amendment 6 (15 November 2026) — a cited fact says what it is, for its marker in the Glass
+
+*The owner's word, 15 November 2026 (seen on the demo): a marker's visible text stays short, and its accessible name
+and hover text say "Show on the graph: " and what it shows. This amends decision 1's payload; the brief, and
+everything sent to the model, is unchanged.*
+
+- Each `GraphCitation` returned for a cited `[G-n]` gains `about`: the fact's two ends as the canvas names them and
+  the link's type in words ("SHAH, Rohan – associated with – MERCER, Dana"). It is written from the asker's own
+  brief (`evidence_brief.GraphFact.about`), whose nodes are the asker's (rule 3), so it names nothing the answer
+  does not already show its reader. An answer kept before `about` has none, and the Glass names that fact by its
+  number ("graph fact 1"), never by an id. An `[S-n]` is named by the record's name it already carries.
+- *Tests:* `tests/services/api/test_questions_graph_facts.py`:
+  `test_a_cited_fact_says_what_it_is_in_the_canvas_s_names`;
+  `test_no_fact_s_about_names_a_node_the_asker_may_not_see` (rule 4; red with the scope read wider than the
+  asker may see); and `test_what_the_model_is_sent_is_byte_for_byte_as_before` (the whole request's hash as
+  before `about`, and red with `about` written into the brief). The Glass's are `questions/QuestionsPanel.test.tsx`'s.
+
 ### ADR-149, Amendment 1 (14 November 2026) — Ask's *Whole case* calls the search, and the leak test covers what it reads
 
 Status: written 14 November 2026 by the rules-b lane (step v052D, part D(iii)), after ADR-149 landed. It records

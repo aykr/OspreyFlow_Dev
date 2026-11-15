@@ -918,3 +918,12 @@
 .severity--high { border-color: var(--error); }
 .severity--medium { border-color: var(--warning); }
 .severity--low { border-color: var(--text-tertiary); }
+
+/* The answer's [G-n] and [S-n] markers (the owner's word, 15 November 2026): inline in the sentence, a link's look
+   and no padding, so a marker sits one space after its words and before any punctuation as text does. */
+.answer-marker {
+  display: inline; margin: 0; padding: 0; border: 0; background: none; font: inherit; line-height: inherit;
+  color: var(--text-primary); text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+}
+.answer-marker:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
+.answer-marker:disabled { color: var(--text-secondary); text-decoration: none; cursor: default; }

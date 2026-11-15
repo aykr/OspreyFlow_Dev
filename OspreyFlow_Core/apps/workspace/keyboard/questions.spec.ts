@@ -175,24 +175,24 @@ test("asking, then reaching a [G-n] from the answer by Tab, selects what it stan
   await page.getByLabel("Your question").focus();
   await page.keyboard.type("Who is connected to n0?");
   await page.keyboard.press("Control+Enter");
-  await expect(page.getByRole("button", { name: "Select [G-1] on the canvas" })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Show on the graph: graph fact 1, [G-1]" })).toHaveCount(2);
   expect(scopes).toEqual([{ question: "Who is connected to n0?", selected_node_ids: [], selected_link_ids: [], read_from: "graph" }]);
   const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
   await page.getByLabel("Your question").focus();
 
-  await tabToLabel(page, "Select [G-1] on the canvas");
+  await tabToLabel(page, "Show on the graph: graph fact 1, [G-1]");
   await page.keyboard.press("Enter");
   await expect.poll(state).toEqual({ nodes: [], edge: "e0" });
 
-  await tabToLabel(page, "Select [G-2] on the canvas");
+  await tabToLabel(page, "Show on the graph: graph fact 2, [G-2]");
   await page.keyboard.press("Enter");
   await expect.poll(state).toEqual({ nodes: ["n2", "n3"], edge: null });
 
-  await tabToLabel(page, "Select [G-3] on the canvas");
+  await tabToLabel(page, "Show on the graph: graph fact 3, [G-3]");
   await page.keyboard.press("Enter");
   await expect.poll(state).toEqual({ nodes: ["n1", "n2", "n3"], edge: null });
 
-  await tabToLabel(page, "Select [G-4] on the canvas");
+  await tabToLabel(page, "Show on the graph: graph fact 4, [G-4]");
   await page.keyboard.press("Enter");
   // Nothing in view: the selection is left as it was.
   await expect.poll(state).toEqual({ nodes: ["n1", "n2", "n3"], edge: null });
@@ -230,7 +230,7 @@ test("the model engine is reached from the question by Shift+Tab, changed by key
   await page.keyboard.type("Who wrote about the plant?");
   await page.keyboard.press("Control+Enter");
   // Exact: "Will be answered by …" (ADR-135 Amendment 12) above the question holds these words too.
-  await expect(page.getByText("Answered by This deployment's own model (qwen2.5:7b-instruct)", { exact: true })).toBeVisible();
+  await expect(page.getByText("Answered by this deployment's own model (qwen2.5:7b-instruct)", { exact: true })).toBeVisible();
   expect((scopes[0] as { engine?: string }).engine).toBe("local");
   registerCovered(REGISTRY, "choose-the-model-engine-by-keyboard");
 });
@@ -334,7 +334,7 @@ test("Whole case is chosen by arrow keys, its search is asked with the question'
 
   const state = () => page.evaluate(() => ({ nodes: window.__KEYBOARD__!.selection, edge: window.__KEYBOARD__!.selectedEdge }));
   await page.getByLabel("Your question").focus();
-  await tabToLabel(page, "Select [S-1], N2, on the canvas");
+  await tabToLabel(page, "Show on the graph: N2, [S-1]");
   await page.keyboard.press("Enter");
   await expect.poll(state).toEqual({ nodes: ["n2", "n3"], edge: null });
   registerCovered(REGISTRY, "select-a-search-source-from-an-answer-by-keyboard");

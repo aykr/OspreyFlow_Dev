@@ -4,7 +4,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { QuestionsPanel, WHOLE_CASE_LINE } from "./QuestionsPanel";
+import { answeredBy } from "../models/engines";
+import { QuestionsPanel, WHOLE_CASE_LINE, readWords } from "./QuestionsPanel";
 import type { QuestionAnswer, WillRead } from "./questionsApi";
 
 afterEach(() => {
@@ -154,14 +155,14 @@ describe("QuestionsPanel", () => {
     serve({ "GET /questions": () => json(200, [WITH_FACTS]) });
     const onSelectFacts = vi.fn();
     mount(vi.fn(), vi.fn(), { onSelectFacts });
-    fireEvent.click(await screen.findByRole("button", { name: "Select [G-2] on the canvas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show on the graph: graph fact 2, [G-2]" }));
     expect(onSelectFacts).toHaveBeenCalledWith({
       number: 2,
       label: "[G-2]",
       node_ids: ["n-dana", "n-callum"],
       link_ids: ["l-called"],
     });
-    expect(screen.getAllByRole("button", { name: /Select \[G-\d+\] on the canvas/ })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: /^Show on the graph: graph fact \d+, \[G-\d+\]$/ })).toHaveLength(2);
   });
 
   it("makes every occurrence of a repeated [G-n] a button, so no marker is left as literal text", async () => {
@@ -170,9 +171,9 @@ describe("QuestionsPanel", () => {
     });
     const onSelectFacts = vi.fn();
     mount(vi.fn(), vi.fn(), { onSelectFacts });
-    const buttons = await screen.findAllByRole("button", { name: "Select [G-1] on the canvas" });
+    const buttons = await screen.findAllByRole("button", { name: "Show on the graph: graph fact 1, [G-1]" });
     expect(buttons).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Select [G-2] on the canvas" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Show on the graph: graph fact 2, [G-2]" })).toHaveLength(1);
     fireEvent.click(buttons[1]!);
     expect(onSelectFacts).toHaveBeenCalledWith(expect.objectContaining({ number: 1 }));
     // The words round them are still there, and no marker is left as plain text outside a button.
@@ -189,7 +190,7 @@ describe("QuestionsPanel", () => {
     serve({ "GET /questions": () => json(200, [{ ...WITH_FACTS, graph_citations: [] }]) });
     mount();
     expect(await screen.findByText(/\[G-1\]/)).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /Select \[G-/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Show on the graph: / })).toBeNull();
   });
 
   it("says in words why a question too long to read at once was refused, with the three ways out, and keeps it", async () => {
@@ -335,7 +336,7 @@ describe("the engine choice (ADR-135)", () => {
     fireEvent.change(choice, { target: { value: "local" } });
     fireEvent.change(screen.getByLabelText("Your question"), { target: { value: "Who?" } });
     fireEvent.click(screen.getByRole("button", { name: "Ask" }));
-    expect(await screen.findByText("Answered by This deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
+    expect(await screen.findByText("Answered by this deployment's own model (qwen2.5:7b-instruct)")).toBeTruthy();
     const posted = calls.find((c) => c.init?.method === "POST" && c.url.endsWith("/questions"))!;
     expect(JSON.parse(String(posted.init!.body)).engine).toBe("local");
   });
@@ -433,7 +434,7 @@ describe("QuestionsPanel · read from, will read, the engine", () => {
     mount(vi.fn(), vi.fn(), { selection });
     expect((screen.getByRole("radio", { name: "Selected items" }) as HTMLInputElement).checked).toBe(true);
     expect(await screen.findByText("About: Tarbuck, Kyle and 1 other")).toBeTruthy();
-    expect(screen.getByText("Will read: 0 documents, 2 items, 3 links and 4 events (1 document has no text to read)")).toBeTruthy();
+    expect(screen.getByText("Will read: 0 documents, 2 items, 3 links and 4 events; 1 document has no text to read")).toBeTruthy();
     expect(screen.getByText("No documents will be read: the answer will come from the links and events.")).toBeTruthy();
     expect(willBodies(calls)[0]).toEqual({ selected_node_ids: ["n-tarbuck", "n-cole"], selected_link_ids: [], read_from: "selection" });
   });
@@ -577,7 +578,7 @@ describe("QuestionsPanel · read from, will read, the engine", () => {
     expect(await screen.findByText("Read: 2 documents, 5 items and 4 links.")).toBeTruthy();
     expect(
       screen.getByText(
-        "No documents were read: the answer comes from the links and events (read: 0 documents, 2 items, 3 links and 4 events (1 document has no text to read)).",
+        "No documents were read: the answer comes from the links and events (read: 0 documents, 2 items, 3 links and 4 events; 1 document has no text to read).",
       ),
     ).toBeTruthy();
   });
@@ -657,12 +658,12 @@ describe("QuestionsPanel · Whole case", () => {
     serve({ "GET /questions": () => json(200, [SOURCED]) });
     const onSelectFacts = vi.fn();
     mount(vi.fn(), vi.fn(), { onSelectFacts });
-    fireEvent.click(await screen.findByRole("button", { name: "Select [S-1], KESTREL, Ann, on the canvas" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Show on the graph: KESTREL, Ann, [S-1]" }));
     expect(onSelectFacts).toHaveBeenCalledWith({ number: 1, label: "[S-1]", node_ids: ["n-k1", "n-k2"], link_ids: [] });
     const sources = screen.getByRole("list", { name: "Sources found in the case" });
     expect(sources.textContent).toContain("Person · Name is 'Kestrel'");
     // An unmarked source is still reachable: its button is in the list.
-    fireEvent.click(screen.getByRole("button", { name: "Select [S-2], Kestrel invoice, on the canvas" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show on the graph: Kestrel invoice, [S-2]" }));
     expect(onSelectFacts).toHaveBeenLastCalledWith({ number: 2, label: "[S-2]", node_ids: ["d-k"], link_ids: [] });
   });
 
@@ -674,5 +675,82 @@ describe("QuestionsPanel · Whole case", () => {
         `Read from the whole case: 4 matches found in the case: 1 document whole, 1 document by the passage found and 2 other records. ${WHOLE_CASE_LINE}`,
       ),
     ).toBeTruthy();
+  });
+});
+
+// The owner's word, 15 November 2026 (seen on the demo, "who are known associated for Callum?"): the answer's
+// markers and wording. A marker sits one space after the words it follows, with no gap before punctuation; its
+// visible text stays short and its name and hover text say what choosing it does and to what; a line under the
+// answer says how to use them; the local engine is lower case inside "Answered by …"; and no bracket is nested.
+describe("the answer's markers and wording (the owner, 15 November 2026)", () => {
+  const SPACED: QuestionAnswer = {
+    ...ANSWERED,
+    id: "q-spaced",
+    answer: "Callum is associated with Lewis Marchbank    [G-1]    and Jordan Selwood    [G-2]   .",
+    candidates: [],
+    unplaced: 0,
+    graph_citations: [
+      { number: 1, label: "[G-1]", about: "Callum Vance, associate of, Lewis Marchbank", node_ids: ["n-c", "n-m"], link_ids: ["l-1"] },
+      { number: 2, label: "[G-2]", node_ids: ["n-c", "n-s"], link_ids: ["l-2"] },
+    ],
+  };  // prettier-ignore
+
+  it("puts a marker one space after the words it follows, with no gap before the full stop", async () => {
+    serve({ "GET /questions": () => json(200, [SPACED]) });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
+    const marker = await screen.findByRole("button", { name: "Show on the graph: Callum Vance, associate of, Lewis Marchbank, [G-1]" });
+    const paragraph = marker.closest("p")!;
+    expect(paragraph.textContent).toBe("Callum is associated with Lewis Marchbank [G-1] and Jordan Selwood [G-2].");
+    // Drawn inline in the sentence, not as a padded button.
+    expect(marker.className).toContain("answer-marker");
+    expect(marker.className).not.toContain("btn");
+  });
+
+  it("names each marker by what choosing it shows, and says so under the answer", async () => {
+    serve({ "GET /questions": () => json(200, [SPACED]) });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
+    const named = await screen.findByRole("button", { name: "Show on the graph: Callum Vance, associate of, Lewis Marchbank, [G-1]" });
+    expect(named.textContent).toBe("[G-1]");
+    expect(named.getAttribute("title")).toBe("Show on the graph: Callum Vance, associate of, Lewis Marchbank");
+    // An answer kept before facts were described: the fact's number, never an id.
+    const kept = screen.getByRole("button", { name: "Show on the graph: graph fact 2, [G-2]" });
+    expect(kept.getAttribute("title")).toBe("Show on the graph: graph fact 2");
+    expect(screen.getByText("Select a marker to show that item on the graph.")).toBeTruthy();
+  });
+
+  it("names an [S-n] marker by its record's name", async () => {
+    const sourced: QuestionAnswer = {
+      ...ANSWERED, id: "q-s", answer: "Ann Kestrel was paid [S-1].", candidates: [], unplaced: 0,
+      search_citations: [{ number: 1, label: "[S-1]", name: "KESTREL, Ann", type: "Person", why: "Name is 'Kestrel'", node_ids: ["n-k1"] }],
+    };  // prettier-ignore
+    serve({ "GET /questions": () => json(200, [sourced]) });
+    mount(vi.fn(), vi.fn(), { onSelectFacts: vi.fn() });
+    const marker = await screen.findByRole("button", { name: "Show on the graph: KESTREL, Ann, [S-1]" });
+    expect(marker.textContent).toBe("[S-1]");
+    expect(marker.getAttribute("title")).toBe("Show on the graph: KESTREL, Ann");
+    expect(screen.getByText("Select a marker to show that item on the graph.")).toBeTruthy();
+  });
+
+  it("says nothing of markers under an answer that has none", async () => {
+    serve({ "GET /questions": () => json(200, [{ ...ANSWERED, answer: "Nobody.", candidates: [], unplaced: 0 }]) });
+    mount();
+    await screen.findByText("Nobody.");
+    expect(screen.queryByText("Select a marker to show that item on the graph.")).toBeNull();
+  });
+
+  it("writes the local engine in lower case inside Answered by, never nesting a bracket", async () => {
+    expect(answeredBy("local", "qwen2.5:14b-instruct", [])).toBe("Answered by this deployment's own model (qwen2.5:14b-instruct)");
+    expect(answeredBy("gemini", "gemini/gemini-2.5-flash", [{ name: "gemini", label: "Gemini" } as never])).toBe(
+      "Answered by Gemini (gemini/gemini-2.5-flash)",
+    );
+  });
+
+  it("never nests a bracket in what was read", () => {
+    const read = { read_from: "graph", documents: 0, documents_without_text: 1, items: 0, links: 83, events: 190, selected: 0, first_selected: null, ...NOT_CASE } as const;  // prettier-ignore
+    const words = `No documents were read: the answer comes from the links and events (read: ${readWords(read)}).`;
+    expect(words).toBe(
+      "No documents were read: the answer comes from the links and events (read: 0 documents, 0 items, 83 links and 190 events; 1 document has no text to read).",
+    );
+    expect(words).not.toMatch(/\([^)]*\(/);
   });
 });

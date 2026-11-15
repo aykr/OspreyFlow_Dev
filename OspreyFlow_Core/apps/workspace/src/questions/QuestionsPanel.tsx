@@ -9,7 +9,8 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
-import { sourceAsFact, splitAnswer, type GraphCitation, type SearchCitation } from "./graphFacts";
+import { currentBrand } from "../brand/brand";
+import { sourceAsFact, splitAnswer, type AnswerPart, type GraphCitation, type SearchCitation } from "./graphFacts";
 import {
   acceptProposal,
   askQuestion,
@@ -90,7 +91,7 @@ export function readWords(read: ReadSummary): string {
   const listed = `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
   const unread =
     read.documents_without_text > 0
-      ? ` (${counted(read.documents_without_text, "document has", "documents have")} no text to read)`
+      ? `; ${counted(read.documents_without_text, "document has", "documents have")} no text to read`
       : "";
   return `${listed}${unread}`;
 }
@@ -107,7 +108,7 @@ function caseWords(read: ReadSummary): string {
   if (read.items > 0) parts.push(counted(read.items, "other record", "other records"));
   const unread =
     read.documents_without_text > 0
-      ? ` (${counted(read.documents_without_text, "document has", "documents have")} no text to read)`
+      ? `; ${counted(read.documents_without_text, "document has", "documents have")} no text to read`
       : "";
   return `${counted(read.found, "match", "matches")} found in the case: ${listed(parts.length ? parts : ["nothing to read"])}${unread}`;
 }
@@ -540,6 +541,26 @@ function ReadLine({ read }: { read: ReadSummary }) {
   );
 }
 
+/** The answer's words around its markers as a sentence reads (the owner's word, 15 November 2026): one space before
+ * a marker, none between a marker and the punctuation after it, and runs of spaces at a marker made one. Only the
+ * spacing at a marker changes; the words are the model's. */
+export function spacedAroundMarkers(parts: AnswerPart[]): AnswerPart[] {
+  const isMarker = (part: AnswerPart | undefined) => part !== undefined && part.kind !== "text";
+  return parts.map((part, i) => {
+    if (part.kind !== "text") return part;
+    const before = isMarker(parts[i - 1]);
+    const after = isMarker(parts[i + 1]);
+    let text = part.text;
+    if (before && after && text.trim() === "") return { kind: "text", text: " " };
+    if (before) text = /^\s*[.,;:!?)\]]/.test(text) ? text.replace(/^\s+/, "") : text.replace(/^\s+/, " ");
+    if (after) {
+      text = text.replace(/\s+$/, "");
+      if (text !== "" && !text.endsWith("(")) text = `${text} `;
+    }
+    return { kind: "text", text };
+  });
+}
+
 /** The answer, with each `[G-n]` the Conduit returned as a button that selects what it stands for.
  * A fact the words do not mark follows the answer, so every citation is reachable. */
 function AnswerText({
@@ -562,36 +583,34 @@ function AnswerText({
   );
   // An `[S-n]` selects its records as a fact does (`bringFactIntoView`); one not on the canvas
   // leaves the selection as it was.
-  const sourceButton = (source: SearchCitation, key: string) => (
+  // The owner's word, 15 November 2026: a marker's visible text stays short ("[G-1]"); its name and hover text say
+  // what choosing it does and to what, "Show on the graph: …, [G-1]" (a fact's own words, or for an answer kept before the
+  // Conduit sent them, its number; never an id). It is drawn inline in the sentence, not as a padded button.
+  const marker = (label: string, shows: string, key: string, onChoose: () => void) => (
     <button
       key={key}
       type="button"
-      className="btn btn--quiet"
+      className={currentBrand() === "govuk" ? "govuk-link answer-marker" : "answer-marker"}
       disabled={!onSelectFacts}
-      aria-label={`Select ${source.label}, ${source.name}, on the canvas`}
-      title={`${source.type}: ${source.why}`}
-      onClick={() => onSelectFacts?.(sourceAsFact(source))}
+      // Its name ends with its visible text, so a person who says what they see reaches it (WCAG 2.5.3).
+      aria-label={`Show on the graph: ${shows}, ${label}`}
+      title={`Show on the graph: ${shows}`}
+      onClick={onChoose}
     >
-      {source.label}
+      {label}
     </button>
   );
-  const factButton = (citation: GraphCitation, key: string) => (
-    <button
-      key={key}
-      type="button"
-      className="btn btn--quiet"
-      disabled={!onSelectFacts}
-      aria-label={`Select ${citation.label} on the canvas`}
-      onClick={() => onSelectFacts?.(citation)}
-    >
-      {citation.label}
-    </button>
-  );
+  const sourceButton = (source: SearchCitation, key: string) =>
+    marker(source.label, source.name, key, () => onSelectFacts?.(sourceAsFact(source)));
+  const factButton = (citation: GraphCitation, key: string) =>
+    marker(citation.label, citation.about || `graph fact ${citation.number}`, key, () => onSelectFacts?.(citation));
+  const spaced = spacedAroundMarkers(parts);
+  const anyMarker = parts.some((part) => part.kind !== "text") || unmarked.length > 0 || unmarkedSources.length > 0;
   return (
     <>
       <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
         {entry.answer === "" && "The model gave no answer."}
-        {parts.map((part, i) =>
+        {spaced.map((part, i) =>
           part.kind === "text" ? (
             <span key={`t${i}`}>{part.text}</span>
           ) : part.kind === "fact" ? (
@@ -601,6 +620,11 @@ function AnswerText({
           ),
         )}
       </p>
+      {anyMarker && (
+        <p style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)", margin: 0 }}>
+          Select a marker to show that item on the graph.
+        </p>
+      )}
       {unmarked.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--sp-4)", alignItems: "center" }}>
           <span style={{ color: "var(--text-tertiary)", fontSize: "var(--fs-12)" }}>Graph facts</span>

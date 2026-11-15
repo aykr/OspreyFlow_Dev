@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.66** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
+**Version 1.67** · 2026-11-15 · For OspreyFlow v0.5.2 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.67 | 2026-11-15 | Ask & Chat (§6): a marker sits after its words and is named "Show on the graph:" and what it shows; the line under an answer with markers; the engine named in lower case after "Answered by" (the owner, 15 Nov; ADR-129 Amendment 6). Version set at merge. PDF made by the orchestrator at merge. |
 | 1.66 | 2026-11-15 | The header names v0.5.2, the release this guide describes (step 5's sweep, §2, at the cut). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.65 | 2026-11-14 | "View" means a saved view alone (ADR-145 Amendment 17, ADR-144 Amendment 6). §3: the case line's **Saved views (n)** (*Saved views* while unread), and "› Saved view: ‹name›" while one is open. §4 and §5: the Cases panel's saved views, **More** in place of More views with its name for a screen reader, the case line's parts in their order; §5.2, **Clear the graph**. §5.13, *Saved views*: the strip's **Back to the whole case** first and its words, the list's **The whole case** row and *Open now*, a view saved under the Glass's default name told apart by its first item and when it was saved, focus to the strip and back, the canvas's notice in a saved view, and the graph toolbar's Views menu gone. §5.12, the client's words gone (studio's V3): the composition is **Rarity plus adds**, its scale the raw-sum scale, the measure the **share of pair links**, and the influencers' "to be confirmed" note struck. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py`, `tests/test_user_guide_saved_views.py` and `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.64 | 2026-11-14 | §5.2: a batch result, and a view, up to the view's limit saved and opened with its links, and *Show links among all* on a large canvas, since the links among a set are found a thousand records at a time (ADR-124 Amendment 20). Held by `tests/test_user_guide_am20.py`. PDF made by the orchestrator at merge. |
@@ -915,8 +916,14 @@ and last date, how often it occurred, its dataset's label and whether it is dire
 events for each month. It holds only what you may see, and never an identifier of the system. It has no
 path facts: a question about a connection is answered from the links it holds.
 
-In an answer, each `[G-n]` is a button, "Select [G-1] on the canvas". It selects what the fact stands
-for and brings it into view: the link if one drawn link is meant, otherwise its nodes. A fact the model
+In an answer, each `[G-n]` and `[S-n]` is a short marker, one space after the words it follows. Its name,
+read aloud and shown when you point at it, says what choosing it shows: "Show on the graph: SHAH, Rohan –
+associated with – MERCER, Dana" for a fact, its two ends as the canvas names them, or "Show on the graph:
+KESTREL, Ann" for a source. A line under the answer says "Select a marker to show that item on the graph."
+Choosing a fact's marker selects what the fact stands for and brings it into view: the link if one drawn
+link is meant, otherwise its nodes. An answer kept from before facts were described names a fact by its
+number, "Show on the graph: graph fact 1". Read aloud, each name ends with the marker itself, "…, [G-1]", so
+you can say the marker you see to choose it. A fact the model
 cites that was not in the account it was given is dropped and counted among the items left out.
 
 The documents and the graph facts share one limit. Over it, the question is refused, saying how many
@@ -946,7 +953,7 @@ deployment's own model is chosen instead. Every dataset starts at "never", so un
 changes yours, every question is answered by the deployment's own model.
 
 **"Answered by …".** Under each answer, a small line says which engine and model produced it, for
-example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by This deployment's own model
+example "Answered by Gemini (gemini/gemini-2.5-flash)" or "Answered by this deployment's own model
 (qwen2.5:7b-instruct)". It is what the deployment says it used, not what you chose. An answer kept
 before engines were named has no such line. **Ask to search** shows the same choice and line, and the
 choice applies there too: your question is about the case, so it goes under the case's handling and
