@@ -172,7 +172,7 @@ case-b	v060-i3-accordion	M	done	v0.6.0 (the owner, 15 Nov): Ask & Chat history a
 case-b	v060-i4-fullpage	M	building	v0.6.0 (the owner, 15 Nov): Ask & Chat as a full page
 case	v060-i5-show-all	M	building	v0.6.0 (the owner, 15 Nov): Show all on graph and Save as a view
 admin	v060-i6-govuk-type	M	todo	v0.6.0 (the owner, 15 Nov): The GOV.UK look's type
-docs	v060-i9-rename	M	review	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0
+docs	v060-i9-rename	M	done	v0.6.0 (the owner, 15 Nov): The rename to v0.6.0	lane/docs-v060-rename
 rules-b	v060-i10-basemap	M	building	v0.6.0 (the owner, 15 Nov): The basemap as a step of the demo's install recipe
 platform-b	v060-i11-package-test	M	done	v0.6.0 (the owner, 15 Nov): The package test reshaped, fresh install only	lane/platform-b-v060-package-test
 rules	v060-i14-stopped-why	M	building	v0.6.0 (the owner, 15 Nov): Alert sources say why a source stopped
