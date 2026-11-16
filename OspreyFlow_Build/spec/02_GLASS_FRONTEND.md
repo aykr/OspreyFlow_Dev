@@ -199,7 +199,7 @@ to the model, ADR-098, §3.1; named *Questions* until Amendment 12) and *History
 now under *More*) left it. An opener is never pressed: it is expanded while its panel is open (`aria-expanded`;
 `aria-haspopup="dialog"` for a drawer's), a second press closes it, and opening or closing a panel never changes the view
 (`shell/railLayout.ts`'s `railMark`). Closing a panel, by its opener, Escape or its *Close*, returns focus to the opener.
-*Ask & Chat* is the exception to the drawers: it opens as a page over the view (§2.0d, ADR-145 Amendment 18).
+*Ask & Chat* opens a drawer too, whose *Expand* turns it into a page over the view (§2.0d, ADR-145 Amendments 18 and 20).
 Every drawer opens under the top bar and the context row, never over the navigation they carry (ADR-145 Amendment 14
 decision 2, `design/primitives/Drawer.tsx`). The rail's **Help** (and `?`) opens the keys panel, with the user
 guide's link, over whichever view is on screen, and a second press, Esc or its × closes it (Amendment
@@ -246,7 +246,7 @@ closed answer hides them):
   count, "n of this answer's items could not be shown.", and never named: a node hidden from the reader or no longer
   held, and a link whose two ends the reader cannot both see (the orchestrator's ruling, 15 November 2026). Past the
   working set's cap nothing is added, and the refusal says its figures and points to *Save as a view* "under the answer
-  in Ask & Chat" (rule 2): said over the graph, after the page has gone (§2.0d), it names where that action is.
+  in Ask & Chat" (rule 2): said over the graph, after Ask & Chat has gone (§2.0d), it names where that action is.
 - **Save as a view** opens the *Save as a view* form under the answer, named after its question ("Answer: …", cut at a
   word past 72 characters), and saves the answer's nodes as a saved view of the case, private until shared (ADR-144;
   the case line's *Saved views (n)* counts it). It isn't offered for an answer that stands for links alone.
@@ -707,7 +707,8 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
   results kept and shown again when it closes, focus on their heading. A search made while a document is read over
   the view shows its results at once, the reader closed (§2.0d). A record a result names that the answer does not
   hold is said, never dropped.
-- **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat with
+- **The Ask line**, "Ask a question about '…' instead", for someone Ask & Chat is offered to: it opens Ask & Chat's page
+  (§2.0d; the one opening that is not the drawer, since the page replaces the results) with
   the words in the question box, focused, once, and sends nothing.
 - **No results** says "No records match '…'." with *Clear filters* where a filter is on. **The fallback** shows the
   Conduit's one line on why the results are limited (a line of the Glass's own where it gives none). **A refusal** is
@@ -721,50 +722,76 @@ suggestions alone: the results start at *All* with no filter. They read `POST /v
 Proved by `search/SearchResults.test.tsx`, `App.search.test.tsx`, `design/primitives/Combobox.test.tsx`,
 `keyboard/search-results.spec.ts` (`SEARCH_RESULTS_ACTIONS`) and the every-harness scan of `search-results-harness.html`.
 
-### 2.0d The Ask & Chat page (ADR-145 Amendment 18; v0.6.0, the owner's list of 15 November 2026)
+### 2.0d Ask & Chat: a drawer, and a page when expanded (ADR-145 Amendments 18 and 20; v0.6.0 and v0.6.1)
 
-The rail's *Ask & Chat* opens the case's questions (§3.1, ADR-098) as a page that fills the main area, as the search
-results do (§2.0c), over the view the person left, which stays as it was beneath it and out of reach (`inert`)
-(`questions/AskPage.tsx`; when it shows and where focus goes, `questions/useAskPage.ts`, shared by App and the keyboard
-harnesses as `useSearchResultsOverlay` is). Explore and History stay drawers.
+The rail's *Ask & Chat* opens the case's questions (§3.1, ADR-098) in a **drawer** beside the view, as Explore and
+History are (ADR-145 Amendment 20, the owner's ruling of 16 November 2026). Its **Expand** turns the drawer into a
+**page** that fills the main area, as the search results do (§2.0c), over the view the person left, which stays as it
+was beneath it and out of reach (`inert`) (Amendment 18). Both shapes are one element, `questions/AskPage.tsx` (its
+`form`). When it shows, in which shape, where focus goes and what is inert is `questions/useAskPage.ts`, shared by App
+and the keyboard harnesses as `useSearchResultsOverlay` is.
 
-- **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and returns to the view exactly as it
-  was, focus on the rail's *Ask & Chat*. A second press of the rail's *Ask & Chat* does the same. The page has no Escape
-  of its own, as the results page has none: Escape inside it stays with the control that has focus.
-- **The heading**, "Ask & Chat", takes focus on opening; when the page opens with words carried into the question (the
-  results page's Ask line), the question box takes it instead.
-- **The results page and the Ask & Chat page replace each other**: the Ask line, or the rail's *Ask & Chat*, while the
-  results show, leaves them for the Ask page; a search from the Ask page leaves it for the results. Back from either
-  returns to the view beneath, never to the other page. Choosing any view, a saved view, another place or the
-  cross-link leaves it, as it leaves the results.
-- **A marker** in an answer (*Show on the graph: …*) leaves the page and shows the graph, the item brought into view,
-  focus on the canvas once it is back in reach (never left on the marker that went with the page), as the results'
-  *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) leaves it the same way, through the same hook.
-  **A document** opened from an answer is read over the view, the page hidden and shown again when it closes, focus on
-  its heading, never on the view beneath. *Ask the model about these…* opens the page, as a case opened to ask the
-  model does (ADR-098 decision 4).
+- **The drawer** is the workspace's drawer: at the window's right, under the top bar and the context row (Amendment
+  14), not modal, the view beside it in reach. Its header holds the heading **Ask & Chat**, which takes focus on
+  opening, then **Expand** ("Expand Ask & Chat to the full page") and **Close**. **Close**, a second press of the rail's
+  *Ask & Chat*, or **Escape** with focus inside the drawer closes it, focus on the rail's *Ask & Chat*. Escape with
+  focus elsewhere keeps its own meaning.
+- **Expand** keeps everything in hand: the panel is never mounted again, so the question typed, the engine chosen, the
+  answers and which are open go with it, and the scroll stays on the item at its top. Focus goes to the page's heading.
+- **The page:** **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and closes Ask & Chat
+  entirely, returning to the view exactly as it was, focus on the rail's *Ask & Chat*; a second press of the rail's
+  *Ask & Chat* does the same. Then the heading **Ask & Chat**, which takes focus on opening (when the page opens with
+  words carried into the question, from the results page's Ask line, the question box takes it instead), and
+  **Show as a drawer** beside it, which returns to the drawer, focus on *Expand*. The page has no Escape of its own, as
+  the results page has none: Escape inside it stays with the control that has focus.
+- **Which shape opens:** each opening is the drawer (the rail, *Ask the model about these…*, a case opened to ask the
+  model, ADR-098 decision 4); the shape is not remembered. The results page's Ask line alone opens the page.
+- **The results page and the Ask & Chat page replace each other**: the Ask line, or *Expand* while the results show,
+  leaves them for the page; a search from the page leaves it for the results. Back from either returns to the view
+  beneath, never to the other page. Choosing any view, a saved view, another place or the cross-link leaves the page,
+  as it leaves the results. **The drawer** stays beside a view chosen, a saved view opened, a search and the results
+  (as Explore and History do); another place and the cross-link close it.
+- **A marker** in an answer (*Show on the graph: …*) closes Ask & Chat, in either shape, and shows the graph, the item
+  brought into view, focus on the canvas once it is back in reach (never left on the marker that went with it), as the
+  results' *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) does the same, through the same hook.
+  **A document** opened from an answer is read over the view, Ask & Chat hidden and shown again in its shape when the
+  reader closes, focus on its heading, never on the view beneath.
 - **Opened while a document is read** over the view (from the results, from the view itself, from an answer before a
-  search), either page shows at once: the reader closes, as the page takes the view's place, and focus goes to the
-  page's heading (the orchestrator, 15 November 2026; `stopReading`, handed to both hooks by App and the harness).
-- Help's keys panel opens over the page when asked for, as over the results. It takes focus as it is asked for and
-  only then: drawn again elsewhere (beside the view, when the page it sat over is hidden for the reader) or drawn again
-  by App, it leaves focus where the analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the
-  canvas's foot is hidden under the page, as under the results, and back when it closes.
-- The rail's opener is `aria-expanded` while the page shows and announces no dialog (`LeftRail`'s `opensPage`). While
-  the page is hidden for a document read from an answer it is not expanded, and one press shows the page again, the
-  reader closed, focus on its heading (case's re-check, 15 November 2026; the hook's `shown`).
+  search), Ask & Chat shows at once: the reader closes and focus goes to its heading (the orchestrator, 15 November
+  2026; `stopReading`, handed to both hooks by App and the harness). The drawer opened over a document read from the
+  results shows beside them, and keeps the focus it was asked for.
+- Help's keys panel opens over the page when asked for, as over the results; beside the drawer it is drawn over the
+  view, once, never inside the drawer. It takes focus as it is asked for and only then: drawn again elsewhere (beside
+  the view, when the page it sat over is hidden for the reader) or drawn again by App, it leaves focus where the
+  analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the canvas's foot is hidden under the
+  page, as under the results, and back when it closes; beside the drawer it stays.
+- The rail's opener says it opens a dialog (`aria-haspopup="dialog"`) and is `aria-expanded` while Ask & Chat shows, in
+  either shape. While Ask & Chat is hidden for a document read from an answer it is not expanded, and one press shows
+  it again, the reader closed, focus on its heading (case's re-check, 15 November 2026; the hook's `shown`).
 
-Proved by `App.chrome.test.tsx` (the rail's openers), `App.search.test.tsx` (the two pages replacing each other, the
-reader, a page opened over a document read, a marker, *Show all on graph* and its saved view closed first, Help and its
-focus, another place, a saved view, the cross-link, Escape doing nothing, the hand-off's `view=questions`, *Ask the
-model about these…*), `App.batchExpand.test.tsx`, `keyboard/shell.spec.ts` (`ask-and-chat-page-by-keyboard`,
-`SHELL_ACTIONS`, on `places-harness.html`), `keyboard/questions.spec.ts` (`back-from-ask-and-chat-by-keyboard` on
-`questions-harness.html`, which mounts the panel in the page; and `select-a-graph-fact-from-the-ask-page-by-keyboard`
-and `show-all-from-the-ask-page-by-keyboard` on `harness.html?questions=page`, the page over the real canvas, with *Show
-all on graph*'s refusal past the cap there), `keyboard/search-results.spec.ts` (either page opened while a document is
-read, by keyboard; nothing of the canvas drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the
-three looks) and the every-harness scans of `places-harness.html?open=questions` and `questions-harness.html` in the
-three looks.
+Proved by:
+- `App.search.test.tsx`:
+  - the drawer's own block: the rail's drawer, Escape inside and outside, Expand keeping the same question box and its
+    words, *Show as a drawer*, the shape not remembered, a view, a search and another place, a document read from the
+    drawer, Help drawn once;
+  - the page's cases, through Expand: the two pages replacing each other, the reader, a page opened over a document
+    read, a marker, *Show all on graph* and its saved view closed first, Help and its focus, another place, a saved
+    view, the cross-link, Escape doing nothing;
+  - the hand-off's `view=questions` and *Ask the model about these…* opening the drawer.
+- `App.chrome.test.tsx` (the rail's openers), `App.help.test.tsx` and `App.batchExpand.test.tsx`.
+- `keyboard/shell.spec.ts` on `places-harness.html` (`SHELL_ACTIONS`): `open-ask-and-chat-as-a-drawer-by-keyboard`,
+  `escape-closes-the-ask-and-chat-drawer-by-keyboard`, `expand-ask-and-chat-to-the-page-by-keyboard` and
+  `show-ask-and-chat-as-a-drawer-by-keyboard`.
+- `keyboard/questions.spec.ts`:
+  - on `questions-harness.html`, which mounts the real panel in the drawer, or in the page with `?form=page`:
+    `expand-and-show-as-a-drawer-keep-the-question-by-keyboard` (the question, the engine and the scroll kept) and
+    `back-from-ask-and-chat-by-keyboard`;
+  - on `harness.html?questions=page`, the page over the real canvas: `select-a-graph-fact-from-the-ask-page-by-keyboard`
+    and `show-all-from-the-ask-page-by-keyboard`, with *Show all on graph*'s refusal past the cap there.
+- `keyboard/search-results.spec.ts`: Ask & Chat opened while a document is read, by keyboard; nothing of the canvas
+  drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the three looks.
+- The every-harness scans of `places-harness.html?open=questions` (the drawer) and `?open=questions&form=page`, and of
+  `questions-harness.html` in both shapes, in the three looks.
 
 ### 2.1 Investigation selection on load — proposed, not settled spec
 

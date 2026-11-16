@@ -40429,3 +40429,95 @@ what the decision's design implied and nothing said: the index is written after 
 4. **Not promised:** a figure for the lag under load or on a client's domain; the guides say what an analyst sees in
    v0.6.1.
 
+
+### ADR-145, Amendment 20 (16 November 2026) — Ask & Chat a drawer by default, with Expand to the full page
+
+The owner, 16 November 2026 (v0.6.1, the patch's item A, `process/lanes/v061patch/BRIEF.md`): Ask & Chat should open as
+a drawer, with an option to expand it to the full page. Amendment 18 made it a page only; that was the orchestrator's
+ruling of 15 November, not the owner's words. The orchestrator's rulings 1 to 6 on the shape are the brief's. Built by
+case-b. **Amends Amendment 18** points 1, 2 and 4 (each holds now for the page alone), its point 3 (the drawer is not a
+page: decision 5), the sentence in its point 5 and its Tests that *Ask the model about these…* opens the page
+(decision 4), and its point 6's registry name (decision 7). Spec 02 §2.0d follows.
+
+1. **The rail opens a drawer.** The rail's *Ask & Chat* opens the panel (`QuestionsPanel`, unchanged) in the
+   workspace's drawer, as before Amendment 18. It is 360 px at the window's right, under the top navigation and the case
+   line (Amendment 14 decision 2), not modal, and the view beside it stays in reach. Its header holds the heading **Ask
+   & Chat**, which takes focus on opening, then **Expand** and **Close**. The opener says it opens a dialog again
+   (`aria-haspopup="dialog"`; Amendment 18's drop of it is withdrawn with the page as the first opening). It stays
+   `aria-expanded` while Ask & Chat shows, in either shape. **Close**, a second press of the opener, or **Escape** with
+   focus inside the drawer closes it, focus to the opener. Escape with focus elsewhere keeps its own meaning (the
+   canvas's selection, a menu). That is narrower than the old drawer, which closed on Escape anywhere in the document;
+   it is case-b's decision, taken so that Escape on the canvas does not also close the panel and move focus to the rail.
+2. **Expand.** The drawer's **Expand** (its name says what it does: "Expand Ask & Chat to the full page") turns the
+   drawer into Amendment 18's page. The drawer and the page are one element whose chrome changes
+   (`questions/AskPage.tsx`'s `form`), so the panel inside is never mounted again. The question typed, the engine
+   chosen, the answers and which of them are open all go with it, and the scroll is kept on the item that was at its
+   top. Focus goes to the page's heading, without scrolling. The page replaces the results where they showed
+   (Amendment 18 point 3).
+3. **The page.** It keeps Amendment 18 points 1 to 6, plus **Show as a drawer** beside its heading (the next Tab stop
+   after it). That returns to the drawer, focus on **Expand**, the view back in reach. **Back to ‹view›** closes Ask &
+   Chat entirely, focus on the opener, as now. The page still has no Escape of its own (Amendment 18 point 4).
+4. **The shape is not remembered.** Each opening is the drawer: the rail, *Ask the model about these…* (ADR-144
+   decision 4) and a case opened on its questions (the hand-off's `view=questions`, ADR-098 decision 4). Only the
+   results page's *Ask a question about '…' instead* opens the page, since it replaces the results (Amendment 18 point
+   3). A second opening after the page was closed is the drawer again. Opened again after being hidden for a document
+   read from an answer, it shows in the shape it had.
+5. **What the drawer stays beside, and what closes it.** Before Amendment 18 the drawer stayed open while the analyst
+   moved about, as Explore and History do. That holds again; these are case-b's decisions where the rulings were silent:
+   - a view chosen, a saved view opened, a search and the results' *Show on graph* keep the drawer, beside the new view
+     or the results (each still leaves the page);
+   - another place and the cross-link close it in either shape: it belongs to the Glass;
+   - a marker in an answer and *Show all on graph* close it for the graph, focus on the canvas, as from the page;
+   - a document read from an answer hides it, and closing the reader shows it again, focus on its heading;
+   - opened while a document is read, the reader closes and the drawer shows at once, focus on its heading. Where the
+     reader was over the results, the results show again beside it. Their own hook's focus on their heading gives way
+     to the drawer's, which was asked for.
+
+   Beside the drawer the batch job's panel stays at the canvas's foot. Help's keys panel is drawn over the view, once,
+   never inside the drawer. *Show toolbar* and T stay usable, since the view is in reach.
+6. **Both looks.** The drawer's chrome is every drawer's: the panel title's size, quiet buttons for Expand and Close.
+   Under GOV.UK its type takes the page's tokens (`design/panelType.css`), and the page's *Show as a drawer* is GOV.UK's
+   secondary button. The page's heading row is held to the reading width of its body (72ch), so *Show as a drawer*
+   stays beside the heading on a wide window. No colour is outside `design/tokens.css`.
+7. **One hook, extended.** `questions/useAskPage.ts` keeps Amendment 18 point 6's pattern: App and the keyboard
+   harnesses (`places-harness`, `questions-harness`, `harness`, `search-results-harness`) all use it. It gains the
+   shape (`expanded`), `openDrawer`, `expand`, `collapse` and `viewChosen`, and `initial` names the shape to open in.
+   `design/primitives/Drawer.tsx` shares its measure of the chrome as `useTopUnderTheChrome`, used by `Drawer` and by
+   Ask & Chat's drawer, which cannot be `Drawer` because it is a page in turn. In the keyboard registry,
+   `ask-and-chat-page-by-keyboard` is replaced by four `SHELL_ACTIONS` entries, and `QUESTIONS_ACTIONS` gains one:
+   - `open-ask-and-chat-as-a-drawer-by-keyboard`;
+   - `escape-closes-the-ask-and-chat-drawer-by-keyboard`;
+   - `expand-ask-and-chat-to-the-page-by-keyboard`;
+   - `show-ask-and-chat-as-a-drawer-by-keyboard`;
+   - `expand-and-show-as-a-drawer-keep-the-question-by-keyboard` (`QUESTIONS_ACTIONS`).
+
+**Tests.**
+- **By keyboard alone (rule 13):** `keyboard/shell.spec.ts` on `places-harness.html`, the rail and App's hook:
+  - the drawer opened, focus on its heading, the view in reach, the opener a dialog's, the drawer under the top bar
+    and the case line, Close and the rail closing it, focus on the opener, a view chosen keeping it;
+  - Escape from inside closing it, the page ignoring Escape;
+  - Expand to the page, focus on its heading, the view inert, then *Back to Map* closing it and the next opening the
+    drawer, and a view chosen leaving the page;
+  - *Show as a drawer*, focus on Expand.
+
+  Also `keyboard/questions.spec.ts` on `questions-harness.html`, the real panel: the question typed, the engine chosen
+  and the scroll kept through Expand and back, with forty earlier questions so both shapes scroll. Its *Back to Graph*
+  case runs on `?form=page`.
+- **Every-harness:** `a11y/every-harness.spec.ts` scans `places-harness.html` `open=questions` (the drawer) and
+  `open=questions&form=page`, and `questions-harness.html`'s default (the drawer), `form=page` and
+  `history=1&form=page`, in the dark, light and GOV.UK looks.
+- **The real App:** `src/App.search.test.tsx`'s "Ask & Chat's drawer (ADR-145 Amendment 20)" block:
+  - the rail's drawer, its focus, the view in reach;
+  - Escape inside and outside;
+  - Expand keeping the same textbox element and its words, and *Show as a drawer*, focus on Expand;
+  - the shape not remembered;
+  - a view chosen and a search keeping the drawer, another place closing it;
+  - a document read from the drawer;
+  - Help drawn once, outside it.
+
+  Amendment 18's page cases there run through the drawer's Expand, and the hand-off and *Ask the model about these…*
+  open the drawer. Also `src/App.chrome.test.tsx` (the three rail openers each a dialog's; under the page no *Show
+  toolbar*, beside the drawer one), `src/App.help.test.tsx` and `src/App.batchExpand.test.tsx` (the panel beside the
+  drawer, hidden under the page).
+
+The red record is `process/lanes/case-b/v061p-ask-drawer/`: the five new keyboard cases red on 236e31e, and the plants.
