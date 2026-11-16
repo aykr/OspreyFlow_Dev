@@ -62,7 +62,8 @@ DATASET = "Z3004ZZ"
 SEARCHABLE_WITHIN = 30.0
 #: The backlog's own drain: a dead holder's lease (an earlier Conduit's, killed) runs out first.
 BACKLOG_WITHIN = LEASE_SECONDS + 90.0
-BACKLOG = 60
+#: Large enough to measure the drain's rate (Amendment 4's measured line), four batches of 500.
+BACKLOG = 2000
 
 
 def _person(family_name: str) -> NodeWrite:
@@ -165,7 +166,11 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
             jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit", "OSPREY_SEARCH_INDEX_ALIAS": alias}
         )
         left, drained_in = loop.run_until_complete(wait_for_backlog(backlog))
-        print(f"\nthe backlog of {BACKLOG}: {BACKLOG - left} drained in {drained_in:.1f} s")
+        rate = (BACKLOG - left) / drained_in if drained_in else 0.0
+        print(
+            f"\nthe backlog of {BACKLOG}: {BACKLOG - left} drained in {drained_in:.1f} s "
+            f"({rate:.0f} rows/s, from the Conduit's start, its lease wait included)"
+        )
         assert left == 0, (
             f"{left} of the backlog's {BACKLOG} outbox rows still pending after "
             f"{drained_in:.0f} s: "
