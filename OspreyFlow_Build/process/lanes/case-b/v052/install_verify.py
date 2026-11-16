@@ -100,6 +100,7 @@ class Deployment(Protocol):
     def database_readers(self, database: str) -> set[str]: ...
     def store_readers(self, store: str) -> set[str]: ...
     def bucket_objects(self, bucket: str) -> int: ...
+    def proxied_providers(self) -> list[str]: ...
     def entra_used(self, registration: str) -> bool: ...
     def connects(self, host: str) -> bool: ...
     def reachable_outside(self, host: str) -> bool: ...
@@ -354,6 +355,11 @@ def _store(store: str) -> Callable[[Deployment], tuple[bool, str]]:
 def _bucket(bucket: str) -> Callable[[Deployment], tuple[bool, str]]:
     def run(d: Deployment) -> tuple[bool, str]:
         n = d.bucket_objects(bucket)
+        # The tile cache is written by the Conduit's tile proxy alone, which refuses a provider whose proxy is none
+        # (`GET /v1/map/tiles`, 400): with no proxied provider in the deployed map, nothing can write it (v0.6.0's
+        # package test row 6, the orchestrator's ruling). Said, not failed; with one, empty still fails.
+        if not n and bucket == "tile-cache" and not d.proxied_providers():
+            return True, "not written: no tier-3/4 provider on this install (every map provider's proxy is none)"
         return (n > 0, f"{n} object(s)" if n else "empty: nothing written")
     return run
 
@@ -560,6 +566,18 @@ def shape_of(configmap: dict[str, Any] | None) -> str:
         raise LookupError("no deployed configuration (the ospreyflow-files ConfigMap's osprey.yaml)")
     config = yaml.safe_load(configmap["data"]["osprey.yaml"]) or {}
     return str((config.get("cloud_platform") or {}).get("shape") or "standard")
+
+
+def proxied_of(configmap: dict[str, Any] | None) -> list[str]:
+    """The deployed map's providers the Conduit's tile proxy serves (`proxy` other than none), from the same
+    `osprey.yaml` as the shape."""
+    import yaml
+
+    if not configmap or "osprey.yaml" not in (configmap.get("data") or {}):
+        raise LookupError("no deployed configuration (the ospreyflow-files ConfigMap's osprey.yaml)")
+    config = yaml.safe_load(configmap["data"]["osprey.yaml"]) or {}
+    providers = (config.get("map") or {}).get("providers") or []
+    return [str(p.get("id")) for p in providers if str(p.get("proxy") or "none") != "none"]
 
 
 def _exit(status: dict[str, Any] | None) -> int | None:
@@ -851,6 +869,9 @@ class KindDeployment:
 
     def shape(self) -> str:
         return shape_of(self._get("configmap", "ospreyflow-files"))
+
+    def proxied_providers(self) -> list[str]:
+        return proxied_of(self._get("configmap", "ospreyflow-files"))
 
     def render_differences(self) -> list[str]:
         from harness.cloud_platform.manifest import differences, load, rendered
