@@ -11,6 +11,8 @@ import { offeredViews, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews
 import type { RailEntry } from "../src/rights/visibility";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { useState } from "react";
+import { ShowToolbarButton } from "../src/canvas/ToolbarToggle";
+import { isCompactToolbar } from "../src/canvas/toolbarCompact";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -161,10 +163,16 @@ function Harness() {
                 }
               : "whole"
         }
-        // `?slim=1`: the slim line a hidden toolbar gives (ADR-145 Amendment 19 decision 6), its end a stand-in for
-        // case-b's *Show toolbar*, so the line's fold is measured in both forms (`case-line-type.spec.ts`).
+        // `?slim=1`: the slim line a hidden toolbar gives (ADR-145 Amendment 19 decision 6), its end case-b's real *Show
+        // toolbar*, so the line's fold is measured in both forms (`case-line-type.spec.ts`). Its words follow the owner's
+        // ruling 14: short where the toolbar would be narrow; with no canvas here, the window less the rail stands for
+        // the canvas's width (as App's is with the side panel folded, below a 1200 px window).
         slim={place === "glass" && params.get("slim") === "1"}
-        end={place === "glass" && params.get("slim") === "1" ? <button type="button" className="btn">Show toolbar</button> : undefined}
+        end={
+          place === "glass" && params.get("slim") === "1" ? (
+            <ShowToolbarButton onToggle={() => undefined} compact={isCompactToolbar(window.innerWidth - 48)} />
+          ) : undefined
+        }
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? (params.get("long") === "1" ? ["Prison Intelligence Dataset (synthetic)", "the Ledger visits log"] : ["Prison intel"]) : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {

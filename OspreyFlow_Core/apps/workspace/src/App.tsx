@@ -86,6 +86,7 @@ import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { HideToolbarButton, ShowToolbarButton } from "./canvas/ToolbarToggle";
 import { useViewToolbar, VIEW_TOOLBAR_ID } from "./canvas/toolbarVisibility";
+import { useCompactWidth } from "./canvas/toolbarCompact";
 import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
@@ -1139,6 +1140,12 @@ export function App() {
     hideRef: hideToolbarRef,
     showRef: showToolbarRef,
   } = useViewToolbar(principal?.username || null, toolbarHere);
+  // The owner's ruling 14: *Show toolbar* says "Show" where the toolbar it brings back is narrow; the canvas says so of
+  // its own, and the Map's row is as wide as the column it spans.
+  const [canvasToolbarCompact, setCanvasToolbarCompact] = useState(false);
+  const viewColumnRef = useRef<HTMLDivElement | null>(null);
+  const viewColumnCompact = useCompactWidth(viewColumnRef);
+  const showToolbarCompact = view === "map" ? viewColumnCompact : canvasToolbarCompact;
   const leavePages = ask.leaveBoth;
   const openAskPage = ask.openPage;
   // ADR-093: every node selected on the canvas, for the Inspector's list.
@@ -2075,7 +2082,7 @@ export function App() {
         })}
         // Amendment 19 decision 6: with the view's toolbar hidden the line is slim, ending with *Show toolbar*.
         slim={toolbarHidden}
-        end={toolbarHidden ? <ShowToolbarButton ref={showToolbarRef} onToggle={toggleToolbar} /> : undefined}
+        end={toolbarHidden ? <ShowToolbarButton ref={showToolbarRef} onToggle={toggleToolbar} compact={showToolbarCompact} /> : undefined}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       {/* ADR-097 step 1: the left rail, the Glass's alone (ADR-145 decision 1); the Studio has none. */}
@@ -2089,7 +2096,7 @@ export function App() {
       />
       )}
       {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
+      <div ref={viewColumnRef} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
       {/* Part A: the view left stays as it was beneath the search results, out of reach while they show. */}
       <div style={{ display: "contents" }} inert={app === "glass" && pageOver ? true : undefined}>
       {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
@@ -2302,6 +2309,7 @@ export function App() {
                 toolbarId={VIEW_TOOLBAR_ID}
                 toolbarHidden={toolbarHidden}
                 onToolbarKey={toggleToolbarByKey}
+                onToolbarCompactChange={setCanvasToolbarCompact}
                 toolbarEnd={<HideToolbarButton ref={hideToolbarRef} onToggle={toggleToolbar} />}
                 graph={(lens?.workingSet ?? workingSetRef.current).graph}
                 store={(lens?.workingSet ?? workingSetRef.current).store}

@@ -25,7 +25,7 @@ for f in "${FILES[@]}"; do cp "$f" "$SAVED/$(basename "$f")"; done
 restore() { for f in "${FILES[@]}"; do cp "$SAVED/$(basename "$f")" "$f"; done; }
 trap 'restore; cp "$SAVED/registry-as-found.ts" "$REG"; rm -rf "$SAVED"' EXIT
 fails=0
-js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/resolution src/canvas/toolbarVisibility.test.ts src/welcome/WorkspaceWelcome.test.tsx 2>&1); }
+js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/resolution src/canvas/toolbarVisibility.test.ts src/canvas/ToolbarToggle.test.tsx src/welcome/WorkspaceWelcome.test.tsx 2>&1); }
 kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts keyboard.spec.ts -g "Match strictness|Hide toolbar is reached|T on the focused canvas" --workers=2 --reporter=line 2>&1); }
 gt() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts glass-toolbar.spec.ts --workers=4 --reporter=line 2>&1); }
 red() { grep -E "×|^\s+[0-9]+\) |^FAILED" <<<"$1" | grep -qF "$2"; }
@@ -121,6 +121,18 @@ plant "T6 the canvas's T taken from inside it (the Layout picker), the target gu
   "T on the focused canvas hides the toolbar and shows it again"
 plant "C18 the canvas first drawn shown, the setting handed on a draw late" "$APP" 's/(                toolbarHidden=)\{toolbarHidden\}/$1\{drawnLate\}/; s/(  const pageOver = results\.viewInert \|\| ask\.viewInert;\n)/$1  const [drawnLate, setDrawnLate] = useState(false);\n/; s/(  \} = useViewToolbar\(principal\?\.username \|\| null, toolbarHere\);\n)/$1  useEffect(() => setDrawnLate(toolbarHidden), [toolbarHidden]);\n/' js \
   "the Glass opens as the analyst left it: hidden at the first draw"
+echo "== ruling 14: Show toolbar's words"
+plant "S1 Show toolbar's whole words on a narrow toolbar" "$TOGGLE" 's/\{compact \? "Show" : "Show toolbar"\}/Show toolbar/' js \
+  "reads Show on a narrow toolbar, its name still Show toolbar
+Show toolbar reads Show where the canvas says its toolbar is narrow"
+plant "S2 App not telling Show toolbar" "$APP" 's/ compact=\{showToolbarCompact\} \/>/ \/>/' js \
+  "Show toolbar reads Show where the canvas says its toolbar is narrow"
+plant "S3 the canvas not telling App its toolbar is narrow" "$CANVAS" 's/\n\s*useEffect\(\(\) => onToolbarCompactChange\?\.\(toolbarCompact\), \[toolbarCompact, onToolbarCompactChange\]\);//' gt \
+  "at 1024 px of toolbar (dark) the words are short
+at 912 px of toolbar (govuk) the words are short"
+plant "S4 Show toolbar's name lost with its words" "$TOGGLE" 's/      aria-label="Show toolbar"\n//' js \
+  "reads Show on a narrow toolbar, its name still Show toolbar"
+
 echo "== unplanted: every case green"
 out="$(js)"; grep -E "Tests " <<<"$out"; grep -q "×" <<<"$out" && { echo "UNPLANTED RED (jsdom)"; fails=1; }
 out="$(kb)"; grep -E "passed|failed" <<<"$out" | tail -2; grep -q "failed" <<<"$out" && { echo "UNPLANTED RED (keyboard)"; fails=1; }

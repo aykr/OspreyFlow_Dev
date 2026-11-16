@@ -7,7 +7,7 @@
 //   ?view=map      the Map's row instead of the canvas (the row as App draws it; the map itself is not drawn);
 //   ?open=strictness  the strictness control open; ?hidden=1 the toolbar hidden, as the analyst left it;
 //   ?brand=govuk, ?theme=light the looks.
-import { createRef } from "react";
+import { createRef, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
@@ -18,6 +18,7 @@ import { Button } from "../src/design/primitives/Button";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { HideToolbarButton, ShowToolbarButton } from "../src/canvas/ToolbarToggle";
 import { useViewToolbar, VIEW_TOOLBAR_ID, writeToolbarHidden } from "../src/canvas/toolbarVisibility";
+import { useCompactWidth } from "../src/canvas/toolbarCompact";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { ResolutionThresholdControl } from "../src/resolution/ThresholdControl";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
@@ -85,8 +86,12 @@ window.__GLASS_TOOLBAR__ = {
 
 function Screen() {
   const { hidden, toggle, toggleByKey, hideRef, showRef } = useViewToolbar(username, true);
+  // As App: the canvas says whether its toolbar is narrow; the Map's row is measured on the column it spans.
+  const [canvasCompact, setCanvasCompact] = useState(false);
+  const column = useRef<HTMLDivElement | null>(null);
+  const columnCompact = useCompactWidth(column);
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+    <div ref={column} style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <ClassificationStrip marking="OFFICIAL" />
       <ContextBanner
         place="glass"
@@ -96,7 +101,7 @@ function Screen() {
         savedViews={7}
         crossLink={{ label: "Open this case's data in the Ingest Studio ↗", shortLabel: "Open in the Ingest Studio ↗", onFollow: () => undefined }}
         slim={hidden}
-        end={hidden ? <ShowToolbarButton ref={showRef} onToggle={toggle} /> : undefined}
+        end={hidden ? <ShowToolbarButton ref={showRef} onToggle={toggle} compact={onMap ? columnCompact : canvasCompact} /> : undefined}
       />
       {onMap && (
         <div role="toolbar" aria-label="Map view" className="view-toolbar" id={VIEW_TOOLBAR_ID} hidden={hidden}>
@@ -131,6 +136,7 @@ function Screen() {
               toolbarId={VIEW_TOOLBAR_ID}
               toolbarHidden={hidden}
               onToolbarKey={toggleByKey}
+              onToolbarCompactChange={setCanvasCompact}
               toolbarEnd={<HideToolbarButton ref={hideRef} onToggle={toggle} />}
             />
           )}

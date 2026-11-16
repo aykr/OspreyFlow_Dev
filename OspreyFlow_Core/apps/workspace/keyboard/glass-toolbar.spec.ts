@@ -71,9 +71,9 @@ test("the Map's row hides the same way, under the same setting", async ({ page }
 // top of the drawing area, from the toolbar's bottom edge to the canvas's own top; the canvas element moves only by
 // what the slim line gives back (nothing where both forms are one line). Each is watched every frame, so a move in
 // two steps (a jump and a settle) is seen.
-// At 400 px the full line is three rows and the slim one two (measured on B's line), so the canvas element itself moves
-// too, once.
-for (const viewport of [1280, 400]) test(`hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (${viewport} px)`, async ({ page }) => {
+// At 400 px the full line is taller than the slim one (measured on B's line), so the canvas element itself moves too, once;
+// at 540 px the slim line was once taller than the full one (case's ruling 14 fixed it): the canvas must not move down.
+for (const viewport of [1280, 540, 400]) test(`hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (${viewport} px)`, async ({ page }) => {
   await page.setViewportSize({ width: viewport, height: 800 });
   await open(page);
   await expect.poll(() => page.evaluate(() => window.__GLASS_TOOLBAR__!.cameraState())).not.toBeNull();
@@ -116,6 +116,8 @@ for (const viewport of [1280, 400]) test(`hiding and showing moves the drawing a
   expect(shown.seen.drawing).toEqual([drawingBefore, hidden.seen.drawing[1], drawingBefore]);
   expect(shown.camera).toEqual(before.camera);
   if (viewport === 400) expect(before.line - hidden.line).toBeGreaterThan(20);
+  // Never taller: hiding the toolbar never pushes the canvas down.
+  expect(hidden.line).toBeLessThanOrEqual(before.line);
 });
 
 // The owner's rulings 1, 6 and 7: the toolbar stays one row; when its own width is narrow its words shorten
@@ -141,6 +143,10 @@ for (const look of ["dark", "govuk"] as const) {
       expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(37);
       const last = await bar.evaluate((el) => [...el.querySelectorAll("button, select")].at(-1)?.getAttribute("aria-label"));
       expect(last).toBe("Hide toolbar");
+      // Ruling 14: hidden, Show toolbar on the case line says Show on the same narrow width, its name kept.
+      await hide.click();
+      const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+      await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
     });
   }
 }

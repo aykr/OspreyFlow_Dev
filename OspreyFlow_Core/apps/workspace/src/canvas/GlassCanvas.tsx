@@ -280,6 +280,8 @@ export interface GlassCanvasProps {
   toolbarId?: string;
   /** T on the canvas (the owner's ruling of 16 November 2026): App hides or shows the toolbar. */
   onToolbarKey?: () => void;
+  /** Whether the toolbar is narrow (its words short), told to App for *Show toolbar*'s words (the owner's ruling 14). */
+  onToolbarCompactChange?: (compact: boolean) => void;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -502,6 +504,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       toolbarHidden = false,
       toolbarId,
       onToolbarKey,
+      onToolbarCompactChange,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -811,6 +814,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
     // The owner's rulings 6 and 7 (16 November 2026): shorter words follow the toolbar's own width.
     const [toolbarCompact, setToolbarCompact] = useState(false);
+    useEffect(() => onToolbarCompactChange?.(toolbarCompact), [toolbarCompact, onToolbarCompactChange]);
     // A layout effect, so the toolbar's words are chosen before the first paint: GlassCanvas is drawn afresh whenever a
     // saved view opens or closes, and a passive effect drew the whole words for a frame, wrapping a narrow toolbar
     // (the lane-reviewer's item 9).

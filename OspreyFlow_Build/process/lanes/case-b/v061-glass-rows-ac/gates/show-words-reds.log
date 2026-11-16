@@ -1,0 +1,442 @@
+
+Running 16 tests using 1 worker
+
+  ✓   1 keyboard/glass-toolbar.spec.ts:127:5 › at 1440 px of toolbar (dark) the words are whole and it is one row (928ms)
+  ✓   2 keyboard/glass-toolbar.spec.ts:127:5 › at 1240 px of toolbar (dark) the words are whole and it is one row (631ms)
+  ✓   3 keyboard/glass-toolbar.spec.ts:127:5 › at 1220 px of toolbar (dark) the words are whole and it is one row (616ms)
+  ✘   4 keyboard/glass-toolbar.spec.ts:127:5 › at 1219 px of toolbar (dark) the words are short and it is one row (5.8s)
+  ✘   5 keyboard/glass-toolbar.spec.ts:127:5 › at 1131 px of toolbar (dark) the words are short and it is one row (5.8s)
+  ✘   6 keyboard/glass-toolbar.spec.ts:127:5 › at 1024 px of toolbar (dark) the words are short and it is one row (5.8s)
+  ✘   7 keyboard/glass-toolbar.spec.ts:127:5 › at 940 px of toolbar (dark) the words are short and it is one row (5.8s)
+  ✘   8 keyboard/glass-toolbar.spec.ts:127:5 › at 912 px of toolbar (dark) the words are short and it is one row (5.8s)
+  ✓   9 keyboard/glass-toolbar.spec.ts:127:5 › at 1440 px of toolbar (govuk) the words are whole and it is one row (751ms)
+  ✓  10 keyboard/glass-toolbar.spec.ts:127:5 › at 1240 px of toolbar (govuk) the words are whole and it is one row (644ms)
+  ✓  11 keyboard/glass-toolbar.spec.ts:127:5 › at 1220 px of toolbar (govuk) the words are whole and it is one row (634ms)
+  ✘  12 keyboard/glass-toolbar.spec.ts:127:5 › at 1219 px of toolbar (govuk) the words are short and it is one row (5.7s)
+  ✘  13 keyboard/glass-toolbar.spec.ts:127:5 › at 1131 px of toolbar (govuk) the words are short and it is one row (5.8s)
+  ✘  14 keyboard/glass-toolbar.spec.ts:127:5 › at 1024 px of toolbar (govuk) the words are short and it is one row (5.8s)
+  ✘  15 keyboard/glass-toolbar.spec.ts:127:5 › at 940 px of toolbar (govuk) the words are short and it is one row (5.7s)
+  ✘  16 keyboard/glass-toolbar.spec.ts:127:5 › at 912 px of toolbar (govuk) the words are short and it is one row (5.8s)
+
+
+  1) keyboard/glass-toolbar.spec.ts:127:5 › at 1219 px of toolbar (dark) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="btn btn--ghost toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-1219-px-o-021f9-are-short-and-it-is-one-row/error-context.md
+
+  2) keyboard/glass-toolbar.spec.ts:127:5 › at 1131 px of toolbar (dark) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="btn btn--ghost toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-1131-px-o-040c4-are-short-and-it-is-one-row/error-context.md
+
+  3) keyboard/glass-toolbar.spec.ts:127:5 › at 1024 px of toolbar (dark) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="btn btn--ghost toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-1024-px-o-6554e-are-short-and-it-is-one-row/error-context.md
+
+  4) keyboard/glass-toolbar.spec.ts:127:5 › at 940 px of toolbar (dark) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="btn btn--ghost toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-940-px-of-9a887-are-short-and-it-is-one-row/error-context.md
+
+  5) keyboard/glass-toolbar.spec.ts:127:5 › at 912 px of toolbar (dark) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="btn btn--ghost toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-912-px-of-13dec-are-short-and-it-is-one-row/error-context.md
+
+  6) keyboard/glass-toolbar.spec.ts:127:5 › at 1219 px of toolbar (govuk) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="govuk-link toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-1219-px-o-0a66e-are-short-and-it-is-one-row/error-context.md
+
+  7) keyboard/glass-toolbar.spec.ts:127:5 › at 1131 px of toolbar (govuk) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="govuk-link toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-1131-px-o-16597-are-short-and-it-is-one-row/error-context.md
+
+  8) keyboard/glass-toolbar.spec.ts:127:5 › at 1024 px of toolbar (govuk) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="govuk-link toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-1024-px-o-15d58-are-short-and-it-is-one-row/error-context.md
+
+  9) keyboard/glass-toolbar.spec.ts:127:5 › at 940 px of toolbar (govuk) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="govuk-link toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-940-px-of-8c2a1-are-short-and-it-is-one-row/error-context.md
+
+  10) keyboard/glass-toolbar.spec.ts:127:5 › at 912 px of toolbar (govuk) the words are short and it is one row 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+    Expected: "Show"
+    Received: "Show toolbar"
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveText" getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'You are in the Glass' }).getByRole('button', { name: 'Show toolbar' })
+        14 × locator resolved to <button type="button" aria-expanded="false" aria-controls="glass-view-toolbar" title="Show toolbar (T on the graph)" class="govuk-link toolbar-toggle toolbar-toggle--show">Show toolbar</button>
+           - unexpected value "Show toolbar"
+
+
+      145 |       await hide.click();
+      146 |       const show = caseLine(page).getByRole("button", { name: "Show toolbar" });
+    > 147 |       await expect(show).toHaveText(compact ? "Show" : "Show toolbar");
+          |                          ^
+      148 |     });
+      149 |   }
+      150 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:147:26
+
+    Error Context: test-results/glass-toolbar-at-912-px-of-f0259-are-short-and-it-is-one-row/error-context.md
+
+  10 failed
+    keyboard/glass-toolbar.spec.ts:127:5 › at 1219 px of toolbar (dark) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 1131 px of toolbar (dark) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 1024 px of toolbar (dark) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 940 px of toolbar (dark) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 912 px of toolbar (dark) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 1219 px of toolbar (govuk) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 1131 px of toolbar (govuk) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 1024 px of toolbar (govuk) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 940 px of toolbar (govuk) the words are short and it is one row 
+    keyboard/glass-toolbar.spec.ts:127:5 › at 912 px of toolbar (govuk) the words are short and it is one row 
+  6 passed (1.1m)
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/canvas/ToolbarToggle.test.tsx (3 tests | 1 failed) 65ms
+   ❯ Show toolbar's words (ruling 14) (2)
+     × reads Show on a narrow toolbar, its name still Show toolbar 58ms
+     ✓ reads Show toolbar otherwise 3ms
+   ✓ Hide toolbar's words (ruling 1) (1)
+     ✓ reads Hide on a narrow toolbar, its name still Hide toolbar 2ms
+stderr | src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ ❯ src/App.chrome.test.tsx (40 tests | 1 failed) 6805ms
+   ✓ the case screen's chrome, variant B (ADR-145 Amendment 2) (3)
+     ✓ 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19) 169ms
+     ✓ the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 41ms
+     ✓ the column opens with the Inspector only, the other panels folded in their order 76ms
+   ✓ the dataset named once (ADR-145 Amendment 14 decision 4) (3)
+     ✓ the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 41ms
+     ✓ a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 40ms
+     ✓ the badge names the scope when the case's datasets cannot be read 46ms
+   ✓ the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) (2)
+     ✓ the scope badge stays where the banner names no dataset: You are in Rules and Monitoring 53ms
+     ✓ the scope badge stays where the banner names no dataset: You are in the Ingest Studio 48ms
+   ✓ the owner's navigation (ADR-145 Amendment 15) (10)
+     ✓ the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 75ms
+     ✓ Drawing board is a view: its own screen says it is a sketch that does not change the case's data 28ms
+     ✓ the strip names no mode and says no mode's note 19ms
+     ✓ the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 18ms
+     ✓ Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 66ms
+     ✓ Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it 72ms
+     ✓ History opens its panel without changing the view, a second press closes it, and closing returns focus to it 47ms
+     ✓ the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · Whole case · reads … 18ms
+     ✓ Saved views opens its panel at the saved views list 27ms
+     ✓ the case switcher's last entry is All cases, which opens the Cases panel 1052ms
+   ✓ Build a report beside Reports (ADR-145 Amendment 15) (3)
+     ✓ is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab 72ms
+     ✓ is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed 39ms
+     ✓ is not offered, even to a builder, where there is no Superset 39ms
+   ✓ Part B after review (ADR-145 Amendment 15) (9)
+     ✓ in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel 1073ms
+     ✓ the Cases panel opened from All cases returns focus to the case menu's button when it closes 1086ms
+     ✓ Saved views is a toggle: expanded while its panel is open, a second press closes it 68ms
+     ✓ a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board 60ms
+     ✓ an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views 53ms
+     ✓ a drawing board chosen before the rights arrive gives way when they say the person may not investigate 98ms
+     ✓ Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current 133ms
+     ✓ the built-in Administrator, offered Connection strength alone, has it in the switch and current 54ms
+     ✓ exactly one view is current: one pressed in the switch, or none there and More views naming its own 162ms
+   ✓ Match strictness in the canvas toolbar (Amendment 19 decision 5) (2)
+     ✓ the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting 35ms
+     ✓ the Map keeps its row, Add site and Draw boundary, with no strictness in it 54ms
+   ❯ a toolbar that can be hidden (Amendment 19 decision 6) (8)
+     ✓ Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them 49ms
+     ✓ the Glass opens as the analyst left it: hidden at the first draw 22ms
+     ✓ under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and the key does nothing; back on the view, both are as left 41ms
+     × Show toolbar reads Show where the canvas says its toolbar is narrow (ruling 14), its name kept 1019ms
+     ✓ another analyst's setting on this browser is not this one's 38ms
+     ✓ T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing 71ms
+     ✓ the Map has the same control and the same setting: its row hidden, Show toolbar on the line 111ms
+     ✓ the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and T does nothing there 67ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Show toolbar reads Show where the canvas says its toolbar is narrow (ruling 14), its name kept
+AssertionError: expected 'Show toolbar' to be 'Show' // Object.is equality
+
+Expected: "Show"
+Received: "Show toolbar"
+
+ ❯ src/App.chrome.test.tsx:663:55
+    661|       render(<App />);
+    662|       const show = await within(await screen.findByRole("region", { na…
+    663|       await vi.waitFor(() => expect(show.textContent).toBe("Show"));
+       |                                                       ^
+    664|     } finally {
+    665|       canvasNarrow.value = false;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/canvas/ToolbarToggle.test.tsx > Show toolbar's words (ruling 14) > reads Show on a narrow toolbar, its name still Show toolbar
+AssertionError: expected 'Show toolbar' to be 'Show' // Object.is equality
+
+Expected: "Show"
+Received: "Show toolbar"
+
+ ❯ src/canvas/ToolbarToggle.test.tsx:16:30
+     14|     render(<ShowToolbarButton onToggle={() => undefined} compact />);
+     15|     const show = screen.getByRole("button", { name: "Show toolbar" });
+     16|     expect(show.textContent).toBe("Show");
+       |                              ^
+     17|   });
+     18|   it("reads Show toolbar otherwise", () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  2 failed | 41 passed (43)
+   Start at  08:38:34
+   Duration  7.52s (tests 85%, environment 13%, import 1%, transform 1%)
+
+
+Slowest 30 of 43 tests:
+  1086 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1073 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+  1052 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1019 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Show toolbar reads Show where the canvas says its toolbar is narrow (ruling 14), its name kept
+   169 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)
+   162 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   133 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   111 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Map has the same control and the same setting: its row hidden, Show toolbar on the line
+    98 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a drawing board chosen before the rights arrive gives way when they say the person may not investigate
+    76 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+    75 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current
+    72 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab
+    72 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    71 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing
+    68 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Saved views is a toggle: expanded while its panel is open, a second press closes it
+    67 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and T does nothing there
+    66 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    60 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board
+    58 ms  src/canvas/ToolbarToggle.test.tsx > Show toolbar's words (ruling 14) > reads Show on a narrow toolbar, its name still Show toolbar
+    54 ms  src/App.chrome.test.tsx > Match strictness in the canvas toolbar (Amendment 19 decision 5) > the Map keeps its row, Add site and Draw boundary, with no strictness in it
+    54 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the built-in Administrator, offered Connection strength alone, has it in the switch and current
+    53 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+    53 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views
+    49 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them
+    48 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in the Ingest Studio
+    47 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > History opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    46 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the badge names the scope when the case's datasets cannot be read
+    41 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name
+    41 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it
+    41 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and the key does nothing; back on the view, both are as left

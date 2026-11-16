@@ -13,6 +13,7 @@
 // order) would be counted in the wrong place. Neither is used in the chrome today. A true Tab walk on
 // the real `App` needs a browser and the Conduit behind it — the dev stack — which this tier has not.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { App as AppComponent } from "./App";
@@ -24,11 +25,14 @@ import { forgetToolbarSettings } from "./canvas/toolbarVisibility";
 // real toolbar's own hiding is held in a browser, `keyboard/glass-toolbar.spec.ts`).
 // Each draw's `toolbarHidden` is kept, so the first draw can be held to the analyst's setting (`canvasDraws`).
 const canvasDraws: (boolean | undefined)[] = [];
+const canvasNarrow = { value: false };
 // The canvas's T is the real `GlassCanvas`'s (`keyboard.spec.ts`); the stand-in hands its key to `onToolbarKey`, so App's
 // wiring of what T does is held here.
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId, onToolbarKey }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string; onToolbarKey?: () => void }) => {
+  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId, onToolbarKey, onToolbarCompactChange }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string; onToolbarKey?: () => void; onToolbarCompactChange?: (compact: boolean) => void }) => {
     canvasDraws.push(toolbarHidden);
+    // The real canvas reports whether its toolbar is narrow (its width, read off the canvas); `canvasNarrow` says so here.
+    useEffect(() => onToolbarCompactChange?.(canvasNarrow.value), [onToolbarCompactChange]);
     return (
       <div role="application" aria-label="Network canvas" tabIndex={0} onKeyDown={(e) => { if (e.key === "t" && e.target === e.currentTarget) onToolbarKey?.(); }}>
         <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{toolbarAfterLayout}{toolbarEnd}</div>
@@ -648,6 +652,18 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     fireEvent.click(opener);
     await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
     expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+  });
+
+  test("Show toolbar reads Show where the canvas says its toolbar is narrow (ruling 14), its name kept", async () => {
+    canvasNarrow.value = true;
+    try {
+      localStorage.setItem(KEY, "hidden");
+      render(<App />);
+      const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
+      await vi.waitFor(() => expect(show.textContent).toBe("Show"));
+    } finally {
+      canvasNarrow.value = false;
+    }
   });
 
   test("another analyst's setting on this browser is not this one's", async () => {

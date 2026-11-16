@@ -35,8 +35,14 @@ export const HideToolbarButton = forwardRef<HTMLButtonElement, HideToolbarButton
   );
 });
 
+export interface ShowToolbarButtonProps extends ToolbarToggleProps {
+  /** The owner's ruling 14: the toolbar it brings back is narrow, so it reads "Show", its name still *Show toolbar*. It is
+   * on the case line, outside the toolbar, so it is told rather than reading `CanvasToolbarCompact`. */
+  compact?: boolean;
+}
+
 /** On the slim case line, drawn in its `end`. Under GOV.UK it is a link's look, as the line's cross-link is. */
-export const ShowToolbarButton = forwardRef<HTMLButtonElement, ToolbarToggleProps>(function ShowToolbarButton({ onToggle }, ref) {
+export const ShowToolbarButton = forwardRef<HTMLButtonElement, ShowToolbarButtonProps>(function ShowToolbarButton({ onToggle, compact = false }, ref) {
   const govuk = currentBrand() === "govuk";
   return (
     <button
@@ -45,10 +51,11 @@ export const ShowToolbarButton = forwardRef<HTMLButtonElement, ToolbarToggleProp
       className={govuk ? "govuk-link toolbar-toggle toolbar-toggle--show" : "btn btn--ghost toolbar-toggle toolbar-toggle--show"}
       aria-expanded={false}
       aria-controls={VIEW_TOOLBAR_ID}
+      aria-label="Show toolbar"
       title="Show toolbar (T on the graph)"
       onClick={onToggle}
     >
-      Show toolbar
+      {compact ? "Show" : "Show toolbar"}
     </button>
   );
 });
