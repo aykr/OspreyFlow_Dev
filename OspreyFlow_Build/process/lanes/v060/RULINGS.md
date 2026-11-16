@@ -88,6 +88,7 @@ cancels a run in progress).
 - **First item of v0.6.1: the Glass, fewer rows above the canvas and a toolbar that can be hidden** (the owner, 16 Nov; brief at `v061/glass-rows/OWNER_BRIEF_2026-11-16.md`, sketch in Claude outputs/ospreyflow_glass_rows_2026-11-16/). The case lane; estimate, proposals, the draft ADR amendment and the measured gain before any building; nothing merges before v0.6.0 is released
 - The report sync tested against a real Valkey that requires TLS and a password (rule 15; the stand-in accepted plaintext)
 - The report sync's loop survives a Valkey error (logs and retries rather than exiting into a crash loop)
+- The report sync survives an unreachable Conduit too: `_pull_dashboard`'s case-list and feed GETs catch httpx.HTTPError as a recorded failure, as the token path does (the package test's row 6 on b6d33ce, 16 Nov: an httpx.ConnectTimeout while step 9 had the api at 0 exited the process; one restart, self-healing, no figures lost; case as deputy: v0.6.1, low); red first with a stand-in Conduit that refuses connections
 - The drawn-merge sheet moves focus only when first drawn and when sent, not after each choice (WCAG 3.2.2 On Input; rules-b's audit, 16 Nov), then the spec's waits removed
 - **Scope dashboard builders** (the owner, 16 Nov): manage_dashboards limited to the dashboard identities its holder is cleared for, in their own Superset session, not only the guest token; its own ADR (rule 3)
 - T on the Map's container hides and shows the toolbar, as on the graph canvas (Glass rows ruling 13; map/MapView.tsx is platform's)
