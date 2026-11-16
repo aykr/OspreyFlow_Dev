@@ -1,0 +1,1 @@
+  120 passed (1.3m) — proof.spec.ts.txt from keyboard/, --repeat-each 30 --workers 8, slot 9, 2026-11-16T07:26:09Z: OLD :92 and OLD :96 each red with "inactive" 30 of 30 (asserted), NEW :92 and NEW :96 each green 30 of 30

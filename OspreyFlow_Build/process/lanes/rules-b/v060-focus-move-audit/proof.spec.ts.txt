@@ -1,0 +1,115 @@
+// rules-b's proof for drawn-merge.spec's two waits (temporary; kept in the lane's record, not in keyboard/).
+// The stand-in for CI under load: once the test arms it (just before a "goes in as"/"goes into" choice),
+// the sheet's next move onto its heading (an effect after Match's answer is drawn) is held while focus
+// still sits on the select just changed, and lands on the next focus anywhere else (as on CI, between the
+// test's focus of the next control and its check), or after 3 s. OLD (act on the next control at once)
+// must fail with "inactive"; NEW (wait for the heading's focus first) must pass.
+import { expect, test, type Page } from "@playwright/test";
+
+const HEADING = "Merge Night visits into Prison intel";
+
+async function standIn(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const focus = HTMLElement.prototype.focus;
+    const w = window as unknown as { __ARM__?: () => void };
+    let armed = false;
+    let changed: Element | null = null;
+    w.__ARM__ = () => {
+      armed = true;
+      changed = document.activeElement;
+    };
+    HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+      if (this.id === "drawn-merge-sheet-title" && armed) {
+        armed = false;
+        const heading = this;
+        if (document.activeElement !== changed) {
+          focus.call(heading, options); // the test already moved on: the move lands at once
+          return;
+        }
+        let done = false;
+        const land = () => {
+          if (done) return;
+          done = true;
+          document.removeEventListener("focusin", land, true);
+          queueMicrotask(() => focus.call(heading, options));
+        };
+        document.addEventListener("focusin", land, true);
+        setTimeout(land, 3000);
+        return;
+      }
+      focus.call(this, options);
+    };
+  });
+}
+
+async function toMapped(page: Page): Promise<void> {
+  await standIn(page);
+  await page.goto("/keyboard/drawn-merge-harness.html");
+  const select = page.getByLabel("Merge into", { exact: true });
+  await select.focus();
+  await select.selectOption("src");
+  const map = page.getByRole("button", { name: "Map and match", exact: true });
+  await map.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: HEADING })).toBeFocused();
+}
+
+async function chooseOrganisation(page: Page): Promise<void> {
+  const vessel = page.getByLabel("Vessel goes in as");
+  await vessel.focus();
+  await expect(vessel).toBeFocused();
+  await page.evaluate(() => (window as unknown as { __ARM__: () => void }).__ARM__());
+  await vessel.selectOption("Organisation");
+  await expect(vessel).toHaveValue("Organisation");
+}
+
+test("OLD (:92): flag focused at once after the vessel choice loses its focus to the late heading", async ({ page }) => {
+  await toMapped(page);
+  await chooseOrganisation(page);
+  const flag = page.getByLabel("flag goes into");
+  await flag.focus();
+  let error = "";
+  await expect(flag).toBeFocused({ timeout: 2000 }).catch((e: Error) => (error = e.message));
+  expect(error).toContain("inactive");
+});
+
+test("NEW (:92): waiting for the heading first, flag keeps its focus", async ({ page }) => {
+  await toMapped(page);
+  await chooseOrganisation(page);
+  await expect(page.getByRole("heading", { name: HEADING })).toBeFocused();
+  const flag = page.getByLabel("flag goes into");
+  await flag.focus();
+  await expect(flag).toBeFocused({ timeout: 2000 });
+});
+
+async function chooseCountry(page: Page): Promise<void> {
+  await chooseOrganisation(page);
+  await expect(page.getByRole("heading", { name: HEADING })).toBeFocused();
+  const flag = page.getByLabel("flag goes into");
+  await flag.focus();
+  await expect(flag).toBeFocused();
+  await page.evaluate(() => (window as unknown as { __ARM__: () => void }).__ARM__());
+  await flag.selectOption("country");
+  await expect(flag).toHaveValue("country");
+}
+
+test("OLD (:96): Dry run pressed at once after the flag choice loses its focus to the late heading", async ({ page }) => {
+  await toMapped(page);
+  await chooseCountry(page);
+  const dry = page.getByRole("button", { name: "Dry run", exact: true });
+  await dry.focus();
+  let error = "";
+  await expect(dry).toBeFocused({ timeout: 2000 }).catch((e: Error) => (error = e.message));
+  expect(error).toContain("inactive");
+});
+
+test("NEW (:96): waiting for the heading first, Dry run is pressed and answered", async ({ page }) => {
+  await toMapped(page);
+  await chooseCountry(page);
+  await expect(page.getByRole("heading", { name: HEADING })).toBeFocused();
+  const dry = page.getByRole("button", { name: "Dry run", exact: true });
+  await dry.focus();
+  await expect(dry).toBeFocused({ timeout: 2000 });
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("status")).toContainText("It would add 3 items and 0 links to Prison intel");
+});
