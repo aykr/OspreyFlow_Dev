@@ -435,7 +435,8 @@ One row, 40px. From the left:
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
 Ownership and Connection strength are under *More*, History is a panel of the rail; the resolution threshold, named **Match strictness** for what
-the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
+the analyst sets with it (ADR-097 step 3), is a button in the canvas toolbar after Layout, naming its setting
+and opening the slider (ADR-145 Amendment 19 decision 5); the Graph has no view toolbar row of its own. Search is at least 280px
 wide.
 
 **When the bar runs out of room it folds, and stays one line high** (the owner's ruling of 14 November 2026, ADR-115 Amendment 7, after
@@ -568,12 +569,13 @@ right, with **Proposed types** (`manage_ontology`) under *Data*: it left the Gla
 decided here until the Studio's Model tab shows proposed types (L3.5; ADR-090 Amendment 5). Its routes
 ask for the administrator role as well as `manage_ontology`.
 
-**The count (ADR-145 Amendments 2 and 15).** A keyboard user passes 25 controls before the canvas — 26 on the
+**The count (ADR-145 Amendments 2, 15 and 19).** A keyboard user passes 24 controls before the canvas — 25 on the
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
 Drawing board, Reports, *More*, *Export*, the theme, the account; the case menu, *Saved views (n)* and the
-cross-link; the rail's Explore, Ask & Chat, History, Help and Show names; and the Graph's *Match strictness* (25
-controls, ADR-145 Amendment 15; one more, *Build a report*, for a builder where Superset is deployed).
+cross-link; and the rail's Explore, Ask & Chat, History, Help and Show names (24 controls, ADR-145 Amendment 15;
+*Match strictness* moved into the canvas toolbar by Amendment 19; one more, *Build a report*, for a builder where
+Superset is deployed).
 `App.chrome.test.tsx` counts them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
@@ -965,12 +967,38 @@ row along its top edge, *Canvas tools* (36px, `--surface-panel`, a hairline belo
 DESIGN.md §6), in labelled groups: **Select** (the lasso), **Layout** (the layout, *Bubbles by* for
 Clustered bubbles, *Arrange* — a re-run icon (ADR-115 E4) — which arranges again with the layout chosen), **Show** — one segmented control of *Communities* (pressed while on),
 *Labels* and *Icons*, followed while Communities is on by what it found and *Collapse all* / *Expand
-all* — and, at the right-hand end, **View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear the graph*,
-*Add files*), then the case's last change ("Last change: Expanded, yesterday", a fixed label with no number and no name (ADR-124 decision 8), from
-the history the History drawer lists; hidden below a 1100px window) and *Details* (ADR-115 E4, E6). A menu's panel and *Clear the graph*'s confirmation are laid over the canvas under their
+all* — and, after Layout, **Match strictness** ("Match strictness: Balanced ▾", opening the slider; ADR-145 Amendment 19
+decision 5); then the case's last change ("Last change: Expanded, yesterday", a fixed label with no number and no name
+(ADR-124 decision 8), from the history the History drawer lists; hidden below a 1100px window), which takes only the room
+the row has left, ellipsised with its whole words in its title, so it never wraps the row; and, at the right-hand end,
+**View** (*Hide selected link*, *Show hidden links (n)*, *Show links among all*, *Clear the graph*, *Add files*,
+*Details* (ADR-115 E4, E6), and *Hide toolbar* last). Under 1220px of the canvas's own width (measured on this row;
+the owner's ruling of 16 November 2026 estimated 1132) the words shorten: "Strictness: Balanced ▾" and "Hide", the
+Layout and Show captions are not drawn (the groups keep their names), and the row is drawn tighter, so it stays one
+row down to 912px in its quiet state; the controls drawn on demand (Communities' findings, the hidden links, *Previous
+positions*, a *Custom* strictness) may wrap it to a second row, hiding nothing. A menu's panel and *Clear the graph*'s confirmation are laid over the canvas under their
 button, as overlays with a shadow. The toolbar's controls are quiet buttons at `--fs-12`; a pressed or
 open one is primary text with a 2px underline. Checked in the browser (`keyboard/canvas-look.spec.ts`:
 the groups, one row, no shadow); each control keeps its own keyboard case.
+
+**A toolbar that can be hidden (ADR-145 Amendment 19 decision 6; the owner's rulings of 16 November 2026).**
+*Hide toolbar* at the right-hand end of the canvas toolbar, and of the Map's row (*Add site*, *Draw boundary*),
+hides that toolbar: `hidden`, so out of the tab order and the accessibility tree. The case line is then slim (`ContextBanner`'s
+`slim`) with *Show toolbar* at its right-hand end. Each names the toolbar in `aria-controls` and says whether it is shown in
+`aria-expanded`; focus moves to *Show toolbar* on hiding and back to *Hide toolbar* on showing. **T**, with no
+modifier, while the graph's canvas has focus, does the same, focus staying on the canvas (as F, L and G act there; WCAG
+2.1.4, active only on focus), and is listed in "?" as "T — Hide or show the toolbar (on the graph)". The Map has the
+buttons only (T on the map's container is on v0.6.1's list for the platform lane). The setting is the signed-in analyst's in this browser (`ospreyflow.glass.toolbar.<username>`, "hidden" or absent),
+read before the first draw; where nothing can be kept (no one signed in, storage refused) it holds for the page. One
+setting for the Graph and the Map; the Drawing board has no such toolbar and its line is always the full one; while a
+page lies over the view (Amendment 18) the line is the full one (the canvas, inert, takes no key). On the Graph the canvas
+toolbar lies over the canvas, so hiding moves the drawing area's top up by the toolbar's height, once, and the camera is
+untouched. Held by `keyboard/glass-toolbar.spec.ts`, `keyboard.spec.ts`'s three cases (*match-strictness-by-keyboard*,
+*hide-and-show-the-toolbar-by-keyboard*, *t-on-the-canvas-hides-and-shows-the-toolbar*), `App.chrome.test.tsx` and
+`canvas/toolbarVisibility.test.ts`. The key was first Alt+Shift+T, which Chrome on Windows and Linux binds to focusing its
+own toolbar; no combination with a modifier was free in every browser and screen reader, so the owner ruled T on the
+canvas (16 November 2026; the browsers' and screen readers' own published key lists were checked, not a live screen
+reader; the sources are in the lane's build record).
 
 **Moving nodes by hand (owner, 6 October 2026; the spec was silent).** Dragging a node moves it, and moves
 the whole selection when the node is in it; the camera does not pan while a node is held, and the click

@@ -2201,6 +2201,126 @@ test("the Labels control is reached by Tab, and a property chosen with the arrow
   registerCovered("CANVAS_ACTIONS", "labels-menu-by-keyboard");
 });
 
+// --- Match strictness in the canvas toolbar (v0.6.1 glass-rows A, ADR-145 Amendment 19 decision 5) ----------
+// The Graph's own row above the canvas held strictness alone; it is a button in the canvas toolbar now, after
+// Layout, opening the same three-stop slider and saying the same words when a stop is chosen.
+async function routeThreshold(page: Page): Promise<{ puts: number[] }> {
+  const puts: number[] = [];
+  await page.route("**/v1/investigations/keyboard-fixture/resolution/threshold", async (route) => {
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as { threshold: number };
+      puts.push(body.threshold);
+      await route.fulfill({
+        json: { delta: { seq: 1, op: "reproject", reason: "threshold", affected_cluster_ids: {} }, merged: 2, split: 1, affected: 3 },
+      });
+      return;
+    }
+    await route.fulfill({ json: { threshold: 0.95 } });
+  });
+  return { puts };
+}
+
+test("Match strictness is reached by Tab in the canvas toolbar after Layout, set with the arrow keys, and closed by Escape", async ({
+  page,
+}) => {
+  const { puts } = await routeThreshold(page);
+  await page.goto("/keyboard/harness.html?strictness=1");
+  await settle(page, "n0");
+  const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+  const button = tools.getByRole("button", { name: "Match strictness: Balanced" });
+  await expect(button).toHaveAttribute("aria-expanded", "false");
+  // After the Layout group, before Show: the order the owner's ruling 1 names.
+  const order = await tools.evaluate((bar) => {
+    const layout = bar.querySelector('[role="group"][aria-label="Layout"]')!;
+    const strict = [...bar.querySelectorAll("button")].find((b) => b.getAttribute("aria-label")?.startsWith("Match strictness"))!;
+    const show = bar.querySelector('[role="group"][aria-label="Show"]')!;
+    return [layout.compareDocumentPosition(strict) & Node.DOCUMENT_POSITION_FOLLOWING, strict.compareDocumentPosition(show) & Node.DOCUMENT_POSITION_FOLLOWING];
+  });
+  expect(order.every((bit) => bit !== 0)).toBe(true);
+
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabTo(page, button);
+  await page.keyboard.press("Enter");
+  await expect(button).toHaveAttribute("aria-expanded", "true");
+  const slider = page.getByRole("slider", { name: "Match strictness" });
+  await tabTo(page, slider);
+  const focusedBefore = await page.evaluate(() => window.__KEYBOARD__?.focused);
+  // Balanced is the middle stop; one step left is Strict.
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => puts).toEqual([0.99]);
+  await expect
+    .poll(() => page.evaluate(() => window.__KEYBOARD__?.strictnessSaid))
+    .toBe("Match strictness: Strict — 2 merged, 1 split, 3 affected");
+  // A key on the slider belongs to the slider: the canvas did not take it as its own.
+  expect(await page.evaluate(() => window.__KEYBOARD__?.focused)).toBe(focusedBefore);
+  await expect(slider).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(slider).toHaveCount(0);
+  const named = tools.getByRole("button", { name: "Match strictness: Strict" });
+  await expect(named).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "match-strictness-by-keyboard");
+});
+
+// --- A toolbar that can be hidden (v0.6.1 glass-rows C, ADR-145 Amendment 19 decision 6) -----------------------------
+// On the real canvas toolbar and case line, wired by App's own `useViewToolbar` (`glass-toolbar-harness.tsx`).
+test("Hide toolbar is reached by Tab and pressed with Enter; Show toolbar on the case line then has focus, and Enter on it brings the toolbar back with focus on Hide toolbar", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/glass-toolbar-harness.html");
+  const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+  const hide = tools.getByRole("button", { name: "Hide toolbar" });
+  await expect(hide).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabTo(page, hide);
+  await page.keyboard.press("Enter");
+  await expect(tools).toHaveCount(0);
+  const show = page.getByRole("region", { name: "You are in the Glass" }).getByRole("button", { name: "Show toolbar" });
+  await expect(show).toBeFocused();
+  await expect(show).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Enter");
+  await expect(tools).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Hide toolbar" })).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "hide-and-show-the-toolbar-by-keyboard");
+});
+
+// The owner's ruling of 16 November 2026: T, with no modifier, while the canvas has focus (as F, L and G are; WCAG
+// 2.1.4, active only on focus); Alt+Shift+T was Chrome's own toolbar key on Windows and Linux.
+test("T on the focused canvas hides the toolbar and shows it again, focus staying on the canvas; T typed in a field, or pressed with focus elsewhere, does nothing", async ({ page }) => {
+  await page.goto("/keyboard/glass-toolbar-harness.html");
+  const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await expect(tools).toBeVisible();
+  // Each checked on its own, so two that each toggled could not cancel out. Focus elsewhere: on a toolbar button, on
+  // the case line.
+  const stillShown = async () => {
+    await page.waitForTimeout(150);
+    await expect(tools).toBeVisible();
+  };
+  await tools.getByRole("button", { name: "Hide toolbar" }).focus();
+  await page.keyboard.press("t");
+  await stillShown();
+  await page.getByRole("button", { name: /^Case: Kestrel/ }).focus();
+  await page.keyboard.press("t");
+  await stillShown();
+  // Typed in a field: the Layout picker, inside the canvas itself.
+  await tools.getByRole("combobox", { name: "Layout" }).focus();
+  await page.keyboard.press("t");
+  await stillShown();
+  // Alt+Shift+T, the first key, is the browser's again.
+  await canvas.focus();
+  await page.keyboard.press("Alt+Shift+KeyT");
+  await stillShown();
+  await canvas.focus();
+  await page.keyboard.press("t");
+  await expect(tools).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Show toolbar" })).toBeVisible();
+  await expect(canvas).toBeFocused();
+  await page.keyboard.press("T");
+  await expect(tools).toBeVisible();
+  await expect(canvas).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "t-on-the-canvas-hides-and-shows-the-toolbar");
+});
+
 test("a chosen label is still there after the page is reloaded, and Default puts it back", async ({
   page,
 }) => {
@@ -2906,7 +3026,9 @@ test("the legend docks below a wrapped toolbar and moves by keyboard from its gr
   page,
 }) => {
   await page.setViewportSize({ width: 760, height: 900 });
-  await page.goto("/keyboard/harness.html");
+  // A canvas 600 px wide: since the toolbar's short words (v0.6.1 glass-rows, the owner's ruling 7) the harness's
+  // 900 px canvas keeps it to one row, and a toolbar wraps only below about 900 px of its own width.
+  await page.goto("/keyboard/harness.html?width=600");
   const toolbar = page.getByRole("toolbar", { name: "Canvas tools" });
   const legend = page.locator(".canvas-legend");
   await expect(legend).toBeVisible();

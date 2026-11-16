@@ -39,6 +39,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   // ADR-078 Amendment 1: the canvas's right-click menu open on one node (the selection's actions, its link
   // types, its own) and on two (the selection's, the pair's), opened by the keyboard's own route.
   "harness.html": ["menu=node", "menu=two"],
+  // v0.6.1 glass-rows (ADR-145 Amendment 19 decisions 5 and 6): strictness's slider open in the canvas toolbar; the
+  // toolbar hidden, the case line slim with Show toolbar; the Map's row with Hide toolbar.
+  "glass-toolbar-harness.html": ["open=strictness", "hidden=1", "view=map"],
   // ADR-135 Amendment 2: Admin › Models with an engine being added, a key being entered, and a
   // local-only deployment (platform lane P1); Amendment 3: an engine's limits being set, the usage's
   // own days drawn, and the gateway not giving its usage (P2; the usage table is on every other state).

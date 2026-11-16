@@ -192,6 +192,13 @@ export const CANVAS_ACTIONS = defineActionRegistry("CANVAS_ACTIONS", [
   // and the pickers it opens are native controls, but whether Tab reaches them, an arrow key chooses,
   // and the label on the canvas then changes is exactly what the suite exists to prove.
   "labels-menu-by-keyboard",
+  // v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5): Match strictness in the canvas toolbar, a button
+  // opening the same slider, which an arrow key moves and Escape closes.
+  "match-strictness-by-keyboard",
+  // v0.6.1 glass-rows C (Amendment 19 decision 6): Hide toolbar and Show toolbar, focus moving between them, and
+  // T on the focused canvas doing the same (the owner's ruling of 16 November 2026).
+  "hide-and-show-the-toolbar-by-keyboard",
+  "t-on-the-canvas-hides-and-shows-the-toolbar",
   "an-expansion-leaves-the-view-and-the-settled-nodes-where-they-were",
 ] as const);
 

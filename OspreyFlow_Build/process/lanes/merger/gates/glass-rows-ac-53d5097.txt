@@ -1,0 +1,17 @@
+Merge of case-b v061-glass-rows-ac (53d5097, its 30edfaf plus the two harness font commits 0eff99f and 53d5097) onto
+e27a820 (case's B), in ~/dev/osprey-wt/merge2, by case as deputy orchestrator (16 Nov 2026), with registry.patch applied.
+
+The tree's apps/workspace/src and keyboard/ equal 53d5097's but for registry.patch (actionRegistry.ts) and promotions.spec.ts.
+Passed on the tree before (the orchestrator): tsc, eslint, 303 guide/spec/docs/changelog tests, citation, ADR reservations,
+test-file coverage, scripts.changelog_check --tag v0.6.0.
+
+vitest (npx vitest run --root apps/workspace): 3683 passed, exit 0.
+keyboard (OSPREY_PORTS_SLOT=20, --workers 8, Vite cache cleared): 1469 passed, 5 skipped, 0 failed, exit 0.
+every-harness (a11y config, slot 20): 1190 passed, exit 0.
+
+First keyboard run on 30edfaf: 5 failed in glass-toolbar.spec.ts (the row wrapped at 69 px). The cause was merge2's
+node_modules, a symlink outside the worktree, so Vite refused the @fontsource files and widths were measured in the
+fallback face. 0eff99f made the harness wait for the face, and a refused face then blanked both harnesses (38 failed).
+Fixed twice over: merge2's node_modules made an APFS clone of the main checkout's (same lockfile; the clone's stray
+node_modules/node_modules self-link removed), and 53d5097 (keyboard/lookFaces.ts) never lets a face that cannot load
+blank a harness, and says so in the width cases. Red first in case-b's gates/font-refused-reds.log.

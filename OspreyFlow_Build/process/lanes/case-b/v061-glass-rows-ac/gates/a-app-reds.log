@@ -1,0 +1,143 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+stderr | src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ ❯ src/App.chrome.test.tsx (32 tests | 2 failed) 6444ms
+   ❯ the case screen's chrome, variant B (ADR-145 Amendment 2) (3)
+     × 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19) 189ms
+     ✓ the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 54ms
+     ✓ the column opens with the Inspector only, the other panels folded in their order 96ms
+   ✓ the dataset named once (ADR-145 Amendment 14 decision 4) (3)
+     ✓ the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 46ms
+     ✓ a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 42ms
+     ✓ the badge names the scope when the case's datasets cannot be read 41ms
+   ✓ the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) (2)
+     ✓ the scope badge stays where the banner names no dataset: You are in Rules and Monitoring 57ms
+     ✓ the scope badge stays where the banner names no dataset: You are in the Ingest Studio 50ms
+   ✓ the owner's navigation (ADR-145 Amendment 15) (10)
+     ✓ the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 80ms
+     ✓ Drawing board is a view: its own screen says it is a sketch that does not change the case's data 31ms
+     ✓ the strip names no mode and says no mode's note 21ms
+     ✓ the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 17ms
+     ✓ Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 54ms
+     ✓ Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it 64ms
+     ✓ History opens its panel without changing the view, a second press closes it, and closing returns focus to it 50ms
+     ✓ the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · reads … 21ms
+     ✓ Saved views opens its panel at the saved views list 34ms
+     ✓ the case switcher's last entry is All cases, which opens the Cases panel 1047ms
+   ✓ Build a report beside Reports (ADR-145 Amendment 15) (3)
+     ✓ is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab 69ms
+     ✓ is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed 40ms
+     ✓ is not offered, even to a builder, where there is no Superset 39ms
+   ✓ Part B after review (ADR-145 Amendment 15) (9)
+     ✓ in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel 1062ms
+     ✓ the Cases panel opened from All cases returns focus to the case menu's button when it closes 1079ms
+     ✓ Saved views is a toggle: expanded while its panel is open, a second press closes it 60ms
+     ✓ a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board 64ms
+     ✓ an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views 64ms
+     ✓ a drawing board chosen before the rights arrive gives way when they say the person may not investigate 107ms
+     ✓ Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current 138ms
+     ✓ the built-in Administrator, offered Connection strength alone, has it in the switch and current 54ms
+     ✓ exactly one view is current: one pressed in the switch, or none there and More views naming its own 177ms
+   ❯ Match strictness in the canvas toolbar (Amendment 19 decision 5) (2)
+     × the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting 1027ms
+     ✓ the Map keeps its row, Add site and Draw boundary, with no strictness in it 72ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)
+AssertionError: expected [ 'Osprey, go to Home', …(24) ] to deeply equal [ 'Osprey, go to Home', …(23) ]
+
+- Expected
++ Received
+
+@@ -21,6 +21,7 @@
+    "Explore",
+    "Ask & Chat",
+    "History",
+    "Help",
+    "Show names",
++   "Match strictness: Broad",
+  ]
+
+ ❯ src/App.chrome.test.tsx:131:19
+    129|     await screen.findByRole("button", { name: "Open this case's data i…
+    130|     const stops = before(canvas);
+    131|     expect(stops).toEqual([
+       |                   ^
+    132|       // ADR-146 decision 2: Rules and Monitoring, with the count that…
+    133|       "Osprey, go to Home", "The Glass", "Ingest Studio", "Rules and M…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/App.chrome.test.tsx > Match strictness in the canvas toolbar (Amendment 19 decision 5) > the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting
+TestingLibraryElementError: Unable to find role="button" and name "Match strictness: Broad"
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Canvas tools"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m/>[39m
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Canvas tools"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m/>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.chrome.test.tsx:546:40
+    544|     const tools = await screen.findByRole("toolbar", { name: "Canvas t…
+    545|     // The fixture's threshold is 0.8: Broad.
+    546|     const button = await within(tools).findByRole("button", { name: "M…
+       |                                        ^
+    547|     expect(button.getAttribute("aria-expanded")).toBe("false");
+    548|     expect(screen.queryByRole("toolbar", { name: "Graph view" })).toBe…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 30 passed (32)
+   Start at  06:49:47
+   Duration  7.13s (tests 91%, environment 7%, import 1%)
+
+
+Slowest 30 of 32 tests:
+  1079 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1062 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+  1047 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1027 ms  src/App.chrome.test.tsx > Match strictness in the canvas toolbar (Amendment 19 decision 5) > the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting
+   189 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)
+   177 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   138 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   107 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a drawing board chosen before the rights arrive gives way when they say the person may not investigate
+    96 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+    80 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current
+    72 ms  src/App.chrome.test.tsx > Match strictness in the canvas toolbar (Amendment 19 decision 5) > the Map keeps its row, Add site and Draw boundary, with no strictness in it
+    69 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab
+    64 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board
+    64 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views
+    64 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    60 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Saved views is a toggle: expanded while its panel is open, a second press closes it
+    57 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+    54 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name
+    54 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the built-in Administrator, offered Connection strength alone, has it in the switch and current
+    54 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    50 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > History opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    50 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in the Ingest Studio
+    46 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it
+    42 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it
+    41 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the badge names the scope when the case's datasets cannot be read
+    40 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed
+    39 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is not offered, even to a builder, where there is no Superset
+    34 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Saved views opens its panel at the saved views list
+    31 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Drawing board is a view: its own screen says it is a sketch that does not change the case's data
+    21 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · reads …

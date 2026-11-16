@@ -76,8 +76,10 @@ describe("the workspace's welcome panel", () => {
     shown();
     const keys = within(screen.getByRole("list", { name: "Keys worth knowing" }));
     const rows = keys.getAllByRole("listitem").map((li) => [li.querySelector("kbd")?.textContent, li.textContent]);
-    expect(rows.map(([k]) => k)).toEqual(["/", "←→", "Enter", "F", "Esc", "?"]);
+    expect(rows.map(([k]) => k)).toEqual(["/", "←→", "Enter", "F", "T", "Esc", "?"]);
     expect(rows[2]![1]).toContain("Expand the focused node by one hop");
+    // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's ruling of 16 November 2026): the toolbar's key.
+    expect(rows[4]![1]).toBe("THide or show the toolbar (on the graph)");
   });
 
   it("closes from its own button", () => {

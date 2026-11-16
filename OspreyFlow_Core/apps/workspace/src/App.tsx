@@ -84,6 +84,9 @@ import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
 import { seedElements } from "./connections/connectionsApi";
 import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
+import { HideToolbarButton, ShowToolbarButton } from "./canvas/ToolbarToggle";
+import { useViewToolbar, VIEW_TOOLBAR_ID } from "./canvas/toolbarVisibility";
+import { useCompactWidth } from "./canvas/toolbarCompact";
 import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
@@ -1124,6 +1127,25 @@ export function App() {
     if (!questionsOpen) setQuestionDraft(null);
   }, [questionsOpen]);
   const pageOver = results.viewInert || ask.viewInert;
+  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4): the toolbar above the Graph's
+  // canvas or the Map can be hidden, the case line then slim with *Show toolbar* at its end. One setting for both,
+  // the signed-in analyst's in this browser; the Drawing board and the other views have no such toolbar.
+  // Not while a page lies over the view (ADR-145 Amendment 18): the view is inert beneath it, so Show toolbar would send
+  // focus into it and lose it (the lane-reviewer's item 2); the line and the key wait until the page is left.
+  const toolbarHere = app === "glass" && (view === "graph" || view === "map") && !pageOver;
+  const {
+    hidden: toolbarHidden,
+    toggle: toggleToolbar,
+    toggleByKey: toggleToolbarByKey,
+    hideRef: hideToolbarRef,
+    showRef: showToolbarRef,
+  } = useViewToolbar(principal?.username || null, toolbarHere);
+  // The owner's ruling 14: *Show toolbar* says "Show" where the toolbar it brings back is narrow; the canvas says so of
+  // its own, and the Map's row is as wide as the column it spans.
+  const [canvasToolbarCompact, setCanvasToolbarCompact] = useState(false);
+  const viewColumnRef = useRef<HTMLDivElement | null>(null);
+  const viewColumnCompact = useCompactWidth(viewColumnRef);
+  const showToolbarCompact = view === "map" ? viewColumnCompact : canvasToolbarCompact;
   const leavePages = ask.leaveBoth;
   const openAskPage = ask.openPage;
   // ADR-093: every node selected on the canvas, for the Inspector's list.
@@ -2058,6 +2080,9 @@ export function App() {
             setView(lastGlassView());
           },
         })}
+        // Amendment 19 decision 6: with the view's toolbar hidden the line is slim, ending with *Show toolbar*.
+        slim={toolbarHidden}
+        end={toolbarHidden ? <ShowToolbarButton ref={showToolbarRef} onToggle={toggleToolbar} compact={showToolbarCompact} /> : undefined}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       {/* ADR-097 step 1: the left rail, the Glass's alone (ADR-145 decision 1); the Studio has none. */}
@@ -2071,34 +2096,25 @@ export function App() {
       />
       )}
       {/* `position: relative` so the keys panel, over whichever view is on screen, is placed in it. */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
+      <div ref={viewColumnRef} style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }}>
       {/* Part A: the view left stays as it was beneath the search results, out of reach while they show. */}
       <div style={{ display: "contents" }} inert={app === "glass" && pageOver ? true : undefined}>
       {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
           (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
       {welcomeOpen && !inCanvasArea && !pageOver && welcomePanel}
-      {(view === "graph" || view === "map") && (
-        // ADR-097 step 1: what belongs to this view alone, docked above it.
-        <div role="toolbar" aria-label={view === "graph" ? "Graph view" : "Map view"} className="view-toolbar">
-          {view === "graph" && (
-            <ResolutionThresholdControl
-              apiBaseUrl={API_BASE_URL}
-              bearerToken={bearerToken}
-              investigationId={investigationId}
-              store={workingSetRef.current.store}
-              onChangeSummary={setToast}
-            />
-          )}
-          {view === "map" && (
-            <>
-              <Button aria-pressed={siteWizardOpen} onClick={() => setSiteWizardOpen((open) => !open)}>
-                Add site
-              </Button>
-              <Button aria-pressed={boundaryToolOpen} onClick={() => setBoundaryToolOpen((open) => !open)}>
-                Draw boundary
-              </Button>
-            </>
-          )}
+      {view === "map" && (
+        // ADR-097 step 1: what belongs to this view alone, docked above it. The Graph's row, which held
+        // Match strictness alone, is withdrawn: strictness is in the canvas toolbar (ADR-145 Amendment 19
+        // decision 5).
+        <div role="toolbar" aria-label="Map view" className="view-toolbar" id={VIEW_TOOLBAR_ID} hidden={toolbarHidden}>
+          <Button aria-pressed={siteWizardOpen} onClick={() => setSiteWizardOpen((open) => !open)}>
+            Add site
+          </Button>
+          <Button aria-pressed={boundaryToolOpen} onClick={() => setBoundaryToolOpen((open) => !open)}>
+            Draw boundary
+          </Button>
+          {/* Amendment 19 decision 6: the same control as the Graph's, at the row's right end. */}
+          <HideToolbarButton ref={hideToolbarRef} look="row" onToggle={toggleToolbar} />
         </div>
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
@@ -2279,6 +2295,22 @@ export function App() {
                 key={lens ? `view:${lens.opened.view.id}` : "case"}
                 ref={glassCanvasRef}
                 lastChange={lastChange}
+                // ADR-145 Amendment 19 decision 5: Match strictness in the canvas toolbar, after Layout; the
+                // same control, re-projecting the case's working set and announcing through the Toast.
+                toolbarAfterLayout={
+                  <ResolutionThresholdControl
+                    apiBaseUrl={API_BASE_URL}
+                    bearerToken={bearerToken}
+                    investigationId={investigationId}
+                    store={workingSetRef.current.store}
+                    onChangeSummary={setToast}
+                  />
+                }
+                toolbarId={VIEW_TOOLBAR_ID}
+                toolbarHidden={toolbarHidden}
+                onToolbarKey={toggleToolbarByKey}
+                onToolbarCompactChange={setCanvasToolbarCompact}
+                toolbarEnd={<HideToolbarButton ref={hideToolbarRef} onToggle={toggleToolbar} />}
                 graph={(lens?.workingSet ?? workingSetRef.current).graph}
                 store={(lens?.workingSet ?? workingSetRef.current).store}
                 ontology={ontology}

@@ -29,11 +29,15 @@ import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
 import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
+import { loadLookFaces } from "./lookFaces";
+import { ResolutionThresholdControl } from "../src/resolution/ThresholdControl";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
 
 declare global {
   interface Window {
     __KEYBOARD__?: {
+      /** `?strictness=1`: what the Match strictness control announced, as App's Toast would say it. */
+      strictnessSaid?: string;
       focused: string | null;
       selection: string[];
       viewMessagesNodeId: string | null;
@@ -396,6 +400,18 @@ await applyHarnessBrand();
 
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
+// v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5): `?strictness=1` hands the canvas toolbar the real
+// Match strictness control after Layout, as App does, its threshold read and set at the address the spec
+// routes. `?width=1131` lays the canvas out that wide, so the toolbar's own width decides its words.
+const wantsStrictness = new URLSearchParams(window.location.search).get("strictness") === "1";
+const wantsWidth = Number(new URLSearchParams(window.location.search).get("width") ?? "");
+if (wantsWidth > 0) {
+  container.style.width = `${wantsWidth}px`;
+  // Widths are measured in the product's own faces, as `src/main.tsx` loads them.
+  await import("../src/design/fonts");
+  // The look's own faces, never left to blank the page (`lookFaces.ts`).
+  await loadLookFaces(["400", "600"]);
+}
 
 // `?fixture=lit` is ADR-128's (B3, select what is lit): the chain above with the real timeline under
 // it, so a keyboard walkthrough can set a window by Set exact dates, run Select what is lit, and
@@ -482,6 +498,19 @@ createRoot(container).render(
   <Mount {...(Mount === "div" ? { style: { display: "contents" } } : {})}>
     <GlassCanvas
       lastChange={lastChange}
+      toolbarAfterLayout={
+        wantsStrictness ? (
+          <ResolutionThresholdControl
+            apiBaseUrl="http://keyboard-test.invalid"
+            bearerToken="unused"
+            investigationId="keyboard-fixture"
+            store={workingSet.store}
+            onChangeSummary={(said) => {
+              window.__KEYBOARD__!.strictnessSaid = said;
+            }}
+          />
+        ) : undefined
+      }
       ref={canvasHandle}
       judgementCounts={judged}
       degreeMarks={degrees}

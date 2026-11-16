@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // ADR-145 decision 4 and Amendment 2 (variant B, the owner's choice of 7 November 2026): the case
-// screen's chrome, counted on the real `App`. A keyboard user passes 25 controls before the canvas
-// (26 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
+// screen's chrome, counted on the real `App`. A keyboard user passes 24 controls before the canvas (25 before ADR-145 Amendment 19 moved Match strictness into the canvas toolbar)
+// (25 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
 // the mark without its Home button, counted one fewer for every variant), and the right-hand column
 // opens with the Inspector only. Red if a control returns before the canvas, or a panel opens by
 // default. The canvas, the map and the timeline need WebGL, which jsdom has none of: the canvas is a
@@ -13,12 +13,32 @@
 // order) would be counted in the wrong place. Neither is used in the chrome today. A true Tab walk on
 // the real `App` needs a browser and the Conduit behind it — the dev stack — which this tier has not.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { useEffect } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { App as AppComponent } from "./App";
+import { forgetToolbarSettings } from "./canvas/toolbarVisibility";
 
+// The stand-in draws what App hands the canvas toolbar (v0.6.1 glass-rows A: strictness after Layout), inside the
+// canvas, where the real `GlassCanvas` draws its toolbar.
+// C: the toolbar's id, `hidden` while App says so, and *Hide toolbar* at its end, as `GlassCanvas` draws them (the
+// real toolbar's own hiding is held in a browser, `keyboard/glass-toolbar.spec.ts`).
+// Each draw's `toolbarHidden` is kept, so the first draw can be held to the analyst's setting (`canvasDraws`).
+const canvasDraws: (boolean | undefined)[] = [];
+const canvasNarrow = { value: false };
+// The canvas's T is the real `GlassCanvas`'s (`keyboard.spec.ts`); the stand-in hands its key to `onToolbarKey`, so App's
+// wiring of what T does is held here.
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: () => <div role="application" aria-label="Network canvas" tabIndex={0} />,
+  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId, onToolbarKey, onToolbarCompactChange }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string; onToolbarKey?: () => void; onToolbarCompactChange?: (compact: boolean) => void }) => {
+    canvasDraws.push(toolbarHidden);
+    // The real canvas reports whether its toolbar is narrow (its width, read off the canvas); `canvasNarrow` says so here.
+    useEffect(() => onToolbarCompactChange?.(canvasNarrow.value), [onToolbarCompactChange]);
+    return (
+      <div role="application" aria-label="Network canvas" tabIndex={0} onKeyDown={(e) => { if (e.key === "t" && e.target === e.currentTarget) onToolbarKey?.(); }}>
+        <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{toolbarAfterLayout}{toolbarEnd}</div>
+      </div>
+    );
+  },
 }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
 vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
@@ -117,7 +137,7 @@ afterEach(() => {
 });
 
 describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
-  test("25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)", async () => {
+  test("24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)", async () => {
     render(<App />);
     const canvas = await screen.findByRole("application", { name: "Network canvas" });
     await screen.findByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
@@ -130,9 +150,9 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       "Graph", "Map", "Drawing board", "Reports", "More ways to show the case", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
       // The case line: Case ‹switcher› · Saved views (n) · reads …, then the cross-link (Amendment 17).
       expect.stringMatching(/^Case: Kestrel/), expect.stringMatching(/^Saved views/), "Open this case's data in the Ingest Studio ↗",
-      // The rail: the panel openers alone, then Help and the names toggle; then the Graph's own toolbar.
+      // The rail: the panel openers alone, then Help and the names toggle. The Graph has no row of its own
+      // (Amendment 19 decision 5): strictness is in the canvas toolbar, inside the canvas.
       "Explore", "Ask & Chat", "History", "Help", "Show names",
-      "Match strictness",
     ]); // prettier-ignore
   });
 
@@ -528,5 +548,184 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     fireEvent.click(await within(await screen.findByRole("group", { name: "More ways to show the case" })).findByRole("button", { name: "Matrix" }));
     await vi.waitFor(() => expect(pressed()).toEqual([]));
     expect(screen.getByRole("button", { name: /^Matrix/ }).className).toContain("menu-button--pressed");
+  });
+});
+
+// v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5; the owner's rulings of 16 November 2026): the Graph's own
+// row above the canvas, which held strictness alone, is gone; strictness is a button in the canvas toolbar.
+describe("Match strictness in the canvas toolbar (Amendment 19 decision 5)", () => {
+  test("the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    // The fixture's threshold is 0.8: Broad.
+    const button = await within(tools).findByRole("button", { name: "Match strictness: Broad" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("toolbar", { name: "Graph view" })).toBeNull();
+    expect(document.querySelector(".view-toolbar")).toBeNull();
+  });
+
+  test("the Map keeps its row, Add site and Draw boundary, with no strictness in it", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    const row = await screen.findByRole("toolbar", { name: "Map view" });
+    expect(within(row).getByRole("button", { name: "Add site" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Draw boundary" })).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: /strictness/i })).toBeNull();
+  });
+});
+
+// v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4, 16 November 2026): a toolbar
+// that can be hidden. *Hide toolbar* at the toolbar's right end hides it and slims the case line, which then ends
+// with *Show toolbar*; each names the toolbar it controls and whether it is shown; focus moves between the two;
+// T on the focused canvas does the same, focus staying on the canvas (the owner's ruling of 16 November 2026); the setting is the signed-in analyst's, in this browser; the Map has it, the Drawing
+// board does not.
+describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
+  const KEY = "ospreyflow.glass.toolbar.osprey-demo-analyst";
+  beforeEach(() => {
+    // The username the setting is kept under is the token's preferred_username, as the Studio's mode is.
+    vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
+      access_token: "a-token",
+      profile: { sub: "analyst-1", preferred_username: "osprey-demo-analyst", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] },
+    } as never); // prettier-ignore
+  });
+  afterEach(() => forgetToolbarSettings());
+  const caseLine = () => screen.getByRole("region", { name: "You are in the Glass" });
+
+  test("Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    const hide = await within(tools).findByRole("button", { name: "Hide toolbar" });
+    expect(hide.getAttribute("aria-expanded")).toBe("true");
+    expect(hide.getAttribute("aria-controls")).toBe(tools.id);
+    expect(tools.id).not.toBe("");
+    await within(caseLine()).findByText(/^reads /);
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+
+    fireEvent.click(hide);
+    expect(tools.hidden).toBe(true);
+    // Out of the accessibility tree, not merely out of sight.
+    expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+    const show = within(caseLine()).getByRole("button", { name: "Show toolbar" });
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    expect(show.getAttribute("aria-controls")).toBe(tools.id);
+    expect(document.activeElement).toBe(show);
+    // The slim line (case's seam): no reads, the case and Saved views kept, Show toolbar last.
+    expect(caseLine().textContent).not.toMatch(/reads /);
+    expect(within(caseLine()).getByRole("button", { name: /^Saved views/ })).toBeTruthy();
+    expect(within(caseLine()).getAllByRole("button").at(-1)).toBe(show);
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+
+    fireEvent.click(show);
+    expect(tools.hidden).toBe(false);
+    expect(document.activeElement).toBe(within(tools).getByRole("button", { name: "Hide toolbar" }));
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  test("the Glass opens as the analyst left it: hidden at the first draw", async () => {
+    localStorage.setItem(KEY, "hidden");
+    canvasDraws.length = 0;
+    render(<App />);
+    const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    await screen.findByRole("application", { name: "Network canvas" });
+    expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+    // Never drawn shown first and hidden after: every draw of the canvas had it hidden.
+    expect(canvasDraws.length).toBeGreaterThan(0);
+    expect(canvasDraws.every((hidden) => hidden === true)).toBe(true);
+  });
+
+  test("under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and the key does nothing; back on the view, both are as left", async () => {
+    localStorage.setItem(KEY, "hidden");
+    render(<App />);
+    const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
+    expect(show).toBeTruthy();
+    const opener = within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" });
+    fireEvent.click(opener);
+    await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+    // Showing it would send focus to Hide toolbar inside the inert view, and lose it.
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+    fireEvent.keyDown(document.body, { key: "t", code: "KeyT" });
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+    fireEvent.click(opener);
+    await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+  });
+
+  test("Show toolbar reads Show where the canvas says its toolbar is narrow (ruling 14), its name kept", async () => {
+    canvasNarrow.value = true;
+    try {
+      localStorage.setItem(KEY, "hidden");
+      render(<App />);
+      const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
+      await vi.waitFor(() => expect(show.textContent).toBe("Show"));
+    } finally {
+      canvasNarrow.value = false;
+    }
+  });
+
+  test("another analyst's setting on this browser is not this one's", async () => {
+    localStorage.setItem("ospreyflow.glass.toolbar.someone-else", "hidden");
+    render(<App />);
+    expect(await screen.findByRole("toolbar", { name: "Canvas tools" })).toBeTruthy();
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+  });
+
+  test("T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    await within(tools).findByRole("button", { name: "Hide toolbar" });
+    // Elsewhere: on the page, or typed in search; each checked on its own, so two that each toggled could not cancel out.
+    fireEvent.keyDown(document.body, { key: "t", code: "KeyT" });
+    expect(tools.hidden).toBe(false);
+    fireEvent.keyDown(screen.getByRole("combobox", { name: /Search entities/ }), { key: "t", code: "KeyT" });
+    expect(tools.hidden).toBe(false);
+    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(false);
+    expect(localStorage.getItem(KEY)).toBeNull();
+    const canvas = screen.getByRole("application", { name: "Network canvas" });
+    canvas.focus();
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    expect(tools.hidden).toBe(true);
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+    // The key's place is the canvas, which keeps focus: nothing was lost to move it from.
+    expect(document.activeElement).toBe(canvas);
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    expect(tools.hidden).toBe(false);
+    expect(document.activeElement).toBe(canvas);
+  });
+
+  test("the Map has the same control and the same setting: its row hidden, Show toolbar on the line", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    const row = await screen.findByRole("toolbar", { name: "Map view" });
+    const hide = within(row).getByRole("button", { name: "Hide toolbar" });
+    expect(hide.getAttribute("aria-controls")).toBe(row.id);
+    fireEvent.click(hide);
+    expect(row.hidden).toBe(true);
+    expect(screen.queryByRole("toolbar", { name: "Map view" })).toBeNull();
+    const show = within(caseLine()).getByRole("button", { name: "Show toolbar" });
+    expect(document.activeElement).toBe(show);
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+    // One setting: back on the Graph its toolbar is hidden too.
+    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+    await screen.findByRole("application", { name: "Network canvas" });
+    expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+  });
+
+  test("the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and T does nothing there", async () => {
+    localStorage.setItem(KEY, "hidden");
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: "Drawing board" }));
+    await within(caseLine()).findByText(/^reads /);
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+    fireEvent.keyDown(document.body, { key: "t", code: "KeyT" });
+    expect(localStorage.getItem(KEY)).toBe("hidden");
   });
 });

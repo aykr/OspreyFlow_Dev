@@ -19,7 +19,7 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.74 | 2026-11-16 | v0.6.0 (the owner, 16 Nov; built as v0.6.1's first item), the Glass's rows (ADR-145 Amendment 19, decisions 1 to 4): §3, the case line says what is on the graph, "Whole case" or "Saved view: ‹name›" with its tag, **Details ▾** and **Back to the whole case**, and stays one line on a narrow window; §5.13, no strip over the graph: *Details* holds the count of what could not be shown, that nothing changes the case, where the view came from with **← Back to the alert**, and a merged drawing's notes; focus to the saved view's name. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py` and `tests/test_user_guide_saved_views.py`. |
+| 1.74 | 2026-11-16 | v0.6.0 (the owner, 16 Nov; built as v0.6.1's first item), the Glass's rows (ADR-145 Amendment 19, decisions 1 to 4): §3, the case line says what is on the graph, "Whole case" or "Saved view: ‹name›" with its tag, **Details ▾** and **Back to the whole case**, and stays one line on a narrow window; §5.13, no strip over the graph: *Details* holds the count of what could not be shown, that nothing changes the case, where the view came from with **← Back to the alert**, and a merged drawing's notes; focus to the saved view's name. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py` and `tests/test_user_guide_saved_views.py`. §5.2, **Match strictness** is a control in the graph's toolbar, and **Hiding the toolbar**: **Hide toolbar** and **Show toolbar**, T with the graph selected, remembered for you in this browser; the Map has the buttons (ADR-145 Amendment 19, decisions 5 and 6). |
 | 1.73 | 2026-11-16 | §9's **Reports**: in the boards' editor a builder sees the figures behind every board, for every case and clearance, so the right to manage dashboards is given only to people cleared for all of them (ADR-148 Amendment 21, the owner's ruling of 16 November). |
 | 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0); *Show all on graph*'s words past the limit say *Save as a view* is under the answer in Ask & Chat, since the page has gone. Held by `tests/test_user_guide_ask_chat.py` and `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.71 | 2026-11-15 | §6, *An answer's items* (v0.6.0 item 5, the owner's closed list): **Show all on graph** puts an answer's items on the case's graph, selected, a saved view closed first, what it cannot show a count and past the limit nothing; **Save as a view** names the view from the question and saves it as a saved view of the case. Held by `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -347,6 +347,14 @@ after a selection made by what is lit. Past one degree, **Show links** draws the
 selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear the graph** take nodes off the canvas; a node you put back brings
 its links in the view back with it.
 
+**Hiding the toolbar.** **Hide toolbar**, at the right-hand end of the graph's toolbar, hides it and
+gives its room to the graph. The case line then becomes one short line, with **Show toolbar** at its
+right-hand end to bring it back. With the graph selected (click it, or Tab to it), press T to hide or
+show the toolbar. The map's toolbar hides in the same way, with its buttons, under the same setting; the
+drawing board has no toolbar to hide. OspreyFlow
+remembers your choice in this browser, so the Glass opens as you left it. On a narrow window the
+toolbar's words are shorter (**Strictness** and **Hide**), so it stays on one row.
+
 **Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`, the menu
 key, or Shift+F10) opens its menu, on the selection: a right-click on something not selected selects
 it first. The selection's own actions come first, in the bar's words. **Expand by link type** lists
@@ -409,8 +417,8 @@ are dots.
 **Same-as links.** Records OspreyFlow thinks are one are joined by a same-as link. Its menu offers
 **Collapse into one node** (for this view only), **Confirm as the same**, **Mark as not the same**
 and **Explain this link**. Confirming or marking needs a reason, kept in the audit with your name.
-**Match strictness** at the top of the graph sets how sure a match must be to show records as one —
-Strict, Balanced (the default) or Broad — and says how many merged and split.
+**Match strictness** in the graph's toolbar, after Layout, sets how sure a match must be to show records as
+one. Press it to open its slider: Strict, Balanced (the default) or Broad. It says how many merged and split.
 Records drawn into the graph, by a search, an expansion or a list, arrive already shown as one where they
 match at the case's strictness, with **Explain cluster** on them. What is shown as one is worked out for you
 alone, from the records you may see: a record hidden from you joins nothing. When someone else on the case changes the strictness, your graph shows it in full when the case is loaded again; an expansion brings it only for the records it adds.

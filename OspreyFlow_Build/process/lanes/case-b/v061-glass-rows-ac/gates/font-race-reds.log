@@ -1,0 +1,46 @@
+
+Running 2 tests using 1 worker
+
+  ✘  1 keyboard/glass-toolbar.spec.ts:158:1 › the widths are measured in the product's own face even when its font files are slow to arrive (774ms)
+  ✘  2 keyboard/glass-toolbar.spec.ts:171:1 › under GOV.UK too: its face, a web face as well, is loaded before the narrowest one-row width is measured (621ms)
+
+
+  1) keyboard/glass-toolbar.spec.ts:158:1 › the widths are measured in the product's own face even when its font files are slow to arrive 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      165 |   const bar = tools(page);
+      166 |   await expect(bar.getByRole("button", { name: "Match strictness: Balanced" })).toHaveText("Match strictness: Balanced ▾");
+    > 167 |   expect(await page.evaluate(() => document.fonts.check('12px "Atkinson Hyperlegible Next"'))).toBe(true);
+          |                                                                                                ^
+      168 |   expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(37);
+      169 | });
+      170 |
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:167:96
+
+    Error Context: test-results/glass-toolbar-the-widths-a-dc56a-nt-files-are-slow-to-arrive/error-context.md
+
+  2) keyboard/glass-toolbar.spec.ts:171:1 › under GOV.UK too: its face, a web face as well, is loaded before the narrowest one-row width is measured 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      178 |   const bar = tools(page);
+      179 |   await expect(bar.getByRole("button", { name: "Match strictness: Balanced" })).toHaveText("Strictness: Balanced ▾");
+    > 180 |   expect(await page.evaluate(() => document.fonts.check(`12px ${getComputedStyle(document.documentElement).getPropertyValue("--ui")}`))).toBe(true);
+          |                                                                                                                                          ^
+      181 |   expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(37);
+      182 | });
+      183 |
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:180:138
+
+    Error Context: test-results/glass-toolbar-under-GOV-UK-2ddf2-t-one-row-width-is-measured/error-context.md
+
+  2 failed
+    keyboard/glass-toolbar.spec.ts:158:1 › the widths are measured in the product's own face even when its font files are slow to arrive 
+    keyboard/glass-toolbar.spec.ts:171:1 › under GOV.UK too: its face, a web face as well, is loaded before the narrowest one-row width is measured 

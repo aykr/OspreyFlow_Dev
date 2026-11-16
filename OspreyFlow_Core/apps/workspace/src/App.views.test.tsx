@@ -9,11 +9,13 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { App as AppComponent } from "./App";
+import { forgetToolbarSettings } from "./canvas/toolbarVisibility";
 
+// v0.6.1 glass-rows C: the toolbar's id, `hidden` and *Hide toolbar* at its end, as `GlassCanvas` draws them.
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: ({ viewsMenu }: { viewsMenu?: import("react").ReactNode }) => (
+  GlassCanvas: ({ viewsMenu, toolbarEnd, toolbarHidden, toolbarId }: { viewsMenu?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string }) => (
     <>
-      <div role="toolbar" aria-label="Canvas tools">{viewsMenu}</div>
+      <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{viewsMenu}{toolbarEnd}</div>
       <div role="application" aria-label="Network canvas" tabIndex={0} />
     </>
   ),
@@ -107,6 +109,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  forgetToolbarSettings();
   vi.restoreAllMocks();
   sessionStorage.clear();
   localStorage.clear();
@@ -141,6 +144,31 @@ describe("saved views and the way back to the whole case (ADR-145 Amendment 19, 
     await vi.waitFor(() => expect(within(caseLine).queryByText(/^Saved view:/)).toBeNull());
     expect(within(caseLine).getByText("Whole case")).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Saved view details" })).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(within(caseLine).getByRole("button", { name: "Saved views (1)" })));
+  });
+
+  // v0.6.1 glass-rows C, the owner's brief: "Back to the whole case is on screen in every state", the toolbar hidden too.
+  test("with the toolbar hidden, a saved view opened from the slim line says so there, and Back to the whole case on it puts the case back, the toolbar still hidden", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    fireEvent.click(within(tools).getByRole("button", { name: "Hide toolbar" }));
+    expect(tools.hidden).toBe(true);
+    const caseLine = screen.getByRole("region", { name: "You are in the Glass" });
+    expect(within(caseLine).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+    expect(within(caseLine).getByText("Whole case")).toBeTruthy();
+    fireEvent.click(await within(caseLine).findByRole("button", { name: "Saved views (1)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open Payments in March" }));
+    const named = await within(caseLine).findByText(/^Saved view:/);
+    expect(named.textContent).toBe("Saved view: Payments in March");
+    // The saved view's canvas is drawn afresh; its toolbar is hidden as the analyst left it.
+    expect(document.getElementById("glass-view-toolbar")?.hidden).toBe(true);
+    expect(within(caseLine).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+    const back = within(caseLine).getByRole("button", { name: "Back to the whole case" });
+    fireEvent.click(back);
+    await vi.waitFor(() => expect(within(caseLine).queryByText(/^Saved view:/)).toBeNull());
+    expect(within(caseLine).getByText("Whole case")).toBeTruthy();
+    expect(document.getElementById("glass-view-toolbar")?.hidden).toBe(true);
+    expect(within(caseLine).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
     await vi.waitFor(() => expect(document.activeElement).toBe(within(caseLine).getByRole("button", { name: "Saved views (1)" })));
   });
 

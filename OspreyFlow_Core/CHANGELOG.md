@@ -96,8 +96,13 @@ around: one view switch, a case line that says what is open, and "view" kept for
   bar: Graph, Map, Drawing board and Reports, with the rest under **More**. The bar stays one line high,
   folding less-used views into More. The case line reads "Case ‹name› · Saved views (n) · reads
   ‹dataset›".
-- **Saved views:** "view" now means a saved view alone. **Back to the whole case** is the first thing in
-  a saved view's strip, and the case line names the one open. The list starts with *The whole case*, and
+- **Fewer rows above the graph** (ADR-145 Amendment 19). The case line says what is on the graph,
+  "Whole case" or "Saved view: ‹name›" with **Details ▾** and **Back to the whole case**, so there is no
+  strip over the graph, and it stays one line on a narrow window. **Match strictness** is a control in the
+  graph's toolbar. **Hide toolbar** gives the graph the toolbar's row; **Show toolbar** or T, with the graph
+  selected, brings it back, and the choice is remembered for you in this browser. The Map has the buttons.
+- **Saved views:** "view" now means a saved view alone. **Back to the whole case** is on the case line,
+  which names the view open. The list starts with *The whole case*, and
   a view saved under the default name is told apart by its first item and when it was saved. The graph
   toolbar's *Views* menu is gone (ADR-144 Amendment 6), and *Clear view* is **Clear the graph**.
 - **A batch job past the working set's cap** (ADR-151): the expansion runs on the server as you, and its

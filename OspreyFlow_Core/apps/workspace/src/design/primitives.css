@@ -95,6 +95,12 @@
 .range-slider__handle:focus-visible { background: var(--brass); }
 
 .resolution-threshold-control { display: flex; align-items: center; gap: var(--sp-8); }
+/* Amendment 19 decision 5: the control is a button in the canvas toolbar; the slider is in its panel. */
+.resolution-threshold-control > .radial-menu__item { white-space: nowrap; }
+.resolution-threshold-control__panel {
+  display: flex; align-items: center; gap: var(--sp-8); padding: var(--sp-8);
+  background: var(--surface-raised); border: 1px solid var(--border-subtle);
+}
 .resolution-threshold-control input[type="range"] { width: 120px; }
 .resolution-threshold-control__name { font-size: var(--fs-12); font-weight: 600; color: var(--text-tertiary); white-space: nowrap; }
 .resolution-threshold-control__label {
@@ -646,6 +652,15 @@
 .canvas-toolbar__show { border-color: var(--border-subtle); overflow: visible; }
 .canvas-toolbar__show > * + * { border-left: 1px solid var(--border-subtle); }
 .canvas-toolbar__show .radial-menu__item { border-radius: 0; }
+/* The owner's rulings 6 and 7 (v0.6.1 glass-rows): under 1220 px of its own width (measured; the rulings' estimate
+   was 1132) the toolbar's words shorten (`toolbarCompact.ts`) and it draws a little tighter, so it stays one row down
+   to 912 px in its quiet state (the controls drawn on demand may wrap it). */
+/* Amendment 19 decision 6: a hidden toolbar is not drawn at all (the rule above would otherwise draw it). */
+.canvas-toolbar[hidden], .view-toolbar[hidden] { display: none; }
+.view-toolbar .toolbar-toggle { margin-left: auto; }
+.canvas-toolbar--compact { column-gap: var(--sp-8); }
+.canvas-toolbar--compact .radial-menu__item { padding: var(--sp-2) var(--sp-4); }
+.canvas-toolbar--compact select { max-width: 104px; }
 /* A toolbar menu's panel, laid over the canvas under its button: an overlay, so a shadow. */
 .canvas-menu { position: relative; display: flex; }
 .canvas-menu-panel {
@@ -847,7 +862,9 @@
 .session-prompt__actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
 .session-prompt__problem { margin: var(--sp-12) 0 0; color: var(--error); font-weight: 600; }
 /* ADR-115 E6 (DESIGN.md §5a): below 1100px the toolbar's "Last change" note gives its room back. */
-.canvas-toolbar__last-change { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary); }
+.canvas-toolbar__last-change {
+  flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary);
+}
 @media (max-width: 1099px) { .canvas-toolbar__last-change { display: none; } }
 
 /* The cases, each once, with each case's views beneath it (ADR-144 decision 5), in the case menu and

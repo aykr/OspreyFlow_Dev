@@ -6,9 +6,10 @@
 // (a native range input is
 // keyboard-operable by browser default, with no custom key handling whose correctness a scripted
 // walkthrough would need to prove — unlike the canvas's own hand-rolled `onKeyDown`).
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
 import type { StoreApi } from "zustand/vanilla";
 
+import { CanvasToolbarCompact } from "../canvas/toolbarCompact";
 import { Slider } from "../design/primitives/Slider";
 import type { ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
 import type { WorkingSetStoreState } from "../workingset/store";
@@ -50,6 +51,13 @@ export function ResolutionThresholdControl({
   // 50k cap, so firing it on every intermediate `onChange` value during a drag would mean one
   // reprojection per pixel of drag rather than one per gesture.
   const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+  // v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5): a button in the canvas toolbar naming the
+  // setting, opening the same slider beneath it, as the toolbar's Labels and Icons open theirs.
+  const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const panelId = useId();
+  // The owner's ruling 1: on a narrow toolbar the visible words shorten; the whole name stays.
+  const compact = useContext(CanvasToolbarCompact);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,9 +89,13 @@ export function ResolutionThresholdControl({
   const label = currentDetent ? currentDetent.label : `Custom (${threshold.toFixed(2)})`;
 
   async function commit(index: number): Promise<void> {
+    // The slider commits on every key's release, Tab's too, which reaches it now its panel is opened from the toolbar:
+    // what is sent is decided by whether the slider moved in this gesture, not by the value read when the control
+    // opened, which a colleague may since have changed (the setting is the case's).
+    const moved = pendingIndex !== null;
     setPendingIndex(null);
     const detent = DETENTS[index];
-    if (!detent) return;
+    if (!detent || !moved) return;
     const response = await fetch(
       `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/threshold`,
       {
@@ -101,21 +113,48 @@ export function ResolutionThresholdControl({
     );
   }
 
+  const name = `Match strictness: ${label}`;
   return (
     // ADR-097 step 3 (design review item 15): named for what the analyst sets, how strictly two
     // records must match to be drawn as one entity.
-    <div className="resolution-threshold-control">
-      <span className="resolution-threshold-control__name">Match strictness</span>
-      <span className="resolution-threshold-control__label">{label}</span>
-      <Slider
-        min={0}
-        max={DETENTS.length - 1}
-        step={1}
-        value={sliderIndex}
-        onChange={setPendingIndex}
-        onCommit={(index) => void commit(index)}
-        aria-label="Match strictness"
-      />
+    <div
+      className="canvas-menu resolution-threshold-control"
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && open) {
+          event.stopPropagation();
+          setOpen(false);
+          button.current?.focus();
+        }
+      }}
+    >
+      <button
+        ref={button}
+        type="button"
+        className="radial-menu__item"
+        aria-label={name}
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        title={compact ? name : undefined}
+        onClick={() => setOpen((v) => !v)}
+      >
+        {compact ? `Strictness: ${label}` : name}
+        <span aria-hidden="true"> ▾</span>
+      </button>
+      {open && (
+        <div id={panelId} className="canvas-menu-panel resolution-threshold-control__panel">
+          <span className="resolution-threshold-control__name">Match strictness</span>
+          <span className="resolution-threshold-control__label">{label}</span>
+          <Slider
+            min={0}
+            max={DETENTS.length - 1}
+            step={1}
+            value={sliderIndex}
+            onChange={setPendingIndex}
+            onCommit={(index) => void commit(index)}
+            aria-label="Match strictness"
+          />
+        </div>
+      )}
     </div>
   );
 }
