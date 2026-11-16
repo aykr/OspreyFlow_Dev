@@ -28,3 +28,4 @@ owner	2026-11-16	Tomorrow morning: the DNS records for ospreyflow.org and osprey
 owner	2026-11-16	ospreyflow.app (Part 3): O2 Porkbun API on (done); O3 the key file on the server (rerun the block with its printf line; confirm ls shows -rw------- root); O4 an ACME email; O5 who may reach 443; O1 DNS at the cutover	done
 owner	2026-11-16	ospreyflow.app (Part 3), when you're ready: O4 an email for certificate notices; O5 who may reach the demos after the cutover (the same two addresses, everyone, or a list). O2 and O3 done.	done
 owner	2026-11-16	ospreyflow.app (Part 3): O5 who may reach the demos after the cutover: (a) the same two addresses (recommended for now), (b) everyone, (c) another list. O2, O3 and O4 done.	done
+owner	2026-11-16	GOV.UK demo: Gemini's key, two commands at the top of MORNING.md (ssh -t ospreyflow-test); then the orchestrator runs the Gemini checks, and from then the demo is protected	open
