@@ -40273,9 +40273,14 @@ item; decisions 1 to 4 built by the case lane, 5 and 6 by case-b.
    - **Hide toolbar**, at the right end of the Graph's and the Map's toolbar, hides that toolbar. The case line becomes
      one slim line: "Case ‹switcher› · Saved views (n) · ‹state› · Open in the Ingest Studio ↗ · **Show toolbar**"
      ("You are in the Glass" out of sight but still the region's name, no "reads …"; the cross-link stays, in its short
-     words: ruling 9). *Back to the whole case* is on the slim line whenever a saved view is open.
+     words: ruling 9). *Back to the whole case* is on the slim line whenever a saved view is open. The slim line is never
+     taller than the full one at any width (ruling 14, on case-b's measurement of 81 against 41 px at a 520–560 px
+     window): its last fold step, before any wrap, shows the cross-link as **Studio ↗**, still named "Open in the Ingest
+     Studio" (ruling 9's words become its shortest); *Show toolbar* reads **Show** on a toolbar under 1220 px, as *Hide*
+     does, its name kept; and in the standard look a wrapped line's controls take its 24 px height, as GOV.UK's do.
    - The hidden toolbar is out of the tab order and the accessibility tree, not merely invisible. The button states
-     `aria-expanded` and `aria-controls`; focus moves to *Show toolbar* on hiding and to *Hide toolbar* on showing.
+     `aria-expanded` and `aria-controls`; pressed, *Hide toolbar* moves focus to *Show toolbar* and *Show toolbar* to
+     *Hide toolbar*. T leaves focus on the canvas, where it was pressed.
      Showing or hiding moves the drawing area's top once, by the toolbar's height, the graph keeping its centre and
      zoom (on the Graph the toolbar lies over the canvas, so the canvas element itself moves only by what the slim line
      gives back).
@@ -40295,7 +40300,7 @@ strip, focus on the name, *Details*, the alert's way back), `keyboard/views.spec
 controls), `keyboard/rules-place.spec.ts`, `keyboard/view-over-cap.spec.ts` and `keyboard/case-line-type.spec.ts` (the
 fold's order). The keyboard registry's `open-a-saved-views-details-from-the-case-line-by-keyboard`. Decisions 5 and 6:
 `keyboard/glass-toolbar.spec.ts`; `keyboard/keyboard.spec.ts`'s `match-strictness-by-keyboard`,
-`hide-and-show-the-toolbar-by-keyboard` and the T key's own case; `src/App.chrome.test.tsx`'s
+`hide-and-show-the-toolbar-by-keyboard` and `t-on-the-canvas-hides-and-shows-the-toolbar` (`CANVAS_ACTIONS`); `src/App.chrome.test.tsx`'s
 "Match strictness in the canvas toolbar" and "a toolbar that can be hidden" blocks; `src/canvas/toolbarVisibility.test.ts`;
 `src/resolution/ThresholdControl.test.tsx`. The red records and plants are `process/lanes/case/gates/glass-rows-*.log`
 (with `process/lanes/case/glass-rows/plants.sh`) and `process/lanes/case-b/v061-glass-rows-ac/`.

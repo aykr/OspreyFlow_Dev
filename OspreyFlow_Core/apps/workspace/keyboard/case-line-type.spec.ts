@@ -130,3 +130,31 @@ for (const [brand, theme] of LOOKS) {
     expect(clipped, "items of the row clipped").toEqual([]);
   });
 }
+
+// ADR-145 Amendment 19 decisions 4 and 6 (case-b's measurement, 16 November 2026: at a 520–560 px window the slim line
+// was 81 px against the full line's 41, so hiding the toolbar pushed the canvas down): the slim line folds at least as
+// far as the full one, so it is never taller, at any width, in each look, with the whole case or a saved view open.
+for (const [brand, theme] of LOOKS) {
+  // 600 and 640 (the whole case) and 900 and 940 (a saved view open) are where only the slim line's shortest cross-link
+  // keeps it from wrapping (ruling 14), measured by a sweep from 380 to 1500 with that step removed.
+  for (const width of [1440, 1024, 940, 900, 760, 640, 600, 540, 400]) {
+    for (const openview of [false, true]) {
+      test(`${brand} ${theme}: at ${width} wide${openview ? " with a saved view open" : ""}, the slim line is never taller than the full one`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 900 });
+        const height = async (slim: boolean) => {
+          await page.goto(`/keyboard/places-harness.html?${openview ? "openview=1&" : ""}${slim ? "slim=1&" : ""}${brand === "govuk" ? "brand=govuk" : ""}`);
+          await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+          const region = page.getByRole("region", { name: "You are in the Glass" });
+          await expect(region.getByRole("button", { name: /^Saved views/ })).toBeVisible();
+          await page.evaluate(() => document.fonts.ready.then(() => undefined));
+          // Two frames for the fold to settle.
+          await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(null)))));
+          return (await region.boundingBox())!.height;
+        };
+        const full = await height(false);
+        const slim = await height(true);
+        expect(slim, `the slim line ${slim} px, the full ${full} px`).toBeLessThanOrEqual(full);
+      });
+    }
+  }
+}

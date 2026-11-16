@@ -29,6 +29,9 @@ export interface CrossLink {
   /** Its words when the line runs out of room (the owner's word of 15 November 2026: the line stays one line where the
    * top bar does), the place it goes to and no more: the case is the one the line names. */
   shortLabel?: string;
+  /** Its shortest words, on the slim line's last fold step before any wrap (ADR-145 Amendment 19 decision 6, the
+   * owner's ruling 14), with the name a screen reader hears, which holds those words (WCAG 2.5.3). */
+  shortest?: { label: string; name: string };
   onFollow: () => void;
 }
 
@@ -147,13 +150,16 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
   const row = useRef<HTMLDivElement>(null);
   const [fold, setFold] = useState({ step: 0, pass: 0 });
   const shortLabel = crossLink?.shortLabel;
+  // The slim line has one more step before it wraps (ruling 14): the cross-link's shortest words, so it is never taller
+  // than the full line, which has "You are in …" and "reads …" to give way where the slim line has *Show toolbar*.
+  const lastSqueeze = slim && crossLink?.shortest ? 6 : 5;
   useLayoutEffect(() => {
     const element = row.current;
     if (!element) return;
     if (fold.step < 2 && lineWraps(element)) setFold((current) => ({ ...current, step: current.step === 0 && shortLabel ? 1 : 2 }));
-    else if (fold.step >= 2 && fold.step <= 5 && element.scrollWidth > element.clientWidth + 1)
+    else if (fold.step >= 2 && fold.step <= lastSqueeze && element.scrollWidth > element.clientWidth + 1)
       setFold((current) => ({ ...current, step: current.step + 1 }));
-  }, [fold.step, fold.pass, shortLabel, crossLink?.label, datasets, place, caseState, slim]);
+  }, [fold.step, fold.pass, shortLabel, crossLink?.label, datasets, place, caseState, slim, lastSqueeze]);
   useLayoutEffect(() => {
     const element = row.current;
     if (!element || typeof ResizeObserver === "undefined") return;
@@ -178,8 +184,16 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       fonts?.removeEventListener?.("loadingdone", again);
     };
   }, []);
+  // The slim and full lines fold from their own start: a step the one reached means something else in the other.
+  const wasSlim = useRef(slim);
+  useLayoutEffect(() => {
+    if (wasSlim.current === slim) return;
+    wasSlim.current = slim;
+    setFold((current) => ({ step: 0, pass: current.pass + 1 }));
+  }, [slim]);
   const short = slim || fold.step >= 1;
-  const squeezed = fold.step >= 2 && fold.step <= 5;
+  const squeezed = fold.step >= 2 && fold.step <= lastSqueeze;
+  const shortest = squeezed && fold.step >= 6 && crossLink?.shortest ? crossLink.shortest : null;
   const rowClass = [squeezed && "context-banner--squeezed", squeezed && fold.step >= 4 && "context-banner--fold-case"].filter(Boolean).join(" ");
   const placeHidden = slim || (squeezed && fold.step >= 5);
   // *Details* of the open saved view (Amendment 19 decision 2): closed again whenever another view opens, and focus
@@ -237,7 +251,8 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
         // The owner's navigation decision (ADR-145 Amendment 15, its words Amendment 17's): "Case ‹switcher› · Saved views (n) · reads …",
         // with the word "Case" visible; the switcher's name keeps its own "Case:" for a screen reader.
         <>
-          {next()}
+          {/* No separator before "Case" while "You are in …" is out of sight (the slim line, fold step 5). */}
+          {!placeHidden && next()}
           <span className="context-banner__label" aria-hidden="true">Case</span>
           {caseSwitcher}
           {onViews && (
@@ -304,8 +319,13 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
         </>
       )}
       {crossLink && (
-        <button type="button" className={govuk ? "govuk-link context-banner__cross" : "btn btn--ghost context-banner__cross"} onClick={crossLink.onFollow}>
-          {short && crossLink.shortLabel ? crossLink.shortLabel : crossLink.label}
+        <button
+          type="button"
+          className={govuk ? "govuk-link context-banner__cross" : "btn btn--ghost context-banner__cross"}
+          aria-label={shortest ? shortest.name : undefined}
+          onClick={crossLink.onFollow}
+        >
+          {shortest ? shortest.label : short && crossLink.shortLabel ? crossLink.shortLabel : crossLink.label}
         </button>
       )}
       {end && <span className="context-banner__end">{end}</span>}
@@ -350,7 +370,12 @@ export function crossLinkFor(
   if (place === "glass") {
     // ADR-145 Amendment 14 decision 4: the row names the case's datasets once, in "reads …"; the
     // cross-link does not name them again.
-    return { label: "Open this case's data in the Ingest Studio ↗", shortLabel: "Open in the Ingest Studio ↗", onFollow: go.toStudio };
+    return {
+      label: "Open this case's data in the Ingest Studio ↗",
+      shortLabel: "Open in the Ingest Studio ↗",
+      shortest: { label: "Studio ↗", name: "Open in the Ingest Studio" },
+      onFollow: go.toStudio,
+    };
   }
   if (place === "ingest") {
     return {

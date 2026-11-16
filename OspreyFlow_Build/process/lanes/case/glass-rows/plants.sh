@@ -44,8 +44,14 @@ plant "the slim line keeps reads" src/shell/ContextBanner.tsx '{place === "glass
   src/shell/caseLine.test.tsx "drops You are in and reads" "" ""
 plant "the canvas pushed by a strip again" src/App.tsx '            {/* ADR-145 Amendment 19: no strip over the canvas; what is open is said on the case line (`caseState`). */}' '            {view === "graph" && investigationId && <div role="region" aria-label="The whole case" className="view-lens-banner">You are looking at the whole case.</div>}' \
   src/App.views.test.tsx "said on the case line" "" ""
+plant "the slim line without its shortest cross-link (ruling 14)" src/shell/ContextBanner.tsx 'const lastSqueeze = slim && crossLink?.shortest ? 6 : 5;' 'const lastSqueeze = 5;' \
+  "" "" case-line-type.spec "never taller"
+plant "the cross-link and the end on 32 px when wrapped (ruling 14)" src/shell/places.css '.context-banner :is(.context-banner__cross, .context-banner__end .btn) { min-height: 24px; padding-top: 0; padding-bottom: 0; }' '' \
+  "" "" case-line-type.spec "never taller"
+plant "a separator before Case while You are in is out of sight" src/shell/ContextBanner.tsx '{!placeHidden && next()}' '{next()}' \
+  src/shell/caseLine.test.tsx "no separator before it" "" ""
 echo "unplanted:"
 npx vitest run src/shell/caseLine.test.tsx src/App.views.test.tsx >/tmp/plant.$$ 2>&1 && echo "green vitest" || { echo "RED vitest unplanted"; fails=$((fails+1)); }
-npx playwright test --config keyboard/playwright.config.ts views.spec --reporter=line >/tmp/plant.$$ 2>&1 && echo "green views.spec" || { echo "RED views.spec unplanted"; fails=$((fails+1)); }
+npx playwright test --config keyboard/playwright.config.ts views.spec case-line-type.spec --reporter=line >/tmp/plant.$$ 2>&1 && echo "green views.spec, case-line-type.spec" || { echo "RED keyboard unplanted"; fails=$((fails+1)); }
 rm -f /tmp/plant.$$
 echo "plants failing to go red, or unplanted red: $fails"; exit "$fails"

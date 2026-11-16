@@ -161,6 +161,10 @@ function Harness() {
                 }
               : "whole"
         }
+        // `?slim=1`: the slim line a hidden toolbar gives (ADR-145 Amendment 19 decision 6), its end a stand-in for
+        // case-b's *Show toolbar*, so the line's fold is measured in both forms (`case-line-type.spec.ts`).
+        slim={place === "glass" && params.get("slim") === "1"}
+        end={place === "glass" && params.get("slim") === "1" ? <button type="button" className="btn">Show toolbar</button> : undefined}
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? (params.get("long") === "1" ? ["Prison Intelligence Dataset (synthetic)", "the Ledger visits log"] : ["Prison intel"]) : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {

@@ -39,6 +39,15 @@ describe.each(["ospreyflow", "govuk"] as const)("the case line's slim form (%s)"
     expect(within(region).getByRole("button", { name: "Open in the Ingest Studio ↗" })).toBeTruthy();
   });
 
+  it("starts with the case, no separator before it, while You are in is out of sight", () => {
+    applyBrand(brand);
+    render(line({ slim: true }));
+    const region = screen.getByRole("region", { name: "You are in the Glass" });
+    const row = region.querySelector(".govuk-notification-banner__content") ?? region;
+    const drawn = [...row.children].filter((c) => !c.classList.contains("visually-hidden"));
+    expect(drawn[0]!.textContent).toBe("Case");
+  });
+
   it("draws the end slot last on the line, in both forms", () => {
     applyBrand(brand);
     for (const slim of [false, true]) {
