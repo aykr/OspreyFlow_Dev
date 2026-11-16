@@ -89,3 +89,4 @@ cancels a run in progress).
 - The report sync tested against a real Valkey that requires TLS and a password (rule 15; the stand-in accepted plaintext)
 - The report sync's loop survives a Valkey error (logs and retries rather than exiting into a crash loop)
 - The drawn-merge sheet moves focus only when first drawn and when sent, not after each choice (WCAG 3.2.2 On Input; rules-b's audit, 16 Nov), then the spec's waits removed
+- **Scope dashboard builders** (the owner, 16 Nov): manage_dashboards limited to the dashboard identities its holder is cleared for, in their own Superset session, not only the guest token; its own ADR (rule 3)
