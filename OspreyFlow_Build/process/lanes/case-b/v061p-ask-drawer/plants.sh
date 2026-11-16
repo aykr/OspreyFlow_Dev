@@ -113,7 +113,9 @@ plant "P10b the view in reach under the page" "$HOOK" \
   "viewInert: open && expanded && !reading," "viewInert: false," \
   kb $SSPEC "Expand turns the Ask & Chat drawer"
 plant "P11 Escape closes the page too" "$PAGE" \
-  "if (!drawer || hidden) return;" "if (hidden) return;" \
+  "if (!drawer || hidden) return;
+    const onKeyDown" "if (hidden) return;
+    const onKeyDown" \
   kb $SSPEC "Escape from inside the Ask & Chat drawer"
 plant "P12 the results' heading keeps focus from the drawer opened over their reader" "$HOOK" \
   "      setTimeout(() => document.querySelector<HTMLElement>(ASK_HEADING)?.focus(), 0);" "" \

@@ -1,17 +1,21 @@
 diff --git a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-index f5fafa7..69056cc 100644
+index f5fafa7..c2e0b50 100644
 --- a/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
 +++ b/OspreyFlow_Core/apps/workspace/keyboard/actionRegistry.ts
-@@ -783,6 +783,8 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
+@@ -783,6 +783,12 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
    "select-a-graph-fact-from-the-ask-page-by-keyboard",
    // ADR-145 Amendment 18: Show all on graph on the page leaves it for the canvas, the items selected, focus there.
    "show-all-from-the-ask-page-by-keyboard",
 +  // ADR-145 Amendment 20 decision 2: Expand and Show as a drawer keep the question typed, the engine and the scroll.
 +  "expand-and-show-as-a-drawer-keep-the-question-by-keyboard",
++  // ADR-145 Amendment 20 (the orchestrator's ruling R1): a graph fact or Show all chosen in the drawer keeps it beside the
++  // canvas, focus there; Escape from the canvas closes it.
++  "select-a-graph-fact-from-the-ask-drawer-by-keyboard",
++  "show-all-from-the-ask-drawer-by-keyboard",
    // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
    "select-a-graph-fact-from-an-answer-by-keyboard",
    // ADR-129 Amendment 5: a source Whole case's search found ([S-n]) selects its records.
-@@ -902,8 +904,13 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
+@@ -902,8 +908,13 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
    // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
    // opened with one keypress.
    "rail-panels-by-keyboard",
