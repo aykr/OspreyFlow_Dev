@@ -17,7 +17,9 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import "../src/design/fonts";
 import { applyHarnessBrand } from "./brandHarness";
+import { loadLookFaces } from "./lookFaces";
 import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
@@ -54,6 +56,9 @@ window.fetch = async (input: RequestInfo | URL) =>
     : new Response("[]", { status: 200 });
 
 const brand = await applyHarnessBrand();
+// The look's own faces loaded before the case line is drawn and folded, so its widths are the product's, not the
+// runner's fallback face (CI's DejaVu folded the line at 1440, 16 November 2026; `lookFaces.ts`).
+await loadLookFaces(["400", "600", "700"]);
 const params = new URLSearchParams(location.search);
 // read_reports and trace_ownership by default, so the switch and More views hold every view (`offeredViews`).
 const rights = new Set((params.get("rights") ?? "investigate,read_alert_queue,edit_pipelines,manage_people,read_reports,trace_ownership").split(","));
