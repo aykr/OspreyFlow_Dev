@@ -1,3 +1,12 @@
+# case-b lane · current work (16 November 2026, the orchestrator)
+
+L3.8 below merged on 9 Nov (b0671be); v0.6.0 #3 and #4 are merged. Now, on sol: **v0.6.1's first item, the Glass rows, A and C**
+(strictness into the toolbar; Hide and Show toolbar, Alt+Shift+T, the remembered setting, Map), split with case's B, on
+lane/case-b-v061-glass-rows-ac, based on case's ContextBanner props commit. Brief, proposal and rulings 1-8:
+`v061/glass-rows/`. Merges after B and after v0.6.0's release.
+
+---
+
 # Case-b lane · brief L3.8 · the ownership route for Disable…
 
 Written by the orchestrator, 9 November 2026, after L3.7's merge (`e935ded`), for a **fresh case-b session on
