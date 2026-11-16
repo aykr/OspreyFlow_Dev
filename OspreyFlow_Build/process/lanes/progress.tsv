@@ -189,4 +189,4 @@ platform-b	v060-stage4-package-test	L	building	v0.6.0 stage 4: the package test 
 platform-b	v060-stage3-done	S	done	v0.6.0 stage 3: the candidate C = 09f1fbe (CI 43756479074 green), its dry run green; no Core change needed	lane/platform-b-v060-candidate-records
 orchestrator	v060-build	S	done	v0.6.0 stage 1, Build: every closed-list item merged (#4 last, d7cf5a0), CI green on 09f1fbe	-
 orchestrator	v060-websites	S	building	The websites published to gh-pages (org f22e611, net a38ec0f) with Pages on and each domain set, 16 Nov ~06:30Z; live once the owner's DNS resolves, then Enforce HTTPS
-platform-b	v060-search-jobs-pg	S	building	v0.6.0 stage 4 fix (the owner, 15 Nov): the chart's search Jobs given the managed database's settings, the policy gate admitting them; red first
+platform-b	v060-search-jobs-pg	S	done	v0.6.0 stage 4 fix (the owner, 15 Nov): the chart's search Jobs given the managed database's settings, the policy gate admitting them; red first	lane/platform-b-v060-search-jobs-pg

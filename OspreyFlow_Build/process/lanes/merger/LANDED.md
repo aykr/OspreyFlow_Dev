@@ -240,3 +240,4 @@ e776b37 fb3653f rules-b v060-stage2-margin
 d7cf5a0 6be00be docs v060-changelog-i4-i6
 9bb1e6a af5d2cb case v060-studio-save-wait
 dca173a 2346bb0 platform-b v060-candidate-records
+687ae02 b377bed platform-b v060-search-jobs-pg
