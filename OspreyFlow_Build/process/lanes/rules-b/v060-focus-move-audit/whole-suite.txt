@@ -1,0 +1,3 @@
+# The whole keyboard suite on lane/rules-b-v060-focus-move-audit (eccfbc3 + the drawn-merge.spec waits), slot 9, --workers 8 (2026-11-16T07:32:23Z)
+  1365 passed (6.1m)
+  5 skipped
