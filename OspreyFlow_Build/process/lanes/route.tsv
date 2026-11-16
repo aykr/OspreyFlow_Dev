@@ -28,7 +28,7 @@ c2	CI green on the new candidate 38fafb8 (resolution, report-sync and keyboard-r
 kp	CI's keyboard races: every keyboard spec's press waits for its button to be enabled; joins the next candidate	rules-b	2026-11-16	2026-11-16	y	-	rules-b:v060-press-enabled
 rv	Package test's second find: the report sync opens Valkey with its password and TLS on cloud-platform (the owner, 16 Nov)	platform-b	2026-11-16	2026-11-16	y	-	platform-b:v060-report-sync-valkey
 rd	Package test's find: resolution for Person works with no date of birth anywhere (the owner, 16 Nov), then the new candidate	rules-b	2026-11-16	2026-11-16	y	-	rules-b:v060-resolve-empty-dob
-4	Package test on 38fafb8 from row 0, every check (about 5 h), beside its CI; runs on 0c158b8 and 720dcfc found two defects, both fixed	platform-b	2026-11-16	2026-11-16	y	rv,kp	platform-b:v060-stage4-package-test
+4	Package test on 38fafb8 from row 0, every check (about 5 h), beside its CI; runs on 0c158b8 and 720dcfc found two defects, both fixed	platform-b	2026-11-16	2026-11-16	y	rv,kp	platform-b:v060-stage4
 5	Release v0.6.0 on the owner's word given in advance: the product repository and its tag, the release workflow's signed images	orchestrator	2026-11-16	2026-11-16	y	4,c2	-
 rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
 gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-

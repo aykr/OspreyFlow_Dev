@@ -746,7 +746,7 @@ route_view() {
     printf '%s\t%s\t%s\n' "$lane" "${st:--}" "$note" >> "$lanes"
   done
   P_CLOCK="$(clock)" P_NOW="$(now)" P_PROGRESS="$PROGRESS" P_ROUTE="$ROUTE" P_OWNER_DUE="$OWNER_DUE" \
-    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" P_STEPS="${P_STEPS:-}" perl -CSD -e "$STAGES_PL$ROUTE_PL"
+    P_AUDIT="$AUDIT" P_LANES="$lanes" P_NEEDS="$needs" P_DIR="$DIR" P_STEPS="${P_STEPS:-}" P_ROWS="${OSPREY_HEARTBEAT_ROWS:-$( (tput lines </dev/tty) 2>/dev/null || echo 40)}" perl -CSD -e "$STAGES_PL$ROUTE_PL"
   rm -f "$lanes" "$needs"
   # shellcheck disable=SC2064   # this file, now
   trap "rm -f '$GIT_PROGRESS' '$GIT_PROGRESS.tmp'" EXIT
@@ -928,7 +928,9 @@ printf "FINISHED %s %d of %d steps merged\n", bar(@progress ? $merged / @progres
   scalar @progress;
 print "Other views: lanes_heartbeat.sh --steps · --overview · --full · --lanes · summary\n";
 select($screen); close $tail_fh; $tail = Encode::decode("UTF-8", $tail);
-my $room = 40 - $head_lines - 1 - scalar(split /\n/, $tail);
+# The screen is the terminal`s own height when taller than 40 (the owner, 16 Nov: every running step`s stages shown).
+my $height = ($ENV{P_ROWS} // "") =~ /^\d+$/ && $ENV{P_ROWS} > 40 ? $ENV{P_ROWS} - 2 : 40;
+my $room = $height - $head_lines - 1 - scalar(split /\n/, $tail);
 my ($fold, @under, $shown, $hidden) = (0);
 for my $f (0 .. 3) { $fold = $f; @under = map { [lines_of($f, $_->[1])] } @rows;
   $shown = @rows; $shown += @$_ for @under; last if $shown <= $room }
