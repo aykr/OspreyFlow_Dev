@@ -733,9 +733,10 @@ and the keyboard harnesses as `useSearchResultsOverlay` is.
 
 - **The drawer** is the workspace's drawer: at the window's right, under the top bar and the context row (Amendment
   14), not modal, the view beside it in reach. Its header holds the heading **Ask & Chat**, which takes focus on
-  opening, then **Expand** ("Expand Ask & Chat to the full page") and **Close**. **Close**, a second press of the rail's
-  *Ask & Chat*, or **Escape** with focus inside the drawer closes it, focus on the rail's *Ask & Chat*. Escape with
-  focus elsewhere keeps its own meaning.
+  opening, then **Expand** ("Expand Ask & Chat to the full page") and **Close**. **Close** or a second press of the
+  rail's *Ask & Chat* closes it, focus on what opened it where that is still there (the canvas's *Ask the model about
+  these…*), otherwise the rail's *Ask & Chat*. **Escape anywhere** closes it, as every drawer's does: from inside it,
+  focus goes the same way; from elsewhere (the canvas) focus stays where it is.
 - **Expand** keeps everything in hand: the panel is never mounted again, so the question typed, the engine chosen, the
   answers and which are open go with it, and the scroll stays on the item at its top. Focus goes to the page's heading.
 - **The page:** **Back to ‹view›** (a GOV.UK back link under that brand) is its first item and closes Ask & Chat
@@ -751,11 +752,13 @@ and the keyboard harnesses as `useSearchResultsOverlay` is.
   beneath, never to the other page. Choosing any view, a saved view, another place or the cross-link leaves the page,
   as it leaves the results. **The drawer** stays beside a view chosen, a saved view opened, a search and the results
   (as Explore and History do); another place and the cross-link close it.
-- **A marker** in an answer (*Show on the graph: …*) closes Ask & Chat, in either shape, and shows the graph, the item
-  brought into view, focus on the canvas once it is back in reach (never left on the marker that went with it), as the
-  results' *Show on graph* does; *Show all on graph* under an answer (v0.6.0 #5) does the same, through the same hook.
-  **A document** opened from an answer is read over the view, Ask & Chat hidden and shown again in its shape when the
-  reader closes, focus on its heading, never on the view beneath.
+- **A marker** in an answer (*Show on the graph: …*) shows the graph, the item brought into view, focus on the canvas
+  once it is in reach; the drawer stays beside it (ADR-129 decision 1), while the page closes for it (never leaving
+  focus on the marker that went with it), as the results' *Show on graph* does; *Show all on graph* under an answer
+  (v0.6.0 #5) does the same, through the same hook. **A document** read over the view hides Ask & Chat, wherever it
+  was opened, which shows again in its shape when the reader closes. Focus comes back to its heading only after a
+  document read from an answer; one read from the view or the results gives focus back where they put it (the canvas,
+  the results' heading).
 - **Opened while a document is read** over the view (from the results, from the view itself, from an answer before a
   search), Ask & Chat shows at once: the reader closes and focus goes to its heading (the orchestrator, 15 November
   2026; `stopReading`, handed to both hooks by App and the harness). The drawer opened over a document read from the
@@ -764,9 +767,12 @@ and the keyboard harnesses as `useSearchResultsOverlay` is.
   view, once, never inside the drawer. It takes focus as it is asked for and only then: drawn again elsewhere (beside
   the view, when the page it sat over is hidden for the reader) or drawn again by App, it leaves focus where the
   analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the canvas's foot is hidden under the
-  page, as under the results, and back when it closes; beside the drawer it stays.
-- The rail's opener says it opens a dialog (`aria-haspopup="dialog"`) and is `aria-expanded` while Ask & Chat shows, in
-  either shape. While Ask & Chat is hidden for a document read from an answer it is not expanded, and one press shows
+  page, as under the results, and back when it closes; beside the drawer it stays, moved clear of it.
+- **Room beside the drawer:** the results page's Filters and the batch job's panel make room for the drawer
+  (`--w-drawer`, `design/primitives.css`; `data-ask-drawer`, `questions/askPage.css`), so no control lies under it
+  while Tab reaches it.
+- The rail's opener says it opens a dialog (`aria-haspopup="dialog"`) while Ask & Chat is closed or the drawer, none
+  while it is the page, and is `aria-expanded` while Ask & Chat shows, in either shape. While Ask & Chat is hidden for a document read from an answer it is not expanded, and one press shows
   it again, the reader closed, focus on its heading (case's re-check, 15 November 2026; the hook's `shown`).
 
 Proved by:
@@ -787,9 +793,13 @@ Proved by:
     `expand-and-show-as-a-drawer-keep-the-question-by-keyboard` (the question, the engine and the scroll kept) and
     `back-from-ask-and-chat-by-keyboard`;
   - on `harness.html?questions=page`, the page over the real canvas: `select-a-graph-fact-from-the-ask-page-by-keyboard`
-    and `show-all-from-the-ask-page-by-keyboard`, with *Show all on graph*'s refusal past the cap there.
+    and `show-all-from-the-ask-page-by-keyboard`, with *Show all on graph*'s refusal past the cap there;
+  - on `harness.html?questions=drawer`, the drawer beside the real canvas: `select-a-graph-fact-from-the-ask-drawer-by-keyboard`
+    (the drawer kept, focus on the canvas, Escape there closing it) and `show-all-from-the-ask-drawer-by-keyboard`.
 - `keyboard/search-results.spec.ts`: Ask & Chat opened while a document is read, by keyboard; nothing of the canvas
-  drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the three looks.
+  drawn over the page, on `search-results-harness.html?canvas=1&ask=1`, in the three looks; no control of the results
+  under the drawer, in the three looks at two widths; focus after a document read from the results or the view with
+  the drawer open. `keyboard/batch-expansion.spec.ts` (`?ask=drawer`): the panel clear of the drawer.
 - The every-harness scans of `places-harness.html?open=questions` (the drawer) and `?open=questions&form=page`, and of
   `questions-harness.html` in both shapes, in the three looks.
 

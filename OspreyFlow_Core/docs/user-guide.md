@@ -15,11 +15,12 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.75** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
+**Version 1.76** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 1.75 | 2026-11-16 | v0.6.1 (the owner, 16 Nov): Ask & Chat (§6) opens as a drawer beside the view again, with **Expand** to make it the page and **Show as a drawer** to turn it back, keeping your question, engine and place; Esc inside the drawer closes it; each opening is the drawer, and the results' *Ask a question about '…' instead* opens the page; §3's rail row and §5.5's Ask line say so (ADR-145 Amendment 20). |
+| 1.76 | 2026-11-16 | §6, Ask & Chat's drawer as reviewed (ADR-145 Amendment 20): Esc closes it as it closes other drawers; a marker or *Show all on graph* shows the graph with the drawer kept beside it; closing returns focus to what you opened it from. |
+| 1.75 | 2026-11-16 | v0.6.1 (the owner, 16 Nov): Ask & Chat (§6) opens as a drawer beside the view again, with **Expand** to make it the page and **Show as a drawer** to turn it back, keeping your question, engine and place; Esc closes the drawer, as other drawers; a marker or *Show all on graph* keeps the drawer; each opening is the drawer, and the results' *Ask a question about '…' instead* opens the page; §3's rail row and §5.5's Ask line say so (ADR-145 Amendment 20). |
 | 1.74 | 2026-11-16 | v0.6.0 (the owner, 16 Nov; built as v0.6.1's first item), the Glass's rows (ADR-145 Amendment 19, decisions 1 to 4): §3, the case line says what is on the graph, "Whole case" or "Saved view: ‹name›" with its tag, **Details ▾** and **Back to the whole case**, and stays one line on a narrow window; §5.13, no strip over the graph: *Details* holds the count of what could not be shown, that nothing changes the case, where the view came from with **← Back to the alert**, and a merged drawing's notes; focus to the saved view's name. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py` and `tests/test_user_guide_saved_views.py`. §5.2, **Match strictness** is a control in the graph's toolbar, and **Hiding the toolbar**: **Hide toolbar** and **Show toolbar**, T with the graph selected, remembered for you in this browser; the Map has the buttons (ADR-145 Amendment 19, decisions 5 and 6). |
 | 1.73 | 2026-11-16 | §9's **Reports**: in the boards' editor a builder sees the figures behind every board, for every case and clearance, so the right to manage dashboards is given only to people cleared for all of them (ADR-148 Amendment 21, the owner's ruling of 16 November). |
 | 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0); *Show all on graph*'s words past the limit say *Save as a view* is under the answer in Ask & Chat, since the page has gone. Held by `tests/test_user_guide_ask_chat.py` and `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -952,15 +953,15 @@ it holds proposals you have not yet accepted or rejected, its line says so: "2 p
 you can go on using. **Expand**, at the top of the drawer, turns it into a page filling the main area, as
 the search results do, with the view you left kept beneath it, unchanged; the question you were typing,
 the engine you chose and your place in the conversation go with it. On the page, **Show as a drawer**,
-beside its heading, turns it back. Each time you open Ask & Chat it opens as the drawer. **Close**, Esc
-inside the drawer, or pressing Ask & Chat on the rail again closes it; focus returns to Ask & Chat on the
-rail. On the page, **Back to** the view (*Back to Map*, say) is its first link and puts that view back,
+beside its heading, turns it back. Each time you open Ask & Chat it opens as the drawer. **Close**, Esc,
+or pressing Ask & Chat on the rail again closes it; focus returns to what you opened it from, or to Ask &
+Chat on the rail. On the page, **Back to** the view (*Back to Map*, say) is its first link and puts that view back,
 as does pressing Ask & Chat on the rail again. A search from the page shows the results in its place, and
 the results' *Ask a question about '…' instead* opens the page in theirs; Back from either goes to the
 view, not to the other. Choosing a view, a saved view or another place leaves the page too; the drawer
 stays beside a view or a search you choose, and closes when you go to another place. Selecting a marker
-in an answer, or **Show all on graph** under it, closes Ask & Chat and shows the graph with those items
-in view.
+in an answer, or **Show all on graph** under it, shows the graph with those items in view; the drawer
+stays beside it, while the page closes.
 
 **Graph facts.** Along with the documents, the model is given a numbered, plain account of the graph
 around what you have selected and one link beyond it (the whole view when nothing is selected). A

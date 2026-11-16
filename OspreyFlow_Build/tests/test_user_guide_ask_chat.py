@@ -172,15 +172,19 @@ def test_section_6_says_ask_and_chat_is_a_drawer_with_expand_to_a_page_as_the_gl
     assert "Each time you open Ask & Chat it opens as the drawer." in text
     # Close, Esc inside the drawer and the rail's second press close it, focus back on the rail's opener.
     assert "focusRailOpener(RAIL_LABELS.questions)" in hook
-    assert 'if (event.key !== "Escape" || event.defaultPrevented) return;' in page
-    assert "**Close**, Esc inside the drawer, or pressing Ask & Chat on the rail again closes it" in text
-    assert "focus returns to Ask & Chat on the rail" in text
+    assert 'if (event.key !== "Escape") return;' in page and "(inside ? onBackRef : onDismissRef).current();" in page
+    assert "**Close**, Esc, or pressing Ask & Chat on the rail again closes it" in text
+    assert "focus returns to what you opened it from, or to Ask & Chat on the rail" in text
+    assert "if (to?.isConnected && !to.closest(\"nav\"))" in hook
     # The two pages replace each other: a search leaves the page (not the drawer), and the page leaves the results.
-    assert re.search(r"openPage: \(\) => \{ other\.leave\(\);", hook)
+    assert re.search(r"openPage: \(\) => \{ noteOpener\(\); other\.leave\(\);", hook)
     assert "const leavePage = () => { if (expanded) close(); };" in hook and "leave: leavePage," in hook
     assert "ask.leave(); // the results replace Ask & Chat's page" in app
     assert "shows the results in its place" in text
     assert "Back from either goes to the view, not to the other" in text
+    # A marker or Show all keeps the drawer; the page closes for them.
+    assert "showOnGraph: (show) => { if (expanded) close();" in hook
+    assert "shows the graph with those items in view; the drawer stays beside it, while the page closes" in text
     # A view chosen keeps the drawer; another place closes it.
     assert "viewChosen: () => { other.leave(); leavePage(); }," in hook
     assert "leaveBoth: () => { other.leave(); close(); }," in hook
