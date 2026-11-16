@@ -14,6 +14,28 @@ check 0 new, the citations clean; the warm release dry run from a hash-checked a
 seven images built with the 2026-11-16 stamp, seven trivy scans clean, the lock refusing only our five, the chart
 packaged; the scan tags removed. `make chart-check cp-policy-check` against the run copy: 393 passed.
 
+## The owner's ruling (16 November): this run stands for `529f0f4`
+
+CI 43869826530 on b6d33ce was red on two items: a records slip (`test_lanes_groups`, fixed on main in 6a99cb0) and two
+keyboard cases whose harness never loaded the product's faces (fixed test-only in 4fefa51). The next C, `529f0f4`
+(529f0f4be623ae929050b743ee7c571a0a98b53b), was compared with b6d33ce by platform-b for the ruling:
+
+- `git diff b6d33ce 529f0f4`: **2 files under `OspreyFlow_Core`**, `apps/workspace/keyboard/case-line-type.spec.ts`
+  and `places-harness.tsx`, and **8 under `OspreyFlow_Build/process/`**; nothing else. VERSION, the CHANGELOG, the
+  guides and their PDFs, the chart, every Dockerfile, `.dockerignore`, the package manifests and lock, and every
+  service, package, harness and command file unchanged: **nothing in a build input** but the one context below.
+- The one image whose context takes the folder in is the workspace's builder stage (`COPY apps/workspace`). Its build is
+  `vite build` (no tsc); built on the test server from the hash-checked b6d33ce copy, then with 529f0f4's two files in
+  place: **the dist byte for byte identical**, 59 files each, every file's sha256 the same, **tree hash
+  `afd0a61e71b4ff28`** both times. The image copies only that dist. (`~/osprey-runs/platform-b.c8/dist-compare/`; the
+  copy restored and its files sha-checked afterwards.)
+- What differs downstream is only the product repository's published tree (release step 6 compares C's
+  `OspreyFlow_Core`): it carries the two new test files, as intended.
+
+**The owner accepts stage 4 on b6d33ce for 529f0f4** (through case as deputy and the orchestrator; `v060/RULINGS.md`,
+"Stage 4 on b6d33ce stands for 529f0f4"). No rows were run again. CI on 529f0f4 must still be fully green before
+"release-ready".
+
 ## Known issue, for the release notes
 
 - **report-sync restarts once if the Conduit is unreachable during a pass; it recovers on its own.** (Row 6; case's
