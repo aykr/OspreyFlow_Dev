@@ -108,6 +108,8 @@ from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
 from services.search_index.pending import PendingIds, pending_node_ids
+from services.search_index.run import configured as search_index_configured
+from services.search_index.run import start_index_feed
 from valkey.asyncio import Valkey
 
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
@@ -1654,6 +1656,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if job_loop_in_conduit()
         else None
     )
+    # ADR-150 Amendment 4: there too, where this shape has an OpenSearch, the Conduit feeds the
+    # search index, as the worker does (one holder of the lease, stopped at shutdown, its client
+    # closed). It reads through the adapter itself, as the worker's does, never the stamping graph
+    # the routes are given; no route reaches it (`test_index_feed_reach.py`).
+    index_feed = (
+        start_index_feed(
+            getattr(graph, "inner", graph), extraction_candidates, valkey,
+            _conduit_feed_name(), ontology,
+        )
+        if index_feed_in_conduit()
+        else None
+    )  # fmt: skip
+    if index_feed is not None:
+        logger.info("the Conduit is feeding the search index %s", index_feed.alias)
     promotion_task = asyncio.create_task(
         promotion_ageing_module.run_every(
             app.state.promotion_sweep,
@@ -1676,6 +1692,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await asyncio.wait_for(job_loop_task, timeout=JOB_LOOP_STOP_SECONDS)
             except TimeoutError:
                 job_loop_task.cancel()
+        if index_feed is not None:
+            # Before the stores it reads are closed below: the batch in hand finishes, or its rows
+            # stay in the outbox for the next start.
+            await index_feed.close(timeout=JOB_LOOP_STOP_SECONDS)
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
@@ -2291,6 +2311,19 @@ def job_loop_in_conduit(environ: Mapping[str, str] | None = None) -> bool:
     workload). Unset, as a test app or a deployment rendered before this is, it does not, so a
     worker that exists is never joined by a Conduit consuming beside it."""
     return (os.environ if environ is None else environ).get("OSPREY_JOB_WORKER") == "conduit"
+
+
+def index_feed_in_conduit(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether this Conduit feeds the search index (ADR-150 Amendment 4): where it runs the job
+    loop (no worker workload is rendered) and an OpenSearch is configured. Elsewhere the worker
+    feeds it, or nothing does because there is no index."""
+    return job_loop_in_conduit(environ) and search_index_configured(environ)
+
+
+def _conduit_feed_name() -> str:
+    """This Conduit process's name in the indexer's lease: its consumer name and its process id,
+    so two processes on one host never both read the lease as their own."""
+    return f"{_conduit_consumer_name()}-{os.getpid()}"
 
 
 def _conduit_consumer_name() -> str:
