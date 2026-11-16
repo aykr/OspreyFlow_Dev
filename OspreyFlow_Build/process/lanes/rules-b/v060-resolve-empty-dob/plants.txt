@@ -1,0 +1,7 @@
+the real fix: 3 of 3 pass 
+RED   no fix (main before it): ['test_a_population_with_no_date_of_birth_at_all_resolves_without_raising: SplinkException', 'test_the_same_name_with_no_date_of_birth_still_becomes_a_candidate: SplinkException']
+RED   every date column emptied, not only an empty one: ['test_a_population_with_dates_of_birth_resolves_exactly_as_before: AssertionError']
+RED   any() for all(): a mixed column emptied: ['test_a_population_with_dates_of_birth_resolves_exactly_as_before: AssertionError']
+RED   the empty column typed as text: ['test_a_population_with_no_date_of_birth_at_all_resolves_without_raising: SplinkException', 'test_the_same_name_with_no_date_of_birth_still_becomes_a_candidate: SplinkException']
+RED   the failure swallowed, returning no candidates: ['test_the_same_name_with_no_date_of_birth_still_becomes_a_candidate: AssertionError']
+5 of 5 plants caught

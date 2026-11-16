@@ -128,3 +128,66 @@ def test_a_hyphenated_family_name_does_not_crash_the_entire_resolution_pass() ->
     pairs = {frozenset((c.node_a, c.node_b)) for c in candidates}
     assert frozenset({"n1", "n2"}) in pairs
     assert not any({"n3"} <= pair for pair in pairs)
+
+
+def _person_without_date_of_birth(node_id: str, family_name: str, given_names: str) -> Node:
+    """A `Person` as a source with no date-of-birth column loads one: the property absent."""
+    node = _person(node_id, family_name, given_names, "1980-01-01")
+    properties = {k: v for k, v in node.properties.items() if k != "date_of_birth"}
+    return node.model_copy(update={"properties": properties})
+
+
+def test_a_population_with_no_date_of_birth_at_all_resolves_without_raising() -> None:
+    """v0.6.0's package test (job 01M7HH04PV17TWBRPNKRZXGQ26): a deployment whose every `Person`
+    came from a source with no date-of-birth column (R1's load maps names and a phone alone)
+    failed the whole type's run with `Binder Error: No function matches ... 'year(INTEGER)'`. An
+    all-`None` column reaches DuckDB as INTEGER, and the blocking rule `year(date_of_birth)`
+    cannot bind it, so no `Person` was ever resolved and the worker's failure reached no one. The
+    two names here share no block, so the pass resolves to nothing, without raising."""
+    nodes = [
+        _person_without_date_of_birth("n1", "R1Synthetic", "Person"),
+        _person_without_date_of_birth("n2", "R1Second", "Person"),
+    ]
+    assert resolve_entity_type(nodes, PERSON_TYPE) == []
+
+
+def test_the_same_name_with_no_date_of_birth_still_becomes_a_candidate() -> None:
+    """The fix is not only "no exception": with no date of birth anywhere, the name blocking rule
+    (`soundex(family_name)`) still pairs two identical names, and they score as a match."""
+    nodes = [
+        _person_without_date_of_birth("n1", "Mercer", "Dana"),
+        _person_without_date_of_birth("n2", "Mercer", "Dana"),
+        _person_without_date_of_birth("n3", "Okafor", "Susan"),
+    ]
+    candidates = resolve_entity_type(nodes, PERSON_TYPE)
+    pairs = {frozenset((c.node_a, c.node_b)): c for c in candidates}
+    assert set(pairs) == {frozenset({"n1", "n2"})}
+    assert pairs[frozenset({"n1", "n2"})].score > 0.9
+
+
+def test_a_population_with_dates_of_birth_resolves_exactly_as_before() -> None:
+    """The fix touches only a date column that is empty in every row: a population with dates of
+    birth, and one where only some have one, keep their DATE column and their scores."""
+    with_dates = resolve_entity_type(_matching_pair(), PERSON_TYPE)
+    assert len(with_dates) == 1
+    assert with_dates[0].score == pytest.approx(1.0, abs=1e-3)
+    assert with_dates[0].comparison_vector["gamma_date_of_birth"] == 1
+    some_dates = resolve_entity_type(
+        [
+            _person("n1", "Mercer", "Dana", "1980-01-01"),
+            _person_without_date_of_birth("n2", "Mercer", "Dana"),
+            _person("n3", "Mercer", "Dana", "1980-01-01"),
+        ],
+        PERSON_TYPE,
+    )
+    gammas = {
+        frozenset((c.node_a, c.node_b)): c.comparison_vector["gamma_date_of_birth"]
+        for c in some_dates
+    }
+    # The two with a date still compare it (DuckDB still reads the column as DATE); the one
+    # without takes Splink's null level against each.
+    assert gammas == {
+        frozenset({"n1", "n3"}): 1,
+        frozenset({"n1", "n2"}): -1,
+        frozenset({"n2", "n3"}): -1,
+    }

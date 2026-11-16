@@ -90,7 +90,16 @@ def _nodes_to_dataframe(
         for column in columns:
             row[column] = _cast(node.properties.get(column), property_types.get(column))
         rows.append(row)
-    return pd.DataFrame(rows)
+    frame = pd.DataFrame(rows)
+    # A date column empty in every row (a population whose every source had no such column) is
+    # all `None`, which DuckDB types as INTEGER: `year(date_of_birth)` then cannot bind, and the
+    # whole type's run failed (v0.6.0's package test, `Binder Error: ... 'year(INTEGER)'`). A
+    # datetime dtype of nothing but `NaT` reaches DuckDB as a TIMESTAMP of NULLs, which binds.
+    for column in columns:
+        temporal = property_types.get(column) in (PropertyType.DATE, PropertyType.DATETIME)
+        if temporal and frame[column].isna().all():
+            frame[column] = pd.Series(pd.NaT, index=frame.index, dtype="datetime64[ns]")
+    return frame
 
 
 def _cast(value: Any, prop_type: PropertyType | None) -> Any:
