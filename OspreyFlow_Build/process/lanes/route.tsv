@@ -34,10 +34,12 @@ rd	Package test's find: resolution for Person works with no date of birth anywhe
 gm2	The Glass rows merged into v0.6.0 (the owner, 16 Nov): both halves, the guide 1.74, the CHANGELOG, every suite on the merged code; then the new candidate pushed	orchestrator	2026-11-16	2026-11-16	y	-	orchestrator:v060-glass-merge
 c3	CI on the Glass candidate 529f0f4 (run 43883311468; case, deputy): b6d33ce plus a test-only harness fix and records	case	2026-11-16	2026-11-16	y	gm2	orchestrator:v060-c3-ci
 4g	Package test PASSED on b6d33ce, every row; stands for 529f0f4 (the owner's ruling, 16 Nov: identical build)	platform-b	2026-11-16	2026-11-16	y	gm2,4	platform-b:v060-stage4
-5	Release v0.6.0 with the Glass rows (about 17:30Z), or ea5fc61 without them if the new candidate trips	orchestrator	2026-11-16	2026-11-16	y	4g,c3	-
-rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks (case starts it, as deputy)	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
+5	Release v0.6.0 with the Glass rows: RELEASED ~15:10Z, product 2d96da7 from 529f0f4, workflow 43892824809	orchestrator	2026-11-16	2026-11-16	y	4g,c3	orchestrator:v060-release
+s10	Release step 10, the client's view: anonymous pulls of 16 images and the chart, harness.signatures (shown red three ways), the update check: PASS	platform-b	2026-11-16	2026-11-16	n	5	platform-b:v060-step10
+mp	The post-release merges: platform-b's tooling branch (ad1758c) and rules-b's focus-move audit (74cc258), one push	orchestrator	2026-11-16	2026-11-16	n	5	orchestrator:v060-post-merges
+rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks (started 15:30Z by the orchestrator, demo lane on sol)	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
 gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-
-ws	The websites ospreyflow.org and ospreyflow.net: LIVE on HTTPS since 16 Nov 06:54Z (certificates issued, HTTPS enforced, http redirects)	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
+ws	The websites ospreyflow.org and ospreyflow.net: live on HTTPS since 16 Nov 06:54Z; the owner is moving them to internal Google Sites; leave the GitHub side alone, publish nothing	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
 p3	ospreyflow.app, the standard-look demo (Part 3): offline work done; the server proof, install and cutover after the GOV.UK rebuild; needs the owner's O1-O8 (DNS, Porkbun key, lease, window)	platform	2026-11-15	2026-11-18	n	gm	platform:part3
 gB	Glass rows, B (built as v0.6.1, joining v0.6.0): the case line carries the state, no strip, ADR-145 Am 19	case	2026-11-16	2026-11-17	n	-	case:v061-glass-rows
 gAC	Glass rows, A and C (built as v0.6.1, joining v0.6.0): Match strictness in the toolbar; Hide and Show toolbar, T on the canvas, remembered; the Map has the buttons	case-b	2026-11-16	2026-11-17	n	-	case-b:v061-glass-rows-ac
