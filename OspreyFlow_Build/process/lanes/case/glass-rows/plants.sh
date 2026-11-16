@@ -18,8 +18,11 @@ s = open(p).read()
 assert s.count(old) == 1, f"{old!r} found {s.count(old)} times"
 open(p, "w").write(s.replace(old, new))
 PY
-  if [ -n "$vfiles" ]; then npx vitest run $vfiles -t "$vgrep" >/tmp/plant.$$ 2>&1 || red=$((red+1)); fi
-  if [ -n "$kspecs" ]; then npx playwright test --config keyboard/playwright.config.ts $kspecs -g "$kgrep" --reporter=line >/tmp/plant.$$ 2>&1 || red=$((red+1)); fi
+  # Red is a test that failed (exit 1), never a run that was killed or broke (a signal's 128+n, say): a plant run
+  # killed by another lane's pkill counted as red once (16 November 2026).
+  local rc
+  if [ -n "$vfiles" ]; then npx vitest run $vfiles -t "$vgrep" >/tmp/plant.$$ 2>&1; rc=$?; [ "$rc" -eq 1 ] && red=$((red+1)); [ "$rc" -gt 1 ] && echo "  vitest ended $rc: not a result"; fi
+  if [ -n "$kspecs" ]; then npx playwright test --config keyboard/playwright.config.ts $kspecs -g "$kgrep" --reporter=line >/tmp/plant.$$ 2>&1; rc=$?; [ "$rc" -eq 1 ] && red=$((red+1)); [ "$rc" -gt 1 ] && echo "  keyboard ended $rc: not a result"; fi
   git -C "$ROOT" checkout -q -- "$W/$file"
   local want=0; [ -n "$vfiles" ] && want=$((want+1)); [ -n "$kspecs" ] && want=$((want+1))
   if [ "$red" -eq "$want" ]; then echo "red   $name"; else echo "GREEN $name (red $red of $want)"; fails=$((fails+1)); fi
