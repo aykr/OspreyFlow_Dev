@@ -80,6 +80,11 @@ class _Door:
     #: "ingress-404" (the path reaches no Conduit, so a 404 in another's words).
     wrong = ""
     runs: list[str] = []
+    #: How many searches answer no node before the load is found: the indexer writes a moment
+    #: after the load (ADR-150), so a search at once can find nothing
+    #: (`tests/test_r1_kind_search_wait.py`).
+    found_after = 0
+    searches = 0
 
     def get(self, path: str, headers: dict[str, str] | None = None, **_: Any) -> _Answer:
         who = (headers or {}).get("Authorization", "").removeprefix("Bearer ")
@@ -123,6 +128,10 @@ class _Door:
             "/run": (200, {"nodes_created": 2}),
             "/search": (200, {"nodes": [{"id": "n1"}]}),
         }
+        if path.endswith("/search"):
+            type(self).searches += 1
+            if type(self).searches <= self.found_after:
+                return _Answer(200, {"nodes": [], "source": "index"})
         for tail, (status, body) in answers.items():
             if path.endswith(tail):
                 return _Answer(status, body)
@@ -138,6 +147,7 @@ def _checks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, search: str, versio
     monkeypatch.setattr(_Door, "version", version)
     monkeypatch.setattr(_Door, "wrong", wrong)
     monkeypatch.setattr(_Door, "runs", [])
+    monkeypatch.setattr(_Door, "searches", 0)
     # The stand-in's issuing (held by tests/test_r1_entra_standin.py) stood in by the application's name.
     names = {v["client_id"]: k for k, v in yaml.safe_load((GATES / "r1_kind_entra.yaml").read_text()).items()
              if isinstance(v, dict) and "client_id" in v}
