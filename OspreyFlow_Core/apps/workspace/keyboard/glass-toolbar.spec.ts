@@ -151,6 +151,36 @@ for (const look of ["dark", "govuk"] as const) {
   }
 }
 
+// case's merge tree (16 November 2026): the standard look's widths were measured before its web font arrived, in the
+// fallback face, which is wider, so a toolbar that fits in Atkinson Hyperlegible Next wrapped. Five cases failed there on a
+// cold server and passed here on a warm one. The harness now loads the product's faces before it draws; held here with
+// the font files held back, as a cold or busy server serves them.
+test("the widths are measured in the product's own face even when its font files are slow to arrive", async ({ page }) => {
+  await page.route(/\.woff2?(\?.*)?$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page, "width=1240");
+  const bar = tools(page);
+  await expect(bar.getByRole("button", { name: "Match strictness: Balanced" })).toHaveText("Match strictness: Balanced ▾");
+  expect(await page.evaluate(() => document.fonts.check('12px "Atkinson Hyperlegible Next"'))).toBe(true);
+  expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(37);
+});
+
+test("under GOV.UK too: its face, a web face as well, is loaded before the narrowest one-row width is measured", async ({ page }) => {
+  await page.route(/\.woff2?(\?.*)?$/, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await route.continue();
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page, "width=912", "govuk");
+  const bar = tools(page);
+  await expect(bar.getByRole("button", { name: "Match strictness: Balanced" })).toHaveText("Strictness: Balanced ▾");
+  expect(await page.evaluate(() => document.fonts.check(`12px ${getComputedStyle(document.documentElement).getPropertyValue("--ui")}`))).toBe(true);
+  expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(37);
+});
+
 // The owner's brief: Hide toolbar, Show toolbar and the strictness control meet the contrast floor in all three themes
 // (the adviser's sketch had Show toolbar unreadable in the light theme).
 for (const look of ["dark", "light", "govuk"] as const) {

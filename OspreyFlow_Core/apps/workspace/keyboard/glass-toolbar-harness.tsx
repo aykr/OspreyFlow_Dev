@@ -40,6 +40,13 @@ declare global {
 const params = new URLSearchParams(window.location.search);
 const brand = await applyHarnessBrand();
 if (brand !== "govuk" && params.get("theme") === "light") applyTheme("light");
+// The product's faces loaded before anything is drawn or measured: `document.fonts.ready` alone resolves before any text
+// has asked for them, so on a cold or busy server the widths were measured in the wider fallback face (case's merge
+// tree, 16 November 2026). The look's own face is read from `--ui` (Atkinson Hyperlegible Next, or GDS Transport under
+// GOV.UK, a web face too), so each look waits for its own.
+const uiFace = getComputedStyle(document.documentElement).getPropertyValue("--ui").trim();
+await Promise.all(["400", "600", "700"].map((weight) => document.fonts.load(`${weight} 12px ${uiFace}`)));
+await document.fonts.load('400 12px "IBM Plex Mono"');
 await document.fonts.ready;
 
 const userParam = params.get("user");

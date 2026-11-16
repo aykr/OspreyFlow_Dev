@@ -408,6 +408,10 @@ if (wantsWidth > 0) {
   container.style.width = `${wantsWidth}px`;
   // Widths are measured in the product's own faces, as `src/main.tsx` loads them.
   await import("../src/design/fonts");
+  // The faces asked for by name: `fonts.ready` alone resolves before any text has asked for them (see
+  // glass-toolbar-harness.tsx).
+  const uiFace = getComputedStyle(document.documentElement).getPropertyValue("--ui").trim();
+  await Promise.all(["400", "600"].map((weight) => document.fonts.load(`${weight} 12px ${uiFace}`)));
   await document.fonts.ready;
 }
 
