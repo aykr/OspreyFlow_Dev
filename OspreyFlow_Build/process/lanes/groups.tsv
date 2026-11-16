@@ -193,3 +193,4 @@ demo	v060-govuk-rebuild	Housekeeping	Small
 case	v061-glass-rows	Four places, the Glass and Admin	After the client's install
 rules-b	v060-resolve-empty-dob	Housekeeping	Client install
 case-b	v061-glass-rows-ac	Four places, the Glass and Admin	After the client's install
+rules-b	v060-press-enabled	Housekeeping	Client install

@@ -190,8 +190,9 @@ platform-b	v060-stage3-done	S	done	v0.6.0 stage 3: the candidate C = 09f1fbe (CI
 orchestrator	v060-build	S	done	v0.6.0 stage 1, Build: every closed-list item merged (#4 last, d7cf5a0), CI green on 09f1fbe	-
 orchestrator	v060-websites	S	building	The websites published to gh-pages (org f22e611, net a38ec0f) with Pages on and each domain set, 16 Nov ~06:30Z; live once the owner's DNS resolves, then Enforce HTTPS
 platform-b	v060-search-jobs-pg	S	done	v0.6.0 stage 4 fix (the owner, 15 Nov): the chart's search Jobs given the managed database's settings, the policy gate admitting them; red first	lane/platform-b-v060-search-jobs-pg
-orchestrator	v060-c2-ci	S	building	CI on the new candidate 0c158b8 (run 43813698501), then platform-b's dry run re-checked on it
+orchestrator	v060-c2-ci	S	building	CI on the new candidate 720dcfc (run 43819153700), then platform-b's dry run re-checked on it
 demo	v060-govuk-rebuild	M	todo	The GOV.UK demo rebuilt fresh from v0.6.0, from demo/REBUILD_2026-11-18.md (with listen_address)
 case	v061-glass-rows	M	building	v0.6.1 first item (the owner, 16 Nov): fewer rows above the canvas, a toolbar that can be hidden; the pre-build answers first (estimate, code check, proposals, ADR draft, measured gain)
 rules-b	v060-resolve-empty-dob	S	done	v0.6.0 (the owner, 16 Nov): resolution for Person works when no Person has a date_of_birth (an all-empty date column typed as a date); red first	lane/rules-b-v060-resolve-empty-dob
 case-b	v061-glass-rows-ac	M	building	v0.6.1 glass rows A+C (strictness into the toolbar, Hide and Show toolbar, Alt+Shift+T, the remembered setting, Map), split from case's B; merges after B and after v0.6.0
+rules-b	v060-press-enabled	S	building	CI's keyboard races: every keyboard spec's press waits for its button to be enabled; test-only
