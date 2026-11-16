@@ -16,3 +16,5 @@ On case's PROPOSAL.md (3d93df5, merged bda4af1):
 
 Building starts after v0.6.0 is released, on the case lane; about 26 h (B first, then A and C together). Nothing merges
 before the release.
+
+The owner, 16 Nov ~08:00Z: **build now, in parallel with the last stages of v0.6.0; merge only after the release.**
