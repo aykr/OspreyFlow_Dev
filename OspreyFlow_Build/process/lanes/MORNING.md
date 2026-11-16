@@ -2202,3 +2202,4 @@ merged first (eb78042), as the owner asked. Estimates requested from every ownin
 - **The new candidate C is f41457a (16 Nov ~14:30Z):** 0b51705 plus the POC seed fix (ADR-148 Am 22). CI on 0b51705 had 2 flakes in conformance (carried); stage 4 from row 0 beside the new CI.
 - **Websites (16 Nov ~10:00Z):** the owner asked for the .org/.net takedown steps (internal Google Sites); the GitHub Pages side is to be left alone by the orchestrator. No publish to either site repository until the owner says.
 - **CI on ea5fc61: GREEN, first attempt** (run 43842428591), every job. The release now waits only for the package test on ea5fc61.
+- **The Gemini key** goes back on the owner's list (owner_due.tsv) only when the GOV.UK rebuild is complete; the orchestrator re-adds it then, with the command at the top of this file.
