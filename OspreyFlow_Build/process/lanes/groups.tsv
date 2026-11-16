@@ -202,3 +202,4 @@ orchestrator	v060-glass-merge	Housekeeping	Client install
 orchestrator	v060-c3-ci	Housekeeping	Client install
 platform-b	v060-stage4-glass	Housekeeping	Client install
 platform-b	v060-stage4-ea5	Housekeeping	Client install
+platform	v060-step6-all-pods	Housekeeping	Client install
