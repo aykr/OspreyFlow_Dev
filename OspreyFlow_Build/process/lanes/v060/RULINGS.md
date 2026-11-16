@@ -108,3 +108,11 @@ was red on a records row (fixed in 6a99cb0) and two keyboard cases whose harness
 - the workspace's `vite build` from each, on the server, gives a byte-identical dist (59 files; tree hash afd0a61e71b4ff28),
   the only thing the workspace image takes from apps/workspace (platform-b, ~/osprey-runs/platform-b.c8/dist-compare/).
 CI on 529f0f4 must still be fully green before "release-ready".
+
+## This part of the development closes (the owner, 16 Nov ~15:45Z)
+Once the queued work is finished, this part of the development is brought to a close: each lane is closed as its work
+completes (HANDOFF.md, `lanes_launch.sh pause-done <lane> "closed after v0.6.0"`, the session ended). The queued work:
+the post-release merges (ad1758c, 74cc258), the GOV.UK rebuild and the owner's Gemini key, Part 3 (ospreyflow.app).
+Closed at once (16 Nov): case-b, rules-b, platform-b (step 10 its last job). Then case (deputy role handed back), demo
+(after the rebuild's checks), platform (after Part 3), the orchestrator last. docs was already paused (44e2d3e). v0.6.1
+is not started until the owner opens it.
