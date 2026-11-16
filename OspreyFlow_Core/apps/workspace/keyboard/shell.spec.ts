@@ -109,7 +109,7 @@ test("each rail panel is opened and closed by keyboard, the view kept and focus 
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  // Ask & Chat is a page over the view, not a drawer (v0.6.0 #4): its own case follows.
+  // Ask & Chat's drawer has its own cases below (ADR-145 Amendment 20): its opener toggles App's hook, not this list.
   for (const name of ["Explore", "History"]) {
     const opener = rail.getByRole("button", { name, exact: true });
     await opener.focus();
@@ -132,10 +132,11 @@ test("each rail panel is opened and closed by keyboard, the view kept and focus 
   registerCovered(REGISTRY, "rail-panels-by-keyboard");
 });
 
-// v0.6.0 #4 (ADR-145 Amendment 18, rule 13): Ask & Chat fills the main area as the search results do. The rail's
-// Ask & Chat opens it with focus on its heading and the view beneath out of reach; Shift+Tab reaches *Back to Map*,
-// which puts the view back as it was with focus on the opener; a second Enter on the opener closes it too.
-test("Ask & Chat opens as a page over the view by keyboard, and Back to the view or the rail closes it", async ({ page }) => {
+// v0.6.1 item A (ADR-145 Amendment 20, rule 13): the rail's Ask & Chat opens a drawer beside the view, as before
+// Amendment 18. Focus goes to its heading, the view stays in reach, and the opener says it opens a dialog. Its Close,
+// a second press of the rail and Escape (below) each close it, focus back on the opener. A view chosen keeps it,
+// as Explore and History are kept.
+test("Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it", async ({ page }) => {
   await page.goto("/keyboard/places-harness.html?rights=investigate,ask_model");
   const rail = page.getByRole("navigation", { name: "Workspace" });
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
@@ -143,40 +144,145 @@ test("Ask & Chat opens as a page over the view by keyboard, and Back to the view
   const view = page.getByText("glass, map, on case kestrel");
   await expect(view).toBeVisible();
   const opener = rail.getByRole("button", { name: "Ask & Chat", exact: true });
-  await expect(opener).not.toHaveAttribute("aria-haspopup");
-  const askPage = page.getByRole("region", { name: "Ask & Chat" });
-  for (const leave of ["Back to Map", "the rail"] as const) {
+  await expect(opener).toHaveAttribute("aria-haspopup", "dialog");
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  for (const leave of ["Close", "the rail"] as const) {
     await opener.focus();
     await page.keyboard.press("Enter");
-    await expect(askPage).toBeVisible();
-    await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toHaveCount(0);
-    await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+    await expect(drawer).toBeVisible();
+    await expect(page.getByRole("region", { name: "Ask & Chat" })).toHaveCount(0);
+    await expect(drawer.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
     await expect(opener).toHaveAttribute("aria-expanded", "true");
-    // The view beneath is kept, but out of reach while the page shows.
-    await expect(page.getByRole("main", { name: "Place content" })).toHaveAttribute("inert", "");
-    if (leave === "Back to Map") {
-      await page.keyboard.press("Shift+Tab");
-      await expect(askPage.getByRole("button", { name: "Back to Map" })).toBeFocused();
+    // A drawer beside the view: the view stays in reach.
+    await expect(page.getByRole("main", { name: "Place content" })).not.toHaveAttribute("inert", "");
+    // Under the top navigation and the case line, as every drawer (ADR-145 Amendment 14 decision 2).
+    const chromeBottom = await page.evaluate(() =>
+      Math.max(...[...document.querySelectorAll(".top-bar, .context-banner, .context-banner--govuk")].map((el) => el.getBoundingClientRect().bottom)),
+    );
+    expect(chromeBottom).toBeGreaterThan(0);
+    expect((await drawer.boundingBox())!.y).toBeGreaterThanOrEqual(Math.round(chromeBottom) - 1);
+    if (leave === "Close") {
+      // The heading, then Expand, then Close.
+      await page.keyboard.press("Tab");
+      await expect(drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeFocused();
+      await page.keyboard.press("Tab");
+      await expect(drawer.getByRole("button", { name: "Close Ask & Chat" })).toBeFocused();
       await page.keyboard.press("Enter");
     } else {
       await opener.focus();
       await page.keyboard.press("Enter");
     }
-    await expect(askPage).toHaveCount(0);
+    await expect(drawer).toHaveCount(0);
     await expect(opener).toBeFocused();
     await expect(opener).toHaveAttribute("aria-expanded", "false");
     await expect(view).toBeVisible();
-    await expect(page.getByRole("main", { name: "Place content" })).not.toHaveAttribute("inert", "");
   }
-  // A view chosen leaves the page, that view current (App's `leaveBoth`, by the same hook).
+  // A view chosen keeps the drawer beside the new view (the page would be left: the case below).
   await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(drawer).toBeVisible();
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Graph", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
+  await expect(drawer).toBeVisible();
+  registerCovered(REGISTRY, "open-ask-and-chat-as-a-drawer-by-keyboard");
+});
+
+// ADR-145 Amendment 20 (rule 13): Escape from inside the drawer closes it, focus back on the rail's opener, as the
+// drawer did before Amendment 18. The page has no Escape of its own (Amendment 18 point 4, kept): it stays open.
+test("Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,ask_model");
+  const opener = page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Ask & Chat", exact: true });
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(drawer.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(opener).toHaveAttribute("aria-expanded", "false");
+  // Expanded, Escape leaves the page where it is.
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(askPage).toBeVisible();
+  registerCovered(REGISTRY, "escape-closes-the-ask-and-chat-drawer-by-keyboard");
+});
+
+// ADR-145 Amendment 20 (rule 13): Expand, in the drawer's header, turns it into Amendment 18's page: focus on its
+// heading, the view beneath out of reach, the opener still expanded. *Back to Map* then closes Ask & Chat entirely,
+// focus on the opener, and a view chosen leaves the page (App's `viewChosen`, by the same hook).
+test("Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,ask_model");
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  const opener = page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Ask & Chat", exact: true });
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  const place = page.getByRole("main", { name: "Place content" });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await expect(drawer).toBeVisible();
+  await page.keyboard.press("Tab");
+  const expand = drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" });
+  await expect(expand).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(askPage).toBeVisible();
+  await expect(drawer).toHaveCount(0);
+  await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+  await expect(place).toHaveAttribute("inert", "");
+  await expect(opener).toHaveAttribute("aria-expanded", "true");
+  // The page is no dialog: its opener says so while it shows (and says it opens one again as the drawer).
+  await expect(opener).not.toHaveAttribute("aria-haspopup");
+  await page.keyboard.press("Shift+Tab");
+  await expect(askPage.getByRole("button", { name: "Back to Map" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(askPage).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(opener).toHaveAttribute("aria-expanded", "false");
+  await expect(place).not.toHaveAttribute("inert", "");
+  // The choice is not remembered: the next opening is the drawer.
+  await page.keyboard.press("Enter");
+  await expect(drawer).toBeVisible();
+  // Expanded again, a view chosen leaves the page, that view current.
+  await page.keyboard.press("Tab");
   await page.keyboard.press("Enter");
   await expect(askPage).toBeVisible();
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Graph", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(askPage).toHaveCount(0);
+  await expect(drawer).toHaveCount(0);
   await expect(page.getByText("glass, graph, on case kestrel")).toBeVisible();
-  registerCovered(REGISTRY, "ask-and-chat-page-by-keyboard");
+  registerCovered(REGISTRY, "expand-ask-and-chat-to-the-page-by-keyboard");
+});
+
+// ADR-145 Amendment 20 (rule 13): *Show as a drawer*, beside the page's heading, returns to the drawer, focus on
+// Expand, the view back in reach and the opener still expanded.
+test("Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand", async ({ page }) => {
+  await page.goto("/keyboard/places-harness.html?rights=investigate,ask_model");
+  const opener = page.getByRole("navigation", { name: "Workspace" }).getByRole("button", { name: "Ask & Chat", exact: true });
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Enter");
+  await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(askPage.getByRole("button", { name: "Show as a drawer" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(askPage).toHaveCount(0);
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeFocused();
+  await expect(page.getByRole("main", { name: "Place content" })).not.toHaveAttribute("inert", "");
+  await expect(opener).toHaveAttribute("aria-expanded", "true");
+  registerCovered(REGISTRY, "show-ask-and-chat-as-a-drawer-by-keyboard");
 });
 
 test("each view is chosen by keyboard: Graph, Map, Drawing board and Reports, the rest under More views", async ({ page }) => {

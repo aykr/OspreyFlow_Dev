@@ -783,6 +783,12 @@ export const QUESTIONS_ACTIONS = defineActionRegistry("QUESTIONS_ACTIONS", [
   "select-a-graph-fact-from-the-ask-page-by-keyboard",
   // ADR-145 Amendment 18: Show all on graph on the page leaves it for the canvas, the items selected, focus there.
   "show-all-from-the-ask-page-by-keyboard",
+  // ADR-145 Amendment 20 decision 2: Expand and Show as a drawer keep the question typed, the engine and the scroll.
+  "expand-and-show-as-a-drawer-keep-the-question-by-keyboard",
+  // ADR-145 Amendment 20 (the orchestrator's ruling R1): a graph fact or Show all chosen in the drawer keeps it beside the
+  // canvas, focus there; Escape from the canvas closes it.
+  "select-a-graph-fact-from-the-ask-drawer-by-keyboard",
+  "show-all-from-the-ask-drawer-by-keyboard",
   // ADR-129 decision 1: a cited graph fact selects what it stands for and brings it into view.
   "select-a-graph-fact-from-an-answer-by-keyboard",
   // ADR-129 Amendment 5: a source Whole case's search found ([S-n]) selects its records.
@@ -902,8 +908,13 @@ export const SHELL_ACTIONS = defineActionRegistry("SHELL_ACTIONS", [
   // returned to its opener (the rail's More left with Amendment 15), More views, and a folded panel of the column
   // opened with one keypress.
   "rail-panels-by-keyboard",
-  // ADR-145 Amendment 18 (v0.6.0 #4): Ask & Chat opens as a page over the view; Back and the rail close it.
-  "ask-and-chat-page-by-keyboard",
+  // ADR-145 Amendment 20 (v0.6.1, replacing Amendment 18's page from the rail): Ask & Chat opens as a drawer beside the
+  // view, Close and the rail close it, a view chosen keeps it; Escape from inside closes it (the page has none); Expand
+  // turns it into Amendment 18's page, whose Back closes it; Show as a drawer returns, focus on Expand.
+  "open-ask-and-chat-as-a-drawer-by-keyboard",
+  "escape-closes-the-ask-and-chat-drawer-by-keyboard",
+  "expand-ask-and-chat-to-the-page-by-keyboard",
+  "show-ask-and-chat-as-a-drawer-by-keyboard",
   "more-views-by-keyboard",
   "open-a-folded-panel-by-keyboard",
   // ADR-145 Amendment 4 and ADR-146 decision 2 (L2.9): Rules and Monitoring, the fourth place, in the

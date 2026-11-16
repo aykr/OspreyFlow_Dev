@@ -20,8 +20,8 @@ export interface RailItem {
    * open. Such an item is never `pressed`: the rail marks the place alone, one place, one marker
    * (ADR-145 Amendment 14 decision 3); the panel's state is `aria-expanded`. */
   expanded?: boolean;
-  /** An item that opens a page over the view rather than a drawer (Ask & Chat, v0.6.0 #4): it is still
-   * `aria-expanded`, but announces no dialog. */
+  /** An item whose panel is a page over the view rather than a drawer (Ask & Chat while expanded, ADR-145 Amendments 18
+   * and 20): it is still `aria-expanded`, but announces no dialog. */
   opensPage?: boolean;
 }
 

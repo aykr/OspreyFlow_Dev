@@ -1,0 +1,593 @@
+Red record: the new keyboard cases at 2c6793f's specs and registry patch, against 236e31e's src/ and harnesses (restored from HEAD after).
+
+Running 21 tests using 4 workers
+
+[1/21] apps/workspace/keyboard/questions.spec.ts:137:1 › Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard
+[2/21] apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow dark 1440: beside Ask & Chat's drawer no control of the results lies under it
+[3/21] apps/workspace/keyboard/shell.spec.ts:139:1 › Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it
+[4/21] apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (dark, 1440)
+  1) apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (dark, 1440) 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      130 |       await open(page, "job=following&ask=drawer", look);
+      131 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 132 |       await expect(drawer).toBeVisible();
+          |                            ^
+      133 |       const d = (await drawer.boundingBox())!;
+      134 |       const p = (await panel(page).boundingBox())!;
+      135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/batch-expansion.spec.ts:132:28
+
+    Error Context: apps/workspace/test-results/batch-expansion-beside-Ask-3d413-lies-clear-of-it-dark-1440-/error-context.md
+
+
+  2) apps/workspace/keyboard/questions.spec.ts:137:1 › Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      161 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+      162 |   const askPage = page.getByRole("region", { name: "Ask & Chat" });
+    > 163 |   await expect(drawer).toBeVisible();
+          |                        ^
+      164 |   const choice = drawer.getByRole("combobox", { name: "Model engine" });
+      165 |   await expect(choice).toHaveValue("gemini");
+      166 |   await page.getByLabel("Your question").focus();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:163:24
+
+    Error Context: apps/workspace/test-results/questions-Expand-and-Show--2afc9-scroll-position-by-keyboard/error-context.md
+
+
+  3) apps/workspace/keyboard/shell.spec.ts:139:1 › Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Ask & Chat', exact: true })
+    Expected: "dialog"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Ask & Chat', exact: true }) with timeout 5000ms
+      - waiting for getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Ask & Chat', exact: true })
+        14 × locator resolved to <button type="button" title="Ask & Chat" aria-expanded="false" class="left-rail__item" aria-label="Ask & Chat">…</button>
+           - unexpected value "null"
+
+
+      145 |   await expect(view).toBeVisible();
+      146 |   const opener = rail.getByRole("button", { name: "Ask & Chat", exact: true });
+    > 147 |   await expect(opener).toHaveAttribute("aria-haspopup", "dialog");
+          |                        ^
+      148 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+      149 |   for (const leave of ["Close", "the rail"] as const) {
+      150 |     await opener.focus();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:147:24
+
+    Error Context: apps/workspace/test-results/shell-Ask-Chat-opens-as-a--8ca68-Close-or-the-rail-closes-it/error-context.md
+
+
+  4) apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow dark 1440: beside Ask & Chat's drawer no control of the results lies under it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      241 |       await press(page, "Ask & Chat");
+      242 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 243 |       await expect(drawer).toBeVisible();
+          |                            ^
+      244 |       await expect(heading(page)).toBeVisible();
+      245 |       const covered = await page.evaluate(() => {
+      246 |         const results = document.querySelector<HTMLElement>("section.search-results")!;
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:243:28
+
+    Error Context: apps/workspace/test-results/search-results-ospreyflow--d191a-f-the-results-lies-under-it/error-context.md
+
+
+[5/21] apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (dark, 1024)
+[6/21] apps/workspace/keyboard/questions.spec.ts:542:1 › a [G-n] chosen in Ask & Chat's drawer selects on the real canvas, the drawer kept, focus on the canvas; Escape there closes it
+[7/21] apps/workspace/keyboard/shell.spec.ts:193:1 › Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it
+[8/21] apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow dark 1024: beside Ask & Chat's drawer no control of the results lies under it
+  5) apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (dark, 1024) 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      130 |       await open(page, "job=following&ask=drawer", look);
+      131 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 132 |       await expect(drawer).toBeVisible();
+          |                            ^
+      133 |       const d = (await drawer.boundingBox())!;
+      134 |       const p = (await panel(page).boundingBox())!;
+      135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/batch-expansion.spec.ts:132:28
+
+    Error Context: apps/workspace/test-results/batch-expansion-beside-Ask-570bf-lies-clear-of-it-dark-1024-/error-context.md
+
+
+  6) apps/workspace/keyboard/questions.spec.ts:542:1 › a [G-n] chosen in Ask & Chat's drawer selects on the real canvas, the drawer kept, focus on the canvas; Escape there closes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      543 |   await serve(page, [], GRAPH_FACTS, "/keyboard/harness.html?questions=drawer");
+      544 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 545 |   await expect(drawer).toBeVisible();
+          |                        ^
+      546 |   await page.getByLabel("Your question").focus();
+      547 |   await page.keyboard.type("Who is connected to n0?");
+      548 |   await page.keyboard.press("Control+Enter");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:545:24
+
+    Error Context: apps/workspace/test-results/questions-a-G-n-chosen-in--292eb-nvas-Escape-there-closes-it/error-context.md
+
+
+  7) apps/workspace/keyboard/shell.spec.ts:193:1 › Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+    Expected: focused
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" getByRole('dialog', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+
+
+      197 |   await opener.focus();
+      198 |   await page.keyboard.press("Enter");
+    > 199 |   await expect(drawer.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+          |                                                                     ^
+      200 |   await page.keyboard.press("Tab");
+      201 |   await expect(drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeFocused();
+      202 |   await page.keyboard.press("Escape");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:199:69
+
+    Error Context: apps/workspace/test-results/shell-Escape-from-inside-t-05bcc--opener-the-page-ignores-it/error-context.md
+
+
+[9/21] apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (light, 1440)
+  8) apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow dark 1024: beside Ask & Chat's drawer no control of the results lies under it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      241 |       await press(page, "Ask & Chat");
+      242 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 243 |       await expect(drawer).toBeVisible();
+          |                            ^
+      244 |       await expect(heading(page)).toBeVisible();
+      245 |       const covered = await page.evaluate(() => {
+      246 |         const results = document.querySelector<HTMLElement>("section.search-results")!;
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:243:28
+
+    Error Context: apps/workspace/test-results/search-results-ospreyflow--ba5eb-f-the-results-lies-under-it/error-context.md
+
+
+[10/21] apps/workspace/keyboard/questions.spec.ts:563:1 › Show all on graph in Ask & Chat's drawer selects the answer's items on the real canvas, the drawer kept, focus on the canvas
+[11/21] apps/workspace/keyboard/shell.spec.ts:220:1 › Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it
+[12/21] apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow light 1440: beside Ask & Chat's drawer no control of the results lies under it
+  9) apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (light, 1440) 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      130 |       await open(page, "job=following&ask=drawer", look);
+      131 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 132 |       await expect(drawer).toBeVisible();
+          |                            ^
+      133 |       const d = (await drawer.boundingBox())!;
+      134 |       const p = (await panel(page).boundingBox())!;
+      135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/batch-expansion.spec.ts:132:28
+
+    Error Context: apps/workspace/test-results/batch-expansion-beside-Ask-dec5a-ies-clear-of-it-light-1440-/error-context.md
+
+
+[13/21] apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (light, 1024)
+  10) apps/workspace/keyboard/shell.spec.ts:220:1 › Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      228 |   await opener.focus();
+      229 |   await page.keyboard.press("Enter");
+    > 230 |   await expect(drawer).toBeVisible();
+          |                        ^
+      231 |   await page.keyboard.press("Tab");
+      232 |   const expand = drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" });
+      233 |   await expect(expand).toBeFocused();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:230:24
+
+    Error Context: apps/workspace/test-results/shell-Expand-turns-the-Ask-5a0fb--Back-to-the-view-closes-it/error-context.md
+
+
+  11) apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow light 1440: beside Ask & Chat's drawer no control of the results lies under it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      241 |       await press(page, "Ask & Chat");
+      242 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 243 |       await expect(drawer).toBeVisible();
+          |                            ^
+      244 |       await expect(heading(page)).toBeVisible();
+      245 |       const covered = await page.evaluate(() => {
+      246 |         const results = document.querySelector<HTMLElement>("section.search-results")!;
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:243:28
+
+    Error Context: apps/workspace/test-results/search-results-ospreyflow--24a18-f-the-results-lies-under-it/error-context.md
+
+
+[14/21] apps/workspace/keyboard/shell.spec.ts:267:1 › Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand
+[15/21] apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow light 1024: beside Ask & Chat's drawer no control of the results lies under it
+  12) apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (light, 1024) 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      130 |       await open(page, "job=following&ask=drawer", look);
+      131 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 132 |       await expect(drawer).toBeVisible();
+          |                            ^
+      133 |       const d = (await drawer.boundingBox())!;
+      134 |       const p = (await panel(page).boundingBox())!;
+      135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/batch-expansion.spec.ts:132:28
+
+    Error Context: apps/workspace/test-results/batch-expansion-beside-Ask-c333c-ies-clear-of-it-light-1024-/error-context.md
+
+
+[16/21] apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (govuk, 1440)
+  13) apps/workspace/keyboard/shell.spec.ts:267:1 › Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('region', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+    Expected: focused
+    Received: inactive
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('region', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+        14 × locator resolved to <h2 tabindex="-1" id="ask-page-title" class="ask-page__title">Ask & Chat</h2>
+           - unexpected value "inactive"
+
+
+      274 |   await page.keyboard.press("Tab");
+      275 |   await page.keyboard.press("Enter");
+    > 276 |   await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+          |                                                                      ^
+      277 |   await page.keyboard.press("Tab");
+      278 |   await expect(askPage.getByRole("button", { name: "Show as a drawer" })).toBeFocused();
+      279 |   await page.keyboard.press("Enter");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:276:70
+
+    Error Context: apps/workspace/test-results/shell-Show-as-a-drawer-ret-65a19-by-keyboard-focus-on-Expand/error-context.md
+
+
+  14) apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow light 1024: beside Ask & Chat's drawer no control of the results lies under it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      241 |       await press(page, "Ask & Chat");
+      242 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 243 |       await expect(drawer).toBeVisible();
+          |                            ^
+      244 |       await expect(heading(page)).toBeVisible();
+      245 |       const covered = await page.evaluate(() => {
+      246 |         const results = document.querySelector<HTMLElement>("section.search-results")!;
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:243:28
+
+    Error Context: apps/workspace/test-results/search-results-ospreyflow--d6a42-f-the-results-lies-under-it/error-context.md
+
+
+[17/21] apps/workspace/keyboard/search-results.spec.ts:236:5 › govuk light 1440: beside Ask & Chat's drawer no control of the results lies under it
+  15) apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (govuk, 1440) 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      130 |       await open(page, "job=following&ask=drawer", look);
+      131 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 132 |       await expect(drawer).toBeVisible();
+          |                            ^
+      133 |       const d = (await drawer.boundingBox())!;
+      134 |       const p = (await panel(page).boundingBox())!;
+      135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/batch-expansion.spec.ts:132:28
+
+    Error Context: apps/workspace/test-results/batch-expansion-beside-Ask-8711c-ies-clear-of-it-govuk-1440-/error-context.md
+
+
+[18/21] apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (govuk, 1024)
+  16) apps/workspace/keyboard/search-results.spec.ts:236:5 › govuk light 1440: beside Ask & Chat's drawer no control of the results lies under it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      241 |       await press(page, "Ask & Chat");
+      242 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 243 |       await expect(drawer).toBeVisible();
+          |                            ^
+      244 |       await expect(heading(page)).toBeVisible();
+      245 |       const covered = await page.evaluate(() => {
+      246 |         const results = document.querySelector<HTMLElement>("section.search-results")!;
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:243:28
+
+    Error Context: apps/workspace/test-results/search-results-govuk-light-349c8-f-the-results-lies-under-it/error-context.md
+
+
+[19/21] apps/workspace/keyboard/search-results.spec.ts:236:5 › govuk light 1024: beside Ask & Chat's drawer no control of the results lies under it
+  17) apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (govuk, 1024) 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      130 |       await open(page, "job=following&ask=drawer", look);
+      131 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 132 |       await expect(drawer).toBeVisible();
+          |                            ^
+      133 |       const d = (await drawer.boundingBox())!;
+      134 |       const p = (await panel(page).boundingBox())!;
+      135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/batch-expansion.spec.ts:132:28
+
+    Error Context: apps/workspace/test-results/batch-expansion-beside-Ask-35817-ies-clear-of-it-govuk-1024-/error-context.md
+
+
+  18) apps/workspace/keyboard/search-results.spec.ts:236:5 › govuk light 1024: beside Ask & Chat's drawer no control of the results lies under it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      241 |       await press(page, "Ask & Chat");
+      242 |       const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 243 |       await expect(drawer).toBeVisible();
+          |                            ^
+      244 |       await expect(heading(page)).toBeVisible();
+      245 |       const covered = await page.evaluate(() => {
+      246 |         const results = document.querySelector<HTMLElement>("section.search-results")!;
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:243:28
+
+    Error Context: apps/workspace/test-results/search-results-govuk-light-5159a-f-the-results-lies-under-it/error-context.md
+
+
+[20/21] apps/workspace/keyboard/search-results.spec.ts:266:1 › with the drawer open, a document read from the results gives focus back to their heading, not the drawer
+  19) apps/workspace/keyboard/search-results.spec.ts:266:1 › with the drawer open, a document read from the results gives focus back to their heading, not the drawer 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      268 |   await press(page, "Ask & Chat");
+      269 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 270 |   await expect(drawer).toBeVisible();
+          |                        ^
+      271 |   const name = await page.getByRole("list", { name: "Results" }).getByRole("heading", { level: 3 }).last().textContent();
+      272 |   await press(page, `Open ${name}`);
+      273 |   await expect(drawer).toBeHidden();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:270:24
+
+    Error Context: apps/workspace/test-results/search-results-with-the-dr-15d39-heir-heading-not-the-drawer/error-context.md
+
+
+[21/21] apps/workspace/keyboard/search-results.spec.ts:279:1 › with the drawer open, a document read from the view does not take focus into the drawer on closing
+  20) apps/workspace/keyboard/search-results.spec.ts:279:1 › with the drawer open, a document read from the view does not take focus into the drawer on closing 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      281 |   await press(page, "Ask & Chat");
+      282 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+    > 283 |   await expect(drawer).toBeVisible();
+          |                        ^
+      284 |   await press(page, "Read a document from the graph");
+      285 |   await expect(drawer).toBeHidden();
+      286 |   await press(page, "Close");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/search-results.spec.ts:283:24
+
+    Error Context: apps/workspace/test-results/search-results-with-the-dr-6ce19--into-the-drawer-on-closing/error-context.md
+
+
+  21) apps/workspace/keyboard/questions.spec.ts:563:1 › Show all on graph in Ask & Chat's drawer selects the answer's items on the real canvas, the drawer kept, focus on the canvas 
+
+    Test timeout of 60000ms exceeded.
+
+    Error: locator.focus: Test timeout of 60000ms exceeded.
+    Call log:
+      - waiting for getByLabel('Your question')
+
+
+      486 |   });
+      487 |   await serve(page, [], SHOW_ALL, at);
+    > 488 |   await page.getByLabel("Your question").focus();
+          |                                          ^
+      489 |   await page.keyboard.type("Who is near n2?");
+      490 |   await page.keyboard.press("Control+Enter");
+      491 |   await expect(page.getByRole("button", { name: "Show all on graph", exact: true })).toBeVisible();
+        at askForAll (/Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:488:42)
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:564:17
+
+    Error Context: apps/workspace/test-results/questions-Show-all-on-grap-12cd8-er-kept-focus-on-the-canvas/error-context.md
+
+
+  21 failed
+    apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (dark, 1440) 
+    apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (dark, 1024) 
+    apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (light, 1440) 
+    apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (light, 1024) 
+    apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (govuk, 1440) 
+    apps/workspace/keyboard/batch-expansion.spec.ts:128:5 › beside Ask & Chat's drawer the batch job's panel lies clear of it (govuk, 1024) 
+    apps/workspace/keyboard/questions.spec.ts:137:1 › Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard 
+    apps/workspace/keyboard/questions.spec.ts:542:1 › a [G-n] chosen in Ask & Chat's drawer selects on the real canvas, the drawer kept, focus on the canvas; Escape there closes it 
+    apps/workspace/keyboard/questions.spec.ts:563:1 › Show all on graph in Ask & Chat's drawer selects the answer's items on the real canvas, the drawer kept, focus on the canvas 
+    apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow dark 1440: beside Ask & Chat's drawer no control of the results lies under it 
+    apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow dark 1024: beside Ask & Chat's drawer no control of the results lies under it 
+    apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow light 1440: beside Ask & Chat's drawer no control of the results lies under it 
+    apps/workspace/keyboard/search-results.spec.ts:236:5 › ospreyflow light 1024: beside Ask & Chat's drawer no control of the results lies under it 
+    apps/workspace/keyboard/search-results.spec.ts:236:5 › govuk light 1440: beside Ask & Chat's drawer no control of the results lies under it 
+    apps/workspace/keyboard/search-results.spec.ts:236:5 › govuk light 1024: beside Ask & Chat's drawer no control of the results lies under it 
+    apps/workspace/keyboard/search-results.spec.ts:266:1 › with the drawer open, a document read from the results gives focus back to their heading, not the drawer 
+    apps/workspace/keyboard/search-results.spec.ts:279:1 › with the drawer open, a document read from the view does not take focus into the drawer on closing 
+    apps/workspace/keyboard/shell.spec.ts:139:1 › Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it 
+    apps/workspace/keyboard/shell.spec.ts:193:1 › Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it 
+    apps/workspace/keyboard/shell.spec.ts:220:1 › Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it 
+    apps/workspace/keyboard/shell.spec.ts:267:1 › Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand 

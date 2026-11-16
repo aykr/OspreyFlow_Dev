@@ -150,11 +150,13 @@
 .panel__body { padding: var(--sp-16); }
 
 /* Overlays: shadow, no hairline. */
+/* A drawer's width, read by `.drawer` and by what makes room beside Ask & Chat's drawer (`questions/askPage.css`). */
+:root { --w-drawer: 360px; }
 .drawer {
   /* Above every canvas-docked overlay (`.canvas-zoom`/`.canvas-legend` at 10, the selection bar
      at 12) and the open menus at 40: without a layer of its own, the canvas's zoom cluster drew
      over the Questions drawer's own text (the owner, 9 October 2026). */
-  position: fixed; top: 0; bottom: 0; right: 0; width: 360px; z-index: 45;
+  position: fixed; top: 0; bottom: 0; right: 0; width: var(--w-drawer); z-index: 45;
   background: var(--surface-panel); box-shadow: var(--overlay-shadow);
   border-radius: var(--r-overlay) 0 0 var(--r-overlay);
   transition: transform var(--dur-panel) var(--ease);

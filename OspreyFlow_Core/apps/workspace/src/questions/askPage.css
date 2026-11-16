@@ -1,6 +1,7 @@
-/* Ask & Chat as a page (v0.6.0 #4). Tokens only (`design/tokens.css`). It fills the main area over the view the person
-   left, in the same layer as the search results page (`search/searchResults.css`, which says why 19): above every
-   control a view docks over itself, below the search box's own suggestions. The two never show at once. */
+/* Ask & Chat (ADR-145 Amendment 20): a drawer by default, a page when expanded. Tokens only (`design/tokens.css`).
+   The page (v0.6.0 #4, Amendment 18) fills the main area over the view the person left, in the same layer as the search
+   results page (`search/searchResults.css`, which says why 19): above every control a view docks over itself, below the
+   search box's own suggestions. The two never show at once. */
 .ask-page {
   position: absolute;
   inset: 0;
@@ -29,6 +30,23 @@
 .ask-page__back:focus-visible, .ask-page__title:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
 .ask-page--govuk .ask-page__back { margin: 0; }
 .ask-page__title { margin: 0; font-size: var(--fs-19); line-height: var(--lh-19); font-weight: 600; }
+/* The heading with the control that changes the shape: *Show as a drawer* beside the page's heading, Expand and Close
+   at the drawer's header's end. Wraps on a narrow column rather than overflow it. */
+.ask-surface__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-8); }
+.ask-surface__head > h2 { margin: 0; }
+.ask-surface__actions { display: inline-flex; gap: var(--sp-4); }
+.ask-page__shape { margin: 0; }
+/* The drawer's shape: the workspace's drawer (`.drawer`, `design/primitives.css`), its title the panel title's size. */
+.ask-drawer[hidden] { display: none; }
+.ask-drawer__title { font-size: inherit; line-height: inherit; font-weight: inherit; }
+.ask-drawer__title:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
 .ask-page--govuk h2:focus { outline: none; }
-/* A reading width for the questions and their answers, not the screen's. */
-.ask-page__body { max-width: 72ch; }
+/* A reading width for the questions and their answers, not the screen's; *Show as a drawer* at its end, beside the
+   heading, not at the far side of a wide window. */
+.ask-page__body, .ask-page .ask-surface__head { max-width: 72ch; }
+/* Beside the drawer, what lies at the window's right makes room for it (ADR-145 Amendment 20; the lane review): the
+   results page's Filters column and the batch job's panel, each of which it would cover while their controls stayed in
+   the tab order. The drawer's width is `.drawer`'s own, `--w-drawer` (`design/primitives.css`); `AskPage` sets the
+   attribute. */
+:root[data-ask-drawer] .search-results { padding-right: calc(var(--w-drawer) + var(--sp-24)); }
+:root[data-ask-drawer] .batch-expansion { right: calc(var(--w-drawer) + var(--sp-16)); max-width: calc(100% - var(--w-drawer) - var(--sp-32)); }

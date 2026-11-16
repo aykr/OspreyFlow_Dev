@@ -6,6 +6,19 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+### v0.6.1
+
+A patch to v0.6.0 (dated and made a release's section at the cut).
+
+**The Glass (ADR-145 Amendment 20).**
+- **Ask & Chat opens as a drawer again**, beside the view, which stays in reach. **Expand**, at the drawer's top,
+  makes it v0.6.0's full page over the view, keeping the question you were typing, the engine you chose and your
+  place in the conversation; **Show as a drawer**, beside the page's heading, turns it back. Esc closes the drawer,
+  as it closes other drawers, and so do **Close** and a second press of the rail. Each opening is the drawer; the
+  search results' *Ask a question about '…' instead* opens the page, in the results' place. The drawer stays beside a
+  view or a search you choose, and beside the graph when you choose a marker or *Show all on graph*; it closes when
+  you go to another place. The search results and the batch job's panel make room for it.
+
 ## v0.6.0 — 2026-11-18
 
 **v0.6.0 is installed fresh: there is no upgrade to it from any earlier version.**

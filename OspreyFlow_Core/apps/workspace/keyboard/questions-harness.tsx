@@ -1,5 +1,6 @@
 // Questions keyboard harness (ADR-098 decision 4): the case's questions to the model, mounted inside
-// Ask & Chat's real page as `App.tsx` renders it (ADR-145 Amendment 18), by App's own hook. `questions.spec.ts` intercepts the routes at the
+// Ask & Chat's real drawer, or its page with `?form=page`, as `App.tsx` renders them (ADR-145 Amendments 18 and 20), by
+// App's own hook. `questions.spec.ts` intercepts the routes at the
 // transport; what the panel hands back (a change to the view, a document to open) is exposed on
 // `window.__QUESTIONS__`. A chosen `[G-n]` is proved against the real canvas in `harness.html?questions=1`.
 import { useState } from "react";
@@ -141,16 +142,24 @@ if (new URLSearchParams(window.location.search).get("save") === "1") {
   setTimeout(press, 50);
 }
 
+// `?form=page`: open as the page, as the results' Ask line opens it; otherwise the drawer, as the rail opens it (ADR-145
+// Amendment 20).
+const form = new URLSearchParams(window.location.search).get("form") === "page" ? "page" : "drawer";
+
 function Page() {
-  const ask = useAskPage(false, { leave: () => undefined }, true);
+  const ask = useAskPage(false, { leave: () => undefined }, form);
   if (!ask.open) return <p>The view.</p>;
   return (
     <AskPage
+      form={ask.expanded ? "page" : "drawer"}
+      onExpand={ask.expand}
+      onCollapse={ask.collapse}
       backLabel="Graph"
       onBack={() => {
         window.__QUESTIONS__!.closed = (window.__QUESTIONS__!.closed ?? 0) + 1;
         ask.back();
       }}
+      onDismiss={ask.dismiss}
     >
       <Panel />
     </AskPage>
@@ -158,7 +167,8 @@ function Page() {
 }
 
 createRoot(container).render(
-  // Inside Ask & Chat's page, as `App.tsx` mounts it, so its Back is provable here (rule 13). `position: relative`, as
+  // Inside Ask & Chat's drawer or page, as `App.tsx` mounts it, so its Expand, Show as a drawer and Back are provable
+  // here (rule 13). `position: relative`, as
   // App's main area is, so the page fills it.
   <div style={{ position: "relative", minHeight: "100vh" }}>
     <Page />

@@ -70,11 +70,13 @@ function Harness() {
   const start = (params.get("place") as PlaceId | null) ?? (params.get("view") === "ingest" ? "ingest" : null) ?? places[0] ?? "glass";
   const [admin, setAdmin] = useState(start === "admin");
   const [view, setView] = useState<View>(start === "ingest" ? "ingest" : start === "rules" ? "alerts" : "graph");
-  // Ask & Chat's page by App's own hook (ADR-145 Amendment 18): no results page here, and no reader.
+  // Ask & Chat, its drawer and its page, by App's own hook (ADR-145 Amendments 18 and 20): no results page here, and no
+  // reader.
   const ask = useAskPage(false, { leave: () => undefined });
-  // A view chosen, another place or the cross-link leaves the page, as App's `leavePages` does.
+  // A view chosen leaves the page and keeps the drawer, as App's `viewChosen` does; another place or the cross-link
+  // leaves either, as App's `leavePages` does.
   const goTo = (id: View) => {
-    ask.leaveBoth();
+    ask.viewChosen();
     setView(id);
   };
   // The views `App.tsx` offers this person (`offeredViews`), never a copy.
@@ -202,9 +204,10 @@ function Harness() {
             <LeftRail
               {...splitRail(ON_THE_RAIL.map((id) => ({
                 id, label: RAIL_LABELS[id], icon: id,
-                // Ask & Chat opens a page over the view, not a drawer (v0.6.0 #4), by App's own hook.
+                // Ask & Chat opens its drawer (ADR-145 Amendment 20), by App's own hook.
                 onSelect: id === "questions" ? ask.toggle : () => toggle(id),
-                opensPage: id === "questions",
+                // While Ask & Chat is the page its opener opens no dialog, as App's (ADR-145 Amendment 20).
+                opensPage: id === "questions" && ask.expanded,
                 // Marked by the same `railMark` as `App.tsx`, never a copy: expanded while its panel is open.
                 ...railMark(id, { view, open: ask.shown ? new Set([...panels, "questions" as RailEntry]) : panels }),
               })))}
@@ -218,7 +221,14 @@ function Harness() {
               <p>{`${place}, ${view}, on case ${caseId}`}</p>
             </main>
             {place === "glass" && ask.open && (
-              <AskPage backLabel={VIEW_LABELS[view as keyof typeof VIEW_LABELS] ?? "Graph"} onBack={ask.back} hidden={ask.pageHidden}>
+              <AskPage
+                form={ask.expanded ? "page" : "drawer"}
+                backLabel={VIEW_LABELS[view as keyof typeof VIEW_LABELS] ?? "Graph"}
+                onBack={ask.back} onDismiss={ask.dismiss}
+                onExpand={ask.expand}
+                onCollapse={ask.collapse}
+                hidden={ask.pageHidden}
+              >
                 <p>{`${RAIL_LABELS.questions}'s questions and answers.`}</p>
               </AskPage>
             )}
@@ -244,8 +254,9 @@ function Harness() {
 const container = document.getElementById("root");
 if (!container) throw new Error("#root not found");
 // `?open=views`: the top bar's More views drawn open; `?open=explore` or `?open=cases`: the Explore panel, or the Cases
-// panel from *Views in this case*, drawn open (ADR-145 Amendment 15), and `?open=questions` Ask & Chat's page (ADR-145
-// Amendment 18), so the accessibility scan sees each (`a11y/every-harness.spec.ts`).
+// panel from *Views in this case*, drawn open (ADR-145 Amendment 15), and `?open=questions` Ask & Chat's drawer (ADR-145
+// Amendment 20; with `&form=page`, Expand pressed too, its page), so the accessibility scan sees each
+// (`a11y/every-harness.spec.ts`).
 const opening = params.get("open");
 if (opening) {
   const press = () => {
@@ -259,6 +270,12 @@ if (opening) {
           : [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.startsWith("More"));
     if (button) button.click();
     else setTimeout(press, 50);
+    if (button && opening === "questions" && params.get("form") === "page") setTimeout(expand, 0);
+  };
+  const expand = () => {
+    const button = document.querySelector<HTMLButtonElement>('button[aria-label="Expand Ask & Chat to the full page"]');
+    if (button) button.click();
+    else setTimeout(expand, 50);
   };
   setTimeout(press, 0);
 }

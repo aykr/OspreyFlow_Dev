@@ -120,8 +120,9 @@ test("a proposal is accepted by keyboard, and its change reaches the view", asyn
 
 test("Ask & Chat's page is left by its visible Back to Graph, its first control, reached by keyboard", async ({ page }) => {
   // The owner, 9 October 2026: "how do I close the questions panel?" — Escape alone said nothing. ADR-145 Amendment 18:
-  // the panel is a page over the view, and its way out is Back to ‹view›, reached by Shift+Tab from the heading.
-  await serve(page, [ANSWER]);
+  // the page's way out is Back to ‹view›, reached by Shift+Tab from the heading. Amendment 20: the page is the drawer
+  // expanded (`?form=page` opens it there, as the results' Ask line does).
+  await serve(page, [ANSWER], ANSWER, "/keyboard/questions-harness.html?form=page");
   const askPage = page.getByRole("region", { name: "Ask & Chat" });
   await askPage.getByRole("heading", { name: "Ask & Chat" }).focus();
   await page.keyboard.press("Shift+Tab");
@@ -129,7 +130,66 @@ test("Ask & Chat's page is left by its visible Back to Graph, its first control,
   await page.keyboard.press("Enter");
   await expect.poll(() => page.evaluate(() => window.__QUESTIONS__?.closed ?? 0)).toBe(1);
   await expect(askPage).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toHaveCount(0);
   registerCovered(REGISTRY, "back-from-ask-and-chat-by-keyboard");
+});
+
+test("Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard", async ({ page }) => {
+  // ADR-145 Amendment 20 decision 2 (rule 13): the drawer and the page are one panel in two shapes, never mounted
+  // again, so what the analyst had in hand goes with it both ways. Forty earlier questions, so both shapes scroll.
+  await page.route("**/*/v1/investigations/*/models/engines", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        engines: [
+          { name: "local", label: "This deployment's own model", roles: ["extraction"], default_for: [] },
+          { name: "gemini", label: "Gemini", roles: ["extraction"], default_for: ["extraction"] },
+        ],
+      }),
+    }),
+  );
+  const history = Array.from({ length: 40 }, (_, i) => ({
+    ...ANSWER,
+    id: `q-${i + 1}`,
+    question: `Earlier question ${i + 1}?`,
+    candidates: [],
+    citations: [],
+    created_at: `2026-10-07T10:${String(i).padStart(2, "0")}:00Z`,
+  }));
+  await serve(page, history);
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  const askPage = page.getByRole("region", { name: "Ask & Chat" });
+  await expect(drawer).toBeVisible();
+  const choice = drawer.getByRole("combobox", { name: "Model engine" });
+  await expect(choice).toHaveValue("gemini");
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who paid Kestrel?");
+  await page.keyboard.press("Shift+Tab");
+  await expect(choice).toBeFocused();
+  await page.keyboard.type("This");
+  await expect(choice).toHaveValue("local");
+  // Scrolled to the middle of the history (a setup, not an action of the analyst's: no mouse).
+  const middle = page.getByText("Earlier question 20?", { exact: true });
+  await middle.evaluate((el) => el.scrollIntoView({ block: "start" }));
+  await expect(middle).toBeInViewport();
+  await expect(page.getByText("Earlier question 1?", { exact: true })).not.toBeInViewport();
+  const expand = drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" });
+  await expand.focus();
+  await page.keyboard.press("Enter");
+  await expect(askPage).toBeVisible();
+  await expect(askPage.getByLabel("Your question")).toHaveValue("Who paid Kestrel?");
+  await expect(askPage.getByRole("combobox", { name: "Model engine" })).toHaveValue("local");
+  await expect(middle).toBeInViewport();
+  await expect(page.getByText("Earlier question 1?", { exact: true })).not.toBeInViewport();
+  await askPage.getByRole("button", { name: "Show as a drawer" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByLabel("Your question")).toHaveValue("Who paid Kestrel?");
+  await expect(drawer.getByRole("combobox", { name: "Model engine" })).toHaveValue("local");
+  await expect(middle).toBeInViewport();
+  await expect(page.getByText("Earlier question 1?", { exact: true })).not.toBeInViewport();
+  registerCovered(REGISTRY, "expand-and-show-as-a-drawer-keep-the-question-by-keyboard");
 });
 
 test("a [G-n] chosen on Ask & Chat's page leaves it, selects what it stands for on the real canvas, and focus is on the canvas", async ({ page }) => {
@@ -372,8 +432,8 @@ test("an earlier answer is opened from its question's line by keyboard, its mark
   await expect(proposals).toContainText("2 proposals to decide");
   await expect(page.getByRole("button", { name: /^Who called Callum\?/ })).toHaveAttribute("aria-expanded", "true");
   // Every stop Tab makes through the panel, from its start: none is a closed answer's marker or proposal.
-  // From the page's heading, its start (ADR-145 Amendment 18: the panel is on Ask & Chat's page, not in a drawer).
-  await page.getByRole("region", { name: "Ask & Chat" }).getByRole("heading", { name: "Ask & Chat" }).focus();
+  // From Ask & Chat's heading, its start (the drawer's, by default: ADR-145 Amendment 20).
+  await page.getByRole("heading", { name: "Ask & Chat" }).focus();
   const stops: string[] = [];
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press("Tab");
@@ -473,6 +533,52 @@ test("Show all on graph on Ask & Chat's page leaves it, selects the answer's ite
   await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selection.slice().sort())).toEqual(["n2", "n3", "n9"]);
   await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
   registerCovered(REGISTRY, "show-all-from-the-ask-page-by-keyboard");
+});
+
+// The orchestrator's ruling R1 (ADR-145 Amendment 20, rule 13), on the real canvas and App's own hook
+// (harness.html?questions=drawer): in the drawer a marker brings its fact into view and focus to the canvas, and the
+// drawer stays beside it, as before Amendment 18 (ADR-129 decision 1); Escape from the canvas then closes the drawer,
+// focus left on the canvas, as a drawer's Escape does.
+test("a [G-n] chosen in Ask & Chat's drawer selects on the real canvas, the drawer kept, focus on the canvas; Escape there closes it", async ({ page }) => {
+  await serve(page, [], GRAPH_FACTS, "/keyboard/harness.html?questions=drawer");
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  await expect(drawer).toBeVisible();
+  await page.getByLabel("Your question").focus();
+  await page.keyboard.type("Who is connected to n0?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByRole("button", { name: "Show on the graph: graph fact 1, [G-1]" })).toHaveCount(2);
+  await page.getByLabel("Your question").focus();
+  await tabToLabel(page, "Show on the graph: graph fact 1, [G-1]");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selectedEdge)).toBe("e0");
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await expect(canvas).toBeFocused();
+  await expect(drawer).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(drawer).toHaveCount(0);
+  await expect(canvas).toBeFocused();
+  registerCovered(REGISTRY, "select-a-graph-fact-from-the-ask-drawer-by-keyboard");
+});
+
+test("Show all on graph in Ask & Chat's drawer selects the answer's items on the real canvas, the drawer kept, focus on the canvas", async ({ page }) => {
+  const added = await askForAll(
+    page,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ outcome: { delta: { seq: 9, op: "add", nodes: [N9], edges: [] }, links_among: "not_asked" }, not_shown: 1 }),
+      }),
+    "/keyboard/harness.html?questions=drawer",
+  );
+  await page.getByLabel("Your question").focus();
+  await tabToText(page, "Show all on graph");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => added).toEqual([{ node_ids: ["n2", "n3", "n9", "hidden-1"], link_ids: ["e2"] }]);
+  await expect.poll(() => page.evaluate(() => window.__KEYBOARD__!.selection.slice().sort())).toEqual(["n2", "n3", "n9"]);
+  await expect(page.getByRole("application", { name: "Network canvas" })).toBeFocused();
+  await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toBeVisible();
+  registerCovered(REGISTRY, "show-all-from-the-ask-drawer-by-keyboard");
 });
 
 /** Tab until the focused control's own text is `text` (a button named by its words, not an aria-label). */

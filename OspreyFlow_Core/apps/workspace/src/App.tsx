@@ -763,7 +763,7 @@ export function App() {
     if (!investigationId) return;
     if (lens) closeLens();
     setView("graph");
-    // ADR-145 Amendment 18: the answer is on Ask & Chat's page; the page goes, as a marker's does (one hook,
+    // ADR-145 Amendments 18 and 20: the page goes (the drawer stays beside the graph), as for a marker (one hook,
     // `questions/useAskPage.ts`), the items are shown once the canvas is back in reach, and focus goes to it.
     ask.showOnGraph(
       () =>
@@ -1115,12 +1115,13 @@ export function App() {
   };
   const results = useSearchResultsOverlay(readerDocumentId !== null, stopReading);
   const searching = results.searching;
-  // v0.6.0 #4: Ask & Chat is a page over the view, as the results page is; the two replace each other, and whatever
-  // leaves the results (a view chosen, another place, a saved view opened) leaves it too. The view beneath is out of
-  // reach while it shows, except while a document read from an answer is open over the view.
-  // Shared with the keyboard harnesses (`questions/useAskPage.ts`). ADR-098 decision 4: open at once when the case
-  // was opened on its questions.
-  const ask = useAskPage(readerDocumentId !== null, results, handoff.view === "questions", stopReading);
+  // ADR-145 Amendment 20 (v0.6.1): Ask & Chat opens as a drawer beside the view, and Expand makes it Amendment 18's
+  // page over the view, as the results page is: the page and the results replace each other, and whatever leaves the
+  // results leaves the page too; the drawer stays beside a view chosen, as Explore and History do. The view beneath
+  // the page is out of reach while it shows, except while a document read from an answer is open over the view.
+  // Shared with the keyboard harnesses (`questions/useAskPage.ts`). ADR-098 decision 4: open at once, as the drawer,
+  // when the case was opened on its questions.
+  const ask = useAskPage(readerDocumentId !== null, results, handoff.view === "questions" ? "drawer" : null, stopReading);
   const questionsOpen = ask.open;
   // Part A: the search's words are carried into Ask & Chat once; a later opening starts with an empty box.
   useEffect(() => {
@@ -1146,7 +1147,10 @@ export function App() {
   const viewColumnRef = useRef<HTMLDivElement | null>(null);
   const viewColumnCompact = useCompactWidth(viewColumnRef);
   const showToolbarCompact = view === "map" ? viewColumnCompact : canvasToolbarCompact;
+  // Leaving the Glass (another place, the cross-link) leaves the results and Ask & Chat in either shape; a view chosen
+  // leaves the results and the page but keeps the drawer (Amendment 20).
   const leavePages = ask.leaveBoth;
+  const viewChosen = ask.viewChosen;
   const openAskPage = ask.openPage;
   // ADR-093: every node selected on the canvas, for the Inspector's list.
   const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
@@ -1222,8 +1226,8 @@ export function App() {
     setSelectedNode(null);
     // The view's window, or none: a view keeps no window of the case's.
     timeline?.setWindow(lensWindow(opened));
-    // A saved view opened over the search results leaves them (Part A).
-    leavePages();
+    // A saved view opened over the search results leaves them (Part A), and Ask & Chat's page; not its drawer.
+    viewChosen();
     setView("graph");
   }
 
@@ -1875,7 +1879,7 @@ export function App() {
   // panel and marked expanded while it is open, never pressed (`railMark`); opening or closing one never changes
   // the view.
   const railOpen = new Set<RailEntry>(
-    // Ask & Chat's opener is expanded while its page shows, not while it is hidden for a document read from an answer.
+    // Ask & Chat's opener is expanded while it shows in either shape, not while it is hidden for a document read.
     ([["explore", exploreOpen], ["questions", ask.shown], ["history", historyOpen]] as const)
       .filter(([, open]) => open)
       .map(([id]) => id),
@@ -1883,7 +1887,8 @@ export function App() {
   const mark = (id: RailEntry) => railMark(id, { view, open: railOpen });
   const railTools = [
     { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen((open) => !open), ...mark("explore") },
-    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: ask.toggle, opensPage: true, ...mark("questions") },
+    // A drawer's opener says it opens a dialog; while Ask & Chat is the page it opens none (ADR-145 Amendment 20).
+    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: ask.toggle, opensPage: ask.expanded, ...mark("questions") },
     { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen((open) => !open), ...mark("history") },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   const railSplit = splitRail(railTools);
@@ -1902,12 +1907,12 @@ export function App() {
         onSelect:
           id === "boards"
             ? () => {
-                leavePages();
+                viewChosen();
                 setBoardToOpen(null);
                 setView("boards");
               }
             : () => {
-                leavePages();
+                viewChosen();
                 setView(id);
               },
       })),
@@ -1982,7 +1987,7 @@ export function App() {
               onApplyDelta={applyStarterDelta}
               // Part A: Enter on the typed words opens the results page over the view on screen.
               onSearch={(query) => {
-                ask.leave(); // the results replace Ask & Chat's page (v0.6.0 #4)
+                ask.leave(); // the results replace Ask & Chat's page (v0.6.0 #4); its drawer stays beside them (Amendment 20)
                 results.open(query, view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph");
               }}
               screenNodes={() => {
@@ -2006,7 +2011,7 @@ export function App() {
                 ...(mainViews.length > 0 ? mainViews : otherViews),
                 ...(dossierNodeId
                   ? [{ id: "dossier", label: "Messages", pressed: view === "dossier" && searching === null, onSelect: () => {
-                      leavePages();
+                      viewChosen();
                       setView("dossier");
                     } }]
                   : []),
@@ -2343,7 +2348,8 @@ export function App() {
                 onAskInView={(saved) => {
                   setViewsRead((n) => n + 1);
                   setQuestionsView({ id: saved.id, name: saved.name });
-                  openAskPage();
+                  // Each opening is the drawer (Amendment 20 decision 4); only the results' Ask line opens the page.
+                  ask.openDrawer();
                 }}
                 lens={lens !== null}
                 // ADR-144 Amendment 6: the toolbar's *Views* menu (Amendment 3) is withdrawn on the owner's word; the case
@@ -2781,14 +2787,19 @@ export function App() {
       )}
       </div>
       {/* Part A: the results fill the main area, over the view left, hidden (kept) while a document is read from them. */}
-      {/* v0.6.0 #4: Ask & Chat as a page over the view, as the results page is (`questions/AskPage.tsx`). */}
+      {/* ADR-145 Amendment 20: Ask & Chat, a drawer beside the view or, expanded, a page over it, as the results page is
+          (`questions/AskPage.tsx`, Amendment 18). One element in both shapes, so the panel is never mounted again. */}
       {app === "glass" && questionsOpen && (
         <AskPage
+          form={ask.expanded ? "page" : "drawer"}
           backLabel={view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph"}
-          onBack={ask.back}
+          onBack={ask.back} onDismiss={ask.dismiss}
+          onExpand={ask.expand}
+          onCollapse={ask.collapse}
           hidden={ask.pageHidden}
-          // Not while the page is hidden for the reader: App draws Help over the view then, one panel, never two.
-          beside={welcomeOpen && welcome === "asked" && !ask.pageHidden ? welcomePanel : null}
+          // Only over the page: beside the drawer, or while the page is hidden for the reader, App draws Help over the
+          // view, one panel, never two.
+          beside={welcomeOpen && welcome === "asked" && ask.viewInert ? welcomePanel : null}
           takeFocus={questionDraft === null}
         >
           <QuestionsPanel
@@ -2799,10 +2810,13 @@ export function App() {
             bearerToken={bearerToken}
             investigationId={investigationId}
             onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta)}
-            onOpenDocument={(id) => {
-              setReaderFallback(undefined);
-              setReaderDocumentId(id);
-            }}
+            // From an answer: focus comes back to Ask & Chat when the reader closes (ADR-145 Amendment 20).
+            onOpenDocument={(id) =>
+              ask.readFromAnswer(() => {
+                setReaderFallback(undefined);
+                setReaderDocumentId(id);
+              })
+            }
             // ADR-129: the graph facts asked about are what is selected and one link around it, and
             // inside the timeline window when one is set; a `[G-n]` chosen in an answer selects what
             // it stands for on the canvas and brings it into view.
@@ -2811,11 +2825,11 @@ export function App() {
               linkIds: selectedLink ? [selectedLink.id] : [],
             }}
             getTimelineWindow={() => crossFilterRef.current?.store.getState().window ?? null}
-            // A marker shows its fact on the graph: the page gives the view back, on the Graph, and the fact is
+            // A marker shows its fact on the graph: the page gives the view back (the drawer stays beside it), on the Graph, and the fact is
             // brought into view there once the canvas is in reach again.
             onSelectFacts={(citation) => {
               setView("graph");
-              // The page left, the item brought into view, focus on the canvas (ADR-145 Amendment 18).
+              // The page left or the drawer kept, the item brought into view, focus on the canvas (ADR-145 Amendments 18 and 20).
               ask.showOnGraph(() => {
                 if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
               });
@@ -2844,7 +2858,7 @@ export function App() {
           onShow={(nodes) => {
             void seedToCanvas(nodes, []);
             setSelectedNode(nodes[0] ?? null);
-            leavePages();
+            viewChosen();
             setView("graph");
             // Focus follows to the graph, once the view is back in reach (never left on the button that went).
             setTimeout(() => document.querySelector<HTMLElement>('[role="application"][aria-label="Network canvas"]')?.focus(), 0);
@@ -2876,7 +2890,7 @@ export function App() {
           draws another tree (Home, Admin, All cases) the panel goes, and the job it started is kept here, so the
           panel drawn again follows it rather than starting another; the job runs on the server either way. */}
       {bearerToken && batchExpansion.asked && (
-        <div hidden={view !== "graph" || searching !== null || questionsOpen || readerDocumentId !== null}>
+        <div hidden={view !== "graph" || searching !== null || ask.expanded || readerDocumentId !== null}>
           <BatchExpansion
             key={batchExpansion.asked.n}
             request={batchExpansion.asked.request}

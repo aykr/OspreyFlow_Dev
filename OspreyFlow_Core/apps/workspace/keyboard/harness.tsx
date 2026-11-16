@@ -273,7 +273,10 @@ const SCHEMA: OntologySchema = wantsSameAs
 const wantsQuestions = new URLSearchParams(window.location.search).get("questions") === "1";
 // `?questions=page`: the panel inside Ask & Chat's real page over the canvas, by App's own hook (ADR-145 Amendment 18):
 // a marker leaves the page, brings its fact into view on the real canvas and puts focus on it.
-const wantsAskPage = new URLSearchParams(window.location.search).get("questions") === "page";
+// `?questions=drawer`: the same in Ask & Chat's drawer beside the canvas (ADR-145 Amendment 20): a marker or Show all
+// keeps the drawer (the orchestrator's ruling R1), focus on the canvas; Escape from the canvas closes it.
+const askForm = new URLSearchParams(window.location.search).get("questions");
+const wantsAskPage = askForm === "page" || askForm === "drawer";
 
 const workingSet = createWorkingSet();
 const ontology = new OntologyRegistry(SCHEMA);
@@ -636,18 +639,20 @@ function showAllOnCanvas(ids: AnswerIds) {
 }
 
 function AskPageOverCanvas() {
-  const ask = useAskPage(false, { leave: () => undefined }, true);
+  // Open as the page (ADR-145 Amendment 20: the drawer expanded) or the drawer, by App's own hook.
+  const ask = useAskPage(false, { leave: () => undefined }, askForm === "drawer" ? "drawer" : "page");
   if (!ask.open) return null;
   return (
-    <div style={{ position: "fixed", inset: 0 }}>
-      <AskPage backLabel="Graph" onBack={ask.back}>
+    // The page fills the window over the canvas; the drawer places itself at its right, the canvas in reach.
+    <div style={ask.expanded ? { position: "fixed", inset: 0 } : undefined}>
+      <AskPage form={ask.expanded ? "page" : "drawer"} backLabel="Graph" onBack={ask.back} onDismiss={ask.dismiss} onExpand={ask.expand} onCollapse={ask.collapse}>
         <QuestionsPanel
           apiBaseUrl="http://keyboard-test.invalid"
           bearerToken="unused"
           investigationId="keyboard-fixture"
           onDelta={() => undefined}
           selection={{ nodeIds: [], linkIds: [] }}
-          // As `App.tsx`'s: the page left, the fact brought into view, focus on the canvas.
+          // As `App.tsx`'s: the page left (the drawer kept), the fact brought into view, focus on the canvas.
           onSelectFacts={(citation) =>
             ask.showOnGraph(() => {
               if (canvasHandle.current) bringFactIntoView(canvasHandle.current, citation);

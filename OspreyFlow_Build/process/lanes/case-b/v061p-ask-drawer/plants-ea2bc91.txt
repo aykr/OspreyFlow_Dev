@@ -1,0 +1,120 @@
+RED   P1 Escape does nothing in the drawer
+            Error: expect(locator).toHaveCount(expected) failed
+            > 203 |   await expect(drawer).toHaveCount(0);
+RED   P1u Escape does nothing in the drawer (App)
+        AssertionError: expected <section …(5)>…(2)</section> to be null
+RED   P2 the panel mounted again on a change of shape
+            Error: expect(locator).toHaveValue(expected) failed
+            > 181 |   await expect(askPage.getByLabel("Your question")).toHaveValue("Who paid Kestrel?");
+RED   P2u the panel mounted again on a change of shape (App)
+        AssertionError: expected <textarea …(4)></textarea> to be <textarea …(4)></textarea> // Object.is equality
+RED   P3 the scroll not kept across a change of shape
+            Error: expect(locator).toBeInViewport() failed
+            > 183 |   await expect(middle).toBeInViewport();
+RED   P4 Show as a drawer leaves focus on the heading, not Expand
+            Error: expect(locator).toBeFocused() failed
+            > 282 |   await expect(drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeFocused();
+RED   P4b Expand leaves focus on Expand, not the page's heading
+            Error: expect(locator).toBeFocused() failed
+            > 237 |   await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+RED   P5 a view chosen closes the drawer
+            Error: expect(locator).toBeVisible() failed
+            Error: element(s) not found
+            > 187 |   await expect(drawer).toBeVisible();
+RED   P5u a view chosen closes the drawer (App)
+        TestingLibraryElementError: Unable to find an accessible element with the role "dialog" and name "Ask & Chat"
+RED   P6 the rail opens the page
+            Error: expect(locator).toBeVisible() failed
+            Error: element(s) not found
+            > 152 |     await expect(drawer).toBeVisible();
+RED   P7 the shape remembered (closing and opening keep it)
+            Error: expect(locator).toBeVisible() failed
+            Error: element(s) not found
+            > 252 |   await expect(drawer).toBeVisible();
+RED   P8 the drawer over the top bar and the case line
+            Error: expect(received).toBeGreaterThanOrEqual(expected)
+            > 163 |     expect((await drawer.boundingBox())!.y).toBeGreaterThanOrEqual(Math.round(chromeBottom) - 1);
+RED   P9 the rail's opener announces no dialog for the drawer (harness)
+            Error: expect(locator).toHaveAttribute(expected) failed
+            > 147 |   await expect(opener).toHaveAttribute("aria-haspopup", "dialog");
+RED   P9u the rail's opener announces no dialog for the drawer (App)
+        AssertionError: expected null to be 'dialog' // Object.is equality
+RED   P9b the opener announces a dialog while it is the page (harness)
+            Error: expect(locator).not.toHaveAttribute() failed
+            > 241 |   await expect(opener).not.toHaveAttribute("aria-haspopup");
+RED   P9bu the opener announces a dialog while it is the page (App)
+        AssertionError: expected 'dialog' to be null
+RED   P10 the view inert beside the drawer
+            Error: expect(locator).not.toHaveAttribute(expected) failed
+            > 157 |     await expect(page.getByRole("main", { name: "Place content" })).not.toHaveAttribute("inert", "");
+RED   P10b the view in reach under the page
+            Error: expect(locator).toHaveAttribute(expected) failed
+            > 238 |   await expect(place).toHaveAttribute("inert", "");
+RED   P11 Escape closes the page too
+            Error: expect(locator).toBeVisible() failed
+            Error: element(s) not found
+            > 213 |   await expect(askPage).toBeVisible();
+RED   P12 the results' heading keeps focus from the drawer opened over their reader
+        AssertionError: expected <h2 id="_r_i_" tabindex="-1" …(1)></h2> to be <h2 id="ask-page-title" …(2)></h2> // Object.is equality
+RED   P13 focusing the page's heading undoes the scroll kept
+            Error: expect(locator).toBeInViewport() failed
+            > 183 |   await expect(middle).toBeInViewport();
+RED   P14 Help drawn inside the drawer as well as over the view (App)
+        TestingLibraryElementError: Found multiple elements with the role "dialog" and name "Welcome back"
+RED   P15 the batch panel hidden beside the drawer (App)
+        AssertionError: expected null to be truthy
+RED   P16 Escape from the canvas leaves the drawer open
+            Error: expect(locator).toHaveCount(expected) failed
+            > 558 |   await expect(drawer).toHaveCount(0);
+RED   P16u Escape from the canvas leaves the drawer open (App)
+        AssertionError: expected <section …(5)>…(2)</section> to be null
+RED   P16b Escape from the canvas moves focus to the rail
+        AssertionError: expected <button type="button" …(5)>…(1)</button> to be <div role="application" …(2)></div> // Object.is equality
+RED   P17 a marker closes the drawer (R1)
+            Error: expect(locator).toBeVisible() failed
+            Error: element(s) not found
+            > 556 |   await expect(drawer).toBeVisible();
+RED   P17b Show all closes the drawer (R1)
+            Error: expect(locator).toBeVisible() failed
+            Error: element(s) not found
+            > 580 |   await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toBeVisible();
+RED   P17u a marker closes the drawer (R1, App)
+        TestingLibraryElementError: Unable to find an accessible element with the role "dialog" and name "Ask & Chat"
+RED   P18 closing always sends focus to the rail (R2)
+        AssertionError: expected <button type="button" …(5)>…(1)</button> to be <button type="button"></button> // Object.is equality
+RED   P19 a document from the results or the view takes focus into the drawer
+            Error: expect(locator).toBeFocused() failed
+            > 276 |   await expect(heading(page)).toBeFocused();
+            Error: expect(locator).not.toBeFocused() failed
+RED   P19u a document from the results takes focus into the drawer (App)
+        AssertionError: expected <h2 id="ask-page-title" …(2)></h2> to be <h2 id="_r_i_" tabindex="-1" …(1)></h2> // Object.is equality
+RED   P19b a document from an answer no longer brings focus back to Ask & Chat (App)
+        AssertionError: expected <div role="application" …(2)></div> to be <h2 id="ask-page-title" …(2)></h2> // Object.is equality
+RED   P20 no room for the drawer beside the results
+            Error: the results' controls drawn over
+            > 258 |       expect(covered, "the results' controls drawn over").toEqual([]);
+            Error: the results' controls drawn over
+RED   P21 no room for the drawer beside the batch panel
+            Error: the panel's right edge left of the drawer
+            > 135 |       expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+            Error: the panel's right edge left of the drawer
+RED   P22 a search closes the drawer
+        TestingLibraryElementError: Unable to find an accessible element with the role "dialog" and name "Ask & Chat"
+RED   P23 another place and the cross-link leave the drawer open
+        AssertionError: expected <section …(5)>…(2)</section> to be null
+        AssertionError: expected <section …(5)>…(2)</section> to be null
+RED   P24 the results' Ask line opens the drawer, not the page
+        TestingLibraryElementError: Unable to find role="region" and name "Ask & Chat"
+RED   P25 the hand-off opens the page
+        TestingLibraryElementError: Unable to find role="dialog" and name "Ask & Chat"
+RED   P26 Ask the model about these… opens the page
+        TestingLibraryElementError: Unable to find role="dialog" and name "Ask & Chat"
+RED   P27 Expand leaves the results showing
+        AssertionError: expected <h2 id="_r_i_" tabindex="-1" …(1)></h2> to be null
+RED   P28 a saved view closes the drawer
+        TestingLibraryElementError: Unable to find an accessible element with the role "dialog" and name "Ask & Chat"
+RED   P29 the results' Show on graph closes the drawer
+        TestingLibraryElementError: Unable to find an accessible element with the role "dialog" and name "Ask & Chat"
+RED   P30 T beside the drawer refused (App)
+        TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Show toolbar"
+44 of 44 plants red

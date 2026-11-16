@@ -84,7 +84,7 @@ const EXTRA_STATES: Record<string, string[]> = {
   // The page frame as main.tsx and App.tsx draw it, a drawer's long body and the start overlay open (15 Nov 2026).
   "frame-harness.html": ["drawer=1", "overlay=1"],
   "places-harness.html": [
-    "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "open=questions", "banner=1", "banner=1&place=rules",
+    "place=ingest", "place=admin", "badge=1", "open=explore", "open=cases", "open=views", "open=questions", "open=questions&form=page", "banner=1", "banner=1&place=rules",
     "badge=1&rights=investigate,triage_alerts,read_alert_queue",
     "place=rules&rights=investigate,triage_alerts,read_alert_queue",
   ],
@@ -94,8 +94,9 @@ const EXTRA_STATES: Record<string, string[]> = {
   "alert-figures-harness.html": ["from=alert", "board=1", "board=1&rule=hotlists&from=alert", "home=1", "help=1"],
   // ADR-145 Amendment 11: Home's *Your access and tasks* where Home draws it, below the two columns.
   "answers-harness.html": ["home=1"],
-  // ADR-098 Amendment 9: Whole case chosen, its search's fallback said, an answer with its sources.
-  "questions-harness.html": ["case=1", "history=1", "case=1&save=1"],
+  // ADR-098 Amendment 9: Whole case chosen, its search's fallback said, an answer with its sources. ADR-145 Amendment 20:
+  // the panel in Ask & Chat's drawer by default (its Expand and Close), and in its page (its Back and Show as a drawer).
+  "questions-harness.html": ["case=1", "history=1", "case=1&save=1", "form=page", "history=1&form=page"],
   // ADR-146 decisions 2 and 6: Rules and Monitoring at an alert's address, and at one the reader may
   // not see.
   "rules-place-harness.html": ["address=a1", "address=not-yours", "evidence=1"],
@@ -423,8 +424,10 @@ for (const name of pages) {
             "aria-label",
             state === "menu=two" ? "2 selected" : "n0",
           );
-        // Ask & Chat's page open before the scan (ADR-145 Amendment 18): the harness presses the rail after it loads.
-        if (state === "open=questions") await expect(page.getByRole("region", { name: "Ask & Chat" })).toBeVisible();
+        // Ask & Chat open before the scan: the harness presses the rail after it loads, and Expand too for its page
+        // (ADR-145 Amendments 18 and 20).
+        if (state === "open=questions") await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toBeVisible();
+        if (state === "open=questions&form=page") await expect(page.getByRole("region", { name: "Ask & Chat" })).toBeVisible();
         if (variant === "light") {
           await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
         }

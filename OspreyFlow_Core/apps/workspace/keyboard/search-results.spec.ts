@@ -229,14 +229,74 @@ test("a search while a document is read over the view shows the results at once,
   await expect(heading).toBeFocused();
 });
 
-test("Ask & Chat opened while a document is read over the view shows its page at once, the reader closed, focus on its heading", async ({ page }) => {
+// ADR-145 Amendment 20 (the lane review): the drawer stays beside the results, which make room for it, so no control of
+// theirs lies under it while Tab still reaches it; in each look, at a wide and a narrow window.
+for (const [brand, theme] of [["ospreyflow", "dark"], ["ospreyflow", "light"], ["govuk", "light"]] as const) {
+  for (const width of [1440, 1024]) {
+    test(`${brand} ${theme} ${width}: beside Ask & Chat's drawer no control of the results lies under it`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openByEnter(page, brand === "govuk" ? "?brand=govuk" : "");
+      await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
+      await expect(page.getByRole("checkbox", { name: "Fixture Corp (40)" })).toBeVisible();
+      await press(page, "Ask & Chat");
+      const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+      await expect(drawer).toBeVisible();
+      await expect(heading(page)).toBeVisible();
+      const covered = await page.evaluate(() => {
+        const results = document.querySelector<HTMLElement>("section.search-results")!;
+        const controls = [...results.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea")];
+        return controls
+          .filter((el) => {
+            if (el.getBoundingClientRect().width === 0) return false;
+            // Brought into view first, as Tab brings it: the question is what lies over it there.
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            const r = el.getBoundingClientRect();
+            return !el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+          })
+          .map((el) => el.getAttribute("aria-label") ?? el.textContent?.trim() ?? el.tagName);
+      });
+      expect(covered, "the results' controls drawn over").toEqual([]);
+    });
+  }
+}
+
+// ADR-145 Amendment 20 (the lane review): a document opened from the results or the view while the drawer is open hides
+// it, and closing the reader gives focus back where that opener says (the results' heading), never into the drawer;
+// only a document read from an answer brings focus back to Ask & Chat.
+test("with the drawer open, a document read from the results gives focus back to their heading, not the drawer", async ({ page }) => {
+  await openByEnter(page, "");
+  await press(page, "Ask & Chat");
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  await expect(drawer).toBeVisible();
+  const name = await page.getByRole("list", { name: "Results" }).getByRole("heading", { level: 3 }).last().textContent();
+  await press(page, `Open ${name}`);
+  await expect(drawer).toBeHidden();
+  await press(page, "Close");
+  await expect(drawer).toBeVisible();
+  await expect(heading(page)).toBeFocused();
+});
+
+test("with the drawer open, a document read from the view does not take focus into the drawer on closing", async ({ page }) => {
+  await page.goto("/keyboard/search-results-harness.html");
+  await press(page, "Ask & Chat");
+  const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+  await expect(drawer).toBeVisible();
+  await press(page, "Read a document from the graph");
+  await expect(drawer).toBeHidden();
+  await press(page, "Close");
+  await expect(drawer).toBeVisible();
+  await expect(drawer.getByRole("heading", { name: "Ask & Chat" })).not.toBeFocused();
+});
+
+test("Ask & Chat opened while a document is read over the view shows at once, the reader closed, focus on its heading", async ({ page }) => {
+  // The rail opens the drawer (ADR-145 Amendment 20); it is hidden while a document is read, so the reader closes.
   await page.goto("/keyboard/search-results-harness.html");
   await page.getByRole("button", { name: "Read a document from the graph" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Reading: a document from the graph" })).toBeVisible();
-  await page.getByRole("button", { name: "Ask & Chat" }).focus();
+  await page.getByRole("button", { name: "Ask & Chat", exact: true }).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("region", { name: "Ask & Chat" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Ask & Chat" })).toBeVisible();
   await expect(page.getByRole("dialog", { name: /^Reading/ })).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
 });
@@ -247,7 +307,7 @@ test("Ask & Chat pressed while a document read from an answer is open shows its 
   await page.getByRole("button", { name: "Read a document from an answer" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("dialog", { name: "Reading: a document from an answer" })).toBeVisible();
-  const opener = page.getByRole("button", { name: "Ask & Chat" });
+  const opener = page.getByRole("button", { name: "Ask & Chat", exact: true });
   await expect(opener).toHaveAttribute("aria-expanded", "false");
   await opener.focus();
   await page.keyboard.press("Enter");

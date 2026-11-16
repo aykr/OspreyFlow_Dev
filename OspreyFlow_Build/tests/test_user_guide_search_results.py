@@ -32,8 +32,8 @@ OVERLAY = _read(SRC / "search" / "useSearchResultsOverlay.ts")
 COMBOBOX = _read(SRC / "design" / "primitives" / "Combobox.tsx")
 BOX = _read(SRC / "search" / "GlobalSearch.tsx")
 PANEL = _read(SRC / "questions" / "QuestionsPanel.tsx")
-# Ask & Chat's page (ADR-145 Amendment 18): the results and it replace each other through this hook, so App's results
-# wiring goes through it (`leavePages` is its `leaveBoth`, which leaves the results as its `other`).
+# Ask & Chat's page (ADR-145 Amendments 18 and 20): the results and it replace each other through this hook, so App's
+# results wiring goes through it (`viewChosen` and `leavePages`, its `leaveBoth`, leave the results as its `other`).
 ASK_HOOK = _read(SRC / "questions" / "useAskPage.ts")
 SERVICE = (API / "search_service.py").read_text(encoding="utf-8")
 ROUTES = (API / "app.py").read_text(encoding="utf-8")
@@ -197,12 +197,13 @@ def test_section_5_5_says_show_on_graph_draws_the_records_read_says_the_rest_and
     assert unread and "const unread = result.node_ids.length - nodes.length;" in PAGE
     show = re.search(r"onShow=\{\(nodes\) => \{(.*?)\}\} onOpenDocument=", APP)
     assert show, "App's Show on graph"
-    for step in ("void seedToCanvas(nodes, []);", "setSelectedNode(nodes[0] ?? null);", "leavePages();", 'setView("graph");'):
+    for step in ("void seedToCanvas(nodes, []);", "setSelectedNode(nodes[0] ?? null);", "viewChosen();", 'setView("graph");'):
         assert step in show.group(1), step
-    # `leavePages` leaves the results: it is the Ask page hook's leaveBoth, which leaves its `other`, the results.
-    assert "const leavePages = ask.leaveBoth;" in APP
-    assert 'useAskPage(readerDocumentId !== null, results, handoff.view === "questions", stopReading)' in APP
-    assert "leaveBoth: () => { other.leave(); setOpen(false); }," in ASK_HOOK
+    # `viewChosen` leaves the results: it is the Ask hook's, which leaves its `other`, the results (and Ask & Chat's page,
+    # keeping its drawer: ADR-145 Amendment 20).
+    assert "const viewChosen = ask.viewChosen;" in APP
+    assert 'useAskPage(readerDocumentId !== null, results, handoff.view === "questions" ? "drawer" : null, stopReading)' in APP
+    assert "viewChosen: () => { other.leave(); leavePage(); }," in ASK_HOOK
     text = results_text()
     assert "**Show on graph** puts the records the result stands for on the graph, selects the first and takes you there" in text
     example = re.search(r'a record the result names that could not be read is said, as in "((\d+) of its (\d+) records could not be read\.)"', text)
@@ -228,7 +229,7 @@ def test_section_5_5_says_the_ask_line_is_for_someone_offered_ask_and_chat_and_s
     body = re.sub(r"//[^\n]*?(?= \}|$)", "", m.group(1)).strip()
     assert body == "setQuestionDraft({ text: words, at: Date.now() }); openAskPage();", "and it sends nothing"
     assert "const openAskPage = ask.openPage;" in APP
-    opened = re.search(r"const openPage = \(\) => \{(.*?)\};", ASK_HOOK)
+    opened = re.search(r"openPage: \(\) => \{(.*?)\},", ASK_HOOK)
     assert opened and "other.leave();" in opened.group(1) and "setOpen(true);" in opened.group(1)
     assert "fetch" not in opened.group(1) and "ask(" not in opened.group(1)
     # Ask & Chat puts the words in its box and focuses it; asking stays the person's, by Ask.

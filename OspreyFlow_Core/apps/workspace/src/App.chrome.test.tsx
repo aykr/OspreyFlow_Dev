@@ -297,8 +297,8 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
       const opener = within(rail()).getByRole("button", { name });
       expect(opener.getAttribute("aria-pressed")).toBeNull();
       expect(opener.getAttribute("aria-expanded")).toBe("false");
-      // Ask & Chat opens a page, not a dialog (v0.6.0 #4); Explore and History open drawers.
-      expect(opener.getAttribute("aria-haspopup")).toBe(name === "Ask & Chat" ? null : "dialog");
+      // Each opens a drawer, Ask & Chat's too (ADR-145 Amendment 20; Amendment 18's page is Expand's).
+      expect(opener.getAttribute("aria-haspopup")).toBe("dialog");
     }
   });
 
@@ -311,17 +311,15 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
       opener.focus();
       fireEvent.click(opener);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
-      // Explore and History are drawers; Ask & Chat is a page over the view (v0.6.0 #4).
-      const shown = name === "Ask & Chat" ? "region" : "dialog";
-      expect(screen.getAllByRole(shown, { name: new RegExp(title) }).length).toBeGreaterThan(0);
+      // Each a drawer, Ask & Chat's too (ADR-145 Amendment 20).
+      expect(screen.getAllByRole("dialog", { name: new RegExp(title) }).length).toBeGreaterThan(0);
       expect(pressedViews()).toEqual(["Map"]);
       fireEvent.click(opener);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
       expect(document.activeElement).toBe(opener);
       fireEvent.click(opener);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
-      const close = name === "Ask & Chat" ? /^Back to Map$/ : new RegExp(`^Close ${title}`);
-      fireEvent.click(screen.getAllByRole("button", { name: close })[0]!);
+      fireEvent.click(screen.getAllByRole("button", { name: new RegExp(`^Close ${title}`) })[0]!);
       await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
       expect(document.activeElement).toBe(opener);
       expect(pressedViews()).toEqual(["Map"]);
@@ -644,6 +642,17 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     const opener = within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" });
     fireEvent.click(opener);
     await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
+    // Beside the drawer the view is in reach, and so are Show toolbar and T on the canvas (ADR-145 Amendment 20);
+    // expanded, neither is.
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+    const canvas = screen.getByRole("application", { name: "Network canvas" });
+    canvas.focus();
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    await vi.waitFor(() => expect(localStorage.getItem(KEY)).not.toBe("hidden"));
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    await vi.waitFor(() => expect(localStorage.getItem(KEY)).toBe("hidden"));
+    fireEvent.click(screen.getByRole("button", { name: "Expand Ask & Chat to the full page" }));
+    await screen.findByRole("region", { name: "Ask & Chat" });
     expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
     // Showing it would send focus to Hide toolbar inside the inert view, and lose it.
     expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
