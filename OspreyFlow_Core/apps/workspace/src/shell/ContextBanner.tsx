@@ -63,6 +63,11 @@ export interface ContextBannerProps {
   savedViews?: number | null;
   /** The saved view open over the canvas, named after the case as "› Saved view: ‹name›" (Amendment 17); none, nothing. */
   openView?: string | null;
+  /** ADR-145 Amendment 19 decision 6: the slim line, while the view's toolbar is hidden. "You are in …" is kept for a
+   * screen reader only (it still names the region), "reads …" is not drawn, and the cross-link keeps its short words. */
+  slim?: boolean;
+  /** Drawn last on the line (Amendment 19 decision 6: *Show toolbar* at its right end, where *Hide toolbar* was). */
+  end?: ReactNode;
 }
 
 /** The case line's *Saved views* button, where focus goes back to from the strip's *Back to the whole case* and from the
@@ -115,7 +120,7 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, openView }: ContextBannerProps) {
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, openView, slim = false, end }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   // The line stays one line where the top bar does (the owner's word and ruling, 15 November 2026), measured as the top
   // bar folds (`TopBar`'s `barWraps`), in steps: 0, everything at its full words; 1, the cross-link's short words; 2, the
@@ -155,7 +160,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       fonts?.removeEventListener?.("loadingdone", again);
     };
   }, []);
-  const short = fold.step >= 1;
+  const short = slim || fold.step >= 1;
   const squeezed = fold.step === 2;
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
@@ -230,7 +235,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       )}
       {/* ADR-145 Amendment 14 decision 4: a case reading none says so here, as the scope badge's NO DATA did
           (ADR-115 Amendment 1 point 5); while the datasets are read or refused, nothing, and the badge stays. */}
-      {place === "glass" && datasets && (
+      {place === "glass" && datasets && !slim && (
         <>
           {next()}
           <span className="context-banner__fit" title={datasets.length > 0 ? `reads ${names(datasets)}` : undefined}>
@@ -258,6 +263,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
           {short && crossLink.shortLabel ? crossLink.shortLabel : crossLink.label}
         </button>
       )}
+      {end && <span className="context-banner__end">{end}</span>}
     </>
   );
   if (govuk) {
@@ -266,7 +272,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     return (
       <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
         <div ref={row} className={squeezed ? "govuk-notification-banner__content context-banner--squeezed" : "govuk-notification-banner__content"}>
-          <h2 className="govuk-notification-banner__title context-banner__place" id="context-banner-title">
+          <h2 className={slim ? "govuk-notification-banner__title context-banner__place visually-hidden" : "govuk-notification-banner__title context-banner__place"} id="context-banner-title">
             {YOU_ARE_IN[place]}
           </h2>
           {line}
@@ -276,7 +282,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
   }
   return (
     <div ref={row} className={squeezed ? "context-banner context-banner--squeezed" : "context-banner"} role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
-      <h2 className="context-banner__place" id="context-banner-title">
+      <h2 className={slim ? "context-banner__place visually-hidden" : "context-banner__place"} id="context-banner-title">
         {YOU_ARE_IN[place]}
       </h2>
       {line}
