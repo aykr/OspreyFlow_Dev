@@ -108,8 +108,8 @@ from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
 from services.search_index.pending import PendingIds, pending_node_ids
+from services.search_index.run import IndexFeed, start_index_feed
 from services.search_index.run import configured as search_index_configured
-from services.search_index.run import start_index_feed
 from valkey.asyncio import Valkey
 
 from adapters.model_litellm.adapter import ModelLiteLLMAdapter
@@ -1661,15 +1661,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # closed). It reads through the adapter itself, as the worker's does, never the stamping graph
     # the routes are given; no route reaches it (`test_index_feed_reach.py`).
     index_feed = (
-        start_index_feed(
-            getattr(graph, "inner", graph), extraction_candidates, valkey,
-            _conduit_feed_name(), ontology,
-        )
+        conduit_index_feed(getattr(graph, "inner", graph), extraction_candidates, valkey, ontology)
         if index_feed_in_conduit()
         else None
-    )  # fmt: skip
-    if index_feed is not None:
-        logger.info("the Conduit is feeding the search index %s", index_feed.alias)
+    )
     promotion_task = asyncio.create_task(
         promotion_ageing_module.run_every(
             app.state.promotion_sweep,
@@ -1685,6 +1680,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         schedule_task.cancel()
         monitoring_task.cancel()
         promotion_task.cancel()
+        # Both stops at once, so the feed's batch and the loop's job finish side by side within
+        # one `JOB_LOOP_STOP_SECONDS`, as the worker's shared stop has them do.
+        if index_feed is not None:
+            index_feed.stop.set()
         if job_loop_task is not None:
             # A job in hand finishes and is acknowledged; the loop then sees the stop and ends.
             job_loop_stop.set()
@@ -2318,6 +2317,29 @@ def index_feed_in_conduit(environ: Mapping[str, str] | None = None) -> bool:
     loop (no worker workload is rendered) and an OpenSearch is configured. Elsewhere the worker
     feeds it, or nothing does because there is no index."""
     return job_loop_in_conduit(environ) and search_index_configured(environ)
+
+
+def conduit_index_feed(
+    source: Any,
+    texts: Any,
+    valkey: Any,
+    ontology: Any,
+    environ: Mapping[str, str] | None = None,
+) -> IndexFeed | None:
+    """The Conduit's feed (ADR-150 Amendment 4), or None with the reason logged when its settings
+    are refused (a CA file that is not there, an unknown signing, sigv4 with no region): the query
+    side falls back on the same settings rather than fail every search, so the start must not fail
+    on them either. Search then stays on the graph's exact search, and says so."""
+    try:
+        feed = start_index_feed(
+            source, texts, valkey, _conduit_feed_name(), ontology, environ=environ
+        )
+    except Exception:  # noqa: BLE001 - said, and the Conduit starts without a feed
+        logger.exception("the Conduit cannot feed the search index: its settings were refused")
+        return None
+    if feed is not None:
+        logger.info("the Conduit is feeding the search index %s", feed.alias)
+    return feed
 
 
 def _conduit_feed_name() -> str:

@@ -1,5 +1,5 @@
-"""ADR-150 Amendment 4, offline: where the Conduit feeds the search index, and that it starts the feed
-as the worker does. The feed itself, a write searchable through a real Conduit, is
+"""ADR-150 Amendment 4, offline: where the Conduit feeds the search index, and that it starts the
+feed as the worker does. The feed itself, a write searchable through a real Conduit, is
 `test_conduit_feed_live.py`'s.
 """
 
@@ -38,7 +38,9 @@ def _rendered_env(profile: str) -> dict[str, str]:
 
     from schemas.deployment import OspreyConfig
 
-    network = {"network": {"public_origin": "https://osprey.example.org"}} if profile == "small" else {}
+    network = (
+        {"network": {"public_origin": "https://osprey.example.org"}} if profile == "small" else {}
+    )
     artefacts = render(OspreyConfig.model_validate({"profile": profile, **network}),
                        allow_unpinned=True).artefacts  # fmt: skip
     lines = artefacts["deployment.env"].splitlines()
@@ -55,13 +57,25 @@ def test_small_as_rendered_has_its_conduit_feed_the_index() -> None:
     assert index_feed_in_conduit(env) is True
 
 
-def test_local_lite_as_rendered_feeds_the_index_where_it_runs_an_opensearch() -> None:
-    from services.api.app import index_feed_in_conduit
-    from services.search_index.run import configured
+def test_local_lite_as_rendered_feeds_the_index_exactly_where_it_runs_an_opensearch() -> None:
+    """Both ways, from the render itself: the Conduit feeds where the compose file runs an
+    `opensearch` service, and never where it runs none (`search: postgres-fulltext`)."""
+    import yaml
+    from harness.render import render
 
-    env = _rendered_env("local-lite")
-    assert env.get("OSPREY_JOB_WORKER") == "conduit"
-    assert index_feed_in_conduit(env) is configured(env)
+    from schemas.deployment import OspreyConfig
+    from services.api.app import index_feed_in_conduit
+
+    for search in ("opensearch", "postgres-fulltext"):
+        config = OspreyConfig.model_validate(
+            {"profile": "local-lite", "components": {"search": search}}
+        )
+        artefacts = render(config, allow_unpinned=True).artefacts
+        services = yaml.safe_load(artefacts["compose.yaml"])["services"]
+        lines = artefacts["deployment.env"].splitlines()
+        env = dict(line.split("=", 1) for line in lines if "=" in line and not line.startswith("#"))
+        assert env.get("OSPREY_JOB_WORKER") == "conduit"
+        assert index_feed_in_conduit(env) is ("opensearch" in services), search
 
 
 def test_cluster_s_conduit_never_feeds_beside_its_worker() -> None:
@@ -106,11 +120,73 @@ def test_the_worker_and_the_conduit_start_the_feed_one_way() -> None:
         assert _calls(path, "SearchIndexer") == 0, rel
 
 
-def test_the_one_way_check_names_a_second_feed() -> None:
-    planted = "async def f(i, s, me, stop):\n    await run_indexer(i, s, me, stop)\n"
-    path = Path(__file__).with_name("_planted_feed.py")
-    try:
-        path.write_text(planted, encoding="utf-8")
-        assert _calls(path, "run_indexer") == 1
-    finally:
-        path.unlink(missing_ok=True)
+def test_the_one_way_check_names_a_second_feed(tmp_path: Path) -> None:
+    path = tmp_path / "planted_feed.py"
+    path.write_text("async def f(i, s, me, stop):\n    await run_indexer(i, s, me, stop)\n")
+    assert _calls(path, "run_indexer") == 1
+
+
+async def test_a_feed_s_close_stops_it_and_closes_what_it_opened() -> None:
+    """`IndexFeed.close`: the stop is set, the batch in hand is waited for, and every close in
+    `closing` is awaited, in order."""
+    import asyncio
+
+    from services.search_index.run import IndexFeed
+
+    stop = asyncio.Event()
+    closed: list[str] = []
+
+    async def drain() -> None:
+        await stop.wait()
+
+    async def close_client() -> None:
+        closed.append("client")
+
+    feed = IndexFeed(asyncio.create_task(drain()), stop, "alias", [close_client])
+    await feed.close(timeout=5)
+    assert stop.is_set() and feed.task.done() and not feed.task.cancelled()
+    assert closed == ["client"]
+
+
+async def test_a_feed_past_its_bound_is_cancelled_and_still_closes_its_client() -> None:
+    """A batch slower than the bound is cancelled (its rows stay in the outbox), and the client is
+    closed all the same: a shutdown never waits on OpenSearch past `JOB_LOOP_STOP_SECONDS`."""
+    import asyncio
+
+    from services.search_index.run import IndexFeed
+
+    closed: list[str] = []
+
+    async def slow_batch() -> None:
+        await asyncio.sleep(3600)  # a batch that ignores the stop
+
+    async def close_client() -> None:
+        closed.append("client")
+
+    feed = IndexFeed(asyncio.create_task(slow_batch()), asyncio.Event(), "alias", [close_client])
+    await asyncio.wait_for(feed.close(timeout=0.05), timeout=5)
+    assert feed.task.cancelled()
+    assert closed == ["client"]
+
+
+def test_refused_search_settings_start_the_conduit_without_a_feed() -> None:
+    """A refused setting (here an unknown signing) is logged and the Conduit starts with no feed,
+    as the query side falls back on the same setting: never a start that fails on it."""
+    from services.api.app import conduit_index_feed
+
+    environ = {"OPENSEARCH_HOST": "opensearch", "OPENSEARCH_SIGNING": "rot13"}
+    assert conduit_index_feed(None, None, None, None, environ=environ) is None
+
+
+def test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores() -> None:
+    """Read from the lifespan's own source: the feed's stop is set before the job loop is waited
+    for, and its close is awaited before the first store is closed (the text store it reads)."""
+    source = (CORE / "services/api/app.py").read_text(encoding="utf-8")
+    body = source[source.index("async def lifespan(") :]
+    body = body[body.index("    try:\n        yield\n") :]
+    stop = body.find("index_feed.stop.set()")
+    loop_wait = body.find("await asyncio.wait_for(job_loop_task")
+    close = body.find("await index_feed.close(")
+    first_store = body.find("await investigations.close()")
+    assert -1 not in (stop, loop_wait, close, first_store)
+    assert stop < loop_wait < close < first_store
