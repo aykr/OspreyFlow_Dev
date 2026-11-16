@@ -53,6 +53,12 @@ HERE = Path(__file__).resolve().parent
 GATES = HERE.parents[1] / "platform" / "gates"
 POD_SCRIPT = HERE / "superset_pod.py"
 BOARD = "r1-board"
+#: The mirror of "a Reports Viewer of another unit" (v0.6.0's package test row 3, 16 November 2026): R1 maps a
+#: person's unit from Entra groups and maps unit-1 alone, so no person of another unit can sign in. Instead a
+#: second dashboard identity is registered in another unit, with its own board and a chart on it, and the unit-1
+#: Reports Viewer is offered neither (the same gate in may_open, from the other side).
+OTHER_UNIT, OTHER_BOARD = "r1-another-unit", "r1-board-another-unit"
+OTHER_APP = "eeeeeeee-ffff-4000-8000-000000000003"  # a synthetic application id: no report sync signs in as it
 #: The stand-in tenant's people (platform's `users`, by `preferred_username`), beside its first administrator.
 PEOPLE = {
     "admin@r1.test": None,  # users[0], the first administrator, whose oid is the claims'
@@ -263,12 +269,12 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
        r.status_code == 200 and set(s.get("roles") or []) == {*SUPERSET_ROLE["reader@r1.test"], REGISTRATION_ROLE}, s)
 
     # 5. Embedding, through the Glass's door. A guest token is reported by its status, never its text.
-    def offered(headers: dict[str, str]) -> tuple[int, bool]:
+    def offered(headers: dict[str, str], slug: str = BOARD) -> tuple[int, bool]:
         r = c.get("/v1/reports/dashboards", headers=headers)
-        return r.status_code, r.status_code == 200 and any(d.get("slug") == BOARD for d in r.json())
+        return r.status_code, r.status_code == 200 and any(d.get("slug") == slug for d in r.json())
 
-    def guest(headers: dict[str, str]) -> tuple[int, str | None]:
-        r = c.post(f"/v1/reports/dashboards/{BOARD}/guest-token", headers=headers)
+    def guest(headers: dict[str, str], slug: str = BOARD) -> tuple[int, str | None]:
+        r = c.post(f"/v1/reports/dashboards/{slug}/guest-token", headers=headers)
         return r.status_code, (r.json().get("token") if r.status_code == 200 else None)
 
     # The board's chart first: Superset shows a non-owner (the Conduit's embedder, which lists the boards) only a
@@ -320,16 +326,37 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
     refused, _ = guest(nobody)
     ok("a person with no reports right is refused the listing and the token (403, 403)",
        (listing, refused) == (403, 403), f"listing {listing}, guest token {refused}")
-    unit_claim = claims["org_unit"]["claim"]
     for who, headers in (
         ("a Reports Viewer with no level on the identity's case (the builder, now a Reports Viewer)", token("builder@r1.test")),
-        ("a Reports Viewer of another unit", token("reader@r1.test", **{unit_claim: "r1-another-unit"})),
         ("a Reports Viewer whose clearance is below the identity's", token("reader@r1.test", **{clearance_claim: "PUBLIC"})),
     ):
         listing, has = offered(headers)
         refused, _ = guest(headers)
         ok(f"{who} is offered nothing and refused the token (404)",
            listing == 200 and not has and refused == 404, f"listing {listing}, offered {has}, guest token {refused}")
+    # Another unit, mirrored (OTHER_UNIT above): an identity of another unit, its case the same and its clearance
+    # the same, so the unit alone differs; its board with a chart, and the embedder shown to list it first.
+    note("the other-unit case is mirrored: R1 maps a person's unit from Entra groups and maps unit-1 alone, so no "
+         "person of another unit can sign in; an identity of another unit is checked against the unit-1 Reports "
+         "Viewer instead, and no one here may open it (may_open refuses any unit but the identity's)",
+         claims["org_unit"])
+    r = c.post("/v1/admin/dashboards", headers=admin, json={"name": OTHER_BOARD, "clearance": me["clearance"],
+               "org_unit": OTHER_UNIT, "application_id": OTHER_APP})  # fmt: skip
+    ok(f"a dashboard identity of another unit, {OTHER_BOARD}, is registered", r.status_code in (201, 409),
+       f"{r.status_code} {r.text[:200]}")
+    r = c.put(f"/v1/investigations/{case}/access/grants/{OTHER_APP}", headers=admin, json={"level": "viewer"})
+    ok("the case's Author gives it Viewer, as the first identity has", r.status_code == 204, f"{r.status_code} {r.text[:200]}")
+    s = ask("build", "admin@r1.test", "R1 board, another unit", OTHER_BOARD)
+    ok(f"the administrator saves its board {OTHER_BOARD} (or finds it, on a rerun)",
+       s.get("status") == 201 or (s.get("status") == 200 and s.get("existing") is True), s)
+    s = ask("chart", "admin@r1.test", str(s.get("id")), "R1 figures, another unit")
+    ok("a chart on the mart's figures is on it", s.get("status") in (200, 201) and s.get("chart"), s)
+    s = ask("embedder")
+    ok(f"the Conduit's embedder lists {OTHER_BOARD} (the control: it could be offered)", OTHER_BOARD in (s.get("slugs") or []), s)
+    listing, has = offered(reader, OTHER_BOARD)
+    refused, _ = guest(reader, OTHER_BOARD)
+    ok(f"the unit-1 Reports Viewer is offered nothing of another unit's identity and refused its token (404)",
+       listing == 200 and not has and refused == 404, f"listing {listing}, offered {has}, guest token {refused}")
 
 
 def main(argv: list[str]) -> int:

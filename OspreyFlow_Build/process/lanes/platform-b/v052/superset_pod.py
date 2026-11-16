@@ -141,7 +141,7 @@ def _csrf(client: httpx.Client, headers: dict[str, str] | None = None) -> str | 
     return got.json().get("result") if got.status_code == 200 else None
 
 
-def chart(glass: str, hint: str, board_id: str) -> dict[str, Any]:
+def chart(glass: str, hint: str, board_id: str, name: str = CHART) -> dict[str, Any]:
     """With an administrator's session: the mart's `figures` as a dataset, and a table chart on it grouped by
     the `dashboard` column (the one the guest token's row-level security names), on the board. Each found
     again on a rerun, never made twice."""
@@ -165,13 +165,13 @@ def chart(glass: str, hint: str, board_id: str) -> dict[str, Any]:
         if made.status_code != 201:
             return {"status": made.status_code, "stage": "the dataset", "said": made.text[:200]}
         dataset = made.json()["id"]
-    charts = client.get("/api/v1/chart/", params={"q": f"(filters:!((col:slice_name,opr:eq,value:'{CHART}')))"})
+    charts = client.get("/api/v1/chart/", params={"q": f"(filters:!((col:slice_name,opr:eq,value:'{name}')))"})
     named = (charts.json().get("result") or []) if charts.status_code == 200 else []
     if named:
         return {"status": 200, "dataset": dataset, "chart": named[0]["id"], "existing": True}
     params = {"viz_type": "table", "groupby": ["dashboard"], "metrics": ["count"], "row_limit": 1000}
     made = client.post("/api/v1/chart/", headers=write, json={
-        "slice_name": CHART, "viz_type": "table", "datasource_id": dataset, "datasource_type": "table",
+        "slice_name": name, "viz_type": "table", "datasource_id": dataset, "datasource_type": "table",
         "dashboards": [int(board_id)], "params": json.dumps(params)})  # fmt: skip
     if made.status_code != 201:
         return {"status": made.status_code, "stage": "the chart", "said": made.text[:200]}
@@ -197,6 +197,27 @@ def chartdata(glass: str, how: str, who: str, board_id: str, dataset: str, chart
     return {"status": 200, "dashboards": sorted({str(r.get("dashboard")) for r in rows})}
 
 
+def embedder() -> dict[str, Any]:
+    """The boards the Conduit's own embedder sees in Superset (`services.api.superset_embed`, as the Conduit
+    lists them): every board with a slug that Superset shows it, a published one holding a chart it reads."""
+    import asyncio
+
+    sys.path.insert(0, "/app")
+    from services.api.superset_embed import SupersetEmbedder, SupersetSettings
+
+    async def listed() -> list[str]:
+        settings = SupersetSettings.from_env()
+        if settings is None:
+            return []
+        client = SupersetEmbedder(settings)
+        try:
+            return [slug for _id, slug, _title in await client.dashboards()]
+        finally:
+            await client.aclose()
+
+    return {"slugs": sorted(asyncio.run(listed()))}
+
+
 def _secret(arg: str) -> str:
     """`@secret`: the value the check prepended to this script on stdin, never an argument."""
     import os
@@ -213,7 +234,9 @@ def main(argv: list[str]) -> int:
     elif action == "embedded":
         answer = embedded(glass, rest[0], _secret(rest[1]))
     elif action == "chart":
-        answer = chart(glass, rest[0], rest[1])
+        answer = chart(glass, rest[0], rest[1], *rest[2:3])
+    elif action == "embedder":
+        answer = embedder()
     elif action == "chartdata" and rest[0] == "guest":
         answer = chartdata(glass, "guest", _secret(rest[4]), rest[1], rest[2], rest[3])
     elif action == "chartdata":

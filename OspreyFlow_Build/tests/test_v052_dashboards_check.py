@@ -350,7 +350,8 @@ LEAKS = {
     "the report sync never pulls": "pulls the case",
     "the report sync's pull fails": "pulls the case",
     "the builder, with no level on the identity's case, is offered the board": "no level on the identity's case",
-    "another unit is offered the board": "another unit",
+    "another unit is offered the board": "offered nothing of another unit's identity",
+    "the embedder lists no board of another unit": "the Conduit's embedder lists r1-board-another-unit",
     "a lower clearance is offered the board": "clearance is below",
     "no reports right is given the listing": "no reports right is refused the listing",
     "no reports right is given a guest token": "no reports right is refused the listing",
@@ -381,7 +382,9 @@ class _R1:
         self.CONFIG.write_text(yaml.safe_dump({
             "reporting": {"sync": True, "superset": True},
             "cloud_platform": {"claims": {"first_administrators": [OIDS["admin@r1.test"]], "superset_client_id": entra["superset"]["client_id"],
-                                          "clearance": {"claim": "ext_clearance"}, "org_unit": {"claim": "ext_unit"}}},
+                                          "clearance": {"claim": "ext_clearance"},
+                                          # R1's own shape: the unit from Entra groups, unit-1 alone mapped.
+                                          "org_unit": {"groups": {"20000000-0000-4000-8000-000000000001": "unit-1"}}}},
         }))  # fmt: skip
         self.report_sync = entra["report-sync"]["client_id"]
         self.records, self.calls, self.conduit, self.tmp = tmp / "records", [], conduit, tmp
@@ -421,22 +424,26 @@ def _conduit(leak: str = "") -> Any:
     roles: dict[str, list[str]] = {OIDS["admin@r1.test"]: ["osprey-admin"]}
     grants: dict[str, set[str]] = {}
     identities: list[DashboardIdentity] = []
+    board_slugs: dict[int, str] = {}  # Superset's board ids, by the slug each was saved with
 
     def principal(request: httpx.Request) -> Principal:
         claims = json.loads(request.headers["authorization"].removeprefix("Bearer fake."))
         return Principal(id=claims["oid"], clearance=claims["ext_clearance"], org_unit=claims["ext_unit"],
                          roles=roles.get(claims["oid"], []), receivable_handling_codes=[])  # fmt: skip
 
-    def openable(who: Principal) -> bool:
+    def openable(who: Principal, identity: DashboardIdentity) -> bool:
         seen = {case for case, people in grants.items() if who.id in people} | ({"case-1"} if "osprey-admin" in who.roles else set())
         leaky = {"the builder, with no level on the identity's case, is offered the board": who.id == OIDS["builder@r1.test"],
-                 "another unit is offered the board": who.org_unit != "unit-1",
+                 "another unit is offered the board": identity.org_unit != who.org_unit,
                  "a lower clearance is offered the board": who.clearance == "PUBLIC"}.get(leak, False)  # fmt: skip
-        return leaky or any(
-            may_open(who, i, classification=CLASSES, viewer_cases=seen,
-                     identity_cases={c for c, p in grants.items() if i.account_id in p})  # fmt: skip
-            for i in identities
-        )
+        return leaky or may_open(who, identity, classification=CLASSES, viewer_cases=seen,
+                                 identity_cases={c for c, p in grants.items() if identity.account_id in p})  # fmt: skip
+
+    def board(slug: str) -> DashboardIdentity | None:
+        """The identity a board's slug names, offered only once the board holds a chart (Superset shows its
+        embedder no board without one)."""
+        named = next((i for i in identities if i.name == slug), None)
+        return named if named is not None and slug in answer.charted else None
 
     def answer(request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -469,12 +476,13 @@ def _conduit(leak: str = "") -> Any:
         if path == "/v1/reports/dashboards":
             if not reads and leak != "no reports right is given the listing":
                 return httpx.Response(403, json={"detail": "not_allowed"})
-            listed = openable(who) and answer.charted
-            return httpx.Response(200, json=[{"slug": "r1-board", "title": "R1 board"}] if listed else [])
-        if path == "/v1/reports/dashboards/r1-board/guest-token":
+            listed = [i.name for i in identities if board(i.name) is not None and openable(who, i)]
+            return httpx.Response(200, json=[{"slug": slug, "title": slug} for slug in listed])
+        if path.startswith("/v1/reports/dashboards/") and path.endswith("/guest-token"):
             if not reads and leak != "no reports right is given a guest token":
                 return httpx.Response(403, json={"detail": "not_allowed"})
-            if not reads or openable(who):
+            identity = board(path.split("/")[4])
+            if not reads or (identity is not None and openable(who, identity)):
                 return httpx.Response(200, json={"token": GUEST})
             return httpx.Response(404, json={"detail": "not_found"})
         return httpx.Response(404)
@@ -486,7 +494,8 @@ def _conduit(leak: str = "") -> Any:
     # Whether r1-board holds a chart on the mart. Superset shows a non-owner (the Conduit's embedder) only a
     # published board holding a chart over a data source it reads, so the Conduit offers none before
     # (v0.6.0's package test row 3 on 0b51705, read from the embedder's own listing: [] until the chart).
-    answer.charted = False
+    answer.charted = set()
+    answer.board_slugs = board_slugs
     return answer
 
 
@@ -515,13 +524,19 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             return {"signed_in": True, "username": name, "roles": roles}
         if action == "build":
             gamma = args[0] == "reader@r1.test"
-            return {"status": 201 if not gamma or leak == "Superset lets the Reports Viewer build" else 403, "id": 7}
+            made = {"r1-board": 7, "r1-board-another-unit": 8}.get(args[2] if len(args) > 2 else "", 9)
+            conduit.board_slugs[made] = args[2] if len(args) > 2 else ""
+            return {"status": 201 if not gamma or leak == "Superset lets the Reports Viewer build" else 403, "id": made}
         if action == "embedded":
             assert args[1] == "@secret", "the guest token travels as a secret, never an argument"
             return {"with_token": 200 if secret == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}
         if action == "chart":
-            conduit.charted = True
+            conduit.charted.add(conduit.board_slugs.get(int(args[1]), ""))
             return {"status": 201, "dataset": 3, "chart": 5}
+        if action == "embedder":
+            # Superset's embedder sees a published board holding a chart; the leak hides the other unit's.
+            seen = sorted(conduit.charted - ({"r1-board-another-unit"} if leak == "the embedder lists no board of another unit" else set()))
+            return {"slugs": seen}
         if action == "chartdata" and args[0] == "session":
             # As Superset answers a person's own session: Admin and Alpha read every row of the mart (ADR-148
             # Amendment 21); the read-only OspreyReader holds no access to it, refused 403 (the probe of 16 Nov).
