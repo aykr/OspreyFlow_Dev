@@ -246,3 +246,4 @@ b9470cd be4f780 rules-b v060-resolve-empty-dob
 4d5d61d 9f3f280 platform-b v060-report-sync-valkey
 b60b486 4a759e4 rules-b v060-press-enabled
 7d6e357 2e1cc65 platform-b v060-superset-reader
+f41457a 1253e2e platform v060-seed-irsa
