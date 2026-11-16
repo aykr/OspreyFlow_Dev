@@ -18,3 +18,7 @@ Building starts after v0.6.0 is released, on the case lane; about 26 h (B first,
 before the release.
 
 The owner, 16 Nov ~08:00Z: **build now, in parallel with the last stages of v0.6.0; merge only after the release.**
+
+6. **Below 1180 the visible "Layout" and "Show" captions are dropped** (the groups keep their names for screen readers), with the shorter words of ruling 1; the toolbar fits one row at 1024 in both looks (the owner, 16 Nov ~08:15Z).
+7. **Compact words follow the toolbar's own width** (under ~1132 px, measured), not the window's; with a side panel docked on a small window (below ~900 px of toolbar) it wraps to two rows as today, hiding no action.
+8. **The build is split** (the orchestrator, on case's recommendation, the owner having asked for it if viable): case builds B and owns ContextBanner.tsx (adding `slim` and `end` props first); case-b builds A and C, based on that props commit; B merges before A+C.
