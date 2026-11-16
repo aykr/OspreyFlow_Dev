@@ -100,6 +100,7 @@ class Deployment(Protocol):
     def database_readers(self, database: str) -> set[str]: ...
     def store_readers(self, store: str) -> set[str]: ...
     def bucket_objects(self, bucket: str) -> int: ...
+    def proxied_providers(self) -> list[str]: ...
     def entra_used(self, registration: str) -> bool: ...
     def connects(self, host: str) -> bool: ...
     def reachable_outside(self, host: str) -> bool: ...
@@ -215,8 +216,8 @@ _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 
 def candidate_from_copy(tags: Iterable[str | None], git: Callable[..., str]) -> str:
     """The candidate's commit, found: the one commit our kept render's images are tagged with, which must be in
-    the copy's history with HEAD's own tree (the stack_lease copy commits afresh on top of the last for each
-    run, so the upgrade's commit and the verify run's differ while their files are the same). A render from
+    the copy's history with HEAD's own OspreyFlow_Core (the stack_lease copy commits afresh on top of the last for
+    each run, so the upgrade's commit and the verify run's differ while the product's files are the same). A render from
     other files (v0.5.1's, or a lane's head) has another tree, and fails here."""
     commits = sorted({t for t in tags if t})
     if len(commits) != 1 or not _COMMIT.fullmatch(commits[0]):
@@ -224,8 +225,12 @@ def candidate_from_copy(tags: Iterable[str | None], git: Callable[..., str]) -> 
     (commit,) = commits
     if git("cat-file", "-t", commit).strip() != "commit":
         raise LookupError(f"the kept render's commit {commit[:12]} is not in this copy's history")
-    rendered, here = git("rev-parse", f"{commit}^{{tree}}").strip(), git("rev-parse", "HEAD^{tree}").strip()
-    if rendered != here:
+    # The product's files alone: OspreyFlow_Core, from which the images and the render are made. A fix to the run's
+    # own tooling (OspreyFlow_Build) after the install leaves the candidate the same (v0.6.0's package test row 6:
+    # the whole tree compared, a gate's fix refused the candidate); another release's files still fail here.
+    rendered = git("rev-parse", f"{commit}:OspreyFlow_Core").strip()
+    here = git("rev-parse", "HEAD:OspreyFlow_Core").strip()
+    if not rendered or rendered != here:
         raise LookupError(f"the kept render's commit {commit[:12]} has other files than this copy's HEAD ({rendered[:12]} != {here[:12]})")
     return commit
 
@@ -350,6 +355,11 @@ def _store(store: str) -> Callable[[Deployment], tuple[bool, str]]:
 def _bucket(bucket: str) -> Callable[[Deployment], tuple[bool, str]]:
     def run(d: Deployment) -> tuple[bool, str]:
         n = d.bucket_objects(bucket)
+        # The tile cache is written by the Conduit's tile proxy alone, which refuses a provider whose proxy is none
+        # (`GET /v1/map/tiles`, 400): with no proxied provider in the deployed map, nothing can write it (v0.6.0's
+        # package test row 6, the orchestrator's ruling). Said, not failed; with one, empty still fails.
+        if not n and bucket == "tile-cache" and not d.proxied_providers():
+            return True, "not written: no tier-3/4 provider on this install (every map provider's proxy is none)"
         return (n > 0, f"{n} object(s)" if n else "empty: nothing written")
     return run
 
@@ -556,6 +566,18 @@ def shape_of(configmap: dict[str, Any] | None) -> str:
         raise LookupError("no deployed configuration (the ospreyflow-files ConfigMap's osprey.yaml)")
     config = yaml.safe_load(configmap["data"]["osprey.yaml"]) or {}
     return str((config.get("cloud_platform") or {}).get("shape") or "standard")
+
+
+def proxied_of(configmap: dict[str, Any] | None) -> list[str]:
+    """The deployed map's providers the Conduit's tile proxy serves (`proxy` other than none), from the same
+    `osprey.yaml` as the shape."""
+    import yaml
+
+    if not configmap or "osprey.yaml" not in (configmap.get("data") or {}):
+        raise LookupError("no deployed configuration (the ospreyflow-files ConfigMap's osprey.yaml)")
+    config = yaml.safe_load(configmap["data"]["osprey.yaml"]) or {}
+    providers = (config.get("map") or {}).get("providers") or []
+    return [str(p.get("id")) for p in providers if str(p.get("proxy") or "none") != "none"]
 
 
 def _exit(status: dict[str, Any] | None) -> int | None:
@@ -847,6 +869,9 @@ class KindDeployment:
 
     def shape(self) -> str:
         return shape_of(self._get("configmap", "ospreyflow-files"))
+
+    def proxied_providers(self) -> list[str]:
+        return proxied_of(self._get("configmap", "ospreyflow-files"))
 
     def render_differences(self) -> list[str]:
         from harness.cloud_platform.manifest import differences, load, rendered

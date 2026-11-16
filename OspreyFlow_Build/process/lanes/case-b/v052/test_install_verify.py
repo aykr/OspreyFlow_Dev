@@ -47,6 +47,9 @@ class Fake:
         self.reaches_anything = False
         self.offline = False
         self.differences: list[str] = []
+        #: The map providers the Conduit's tile proxy serves (proxy other than none): one by default, so the
+        #: tile cache is held to being written unless a case says there is none.
+        self.proxied: list[str] = ["a-proxied-provider"]
 
     def drop(self, entry: str) -> Fake:
         self.dropped.add(entry)
@@ -111,6 +114,9 @@ class Fake:
 
     def bucket_objects(self, bucket: str) -> int:
         return 0 if f"managed.s3.buckets.{bucket}" in self.dropped else 3
+
+    def proxied_providers(self) -> list[str]:
+        return list(self.proxied)
 
     def entra_used(self, registration: str) -> bool:
         return f"entra.{registration}" not in self.dropped
@@ -991,10 +997,13 @@ def _copy_repo(tmp: Path) -> tuple[Any, str, str, str]:
 
     tmp.mkdir(parents=True, exist_ok=True)
     git("init", "-q")
-    (tmp / "f").write_text("v0.5.1's files\n")
+    (tmp / "OspreyFlow_Core").mkdir()
+    (tmp / "OspreyFlow_Build").mkdir()
+    (tmp / "OspreyFlow_Build" / "gate.py").write_text("the run's tooling\n")
+    (tmp / "OspreyFlow_Core" / "f").write_text("v0.5.1's files\n")
     git("add", "-A"), git("commit", "-q", "-m", "the copy sent for this run")
     old = git("rev-parse", "HEAD").strip()
-    (tmp / "f").write_text("the candidate's files\n")
+    (tmp / "OspreyFlow_Core" / "f").write_text("the candidate's files\n")
     git("add", "-A"), git("commit", "-q", "--allow-empty", "-m", "the copy sent for this run")
     upgrade = git("rev-parse", "HEAD").strip()
     git("add", "-A"), git("commit", "-q", "--allow-empty", "-m", "the copy sent for this run")
@@ -1005,6 +1014,16 @@ def test_the_candidate_is_the_kept_renders_commit_with_this_copys_files(tmp_path
     git, _old, upgrade, head = _copy_repo(tmp_path)
     assert head != upgrade
     assert iv.candidate_from_copy([upgrade, upgrade, None], git) == upgrade
+
+
+def test_a_tooling_change_after_the_install_still_names_the_candidate(tmp_path: Path) -> None:
+    """The product is OspreyFlow_Core alone (the images and the render are made from it): a fix to the run's own
+    tooling under OspreyFlow_Build, applied to the copy after the install, leaves the candidate the same (v0.6.0's
+    package test row 6 on 0b51705: the whole tree compared, a gate's fix refused the candidate)."""
+    git, _old, upgrade, _head = _copy_repo(tmp_path)
+    (tmp_path / "OspreyFlow_Build" / "gate.py").write_text("the run's tooling, fixed\n")
+    git("add", "-A"), git("commit", "-q", "-m", "the copy sent for this run")
+    assert iv.candidate_from_copy([upgrade], git) == upgrade
 
 
 @pytest.mark.parametrize(
@@ -1049,3 +1068,41 @@ def test_the_search_probe_against_a_domain_that_refuses_unsigned(tmp_path: Path)
         done = subprocess.run([sys.executable, "-c", iv.SEARCH_PROBE], capture_output=True, text=True, env=env, check=False)
         server.shutdown()
         assert iv.search_answer(done.stdout)[0] is expect, (done.stdout, done.stderr[-500:])
+
+
+# ---- the tile cache, on an install with no proxied map provider (v0.6.0's package test row 6) -------------
+
+
+def _tile_cache(proxied: list[str]) -> list[Any]:
+    m = candidate()
+    if "tile-cache" not in m["managed"]["s3"]["buckets"]:
+        m["managed"]["s3"]["buckets"].append("tile-cache")
+    fake = Fake(m).drop("managed.s3.buckets.tile-cache")
+    fake.proxied = proxied
+    return [r for r in iv.verify(m, fake) if r.entry == "managed.s3.buckets.tile-cache"]
+
+
+def test_an_empty_tile_cache_with_no_proxied_provider_is_said_and_not_failed() -> None:
+    """The tile cache is written only by the Conduit's tile proxy, which refuses a provider whose proxy is none
+    (`GET /v1/map/tiles`, 400): an install whose every provider is local (R1's tier 1 file) never writes it."""
+    [result] = _tile_cache([])
+    assert result.ok and "no tier-3/4 provider on this install" in result.said, result
+
+
+def test_an_empty_tile_cache_beside_a_proxied_provider_still_fails() -> None:
+    [result] = _tile_cache(["a-proxied-provider"])
+    assert not result.ok and "empty: nothing written" in result.said, result
+
+
+def test_the_proxied_providers_are_read_from_the_deployed_map() -> None:
+    import yaml
+
+    def configmap(providers: list[dict[str, Any]]) -> dict[str, Any]:
+        return {"data": {"osprey.yaml": yaml.safe_dump({"map": {"default": "osm-local", "providers": providers}})}}
+
+    local = {"id": "osm-local", "kind": "vector", "source": "file:///data/tiles/osm-local.pmtiles", "proxy": "none"}
+    keyed = {"id": "os-maps", "kind": "raster", "source": "https://api.example.invalid/{z}/{x}/{y}", "proxy": "required"}
+    assert iv.proxied_of(configmap([local])) == []
+    assert iv.proxied_of(configmap([local, keyed])) == ["os-maps"]
+    with pytest.raises(LookupError, match="no deployed configuration"):
+        iv.proxied_of(None)

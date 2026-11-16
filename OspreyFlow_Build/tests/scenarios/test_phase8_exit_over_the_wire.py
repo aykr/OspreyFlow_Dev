@@ -163,6 +163,7 @@ from pathlib import Path
 import httpx
 import pytest
 import yaml
+from tests.scenarios.index_wait import search_until, settled
 from tests.services.api.case_dataset import new_case
 from tools.layout import REPO as REPO_ROOT
 
@@ -1216,8 +1217,11 @@ def cdr_load() -> dict:
         # /v1/search` could not find an ingested `Endpoint` at all, because `search_nodes` matched
         # the declared identifier *kinds* (`e164`) rather than the `value_normalised` the engine
         # actually writes. With search working there is a stable handle on every run.
-        found = client.post(
-            _in_case("/v1/search"), json={"query": B1_NORMALISED_NUMBER, "limit": 5}
+        # Where search reads the index, it follows the load through ADR-150's outbox: asked again
+        # until it has the number, up to 30 s, the wait recorded (ADR-150 Amendment 3).
+        found = search_until(
+            client.post, _in_case("/v1/search"), {"query": B1_NORMALISED_NUMBER, "limit": 5},
+            what="B1's number after the CDR load",
         )
         assert found.status_code == 200, found.text
         hits = found.json()["nodes"]
@@ -1281,11 +1285,22 @@ def test_what_an_analyst_ingests_an_analyst_can_find_and_open(
     assert endpoint["properties"]["value_normalised"] == B1_NORMALISED_NUMBER
     assert endpoint["properties"]["endpoint_kind"] == "msisdn"
 
-    # **The raw rendering stays unsearchable, deliberately.** §7's whole purpose is that
-    # `01621926368` and `+44(0)1621926368` collapse onto one canonical value; making the raw
-    # forms searchable would reintroduce the fragmentation by the back door.
-    raw = analyst.post(_in_case("/v1/search"), json={"query": "01621926368", "limit": 5})
-    assert raw.json()["nodes"] == []
+    # **The raw rendering finds the same one Endpoint, never a second.** §7's whole purpose is that
+    # `01621926368` and `+44(0)1621926368` collapse onto one canonical value. Since ADR-128
+    # decision 1 ("Reading each identifier") the search box reads what an analyst types through the
+    # identifier's own Knowledge Adapter, so the local form is read as the canonical one: it finds
+    # that Endpoint, and only it (no node of its own for the raw form). Before that decision this
+    # case asked for no hit at all; the package test of 16 November 2026 found it stale (the
+    # orchestrator's ruling).
+    raw = search_until(
+        analyst.post, _in_case("/v1/search"), {"query": "01621926368", "limit": 5},
+        what="the raw rendering of B1's number",
+    )
+    assert raw.status_code == 200, raw.text
+    assert [n["id"] for n in raw.json()["nodes"]] == [endpoint["id"]], (
+        "the raw rendering should find B1's one Endpoint and nothing else: "
+        f"{[(n['id'], n['type']) for n in raw.json()['nodes']]} (expected {endpoint['id']})"
+    )
 
     seeded = analyst.post(
         f"/v1/investigations/{seeded_scope}/seed", json={"nodes": [endpoint], "edges": []}
@@ -1349,7 +1364,6 @@ def test_b2_duplicate_rows_collapse_and_every_source_row_is_retained(cdr_load: d
     the same pair twice. This case writes it nine times, over the wire.
     """
     verify = cdr_load["verify"]
-    report = cdr_load["report"]
     previewed = [e for e in verify["edges"] if e["type"] == "COMMUNICATED_WITH"]
 
     assert len(previewed) == 1, (
@@ -1362,11 +1376,15 @@ def test_b2_duplicate_rows_collapse_and_every_source_row_is_retained(cdr_load: d
     # actually wrote. Nine row-level edges merging to one stored edge is `CLAUDE.md` rule 12's own
     # worked example — `upsert_edges` went a whole phase without merging same-pair edges while
     # the conformance suite passed, because no case wrote the same pair twice. This one does.
-    assert len(set(report["touched_edge_ids"])) == 1, (
-        "the run touched more than one edge id, so the same pair was stored as separate edges: "
-        f"{sorted(set(report['touched_edge_ids']))}"
+    # Read through the case's own graph as the analyst (`cdr_load`'s expand), which respects access:
+    # since ADR-127 B2-4b (b5b5a8e) the run's report carries no id lists a loader could read beyond
+    # what they may see, so this case no longer reads `touched_edge_ids` (the package test of
+    # 16 November 2026, the orchestrator's ruling).
+    stored = [e for e in cdr_load["stored_edges"] if e["type"] == "COMMUNICATED_WITH"]
+    assert len(stored) == 1, (
+        "the pair's nine rows were stored as more than one edge, read through the case's graph: "
+        f"{sorted(e['id'] for e in stored)}"
     )
-    assert len(report["touched_edge_ids"]) == 9, report["touched_edge_ids"]
 
     # **Every source row retained on the survivor** — the half that is easy to lose, and only
     # readable from the stored edge. Unconditional since round 13cd: the analyst's own search
@@ -1434,8 +1452,14 @@ def test_b3_local_times_are_converted_and_an_unreadable_one_is_refused_by_name(
     assert len(rejections) == 1, rejections
     only = rejections[0]
     assert only["row_index"] == 9, only
-    assert "datetime" in only["reason"] and "not-a-real-timestamp" in only["reason"], (
-        f"the rejection does not name the adapter and the offending value: {only['reason']!r}"
+    # The adapter and the field are named, and the value is not (ad39a15, 9 October 2026: "a
+    # rejection names its cause, not its value"; a rejected row's value is never echoed back). This
+    # case asked for the value before; the package test of 16 November 2026 found it stale.
+    assert "datetime" in only["reason"] and "start_time" in only["reason"], (
+        f"the rejection does not name the adapter and the field: {only['reason']!r}"
+    )
+    assert "not-a-real-timestamp" not in only["reason"], (
+        f"the rejection echoes the rejected value: {only['reason']!r}"
     )
     assert report["rows_read"] == 10, report["rows_read"]
 
@@ -2009,7 +2033,10 @@ def test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities(
     # **The cells are `Location` entities in the graph**, reached the way an analyst reaches
     # anything: by searching for one of them. The recipe gives each cell a
     # `site_ref`, which `Location` declares as an identifier.
-    found = analyst.post(_in_case("/v1/search"), json={"query": f"{site['id']}-r0-c0", "limit": 5})
+    found = search_until(
+        analyst.post, _in_case("/v1/search"), {"query": f"{site['id']}-r0-c0", "limit": 5},
+        what="A1's first cell after drawing the grid",
+    )
     assert found.status_code == 200, found.text
     hits = found.json()["nodes"]
     assert hits, (
@@ -2055,7 +2082,9 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         == 200
     )
     cell_query = {"query": f"{site_id}-r0-c0", "limit": 10}
-    first = analyst.post(_in_case("/v1/search"), json=cell_query).json()["nodes"]
+    first = search_until(
+        analyst.post, _in_case("/v1/search"), cell_query, what="A1's cell before the redraw"
+    ).json()["nodes"]
     assert len(first) == 1, f"one cell should carry this site_ref, found {len(first)}"
 
     assert (
@@ -2064,7 +2093,11 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         ).status_code
         == 200
     )
-    second = analyst.post(_in_case("/v1/search"), json=cell_query).json()["nodes"]
+    # Read once the index has settled: a read at once would see it before the redraw reached it, and
+    # could miss a duplicate written late (ADR-150 Amendment 3).
+    second = settled(
+        analyst.post, _in_case("/v1/search"), cell_query, what="A1's cell after the redraw"
+    )
     assert [n["id"] for n in second] == [n["id"] for n in first], (
         f"redrawing the grid created new cells rather than referencing the existing ones: "
         f"{[n['id'] for n in first]} -> {[n['id'] for n in second]}"
@@ -2145,11 +2178,10 @@ def test_a1_a_cells_geometry_reference_resolves_to_its_centroid(
         == 200
     )
 
-    cells = analyst.post(
-        _in_case("/v1/search"), json={"query": f"{site_id}-r1-c2", "limit": 5}
-    ).json()[
-        "nodes"
-    ]
+    cells = search_until(
+        analyst.post, _in_case("/v1/search"), {"query": f"{site_id}-r1-c2", "limit": 5},
+        what="A1's cell r1-c2 for its centroid",
+    ).json()["nodes"]
     assert len(cells) == 1, f"one cell should carry this site_ref, found {len(cells)}"
     ref = cells[0]["properties"]["geometry_ref"]
     assert ref, "the cell carries no geometry_ref at all, so there is nothing to resolve"

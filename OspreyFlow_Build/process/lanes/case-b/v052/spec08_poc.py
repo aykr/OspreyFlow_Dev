@@ -237,6 +237,8 @@ def run(extra: list[str]) -> int:  # pragma: no cover - the live half, under a l
            "SSL_CERT_FILE": str(bundle), "OSPREY_V052_TOKEN_COMMAND": f"{sys.executable} {Path(__file__)} token",
            "PYTHONPATH": os.pathsep.join([str(HERE), os.environ.get("PYTHONPATH", "")])}
     log = r1.record("spec08-poc")
+    # Each search's wait for the index, line by line (ADR-150 Amendment 3: the lag measured on every run).
+    env["OSPREY_SEARCH_WAITS"] = str(r1.record("spec08-search-waits"))
     done = subprocess.run([sys.executable, "-m", "pytest", "-c", str(BUILD / "pytest.ini"), "-p", "no:cacheprovider", "-p", "spec08_poc",
                            "-rs", "-v", str(MODULE), *extra], env=env, capture_output=True, text=True, check=False)
     log.write_text(done.stdout + done.stderr)

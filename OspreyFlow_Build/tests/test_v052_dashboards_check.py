@@ -306,6 +306,67 @@ def test_a_secret_reaches_the_pod_script_through_stdin_alone(pod: Any, monkeypat
     assert pod._secret("@secret") == GUEST and pod._secret("7") == "7"
 
 
+def test_the_embedder_action_finds_the_conduit_s_modules_under_python_isolated(tmp_path: Path) -> None:
+    """`superset_pod.py embedder` imports the Conduit's own `services.api.superset_embed`, which imports `schemas`;
+    the pod runs it as `python -I -`, which ignores PYTHONPATH, where the api image puts its packages (v0.6.0's
+    package test row 3: ModuleNotFoundError: No module named 'schemas'). Run here the same way, against a
+    stand-in module tree reached only through PYTHONPATH."""
+    import os
+    import subprocess
+    import sys
+
+    app, packages = tmp_path / "app", tmp_path / "packages"
+    (app / "services" / "api").mkdir(parents=True)
+    (packages / "schemas").mkdir(parents=True)
+    for folder in (app / "services", app / "services" / "api", packages / "schemas"):
+        (folder / "__init__.py").write_text("")
+    (packages / "schemas" / "admin.py").write_text("DashboardIdentity = object\n")
+    (app / "services" / "api" / "superset_embed.py").write_text(
+        "from schemas.admin import DashboardIdentity\n"
+        "class SupersetSettings:\n    @classmethod\n    def from_env(cls):\n        return cls()\n"
+        "class SupersetEmbedder:\n    def __init__(self, settings): pass\n"
+        "    async def dashboards(self): return [(6, 'r1-board-another-unit', 't'), (1, 'r1-board', 't')]\n"
+        "    async def aclose(self): pass\n")  # fmt: skip
+    script = (Path(__file__).resolve().parents[1] / "process/lanes/platform-b/v052/superset_pod.py").read_text()
+    script = script.replace('sys.path.insert(0, "/app")', f'sys.path.insert(0, {str(app)!r})')
+    env = {**os.environ, "PYTHONPATH": f"{app}{os.pathsep}{packages}"}
+    done = subprocess.run([sys.executable, "-I", "-", "ospreyflow.r1.test", "embedder"], input=script, env=env,
+                          capture_output=True, text=True, timeout=60, check=False)  # fmt: skip
+    assert done.returncode == 0, done.stderr[-500:]
+    assert json.loads(done.stdout.strip().splitlines()[-1]) == {"slugs": ["r1-board", "r1-board-another-unit"]}
+
+
+def test_the_stdin_the_check_sends_with_a_secret_is_python_the_pod_runs(tmp_path: Path) -> None:
+    """The text `pod()` sends kubectl when a guest token travels with it, compiled and run as `python -I -` would
+    (v0.6.0's package test row 3 on 0b51705: the secret's lines went before superset_pod.py's
+    `from __future__` import, which must come first, so every call with a secret was a SyntaxError). Run with a
+    stand-in for the script's own work: the secret is read back where an argument says `@secret`."""
+    import subprocess
+
+    import sys
+
+    check = _load(CHECK, "dashboards_check_stdin_under_test")
+    sent: list[str] = []
+
+    def kube(r1: Any, *args: str, stdin: str = "") -> str:
+        sent.append(stdin)
+        return '{"ok": true}'
+
+    original = check.kube
+    check.kube = kube
+    try:
+        check.pod(type("R1", (), {"GLASS": GLASS})(), "embedded", "1", "@secret", secret=GUEST)
+    finally:
+        check.kube = original
+    [stdin] = sent
+    compile(stdin, "<stdin>", "exec")  # a SyntaxError here is the field failure
+    probe = stdin.replace("raise SystemExit(main(sys.argv[1:]))", "print(_secret(sys.argv[-1]))")
+    done = subprocess.run([sys.executable, "-I", "-", "ospreyflow.r1.test", "embedded", "1", "@secret"],
+                          input=probe, capture_output=True, text=True, timeout=60, check=False)  # fmt: skip
+    assert done.returncode == 0 and done.stdout.strip().splitlines()[-1] == GUEST, done.stderr[-400:]
+    assert GUEST in stdin and all(GUEST not in a for a in ("embedded", "1", "@secret"))
+
+
 # ---- the check itself, against a Conduit whose refusals are the real may_open's ---------------------------
 
 CLASSES = ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"]
@@ -319,7 +380,8 @@ LEAKS = {
     "the report sync never pulls": "pulls the case",
     "the report sync's pull fails": "pulls the case",
     "the builder, with no level on the identity's case, is offered the board": "no level on the identity's case",
-    "another unit is offered the board": "another unit",
+    "another unit is offered the board": "offered nothing of another unit's identity",
+    "the embedder lists no board of another unit": "the Conduit's embedder lists r1-board-another-unit",
     "a lower clearance is offered the board": "clearance is below",
     "no reports right is given the listing": "no reports right is refused the listing",
     "no reports right is given a guest token": "no reports right is refused the listing",
@@ -350,7 +412,9 @@ class _R1:
         self.CONFIG.write_text(yaml.safe_dump({
             "reporting": {"sync": True, "superset": True},
             "cloud_platform": {"claims": {"first_administrators": [OIDS["admin@r1.test"]], "superset_client_id": entra["superset"]["client_id"],
-                                          "clearance": {"claim": "ext_clearance"}, "org_unit": {"claim": "ext_unit"}}},
+                                          "clearance": {"claim": "ext_clearance"},
+                                          # R1's own shape: the unit from Entra groups, unit-1 alone mapped.
+                                          "org_unit": {"groups": {"20000000-0000-4000-8000-000000000001": "unit-1"}}}},
         }))  # fmt: skip
         self.report_sync = entra["report-sync"]["client_id"]
         self.records, self.calls, self.conduit, self.tmp = tmp / "records", [], conduit, tmp
@@ -390,22 +454,26 @@ def _conduit(leak: str = "") -> Any:
     roles: dict[str, list[str]] = {OIDS["admin@r1.test"]: ["osprey-admin"]}
     grants: dict[str, set[str]] = {}
     identities: list[DashboardIdentity] = []
+    board_slugs: dict[int, str] = {}  # Superset's board ids, by the slug each was saved with
 
     def principal(request: httpx.Request) -> Principal:
         claims = json.loads(request.headers["authorization"].removeprefix("Bearer fake."))
         return Principal(id=claims["oid"], clearance=claims["ext_clearance"], org_unit=claims["ext_unit"],
                          roles=roles.get(claims["oid"], []), receivable_handling_codes=[])  # fmt: skip
 
-    def openable(who: Principal) -> bool:
+    def openable(who: Principal, identity: DashboardIdentity) -> bool:
         seen = {case for case, people in grants.items() if who.id in people} | ({"case-1"} if "osprey-admin" in who.roles else set())
         leaky = {"the builder, with no level on the identity's case, is offered the board": who.id == OIDS["builder@r1.test"],
-                 "another unit is offered the board": who.org_unit != "unit-1",
+                 "another unit is offered the board": identity.org_unit != who.org_unit,
                  "a lower clearance is offered the board": who.clearance == "PUBLIC"}.get(leak, False)  # fmt: skip
-        return leaky or any(
-            may_open(who, i, classification=CLASSES, viewer_cases=seen,
-                     identity_cases={c for c, p in grants.items() if i.account_id in p})  # fmt: skip
-            for i in identities
-        )
+        return leaky or may_open(who, identity, classification=CLASSES, viewer_cases=seen,
+                                 identity_cases={c for c, p in grants.items() if identity.account_id in p})  # fmt: skip
+
+    def board(slug: str) -> DashboardIdentity | None:
+        """The identity a board's slug names, offered only once the board holds a chart (Superset shows its
+        embedder no board without one)."""
+        named = next((i for i in identities if i.name == slug), None)
+        return named if named is not None and slug in answer.charted else None
 
     def answer(request: httpx.Request) -> httpx.Response:
         path, method = request.url.path, request.method
@@ -438,11 +506,13 @@ def _conduit(leak: str = "") -> Any:
         if path == "/v1/reports/dashboards":
             if not reads and leak != "no reports right is given the listing":
                 return httpx.Response(403, json={"detail": "not_allowed"})
-            return httpx.Response(200, json=[{"slug": "r1-board", "title": "R1 board"}] if openable(who) else [])
-        if path == "/v1/reports/dashboards/r1-board/guest-token":
+            listed = [i.name for i in identities if board(i.name) is not None and openable(who, i)]
+            return httpx.Response(200, json=[{"slug": slug, "title": slug} for slug in listed])
+        if path.startswith("/v1/reports/dashboards/") and path.endswith("/guest-token"):
             if not reads and leak != "no reports right is given a guest token":
                 return httpx.Response(403, json={"detail": "not_allowed"})
-            if not reads or openable(who):
+            identity = board(path.split("/")[4])
+            if not reads or (identity is not None and openable(who, identity)):
                 return httpx.Response(200, json={"token": GUEST})
             return httpx.Response(404, json={"detail": "not_found"})
         return httpx.Response(404)
@@ -451,6 +521,11 @@ def _conduit(leak: str = "") -> Any:
     answer.roles = roles
     answer.leak = leak
     answer.mart = set()  # the dashboards with rows in osprey_reports.figures
+    # Whether r1-board holds a chart on the mart. Superset shows a non-owner (the Conduit's embedder) only a
+    # published board holding a chart over a data source it reads, so the Conduit offers none before
+    # (v0.6.0's package test row 3 on 0b51705, read from the embedder's own listing: [] until the chart).
+    answer.charted = set()
+    answer.board_slugs = board_slugs
     return answer
 
 
@@ -479,12 +554,19 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             return {"signed_in": True, "username": name, "roles": roles}
         if action == "build":
             gamma = args[0] == "reader@r1.test"
-            return {"status": 201 if not gamma or leak == "Superset lets the Reports Viewer build" else 403, "id": 7}
+            made = {"r1-board": 7, "r1-board-another-unit": 8}.get(args[2] if len(args) > 2 else "", 9)
+            conduit.board_slugs[made] = args[2] if len(args) > 2 else ""
+            return {"status": 201 if not gamma or leak == "Superset lets the Reports Viewer build" else 403, "id": made}
         if action == "embedded":
             assert args[1] == "@secret", "the guest token travels as a secret, never an argument"
             return {"with_token": 200 if secret == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}
         if action == "chart":
+            conduit.charted.add(conduit.board_slugs.get(int(args[1]), ""))
             return {"status": 201, "dataset": 3, "chart": 5}
+        if action == "embedder":
+            # Superset's embedder sees a published board holding a chart; the leak hides the other unit's.
+            seen = sorted(conduit.charted - ({"r1-board-another-unit"} if leak == "the embedder lists no board of another unit" else set()))
+            return {"slugs": seen}
         if action == "chartdata" and args[0] == "session":
             # As Superset answers a person's own session: Admin and Alpha read every row of the mart (ADR-148
             # Amendment 21); the read-only OspreyReader holds no access to it, refused 403 (the probe of 16 Nov).
@@ -563,6 +645,7 @@ def _env_seen(script: Path, args: list[str], tmp: Path) -> dict[str, Any]:
     ("survival", ["snap"], "process/lanes/platform-b/v052/survival.py"),
     ("spec08", ["run"], "process/lanes/case-b/v052/spec08_poc.py"),
     ("memory", ["report"], "process/lanes/platform-b/v060/memory_sampler.py"),  # v0.6.0 #11
+    ("media", [], "process/lanes/platform-b/v060/media_write.py"),  # v0.6.0's row 6
 ])  # fmt: skip
 def test_the_wrapper_gives_each_script_r1_s_own_environment(tmp_path: Path, which: str, args: list[str], script: str) -> None:
     build = Path(__file__).resolve().parents[1]
