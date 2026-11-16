@@ -144,3 +144,4 @@ the GOV.UK demo is updated to it (the owner's "apply it govuk theme"), proposed 
 was declined: the release tooling, the update check and fresh_only accept vMAJOR.MINOR.PATCH only (harness/release.py:28).
 The closing of this phase waits for the patch; case-b and rules-b reopen for it.
 - (16 Nov ~18:30Z) Gemini's timeouts on the GOV.UK demo explained by the owner's direct call: Google answered 503 UNAVAILABLE ('high demand') for gemini-3.8-flash in 2 s; the gateway retries a 503 past the Conduit's 30 s test. v0.6.2: Test the connection reports the provider's own refusal (a 503's words) rather than 'could not be reached'.
+- (16 Nov ~18:50Z) The owner's yes to rules-b's v0.6.1 wiring (ci.yml live job and test ignores, the Makefile's make test ignores, for test_conduit_feed_live.py): process/lanes/v061patch/wiring-rules-b.diff, applied at merge.
