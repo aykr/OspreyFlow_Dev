@@ -265,6 +265,12 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
         r = c.post(f"/v1/reports/dashboards/{BOARD}/guest-token", headers=headers)
         return r.status_code, (r.json().get("token") if r.status_code == 200 else None)
 
+    # The board's chart first: Superset shows a non-owner (the Conduit's embedder, which lists the boards) only a
+    # published board holding a chart over a data source it reads, so a board with none is never offered
+    # (v0.6.0's package test row 3, 16 November 2026: the embedder's own listing was [] until the chart).
+    s = ask("chart", "admin@r1.test", str(board_id))
+    ok("a chart on the mart's figures is on the board", s.get("status") in (200, 201) and s.get("chart"), s)
+    dataset, chart = str(s["dataset"]), str(s["chart"])
     reader = token("reader@r1.test")
     status, has = offered(reader)
     ok(f"the Reports Viewer is offered {BOARD}", status == 200 and has, f"listing {status}, offered {has}")
@@ -275,10 +281,8 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
        s.get("with_token") == 200 and s.get("without") in (401, 403), s)
     # 5b. The board's rows through the guest token: its row-level security is the access control on this read
     # path (rules 3 and 4). A chart on the mart's figures; another identity's row planted; read with an
-    # administrator's own session (both seen: the control) and with the Reports Viewer's guest token.
-    s = ask("chart", "admin@r1.test", str(board_id))
-    ok("a chart on the mart's figures is on the board", s.get("status") in (200, 201) and s.get("chart"), s)
-    dataset, chart = str(s["dataset"]), str(s["chart"])
+    # administrator's own session (both seen: the control) and with the Reports Viewer's guest token. The chart
+    # is the one made before step 5's listing.
     mart(r1, PLANT_ROW)
     builder_roles = f"/v1/admin/people/{people['builder@r1.test']}/roles"
     try:

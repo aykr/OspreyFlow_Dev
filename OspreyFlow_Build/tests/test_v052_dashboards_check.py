@@ -438,7 +438,8 @@ def _conduit(leak: str = "") -> Any:
         if path == "/v1/reports/dashboards":
             if not reads and leak != "no reports right is given the listing":
                 return httpx.Response(403, json={"detail": "not_allowed"})
-            return httpx.Response(200, json=[{"slug": "r1-board", "title": "R1 board"}] if openable(who) else [])
+            listed = openable(who) and answer.charted
+            return httpx.Response(200, json=[{"slug": "r1-board", "title": "R1 board"}] if listed else [])
         if path == "/v1/reports/dashboards/r1-board/guest-token":
             if not reads and leak != "no reports right is given a guest token":
                 return httpx.Response(403, json={"detail": "not_allowed"})
@@ -451,6 +452,10 @@ def _conduit(leak: str = "") -> Any:
     answer.roles = roles
     answer.leak = leak
     answer.mart = set()  # the dashboards with rows in osprey_reports.figures
+    # Whether r1-board holds a chart on the mart. Superset shows a non-owner (the Conduit's embedder) only a
+    # published board holding a chart over a data source it reads, so the Conduit offers none before
+    # (v0.6.0's package test row 3 on 0b51705, read from the embedder's own listing: [] until the chart).
+    answer.charted = False
     return answer
 
 
@@ -484,6 +489,7 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             assert args[1] == "@secret", "the guest token travels as a secret, never an argument"
             return {"with_token": 200 if secret == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}
         if action == "chart":
+            conduit.charted = True
             return {"status": 201, "dataset": 3, "chart": 5}
         if action == "chartdata" and args[0] == "session":
             # As Superset answers a person's own session: Admin and Alpha read every row of the mart (ADR-148
