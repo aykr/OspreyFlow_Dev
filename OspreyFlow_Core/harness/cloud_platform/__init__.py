@@ -322,20 +322,26 @@ def opensearch_settings(config: OspreyConfig, platform: PlatformSettings) -> dic
 
 
 def search_index_values(
-    platform: PlatformSettings, workloads: Sequence[dict[str, Any]]
+    config: OspreyConfig, platform: PlatformSettings, workloads: Sequence[dict[str, Any]]
 ) -> dict[str, Any]:
     """The chart's `searchIndex`: the Conduit's image, settings and size, under the namespace's own
     service account (the IRSA role the domain admits), for each standing Job."""
     api = next(w for w in workloads if w["name"] == "api")
-    # The settings alone (no Secret of ours whole): the graph's password by name, and the domain's
-    # address from the platform's secret, as the Conduit is given it. Nothing else is read.
-    address = next(e for e in api.get("env", []) if e["name"] == "OPENSEARCH_URL")
+    # The settings alone (no Secret of ours whole): the graph's password by name, the domain's
+    # address and the case store's address and credentials from the platform's secrets, each as the
+    # Conduit is given it. Both Jobs read the case store: `feed_resources` connects the extraction
+    # candidates' store by `PostgresConfig.from_env()`, whose default is the developer stack's
+    # localhost:5433 (v0.6.0's package test stopped there, 15 November 2026;
+    # `tests/harness/test_cloud_platform_search_jobs_postgres.py`).
+    held = {"OPENSEARCH_URL"} | {
+        name for name, (secret, _key) in managed_variables(config).items() if secret == "postgres"
+    }
     return {
         "serviceAccountName": platform.secrets.irsa.service_account,
         "image": api["image"],
         "resources": copy.deepcopy(api["resources"]),
         "env": [
-            copy.deepcopy(address),
+            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in held),
             {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
         ],
         "jobs": [
@@ -1298,7 +1304,7 @@ def render_cloud_platform(
         "jobs": jobs,
     }
     if config.components.search is SearchBackend.OPENSEARCH:
-        out["searchIndex"] = search_index_values(platform, workloads)
+        out["searchIndex"] = search_index_values(config, platform, workloads)
     if _cp(config).shape == "poc":
         out["seed"] = seed_values(config, workloads)
     # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
