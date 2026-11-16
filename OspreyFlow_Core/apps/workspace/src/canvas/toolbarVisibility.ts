@@ -77,6 +77,17 @@ export function isToolbarShortcut(event: KeyboardEvent): boolean {
 
 export const TOOLBAR_SHORTCUT = "Alt+Shift+T";
 
+// Inputs that take typed text; a checkbox, a slider or a button is not one, so the key works there (the lane-reviewer's
+// item 11: every INPUT was refused, the strictness slider and the checkboxes too).
+const TYPED = new Set(["text", "search", "email", "url", "tel", "password", "number", "date", "datetime-local", "month", "time", "week"]);
+
+/** Whether a key pressed here is the field's own typing. */
+export function isTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return true;
+  return target instanceof HTMLInputElement && TYPED.has(target.type);
+}
+
 export interface ViewToolbar {
   /** Whether the toolbar is hidden here: never where the view has no such toolbar. */
   hidden: boolean;
@@ -112,8 +123,7 @@ export function useViewToolbar(username: string | null, here: boolean): ViewTool
     if (!here) return;
     const onKey = (event: KeyboardEvent) => {
       if (!isToolbarShortcut(event) || event.repeat) return;
-      const target = event.target as HTMLElement | null;
-      if (target && (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || target.isContentEditable)) return;
+      if (isTextField(event.target)) return;
       event.preventDefault();
       toggle();
     };

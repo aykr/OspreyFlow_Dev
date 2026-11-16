@@ -61,8 +61,10 @@ plant "A6 the captions kept on a narrow toolbar" "$CANVAS" 's/\{!toolbarCompact 
   "at 1024 px of toolbar (dark) the words are short"
 plant "A7 Last change back in View, wrapping the row" "$CSS" 's/flex: 1 1 0; min-width: 0; text-align: right;/flex: 0 0 auto; min-width: 0; text-align: right;/' gt \
   "at 1240 px of toolbar (dark) the words are whole"
-plant "A8 an unchanged stop sent again" "$CTRL" 's/if \(!detent \|\| detent\.value === threshold\) return;/if (!detent) return;/' js \
+plant "A8 a stop sent where the slider did not move" "$CTRL" 's/if \(!detent \|\| !moved\) return;/if (!detent) return;/' js \
   "sends nothing: the setting it already has is not re-projected"
+plant "A9 the guard against the value read on opening (the first build's shape)" "$CTRL" 's/if \(!detent \|\| !moved\) return;/if (!detent || detent.value === threshold) return;/' js \
+  "is sent, even where it is the stop this control last read"
 
 echo "== C: a toolbar that can be hidden"
 plant "C1 the canvas toolbar never hidden" "$CANVAS" 's/hidden=\{toolbarHidden\}\n/hidden={false}\n/' gt \
@@ -89,8 +91,8 @@ plant "C9 the Map's row never hidden" "$APP" 's/(id=\{VIEW_TOOLBAR_ID\}) hidden=
   "the Map has the same control and the same setting"
 plant "C10 the case line not slimmed" "$APP" 's/slim=\{toolbarHidden\}/slim={false}/' js \
   "Hide toolbar hides the canvas toolbar, slims the case line"
-plant "C11 Show toolbar not saying what it controls" "$TOGGLE" 's/(Show toolbar.*?\n.*?)aria-controls=\{VIEW_TOOLBAR_ID\}/$1/s; s/(className=\{govuk \? "govuk-link toolbar-toggle toolbar-toggle--show".*?\n\s*aria-expanded=\{false\}\n)\s*aria-controls=\{VIEW_TOOLBAR_ID\}\n/$1/s' js \
-  "Hide toolbar hides the canvas toolbar"
+plant "C11 Show toolbar not saying what it controls" "$TOGGLE" 's/(export const ShowToolbarButton.*?aria-expanded=\{false\}\n)\s*aria-controls=\{VIEW_TOOLBAR_ID\}\n/$1/s' js \
+  "Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back"
 plant "C12 nothing hidden where storage is refused or nobody signed in" "$VIS" 's/  thisPage\.set\(username \?\? "", hidden\);\n//' js \
   "is not remembered for nobody, but still hides for this page
 still hides for this page where the browser's storage refuses it"
@@ -98,6 +100,26 @@ plant "C13 the key not listed in ?" "$KEYS" 's/  \["Alt\+Shift\+T", "Hide or sho
   "lists the keys worth knowing"
 plant "C15 the width read off the toolbar, 0 while it is hidden (the first build's shape)" "$CANVAS" 's/const width = containerRef\.current\?\.getBoundingClientRect\(\)\.width \?\? 0;\n(\s*)if \(width > 0\) setToolbarCompact\(isCompactToolbar\(width\)\);/setToolbarCompact(isCompactToolbar(bar.getBoundingClientRect().width));/' gt \
   "hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (640 px)"
+
+echo "== the lane-reviewer's items"
+plant "C16 Show toolbar and the key under a page over the view" "$APP" 's/ && !pageOver;\n/;\n/' js \
+  "under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar"
+plant "C17 every input taken as a text field" "$VIS" 's/return target instanceof HTMLInputElement && TYPED\.has\(target\.type\);/return target instanceof HTMLInputElement;/' js \
+  "Alt+Shift+T works from a control that is not a text field"
+plant "C18 the setting read after the first draw" "$VIS" 's/const hidden = here && setting;/const [ready, setReady] = useState(false); useEffect(() => setReady(true), []); const hidden = here \&\& setting \&\& ready;/; s/import \{ useCallback, useEffect, useRef,/import { useCallback, useEffect, useRef, useState,/' js \
+  "the Glass opens as the analyst left it: hidden at the first draw"
+plant "C18b the setting read after the first draw (browser)" "$VIS" 's/const hidden = here && setting;/const [ready, setReady] = useState(false); useEffect(() => setReady(true), []); const hidden = here \&\& setting \&\& ready;/; s/import \{ useCallback, useEffect, useRef,/import { useCallback, useEffect, useRef, useState,/' gt \
+  "the setting is the analyst's and survives a reload"
+plant "C19 the camera touched when the toolbar hides or shows" "$CANVAS" 's/(    const \[gridOn, setGridOn\])/    useEffect(() => { const camera = sigmaRef.current?.getCamera(); if (camera \&\& toolbarHidden !== undefined) camera.setState({ ratio: camera.getState().ratio * 1.25 }); }, [toolbarHidden]);\n$1/' gt \
+  "keeping the graph's centre and zoom (1280 px)
+keeping the graph's centre and zoom (640 px)"
+plant "C20 Hide and Show toolbar drawn below the contrast floor" "$CSS" 's/(\.view-toolbar \.toolbar-toggle \{ margin-left: auto; \})/$1\n.toolbar-toggle { color: var(--border-subtle) !important; }/' gt \
+  "the toolbar's new controls, hidden, pass axe and the contrast probe (dark)
+the toolbar's new controls, hidden, pass axe and the contrast probe (light)
+the toolbar's new controls, hidden, pass axe and the contrast probe (govuk)
+the toolbar's new controls, shown, strictness open, pass axe and the contrast probe (light)"
+plant "K1 the ? panel's 40 px key column" "$CSS" 's/grid-template-columns: max-content minmax\(0, 1fr\); column-gap/grid-template-columns: var(--sp-40) minmax(0, 1fr); column-gap/' gt \
+  "the ? panel lists Alt+Shift+T without its key running over its words"
 
 echo "== unplanted: every case green"
 out="$(js)"; grep -E "Tests " <<<"$out"; grep -q "×" <<<"$out" && { echo "UNPLANTED RED (jsdom)"; fails=1; }

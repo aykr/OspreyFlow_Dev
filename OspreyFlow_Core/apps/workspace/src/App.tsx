@@ -1035,16 +1035,6 @@ export function App() {
   }, [addressed, addressedAlert, investigationId]);
   // Which place is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : view === "alerts" ? "rules" : "glass";
-  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4): the toolbar above the Graph's
-  // canvas or the Map can be hidden, the case line then slim with *Show toolbar* at its end. One setting for both,
-  // the signed-in analyst's in this browser; the Drawing board and the other views have no such toolbar.
-  const toolbarHere = app === "glass" && (view === "graph" || view === "map");
-  const {
-    hidden: toolbarHidden,
-    toggle: toggleToolbar,
-    hideRef: hideToolbarRef,
-    showRef: showToolbarRef,
-  } = useViewToolbar(principal?.username || null, toolbarHere);
   // ADR-128 decision 3: an attachment of the case brief opens where the thing lives (`openAttachment.ts`).
   const openBriefAttachment = (kind: AttachmentKind, id: string) => {
     const place = placeOf(kind, id);
@@ -1136,6 +1126,18 @@ export function App() {
     if (!questionsOpen) setQuestionDraft(null);
   }, [questionsOpen]);
   const pageOver = results.viewInert || ask.viewInert;
+  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4): the toolbar above the Graph's
+  // canvas or the Map can be hidden, the case line then slim with *Show toolbar* at its end. One setting for both,
+  // the signed-in analyst's in this browser; the Drawing board and the other views have no such toolbar.
+  // Not while a page lies over the view (ADR-145 Amendment 18): the view is inert beneath it, so Show toolbar would send
+  // focus into it and lose it (the lane-reviewer's item 2); the line and the key wait until the page is left.
+  const toolbarHere = app === "glass" && (view === "graph" || view === "map") && !pageOver;
+  const {
+    hidden: toolbarHidden,
+    toggle: toggleToolbar,
+    hideRef: hideToolbarRef,
+    showRef: showToolbarRef,
+  } = useViewToolbar(principal?.username || null, toolbarHere);
   const leavePages = ask.leaveBoth;
   const openAskPage = ask.openPage;
   // ADR-093: every node selected on the canvas, for the Inspector's list.

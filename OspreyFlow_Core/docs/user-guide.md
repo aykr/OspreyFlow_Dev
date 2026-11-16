@@ -346,6 +346,13 @@ after a selection made by what is lit. Past one degree, **Show links** draws the
 selected nodes, says which pairs are not connected, and says when the routes are already drawn. **Remove from view** and **Clear the graph** take nodes off the canvas; a node you put back brings
 its links in the view back with it.
 
+**Hiding the toolbar.** **Hide toolbar**, at the right-hand end of the graph's toolbar, hides it and
+gives its room to the graph. The case line then becomes one short line, with **Show toolbar** at its
+right-hand end to bring it back. Alt+Shift+T (Option+Shift+T on a Mac) does the same. The map's toolbar
+hides in the same way, under the same setting; the drawing board has no toolbar to hide. OspreyFlow
+remembers your choice in this browser, so the Glass opens as you left it. On a narrow window the
+toolbar's words are shorter (**Strictness** and **Hide**), so it stays on one row.
+
 **Expanding.** Double-click, or press Enter, to draw a node's links. Right-click (or `\`, the menu
 key, or Shift+F10) opens its menu, on the selection: a right-click on something not selected selects
 it first. The selection's own actions come first, in the bar's words. **Expand by link type** lists

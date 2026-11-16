@@ -22,12 +22,17 @@ import { forgetToolbarSettings } from "./canvas/toolbarVisibility";
 // canvas, where the real `GlassCanvas` draws its toolbar.
 // C: the toolbar's id, `hidden` while App says so, and *Hide toolbar* at its end, as `GlassCanvas` draws them (the
 // real toolbar's own hiding is held in a browser, `keyboard/glass-toolbar.spec.ts`).
+// Each draw's `toolbarHidden` is kept, so the first draw can be held to the analyst's setting (`canvasDraws`).
+const canvasDraws: (boolean | undefined)[] = [];
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string }) => (
-    <div role="application" aria-label="Network canvas" tabIndex={0}>
-      <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{toolbarAfterLayout}{toolbarEnd}</div>
-    </div>
-  ),
+  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string }) => {
+    canvasDraws.push(toolbarHidden);
+    return (
+      <div role="application" aria-label="Network canvas" tabIndex={0}>
+        <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{toolbarAfterLayout}{toolbarEnd}</div>
+      </div>
+    );
+  },
 }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
 vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
@@ -614,11 +619,53 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
 
   test("the Glass opens as the analyst left it: hidden at the first draw", async () => {
     localStorage.setItem(KEY, "hidden");
+    canvasDraws.length = 0;
     render(<App />);
     const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
     expect(show.getAttribute("aria-expanded")).toBe("false");
     await screen.findByRole("application", { name: "Network canvas" });
     expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+    // Never drawn shown first and hidden after: every draw of the canvas had it hidden.
+    expect(canvasDraws.length).toBeGreaterThan(0);
+    expect(canvasDraws.every((hidden) => hidden === true)).toBe(true);
+  });
+
+  test("under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and Alt+Shift+T does nothing; back on the view, both are as left", async () => {
+    localStorage.setItem(KEY, "hidden");
+    render(<App />);
+    const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
+    expect(show).toBeTruthy();
+    const opener = within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" });
+    fireEvent.click(opener);
+    await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+    // Showing it would send focus to Hide toolbar inside the inert view, and lose it.
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+    const before = document.activeElement;
+    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+    expect(document.activeElement).toBe(before);
+    fireEvent.click(opener);
+    await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+  });
+
+  test("Alt+Shift+T works from a control that is not a text field: a checkbox or a slider", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    await within(tools).findByRole("button", { name: "Hide toolbar" });
+    const box = document.createElement("input");
+    box.type = "checkbox";
+    document.body.appendChild(box);
+    fireEvent.keyDown(box, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(true);
+    const range = document.createElement("input");
+    range.type = "range";
+    document.body.appendChild(range);
+    fireEvent.keyDown(range, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(false);
+    box.remove();
+    range.remove();
   });
 
   test("another analyst's setting on this browser is not this one's", async () => {

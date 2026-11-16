@@ -39,6 +39,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -806,7 +807,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
     // The owner's rulings 6 and 7 (16 November 2026): shorter words follow the toolbar's own width.
     const [toolbarCompact, setToolbarCompact] = useState(false);
-    useEffect(() => {
+    // A layout effect, so the toolbar's words are chosen before the first paint: GlassCanvas is drawn afresh whenever a
+    // saved view opens or closes, and a passive effect drew the whole words for a frame, wrapping a narrow toolbar
+    // (the lane-reviewer's item 9).
+    useLayoutEffect(() => {
       const bar = toolbarRef.current;
       if (!bar || typeof ResizeObserver !== "function") return;
       const measure = () => {

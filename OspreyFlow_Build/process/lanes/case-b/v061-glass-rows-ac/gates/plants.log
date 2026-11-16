@@ -14,8 +14,10 @@ AS IT MUST BE (red): A6 the captions kept on a narrow toolbar
     at 1024 px of toolbar (dark) the words are short
 AS IT MUST BE (red): A7 Last change back in View, wrapping the row
     at 1240 px of toolbar (dark) the words are whole
-AS IT MUST BE (red): A8 an unchanged stop sent again
+AS IT MUST BE (red): A8 a stop sent where the slider did not move
     sends nothing: the setting it already has is not re-projected
+AS IT MUST BE (red): A9 the guard against the value read on opening (the first build's shape)
+    is sent, even where it is the stop this control last read
 == C: a toolbar that can be hidden
 AS IT MUST BE (red): C1 the canvas toolbar never hidden
     hidden means out of the tab order and the accessibility tree
@@ -32,8 +34,7 @@ AS IT MUST BE (red): C5 hidden on the Drawing board too
     the Drawing board is not hidden
 AS IT MUST BE (red): C6 the key heard where there is no toolbar
     the Drawing board is not hidden
-AS IT MUST BE (red): C7 the key heard in a text field
-    Alt+Shift+T hides and shows it
+PLANT DID NOT APPLY: C7 the key heard in a text field
 AS IT MUST BE (red): C8 Ctrl+Shift+T taken as well
     is not Ctrl+Shift+T
     Alt+Shift+T hides and shows it
@@ -42,7 +43,7 @@ AS IT MUST BE (red): C9 the Map's row never hidden
 AS IT MUST BE (red): C10 the case line not slimmed
     Hide toolbar hides the canvas toolbar, slims the case line
 AS IT MUST BE (red): C11 Show toolbar not saying what it controls
-    Hide toolbar hides the canvas toolbar
+    Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back
 AS IT MUST BE (red): C12 nothing hidden where storage is refused or nobody signed in
     is not remembered for nobody, but still hides for this page
     still hides for this page where the browser's storage refuses it
@@ -50,7 +51,27 @@ AS IT MUST BE (red): C13 the key not listed in ?
     lists the keys worth knowing
 AS IT MUST BE (red): C15 the width read off the toolbar, 0 while it is hidden (the first build's shape)
     hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (640 px)
+== the lane-reviewer's items
+AS IT MUST BE (red): C16 Show toolbar and the key under a page over the view
+    under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar
+AS IT MUST BE (red): C17 every input taken as a text field
+    Alt+Shift+T works from a control that is not a text field
+NOT RED FOR ITS REASON: C18 the setting read after the first draw (wanted: the Glass opens as the analyst left it: hidden at the first draw)
+ Test Files  5 passed (5)
+      Tests  67 passed (67)
+NOT RED FOR ITS REASON: C18b the setting read after the first draw (browser) (wanted: the setting is the analyst's and survives a reload)
+  28 passed (22.9s)
+AS IT MUST BE (red): C19 the camera touched when the toolbar hides or shows
+    keeping the graph's centre and zoom (1280 px)
+    keeping the graph's centre and zoom (640 px)
+AS IT MUST BE (red): C20 Hide and Show toolbar drawn below the contrast floor
+    the toolbar's new controls, hidden, pass axe and the contrast probe (dark)
+    the toolbar's new controls, hidden, pass axe and the contrast probe (light)
+    the toolbar's new controls, hidden, pass axe and the contrast probe (govuk)
+    the toolbar's new controls, shown, strictness open, pass axe and the contrast probe (light)
+NOT RED FOR ITS REASON: K1 the ? panel's 40 px key column (wanted: the ? panel lists Alt+Shift+T without its key running over its words)
+  28 passed (23.0s)
 == unplanted: every case green
-      Tests  64 passed (64)
-  3 passed (4.7s)
-  27 passed (22.8s)
+      Tests  67 passed (67)
+  3 passed (4.6s)
+  28 passed (22.7s)

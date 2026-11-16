@@ -652,8 +652,9 @@
 .canvas-toolbar__show { border-color: var(--border-subtle); overflow: visible; }
 .canvas-toolbar__show > * + * { border-left: 1px solid var(--border-subtle); }
 .canvas-toolbar__show .radial-menu__item { border-radius: 0; }
-/* The owner's rulings 6 and 7 (v0.6.1 glass-rows): under about 1132 px of its own width the toolbar's words
-   shorten (`toolbarCompact.ts`) and it draws a little tighter, so it stays one row down to about 900 px. */
+/* The owner's rulings 6 and 7 (v0.6.1 glass-rows): under 1220 px of its own width (measured; the rulings' estimate
+   was 1132) the toolbar's words shorten (`toolbarCompact.ts`) and it draws a little tighter, so it stays one row down
+   to 912 px in its quiet state (the controls drawn on demand may wrap it). */
 /* Amendment 19 decision 6: a hidden toolbar is not drawn at all (the rule above would otherwise draw it). */
 .canvas-toolbar[hidden], .view-toolbar[hidden] { display: none; }
 .view-toolbar .toolbar-toggle { margin-left: auto; }
@@ -813,7 +814,9 @@
 }
 .workspace-welcome__step:hover { background: var(--surface-hover); }
 .workspace-welcome__step .value { font-size: var(--fs-11); color: var(--text-tertiary); }
-.workspace-welcome__keys li { display: grid; grid-template-columns: var(--sp-40) minmax(0, 1fr); align-items: center; gap: var(--sp-8); }
+/* The key column as wide as its widest key (Alt+Shift+T, v0.6.1 glass-rows), so a long key never runs over its words. */
+.workspace-welcome__keys { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--sp-8); }
+.workspace-welcome__keys li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; }
 /* A view pushed past the cap (ADR-124 decision 2): centred over the canvas, a shadow and no hairline, as
    the welcome panel is; the reader's own figure, two ways out. */
 .view-over-cap {

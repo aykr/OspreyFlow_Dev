@@ -46,7 +46,18 @@ test("the setting is the analyst's and survives a reload: the Glass opens hidden
   await open(page);
   await tools(page).getByRole("button", { name: "Hide toolbar" }).click();
   expect(await page.evaluate(() => localStorage.getItem("ospreyflow.glass.toolbar.osprey-demo-analyst"))).toBe("hidden");
+  // From before the page's first script: was the toolbar ever in the page and not hidden, if only for a moment?
+  await page.addInitScript(() => {
+    const seen = { shown: false };
+    (window as unknown as { __TOOLBAR_SEEN__: typeof seen }).__TOOLBAR_SEEN__ = seen;
+    new MutationObserver(() => {
+      const bar = document.getElementById("glass-view-toolbar");
+      if (bar && !bar.hidden) seen.shown = true;
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
+  });
   await page.reload();
+  await expect(page.locator("#glass-view-toolbar")).toHaveCount(1);
+  expect(await page.evaluate(() => (window as unknown as { __TOOLBAR_SEEN__: { shown: boolean } }).__TOOLBAR_SEEN__.shown)).toBe(false);
   await expect(caseLine(page).getByRole("button", { name: "Show toolbar" })).toBeVisible();
   await expect(tools(page)).toHaveCount(0);
   await open(page, "user=someone-else");
@@ -168,3 +179,22 @@ for (const look of ["dark", "light", "govuk"] as const) {
     });
   }
 }
+
+// The lane-reviewer's item 6: "Alt+Shift+T" in its key cap is wider than the panel's old 40 px key column, and ran over
+// its words. Each key now ends before its words begin.
+test("the ? panel lists Alt+Shift+T without its key running over its words", async ({ page }) => {
+  await page.goto("/keyboard/top-bar-harness.html");
+  await page.getByRole("button", { name: "Help" }).click();
+  const keys = page.getByRole("list", { name: "Keys worth knowing" });
+  await expect(keys).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  const overlaps = await keys.evaluate((list) =>
+    [...list.querySelectorAll("li")].flatMap((li) => {
+      const cap = li.querySelector("kbd")!.getBoundingClientRect();
+      const words = li.querySelector("kbd")!.nextElementSibling?.getBoundingClientRect();
+      return words && cap.right > words.left ? [li.textContent] : [];
+    }),
+  );
+  expect(overlaps).toEqual([]);
+  await expect(keys.getByText("Alt+Shift+T")).toBeVisible();
+});

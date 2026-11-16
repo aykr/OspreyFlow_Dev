@@ -89,11 +89,13 @@ export function ResolutionThresholdControl({
   const label = currentDetent ? currentDetent.label : `Custom (${threshold.toFixed(2)})`;
 
   async function commit(index: number): Promise<void> {
+    // The slider commits on every key's release, Tab's too, which reaches it now its panel is opened from the toolbar:
+    // what is sent is decided by whether the slider moved in this gesture, not by the value read when the control
+    // opened, which a colleague may since have changed (the setting is the case's).
+    const moved = pendingIndex !== null;
     setPendingIndex(null);
     const detent = DETENTS[index];
-    // The slider commits on every key's release, Tab's too, which reaches it now its panel is opened from
-    // the toolbar: the setting it already has is not sent again, so nothing is re-projected for it.
-    if (!detent || detent.value === threshold) return;
+    if (!detent || !moved) return;
     const response = await fetch(
       `${apiBaseUrl}/v1/investigations/${investigationId}/resolution/threshold`,
       {

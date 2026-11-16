@@ -155,3 +155,25 @@ describe("a key released on the slider without moving it", () => {
     expect(puts).toEqual([]);
   });
 });
+
+// The lane-reviewer's item 10: the guard against re-sending compared with the value read when the control opened, so a
+// stop a colleague had moved away from could not be chosen again. What is sent is decided by whether the slider moved.
+describe("a stop chosen after the slider moved", () => {
+  it("is sent, even where it is the stop this control last read", async () => {
+    const puts: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
+      if (init?.method === "PUT") {
+        puts.push(String(init.body));
+        return new Response(JSON.stringify({ delta: { seq: 2, op: "reproject", reason: "threshold", affected_cluster_ids: {} }, merged: 0, split: 0, affected: 0 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ threshold: 0.95 }), { status: 200 });
+    });
+    renderControl();
+    const slider = await openSlider();
+    // Away and back to Balanced in one gesture (a colleague's Strict is what the case holds now).
+    fireEvent.change(slider, { target: { value: "0" } });
+    fireEvent.change(slider, { target: { value: "1" } });
+    fireEvent.keyUp(slider, { key: "ArrowRight" });
+    await waitFor(() => expect(puts).toEqual([JSON.stringify({ threshold: 0.95 })]));
+  });
+});

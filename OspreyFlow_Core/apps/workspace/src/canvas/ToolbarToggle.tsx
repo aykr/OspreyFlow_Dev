@@ -28,7 +28,7 @@ export const HideToolbarButton = forwardRef<HTMLButtonElement, HideToolbarButton
       aria-expanded={true}
       aria-controls={VIEW_TOOLBAR_ID}
       aria-keyshortcuts={TOOLBAR_SHORTCUT}
-      title={`Hide toolbar (${TOOLBAR_SHORTCUT})`}
+      title={`Hide toolbar (${TOOLBAR_SHORTCUT}; Option+Shift+T on a Mac)`}
       onClick={onToggle}
     >
       {compact ? "Hide" : "Hide toolbar"}
@@ -47,7 +47,7 @@ export const ShowToolbarButton = forwardRef<HTMLButtonElement, ToolbarToggleProp
       aria-expanded={false}
       aria-controls={VIEW_TOOLBAR_ID}
       aria-keyshortcuts={TOOLBAR_SHORTCUT}
-      title={`Show toolbar (${TOOLBAR_SHORTCUT})`}
+      title={`Show toolbar (${TOOLBAR_SHORTCUT}; Option+Shift+T on a Mac)`}
       onClick={onToggle}
     >
       Show toolbar
