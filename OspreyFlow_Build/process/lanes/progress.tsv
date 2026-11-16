@@ -204,3 +204,4 @@ orchestrator	v060-glass-merge	S	done	the Glass rows merged into v0.6.0 (the owne
 orchestrator	v060-c3-ci	S	building	CI on the candidate with the Glass rows: fb7f336, run 43864213118
 platform-b	v060-stage4-glass	M	building	the package test on the candidate with the Glass rows: fb7f336; stage 3 PASS 12:17Z, row 0 started
 platform	v060-step6-all-pods	S	done	v0.6.0 (case as deputy, 16 Nov; platform-b row 9b on ea5fc61): INSTALL step 6's token-version check reads every api pod; red first	lane/platform-v060-step6-all-pods
+platform-b	v060-stage4-ea5	S	done	the package test on ea5fc61, rows 0-9; ended at 9b's finding

@@ -30,12 +30,12 @@ rv	Package test's second find: the report sync opens Valkey with its password an
 sr	Package test's third find: Reports Viewers could build their own dashboards; a read-only role for them and as Superset's automatic role (the owner, 16 Nov)	platform-b	2026-11-16	2026-11-16	y	-	platform-b:v060-superset-reader
 se	Package test's fourth find: the optional POC seed can't reach the object store on cloud-platform, and step 9 reports success after a failed seed	platform	2026-11-16	2026-11-16	y	-	platform:v060-seed-irsa
 rd	Package test's find: resolution for Person works with no date of birth anywhere (the owner, 16 Nov), then the new candidate	rules-b	2026-11-16	2026-11-16	y	-	rules-b:v060-resolve-empty-dob
-4	Package test on ea5fc61 (the fallback release, without the Glass rows): every check, to the end	platform-b	2026-11-16	2026-11-16	y	se	platform-b:v060-stage4
+4	Package test on ea5fc61: ended at row 9b, which found the step 6 sign-in check defect (fixed in the Glass candidate); rows 0-9 passed. No longer a fallback	platform-b	2026-11-16	2026-11-16	y	se	platform-b:v060-stage4-ea5
 gm2	The Glass rows merged into v0.6.0 (the owner, 16 Nov): both halves, the guide 1.74, the CHANGELOG, every suite on the merged code; then the new candidate pushed	orchestrator	2026-11-16	2026-11-16	y	-	orchestrator:v060-glass-merge
-c3	CI green on the new candidate fb7f336 (ea5fc61 plus the Glass rows and step 6 all-pods): run 43864213118	orchestrator	2026-11-16	2026-11-16	y	gm2	orchestrator:v060-c3-ci
-4g	Package test on fb7f336 from row 0 (about 5 h), after ea5fc61's run ends	platform-b	2026-11-16	2026-11-16	y	gm2,4	platform-b:v060-stage4-glass
+c3	CI on the Glass candidate (case, deputy orchestrator): fb7f336 failed one accessibility scan; fix and a new candidate under way	case	2026-11-16	2026-11-16	y	gm2	orchestrator:v060-c3-ci
+4g	Package test on the Glass candidate from row 0 (about 5 h): restarts on the next candidate after the accessibility fix	platform-b	2026-11-16	2026-11-16	y	gm2,4	platform-b:v060-stage4
 5	Release v0.6.0 with the Glass rows (about 17:30Z), or ea5fc61 without them if the new candidate trips	orchestrator	2026-11-16	2026-11-16	y	4g,c3	-
-rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
+rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks (case starts it, as deputy)	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
 gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-
 ws	The websites ospreyflow.org and ospreyflow.net: LIVE on HTTPS since 16 Nov 06:54Z (certificates issued, HTTPS enforced, http redirects)	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
 p3	ospreyflow.app, the standard-look demo (Part 3): offline work done; the server proof, install and cutover after the GOV.UK rebuild; needs the owner's O1-O8 (DNS, Porkbun key, lease, window)	platform	2026-11-15	2026-11-18	n	gm	platform:part3
