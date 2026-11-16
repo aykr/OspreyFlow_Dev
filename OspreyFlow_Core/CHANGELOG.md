@@ -6,6 +6,14 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+## v0.6.1 — unreleased
+
+- **Search on Small and Lite is fed by the Conduit.** Where no worker runs (`local-lite`, `small`), the
+  Conduit now sends every graph change to the search index itself, so demo packs and loads added after
+  the install are searchable as they are written. In v0.6.0 nothing fed the index on those shapes, and
+  once more than 10,000 changes were waiting, case search answered only exact identifiers. A deployment
+  already in that state catches up by itself once it runs v0.6.1, with no rebuild (ADR-150 Amendment 4).
+
 ## v0.6.0 — 2026-11-18
 
 **v0.6.0 is installed fresh: there is no upgrade to it from any earlier version.**
