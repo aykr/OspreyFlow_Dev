@@ -94,3 +94,5 @@ cancels a run in progress).
 - The guide says a new dashboard is offered in the Glass only once it holds a chart (Superset's own visibility rule; the package test, 16 Nov)
 - The guide says a search just after a load or a drawn grid may not find it for some seconds on poc and cloud-platform (ADR-150's asynchronous index; the package test, 16 Nov)
 - Spec 08's seeded rows also run on poc, after INSTALL's optional seed block (the package test, 16 Nov)
+- Amendment 18's words for an application (app-only) token at v1.0 too: today the run API refuses it with the plain "the sign-in could not be verified" (platform-b's row 9b on ea5fc61, 16 Nov; case as deputy: the operator's own token, not a client user's sign-in, so v0.6.1)
+- A backup and DECOMMISSION step 2's last backup in the same minute collide by Job name ("already exists"); step 2 reuses or waits instead (the package test's row 10 on ea5fc61, 16 Nov; low)
