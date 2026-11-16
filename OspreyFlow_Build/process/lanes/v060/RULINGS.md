@@ -93,3 +93,4 @@ cancels a run in progress).
 - T on the Map's container hides and shows the toolbar, as on the graph canvas (Glass rows ruling 13; map/MapView.tsx is platform's)
 - The guide says a new dashboard is offered in the Glass only once it holds a chart (Superset's own visibility rule; the package test, 16 Nov)
 - The guide says a search just after a load or a drawn grid may not find it for some seconds on poc and cloud-platform (ADR-150's asynchronous index; the package test, 16 Nov)
+- Spec 08's seeded rows also run on poc, after INSTALL's optional seed block (the package test, 16 Nov)
