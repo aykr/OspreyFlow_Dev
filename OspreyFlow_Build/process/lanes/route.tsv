@@ -32,8 +32,8 @@ se	Package test's fourth find: the optional POC seed can't reach the object stor
 rd	Package test's find: resolution for Person works with no date of birth anywhere (the owner, 16 Nov), then the new candidate	rules-b	2026-11-16	2026-11-16	y	-	rules-b:v060-resolve-empty-dob
 4	Package test on ea5fc61 (the fallback release, without the Glass rows): every check, to the end	platform-b	2026-11-16	2026-11-16	y	se	platform-b:v060-stage4
 gm2	The Glass rows merged into v0.6.0 (the owner, 16 Nov): both halves, the guide 1.74, the CHANGELOG, every suite on the merged code; then the new candidate pushed	orchestrator	2026-11-16	2026-11-16	y	-	orchestrator:v060-glass-merge
-c3	CI green on the new candidate (ea5fc61 plus the Glass rows)	orchestrator	2026-11-16	2026-11-16	y	gm2	orchestrator:v060-c3-ci
-4g	Package test on the new candidate from row 0 (about 5 h), after ea5fc61's run ends	platform-b	2026-11-16	2026-11-16	y	gm2,4	platform-b:v060-stage4-glass
+c3	CI green on the new candidate fb7f336 (ea5fc61 plus the Glass rows and step 6 all-pods): run 43864213118	orchestrator	2026-11-16	2026-11-16	y	gm2	orchestrator:v060-c3-ci
+4g	Package test on fb7f336 from row 0 (about 5 h), after ea5fc61's run ends	platform-b	2026-11-16	2026-11-16	y	gm2,4	platform-b:v060-stage4-glass
 5	Release v0.6.0 with the Glass rows (about 17:30Z), or ea5fc61 without them if the new candidate trips	orchestrator	2026-11-16	2026-11-16	y	4g,c3	-
 rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
 gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-
