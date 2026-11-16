@@ -184,6 +184,31 @@ test("a merged drawing's notes are opened and closed from its view's Details on 
   registerCovered("VIEW_ACTIONS", "open-a-merged-drawings-notes-by-keyboard");
 });
 
+// CI on fb7f336 (16 Nov 2026): under GOV.UK the notes' list grew past its height and scrolled where no key could reach
+// it (axe scrollable-region-focusable, serious), while on this Mac it fitted. The list is made to scroll here in every
+// look, so the test does not depend on a runner's fonts: a scrolling list must be reachable by Tab, named, and scroll by
+// the arrow keys.
+for (const look of ["dark", "light", "govuk"] as const) {
+  test(`a merged drawing's notes, when they scroll, are reached by Tab and scrolled by the keys (${look})`, async ({ page }) => {
+    await page.goto(`/keyboard/views-harness.html?show=merged&details=open&notes=open${look === "light" ? "&theme=light" : look === "govuk" ? "&brand=govuk" : ""}`);
+    const toggle = page.getByRole("button", { name: "Notes from the drawing (2)" });
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    // What the toggle controls is what scrolls: its height is cut, as GOV.UK's taller rows did on CI.
+    await page.addStyleTag({ content: "#view-drawing-notes { max-height: 48px !important; overflow-y: auto !important; }" });
+    expect(await page.locator("#view-drawing-notes").evaluate((el) => el.scrollHeight > el.clientHeight), "the notes scroll").toBe(true);
+    const results = await new AxeBuilder({ page }).include("#saved-view-details").withRules(["scrollable-region-focusable"]).analyze();
+    expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    expect((await checkUndecidedContrast(page, results)).unlisted, "colour contrast axe left undecided").toEqual([]);
+    const notes = page.getByRole("region", { name: "Notes from the drawing" });
+    await expect(notes).toHaveAttribute("id", "view-drawing-notes");
+    await toggle.focus();
+    await page.keyboard.press("Tab");
+    await expect(notes).toBeFocused();
+    await page.keyboard.press("ArrowDown");
+    await expect.poll(() => notes.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
+  });
+}
+
 test("another member of the case is shown nothing of a private view, and no share or delete", async ({ page }) => {
   await open(page, "?as=bob");
   const panel = page.getByRole("list", { name: "Saved views" });
