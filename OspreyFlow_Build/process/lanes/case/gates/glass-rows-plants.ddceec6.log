@@ -1,0 +1,12 @@
+red   App passes no state to the case line
+red   the saved view's name takes no focus
+red   Esc does not close Details
+red   Details without the count
+red   the fold wraps after the name (no steps 4 and 5, as before ruling 10)
+red   Back to the whole case low on contrast
+red   the slim line keeps reads
+red   the canvas pushed by a strip again
+unplanted:
+green vitest
+green views.spec
+plants failing to go red, or unplanted red: 0

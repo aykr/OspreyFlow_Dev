@@ -13,7 +13,7 @@ import "../src/design/primitives.css";
 import { connectDeltaClient, type SocketLike } from "../src/workingset/deltaClient";
 import { createWorkingSet } from "../src/workingset/store";
 import { ViewOverCapGate } from "../src/workingset/ViewOverCapGate";
-import { ViewLensBanner } from "../src/views/ViewLensBanner";
+import { ContextBanner } from "../src/shell/ContextBanner";
 import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
@@ -72,7 +72,14 @@ function Harness() {
   return (
     <>
       {within && <p>The view is within the limit.</p>}
-      {lens && <ViewLensBanner name={lens} shared={false} missing={0} onBack={() => setLens(null)} />}
+      {/* ADR-145 Amendment 19: the open saved view said on the case line, as `App.tsx` draws it. */}
+      <ContextBanner
+        place="glass"
+        caseSwitcher={<span className="value">Kestrel (synthetic demo)</span>}
+        onViews={() => undefined}
+        savedViews={1}
+        caseState={lens ? { id: lens, name: lens, shared: false, missing: 0, onBack: () => setLens(null) } : "whole"}
+      />
       <ViewOverCapGate
         store={workingSet.store}
         requestResync={(last) => client.requestResync(last)}

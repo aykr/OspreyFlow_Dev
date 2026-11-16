@@ -1,0 +1,123 @@
+
+Running 30 tests using 1 worker
+
+[1/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 1440 wide, the slim line is never taller than the full one
+[2/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 1440 wide with a saved view open, the slim line is never taller than the full one
+[3/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 1024 wide, the slim line is never taller than the full one
+[4/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 1024 wide with a saved view open, the slim line is never taller than the full one
+[5/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 760 wide, the slim line is never taller than the full one
+[6/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 760 wide with a saved view open, the slim line is never taller than the full one
+[7/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 540 wide, the slim line is never taller than the full one
+[8/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 540 wide with a saved view open, the slim line is never taller than the full one
+  1) keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 540 wide with a saved view open, the slim line is never taller than the full one 
+
+    Error: the slim line 121 px, the full 113 px
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 113
+    Received:    121
+
+      152 |         const full = await height(false);
+      153 |         const slim = await height(true);
+    > 154 |         expect(slim, `the slim line ${slim} px, the full ${full} px`).toBeLessThanOrEqual(full);
+          |                                                                       ^
+      155 |       });
+      156 |     }
+      157 |   }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:154:71
+
+    Error Context: test-results/case-line-type-ospreyflow--77334-er-taller-than-the-full-one/error-context.md
+
+
+[9/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 400 wide, the slim line is never taller than the full one
+[10/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 400 wide with a saved view open, the slim line is never taller than the full one
+  2) keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 400 wide with a saved view open, the slim line is never taller than the full one 
+
+    Error: the slim line 153 px, the full 145 px
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 145
+    Received:    153
+
+      152 |         const full = await height(false);
+      153 |         const slim = await height(true);
+    > 154 |         expect(slim, `the slim line ${slim} px, the full ${full} px`).toBeLessThanOrEqual(full);
+          |                                                                       ^
+      155 |       });
+      156 |     }
+      157 |   }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:154:71
+
+    Error Context: test-results/case-line-type-ospreyflow--7bf51-er-taller-than-the-full-one/error-context.md
+
+
+[11/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 1440 wide, the slim line is never taller than the full one
+[12/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 1440 wide with a saved view open, the slim line is never taller than the full one
+[13/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 1024 wide, the slim line is never taller than the full one
+[14/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 1024 wide with a saved view open, the slim line is never taller than the full one
+[15/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 760 wide, the slim line is never taller than the full one
+[16/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 760 wide with a saved view open, the slim line is never taller than the full one
+[17/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 540 wide, the slim line is never taller than the full one
+[18/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 540 wide with a saved view open, the slim line is never taller than the full one
+  3) keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 540 wide with a saved view open, the slim line is never taller than the full one 
+
+    Error: the slim line 121 px, the full 113 px
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 113
+    Received:    121
+
+      152 |         const full = await height(false);
+      153 |         const slim = await height(true);
+    > 154 |         expect(slim, `the slim line ${slim} px, the full ${full} px`).toBeLessThanOrEqual(full);
+          |                                                                       ^
+      155 |       });
+      156 |     }
+      157 |   }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:154:71
+
+    Error Context: test-results/case-line-type-ospreyflow--21f22-er-taller-than-the-full-one/error-context.md
+
+
+[19/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 400 wide, the slim line is never taller than the full one
+[20/30] keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 400 wide with a saved view open, the slim line is never taller than the full one
+  4) keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 400 wide with a saved view open, the slim line is never taller than the full one 
+
+    Error: the slim line 153 px, the full 145 px
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 145
+    Received:    153
+
+      152 |         const full = await height(false);
+      153 |         const slim = await height(true);
+    > 154 |         expect(slim, `the slim line ${slim} px, the full ${full} px`).toBeLessThanOrEqual(full);
+          |                                                                       ^
+      155 |       });
+      156 |     }
+      157 |   }
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:154:71
+
+    Error Context: test-results/case-line-type-ospreyflow--d0130-er-taller-than-the-full-one/error-context.md
+
+
+[21/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 1440 wide, the slim line is never taller than the full one
+[22/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 1440 wide with a saved view open, the slim line is never taller than the full one
+[23/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 1024 wide, the slim line is never taller than the full one
+[24/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 1024 wide with a saved view open, the slim line is never taller than the full one
+[25/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 760 wide, the slim line is never taller than the full one
+[26/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 760 wide with a saved view open, the slim line is never taller than the full one
+[27/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 540 wide, the slim line is never taller than the full one
+[28/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 540 wide with a saved view open, the slim line is never taller than the full one
+[29/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 400 wide, the slim line is never taller than the full one
+[30/30] keyboard/case-line-type.spec.ts:140:7 › govuk light: at 400 wide with a saved view open, the slim line is never taller than the full one
+  4 failed
+    keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 540 wide with a saved view open, the slim line is never taller than the full one 
+    keyboard/case-line-type.spec.ts:140:7 › ospreyflow dark: at 400 wide with a saved view open, the slim line is never taller than the full one 
+    keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 540 wide with a saved view open, the slim line is never taller than the full one 
+    keyboard/case-line-type.spec.ts:140:7 › ospreyflow light: at 400 wide with a saved view open, the slim line is never taller than the full one 
+  26 passed (12.3s)

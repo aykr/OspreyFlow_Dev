@@ -118,24 +118,30 @@ def test_section_5_names_the_view_switch_and_more_views_in_order() -> None:
 
 def test_sections_3_and_5_give_the_case_line_as_the_banner_draws_it() -> None:
     """ADR-145 Amendment 17: *Saved views (n)*, n the saved views this reader may see, in place of *Views in this
-    case*; and, while one is open, "› Saved view: ‹name›" after the case's name."""
+    case*; Amendment 19: after it, what is on the graph, "Whole case" or the open saved view (its parts are
+    `test_user_guide_saved_views.py`'s)."""
     three = re.sub(r"\s+", " ", section(USER, "## 3"))
     # What the banner can put on screen: its code without its comments.
     banner = re.sub(r"\s+", " ", re.sub(r"(?m)^\s*//.*$", " ", re.sub(r"/\*.*?\*/", " ", BANNER, flags=re.DOTALL)))
-    assert "Views in this case" not in banner and "Saved views (" in banner and "Saved view: " in banner
+    state = re.sub(r"\s+", " ", (SRC / "views/SavedViewOnTheLine.tsx").read_text(encoding="utf-8"))
+    assert "Views in this case" not in banner and "Saved views (" in banner and "Saved view: " in state
     assert '"reads no dataset"' in BANNER and '"reads no dataset"' in three
     assert "Case</span>" in BANNER and '"You are in the Glass · Case ‹name› ▾ · Saved views (n) · reads ‹dataset›"' in three
     assert ("**Saved views (n)**, n being how many saved views you may see (**Saved views** alone while they are still "
             "being read), opens the **Saved views** panel") in three  # fmt: skip
-    assert 'While a saved view is open, the line shows it after the case\'s name: "› Saved view: ‹name›".' in three
+    assert ('then what is on the graph: "Whole case", or, while a saved view is open, "Saved view: ‹name›" with its tag, '
+            "**Details ▾** and **Back to the whole case** (section 5.13)") in three  # fmt: skip
+    assert ('"reads …" and then the saved view\'s and the case\'s names are shortened (their whole words show when you '
+            'point at them), and "You are in the Glass" is left out, before anything moves to a second line') in three
     cross = re.search(r'label: "(Open this case[^"]+)"', BANNER)
     assert cross and f"**{cross.group(1)}**" in three
     assert "mode toggle" not in three and "Graph: the case's data" not in three
     assert ("**All cases**, opens the **Cases** panel" in three) is ("All cases" in (SRC / "App.tsx").read_text(encoding="utf-8"))
-    # The banner's own order: the case, the open saved view, then its button.
-    assert banner.index("› Saved view: {openView}") < banner.index("{savedViewsLabel(savedViews)}")
+    # The banner's own order: the case, its button, then what is on the graph, then "reads …".
+    assert banner.index("{savedViewsLabel(savedViews)}") < banner.index("<CaseStateItems") < banner.index("`reads ${names(datasets)}`")
     assert 'return typeof count === "number" ? `Saved views (${count.toLocaleString("en-GB")})` : "Saved views";' in banner
-    assert "the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads" in _row("Context banner")
+    assert ('the case switcher, **Saved views (n)**, what is on the graph ("Whole case", or the open saved view with '
+            "**Details ▾** and **Back to the whole case**), and the dataset the case reads") in _row("Context banner")
 
 
 def test_section_5_2_gives_the_selection_bar_in_its_words_and_order() -> None:

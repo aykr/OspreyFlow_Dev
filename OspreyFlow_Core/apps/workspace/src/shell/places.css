@@ -42,6 +42,13 @@
 :is(.context-banner, .context-banner--govuk) .menu-button--case { min-width: 0; }
 .context-banner__sep { color: var(--text-secondary); }
 .context-banner__cross { margin-left: auto; }
+/* ADR-145 Amendment 19: the place's own end of the line (*Show toolbar*), at the right; after the cross-link, beside it. */
+.context-banner__end { margin-left: auto; display: inline-flex; align-items: center; }
+.context-banner__cross ~ .context-banner__end { margin-left: 0; }
+/* The cross-link and the place's end control on the line's 24 px control height (ADR-145 Amendment 19, ruling 14), as
+   GOV.UK's folded line has them: a wrapped row holding one is not drawn taller than its words need. The case switcher
+   keeps its 32 px, so the one-line height (41 px) is unchanged. */
+.context-banner :is(.context-banner__cross, .context-banner__end .btn) { min-height: 24px; padding-top: 0; padding-bottom: 0; }
 .context-banner__sections { display: flex; gap: var(--sp-4); }
 /* ADR-145 Amendment 13: the open mode's one line, in the row when it fits and on a line of its own under
    it when it does not (a flex item wraps whole). */
@@ -67,6 +74,12 @@
 .context-banner--squeezed > .context-banner__fit {
   flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* Fold step 4 (ADR-145 Amendment 19 decision 4, the owner's ruling 10): the case switcher gives way too, with its own
+   ellipsis, down to 8em; its whole name stays in its title and its accessible name ("Case: ‹name›"). */
+.context-banner--fold-case > .menu:has(> .menu-button--case) { display: inline-flex; flex: 0 1 auto; min-width: 8em; }
+.context-banner--fold-case .menu-button--case { min-width: 0; max-width: 100%; }
+.context-banner--fold-case .menu-button--case .menu-button__label > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
 /* Under GOV.UK it is a GOV.UK notification banner; kept to its title and one line of content. */
 .govuk-notification-banner.context-banner--govuk { margin: 0; }
@@ -98,3 +111,37 @@
    would not leave it room at 1440. */
 .context-banner--folded .context-banner__note { font-size: 14px; line-height: 20px; color: var(--text-primary); }
 .context-banner--folded :is(.btn, .govuk-link) { min-height: 24px; padding-top: 0; padding-bottom: 0; font-size: inherit; line-height: inherit; }
+
+/* ADR-145 Amendment 19 decisions 1–2: what is on the canvas, on the case line, with the line's own type. */
+.context-banner, .context-banner--govuk .govuk-notification-banner__content { position: relative; }
+.context-banner__state { color: var(--text-primary); }
+.context-banner__view-name { font-weight: 600; }
+/* Focus comes here when a saved view opens (decision 3); not a control, so its ring shows only for the keyboard. */
+.context-banner__saved-view:focus { outline: none; }
+.context-banner__saved-view:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: 2px; }
+.context-banner__tag { white-space: nowrap; }
+:is(.context-banner, .context-banner--govuk) .govuk-tag.context-banner__tag { font-size: inherit; line-height: inherit; padding: 0 var(--sp-4); }
+/* *Back to the whole case*: a link's look with a 24 px target (WCAG 2.2, 2.5.8); under GOV.UK, GOV.UK's back link. */
+.context-banner__whole {
+  min-height: 24px; padding: 0; border: 0; background: none; color: var(--text-primary);
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font: inherit;
+}
+:is(.context-banner, .context-banner--govuk) .govuk-back-link.context-banner__whole { margin: 0; }
+/* *Details*, open: over the canvas under the line's right end, so it moves nothing; above the canvas toolbar (11), with
+   the line's other popovers. */
+.case-line-details {
+  position: absolute; top: 100%; right: var(--sp-12); z-index: 35; box-sizing: border-box;
+  width: min(440px, calc(100% - 2 * var(--sp-12))); max-height: 60vh; overflow-y: auto;
+  display: grid; gap: var(--sp-6); padding: var(--sp-12); margin-top: var(--sp-2);
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--r-control);
+  color: var(--text-primary); font-size: var(--fs-13); line-height: var(--lh-13); white-space: normal;
+}
+.case-line-details__line { margin: 0; }
+.case-line-details__quiet { color: var(--text-secondary); }
+.case-line-details__from { font-weight: 600; }
+.case-line-details__link {
+  min-height: 24px; padding: 0; border: 0; background: none; color: var(--text-primary);
+  text-decoration: underline; text-underline-offset: 2px; cursor: pointer; font: inherit;
+}
+.case-line-details__notes { justify-self: start; min-height: var(--h-control-24); margin-bottom: 0; }
+.case-line-details .view-drawing-notes { margin: 0; display: grid; gap: var(--sp-4); }

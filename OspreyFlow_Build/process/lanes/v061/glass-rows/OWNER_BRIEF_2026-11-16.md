@@ -20,7 +20,7 @@ owning lane before building.
 |---|---|
 | Case line: "You are in the Glass · Case … · Saved views (n) · reads …" | `apps/workspace/src/shell/ContextBanner.tsx`, rendered in `App.tsx` (about line 1995) |
 | Match strictness slider, its own row | `apps/workspace/src/resolution/ThresholdControl.tsx` |
-| "You are looking at the whole case." its own row; with a saved view open, the banner with *Back to the whole case* | `apps/workspace/src/views/ViewLensBanner.tsx` (`WholeCaseStrip`, `ViewLensBanner`; `App.tsx` about line 2240) |
+| "You are looking at the whole case." its own row; with a saved view open, the banner with *Back to the whole case* | ViewLensBanner.tsx in apps/workspace/src/views (removed by this item, 16 Nov) (`WholeCaseStrip`, `ViewLensBanner`; `App.tsx` about line 2240) |
 | Graph toolbar: Layout, Entity type, Show, Clear the graph, Add files, Last change, Details | the graph view's toolbar |
 
 Look at what is there before redesigning anything. If the code differs from this table, tell me

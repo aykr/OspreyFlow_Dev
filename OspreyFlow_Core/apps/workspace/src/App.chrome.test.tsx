@@ -308,14 +308,15 @@ describe("the owner's navigation (ADR-145 Amendment 15)", () => {
     });
   }
 
-  test("the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · reads …", async () => {
+  // ADR-145 Amendment 19: what is on the canvas, "Whole case", after *Saved views (n)*.
+  test("the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · Whole case · reads …", async () => {
     await ready();
     const region = await screen.findByRole("region", { name: "You are in the Glass" });
     await within(region).findByText("reads Prison intel");
     const parts = [...region.querySelectorAll(":scope > *, .govuk-notification-banner__content > *")]
       .filter((el) => !el.classList.contains("context-banner__sep") && !el.classList.contains("govuk-notification-banner__content"))
       .map((el) => (el.textContent ?? "").trim().replace(/\s+/g, " "));
-    expect(parts.slice(0, 5)).toEqual(["You are in the Glass", "Case", expect.stringMatching(/^Case: Kestrel/), expect.stringMatching(/^Saved views/), "reads Prison intel"]);
+    expect(parts.slice(0, 6)).toEqual(["You are in the Glass", "Case", expect.stringMatching(/^Case: Kestrel/), expect.stringMatching(/^Saved views/), "Whole case", "reads Prison intel"]);
   });
 
   test("Saved views opens its panel at the saved views list", async () => {

@@ -33,8 +33,9 @@ const PANELS: Panel[] = [
   // The right-hand panel: the case's saved views in the Cases drawer (the owner's screenshot), once the views are read.
   { name: "the saved views panel, in its drawer", harness: "views-harness", query: "in=drawer", within: [".drawer"],
     ready: "[data-view-id]", holds: ["Private", "Shared"] },
-  // The strip over the canvas while a saved view is open.
-  { name: "the open view's strip over the canvas", harness: "views-harness", query: "show=lens", within: [".view-lens-banner"] },
+  // The open saved view's *Details*, over the canvas from the case line (ADR-145 Amendment 19; the strip withdrawn).
+  { name: "the open saved view's Details, over the canvas", harness: "views-harness", query: "show=lens&details=open", within: [".case-line-details"],
+    holds: ["Nothing in a saved view changes the case."] },
   // The Save as a view form, over the canvas.
   { name: "the Save as a view form", harness: "views-harness", query: "show=form", within: [".save-view"] },
   // More's menu, in the page's own frame (the brand frame, the case line), as the Glass draws it.

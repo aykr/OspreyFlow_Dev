@@ -1,0 +1,66 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+
+ ❯ src/shell/caseLine.test.tsx (6 tests | 4 failed) 116ms
+   ❯ the case line's slim form (ospreyflow) (3)
+     × keeps the case and Saved views, names the region as before, and drops You are in and reads from sight 91ms
+     × draws the end slot last on the line, in both forms 6ms
+     ✓ is the full line without slim: You are in in sight and reads drawn 5ms
+   ❯ the case line's slim form (govuk) (3)
+     × keeps the case and Saved views, names the region as before, and drops You are in and reads from sight 6ms
+     × draws the end slot last on the line, in both forms 4ms
+     ✓ is the full line without slim: You are in in sight and reads drawn 3ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > keeps the case and Saved views, names the region as before, and drops You are in and reads from sight
+ FAIL  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > keeps the case and Saved views, names the region as before, and drops You are in and reads from sight
+AssertionError: expected 'You are in the Glass·CaseCase: Kestre…' not to contain 'reads Prison intel'
+
+Expected: "reads Prison intel"
+Received: "You are in the Glass·CaseCase: Kestrel·Saved views (7)·reads Prison intelOpen this case's data in the Ingest Studio ↗"
+
+ ❯ src/shell/caseLine.test.tsx:35:36
+     33|     expect(within(region).getByRole("button", { name: "Case: Kestrel" …
+     34|     expect(within(region).getByRole("button", { name: "Saved views (7)…
+     35|     expect(region.textContent).not.toContain("reads Prison intel");
+       |                                    ^
+     36|     // The heading stays for a screen reader, out of sight.
+     37|     expect(within(region).getByRole("heading", { name: "You are in the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > draws the end slot last on the line, in both forms
+ FAIL  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > draws the end slot last on the line, in both forms
+AssertionError: expected 'Open this case\'s data in the Ingest …' to be 'Show toolbar' // Object.is equality
+
+Expected: "Show toolbar"
+Received: "Open this case's data in the Ingest Studio ↗"
+
+ ❯ src/shell/caseLine.test.tsx:48:43
+     46|       const region = screen.getByRole("region", { name: "You are in th…
+     47|       const buttons = within(region).getAllByRole("button");
+     48|       expect(buttons.at(-1)!.textContent).toBe("Show toolbar");
+       |                                           ^
+     49|       cleanup();
+     50|     }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 2 passed (6)
+   Start at  06:46:45
+   Duration  745ms (environment 67%, tests 18%, import 11%, transform 4%)
+
+
+Slowest 6 tests:
+    91 ms  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > keeps the case and Saved views, names the region as before, and drops You are in and reads from sight
+     6 ms  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > draws the end slot last on the line, in both forms
+     6 ms  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > keeps the case and Saved views, names the region as before, and drops You are in and reads from sight
+     5 ms  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > is the full line without slim: You are in in sight and reads drawn
+     4 ms  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > draws the end slot last on the line, in both forms
+     3 ms  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > is the full line without slim: You are in in sight and reads drawn

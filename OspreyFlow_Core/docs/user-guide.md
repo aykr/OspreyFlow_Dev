@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.73** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
+**Version 1.74** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.74 | 2026-11-16 | v0.6.0 (the owner, 16 Nov; built as v0.6.1's first item), the Glass's rows (ADR-145 Amendment 19, decisions 1 to 4): §3, the case line says what is on the graph, "Whole case" or "Saved view: ‹name›" with its tag, **Details ▾** and **Back to the whole case**, and stays one line on a narrow window; §5.13, no strip over the graph: *Details* holds the count of what could not be shown, that nothing changes the case, where the view came from with **← Back to the alert**, and a merged drawing's notes; focus to the saved view's name. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py` and `tests/test_user_guide_saved_views.py`. |
 | 1.73 | 2026-11-16 | §9's **Reports**: in the boards' editor a builder sees the figures behind every board, for every case and clearance, so the right to manage dashboards is given only to people cleared for all of them (ADR-148 Amendment 21, the owner's ruling of 16 November). |
 | 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0); *Show all on graph*'s words past the limit say *Save as a view* is under the answer in Ask & Chat, since the page has gone. Held by `tests/test_user_guide_ask_chat.py` and `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.71 | 2026-11-15 | §6, *An answer's items* (v0.6.0 item 5, the owner's closed list): **Show all on graph** puts an answer's items on the case's graph, selected, a saved view closed first, what it cannot show a count and past the limit nothing; **Save as a view** names the view from the question and saves it as a saved view of the case. Held by `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -206,8 +207,11 @@ the Glass it is the **case line**: "You are in the Glass · Case ‹name› ▾ 
 ‹dataset›". The case switcher lists your cases, and its last entry, **All cases**, opens the **Cases**
 panel; **Saved views (n)**, n being how many saved views you may see (**Saved views** alone while they are still
 being read), opens the **Saved views** panel
-(section 5.13); and the line names the dataset the case reads, or says "reads no dataset". While a saved
-view is open, the line shows it after the case's name: "› Saved view: ‹name›". Graph, Map, Drawing board and Reports are
+(section 5.13); then what is on the graph: "Whole case", or, while a saved view is open, "Saved view: ‹name›"
+with its tag, **Details ▾** and **Back to the whole case** (section 5.13); and the line names the dataset the case
+reads, or says "reads no dataset". On a narrow window the line stays one line: "reads …" and then the saved view's
+and the case's names are shortened (their whole words show when you point at them), and "You are in the Glass" is
+left out, before anything moves to a second line. Graph, Map, Drawing board and Reports are
 in the top bar's view switch, not here (section 5). Elsewhere it says "You are in the Ingest Studio",
 "You are in Rules and Monitoring" or "You are in Admin". If you can open both the Glass and the Ingest
 Studio, the banner offers **Open this case's data in the Ingest Studio ↗**, and from there **← Back to
@@ -315,7 +319,7 @@ added from outside, such as a VAST Challenge dataset, is a case of its own named
 | Part | What it is |
 | --- | --- |
 | **Top bar** | The place switcher, search, the view switch (**Graph**, **Map**, **Drawing board** and **Reports**, with **Matrix**, **Figures**, **Ownership** and **Connection strength** under **More**, those your rights allow; for a screen reader **More** is *More ways to show the case*, and while one of its own is open it shows that one's name), **Build a report (opens in new tab)** (section 9), Export, and your account |
-| **Context banner** | The case line: the case switcher, the open saved view when there is one, **Saved views (n)**, and the dataset the case reads (section 3) |
+| **Context banner** | The case line: the case switcher, **Saved views (n)**, what is on the graph ("Whole case", or the open saved view with **Details ▾** and **Back to the whole case**), and the dataset the case reads (section 3) |
 | **Left rail** | **Explore**, **Ask & Chat** and **History**, those your rights allow: Explore and History each open their panel beside the view, and Ask & Chat opens as a page over it (§6); a second press closes each again; **Help** (**?**), which opens the keys and the user guide over any view and closes again with a second press or Esc; and **Show names** |
 | **Canvas** | The graph, the map, the Matrix or the case's figures |
 | **Right column** | The Inspector, Metrics, the query builder and Find connections, stacked; **Full width** and **Hide** |
@@ -806,15 +810,17 @@ copy: there are no branches, and nothing in a saved view changes the case.
   person who saved them **Share with the case** and **Delete** ("Delete this view? Nothing on the case is
   deleted with it."). Before you have any it says "No views yet. Select nodes on the canvas and choose
   *Save as a view*."
-- **Opening one** reads the case through it, read-only. The strip above the graph starts with **Back to the
-  whole case** (the GOV.UK back link in that look), then "Saved view: ‹name›", its *Private* or *Shared*
-  tag, how many of its items could not be shown when any could not, and "Nothing in a saved view changes
-  the case."; the case line shows "› Saved view: ‹name›". A saved view opened from an alert says "Opened
-  from an alert" straight after the way back, and offers **← Back to the alert** after the note. Focus
-  moves to the strip, **Back to the whole case** is the next Tab, and it returns focus to **Saved views
-  (n)**. An action that would change the case says instead "This is a saved view: nothing in it changes
-  the case. Go back to the whole case to change it." With no saved view open the strip says "You are
-  looking at the whole case."
+- **Opening one** reads the case through it, read-only. The case line says so: "Saved view: ‹name›", its
+  *Private* or *Shared* tag, **Details ▾** and **Back to the whole case** (the GOV.UK back link in that
+  look). Nothing is drawn over the graph, so it does not move when a saved view opens or closes.
+  **Details** opens over the graph and says how many of its items could not be shown when any could not,
+  "Nothing in a saved view changes the case.", and, for a saved view opened from an alert, "From alert
+  ‹title›" with **← Back to the alert**; for a merged drawing it offers **Notes from the drawing (n)**. Esc
+  closes it. A saved view opened from an alert also offers **← Back to the alert** on the case line itself.
+  Focus moves to the saved view's name on the case line; **Details** is the next Tab, then **Back to the
+  whole case**, which returns focus to **Saved views (n)**. An action that would change the case says
+  instead "This is a saved view: nothing in it changes the case. Go back to the whole case to change it."
+  With no saved view open the case line ends "Whole case".
 
 ### 5.14 Drawing boards
 

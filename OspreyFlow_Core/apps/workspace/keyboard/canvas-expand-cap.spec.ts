@@ -230,7 +230,7 @@ for (const strict of [false, true]) {
     await expect(panel.getByRole("heading", { name: "Batch job: the whole expansion" })).toBeFocused();
     await tabTo("Open the view");
     await expect.poll(() => page.evaluate(() => (window as unknown as Recorded).__KEYBOARD__?.batchViewOpened)).toBe("v-batch");
-    // Its work done, the panel closes (the App's lens then takes focus, `ViewLensBanner`).
+    // Its work done, the panel closes (the App's lens then takes focus, its name on the case line, ADR-145 Amendment 19).
     await expect(panel).toHaveCount(0);
     expect(started).toHaveLength(1);
     if (!strict) registerCovered(REGISTRY, "run-an-over-cap-expansion-as-a-batch-job-by-keyboard");

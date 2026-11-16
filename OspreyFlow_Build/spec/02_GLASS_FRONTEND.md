@@ -535,7 +535,13 @@ under the OspreyFlow brand, its controls 32), a region named by its first words:
   *Saved views (n)* opens the same panel with its views list focused. "reads …" names the case's datasets once
   in the row ("reads no dataset" for a case reading none): the case menu draws no scope badge beside it and the
   cross-link does not name them (ADR-145 Amendment 14 decision 4); while the datasets are read or refused, "reads"
-  is not drawn and the badge stays. GOV.UK's row is one row at 1440 wide and at most two lines at 1024;
+  is not drawn and the badge stays. After *Saved views (n)* the line says what is on the canvas (ADR-145
+  Amendment 19): "Whole case", or the open saved view with its tag, *Details ▾* and *Back to the whole case*
+  (§3.1h). The line folds rather than wraps, in turn: the cross-link's short words, "reads …" ellipsised then out of
+  sight (kept for a screen reader), the saved view's name ellipsised, the case menu ellipsised (down to 8em), "You
+  are in the Glass" out of sight (still the region's name); only then do whole items wrap. *Saved views (n)*, the
+  tag, *Details* and *Back to the whole case* never fold. With the view's toolbar hidden (Amendment 19 decision 6)
+  it is one slim line, "Case ‹case menu› · Saved views (n) · ‹state› · Open in the Ingest Studio ↗ · Show toolbar";
 - in the Studio: "You are in the Ingest Studio · for ‹case menu›";
 - in Rules and Monitoring: "You are in Rules and Monitoring · ‹case menu›";
 - in Admin: "You are in Admin".
@@ -1267,10 +1273,14 @@ keyboard.
 **Opening one: a read-only lens (the owner's ruling of 8 November 2026, ADR-144 Amendment 2).** An
 opened view takes the canvas's place: its items as the Conduit answers them (only what the reader may
 see now, each already collapsed at the view's threshold, or the case's when it has none), placed where
-the view keeps them, and the timeline set to its window. A strip above the canvas starts with **Back to the whole
-case** (GOV.UK's back link in that look; ADR-145 Amendment 17), then reads "Saved view: <name>", its *Private* or *Shared* tag, "n items in this view could not be shown" when the Conduit counted any
-(never which, nor why), and "Nothing in a saved view changes the case."; with none open it says "You are looking at
-the whole case.", and the case line names the open one after the case, "› Saved view: <name>". Nothing in a view
+the view keeps them, and the timeline set to its window. The case line says what is open (ADR-145 Amendment 19; no
+strip over the canvas, so opening or closing a view moves the canvas by nothing): after *Saved views (n)*, "Whole
+case", or "Saved view: <name>" with its *Private* or *Shared* tag, **Details ▾** and **Back to the whole case**
+(GOV.UK's back link in that look). *Details* opens over the canvas and holds "n items in this view could not be shown"
+when the Conduit counted any (never which, nor why), "Nothing in a saved view changes the case.", where the view was
+opened from with its own way back ("From alert <title>", *← Back to the alert*, which is also on the line), and a
+merged drawing's *Notes from the drawing (n)*; Esc closes it. The line folds rather than wraps (Amendment 19 decision
+4). Nothing in a view
 changes the case's working set: the selection bar offers *Save as a view*, *Ask the model about these…*
 and *Clear* only; the toolbar offers no *Clear the graph*, *Add files* or *Show links among all*; a node's
 menu offers only what changes nothing (read full screen, view messages, expand a group, save the
@@ -1279,7 +1289,8 @@ selection as a view); and a link's menu only folding, a note, hiding, its histor
 canvas*: explaining asks the case about clusters worked out at the case's threshold, not the view's).
 An action that would change the working set asked for another way is said ("This is a saved view: nothing in
 it changes the case. Go back to the whole case to change it."), not done. When the view opens, focus moves to
-the strip, whose first Tab is *Back to the whole case*; that returns focus to the case line's *Saved views*. A view past the working set's cap is refused with its own figures, never cut to fit
+its name on the case line; the next Tab is *Details*, then *Back to the whole case*, which returns focus to the case
+line's *Saved views*. A view past the working set's cap is refused with its own figures, never cut to fit
 (rule 2). The lens is the Graph's: the Map, the Matrix and the status bar go on showing the
 case while a view is open. A view with no window clears the timeline's window while it is open, and
 *Back to the whole case* gives the case's window back and takes `case_view` out of the address. The over-cap

@@ -781,22 +781,27 @@ describe("the tab the launcher asked for is the tab the Glass opens on", () => {
       fireEvent.click(await screen.findByRole("button", { name: /Open alert:.*Structuring/ }));
       await vi.waitFor(() => expect(window.location.pathname).toBe("/alerts/a1"));
       fireEvent.click(await screen.findByRole("button", { name: "Open the evidence" }));
-      const banner = await screen.findByRole("region", { name: "Saved view" });
+      const caseLine = await screen.findByRole("region", { name: "You are in the Glass" });
+      const named = await within(caseLine).findByText(/^Saved view:/);
       expect(saved).toEqual([{ name: "From alert: Structuring", node_ids: ["n1"] }]);
-      expect(within(banner).getByText("From alert: Structuring")).toBeTruthy();
-      expect(within(banner).getByText("Opened from an alert")).toBeTruthy();
-      // ADR-145 Amendment 17: opening a saved view takes focus to its strip, whose ways back follow it.
-      await vi.waitFor(() => expect(document.activeElement).toBe(banner));
-      expect(within(banner).getByText("Private")).toBeTruthy();
-      expect(screen.getByRole("region", { name: "You are in the Glass" })).toBeTruthy();
-      fireEvent.click(within(banner).getByRole("button", { name: "← Back to the alert" }));
+      expect(named.textContent).toBe("Saved view: From alert: Structuring");
+      // ADR-145 Amendment 19: opening a saved view takes focus to its name on the case line; its ways back follow it.
+      await vi.waitFor(() => expect(document.activeElement).toBe(named));
+      expect(within(caseLine).getByText("Private")).toBeTruthy();
+      // Where it came from, with the alert's title, in Details (ADR-146 decision 6's "From alert ‹title›").
+      fireEvent.click(within(caseLine).getByRole("button", { name: "Details" }));
+      const details = screen.getByRole("region", { name: "Saved view details" });
+      expect(details.textContent).toContain("From alert Structuring");
+      fireEvent.keyDown(details, { key: "Escape" });
+      // The way back to the alert, on the line itself.
+      fireEvent.click(within(caseLine).getByRole("button", { name: "← Back to the alert" }));
       expect(await screen.findByRole("region", { name: "You are in Rules and Monitoring" })).toBeTruthy();
       expect(window.location.pathname).toBe("/alerts/a1");
       await vi.waitFor(() =>
         expect(screen.getByRole("button", { name: /Open alert:.*Structuring/ }).getAttribute("aria-pressed")).toBe("true"),
       );
       expect(await screen.findByRole("button", { name: "Open the evidence" })).toBeTruthy();
-      expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull();
+      expect(screen.queryByText(/^Saved view:/)).toBeNull();
     } finally {
       window.history.replaceState(null, "", "/");
     }

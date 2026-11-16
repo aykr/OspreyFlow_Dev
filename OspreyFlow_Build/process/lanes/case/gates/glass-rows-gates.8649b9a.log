@@ -1,0 +1,14 @@
+v0.6.1 glass-rows B, gates at 8649b9a (0ce352a adds only spec words), local Playwright slot 7, the registry patch and the every-harness diff applied for the runs
+== whole vitest
+ (cd3b199, before the chrome test fix) ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ (cd3b199, before the chrome test fix)  Test Files  1 failed | 399 passed (400)
+ (cd3b199, before the chrome test fix)       Tests  1 failed | 3654 passed (3655)
+ rerun at 8649b9a: Test Files 400 passed (400), Tests 3655 passed (3655)
+== whole keyboard suite
+  5 skipped
+  1376 passed (5.9m)
+kb exit 0
+== every-harness
+  1156 passed (17.0m)
+eh exit 0
+== guide tests: test_user_guide*.py, test_guide*.py, test_adr_reservations.py, test_spec_doc_paths.py: 194 passed

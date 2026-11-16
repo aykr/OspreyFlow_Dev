@@ -497,6 +497,8 @@ export const VIEW_ACTIONS = defineActionRegistry("VIEW_ACTIONS", [
   // ADR-145 Amendment 17 (ADR-144 Amendment 6 withdrew Amendment 3's *Views ▾* by the graph, and its case with it): a
   // saved view opened from the case line into the strip, and Back to the whole case.
   "open-a-saved-view-from-the-case-line-and-back-to-the-whole-case-by-keyboard",
+  // ADR-145 Amendment 19 (v0.6.1, the strip withdrawn): the open saved view's *Details*, on the case line.
+  "open-a-saved-views-details-from-the-case-line-by-keyboard",
 ] as const);
 
 /** Drawing boards (ADR-143 decisions 4 to 7; Amendment 2 decision 5; L3.3): a board opened, made

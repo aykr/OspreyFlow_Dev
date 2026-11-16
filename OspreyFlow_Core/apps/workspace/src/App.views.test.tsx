@@ -113,33 +113,34 @@ afterEach(() => {
 });
 
 
-describe("saved views and the way back to the whole case (ADR-145 Amendment 17, ADR-144 Amendment 6)", () => {
-  test("a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views", async () => {
+describe("saved views and the way back to the whole case (ADR-145 Amendment 19, Amendment 17, ADR-144 Amendment 6)", () => {
+  test("a saved view opened from the case line is said on the case line, focus on its name, with no strip over the canvas; Back to the whole case puts the case back and focus on Saved views", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     // The toolbar's Views menu is withdrawn (ADR-144 Amendment 6): the case line's button is the one way.
     expect(within(screen.getByRole("toolbar", { name: "Canvas tools" })).queryByRole("button", { name: /^Views/ })).toBeNull();
     const caseLine = screen.getByRole("region", { name: "You are in the Glass" });
-    // With none open, the strip says the whole case is on screen, and the case line names no saved view.
-    expect(within(screen.getByRole("region", { name: "The whole case" })).getByText("You are looking at the whole case.")).toBeTruthy();
-    expect(within(caseLine).queryByText(/› Saved view:/)).toBeNull();
+    // Amendment 19: with none open, the case line ends "Whole case"; no strip says it over the canvas.
+    expect(within(caseLine).getByText("Whole case")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "The whole case" })).toBeNull();
+    expect(screen.queryByText("You are looking at the whole case.")).toBeNull();
     const savedViews = await within(caseLine).findByRole("button", { name: "Saved views (1)" });
     fireEvent.click(savedViews);
     fireEvent.click(await screen.findByRole("button", { name: "Open Payments in March" }));
-    const strip = await screen.findByRole("region", { name: "Saved view" });
-    await vi.waitFor(() => expect(document.activeElement).toBe(strip));
-    // The way back is the first thing in the strip, then which saved view, and that it changes nothing.
-    const back = within(strip).getByRole("button", { name: "Back to the whole case" });
-    expect(strip.querySelector("button, a")).toBe(back);
-    expect(strip.textContent).toContain("Saved view: Payments in March");
-    expect(strip.textContent).toContain("Nothing in a saved view changes the case.");
-    expect(within(caseLine).getByText("› Saved view: Payments in March")).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "The whole case" })).toBeNull();
+    const named = await within(caseLine).findByText(/^Saved view:/);
+    expect(named.textContent).toBe("Saved view: Payments in March");
+    await vi.waitFor(() => expect(document.activeElement).toBe(named));
+    expect(within(caseLine).queryByText("Whole case")).toBeNull();
+    // Nothing between the case line and the canvas: no strip, no saved view region.
+    expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull();
+    // Details holds that nothing in it changes the case.
+    fireEvent.click(within(caseLine).getByRole("button", { name: "Details" }));
+    expect(screen.getByRole("region", { name: "Saved view details" }).textContent).toContain("Nothing in a saved view changes the case.");
     expect(asked.filter((url) => url.endsWith("/inv-1/views/v-shared"))).toHaveLength(1);
-    fireEvent.click(back);
-    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull());
-    expect(within(caseLine).queryByText(/› Saved view:/)).toBeNull();
-    expect(screen.getByRole("region", { name: "The whole case" })).toBeTruthy();
+    fireEvent.click(within(caseLine).getByRole("button", { name: "Back to the whole case" }));
+    await vi.waitFor(() => expect(within(caseLine).queryByText(/^Saved view:/)).toBeNull());
+    expect(within(caseLine).getByText("Whole case")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Saved view details" })).toBeNull();
     await vi.waitFor(() => expect(document.activeElement).toBe(within(caseLine).getByRole("button", { name: "Saved views (1)" })));
   });
 
@@ -154,7 +155,7 @@ describe("saved views and the way back to the whole case (ADR-145 Amendment 17, 
   });
 
   // ADR-145 Amendment 17 (the owner's exception, 14 November 2026): from the case line the drawer is *Saved views*,
-  // the views list alone; its first row, *The whole case*, does what the strip's way back does.
+  // the views list alone; its first row, *The whole case*, does what the case line's way back does (Amendment 19).
   test("the Saved views drawer holds the saved views alone, and The whole case closes the open view", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
@@ -164,11 +165,12 @@ describe("saved views and the way back to the whole case (ADR-145 Amendment 17, 
     await within(drawer).findByRole("list", { name: "Saved views" });
     expect(within(drawer).queryByRole("button", { name: "Browse all cases" })).toBeNull();
     fireEvent.click(await within(drawer).findByRole("button", { name: "Open Payments in March" }));
-    await screen.findByRole("region", { name: "Saved view" });
+    await caseLine().findByText(/^Saved view:/);
     fireEvent.click(caseLine().getByRole("button", { name: /^Saved views/ }));
     const again = await screen.findByRole("dialog", { name: "Saved views" });
     fireEvent.click(await within(again).findByRole("button", { name: "Open the whole case" }));
-    await vi.waitFor(() => expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull());
+    await vi.waitFor(() => expect(caseLine().queryByText(/^Saved view:/)).toBeNull());
+    expect(caseLine().getByText("Whole case")).toBeTruthy();
     expect(screen.queryByRole("dialog", { name: "Saved views" })).toBeNull();
     await vi.waitFor(() => expect(document.activeElement).toBe(caseLine().getByRole("button", { name: /^Saved views/ })));
   });

@@ -46,7 +46,7 @@ function Harness() {
         <button type="button" data-saved-views-button="" aria-expanded={panelOpen} onClick={() => setPanelOpen((o) => !o)}>
           Saved views ({VIEWS.length})
         </button>{" "}
-        <span id="lens">{opened ? `Saved view: ${opened.name}` : "You are looking at the whole case."}</span>
+        <span id="lens">{opened ? `Saved view: ${opened.name}` : "Whole case"}</span>
       </p>
       <Drawer
         open={panelOpen}

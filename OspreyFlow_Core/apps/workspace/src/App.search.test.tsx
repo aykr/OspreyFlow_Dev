@@ -287,7 +287,7 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
     fireEvent.click(within(region).getByRole("button", { name: /^Saved views/ }));
     const panel = await screen.findByRole("dialog", { name: "Saved views" }); // ADR-145 Amendment 17
     fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
-    await screen.findByRole("region", { name: "Saved view" });
+    await screen.findByText(/^Saved view:/);
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull());
     expect(pressed()).toEqual(["Graph"]);
   });
@@ -422,11 +422,11 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     fireEvent.click(within(region).getByRole("button", { name: /^Saved views/ }));
     const panel = await screen.findByRole("dialog", { name: "Saved views" });
     fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
-    await screen.findByRole("region", { name: "Saved view" });
+    await screen.findByText(/^Saved view:/);
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
     const page = await screen.findByRole("region", { name: "Ask & Chat" });
     fireEvent.click(await within(page).findByRole("button", { name: "Show all on graph" }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Saved view" })).toBeNull());
+    await waitFor(() => expect(screen.queryByText(/^Saved view:/)).toBeNull());
     await waitFor(() => expect(sent.some((s) => s.url.endsWith("/inv-1/working-set/add-by-ids"))).toBe(true));
   });
 
@@ -551,7 +551,7 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     fireEvent.click(within(region).getByRole("button", { name: /^Saved views/ }));
     const panel = await screen.findByRole("dialog", { name: "Saved views" });
     fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
-    await screen.findByRole("region", { name: "Saved view" });
+    await screen.findByText(/^Saved view:/);
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
   });
 
