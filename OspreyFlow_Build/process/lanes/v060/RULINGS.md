@@ -138,7 +138,7 @@ v0.6.1. Added to the v0.6.1 list:
 ## The v0.6.1 patch (the owner, 16 Nov ~18:25Z)
 A patch release **v0.6.1** before the planned build, which becomes **v0.6.2** (the list above under "v0.6.1" is now
 v0.6.2's). Two items: Ask & Chat a drawer by default with Expand (case-b, ADR-145 Am 20) and search on Small fed by the
-Conduit (rules-b, ADR-150 Am 4); brief `v061patch/BRIEF.md`. Gates: CI fully green, the whole keyboard and every-harness
+Conduit (rules-b, ADR-150 Am 4); brief `v061patch/PATCH_BRIEF.md`. Gates: CI fully green, the whole keyboard and every-harness
 suites, a fresh Small install on the test server checked in a browser; no cloud-platform package test. After the release
 the GOV.UK demo is updated to it (the owner's "apply it govuk theme"), proposed in one line first. The name `v0.6.0-1`
 was declined: the release tooling, the update check and fresh_only accept vMAJOR.MINOR.PATCH only (harness/release.py:28).

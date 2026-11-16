@@ -1,6 +1,6 @@
 # target	v0.6.1	2026-11-17
 # steps	-
-# The route to v0.6.1, the patch (the owner, 16 Nov 2026: Ask & Chat a drawer with Expand; search on Small fed by the Conduit), after v0.6.0 (released 16 Nov; its route kept below, done). The planned list is v0.6.2's (v060/RULINGS.md; v061patch/BRIEF.md
+# The route to v0.6.1, the patch (the owner, 16 Nov 2026: Ask & Chat a drawer with Expand; search on Small fed by the Conduit), after v0.6.0 (released 16 Nov; its route kept below, done). The planned list is v0.6.2's (v060/RULINGS.md; v061patch/PATCH_BRIEF.md
 # and v060/RULINGS.md). Kept by the orchestrator; the heartbeat's default view reads it. The items are built in parallel
 # on main; the five stages follow, one at a time. Scope before date: the date is the earliest the whole list allows.
 # Tab-separated: id, title, lane, start (YYYY-MM-DD), end (YYYY-MM-DD), critical (y/n), after (ids, comma, or -), progress
