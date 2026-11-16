@@ -1,0 +1,22 @@
+# The drain measured at b4eb8ce (rebased on bf8d1fe), stack b, lease rules-b of 2026-11-16T19:14:24Z, the wiring diff applied uncommitted
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Core/), logged at osprey-runs/rules-b.meta/runs/20261116T191438Z-dc14d56c/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -p no:randomly -q -s ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py
+
+the outbox held 10000 rows at the start, this file's 10000 among them; waited at most 100 s
+the feed cleared 10000 outbox rows in 4.39 s, 2277 rows/s (polled every 0.1 s, from the last poll before it reached this file's rows to the first after it had cleared them)
+a write was found 1.10 s after it committed, each search after a forced refresh (a real search waits up to the index's 1 s refresh more)
+..
+=============================== warnings summary ===============================
+tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+  /root/osprey-runs/rules-b/OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py:250: ConduitStartTime: a Conduit came up in 12.8 s (http://127.0.0.1:40557)
+    conduit = _ConduitInstance(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+55.83s call     tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+0.83s call     tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.50s setup    tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.21s teardown tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.18s teardown tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+0.07s setup    tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+2 passed, 1 warning in 58.55s
+Wall time: 60 s, exit 0 (stack b, the lease rules-b took at 2026-11-16T19:14:24Z; set-up before it 6 s)

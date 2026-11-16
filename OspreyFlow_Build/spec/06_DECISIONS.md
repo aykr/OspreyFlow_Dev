@@ -40492,7 +40492,15 @@ the outboxes (decision 4) and nothing drained them.
 5734c16: a backlog of 2,000 rows written before the Conduit started had all drained by the first poll after the Conduit
 answered its first request (1.0 s after it answered; the feed starts in the lifespan, before the Conduit answers, so how
 long the drain took was not measured by that run), and a write was found 0.79 s after it committed, each search made
-after a forced refresh (a real search waits for the index's refresh too, by default up to 1 s more). RATE-PLACEHOLDER
+after a forced refresh (a real search waits for the index's refresh too, by default up to 1 s more). The drain's rate was
+measured by the same test as rebuilt (the orchestrator's review): on stack b under rules-b's lease of
+2026-11-16T19:14:24Z, at b4eb8ce, a sampler polled the outbox every 0.1 s from before the Conduit was spawned, and the
+feed cleared a backlog of 10,000 rows (the whole outbox) in 4.39 s, from the last poll before it reached them to the
+first after it had cleared them: about 2,280 rows a second, on a test server otherwise idle but for the protected GOV.UK
+demo. A write was then found 1.10 s after it committed, again after a forced refresh. At that rate a backlog the size of
+the GOV.UK demo's (several hundred thousand rows; 300,000, say) would drain in about two and a quarter minutes. That is
+an estimate from a backlog of small, alike nodes with no texts, not a measurement at that size: larger nodes, Documents'
+texts and a busy host are slower.
 
 **Tests that fail if it is violated.**
 - `tests/services/search_index/test_conduit_feed_live.py`'s
