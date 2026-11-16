@@ -198,3 +198,4 @@ case-b	v061-glass-rows-ac	M	building	v0.6.1 glass rows A+C (strictness into the 
 rules-b	v060-press-enabled	S	done	CI's keyboard races: every keyboard spec's press waits for its button to be enabled; test-only	lane/rules-b-v060-press-enabled
 platform-b	v060-report-sync-valkey	S	done	v0.6.0 (the owner, 16 Nov): the report sync opens Valkey with its password and TLS (cloud-platform)	lane/platform-b-v060-report-sync-valkey
 platform-b	v060-stage4	M	building	v0.6.0 stage 4: the package test on 38fafb8, every row
+platform-b	v060-superset-reader	S	building	v0.6.0 (the owner, 16 Nov): a read-only OspreyReader role for Reports Viewers and as the registration role; the probe first

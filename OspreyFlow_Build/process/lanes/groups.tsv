@@ -196,3 +196,4 @@ case-b	v061-glass-rows-ac	Four places, the Glass and Admin	After the client's in
 rules-b	v060-press-enabled	Housekeeping	Client install
 platform-b	v060-report-sync-valkey	Housekeeping	Client install
 platform-b	v060-stage4	Housekeeping	Client install
+platform-b	v060-superset-reader	Housekeeping	Client install
