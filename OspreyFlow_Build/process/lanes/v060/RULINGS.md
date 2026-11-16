@@ -91,3 +91,4 @@ cancels a run in progress).
 - The drawn-merge sheet moves focus only when first drawn and when sent, not after each choice (WCAG 3.2.2 On Input; rules-b's audit, 16 Nov), then the spec's waits removed
 - **Scope dashboard builders** (the owner, 16 Nov): manage_dashboards limited to the dashboard identities its holder is cleared for, in their own Superset session, not only the guest token; its own ADR (rule 3)
 - T on the Map's container hides and shows the toolbar, as on the graph canvas (Glass rows ruling 13; map/MapView.tsx is platform's)
+- The guide says a new dashboard is offered in the Glass only once it holds a chart (Superset's own visibility rule; the package test, 16 Nov)
