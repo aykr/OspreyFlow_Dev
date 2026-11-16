@@ -49,7 +49,8 @@ class _Conduit:
             self.canvas |= {n["id"] for n in json["nodes"]}
             return _Answer(200, {"delta": {}})
         if path.endswith("/pictures"):
-            return _Answer(200, {"pictures": {n: self.stored[n] for n in json["node_ids"] if n in self.stored}})
+            # As the route answers: `list[EntityPicture]`, each {node_id, document_id} (entity_pictures.py).
+            return _Answer(200, [{"node_id": n, "document_id": self.stored[n]} for n in json["node_ids"] if n in self.stored])
         raise AssertionError(path)
 
     def put(self, path: str, headers: dict[str, str], params: dict[str, str], content: bytes) -> _Answer:

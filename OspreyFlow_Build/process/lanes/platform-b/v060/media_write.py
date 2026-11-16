@@ -50,7 +50,8 @@ def write(c: Any, admin: dict[str, str], case: str) -> dict[str, Any]:
     if put.status_code not in (200, 201):
         raise SystemExit(f"the picture was refused: {put.status_code} {put.text[:300]}")
     seen = c.post(f"/v1/investigations/{case}/pictures", headers=admin, json={"node_ids": [person["id"]]})
-    held = (seen.json().get("pictures") or {}) if seen.status_code == 200 else {}
+    # `list[EntityPicture]`: each {node_id, document_id}, the entities with a picture of their own the caller sees.
+    held = {p["node_id"]: p["document_id"] for p in (seen.json() if seen.status_code == 200 else [])}
     if person["id"] not in held:
         raise SystemExit(f"the picture was set but is not the entity's own: {seen.status_code} {seen.text[:200]}")
     return {"node": person["id"], "picture": held[person["id"]], "status": put.status_code}
