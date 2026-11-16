@@ -82,29 +82,48 @@ PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     ),
     # decision 1's third bullet: stopped at shutdown, before the stores, beside the job loop
     (
-        "F7 the lifespan never closes the feed",
+        "F7 the lifespan never stops the job loop and the feed",
         APP,
-        "            await index_feed.close(timeout=JOB_LOOP_STOP_SECONDS)\n",
+        "        await stop_background(job_loop_task, job_loop_stop, index_feed)\n",
         "",
-        [
-            f"{OFFLINE}::test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores"
-        ],
+        [f"{OFFLINE}::test_the_lifespan_starts_the_feed_last_and_stops_it_before_the_stores"],
     ),
     (
-        "F8 the feed's stop waits for the job loop",
+        "F8 the feed's stop is not set with the job loop's",
         APP,
-        "        if index_feed is not None:\n            index_feed.stop.set()\n",
+        "    if index_feed is not None:\n        index_feed.stop.set()\n",
         "",
-        [
-            f"{OFFLINE}::test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores"
-        ],
+        [f"{OFFLINE}::test_the_feed_sees_its_stop_at_once_not_after_the_job_loop"],
     ),
     (
+        # The real refusal's shape: `SearchIndexConfigError` from the real `from_env`, which a
+        # guard catching the wrong type lets through, so the start would fail on it.
         "F9 a refused search setting stops the Conduit's start",
         APP,
-        "    except Exception:  # noqa: BLE001 - said, and the Conduit starts without a feed\n",
-        "    except ImportError:\n",
+        "    except SearchIndexConfigError as refused:\n",
+        "    except RuntimeError as refused:\n",
         [f"{OFFLINE}::test_refused_search_settings_start_the_conduit_without_a_feed"],
+    ),
+    (
+        "F11 the guard swallows every error, a defect included",
+        APP,
+        "    except SearchIndexConfigError as refused:\n",
+        "    except Exception as refused:  # noqa: BLE001\n",
+        [f"{OFFLINE}::test_an_error_other_than_a_refused_setting_is_raised"],
+    ),
+    (
+        "F12 the feed's close gets a deadline of its own after the job loop's",
+        APP,
+        "        await index_feed.close(timeout=max(0.0, deadline - loop.time()))\n",
+        "        await index_feed.close(timeout=seconds)\n",
+        [f"{OFFLINE}::test_the_job_loop_and_the_feed_stop_under_one_deadline"],
+    ),
+    (
+        "F13 the feed is started before what can raise ahead of the try",
+        APP,
+        "        else None\n    )\n\n    try:\n        yield\n",
+        '        else None\n    )\n    _sweep = float(os.environ.get("X") or 1)\n\n    try:\n        yield\n',
+        [f"{OFFLINE}::test_the_lifespan_starts_the_feed_last_and_stops_it_before_the_stores"],
     ),
     (
         "F10 a feed's close leaves its client open",
