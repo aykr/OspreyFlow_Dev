@@ -207,3 +207,4 @@ platform-b	v060-step10	Housekeeping	Client install
 orchestrator	v060-release	Housekeeping	Client install
 orchestrator	v060-post-merges	Housekeeping	Housekeeping
 orchestrator	v060-close	Housekeeping	Housekeeping
+demo	v060-gemini-checks	Models and maps	Small
