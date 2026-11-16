@@ -398,7 +398,11 @@ in production and discovering the differences during an investigation.
 > promotion, deletion); a rolled-back write records nothing; and the narrow read gives each node as stored, whole,
 > or `None` for one that is not live. It is unfiltered by design, so it is a port apart from GraphPort, and no
 > route may name it (`tests/services/search_index/test_index_feed_reach.py`); access is applied in the query to the
-> index instead (ADR-149, `services/api/search_access.py`).
+> index instead (ADR-149, `services/api/search_access.py`). One process at a time drains the outbox, under a lease
+> in Valkey: the worker where the profile renders one (cluster, cloud-platform), and the Conduit's own lifespan,
+> beside its job loop, where none is rendered (local-lite, Small; ADR-150 Amendment 4,
+> `tests/services/search_index/test_conduit_feed_live.py`). A rebuild leaves the outbox alone, and the feed
+> re-applies its rows after it.
 
 ## 7. Capacity guidance
 

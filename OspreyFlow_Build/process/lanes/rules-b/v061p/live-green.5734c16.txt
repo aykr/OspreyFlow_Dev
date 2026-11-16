@@ -1,0 +1,66 @@
+# Green at 5734c16, stack b, lease rules-b of 2026-11-16T18:34:16Z: the live file, test_feed_live, both search leak files, test_route_rights, test_scheduler_lifespan
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Core/), logged at osprey-runs/rules-b.meta/runs/20261116T184259Z-85fbf198/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -p no:randomly -q -s ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py ../OspreyFlow_Build/tests/services/search_index/test_feed_live.py ../OspreyFlow_Build/tests/services/search_index/test_search_leak_live.py ../OspreyFlow_Build/tests/services/search_index/test_ask_whole_case_leak_live.py ../OspreyFlow_Build/tests/services/api/test_route_rights.py ../OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py
+
+the backlog of 2000: 2000 drained in 1.0 s (1963 rows/s, from the Conduit's start, its lease wait included)
+a write was searchable 0.79 s after it committed (lease 30 s)
+.....................................127.0.0.1 - - [16/Nov/2026 18:44:00] "GET /jwks.json HTTP/1.1" 200 -
+.127.0.0.1 - - [16/Nov/2026 18:44:10] "GET /jwks.json HTTP/1.1" 200 -
+.127.0.0.1 - - [16/Nov/2026 18:44:23] "GET /jwks.json HTTP/1.1" 200 -
+...
+=============================== warnings summary ===============================
+.venv/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/osprey-runs/rules-b/OspreyFlow_Core/.venv/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+  /root/osprey-runs/rules-b/OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py:174: ConduitStartTime: a Conduit came up in 12.3 s (http://127.0.0.1:50413)
+    conduit = _ConduitInstance(
+
+tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger
+  /root/osprey-runs/rules-b/OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py:73: ConduitStartTime: a Conduit came up in 12.2 s (http://127.0.0.1:39027)
+    conduit = _ConduitInstance(jwks_url)
+
+tests/services/api/test_scheduler_lifespan.py::test_a_job_enqueued_on_a_conduit_with_no_worker_service_is_run_by_the_conduit
+  /root/osprey-runs/rules-b/OspreyFlow_Build/tests/services/api/test_scheduler_lifespan.py:123: ConduitStartTime: a Conduit came up in 12.3 s (http://127.0.0.1:48225)
+    conduit = _ConduitInstance(jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit"})
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+---------------------- 5 unmarked test(s) reached a store ----------------------
+tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too: ArcadeDB on port 2492, Postgres on port 55434, Valkey on port 6380
+tests/services/api/test_scheduler_lifespan.py::test_a_job_enqueued_on_a_conduit_with_no_worker_service_is_run_by_the_conduit: Valkey on port 6380
+tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger: Postgres on port 55434
+============================= slowest 30 durations =============================
+36.69s call     tests/services/api/test_scheduler_lifespan.py::test_the_conduits_own_tick_judges_a_due_schedule_and_writes_the_ledger
+21.86s call     tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+14.36s call     tests/services/api/test_scheduler_lifespan.py::test_a_job_enqueued_on_a_conduit_with_no_worker_service_is_run_by_the_conduit
+11.87s call     tests/services/api/test_route_rights.py::test_a_person_from_the_organisation_with_no_role_reads_nothing_on_any_route
+9.97s call     tests/services/api/test_route_rights.py::test_each_right_is_refused_without_it_and_needs_the_case_level_too
+9.49s call     tests/services/api/test_route_rights.py::test_each_guide_answers_only_whom_its_place_opens_signed_in_for_real
+1.38s call     tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+1.27s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[cleared-for-R]
+1.08s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[classification]
+1.03s teardown tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.93s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[not-for-R]
+0.91s call     tests/services/search_index/test_search_leak_live.py::test_names_exact_every_word_sounds_alike_and_spelt_alike
+0.85s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[public-other-unit]
+0.83s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_fuzzy_expansion
+0.79s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[handling_code]
+0.78s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[datasets]
+0.76s call     tests/services/search_index/test_ask_whole_case_leak_live.py::test_the_ask_leak_check_finds_the_access_filter_dropped
+0.75s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_each_filter_part_dropped[text_unit]
+0.74s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_word_rarity_when_scoring_is_not_strict
+0.72s call     tests/services/search_index/test_search_leak_live.py::test_the_leak_check_finds_the_pending_nodes_counted
+0.67s call     tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.60s call     tests/services/search_index/test_search_leak_live.py::test_a_reader_gets_the_same_answers_with_hidden_records_present_or_absent[empty-case]
+0.58s call     tests/services/search_index/test_ask_whole_case_leak_live.py::test_whole_case_reads_the_same_with_hidden_records_present_or_absent[cleared-for-R]
+0.56s call     tests/services/search_index/test_ask_whole_case_leak_live.py::test_whole_case_reads_the_same_with_hidden_records_present_or_absent[public-other-unit]
+0.55s call     tests/services/search_index/test_ask_whole_case_leak_live.py::test_whole_case_reads_the_same_with_hidden_records_present_or_absent[not-for-R]
+0.50s call     tests/services/search_index/test_ask_whole_case_leak_live.py::test_whole_case_reads_the_same_with_hidden_records_present_or_absent[empty-case]
+0.47s setup    tests/services/search_index/test_feed_live.py::test_a_deletion_takes_the_document_and_its_text_out
+0.46s setup    tests/services/search_index/test_feed_live.py::test_a_merge_re_reads_both_ends_and_adds_no_cluster
+0.46s teardown tests/services/search_index/test_feed_live.py::test_the_drift_check_finds_each_difference_and_the_rebuild_mends_them
+0.46s call     tests/services/search_index/test_search_leak_live.py::test_the_world_is_not_vacuous
+42 passed, 4 warnings in 134.82s (0:02:14)
+Wall time: 136 s, exit 0 (stack b, the lease rules-b took at 2026-11-16T18:34:16Z; set-up before it 8 s)

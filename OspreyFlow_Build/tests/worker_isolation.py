@@ -72,6 +72,7 @@ STALE_AFTER = 6 * 3600
 SERIAL = {
     "tests/services/api/test_statelessness.py": "two uvicorn Conduits, which open ArcadeDB's ospreyflow themselves",
     "tests/services/api/test_statelessness_clickhouse.py": "the same two uvicorn Conduits",
+    "tests/services/search_index/test_conduit_feed_live.py": "a uvicorn Conduit, which opens ArcadeDB's ospreyflow itself",
     "tests/ingest/test_pid_seed_live.py": "runs scripts.seed_pid (ospreyflow) in a child, with a fixed scratch folder",
     "tests/resolve/test_trigger.py": "Valkey(host='localhost', port=6379, db=0)",
     "tests/scenarios/test_phase6_extraction_and_resolution.py": "Valkey(..., db=0)",

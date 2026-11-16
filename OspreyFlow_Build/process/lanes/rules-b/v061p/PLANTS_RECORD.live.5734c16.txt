@@ -1,0 +1,11 @@
+# Live plants at 5734c16 (F1-F6; F7-F10 added after, offline), stack b, lease rules-b of 2026-11-16T18:34:16Z
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Core/), logged at osprey-runs/rules-b.meta/runs/20261116T183815Z-929f1c00/log: .venv/bin/python ../OspreyFlow_Build/process/lanes/rules-b/v061p/plants.py
+built: GREEN - 16 passed, 1 warning in 55.44s
+F1 the Conduit never starts the feed (236e31e's behaviour) [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls | 1 failed, 1 warning in 142.99s (0:02:22)
+F2 the Conduit feeds without an OpenSearch to feed [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_conduit_feeds_the_index_only_where_it_runs_the_job_loop_and_there_is_one[conduit-no-index] | 1 failed, 4 passed in 6.16s
+F3 the Conduit feeds beside a worker [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_cluster_s_conduit_never_feeds_beside_its_worker | 1 failed in 6.38s
+F4 the worker runs an indexer of its own beside the helper [OspreyFlow_Core/services/api/worker_main.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_worker_and_the_conduit_start_the_feed_one_way | 1 failed in 1.33s
+F5 the Conduit reads the feed's unfiltered read itself [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py::test_no_route_or_other_module_reaches_the_indexers_reads | 1 failed in 2.42s
+F6 a rebuild clears the outbox rows it covered [OspreyFlow_Core/services/search_index/rebuild.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it | 1 failed in 3.41s
+restored: GREEN - 16 passed, 1 warning in 35.73s
+Wall time: 267 s, exit 0 (stack b, the lease rules-b took at 2026-11-16T18:34:16Z; set-up before it 12 s)

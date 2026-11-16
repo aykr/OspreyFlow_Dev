@@ -775,6 +775,12 @@ a distinct consumer name from its hostname — which is the property the arrange
 on, since Valkey's consumer group delivers each entry to exactly one consumer but keys its
 pending-entries list by consumer name.
 
+**On local-lite and Small no worker container is rendered** (`harness.render.job_worker_place`; the three workers above
+are the job worker's replicas where a profile renders it): the Conduit's own lifespan drains every job stream
+(`OSPREY_JOB_WORKER=conduit`) and, where the deployment runs OpenSearch, **feeds the search index too** (ADR-150
+Amendment 4). So an install's demo packs and every later load reach search as they are written, with no rebuild; a
+backlog left by an older release drains by itself once the Conduit runs this one.
+
 **What "wait for health" waits on — owner's decision, 24 September 2026.** The Conduit exposes
 `GET /healthz`, unauthenticated, fixed body, touching no store and disclosing nothing (§3.0 of
 `03_CONDUIT_MIDDLEWARE.md` has the route and the reasoning), and its image declares a health check

@@ -223,35 +223,31 @@ async def main() -> int:  # pragma: no cover - exercised as a process, not in-pr
         with suppress(NotImplementedError):
             loop.add_signal_handler(sig, stop.set)
 
-    # ADR-150 decision 2: where this shape has an OpenSearch, one replica at a time feeds it.
-    indexing: asyncio.Task[None] | None = None
-    closing: list[Any] = []
-    from services.search_index.run import configured
+    # ADR-150 decision 2: where this shape has an OpenSearch, one replica at a time feeds it,
+    # started as the Conduit starts its own where no worker is rendered (Amendment 4).
+    feed = None
+    texts = None
+    from services.search_index.run import configured, start_index_feed
 
     if configured():
-        from services.search_index.client import SearchIndexConfig, search_client
-        from services.search_index.indexer import SearchIndexer
-        from services.search_index.run import run_indexer
-
         from .review import ExtractionCandidateStore
 
-        search_config = SearchIndexConfig.from_env()
-        search = search_client(search_config)
         texts = await ExtractionCandidateStore.connect(PostgresConfig.from_env().dsn)
-        closing += [search.close, texts.close]
-        indexer = SearchIndexer(graph, texts, search, search_config.alias, load_default_ontology())
-        indexing = asyncio.create_task(run_indexer(indexer, client, consumer_name(), stop))
-        logger.info("worker %s: feeding the search index %s", consumer_name(), search_config.alias)
+        feed = start_index_feed(
+            graph, texts, client, consumer_name(), load_default_ontology(), stop=stop
+        )
+        if feed is not None:
+            logger.info("worker %s: feeding the search index %s", consumer_name(), feed.alias)
 
     logger.info("worker %s: started for %s", consumer_name(), sorted(registered_job_types()))
     try:
         await run_forever(worker, sorted(registered_job_types()), stop=stop)
     finally:
         stop.set()
-        if indexing is not None:
-            await indexing
-        for close in closing:
-            await close()
+        if feed is not None:
+            await feed.close()
+        if texts is not None:
+            await texts.close()
         await alerts.close()
         await judgements.close()
         await datasets.close()
