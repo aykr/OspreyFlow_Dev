@@ -177,6 +177,11 @@ around: one view switch, a case line that says what is open, and "view" kept for
   Valkey is the platform's own over TLS with a password, it was refused as soon as a dashboard was
   registered, and restarted again and again without pulling anything. It now opens Valkey as the rest
   of OspreyFlow does. The Lite and Small shapes were not affected.
+- **A Reports Viewer reads in Superset and changes nothing there.** Superset's own Gamma role, which a
+  Reports Viewer was given, let them save dashboards and charts. They are now given a read-only role, and
+  so is every account at its first sign-in. A builder of reports reads every board's figures in Superset,
+  whatever the case or clearance, so the guides now say to give that right only to people cleared for
+  them all.
 
 ## v0.5.1 — 2026-11-14
 

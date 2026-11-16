@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.23** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 2.24** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.24 | 2026-11-16 | §6a.7's Superset: a Reports Viewer is Superset's OspreyReader, which reads and changes nothing there (Superset's own Gamma saves dashboards and charts; found by v0.6.0's package test, the owner's ruling of 16 November), and every account holds it; a builder (`manage_dashboards`) reads the whole reporting mart in their own session, so the right is for people cleared for every dashboard identity's cases (ADR-148 Amendment 21). |
 | 2.23 | 2026-11-15 | §6a.7: a service identity on Entra ID must hold this API's app role `OspreyFlow.Run` (ADR-148 Amendment 20; v0.6.0 #18), defined on the API's registration and granted to the orchestrator's application; §6a.2's poc tables list it beside `Dashboard.Read`. §6a.7 and §8's `run` row: `ospreyflow run` on Entra ID sends `OSPREY_TOKEN_SCOPE`, the API's `/.default` scope, without which Entra issues no token (the owner, beside #18). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.22 | 2026-11-15 | §6a.9, Bedrock in London (the owner's ruling 17): the example's model is `amazon.nova-pro-v1:0`, a model AWS serves in-Region in London; Bedrock in London means Amazon Nova and the Titan embeddings, not current Claude models, which London serves only through the EU and global profiles the region rule refuses; Claude through AWS's EU profile is not offered in v0.6.0. Held by `tests/test_admin_guide_bedrock_london.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 2.21 | 2026-11-15 | §10's *Keys*, §8's `models key` row and §4.1's guided install, as the code has done since ADR-135 Amendment 2 (the owner followed the guide on 15 November and it was wrong): a key is entered in *Admin › Models* with **Enter key** (**Rotate key**) and **Set the key**, write-only, kept by the model gateway alone and used with nothing restarted; **Remove key** beside it; neither for an engine on the gateway's IAM role. The install hands a key from `deployment.env` to the gateway and removes its line; `ospreyflow models key` runs the Conduit's own key path and restarts nothing. Held by `tests/test_admin_guide_model_keys.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -1770,7 +1771,12 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
   `GET /v1/me/rights` alone (any other route answers 403 `route_not_admitted`). Superset's role is
   the person's rights here, read again at each sign-in: `administer_system` is its Admin,
   `manage_dashboards` its builder (Alpha), whom *Build a report* in the Glass sends there,
-  `read_reports` its read-only Gamma, and a person with none of them is not let in.
+  `read_reports` its OspreyReader, which reads and changes nothing there (every account holds it too),
+  and a person with none of them is not let in.
+  **A builder reads the whole reporting mart** (ADR-148 Amendment 21): in their own Superset session,
+  every figure every dashboard identity's report sync pulled, whatever its clearance or case. The rule
+  keeping a board's rows to its own dashboard identity holds only for a board shown in the Glass.
+  **Give `manage_dashboards` only to people cleared for every dashboard identity's cases.**
 - **A dashboard identity** (ADR-148 Amendment 10), registered in *Admin › Dashboard identities* by its app
   registration's application id and a name (the dashboard's), signs the report sync in with an
   app-only token carrying the app role `Dashboard.Read`; it reads the case list and the report feed
