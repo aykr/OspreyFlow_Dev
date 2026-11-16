@@ -40279,7 +40279,11 @@ item; decisions 1 to 4 built by the case lane, 5 and 6 by case-b.
      Showing or hiding moves the drawing area's top once, by the toolbar's height, the graph keeping its centre and
      zoom (on the Graph the toolbar lies over the canvas, so the canvas element itself moves only by what the slim line
      gives back).
-   - The shortcut is **Alt+Shift+T** (Option+Shift+T on a Mac), outside text fields, listed in "?".
+   - The shortcut is **T**, with no modifier, while the graph's canvas has focus, as F, L and G are (so it is no
+     character key shortcut outside the canvas: WCAG 2.1.4), listed in "?". The Map has the buttons only; T on the map's
+     own container is on v0.6.1's list. (The owner's ruling, 16 November 2026: the first choice, Alt+Shift+T, clashed
+     with Chrome's own Shift+Alt+T, which moves focus to the browser's toolbar on Windows and Linux; case-b's record,
+     `process/lanes/case-b/v061-glass-rows-ac/`.)
    - Remembered per signed-in analyst in the browser (`ospreyflow.glass.toolbar.<username>`, as the Studio remembers
      its mode, ADR-140 decision 3). One setting for the Graph and the Map; the Drawing board's head, its title, is never
      hidden (ruling 4).
@@ -40291,7 +40295,7 @@ strip, focus on the name, *Details*, the alert's way back), `keyboard/views.spec
 controls), `keyboard/rules-place.spec.ts`, `keyboard/view-over-cap.spec.ts` and `keyboard/case-line-type.spec.ts` (the
 fold's order). The keyboard registry's `open-a-saved-views-details-from-the-case-line-by-keyboard`. Decisions 5 and 6:
 `keyboard/glass-toolbar.spec.ts`; `keyboard/keyboard.spec.ts`'s `match-strictness-by-keyboard`,
-`hide-and-show-the-toolbar-by-keyboard` and `alt-shift-t-hides-and-shows-the-toolbar`; `src/App.chrome.test.tsx`'s
+`hide-and-show-the-toolbar-by-keyboard` and the T key's own case; `src/App.chrome.test.tsx`'s
 "Match strictness in the canvas toolbar" and "a toolbar that can be hidden" blocks; `src/canvas/toolbarVisibility.test.ts`;
 `src/resolution/ThresholdControl.test.tsx`. The red records and plants are `process/lanes/case/gates/glass-rows-*.log`
 (with `process/lanes/case/glass-rows/plants.sh`) and `process/lanes/case-b/v061-glass-rows-ac/`.
