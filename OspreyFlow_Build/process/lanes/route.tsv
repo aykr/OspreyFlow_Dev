@@ -32,7 +32,7 @@ rd	Package test's find: resolution for Person works with no date of birth anywhe
 5	Release v0.6.0 on the owner's word given in advance: the product repository and its tag, the release workflow's signed images	orchestrator	2026-11-16	2026-11-16	y	4,c2	-
 rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
 gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-
-ws	The websites ospreyflow.org and ospreyflow.net: LIVE on http since 16 Nov ~06:40Z (the owner's DNS in); HTTPS switched on as GitHub issues each certificate	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
+ws	The websites ospreyflow.org and ospreyflow.net: LIVE on HTTPS since 16 Nov 06:54Z (certificates issued, HTTPS enforced, http redirects)	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
 p3	ospreyflow.app, the standard-look demo (Part 3): offline work done; the server proof, install and cutover after the GOV.UK rebuild; needs the owner's O1-O8 (DNS, Porkbun key, lease, window)	platform	2026-11-15	2026-11-18	n	gm	platform:part3
 gB	v0.6.1 Glass rows, B: the case line carries the state (Whole case, or Saved view with Details), the whole-case row gone, ADR-145 Am 19 (merges after v0.6.0)	case	2026-11-16	2026-11-17	n	-	case:v061-glass-rows
 gAC	v0.6.1 Glass rows, A and C: Match strictness in the toolbar; Hide and Show toolbar, Alt+Shift+T, remembered per analyst; Map too (merges after B)	case-b	2026-11-16	2026-11-17	n	-	case-b:v061-glass-rows-ac
