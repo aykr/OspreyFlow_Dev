@@ -29,6 +29,7 @@ import { Timeline } from "../src/timeline/Timeline";
 import { createWorkingSet } from "../src/workingset/store";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
 import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
+import { loadLookFaces } from "./lookFaces";
 import { ResolutionThresholdControl } from "../src/resolution/ThresholdControl";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
 
@@ -408,11 +409,8 @@ if (wantsWidth > 0) {
   container.style.width = `${wantsWidth}px`;
   // Widths are measured in the product's own faces, as `src/main.tsx` loads them.
   await import("../src/design/fonts");
-  // The faces asked for by name: `fonts.ready` alone resolves before any text has asked for them (see
-  // glass-toolbar-harness.tsx).
-  const uiFace = getComputedStyle(document.documentElement).getPropertyValue("--ui").trim();
-  await Promise.all(["400", "600"].map((weight) => document.fonts.load(`${weight} 12px ${uiFace}`)));
-  await document.fonts.ready;
+  // The look's own faces, never left to blank the page (`lookFaces.ts`).
+  await loadLookFaces(["400", "600"]);
 }
 
 // `?fixture=lit` is ADR-128's (B3, select what is lit): the chain above with the real timeline under

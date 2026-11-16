@@ -1,0 +1,64 @@
+
+Running 2 tests using 1 worker
+
+[WebServer] 11:38:58 [vite] (client) [Unhandled error] NetworkError: A network error occurred.
+[WebServer] 
+  ✘  1 keyboard/glass-toolbar.spec.ts:194:3 › glass-toolbar-harness.html is drawn when the font files are refused (5.3s)
+[WebServer] 11:39:04 [vite] (client) [Unhandled error] NetworkError: A network error occurred.
+[WebServer] 
+  ✘  2 keyboard/glass-toolbar.spec.ts:194:3 › harness.html is drawn when the font files are refused (5.3s)
+
+
+  1) keyboard/glass-toolbar.spec.ts:194:3 › glass-toolbar-harness.html is drawn when the font files are refused 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('application', { name: 'Network canvas' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('application', { name: 'Network canvas' }) with timeout 5000ms
+      - waiting for getByRole('application', { name: 'Network canvas' })
+
+
+      197 |     await page.route(/\.woff2?(\?.*)?$/, (route) => route.fulfill({ status: 403, body: "refused" }));
+      198 |     await page.goto(`/keyboard/${harness}`);
+    > 199 |     await expect(page.getByRole("application", { name: "Network canvas" })).toBeVisible();
+          |                                                                             ^
+      200 |     expect(errors).toEqual([]);
+      201 |   });
+      202 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:199:77
+
+    Error Context: test-results/glass-toolbar-glass-toolba-39202--the-font-files-are-refused/error-context.md
+
+  2) keyboard/glass-toolbar.spec.ts:194:3 › harness.html is drawn when the font files are refused ──
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('application', { name: 'Network canvas' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('application', { name: 'Network canvas' }) with timeout 5000ms
+      - waiting for getByRole('application', { name: 'Network canvas' })
+
+
+      197 |     await page.route(/\.woff2?(\?.*)?$/, (route) => route.fulfill({ status: 403, body: "refused" }));
+      198 |     await page.goto(`/keyboard/${harness}`);
+    > 199 |     await expect(page.getByRole("application", { name: "Network canvas" })).toBeVisible();
+          |                                                                             ^
+      200 |     expect(errors).toEqual([]);
+      201 |   });
+      202 | }
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/glass-toolbar.spec.ts:199:77
+
+    Error Context: test-results/glass-toolbar-harness-html-f00cc--the-font-files-are-refused/error-context.md
+
+  2 failed
+    keyboard/glass-toolbar.spec.ts:194:3 › glass-toolbar-harness.html is drawn when the font files are refused 
+    keyboard/glass-toolbar.spec.ts:194:3 › harness.html is drawn when the font files are refused ───

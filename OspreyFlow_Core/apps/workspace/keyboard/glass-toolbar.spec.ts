@@ -133,6 +133,12 @@ for (const look of ["dark", "govuk"] as const) {
       const strictness = bar.getByRole("button", { name: "Match strictness: Balanced" });
       const hide = bar.getByRole("button", { name: "Hide toolbar" });
       await expect(strictness).toBeVisible();
+      // A width is the product's only in the product's face: where it could not load (a server that refuses
+      // node_modules), say so rather than measure the fallback.
+      expect(
+        await page.evaluate(() => document.fonts.check(`12px ${getComputedStyle(document.documentElement).getPropertyValue("--ui")}`)),
+        "the look's face did not load; is the server allowed to serve node_modules?",
+      ).toBe(true);
       expect(Math.round((await bar.boundingBox())!.width)).toBe(width);
       await expect(strictness).toHaveText(compact ? "Strictness: Balanced ▾" : "Match strictness: Balanced ▾");
       await expect(hide).toHaveText(compact ? "Hide" : "Hide toolbar");
@@ -180,6 +186,20 @@ test("under GOV.UK too: its face, a web face as well, is loaded before the narro
   expect(await page.evaluate(() => document.fonts.check(`12px ${getComputedStyle(document.documentElement).getPropertyValue("--ui")}`))).toBe(true);
   expect((await bar.boundingBox())!.height).toBeLessThanOrEqual(37);
 });
+
+// case's merge tree again: its node_modules is a link outside the worktree, which Vite refuses to serve, so the font files
+// never arrived, `document.fonts.load` rejected, and the harnesses' top-level await left both pages blank (38 cases red).
+// A face that cannot load must leave the page drawn, in its fallback face; a case that measures widths says so plainly.
+for (const harness of ["glass-toolbar-harness.html", "harness.html?width=900"]) {
+  test(`${harness.split("?")[0]} is drawn when the font files are refused`, async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.route(/\.woff2?(\?.*)?$/, (route) => route.fulfill({ status: 403, body: "refused" }));
+    await page.goto(`/keyboard/${harness}`);
+    await expect(page.getByRole("application", { name: "Network canvas" })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+}
 
 // The owner's brief: Hide toolbar, Show toolbar and the strictness control meet the contrast floor in all three themes
 // (the adviser's sketch had Show toolbar unreadable in the light theme).

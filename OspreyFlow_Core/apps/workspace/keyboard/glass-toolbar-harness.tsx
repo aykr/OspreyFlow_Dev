@@ -14,6 +14,7 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/design/fonts";
 import { applyHarnessBrand } from "./brandHarness";
+import { loadLookFaces } from "./lookFaces";
 import { Button } from "../src/design/primitives/Button";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { HideToolbarButton, ShowToolbarButton } from "../src/canvas/ToolbarToggle";
@@ -40,14 +41,8 @@ declare global {
 const params = new URLSearchParams(window.location.search);
 const brand = await applyHarnessBrand();
 if (brand !== "govuk" && params.get("theme") === "light") applyTheme("light");
-// The product's faces loaded before anything is drawn or measured: `document.fonts.ready` alone resolves before any text
-// has asked for them, so on a cold or busy server the widths were measured in the wider fallback face (case's merge
-// tree, 16 November 2026). The look's own face is read from `--ui` (Atkinson Hyperlegible Next, or GDS Transport under
-// GOV.UK, a web face too), so each look waits for its own.
-const uiFace = getComputedStyle(document.documentElement).getPropertyValue("--ui").trim();
-await Promise.all(["400", "600", "700"].map((weight) => document.fonts.load(`${weight} 12px ${uiFace}`)));
-await document.fonts.load('400 12px "IBM Plex Mono"');
-await document.fonts.ready;
+// The look's own faces loaded before anything is drawn or measured, and never left to blank the page (`lookFaces.ts`).
+await loadLookFaces(["400", "600", "700"], ['400 12px "IBM Plex Mono"']);
 
 const userParam = params.get("user");
 const username = userParam === "none" ? null : (userParam ?? "osprey-demo-analyst");
