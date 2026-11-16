@@ -106,7 +106,7 @@ async def run(env: Mapping[str, str]) -> None:
     if password:
         await mart.ensure_reader(reader, password)
     cfg = ValkeyConfig.from_env()
-    valkey = Valkey(host=cfg.host, port=cfg.port, db=cfg.db)
+    valkey = Valkey(**cfg.client_kwargs())
     log.info("report-sync: %d dashboard(s), every %d s", len(boards), interval)
     try:
         while True:

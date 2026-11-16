@@ -646,7 +646,7 @@ async def _main(argv: list[str] | None = None) -> int:
     dsn = PostgresConfig.from_env().dsn
     datasets = await PostgresDatasetStore.connect(dsn)
     valkey_config = ValkeyConfig.from_env()
-    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    valkey = Valkey(**valkey_config.client_kwargs())
     cases = await _cases(dsn)
     try:
         await stamp(
