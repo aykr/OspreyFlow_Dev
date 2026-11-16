@@ -143,3 +143,4 @@ suites, a fresh Small install on the test server checked in a browser; no cloud-
 the GOV.UK demo is updated to it (the owner's "apply it govuk theme"), proposed in one line first. The name `v0.6.0-1`
 was declined: the release tooling, the update check and fresh_only accept vMAJOR.MINOR.PATCH only (harness/release.py:28).
 The closing of this phase waits for the patch; case-b and rules-b reopen for it.
+- (16 Nov ~18:30Z) Gemini's timeouts on the GOV.UK demo explained by the owner's direct call: Google answered 503 UNAVAILABLE ('high demand') for gemini-3.8-flash in 2 s; the gateway retries a 503 past the Conduit's 30 s test. v0.6.2: Test the connection reports the provider's own refusal (a 503's words) rather than 'could not be reached'.
