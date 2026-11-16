@@ -193,3 +193,4 @@ platform-b	v060-search-jobs-pg	S	done	v0.6.0 stage 4 fix (the owner, 15 Nov): th
 orchestrator	v060-c2-ci	S	building	CI on the new candidate 0c158b8 (run 43813698501), then platform-b's dry run re-checked on it
 demo	v060-govuk-rebuild	M	todo	The GOV.UK demo rebuilt fresh from v0.6.0, from demo/REBUILD_2026-11-18.md (with listen_address)
 case	v061-glass-rows	M	building	v0.6.1 first item (the owner, 16 Nov): fewer rows above the canvas, a toolbar that can be hidden; the pre-build answers first (estimate, code check, proposals, ADR draft, measured gain)
+rules-b	v060-resolve-empty-dob	S	building	v0.6.0 (the owner, 16 Nov): resolution for Person works when no Person has a date_of_birth (an all-empty date column typed as a date); red first

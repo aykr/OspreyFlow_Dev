@@ -191,3 +191,4 @@ platform-b	v060-search-jobs-pg	Housekeeping	Client install
 orchestrator	v060-c2-ci	Housekeeping	Client install
 demo	v060-govuk-rebuild	Housekeeping	Small
 case	v061-glass-rows	Four places, the Glass and Admin	After the client's install
+rules-b	v060-resolve-empty-dob	Housekeeping	Client install
