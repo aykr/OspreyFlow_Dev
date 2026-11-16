@@ -116,3 +116,16 @@ the post-release merges (ad1758c, 74cc258), the GOV.UK rebuild and the owner's G
 Closed at once (16 Nov): case-b, rules-b, platform-b (step 10 its last job). Then case (deputy role handed back), demo
 (after the rebuild's checks), platform (after Part 3), the orchestrator last. docs was already paused (44e2d3e). v0.6.1
 is not started until the owner opens it.
+
+## Part 3 moves to v0.6.1; GOV.UK's image tags repaired (the owner, 16 Nov ~18:10Z)
+Stage P (started 17:56Z) stopped after P3's first install: p3-sharer's build moved the shared `osprey/<service>:local`
+tags (harness/render.py:601) to Part 3's code, so GOV.UK's containers ran on with their images untagged (nothing restarted;
+a recreate without a build would have started Part 3's code in GOV.UK). The owner's rulings: GOV.UK's four tags rebuilt from
+/opt/ospreyflow-v0.6.0 with compose `build` only (no container touched); Part 3 stops tonight, p3-* torn down, and moves to
+v0.6.1. Added to the v0.6.1 list:
+- Named Small deployments get their own image tags (render.py:601), red first; before Part 3's stage B.
+- The install's sign-in step on a named Small reads `deployments/small` (cli/ospreyflow/main.py:1056; repair-sign-in uses ctx.deployed().name).
+- The Porkbun API key's "dns" scope (the owner's, in Porkbun's API Access) before stage P's P6.
+- From the GOV.UK rebuild: the CLI follows the recorded home over the current folder on install (home.py find_product);
+  a fresh install from a git archive cannot seed demo packs (seed_internal.py:611); the places stage attaches the gazetteer
+  to no case; `apply` says "nothing was started again" while a service is down and names `start --name default` on Small.
