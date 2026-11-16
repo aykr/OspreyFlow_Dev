@@ -120,7 +120,12 @@ async def _job_state(job_id: str) -> str | None:
 def test_a_job_enqueued_on_a_conduit_with_no_worker_service_is_run_by_the_conduit(jwks_url: str) -> None:
     """local-lite renders `OSPREY_JOB_WORKER=conduit`: no worker image runs there, so the Conduit's
     own lifespan drains every job stream. Red on main: the job stays `pending` forever."""
-    conduit = _ConduitInstance(jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit"})
+    # No OpenSearch, whatever the runner exports: this case is the job loop's, and a Conduit told
+    # where OpenSearch is would feed the shared outbox too (ADR-150 Amendment 4) and hold the
+    # indexer's lease after it is killed. The feed is `test_conduit_feed_live.py`'s.
+    conduit = _ConduitInstance(
+        jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit", "OPENSEARCH_HOST": "", "OPENSEARCH_URL": ""}
+    )
     try:
         job_id = asyncio.run(_submit_a_compute_job())
         deadline = time.monotonic() + 30
