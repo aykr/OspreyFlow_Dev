@@ -1341,7 +1341,15 @@ def change() -> None:
     admin = {"Authorization": f"Bearer {token()}"}
     made = _load_file(c, admin, case, "r1-after-the-set.csv",
                       "family_name,given_names,phone\nR1AfterTheSet,Person,+447700900789\n")
-    seen = (_found(c, admin, case, "R1AfterTheSet"), _found(c, admin, case, "R1Synthetic"))
+    # The index follows the load (ADR-150 Amendment 3): asked again every 5 s for up to 60 s, as the check's
+    # own load is (row 5 of v0.6.0's package test, 16 November 2026; tests/test_r1_kind_search_wait.py).
+    after = 0
+    for _ in range(12):
+        after = _found(c, admin, case, "R1AfterTheSet")
+        if after:
+            break
+        time.sleep(5)
+    seen = (after, _found(c, admin, case, "R1Synthetic"))
     files = _source_files(c, admin, case)
     record("change").write_text(f"made {made}; found after/before {seen}; files {files}\n")
     print(f"after the set: {made} entities made; R1AfterTheSet found {seen[0]}, R1Synthetic found {seen[1]}; files {files}")
