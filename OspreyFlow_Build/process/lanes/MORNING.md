@@ -7,7 +7,8 @@ $OLD/deploy/generated/small/ and started a v0.5.0-image stack on empty volumes (
 still admits only the owner). The demo lane stopped it by PID at 16:10:34Z. Safe: the verified backup
 /srv/ospreyflow/backups/small/20261116T160827Z-small-2be985a… (dry run passed; config/osprey.yaml in it); the tiles (A)
 built; the model caches kept; $NEW untouched. The way back or forward is the owner's (§2 item 6). Record: demo/REPORT_2026-11-16_v060.md
-(lane/demo 5e3739a); logs /root/rebuild-2026-11-16/ on the server.
+(lane/demo 5e3739a); logs /root/rebuild-2026-11-16/ on the server. **The owner chose FORWARD (~16:20Z):** the stray stack down (model caches
+kept), $OLD/osprey.yaml put back from the backup, step 4 rerun with OSPREYFLOW_HOME=$NEW, the recorded home moved to $NEW after the checks.
 
 **16 Nov 05:50Z, the orchestrator: no progress overnight.** platform-b did not act on the 22:30Z fix brief (its last beat
 was ~22:00Z; its session is open, most likely held at an approval prompt or the message unread). The orchestrator did not
