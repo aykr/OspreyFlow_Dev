@@ -1,3 +1,14 @@
+<!-- STOP, at the top as the owner's word (v060/OWNER_WORD_IN_ADVANCE §2) asks -->
+**STOP, 16 Nov 16:10Z: the GOV.UK rebuild stopped at window step 4; the demo is down.** The fresh install acted on the
+OLD folder /opt/ospreyflow, not /opt/ospreyflow-v0.6.0: v0.6.0's CLI finds its product from OSPREYFLOW_HOME, then the
+recorded home (/home/osprey/.config/ospreyflow/home = /opt/ospreyflow, 4 Nov), and only then the current folder
+(cli/ospreyflow/home.py find_product), so the sheet's `cd $NEW` did nothing. The install rewrote $OLD/osprey.yaml and
+$OLD/deploy/generated/small/ and started a v0.5.0-image stack on empty volumes (443 on 185.154.146.242 only; the firewall
+still admits only the owner). The demo lane stopped it by PID at 16:10:34Z. Safe: the verified backup
+/srv/ospreyflow/backups/small/20261116T160827Z-small-2be985a… (dry run passed; config/osprey.yaml in it); the tiles (A)
+built; the model caches kept; $NEW untouched. The way back or forward is the owner's (§2 item 6). Record: demo/REPORT_2026-11-16_v060.md
+(lane/demo 5e3739a); logs /root/rebuild-2026-11-16/ on the server.
+
 **16 Nov 05:50Z, the orchestrator: no progress overnight.** platform-b did not act on the 22:30Z fix brief (its last beat
 was ~22:00Z; its session is open, most likely held at an approval prompt or the message unread). The orchestrator did not
 check that the brief was picked up: its miss. The brief is resent; the fix, CI, a new candidate and the package test
