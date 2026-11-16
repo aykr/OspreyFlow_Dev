@@ -205,3 +205,4 @@ orchestrator	v060-c3-ci	S	done	CI GREEN on 529f0f4, run 43883311468, 41 of 41 jo
 platform-b	v060-stage4-glass	M	done	the package test on the Glass candidate: fb7f336 stopped at 5/6 for the a11y fix; b6d33ce PASSED, every row
 platform	v060-step6-all-pods	S	done	v0.6.0 (case as deputy, 16 Nov; platform-b row 9b on ea5fc61): INSTALL step 6's token-version check reads every api pod; red first	lane/platform-v060-step6-all-pods
 platform-b	v060-stage4-ea5	S	done	the package test on ea5fc61, rows 0-9; ended at 9b's finding
+platform-b	v060-step10	S	done	v0.6.0 RELEASE_STEPS step 10, the client's view: PASS (16 images pulled anonymously by digest, the chart 0.6.0 byte-identical to the asset, harness.signatures green and shown red three ways, check_for_update logic offers v0.5.1 to v0.6.0); records ~/osprey-runs/platform-b.v060-step10/ on the test server	-
