@@ -2077,28 +2077,17 @@ export function App() {
       {/* ADR-145 Amendment 12: the keys panel over any view the view switch opens, not only the graph's
           (it was drawn beside the graph alone, so Help did nothing visible elsewhere). */}
       {welcomeOpen && !inCanvasArea && !pageOver && welcomePanel}
-      {(view === "graph" || view === "map") && (
-        // ADR-097 step 1: what belongs to this view alone, docked above it.
-        <div role="toolbar" aria-label={view === "graph" ? "Graph view" : "Map view"} className="view-toolbar">
-          {view === "graph" && (
-            <ResolutionThresholdControl
-              apiBaseUrl={API_BASE_URL}
-              bearerToken={bearerToken}
-              investigationId={investigationId}
-              store={workingSetRef.current.store}
-              onChangeSummary={setToast}
-            />
-          )}
-          {view === "map" && (
-            <>
-              <Button aria-pressed={siteWizardOpen} onClick={() => setSiteWizardOpen((open) => !open)}>
-                Add site
-              </Button>
-              <Button aria-pressed={boundaryToolOpen} onClick={() => setBoundaryToolOpen((open) => !open)}>
-                Draw boundary
-              </Button>
-            </>
-          )}
+      {view === "map" && (
+        // ADR-097 step 1: what belongs to this view alone, docked above it. The Graph's row, which held
+        // Match strictness alone, is withdrawn: strictness is in the canvas toolbar (ADR-145 Amendment 19
+        // decision 5).
+        <div role="toolbar" aria-label="Map view" className="view-toolbar">
+          <Button aria-pressed={siteWizardOpen} onClick={() => setSiteWizardOpen((open) => !open)}>
+            Add site
+          </Button>
+          <Button aria-pressed={boundaryToolOpen} onClick={() => setBoundaryToolOpen((open) => !open)}>
+            Draw boundary
+          </Button>
         </div>
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
@@ -2279,6 +2268,17 @@ export function App() {
                 key={lens ? `view:${lens.opened.view.id}` : "case"}
                 ref={glassCanvasRef}
                 lastChange={lastChange}
+                // ADR-145 Amendment 19 decision 5: Match strictness in the canvas toolbar, after Layout; the
+                // same control, re-projecting the case's working set and announcing through the Toast.
+                toolbarAfterLayout={
+                  <ResolutionThresholdControl
+                    apiBaseUrl={API_BASE_URL}
+                    bearerToken={bearerToken}
+                    investigationId={investigationId}
+                    store={workingSetRef.current.store}
+                    onChangeSummary={setToast}
+                  />
+                }
                 graph={(lens?.workingSet ?? workingSetRef.current).graph}
                 store={(lens?.workingSet ?? workingSetRef.current).store}
                 ontology={ontology}

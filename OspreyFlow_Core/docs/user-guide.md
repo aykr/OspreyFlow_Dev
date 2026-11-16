@@ -408,8 +408,8 @@ are dots.
 **Same-as links.** Records OspreyFlow thinks are one are joined by a same-as link. Its menu offers
 **Collapse into one node** (for this view only), **Confirm as the same**, **Mark as not the same**
 and **Explain this link**. Confirming or marking needs a reason, kept in the audit with your name.
-**Match strictness** at the top of the graph sets how sure a match must be to show records as one —
-Strict, Balanced (the default) or Broad — and says how many merged and split.
+**Match strictness** in the graph's toolbar, after Layout, sets how sure a match must be to show records as
+one. Press it to open its slider: Strict, Balanced (the default) or Broad. It says how many merged and split.
 Records drawn into the graph, by a search, an expansion or a list, arrive already shown as one where they
 match at the case's strictness, with **Explain cluster** on them. What is shown as one is worked out for you
 alone, from the records you may see: a record hidden from you joins nothing. When someone else on the case changes the strictness, your graph shows it in full when the case is loaded again; an expansion brings it only for the records it adds.

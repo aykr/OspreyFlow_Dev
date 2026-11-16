@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 //
 // ADR-145 decision 4 and Amendment 2 (variant B, the owner's choice of 7 November 2026): the case
-// screen's chrome, counted on the real `App`. A keyboard user passes 25 controls before the canvas
-// (26 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
+// screen's chrome, counted on the real `App`. A keyboard user passes 24 controls before the canvas (25 before ADR-145 Amendment 19 moved Match strictness into the canvas toolbar)
+// (25 on the deployed page, whose brand frame adds the skip link first; part 1's harness, drawing
 // the mark without its Home button, counted one fewer for every variant), and the right-hand column
 // opens with the Inspector only. Red if a control returns before the canvas, or a panel opens by
 // default. The canvas, the map and the timeline need WebGL, which jsdom has none of: the canvas is a
@@ -17,8 +17,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 
 import type { App as AppComponent } from "./App";
 
+// The stand-in draws what App hands the canvas toolbar (v0.6.1 glass-rows A: strictness after Layout), inside the
+// canvas, where the real `GlassCanvas` draws its toolbar.
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: () => <div role="application" aria-label="Network canvas" tabIndex={0} />,
+  GlassCanvas: ({ toolbarAfterLayout }: { toolbarAfterLayout?: import("react").ReactNode }) => (
+    <div role="application" aria-label="Network canvas" tabIndex={0}>
+      <div role="toolbar" aria-label="Canvas tools">{toolbarAfterLayout}</div>
+    </div>
+  ),
 }));
 vi.mock("./map/MapView", () => ({ MapView: () => null }));
 vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
@@ -117,7 +123,7 @@ afterEach(() => {
 });
 
 describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
-  test("25 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15)", async () => {
+  test("24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)", async () => {
     render(<App />);
     const canvas = await screen.findByRole("application", { name: "Network canvas" });
     await screen.findByRole("button", { name: "Open this case's data in the Ingest Studio ↗" });
@@ -130,9 +136,9 @@ describe("the case screen's chrome, variant B (ADR-145 Amendment 2)", () => {
       "Graph", "Map", "Drawing board", "Reports", "More ways to show the case", "Export ▾", expect.stringMatching(/theme/i), expect.stringMatching(/· OFFICIAL/),
       // The case line: Case ‹switcher› · Saved views (n) · reads …, then the cross-link (Amendment 17).
       expect.stringMatching(/^Case: Kestrel/), expect.stringMatching(/^Saved views/), "Open this case's data in the Ingest Studio ↗",
-      // The rail: the panel openers alone, then Help and the names toggle; then the Graph's own toolbar.
+      // The rail: the panel openers alone, then Help and the names toggle. The Graph has no row of its own
+      // (Amendment 19 decision 5): strictness is in the canvas toolbar, inside the canvas.
       "Explore", "Ask & Chat", "History", "Help", "Show names",
-      "Match strictness",
     ]); // prettier-ignore
   });
 
@@ -528,5 +534,29 @@ describe("Part B after review (ADR-145 Amendment 15)", () => {
     fireEvent.click(await within(await screen.findByRole("group", { name: "More ways to show the case" })).findByRole("button", { name: "Matrix" }));
     await vi.waitFor(() => expect(pressed()).toEqual([]));
     expect(screen.getByRole("button", { name: /^Matrix/ }).className).toContain("menu-button--pressed");
+  });
+});
+
+// v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5; the owner's rulings of 16 November 2026): the Graph's own
+// row above the canvas, which held strictness alone, is gone; strictness is a button in the canvas toolbar.
+describe("Match strictness in the canvas toolbar (Amendment 19 decision 5)", () => {
+  test("the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    // The fixture's threshold is 0.8: Broad.
+    const button = await within(tools).findByRole("button", { name: "Match strictness: Broad" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("toolbar", { name: "Graph view" })).toBeNull();
+    expect(document.querySelector(".view-toolbar")).toBeNull();
+  });
+
+  test("the Map keeps its row, Add site and Draw boundary, with no strictness in it", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    const row = await screen.findByRole("toolbar", { name: "Map view" });
+    expect(within(row).getByRole("button", { name: "Add site" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Draw boundary" })).toBeTruthy();
+    expect(within(row).queryByRole("button", { name: /strictness/i })).toBeNull();
   });
 });

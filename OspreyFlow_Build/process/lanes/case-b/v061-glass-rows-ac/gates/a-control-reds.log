@@ -1,0 +1,472 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/resolution/ThresholdControl.test.tsx (7 tests | 6 failed) 6056ms
+   ❯ ResolutionThresholdControl (1)
+     × is called Match strictness, on the slider and in what the bar shows 1012ms
+   ❯ strictness as a toolbar control (Amendment 19 decision 5) (4)
+     × is one button naming the setting, closed, the slider not drawn until it is pressed 1003ms
+     × closes on Escape and on its button, focus back on the button 1004ms
+     × shows a value none of the stops name as Custom on the button 1005ms
+     × on a narrow toolbar shows the shorter words, keeping the whole name for a screen reader and in its title 1005ms
+   ✓ a refused threshold (1)
+     ✓ shows no control and does not throw 22ms
+   ❯ the change summary reads the outcome (1)
+     × shows the outcome's figures and applies the delta inside it 1003ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 6 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/resolution/ThresholdControl.test.tsx > ResolutionThresholdControl > is called Match strictness, on the slider and in what the bar shows
+TestingLibraryElementError: Unable to find role="button" and name `/^Match strictness:/`
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ openSlider src/resolution/ThresholdControl.test.tsx:26:32
+     24|
+     25| async function openSlider(): Promise<HTMLElement> {
+     26|   fireEvent.click(await screen.findByRole("button", { name: /^Match st…
+       |                                ^
+     27|   return screen.getByRole("slider", { name: "Match strictness" });
+     28| }
+ ❯ src/resolution/ThresholdControl.test.tsx:42:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > is one button naming the setting, closed, the slider not drawn until it is pressed
+TestingLibraryElementError: Unable to find role="button" and name "Match strictness: Balanced"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/resolution/ThresholdControl.test.tsx:52:33
+     50|   it("is one button naming the setting, closed, the slider not drawn u…
+     51|     renderControl();
+     52|     const button = await screen.findByRole("button", { name: "Match st…
+       |                                 ^
+     53|     expect(button.textContent).toBe("Match strictness: Balanced ▾");
+     54|     expect(button.getAttribute("aria-expanded")).toBe("false");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > closes on Escape and on its button, focus back on the button
+TestingLibraryElementError: Unable to find role="button" and name `/^Match strictness:/`
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ openSlider src/resolution/ThresholdControl.test.tsx:26:32
+     24|
+     25| async function openSlider(): Promise<HTMLElement> {
+     26|   fireEvent.click(await screen.findByRole("button", { name: /^Match st…
+       |                                ^
+     27|   return screen.getByRole("slider", { name: "Match strictness" });
+     28| }
+ ❯ src/resolution/ThresholdControl.test.tsx:67:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > shows a value none of the stops name as Custom on the button
+TestingLibraryElementError: Unable to find role="button" and name "Match strictness: Custom (0.90)"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mCustom (0.90)[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mCustom (0.90)[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/resolution/ThresholdControl.test.tsx:81:25
+     79|     vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ t…
+     80|     renderControl();
+     81|     expect(await screen.findByRole("button", { name: "Match strictness…
+       |                         ^
+     82|   });
+     83|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > on a narrow toolbar shows the shorter words, keeping the whole name for a screen reader and in its title
+TestingLibraryElementError: Unable to find role="button" and name "Match strictness: Balanced"
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/resolution/ThresholdControl.test.tsx:86:33
+     84|   it("on a narrow toolbar shows the shorter words, keeping the whole n…
+     85|     renderControl({ compact: true });
+     86|     const button = await screen.findByRole("button", { name: "Match st…
+       |                                 ^
+     87|     expect(button.textContent).toBe("Strictness: Balanced ▾");
+     88|     expect(button.getAttribute("title")).toBe("Match strictness: Balan…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  src/resolution/ThresholdControl.test.tsx > the change summary reads the outcome > shows the outcome's figures and applies the delta inside it
+TestingLibraryElementError: Unable to find role="button" and name `/^Match strictness:/`
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"resolution-threshold-control"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__name"[39m
+      [36m>[39m
+        [0mMatch strictness[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"resolution-threshold-control__label"[39m
+      [36m>[39m
+        [0mBalanced[0m
+      [36m</span>[39m
+      [36m<input[39m
+        [33maria-label[39m=[32m"Match strictness"[39m
+        [33mclass[39m=[32m"slider"[39m
+        [33mmax[39m=[32m"2"[39m
+        [33mmin[39m=[32m"0"[39m
+        [33mstep[39m=[32m"1"[39m
+        [33mtype[39m=[32m"range"[39m
+        [33mvalue[39m=[32m"1"[39m
+      [36m/>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ openSlider src/resolution/ThresholdControl.test.tsx:26:32
+     24|
+     25| async function openSlider(): Promise<HTMLElement> {
+     26|   fireEvent.click(await screen.findByRole("button", { name: /^Match st…
+       |                                ^
+     27|   return screen.getByRole("slider", { name: "Match strictness" });
+     28| }
+ ❯ moveToStrict src/resolution/ThresholdControl.test.tsx:123:26
+ ❯ src/resolution/ThresholdControl.test.tsx:131:38
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  6 failed | 1 passed (7)
+   Start at  06:48:38
+   Duration  6.47s (tests 95%, environment 4%, import 1%)
+
+
+Slowest 7 tests:
+  1012 ms  src/resolution/ThresholdControl.test.tsx > ResolutionThresholdControl > is called Match strictness, on the slider and in what the bar shows
+  1005 ms  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > on a narrow toolbar shows the shorter words, keeping the whole name for a screen reader and in its title
+  1005 ms  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > shows a value none of the stops name as Custom on the button
+  1004 ms  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > closes on Escape and on its button, focus back on the button
+  1003 ms  src/resolution/ThresholdControl.test.tsx > the change summary reads the outcome > shows the outcome's figures and applies the delta inside it
+  1003 ms  src/resolution/ThresholdControl.test.tsx > strictness as a toolbar control (Amendment 19 decision 5) > is one button naming the setting, closed, the slider not drawn until it is pressed
+    22 ms  src/resolution/ThresholdControl.test.tsx > a refused threshold > shows no control and does not throw

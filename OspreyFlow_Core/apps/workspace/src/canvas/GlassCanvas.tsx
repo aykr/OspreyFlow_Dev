@@ -24,6 +24,7 @@
 //   (§5's own technique for the 50k/250k fixture), which is still not built
 //   and still unmeasured; past the cap the scatter stays as it is.
 import { DetailsToggle } from "../layout/PanelFrames";
+import { CanvasToolbarCompact, isCompactToolbar } from "./toolbarCompact";
 import { linkHoverText } from "./linkHover";
 import { nodeWithinReach } from "./nodeHitArea";
 import { createNodeBorderProgram } from "@sigma/node-border";
@@ -42,6 +43,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 
 import type {
@@ -264,6 +266,9 @@ export interface GlassCanvasProps {
   lens?: boolean;
   /** ADR-115 E6: the case's latest history step and when, for the toolbar's note. */
   lastChange?: string | null;
+  /** v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5): drawn in the toolbar after Layout; App hands it
+   * the Match strictness control. A control here reads `CanvasToolbarCompact` for its shorter words. */
+  toolbarAfterLayout?: ReactNode;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -481,6 +486,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       onAskInView,
       lens = false,
       lastChange,
+      toolbarAfterLayout,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -788,10 +794,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
     // drawn, not one row down (the owner, 14 October 2026: the legend covered its second row).
     const toolbarRef = useRef<HTMLDivElement | null>(null);
     const [toolbarHeight, setToolbarHeight] = useState<number | null>(null);
+    // The owner's rulings 6 and 7 (16 November 2026): shorter words follow the toolbar's own width.
+    const [toolbarCompact, setToolbarCompact] = useState(false);
     useEffect(() => {
       const bar = toolbarRef.current;
       if (!bar || typeof ResizeObserver !== "function") return;
-      const measure = () => setToolbarHeight(Math.ceil(bar.getBoundingClientRect().height) || null);
+      const measure = () => {
+        const box = bar.getBoundingClientRect();
+        setToolbarHeight(Math.ceil(box.height) || null);
+        setToolbarCompact(isCompactToolbar(box.width));
+      };
       measure();
       const observer = new ResizeObserver(measure);
       observer.observe(bar);
@@ -3594,7 +3606,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             groups; Show is one segmented control. */}
         {/* Sigma draws here and only here; React renders nothing inside it (see sigmaContainerRef). */}
         <div ref={sigmaContainerRef} className="network-canvas__sigma" style={{ position: "absolute", inset: 0 }} />
-        <div role="toolbar" aria-label="Canvas tools" className="canvas-toolbar" ref={toolbarRef}>
+        <CanvasToolbarCompact.Provider value={toolbarCompact}>
+        <div
+          role="toolbar"
+          aria-label="Canvas tools"
+          className={toolbarCompact ? "canvas-toolbar canvas-toolbar--compact" : "canvas-toolbar"}
+          ref={toolbarRef}
+        >
           <div role="group" aria-label="Select" className="canvas-toolbar__group">
             <button
               type="button"
@@ -3607,7 +3625,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             </button>
           </div>
           <div role="group" aria-label="Layout" className="canvas-toolbar__group">
-            <span className="canvas-toolbar__label" aria-hidden="true">Layout</span>
+            {/* Ruling 6: the caption is dropped on a narrow toolbar; the group keeps its name. */}
+            {!toolbarCompact && <span className="canvas-toolbar__label" aria-hidden="true">Layout</span>}
             <LayoutMenu
               mode={layoutMode}
               onChange={(mode) => {
@@ -3626,8 +3645,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               onArrange={() => arrangeNowRef.current()}
             />
           </div>
+          {toolbarAfterLayout && <div className="canvas-toolbar__group">{toolbarAfterLayout}</div>}
           <div className="canvas-toolbar__group">
-            <span className="canvas-toolbar__label" aria-hidden="true">Show</span>
+            {!toolbarCompact && <span className="canvas-toolbar__label" aria-hidden="true">Show</span>}
             <div role="group" aria-label="Show" className="segmented canvas-toolbar__show">
               <CommunitiesToggle on={communitiesOn} onToggle={() => setCommunitiesOn((v) => !v)} />
               <button
@@ -3684,6 +3704,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
             <DetailsToggle />
           </div>
         </div>
+        </CanvasToolbarCompact.Provider>
         {lassoActive && lassoPoints.length > 1 && (
           <svg
             style={{

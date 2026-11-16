@@ -435,7 +435,8 @@ One row, 40px. From the left:
 While the Ingest Studio is open the bar shows a brass line under it and drops what belongs only to
 the Glass (search, the view switch, Export). Rules and Monitoring is a place of the switcher (§2.0a);
 Ownership and Connection strength are under *More*, History is a panel of the rail; the resolution threshold, named **Match strictness** for what
-the analyst sets with it (ADR-097 step 3), is on the Graph's view toolbar. Search is at least 280px
+the analyst sets with it (ADR-097 step 3), is a button in the canvas toolbar after Layout, naming its setting
+and opening the slider (ADR-145 Amendment 19 decision 5); the Graph has no view toolbar row of its own. Search is at least 280px
 wide.
 
 **When the bar runs out of room it folds, and stays one line high** (the owner's ruling of 14 November 2026, ADR-115 Amendment 7, after
@@ -572,8 +573,9 @@ ask for the administrator role as well as `manage_ontology`.
 deployed page, whose brand frame adds the skip link first — in this order: the mark, the four places
 (Rules and Monitoring with its count), search with *Add many from a list* and *Filters*, Graph, Map,
 Drawing board, Reports, *More*, *Export*, the theme, the account; the case menu, *Saved views (n)* and the
-cross-link; the rail's Explore, Ask & Chat, History, Help and Show names; and the Graph's *Match strictness* (25
-controls, ADR-145 Amendment 15; one more, *Build a report*, for a builder where Superset is deployed).
+cross-link; and the rail's Explore, Ask & Chat, History, Help and Show names (24 controls, ADR-145 Amendment 15;
+*Match strictness* moved into the canvas toolbar by Amendment 19; one more, *Build a report*, for a builder where
+Superset is deployed).
 `App.chrome.test.tsx` counts them on the real `App` and fails if one returns.
 
 **Keyboard and accessibility.** `keyboard/shell.spec.ts` proves the switcher (under both brands), the
