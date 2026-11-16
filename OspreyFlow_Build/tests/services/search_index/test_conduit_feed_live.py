@@ -114,6 +114,21 @@ async def _found_by_name(search: AsyncOpenSearch, alias: str, name: str) -> list
 PERSON = f"`{groovy_identifier(physical_type_name('Person'))}`"
 
 
+async def _lease_holder() -> str:
+    """Who holds the indexer's lease in the stack's Valkey (`run.LEASE_KEY`)."""
+    from valkey.asyncio import Valkey
+
+    from services.api.config import ApiConfig
+    from services.search_index.run import LEASE_KEY
+
+    client = Valkey(**ApiConfig.from_env().valkey.client_kwargs())
+    try:
+        held = await client.get(LEASE_KEY)
+    finally:
+        await client.aclose()
+    return held.decode() if isinstance(held, bytes) else str(held or "")
+
+
 async def _remove(client: ArcadeDBClient, ids: Sequence[str]) -> None:
     """This file's own nodes and outbox rows, and nothing else of the shared database: the ids it
     wrote, and any node of its own dataset an earlier run left (a run killed before teardown)."""
@@ -192,6 +207,9 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
             f"{drained_in:.0f} s: "
             "nothing in a Conduit with no worker feeds the search index"
         )
+        # The feeder was this Conduit, not a stray one on the stack's Valkey: it holds the lease.
+        holder = loop.run_until_complete(_lease_holder())
+        assert holder.startswith("conduit-"), f"the indexer's lease is held by {holder!r}"
         node, found, lag = loop.run_until_complete(write_and_find())
         print(f"a write was searchable {lag:.2f} s after it committed (lease {LEASE_SECONDS} s)")
         assert node in found, f"the write was not searchable within {SEARCHABLE_WITHIN:.0f} s"
