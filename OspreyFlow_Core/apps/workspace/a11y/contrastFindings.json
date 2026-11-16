@@ -715,5 +715,21 @@
    "own": 19.59,
    "owner": "shell"
   }
+ },
+ "places-harness.html open=views (govuk)": {
+  ".context-banner__sep[aria-hidden=\"true\"]:nth-child(9)": {
+   "text": "·",
+   "ratio": "unmeasurable",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": 19.59,
+   "owner": "case"
+  },
+  ".context-banner__reads": {
+   "text": "reads Prison intel",
+   "ratio": "unmeasurable",
+   "reason": "hidden at every point, under an opaque element over the words or clipped",
+   "own": 19.59,
+   "owner": "case"
+  }
  }
 }
