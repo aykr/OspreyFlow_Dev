@@ -201,7 +201,7 @@ platform-b	v060-stage4	M	done	v0.6.0 stage 4: PASSED on b6d33ce, every row (RECO
 platform-b	v060-superset-reader	S	done	v0.6.0 (the owner, 16 Nov): a read-only OspreyReader role for Reports Viewers and as the registration role; the probe first	lane/platform-b-v060-superset-reader
 platform	v060-seed-irsa	S	done	v0.6.0: the POC seed Job on cloud-platform gets its IRSA service account and bucket prefix; a failed seed fails INSTALL step 9	lane/platform-v060-seed-irsa
 orchestrator	v060-glass-merge	S	done	the Glass rows merged into v0.6.0 (the owner, 16 Nov); pushed as fb7f336 by case as deputy
-orchestrator	v060-c3-ci	S	building	CI on the Glass candidate 529f0f4, run 43883311468 (fb7f336 and b6d33ce red, fixed)
+orchestrator	v060-c3-ci	S	done	CI GREEN on 529f0f4, run 43883311468, 41 of 41 jobs (fb7f336 and b6d33ce red, fixed)the Glass candidate 529f0f4, run 43883311468 (fb7f336 and b6d33ce red, fixed)
 platform-b	v060-stage4-glass	M	done	the package test on the Glass candidate: fb7f336 stopped at 5/6 for the a11y fix; b6d33ce PASSED, every row
 platform	v060-step6-all-pods	S	done	v0.6.0 (case as deputy, 16 Nov; platform-b row 9b on ea5fc61): INSTALL step 6's token-version check reads every api pod; red first	lane/platform-v060-step6-all-pods
 platform-b	v060-stage4-ea5	S	done	the package test on ea5fc61, rows 0-9; ended at 9b's finding
