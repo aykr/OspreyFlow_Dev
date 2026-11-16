@@ -97,3 +97,14 @@ cancels a run in progress).
 - Spec 08's seeded rows also run on poc, after INSTALL's optional seed block (the package test, 16 Nov)
 - Amendment 18's words for an application (app-only) token at v1.0 too: today the run API refuses it with the plain "the sign-in could not be verified" (platform-b's row 9b on ea5fc61, 16 Nov; case as deputy: the operator's own token, not a client user's sign-in, so v0.6.1)
 - A backup and DECOMMISSION step 2's last backup in the same minute collide by Job name ("already exists"); step 2 reuses or waits instead (the package test's row 10 on ea5fc61, 16 Nov; low)
+
+## Stage 4 on b6d33ce stands for 529f0f4 (the owner, 16 Nov, through the orchestrator)
+The package test passed every row on b6d33ce (platform-b's RECORD_b6d33ce.md, 46a9353). CI on b6d33ce (run 43869826530)
+was red on a records row (fixed in 6a99cb0) and two keyboard cases whose harness measured in the runner's fallback face
+(fixed test-only in 4fefa51). The owner accepts stage 4 on b6d33ce for 529f0f4 on this evidence:
+- `git diff b6d33ce 529f0f4` touches only OspreyFlow_Core/apps/workspace/keyboard/{case-line-type.spec.ts,places-harness.tsx}
+  and 8 files under OspreyFlow_Build/process. VERSION, the CHANGELOG, the guides and PDFs, the chart, every Dockerfile,
+  .dockerignore, the lock inputs, services/, packages/, harness/ and cli/ are unchanged;
+- the workspace's `vite build` from each, on the server, gives a byte-identical dist (59 files; tree hash afd0a61e71b4ff28),
+  the only thing the workspace image takes from apps/workspace (platform-b, ~/osprey-runs/platform-b.c8/dist-compare/).
+CI on 529f0f4 must still be fully green before "release-ready".
