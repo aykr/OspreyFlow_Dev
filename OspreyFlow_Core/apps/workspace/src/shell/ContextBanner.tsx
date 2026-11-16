@@ -310,7 +310,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       )}
       {end && <span className="context-banner__end">{end}</span>}
       {/* Over the canvas, under the line: off the line's own row, so it neither folds the line nor moves the canvas. */}
-      {detailsOpen && caseState && caseState !== "whole" && <SavedViewDetails state={caseState} govuk={govuk} onClose={closeDetails} />}
+      {detailsOpen && caseState && caseState !== "whole" && <SavedViewDetails state={caseState} govuk={govuk} />}
     </>
   );
   if (govuk) {

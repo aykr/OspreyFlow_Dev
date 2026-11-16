@@ -62,7 +62,8 @@ def test_the_case_line_says_what_is_open_in_the_guides_order() -> None:
     assert 'export const NOTHING_CHANGES = "Nothing in a saved view changes the case.";' in code and "{NOTHING_CHANGES}" in panel
     assert "{state.from.label}" in panel and "{state.from.backLabel}" in panel
     assert "Notes from the drawing ({annotations.length})" in panel
-    assert 'if (event.key !== "Escape") return;' in panel
+    # Esc is the line's own, closing *Details* wherever focus is on the line or in it.
+    assert 'if (event.key !== "Escape" || !detailsOpen) return;' in screen("shell/ContextBanner.tsx")
     text = saved_views()
     assert ('The case line says so: "Saved view: ‹name›", its *Private* or *Shared* tag, **Details ▾** and **Back to the '
             "whole case** (the GOV.UK back link in that look).") in text  # fmt: skip

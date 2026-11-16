@@ -7,7 +7,7 @@
 // besides (ADR-144 Amendment 2 decision 4): the count of what could not be shown (a count, never which or why, ADR-144
 // decision 2), that nothing in a saved view changes the case, where it was opened from with its own way back
 // (ADR-146 decision 6), and a merged drawing's *Notes from the drawing (n)* (ADR-143 Amendment 2 decision 7).
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import "./views.css";
 
@@ -112,29 +112,22 @@ export function CaseStateItems({
   );
 }
 
-/** *Details*, open: over the canvas, under the line's right end, so it moves nothing. Esc closes it and focus goes back
- * to *Details*. */
+/** *Details*, open: over the canvas, under the line's right end, so it moves nothing. It is inside the line, so the
+ * line's own Esc (`ContextBanner`) closes it, wherever focus is, and focus goes back to *Details*. */
 export function SavedViewDetails({
   state,
   govuk,
-  onClose,
   notesOpen: startOpen = false,
 }: {
   state: SavedViewOnTheLine;
   govuk: boolean;
-  onClose: () => void;
   notesOpen?: boolean;
 }) {
   const [notesOpen, setNotesOpen] = useState(startOpen);
   const annotations = state.annotations ?? [];
   const note = missingNote(state.missing);
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "Escape") return;
-    event.stopPropagation();
-    onClose();
-  };
   return (
-    <div id={DETAILS_ID} role="region" aria-label="Saved view details" className="case-line-details" data-off-line="" onKeyDown={onKeyDown}>
+    <div id={DETAILS_ID} role="region" aria-label="Saved view details" className="case-line-details" data-off-line="">
       <p className="case-line-details__line">
         Saved view: <span className="context-banner__view-name">{state.name}</span>, {state.shared ? "shared" : "private"}
       </p>
