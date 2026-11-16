@@ -129,3 +129,8 @@ v0.6.1. Added to the v0.6.1 list:
 - From the GOV.UK rebuild: the CLI follows the recorded home over the current folder on install (home.py find_product);
   a fresh install from a git archive cannot seed demo packs (seed_internal.py:611); the places stage attaches the gazetteer
   to no case; `apply` says "nothing was started again" while a service is down and names `start --name default` on Small.
+- (16 Nov ~18:15Z, the owner's word on the protected demo) GOV.UK's search index rebuilt (290,789 documents; the install
+  built it before the packs loaded, and `demo add` does not feed it: v0.6.1 finding) and Gemini's role made the bare id
+  `gemini-3.8-flash` (ModelProviderConfig.route() adds the provider's prefix; the sheet's `gemini/…` doubled it: the guide
+  and the sheet say so in v0.6.1), then apply. Proposed for v0.6.1, the owner to confirm: Ask & Chat as a drawer by default
+  with an Expand to the full page (ADR-145 Am 18 made it page-only on the orchestrator's ruling of 15 Nov).
