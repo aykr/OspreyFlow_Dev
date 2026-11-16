@@ -153,7 +153,10 @@ export function SavedViewDetails({
             Notes from the drawing ({annotations.length})
           </button>
           {notesOpen && (
-            <dl id="view-drawing-notes" className={govuk ? "govuk-summary-list view-drawing-notes" : "view-drawing-notes"}>
+            // The notes scroll when they are many, or tall (GOV.UK's rows): the scrolling box is a named region in the
+            // tab order, so a keyboard reaches it and its arrow keys scroll it (WCAG 2.1.1; axe scrollable-region-focusable).
+            <div id="view-drawing-notes" role="region" aria-label="Notes from the drawing" tabIndex={0} className="view-drawing-notes__scroll">
+            <dl className={govuk ? "govuk-summary-list view-drawing-notes" : "view-drawing-notes"}>
               {annotations.map((a) => (
                 <div key={a.element_id} className={govuk ? "govuk-summary-list__row" : "view-drawing-notes__row"}>
                   <dt className={govuk ? "govuk-summary-list__key" : "view-drawing-notes__label"}>{a.label}</dt>
@@ -165,6 +168,7 @@ export function SavedViewDetails({
                 </div>
               ))}
             </dl>
+            </div>
           )}
         </>
       )}
