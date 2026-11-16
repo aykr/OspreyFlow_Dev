@@ -24,7 +24,7 @@ POD = Path(__file__).resolve().parents[1] / "process/lanes/platform-b/v052/super
 CHECK = Path(__file__).resolve().parents[1] / "process/lanes/platform-b/v052/dashboards_check.py"
 GLASS = "ospreyflow.r1.test"
 TENANT = "00000000-1111-4222-8333-444444444444"
-ROLES = {"reader@r1.test": "Gamma", "builder@r1.test": "Alpha"}  # nobody@r1.test: refused by Superset
+ROLES = {"reader@r1.test": "OspreyReader", "builder@r1.test": "Alpha"}  # nobody@r1.test: refused by Superset
 #: Superset's username is the Conduit's principal, the Entra object id (deploy/superset/superset_config.py
 #: `_entra_user_info`: "its id (the Entra object id) is the username"), never the sign-in name.
 OIDS = {"admin@r1.test": "50000000-0000-4000-8000-0000000000a1", "reader@r1.test": "50000000-0000-4000-8000-0000000000b1",
@@ -115,7 +115,7 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
                 return httpx.Response(400, json={"errors": [{"message": "400 Bad Request: The CSRF session token is missing."}]})
             if fake["csrf_checked"] and request.headers.get("x-csrftoken") != held_csrf[current]:
                 return httpx.Response(400, json={"errors": [{"message": "400 Bad Request: The CSRF token is missing."}]})
-            if role == "Gamma":
+            if role == "OspreyReader":
                 return httpx.Response(403, json={"message": "Forbidden"})
             body = json.loads(request.content)
             if body.get("slug") and body["slug"] in boards:
@@ -223,7 +223,7 @@ def test_the_check_s_plan_and_its_people() -> None:
     assert set(check.SUPERSET_ROLE) | {"nobody@r1.test"} == set(check.PEOPLE)
     assert check.ROLES["builder@r1.test"] == ["reports_viewer", "right:manage_dashboards"]
     assert json.dumps(check.SUPERSET_ROLE) == json.dumps(
-        {"admin@r1.test": ["Admin"], "builder@r1.test": ["Alpha"], "reader@r1.test": ["Gamma"]})
+        {"admin@r1.test": ["Admin"], "builder@r1.test": ["Alpha"], "reader@r1.test": ["OspreyReader"]})
 
 
 def test_the_report_sync_is_given_what_install_s_step_6a_tells_the_client_to_give() -> None:
@@ -324,13 +324,13 @@ LEAKS = {
     "no reports right is given the listing": "no reports right is refused the listing",
     "no reports right is given a guest token": "no reports right is refused the listing",
     "Superset signs in the person with no reports right": "refused by Superset at sign-in",
-    "Superset lets Gamma build": "the Reports Viewer is refused saving one",
+    "Superset lets the Reports Viewer build": "the Reports Viewer is refused saving one",
     "Superset opens the board without a guest token": "nothing opens without it",
     "Superset names the account by its sign-in name": "the Conduit's principal (the object id)",
     "the person with no reports right is stopped by Entra, never reaching Superset": "refused by Superset at sign-in",
-    # Beyond the mapped role and Gamma (v0.6.0's package test, 16 November 2026: the role set, not a list).
+    # Beyond the mapped role and the registration role (v0.6.0's package test, 16 November 2026: the role set, not a list).
     "Superset gives the builder Admin": "builder@r1.test signs in to Superset as Alpha",
-    "Superset gives the reader Alpha": "reader@r1.test signs in to Superset as Gamma",
+    "Superset gives the reader Alpha": "reader@r1.test signs in to Superset as OspreyReader",
 }
 
 
@@ -464,12 +464,12 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             if hint == "nobody@r1.test" and leak != "Superset signs in the person with no reports right":
                 return {"signed_in": False, "stage": "superset", "status": 302, "location": "/login/", "me": 401}
             held = conduit.roles.get(OIDS.get(hint, "x"), [])
-            role = "Admin" if "osprey-admin" in held else "Alpha" if "right:manage_dashboards" in held else "Gamma"
+            role = "Admin" if "osprey-admin" in held else "Alpha" if "right:manage_dashboards" in held else "OspreyReader"
             # As Flask-AppBuilder 5.0.2 gives them (`_oauth_calculate_user_roles`, read from the running
             # Superset image, v0.6.0's package test, 16 November 2026): the mapped role and, while
-            # registration is on, AUTH_USER_REGISTRATION_ROLE (Gamma) always, as a set; Gamma listed
+            # registration is on, AUTH_USER_REGISTRATION_ROLE (OspreyReader) always, as a set; it listed
             # first, so only a check comparing sets passes.
-            roles = ["Gamma"] + [r for r in [role] if r != "Gamma"]
+            roles = ["OspreyReader"] + [r for r in [role] if r != "OspreyReader"]
             if hint == "builder@r1.test" and leak == "Superset gives the builder Admin":
                 roles.append("Admin")
             if hint == "reader@r1.test" and leak == "Superset gives the reader Alpha":
@@ -478,7 +478,7 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             return {"signed_in": True, "username": name, "roles": roles}
         if action == "build":
             gamma = args[0] == "reader@r1.test"
-            return {"status": 201 if not gamma or leak == "Superset lets Gamma build" else 403, "id": 7}
+            return {"status": 201 if not gamma or leak == "Superset lets the Reports Viewer build" else 403, "id": 7}
         if action == "embedded":
             assert args[1] == "@secret", "the guest token travels as a secret, never an argument"
             return {"with_token": 200 if secret == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}

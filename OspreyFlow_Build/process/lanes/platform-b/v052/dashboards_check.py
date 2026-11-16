@@ -14,7 +14,7 @@ What it shows, each line PASS or FAIL, stopping at the first that fails (R1's wa
    would, the report sync restarted, and its first pull seen in Admin › Dashboards.
 3. **Superset's sign-in** (Amendment 9), through Superset's own `/login/entra` and the stand-in's
    `/authorize`, each person's role read from Superset: the administrator Admin, the builder Alpha, the
-   Reports Viewer Gamma, the person with no role refused; and a role re-read at the next sign-in.
+   Reports Viewer OspreyReader, the person with no role refused; and a role re-read at the next sign-in.
 4. **Building** (the owner's Q2): the administrator saves the board `r1-board`; the builder saves a
    dashboard (201); the Reports Viewer is refused (403).
 5. **Embedding** (Amendment 11 point 8), through the Glass's door: the Reports Viewer is offered
@@ -42,6 +42,7 @@ Needs, in the run's `osprey.yaml` (r1_kind_osprey.yaml): `reporting: {sync: true
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
 import time
@@ -65,19 +66,34 @@ ROLES = {
     "nobody@r1.test": [],
 }
 #: What Superset gives each (Amendment 9 point 3; Q2), and what building answers.
-SUPERSET_ROLE = {"admin@r1.test": ["Admin"], "builder@r1.test": ["Alpha"], "reader@r1.test": ["Gamma"]}
+#: Superset's own role settings, read from the product's `superset_config.py` (the owner's ruling, 16 November
+#: 2026: a Reports Viewer is the read-only OspreyReader, and so is every account at registration, as
+#: Flask-AppBuilder adds AUTH_USER_REGISTRATION_ROLE to each), so the check cannot drift from them.
+SUPERSET_CONFIG = HERE.parents[4] / "OspreyFlow_Core" / "deploy" / "superset" / "superset_config.py"
+
+
+def _superset_setting(name: str) -> Any:
+    tree = ast.parse(SUPERSET_CONFIG.read_text(encoding="utf-8"))
+    return next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+                and isinstance(n.targets[0], ast.Name) and n.targets[0].id == name)  # fmt: skip
+
+
+_MAPPING = _superset_setting("AUTH_ROLES_MAPPING")
+REGISTRATION_ROLE: str = _superset_setting("AUTH_USER_REGISTRATION_ROLE")
+SUPERSET_ROLE = {"admin@r1.test": _MAPPING["osprey-admin"], "builder@r1.test": _MAPPING["dashboard_builder"],
+                 "reader@r1.test": _MAPPING["reports_viewer"]}  # fmt: skip
 
 PLAN = [
     "people: three added by object id and given their roles",
     "a case, with Viewer for the Reports Viewer and the dashboard identity",
     "the dashboard identity r1-board registered by the report sync's application id",
     "the report sync given its secret, restarted, and its first pull seen",
-    "Superset: the administrator, the builder and the Reports Viewer sign in as Admin, Alpha and Gamma, "
+    "Superset: the administrator, the builder and the Reports Viewer sign in as Admin, Alpha and OspreyReader, "
     "each Superset account the Conduit's principal (the object id)",
     "Superset: the administrator saves the board r1-board (or finds it, on a rerun)",
     "Superset: the builder saves a dashboard; the Reports Viewer is refused saving one (403)",
     "Superset: the person with no role is refused by Superset at sign-in (its /api/v1/me/ 401)",
-    "Superset: a role is re-read at the next sign-in (the builder made a Reports Viewer: Gamma)",
+    "Superset: a role is re-read at the next sign-in (the builder made a Reports Viewer: OspreyReader)",
     "embedding: the Reports Viewer is offered r1-board and its guest token opens it, nothing without",
     "the board's rows through the guest token: a chart on the mart's figures; the identity's rows only, another "
     "identity's (counted at SECRET) absent; an administrator's own session sees both (the control)",
@@ -209,12 +225,12 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
     # 3 and 4. Superset's sign-in, its roles, building.
     for hint in ("admin@r1.test", "builder@r1.test", "reader@r1.test"):
         s = ask("signin", hint)
-        # The role set, not a list: Flask-AppBuilder 5.0.2 always adds AUTH_USER_REGISTRATION_ROLE (Gamma,
-        # read-only, within Admin and Alpha) to the mapped role while registration is on, at every sign-in
-        # (v0.6.0's package test, 16 November 2026). Nothing beyond the two: a builder never Admin, a
-        # reader never Alpha or Admin (tests/test_v052_dashboards_check.py's LEAKS).
+        # The role set, not a list: Flask-AppBuilder 5.0.2 always adds AUTH_USER_REGISTRATION_ROLE (the
+        # read-only OspreyReader) to the mapped role while registration is on, at every sign-in (v0.6.0's
+        # package test, 16 November 2026). Nothing beyond the two: a builder never Admin, a reader never
+        # Alpha or Admin (tests/test_v052_dashboards_check.py's LEAKS).
         ok(f"{hint} signs in to Superset as {SUPERSET_ROLE[hint][0]}",
-           s.get("signed_in") is True and set(s.get("roles") or []) == {*SUPERSET_ROLE[hint], "Gamma"}, s)
+           s.get("signed_in") is True and set(s.get("roles") or []) == {*SUPERSET_ROLE[hint], REGISTRATION_ROLE}, s)
         # Superset keys its user by the Entra object id (Amendment 9): the Conduit's principal, not a name.
         ok(f"{hint}'s Superset account is the Conduit's principal (the object id)", s.get("username") == people[hint], s)
     s = ask("build", "admin@r1.test", "R1 board", BOARD)
@@ -230,8 +246,8 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
        s.get("signed_in") is False and s.get("stage") == "superset" and s.get("me") == 401, s)
     r = c.put(f"/v1/admin/people/{people['builder@r1.test']}/roles", headers=admin, json={"roles": ["reports_viewer"]})
     s = ask("signin", "builder@r1.test")
-    ok("a role is re-read at the next sign-in (the builder, now a Reports Viewer, is Gamma)",
-       r.status_code == 200 and s.get("roles") == ["Gamma"], s)
+    ok(f"a role is re-read at the next sign-in (the builder, now a Reports Viewer, is {REGISTRATION_ROLE})",
+       r.status_code == 200 and set(s.get("roles") or []) == {*SUPERSET_ROLE["reader@r1.test"], REGISTRATION_ROLE}, s)
 
     # 5. Embedding, through the Glass's door. A guest token is reported by its status, never its text.
     def offered(headers: dict[str, str]) -> tuple[int, bool]:
@@ -275,7 +291,7 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
        (listing, refused) == (403, 403), f"listing {listing}, guest token {refused}")
     unit_claim = claims["org_unit"]["claim"]
     for who, headers in (
-        ("a Reports Viewer with no level on the identity's case (the builder, now Gamma)", token("builder@r1.test")),
+        ("a Reports Viewer with no level on the identity's case (the builder, now a Reports Viewer)", token("builder@r1.test")),
         ("a Reports Viewer of another unit", token("reader@r1.test", **{unit_claim: "r1-another-unit"})),
         ("a Reports Viewer whose clearance is below the identity's", token("reader@r1.test", **{clearance_claim: "PUBLIC"})),
     ):

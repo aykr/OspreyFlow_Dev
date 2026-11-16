@@ -49,7 +49,7 @@ COPY brand/osprey-mark.svg brand/osprey-favicon.svg /app/superset/static/assets/
 COPY brand/loading.gif /app/superset/static/assets/loading.cff8a5da.gif
 COPY brand/loading.gif /app/superset/static/assets/images/loading.gif
 COPY osprey_entrypoint.py /app/osprey_entrypoint.py
-COPY osprey_setup.py osprey_palette.py /app/
+COPY osprey_setup.py osprey_palette.py osprey_roles.py /app/
 # ADR-148 decision 3: the base image's `superset` user takes the one numeric UID all our images run
 # as, and keeps everything it owned: what its old uid owned is given the new uid, and what its old
 # group owned the new gid alone (a file of another owner in that group keeps its owner). Checked in
