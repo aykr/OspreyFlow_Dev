@@ -33,6 +33,8 @@ from opensearchpy import AsyncOpenSearch, NotFoundError
 
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter
 from adapters.graph_arcadedb.client import ArcadeDBClient, ArcadeDBConfig
+from adapters.graph_arcadedb.gremlin_literals import groovy_identifier
+from adapters.graph_arcadedb.naming import physical_type_name
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_node_id
 from ontology.handling import load_uk_le_scheme
@@ -109,13 +111,19 @@ async def _found_by_name(search: AsyncOpenSearch, alias: str, name: str) -> list
     return [h["_source"]["node_id"] for h in hits["hits"]["hits"]]
 
 
+PERSON = f"`{groovy_identifier(physical_type_name('Person'))}`"
+
+
 async def _remove(client: ArcadeDBClient, ids: Sequence[str]) -> None:
-    """This file's own nodes and outbox rows, and nothing else of the shared database."""
+    """This file's own nodes and outbox rows, and nothing else of the shared database: the ids it
+    wrote, and any node of its own dataset an earlier run left (a run killed before teardown)."""
+    left = await client.sql(
+        f"SELECT id FROM {PERSON} WHERE datasets CONTAINS :dataset", params={"dataset": DATASET}
+    )
+    ids = sorted({*ids, *(str(r["id"]) for r in left)})
     if ids:
-        await client.sql("DELETE FROM Person WHERE id IN :ids", params={"ids": list(ids)})
-        await client.sql(
-            "DELETE FROM IndexPending WHERE node_id IN :ids", params={"ids": list(ids)}
-        )
+        await client.sql("DELETE FROM IndexPending WHERE node_id IN :ids", params={"ids": ids})
+        await client.sql(f"DELETE FROM {PERSON} WHERE id IN :ids", params={"ids": ids})
 
 
 def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url: str) -> None:
@@ -136,6 +144,7 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
     async def setup() -> list[str]:
         await arcadedb.create_database_if_absent()
         await graph.apply_schema(ONTOLOGY)
+        await _remove(arcadedb, [])  # what an earlier run of this file left, if anything
         return await _written(graph, [_person(f"Backlog{tag}{n}") for n in range(BACKLOG)])
 
     async def wait_for_backlog(ids: Sequence[str]) -> tuple[int, float]:
