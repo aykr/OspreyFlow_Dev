@@ -13,8 +13,12 @@ async function open(page: Page, query = ""): Promise<void> {
 
 const sent = (page: Page) => page.evaluate(() => window.__PROMOTIONS__!.sent);
 
+/** A disabled button takes neither focus nor Enter, so a press waits for it to be free first (as
+ * `ingest-studio.spec.ts`'s does, af5d2cb). A press made just after an answer that moves focus waits
+ * for that move first, at its call: see "Merge sent" below. */
 async function press(page: Page, name: string | RegExp): Promise<void> {
   const button = page.getByRole("button", { name, exact: typeof name === "string" });
+  await expect(button).toBeEnabled();
   await button.focus();
   await expect(button).toBeFocused();
   await page.keyboard.press("Enter");
@@ -81,6 +85,10 @@ test("a removed case's layer is merged through its sheet by keyboard", async ({ 
   const merged = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/layer-merges/g-1"));
   expect(merged?.body).toEqual({ item_ids: ["i-a"] });
   await expect(page.getByRole("dialog", { name: "Merge sent" })).toContainText("Left out, and why");
+  // The sheet moves focus onto its outcome once the merge is answered, in an effect run after the
+  // outcome is drawn. Pressed before that move, Close lost its focus to the heading and the press
+  // went nowhere (CI, run 43813698501: "Received: inactive"), so wait for the move first.
+  await expect(page.getByRole("heading", { name: "Merge sent" })).toBeFocused();
   await press(page, "Close");
   // A sent merge closed its own grant (committed or sent for review: one grant, one merge), so
   // nothing is cancelled afterwards.

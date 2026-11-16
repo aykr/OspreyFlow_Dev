@@ -1,0 +1,77 @@
+// rules-b's proof for the promotions.spec fix (temporary; kept in the lane's record, not in keyboard/).
+// It stands in for CI under load: the sheet's own focus move onto its "Merge sent" heading (an effect
+// run after the outcome is drawn) is made to land late, by delaying HTMLElement.focus() for that
+// heading alone, until the next focus elsewhere or 3 s. The old flow (press Close as soon as "Merge sent" shows) must fail as CI did; the new
+// flow (wait for the move, then press) must pass.
+import { expect, test, type Page } from "@playwright/test";
+
+const LATE = 3000;
+
+async function lateHeadingFocus(page: Page): Promise<void> {
+  await page.addInitScript((late) => {
+    // Armed when "Merge sent" is drawn (before the test can see it): the sheet's move onto that
+    // heading is then pending, and lands on the next focus anywhere else (as on CI, between the
+    // test's focus of Close and its check), or after `late` ms. The app's own call is held for it.
+    const focus = HTMLElement.prototype.focus;
+    let state: "idle" | "pending" | "landed" = "idle";
+    const heading = () => document.getElementById("layer-merge-title");
+    const land = () => {
+      if (state !== "pending") return;
+      state = "landed";
+      document.removeEventListener("focusin", land, true);
+      queueMicrotask(() => heading()?.focus());
+    };
+    new MutationObserver(() => {
+      if (state === "idle" && heading()?.textContent === "Merge sent") {
+        state = "pending";
+        document.addEventListener("focusin", land, true);
+        setTimeout(land, late);
+      }
+    }).observe(document, { subtree: true, childList: true, characterData: true });
+    HTMLElement.prototype.focus = function (this: HTMLElement, options?: FocusOptions) {
+      if (this.id === "layer-merge-title" && state === "pending") return; // held: lands as above
+      focus.call(this, options);
+    };
+  }, LATE);
+}
+
+async function oldPress(page: Page, name: string): Promise<void> {
+  const button = page.getByRole("button", { name, exact: true });
+  await button.focus();
+  await expect(button).toBeFocused({ timeout: 2000 });
+  await page.keyboard.press("Enter");
+}
+
+async function newPress(page: Page, name: string): Promise<void> {
+  const button = page.getByRole("button", { name, exact: true });
+  await expect(button).toBeEnabled();
+  await button.focus();
+  await expect(button).toBeFocused({ timeout: 2000 });
+  await page.keyboard.press("Enter");
+}
+
+async function toMergeSent(page: Page, press: typeof newPress): Promise<void> {
+  await lateHeadingFocus(page);
+  await page.goto("/keyboard/promotions-harness.html");
+  await press(page, "Merge into the dataset from Old wing");
+  await expect(page.getByRole("heading", { name: /Merge Old wing's layer/ })).toBeFocused();
+  const van = page.getByLabel(/Item: Blue van/);
+  await van.focus();
+  await page.keyboard.press("Space");
+  await press(page, "Merge");
+  await expect(page.getByRole("dialog", { name: "Merge sent" })).toContainText("Left out, and why");
+}
+
+test("OLD: Close pressed as soon as Merge sent shows loses its focus to the late heading", async ({ page }) => {
+  await toMergeSent(page, oldPress);
+  let error = "";
+  await oldPress(page, "Close").catch((e: Error) => (error = e.message));
+  expect(error).toContain("inactive");
+});
+
+test("NEW: waiting for the heading's focus first, Close is pressed and closes the sheet", async ({ page }) => {
+  await toMergeSent(page, newPress);
+  await expect(page.getByRole("heading", { name: "Merge sent" })).toBeFocused();
+  await newPress(page, "Close");
+  await expect(page.getByRole("dialog", { name: "Merge sent" })).toHaveCount(0);
+});
