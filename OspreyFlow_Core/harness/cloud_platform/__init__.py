@@ -354,24 +354,36 @@ def search_index_values(
 #: The POC seed path's standing Job (ADR-148 Amendment 14): spec 08's seeds, started by the install
 #: runbook's optional block with the Conduit and the worker scaled to none.
 SEED_JOB = "ospreyflow-seed"
-def seed_values(config: OspreyConfig, workloads: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    """The chart's `seed` (the poc shape alone): the Conduit's image and size, the case store's
-    address and credentials as the Conduit has them, and the graph's and ClickHouse's passwords by
-    name; nothing else of ours, and no AWS identity. The case's unit is not rendered: `seed_poc`
-    reads the first administrator's own from the people store at the run."""
+
+
+def seed_values(
+    config: OspreyConfig, platform: PlatformSettings, workloads: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    """The chart's `seed` (the poc shape alone): the Conduit's image and size; the case store's
+    address and credentials, and the buckets' prefix, as the Conduit has them; the graph's and
+    ClickHouse's passwords by name; nothing else of ours. It runs as the Conduit's IRSA account,
+    whose role holds the buckets: the HMP seed stages its files in `<prefix>staging` (v0.6.0's
+    package test, INSTALL step 9, 16 November 2026: with no account and no prefix, HeadBucket on
+    `ospreyflow-staging` was refused; `tests/harness/test_cloud_platform_seed_irsa.py`). The case's
+    unit is not rendered: `seed_poc` reads the first administrator's own from the people store at
+    the run."""
     api = next(w for w in workloads if w["name"] == "api")
-    # The case store's, as the Conduit is given them: the platform's RDS secret's variables alone.
-    postgres = {
-        name for name, (secret, _key) in managed_variables(config).items() if secret == "postgres"
+    # The platform's secrets' variables it reads, as the Conduit is given them: the RDS secret's,
+    # and the S3 secret's bucket prefix.
+    held = {
+        name
+        for name, (secret, _key) in managed_variables(config).items()
+        if secret in ("postgres", "s3")
     }
     return {
         "name": SEED_JOB,
         "label": "seed",
+        "serviceAccountName": platform.secrets.irsa.service_account,
         "image": api["image"],
         "resources": copy.deepcopy(api["resources"]),
         "command": ["/app/.venv/bin/python", "-m", "scripts.seed_poc"],
         "env": [
-            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in postgres),
+            *(copy.deepcopy(e) for e in api.get("env", []) if e["name"] in held),
             {"name": "ARCADEDB_ROOT_PASSWORD", "secret": "ARCADEDB_ROOT_PASSWORD"},
             {"name": "CLICKHOUSE_PASSWORD", "secret": "CLICKHOUSE_PASSWORD"},
         ],
@@ -1306,7 +1318,7 @@ def render_cloud_platform(
     if config.components.search is SearchBackend.OPENSEARCH:
         out["searchIndex"] = search_index_values(config, platform, workloads)
     if _cp(config).shape == "poc":
-        out["seed"] = seed_values(config, workloads)
+        out["seed"] = seed_values(config, platform, workloads)
     # Decision 13 (ADR-148 Amendment 7, P9): the backups, added to these values, and its Terraform.
     from harness.cloud_platform_backups import add_backups
 

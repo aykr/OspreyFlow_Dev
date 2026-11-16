@@ -1,0 +1,254 @@
+FFFFFFFFFFF.                                                             [100%]
+=================================== FAILURES ===================================
+______ test_the_seed_runs_as_the_conduit_s_account_with_its_bucket_prefix ______
+
+    def test_the_seed_runs_as_the_conduit_s_account_with_its_bucket_prefix() -> None:
+        values = _values(_config("poc"))
+        seed = values["seed"]
+        api = next(w for w in values["workloads"] if w["name"] == "api")
+>       assert seed.get("serviceAccountName") == api["serviceAccountName"]
+E       AssertionError: assert None == 'ospreyflow'
+E        +  where None = <built-in method get of dict object at 0x107ea6200>('serviceAccountName')
+E        +    where <built-in method get of dict object at 0x107ea6200> = {'name': 'ospreyflow-seed', 'label': 'seed', 'image': '123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:b5d...bf0e6e1e46', 'resources': {'requests': {'cpu': '500m', 'memory': '2Gi'}, 'limits': {'memory': '4Gi', 'cpu': '2'}}, ...}.get
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:45: AssertionError
+___________ test_the_chart_mounts_the_seed_s_token_under_its_account ___________
+
+    def test_the_chart_mounts_the_seed_s_token_under_its_account() -> None:
+        """The chart's own words (Helm's output is `test_cp_egress_order`'s, where helm runs): the
+        seed's pod takes the values' account and mounts its token, never `false` beside it."""
+        text = (CHART / "templates" / "seed.yaml").read_text(encoding="utf-8")
+        body = text.split("*/ -}}", 1)[1]
+>       assert "serviceAccountName: {{ $s.serviceAccountName }}" in body
+E       assert 'serviceAccountName: {{ $s.serviceAccountName }}' in '\n{{- with .Values.seed }}\n{{- $root := $ }}\n{{- $s := . }}\n{{- $ctx := dict "name" $s.label "root" $root }}\napiV..."env" $s.env\n                  "resources" $s.resources)\n                "root" $root) | nindent 12 }}\n{{- end }}\n'
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:56: AssertionError
+_______________________ test_the_seed_reaches_s3_and_sts _______________________
+
+    def test_the_seed_reaches_s3_and_sts() -> None:
+        values = _values(_config("poc"))
+        [row] = [w for w in values["egress"]["workloads"] if w["name"] == "seed"]
+        [api] = [w for w in values["egress"]["workloads"] if w["name"] == "api"]
+        s3 = [h for h in api["hosts"] if h.startswith("s3.")]
+        sts = [h for h in api["hosts"] if h.startswith("sts.")]
+        assert s3 and sts
+>       assert sorted(row.get("hosts") or []) == sorted(s3 + sts), row
+E       AssertionError: {'name': 'seed', 'toPods': [{'name': 'arcadedb', 'ports': [2480, 2434]}, {'name': 'clickhouse', 'ports': [8123, 9000, 9009]}], 'managed': True}
+E       assert [] == ['s3.eu-west-...mazonaws.com']
+E         
+E         Right contains 2 more items, first extra item: 's3.eu-west-2.amazonaws.com'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:68: AssertionError
+_____ test_the_policy_gate_admits_the_seed_as_an_irsa_pod[IRSA-True-said0] _____
+
+account = 'IRSA', token = True, said = []
+
+    @pytest.mark.parametrize(
+        ("account", "token", "said"),
+        [
+            ("IRSA", True, []),
+            (None, True, ["mounts the namespace's default account's token"]),
+            ("someone-else", True, ["mounts someone-else's token, not IRSA's"]),
+            ("GATEWAY", True, ["runs as GATEWAY, the gateway's account",
+                               "mounts GATEWAY's token, not IRSA's"]),
+        ],
+    )  # fmt: skip
+    def test_the_policy_gate_admits_the_seed_as_an_irsa_pod(
+        account: str | None, token: bool, said: list[str]
+    ) -> None:
+        values = _values(_config("poc"))
+        irsa = next(w for w in values["workloads"] if w["name"] == "api")["serviceAccountName"]
+        gateway = "ospreyflow-gateway"
+        named = {"IRSA": irsa, "GATEWAY": gateway}.get(account or "", account)
+        doc, spec = _cronjob("seed", named, token=token)
+        found = [v.detail for v in _token(doc, spec, irsa, gateway)]
+>       assert found == [s.replace("IRSA", irsa).replace("GATEWAY", gateway) for s in said]
+E       assert ["runs as osp...ount's token"] == []
+E         
+E         Left contains 2 more items, first extra item: "runs as ospreyflow, the bucket role's account"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:104: AssertionError
+_____ test_the_policy_gate_admits_the_seed_as_an_irsa_pod[None-True-said1] _____
+
+account = None, token = True
+said = ["mounts the namespace's default account's token"]
+
+    @pytest.mark.parametrize(
+        ("account", "token", "said"),
+        [
+            ("IRSA", True, []),
+            (None, True, ["mounts the namespace's default account's token"]),
+            ("someone-else", True, ["mounts someone-else's token, not IRSA's"]),
+            ("GATEWAY", True, ["runs as GATEWAY, the gateway's account",
+                               "mounts GATEWAY's token, not IRSA's"]),
+        ],
+    )  # fmt: skip
+    def test_the_policy_gate_admits_the_seed_as_an_irsa_pod(
+        account: str | None, token: bool, said: list[str]
+    ) -> None:
+        values = _values(_config("poc"))
+        irsa = next(w for w in values["workloads"] if w["name"] == "api")["serviceAccountName"]
+        gateway = "ospreyflow-gateway"
+        named = {"IRSA": irsa, "GATEWAY": gateway}.get(account or "", account)
+        doc, spec = _cronjob("seed", named, token=token)
+        found = [v.detail for v in _token(doc, spec, irsa, gateway)]
+>       assert found == [s.replace("IRSA", irsa).replace("GATEWAY", gateway) for s in said]
+E       assert ["mounts its ...ount's token"] == ["mounts the ...ount's token"]
+E         
+E         At index 0 diff: "mounts its service account's token" != "mounts the namespace's default account's token"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:104: AssertionError
+_ test_the_policy_gate_admits_the_seed_as_an_irsa_pod[someone-else-True-said2] _
+
+account = 'someone-else', token = True
+said = ["mounts someone-else's token, not IRSA's"]
+
+    @pytest.mark.parametrize(
+        ("account", "token", "said"),
+        [
+            ("IRSA", True, []),
+            (None, True, ["mounts the namespace's default account's token"]),
+            ("someone-else", True, ["mounts someone-else's token, not IRSA's"]),
+            ("GATEWAY", True, ["runs as GATEWAY, the gateway's account",
+                               "mounts GATEWAY's token, not IRSA's"]),
+        ],
+    )  # fmt: skip
+    def test_the_policy_gate_admits_the_seed_as_an_irsa_pod(
+        account: str | None, token: bool, said: list[str]
+    ) -> None:
+        values = _values(_config("poc"))
+        irsa = next(w for w in values["workloads"] if w["name"] == "api")["serviceAccountName"]
+        gateway = "ospreyflow-gateway"
+        named = {"IRSA": irsa, "GATEWAY": gateway}.get(account or "", account)
+        doc, spec = _cronjob("seed", named, token=token)
+        found = [v.detail for v in _token(doc, spec, irsa, gateway)]
+>       assert found == [s.replace("IRSA", irsa).replace("GATEWAY", gateway) for s in said]
+E       assert ["mounts its ...ount's token"] == ["mounts some...ospreyflow's"]
+E         
+E         At index 0 diff: "mounts its service account's token" != "mounts someone-else's token, not ospreyflow's"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:104: AssertionError
+___ test_the_policy_gate_admits_the_seed_as_an_irsa_pod[GATEWAY-True-said3] ____
+
+account = 'GATEWAY', token = True
+said = ["runs as GATEWAY, the gateway's account", "mounts GATEWAY's token, not IRSA's"]
+
+    @pytest.mark.parametrize(
+        ("account", "token", "said"),
+        [
+            ("IRSA", True, []),
+            (None, True, ["mounts the namespace's default account's token"]),
+            ("someone-else", True, ["mounts someone-else's token, not IRSA's"]),
+            ("GATEWAY", True, ["runs as GATEWAY, the gateway's account",
+                               "mounts GATEWAY's token, not IRSA's"]),
+        ],
+    )  # fmt: skip
+    def test_the_policy_gate_admits_the_seed_as_an_irsa_pod(
+        account: str | None, token: bool, said: list[str]
+    ) -> None:
+        values = _values(_config("poc"))
+        irsa = next(w for w in values["workloads"] if w["name"] == "api")["serviceAccountName"]
+        gateway = "ospreyflow-gateway"
+        named = {"IRSA": irsa, "GATEWAY": gateway}.get(account or "", account)
+        doc, spec = _cronjob("seed", named, token=token)
+        found = [v.detail for v in _token(doc, spec, irsa, gateway)]
+>       assert found == [s.replace("IRSA", irsa).replace("GATEWAY", gateway) for s in said]
+E       assert ["runs as osp...ount's token"] == ["runs as osp...ospreyflow's"]
+E         
+E         At index 1 diff: "mounts its service account's token" != "mounts ospreyflow-gateway's token, not ospreyflow's"
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:104: AssertionError
+______ test_a_failed_seed_ends_the_block_failed_without_set_e[seed-fails] ______
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-13353/test_a_failed_seed_ends_the_bl0')
+scenario = 'seed-fails'
+
+    @pytest.mark.parametrize("scenario", ["seed-fails", "never-starts", "overruns", "create-fails"])
+    def test_a_failed_seed_ends_the_block_failed_without_set_e(tmp_path: Any, scenario: str) -> None:
+        """As a person runs it, in a bash shell without `set -e`: the failure is the block's last word
+        and its status, the rebuild never started, and everything put back."""
+        code, said, calls = _run_seed(tmp_path, scenario, set_e=False)
+>       assert code != 0, said
+E       AssertionError: seed-20261116t093020 failed: its log above
+E         seed: c1
+E         seed: done, hmp, fixture-corp, scenarios in case c1
+E         search index rebuilt
+E         
+E       assert 0 != 0
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:112: AssertionError
+_____ test_a_failed_seed_ends_the_block_failed_without_set_e[never-starts] _____
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-13353/test_a_failed_seed_ends_the_bl1')
+scenario = 'never-starts'
+
+    @pytest.mark.parametrize("scenario", ["seed-fails", "never-starts", "overruns", "create-fails"])
+    def test_a_failed_seed_ends_the_block_failed_without_set_e(tmp_path: Any, scenario: str) -> None:
+        """As a person runs it, in a bash shell without `set -e`: the failure is the block's last word
+        and its status, the rebuild never started, and everything put back."""
+        code, said, calls = _run_seed(tmp_path, scenario, set_e=False)
+>       assert code != 0, said
+E       AssertionError: seed-20261116t093020 did not start in five minutes (kubectl -n ospreyflow-poc describe pod -l job-name=seed-20261116t093020 says why); deleted
+E         seed: c1
+E         seed: done, hmp, fixture-corp, scenarios in case c1
+E         search index rebuilt
+E         
+E       assert 0 != 0
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:112: AssertionError
+_______ test_a_failed_seed_ends_the_block_failed_without_set_e[overruns] _______
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-13353/test_a_failed_seed_ends_the_bl2')
+scenario = 'overruns'
+
+    @pytest.mark.parametrize("scenario", ["seed-fails", "never-starts", "overruns", "create-fails"])
+    def test_a_failed_seed_ends_the_block_failed_without_set_e(tmp_path: Any, scenario: str) -> None:
+        """As a person runs it, in a bash shell without `set -e`: the failure is the block's last word
+        and its status, the rebuild never started, and everything put back."""
+        code, said, calls = _run_seed(tmp_path, scenario, set_e=False)
+>       assert code != 0, said
+E       AssertionError: seed-20261116t093021 ran past 30 minutes; deleted
+E         seed: c1
+E         seed: done, hmp, fixture-corp, scenarios in case c1
+E         search index rebuilt
+E         
+E       assert 0 != 0
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:112: AssertionError
+_____ test_a_failed_seed_ends_the_block_failed_without_set_e[create-fails] _____
+
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-13353/test_a_failed_seed_ends_the_bl3')
+scenario = 'create-fails'
+
+    @pytest.mark.parametrize("scenario", ["seed-fails", "never-starts", "overruns", "create-fails"])
+    def test_a_failed_seed_ends_the_block_failed_without_set_e(tmp_path: Any, scenario: str) -> None:
+        """As a person runs it, in a bash shell without `set -e`: the failure is the block's last word
+        and its status, the rebuild never started, and everything put back."""
+        code, said, calls = _run_seed(tmp_path, scenario, set_e=False)
+>       assert code != 0, said
+E       AssertionError: seed-20261116t093022 could not be started (kubectl create job above says why)
+E         seed: c1
+E         seed: done, hmp, fixture-corp, scenarios in case c1
+E         search index rebuilt
+E         
+E       assert 0 != 0
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py:112: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_seed_runs_as_the_conduit_s_account_with_its_bucket_prefix
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_chart_mounts_the_seed_s_token_under_its_account
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_seed_reaches_s3_and_sts
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_policy_gate_admits_the_seed_as_an_irsa_pod[IRSA-True-said0]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_policy_gate_admits_the_seed_as_an_irsa_pod[None-True-said1]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_policy_gate_admits_the_seed_as_an_irsa_pod[someone-else-True-said2]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_the_policy_gate_admits_the_seed_as_an_irsa_pod[GATEWAY-True-said3]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_a_failed_seed_ends_the_block_failed_without_set_e[seed-fails]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_a_failed_seed_ends_the_block_failed_without_set_e[never-starts]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_a_failed_seed_ends_the_block_failed_without_set_e[overruns]
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_seed_irsa.py::test_a_failed_seed_ends_the_block_failed_without_set_e[create-fails]
+11 failed, 1 passed in 4.68s

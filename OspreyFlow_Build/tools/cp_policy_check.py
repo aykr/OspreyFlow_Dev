@@ -375,14 +375,15 @@ def _whole_secret(
 #: whether the writers have stopped). Held here, not read from the render.
 TOKEN_ALLOWED = frozenset({"api", "worker", "report-sync", "litellm",
                            "backup", "backup-claims", "restore", "restore-claims",
-                           "search-rebuild", "search-drift"})  # fmt: skip
+                           "search-rebuild", "search-drift", "seed"})  # fmt: skip
 
 
 #: Whose account each holds: IRSA's bucket role (the platform's `secrets.irsa.service_account`) is
 #: the Conduit's, the workers' and the report sync's alone, and the search index's rebuild and drift
-#: check's (v0.5.2 step 3a: the OpenSearch domain admits that role alone, by SigV4); the gateway's
+#: check's (v0.5.2 step 3a: the OpenSearch domain admits that role alone, by SigV4), and the POC
+#: seed's (ADR-148 Amendment 14: the HMP seed stages its files in the buckets); the gateway's
 #: own role (`gateway_service_account`) the gateway's alone; P9's pods each an account of their own.
-IRSA_PODS = frozenset({"api", "worker", "report-sync", "search-rebuild", "search-drift"})
+IRSA_PODS = frozenset({"api", "worker", "report-sync", "search-rebuild", "search-drift", "seed"})
 
 
 def _token(

@@ -182,6 +182,13 @@ around: one view switch, a case line that says what is open, and "view" kept for
   so is every account at its first sign-in. A builder of reports reads every board's figures in Superset,
   whatever the case or clearance, so the guides now say to give that right only to people cleared for
   them all.
+- **The POC seed (`INSTALL.md` step 9) can reach the buckets.** On the cloud-platform shape the seed's Job
+  ran with no service account and without the deployment's bucket prefix. So the HMP seed was refused
+  at the staging bucket, and the seed could never succeed. It now runs as the Conduit's own account,
+  with the same bucket prefix and the same access to S3.
+- **A failed POC seed now ends step 9 failed.** The step went on to rebuild the search index after a
+  seed that had failed, and then ended as if it had succeeded. It now stops after a failed seed, and
+  its last line says that the seed did not succeed.
 
 ## v0.5.1 — 2026-11-14
 

@@ -7,8 +7,9 @@ none, by
     kubectl -n <namespace> create job --from=cronjob/ospreyflow-seed seed-<when>
 
 It runs in the Conduit's image at its size, with the settings, the case store's address and credentials
-(the platform's secret), the graph's and ClickHouse's passwords by name (never our Secret whole), and no
-service account token: it calls nothing of AWS's. Rendered for the poc shape alone.
+and the buckets' prefix (the platform's secrets), the graph's and ClickHouse's passwords by name (never
+our Secret whole), as the Conduit's IRSA account with its token mounted: the HMP seed stages its files in
+the buckets, signed by that role (`seed.serviceAccountName`). Rendered for the poc shape alone.
 */ -}}
 {{- with .Values.seed }}
 {{- $root := $ }}
@@ -43,7 +44,8 @@ spec:
             ospreyflow.io/egress: "true"
         spec:
           restartPolicy: Never
-          automountServiceAccountToken: false
+          serviceAccountName: {{ $s.serviceAccountName }}
+          automountServiceAccountToken: true
           {{- with $root.Values.imagePullSecrets }}
           imagePullSecrets: {{ toJson . }}
           {{- end }}
