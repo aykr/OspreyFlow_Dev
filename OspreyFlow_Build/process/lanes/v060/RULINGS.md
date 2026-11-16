@@ -76,3 +76,12 @@ rebuild, update, settings change, restore, port or certificate change, and no st
 proposed to the owner in one line (what changes, the expected downtime, the way back) and waits for their word.
 Reading it (checks, health, the gate) is not a disruption.
 - 16 Nov ~06:50Z: stage 4 may start before CI completes on the candidate, in parallel; the release still needs CI fully green on that exact commit (the owner, amending the word in advance for this run).
+
+## Standing rule: long checks in parallel (the owner, 16 Nov ~07:00Z)
+
+Long checks run alongside each other: the package test beside CI on a candidate; trial builds and server rehearsals beside
+CI before a demo update; local merge suites beside the previous push's CI. **The final or public step (a release, a tag,
+a publish, a demo rebuild) waits until every check has passed on the same exact commit.** A real failure in any check stops
+and discards the others; nothing is released on a partial pass. Pushes still go one CI run at a time (the concurrency group
+cancels a run in progress).
+- CI speed: split the long jobs (test, conformance, glass-perf-a11y-keyboard) across parallel runners and cache dependencies (uv, npm, docker layers), which also guards against PyPI timeouts like 16 Nov's; a ci.yml change, to the owner as a diff
