@@ -1,0 +1,7 @@
+offline: 4 of 6 plants, the live file left out
+built: GREEN - 14 passed in 5.19s
+F2 the Conduit feeds without an OpenSearch to feed [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_conduit_feeds_the_index_only_where_it_runs_the_job_loop_and_there_is_one[conduit-no-index] | 1 failed, 4 passed in 3.81s
+F3 the Conduit feeds beside a worker [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_cluster_s_conduit_never_feeds_beside_its_worker | 1 failed in 3.93s
+F4 the worker runs an indexer of its own beside the helper [OspreyFlow_Core/services/api/worker_main.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_worker_and_the_conduit_start_the_feed_one_way | 1 failed in 0.79s
+F5 the Conduit reads the feed's unfiltered read itself [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py::test_no_route_or_other_module_reaches_the_indexers_reads | 1 failed in 1.42s
+restored: GREEN - 14 passed in 5.39s
