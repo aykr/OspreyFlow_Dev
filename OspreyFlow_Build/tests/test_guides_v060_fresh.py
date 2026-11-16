@@ -58,10 +58,12 @@ def guides() -> dict[str, str]:
 
 
 def test_the_changelog_says_v060_is_installed_fresh_and_version_names_it() -> None:
-    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() == "v0.6.0"
+    # VERSION named v0.6.0 at its cut; from v0.6.1 (a patch, 16 Nov) it names a later release of the same line,
+    # and the v0.6.0 section below still says fresh install only.
+    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() in ("v0.6.0", "v0.6.1")
     log = (CORE / "CHANGELOG.md").read_text(encoding="utf-8")
-    m = re.search(r"^## (v\d+\.\d+\.\d+) — \d{4}-\d{2}-\d{2}$", log, re.MULTILINE)
-    assert m and m.group(1) == "v0.6.0", "the latest release in the CHANGELOG"
+    m = re.search(r"^## (v0\.6\.0) — \d{4}-\d{2}-\d{2}$", log, re.MULTILINE)
+    assert m, "v0.6.0's section in the CHANGELOG (the latest release until v0.6.1's patch, 16 Nov)"
     section = log[m.end() : log.index("\n## ", m.end())]
     assert section.lstrip().startswith(FRESH), "the sentence first, in the section's own words"
     assert "**Before you install.**" in section and "**Before you update.**" not in section

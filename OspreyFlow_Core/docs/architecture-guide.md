@@ -16,10 +16,11 @@ installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.6** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 1.7** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.7 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.6 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.5 | 2026-11-15 | The header names v0.5.2, the release this guide describes (step 5's sweep, §2, at the cut). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.4 | 2026-11-14 | Step 5's wording sweep, early part. §2: search as built, OpenSearch or, with `postgres-fulltext`, the graph store's exact search alone (no PostgreSQL full-text exists); the third narrow port, `IndexFeedSource` (ADR-150, access in the index's query, ADR-149). §3: the `cloud-platform` profile beside the three modes. §5: a drawn dataset merged into another, as built, no longer *Coming*. Held by `tests/test_guides_ports_and_search.py`, `test_guides_drawn_merge.py` and `test_guides_v051_gaps.py`. PDF made by the orchestrator at merge. |

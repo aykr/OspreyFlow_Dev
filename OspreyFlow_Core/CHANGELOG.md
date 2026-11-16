@@ -6,9 +6,9 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
-### v0.6.1
+## v0.6.1 — 2026-11-16
 
-A patch to v0.6.0 (dated and made a release's section at the cut).
+A patch to v0.6.0: Ask & Chat opens as a drawer again, and search on Small and Lite keeps up with new data.
 
 **The Glass (ADR-145 Amendment 20).**
 - **Ask & Chat opens as a drawer again**, beside the view, which stays in reach. **Expand**, at the drawer's top,

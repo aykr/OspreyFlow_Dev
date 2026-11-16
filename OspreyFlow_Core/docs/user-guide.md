@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.76** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
+**Version 1.77** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.77 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.76 | 2026-11-16 | §6, Ask & Chat's drawer as reviewed (ADR-145 Amendment 20): Esc closes it as it closes other drawers; a marker or *Show all on graph* shows the graph with the drawer kept beside it; closing returns focus to what you opened it from. |
 | 1.75 | 2026-11-16 | v0.6.1 (the owner, 16 Nov): Ask & Chat (§6) opens as a drawer beside the view again, with **Expand** to make it the page and **Show as a drawer** to turn it back, keeping your question, engine and place; Esc closes the drawer, as other drawers; a marker or *Show all on graph* keeps the drawer; each opening is the drawer, and the results' *Ask a question about '…' instead* opens the page; §3's rail row and §5.5's Ask line say so (ADR-145 Amendment 20). |
 | 1.74 | 2026-11-16 | v0.6.0 (the owner, 16 Nov; built as v0.6.1's first item), the Glass's rows (ADR-145 Amendment 19, decisions 1 to 4): §3, the case line says what is on the graph, "Whole case" or "Saved view: ‹name›" with its tag, **Details ▾** and **Back to the whole case**, and stays one line on a narrow window; §5.13, no strip over the graph: *Details* holds the count of what could not be shown, that nothing changes the case, where the view came from with **← Back to the alert**, and a merged drawing's notes; focus to the saved view's name. Held by `tests/test_user_guide_navigation.py`, `tests/test_guide_navigation_words.py` and `tests/test_user_guide_saved_views.py`. §5.2, **Match strictness** is a control in the graph's toolbar, and **Hiding the toolbar**: **Hide toolbar** and **Show toolbar**, T with the graph selected, remembered for you in this browser; the Map has the buttons (ADR-145 Amendment 19, decisions 5 and 6). |

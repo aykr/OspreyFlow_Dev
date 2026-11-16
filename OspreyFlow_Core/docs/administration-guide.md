@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.24** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
+**Version 2.25** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.25 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 2.24 | 2026-11-16 | §6a.7's Superset: a Reports Viewer is Superset's OspreyReader, which reads and changes nothing there (Superset's own Gamma saves dashboards and charts; found by v0.6.0's package test, the owner's ruling of 16 November), and every account holds it; a builder (`manage_dashboards`) reads the whole reporting mart in their own session, so the right is for people cleared for every dashboard identity's cases (ADR-148 Amendment 21). |
 | 2.23 | 2026-11-15 | §6a.7: a service identity on Entra ID must hold this API's app role `OspreyFlow.Run` (ADR-148 Amendment 20; v0.6.0 #18), defined on the API's registration and granted to the orchestrator's application; §6a.2's poc tables list it beside `Dashboard.Read`. §6a.7 and §8's `run` row: `ospreyflow run` on Entra ID sends `OSPREY_TOKEN_SCOPE`, the API's `/.default` scope, without which Entra issues no token (the owner, beside #18). Version set at merge. PDF made by the orchestrator at merge. |
 | 2.22 | 2026-11-15 | §6a.9, Bedrock in London (the owner's ruling 17): the example's model is `amazon.nova-pro-v1:0`, a model AWS serves in-Region in London; Bedrock in London means Amazon Nova and the Titan embeddings, not current Claude models, which London serves only through the EU and global profiles the region rule refuses; Claude through AWS's EU profile is not offered in v0.6.0. Held by `tests/test_admin_guide_bedrock_london.py`. Version set at merge. PDF made by the orchestrator at merge. |

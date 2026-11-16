@@ -14,10 +14,11 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.39** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 1.40** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.40 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.39 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November); §9's example release tag is `v0.6.0`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.38 | 2026-11-15 | The header names v0.5.2 (step 5's sweep, §2, at the cut); §9's example release tag is `v0.5.2`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.37 | 2026-11-14 | §7.6: an influencer's `note` example is "set from the 2026 calibration", never a setting still to be confirmed, and the `client_parity` composition is called *Rarity plus adds*, as the Glass labels it (studio's V3, the owner's exception). Held by `tests/test_guides_no_client_words.py`. Version set at merge. PDF made by the orchestrator at merge. |
