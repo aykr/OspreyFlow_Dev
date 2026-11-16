@@ -43,3 +43,4 @@ ws	The websites ospreyflow.org and ospreyflow.net: live on HTTPS since 16 Nov 06
 p3	ospreyflow.app, the standard-look demo (Part 3): offline work done; the server proof, install and cutover after the GOV.UK rebuild; needs the owner's O1-O8 (DNS, Porkbun key, lease, window)	platform	2026-11-15	2026-11-18	n	gm	platform:part3
 gB	Glass rows, B (built as v0.6.1, joining v0.6.0): the case line carries the state, no strip, ADR-145 Am 19	case	2026-11-16	2026-11-17	n	-	case:v061-glass-rows
 gAC	Glass rows, A and C (built as v0.6.1, joining v0.6.0): Match strictness in the toolbar; Hide and Show toolbar, T on the canvas, remembered; the Map has the buttons	case-b	2026-11-16	2026-11-17	n	-	case-b:v061-glass-rows-ac
+cl	This part of the development closed (the owner, 16 Nov): every lane closed with its HANDOFF, the clean-up done, the orchestrator last; v0.6.1 waits for the owner	orchestrator	2026-11-16	2026-11-18	n	mp,rb,gm,p3	orchestrator:v060-close
