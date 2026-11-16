@@ -202,5 +202,5 @@ platform-b	v060-superset-reader	S	done	v0.6.0 (the owner, 16 Nov): a read-only O
 platform	v060-seed-irsa	S	done	v0.6.0: the POC seed Job on cloud-platform gets its IRSA service account and bucket prefix; a failed seed fails INSTALL step 9	lane/platform-v060-seed-irsa
 orchestrator	v060-glass-merge	S	done	the Glass rows merged into v0.6.0 (the owner, 16 Nov); pushed as fb7f336 by case as deputy
 orchestrator	v060-c3-ci	S	building	CI on the candidate with the Glass rows: fb7f336, run 43864213118
-platform-b	v060-stage4-glass	M	todo	the package test on the candidate with the Glass rows
+platform-b	v060-stage4-glass	M	building	the package test on the candidate with the Glass rows: fb7f336; stage 3 PASS 12:17Z, row 0 started
 platform	v060-step6-all-pods	S	done	v0.6.0 (case as deputy, 16 Nov; platform-b row 9b on ea5fc61): INSTALL step 6's token-version check reads every api pod; red first	lane/platform-v060-step6-all-pods
