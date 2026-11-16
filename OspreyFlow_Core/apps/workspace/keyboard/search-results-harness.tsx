@@ -83,7 +83,7 @@ await applyHarnessBrand();
 // Graph out (`flex: 1; position: relative`, beside the results in the same main area): the live demo of 15 November 2026
 // drew the canvas's toolbar and zoom over the results page, which a stand-in main area could never show.
 const wantsCanvas = params.get("canvas") === "1";
-// `?ask=1`: Ask & Chat's page (ADR-145 Amendment 18) open at load where `App.tsx` draws it, in the same main area and
+// `?ask=1`: Ask & Chat's page (ADR-145 Amendment 18; Amendment 20's drawer expanded) open at load where `App.tsx` draws it, in the same main area and
 // the same layer as the results, with App's own hook (`questions/useAskPage.ts`), so the stacking case can see the
 // canvas's toolbar and zoom column drawn over it if they ever are.
 const wantsAsk = params.get("ask") === "1";
@@ -103,7 +103,7 @@ function Harness() {
   // As `App.tsx` hands them: a page opened while a document is read closes the reader and shows at once.
   const stopReading = () => setReading(null);
   const results = useSearchResultsOverlay(reading !== null, stopReading);
-  const ask = useAskPage(reading !== null, results, wantsAsk, stopReading);
+  const ask = useAskPage(reading !== null, results, wantsAsk ? "page" : null, stopReading);
   const opened = useRef(false);
   useEffect(() => {
     if (opened.current || !params.get("open")) return;
@@ -154,7 +154,14 @@ function Harness() {
           )}
         </div>
         {ask.open && (
-          <AskPage backLabel="Graph" onBack={ask.back} hidden={ask.pageHidden}>
+          <AskPage
+            form={ask.expanded ? "page" : "drawer"}
+            backLabel="Graph"
+            onBack={ask.back}
+            onExpand={ask.expand}
+            onCollapse={ask.collapse}
+            hidden={ask.pageHidden}
+          >
             <p>Ask a question about this case.</p>
             {/* A document cited by an answer, read over the view, the page hidden meanwhile (the reader is a stand-in). */}
             <button type="button" className="btn" onClick={() => setReading("a document from an answer")}>

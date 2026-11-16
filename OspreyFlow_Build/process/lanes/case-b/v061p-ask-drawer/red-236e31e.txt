@@ -1,0 +1,148 @@
+
+Running 5 tests using 2 workers
+
+[1/5] apps/workspace/keyboard/questions.spec.ts:137:1 › Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard
+[2/5] apps/workspace/keyboard/shell.spec.ts:139:1 › Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it
+  1) apps/workspace/keyboard/questions.spec.ts:137:1 › Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      161 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+      162 |   const askPage = page.getByRole("region", { name: "Ask & Chat" });
+    > 163 |   await expect(drawer).toBeVisible();
+          |                        ^
+      164 |   const choice = drawer.getByRole("combobox", { name: "Model engine" });
+      165 |   await expect(choice).toHaveValue("gemini");
+      166 |   await page.getByLabel("Your question").focus();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/questions.spec.ts:163:24
+
+    Error Context: apps/workspace/test-results/questions-Expand-and-Show--2afc9-scroll-position-by-keyboard/error-context.md
+
+
+  2) apps/workspace/keyboard/shell.spec.ts:139:1 › Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator:  getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Ask & Chat', exact: true })
+    Expected: "dialog"
+    Received: ""
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveAttribute" getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Ask & Chat', exact: true }) with timeout 5000ms
+      - waiting for getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Ask & Chat', exact: true })
+        14 × locator resolved to <button type="button" title="Ask & Chat" aria-expanded="false" class="left-rail__item" aria-label="Ask & Chat">…</button>
+           - unexpected value "null"
+
+
+      145 |   await expect(view).toBeVisible();
+      146 |   const opener = rail.getByRole("button", { name: "Ask & Chat", exact: true });
+    > 147 |   await expect(opener).toHaveAttribute("aria-haspopup", "dialog");
+          |                        ^
+      148 |   const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+      149 |   for (const leave of ["Close", "the rail"] as const) {
+      150 |     await opener.focus();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:147:24
+
+    Error Context: apps/workspace/test-results/shell-Ask-Chat-opens-as-a--8ca68-Close-or-the-rail-closes-it/error-context.md
+
+
+[3/5] apps/workspace/keyboard/shell.spec.ts:187:1 › Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it
+  3) apps/workspace/keyboard/shell.spec.ts:187:1 › Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+    Expected: focused
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" getByRole('dialog', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+
+
+      191 |   await opener.focus();
+      192 |   await page.keyboard.press("Enter");
+    > 193 |   await expect(drawer.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+          |                                                                     ^
+      194 |   await page.keyboard.press("Tab");
+      195 |   await expect(drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeFocused();
+      196 |   await page.keyboard.press("Escape");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:193:69
+
+    Error Context: apps/workspace/test-results/shell-Escape-from-inside-t-05bcc--opener-the-page-ignores-it/error-context.md
+
+
+[4/5] apps/workspace/keyboard/shell.spec.ts:214:1 › Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it
+  4) apps/workspace/keyboard/shell.spec.ts:214:1 › Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Ask & Chat' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('dialog', { name: 'Ask & Chat' })
+
+
+      222 |   await opener.focus();
+      223 |   await page.keyboard.press("Enter");
+    > 224 |   await expect(drawer).toBeVisible();
+          |                        ^
+      225 |   await page.keyboard.press("Tab");
+      226 |   const expand = drawer.getByRole("button", { name: "Expand Ask & Chat to the full page" });
+      227 |   await expect(expand).toBeFocused();
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:224:24
+
+    Error Context: apps/workspace/test-results/shell-Expand-turns-the-Ask-5a0fb--Back-to-the-view-closes-it/error-context.md
+
+
+[5/5] apps/workspace/keyboard/shell.spec.ts:259:1 › Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand
+  5) apps/workspace/keyboard/shell.spec.ts:259:1 › Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('region', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+    Expected: focused
+    Received: inactive
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toBeFocused" getByRole('region', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' }) with timeout 5000ms
+      - waiting for getByRole('region', { name: 'Ask & Chat' }).getByRole('heading', { name: 'Ask & Chat' })
+        14 × locator resolved to <h2 tabindex="-1" id="ask-page-title" class="ask-page__title">Ask & Chat</h2>
+           - unexpected value "inactive"
+
+
+      266 |   await page.keyboard.press("Tab");
+      267 |   await page.keyboard.press("Enter");
+    > 268 |   await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
+          |                                                                      ^
+      269 |   await page.keyboard.press("Tab");
+      270 |   await expect(askPage.getByRole("button", { name: "Show as a drawer" })).toBeFocused();
+      271 |   await page.keyboard.press("Enter");
+        at /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace/keyboard/shell.spec.ts:268:70
+
+    Error Context: apps/workspace/test-results/shell-Show-as-a-drawer-ret-65a19-by-keyboard-focus-on-Expand/error-context.md
+
+
+  5 failed
+    apps/workspace/keyboard/questions.spec.ts:137:1 › Expand and Show as a drawer keep the question typed, the engine chosen and the scroll position, by keyboard 
+    apps/workspace/keyboard/shell.spec.ts:139:1 › Ask & Chat opens as a drawer beside the view by keyboard, and its Close or the rail closes it 
+    apps/workspace/keyboard/shell.spec.ts:187:1 › Escape from inside the Ask & Chat drawer closes it, focus on the opener; the page ignores it 
+    apps/workspace/keyboard/shell.spec.ts:214:1 › Expand turns the Ask & Chat drawer into the page by keyboard, and Back to the view closes it 
+    apps/workspace/keyboard/shell.spec.ts:259:1 › Show as a drawer returns the Ask & Chat page to the drawer by keyboard, focus on Expand 

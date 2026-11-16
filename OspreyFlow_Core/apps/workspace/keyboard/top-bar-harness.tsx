@@ -133,7 +133,7 @@ function RailWithHelp() {
           toggle();
         }}
         // Split and ordered as `App.tsx` does it (`shell/railLayout.ts`), so these cases see its layout.
-        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id), opensPage: id === "questions", ...railMark(id, { view: "graph", open: new Set() }) })))}
+        {...splitRail(RAIL_ENTRIES.map((id) => ({ id, label: RAIL_LABELS[id], icon: id, onSelect: rail(id), ...railMark(id, { view: "graph", open: new Set() }) })))}
       />
       {/* Beside the rail, never over it, as `App.tsx` places it in the column the views share. */}
       {helpOpen && (

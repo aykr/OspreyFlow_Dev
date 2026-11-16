@@ -636,11 +636,12 @@ function showAllOnCanvas(ids: AnswerIds) {
 }
 
 function AskPageOverCanvas() {
-  const ask = useAskPage(false, { leave: () => undefined }, true);
+  // Open as the page (ADR-145 Amendment 20: the drawer expanded), by App's own hook.
+  const ask = useAskPage(false, { leave: () => undefined }, "page");
   if (!ask.open) return null;
   return (
     <div style={{ position: "fixed", inset: 0 }}>
-      <AskPage backLabel="Graph" onBack={ask.back}>
+      <AskPage form={ask.expanded ? "page" : "drawer"} backLabel="Graph" onBack={ask.back} onExpand={ask.expand} onCollapse={ask.collapse}>
         <QuestionsPanel
           apiBaseUrl="http://keyboard-test.invalid"
           bearerToken="unused"
