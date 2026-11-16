@@ -306,6 +306,37 @@ def test_a_secret_reaches_the_pod_script_through_stdin_alone(pod: Any, monkeypat
     assert pod._secret("@secret") == GUEST and pod._secret("7") == "7"
 
 
+def test_the_stdin_the_check_sends_with_a_secret_is_python_the_pod_runs(tmp_path: Path) -> None:
+    """The text `pod()` sends kubectl when a guest token travels with it, compiled and run as `python -I -` would
+    (v0.6.0's package test row 3 on 0b51705: the secret's lines went before superset_pod.py's
+    `from __future__` import, which must come first, so every call with a secret was a SyntaxError). Run with a
+    stand-in for the script's own work: the secret is read back where an argument says `@secret`."""
+    import subprocess
+
+    import sys
+
+    check = _load(CHECK, "dashboards_check_stdin_under_test")
+    sent: list[str] = []
+
+    def kube(r1: Any, *args: str, stdin: str = "") -> str:
+        sent.append(stdin)
+        return '{"ok": true}'
+
+    original = check.kube
+    check.kube = kube
+    try:
+        check.pod(type("R1", (), {"GLASS": GLASS})(), "embedded", "1", "@secret", secret=GUEST)
+    finally:
+        check.kube = original
+    [stdin] = sent
+    compile(stdin, "<stdin>", "exec")  # a SyntaxError here is the field failure
+    probe = stdin.replace("raise SystemExit(main(sys.argv[1:]))", "print(_secret(sys.argv[-1]))")
+    done = subprocess.run([sys.executable, "-I", "-", "ospreyflow.r1.test", "embedded", "1", "@secret"],
+                          input=probe, capture_output=True, text=True, timeout=60, check=False)  # fmt: skip
+    assert done.returncode == 0 and done.stdout.strip().splitlines()[-1] == GUEST, done.stderr[-400:]
+    assert GUEST in stdin and all(GUEST not in a for a in ("embedded", "1", "@secret"))
+
+
 # ---- the check itself, against a Conduit whose refusals are the real may_open's ---------------------------
 
 CLASSES = ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE", "SECRET"]

@@ -124,9 +124,15 @@ def kube(r1: Any, *args: str, stdin: str | None = None) -> str:
 def pod(r1: Any, *args: str, secret: str | None = None) -> dict[str, Any]:
     """`superset_pod.py` in the api pod, its one JSON line back. A `secret` (a guest token) travels inside the
     script's text on stdin, read where an argument says `@secret`: never on kubectl's command line."""
-    preamble = f"import os\nos.environ['R1_SECRET'] = {json.dumps(secret)}\n" if secret is not None else ""
+    script = POD_SCRIPT.read_text()
+    if secret is not None:
+        # The secret is set, then the script run as itself, so its own first lines (a docstring and a
+        # `from __future__` import, which must come first) stay first (v0.6.0's package test row 3: the
+        # secret's lines put before them made every call with a secret a SyntaxError).
+        script = (f"import os\nos.environ['R1_SECRET'] = {json.dumps(secret)}\n"
+                  f"exec(compile({json.dumps(script)}, 'superset_pod.py', 'exec'))\n")  # fmt: skip
     out = kube(r1, "exec", "-i", "deploy/api", "--", "/app/.venv/bin/python", "-I", "-", r1.GLASS, *args,
-               stdin=preamble + POD_SCRIPT.read_text())  # fmt: skip
+               stdin=script)  # fmt: skip
     return json.loads(out.strip().splitlines()[-1])
 
 
