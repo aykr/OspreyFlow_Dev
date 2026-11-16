@@ -1,0 +1,16 @@
+red   App passes no state to the case line
+red   the saved view's name takes no focus
+red   Esc does not close Details
+red   Details without the count
+red   the fold wraps after the name (no steps 4 and 5, as before ruling 10)
+red   Back to the whole case low on contrast
+red   the slim line keeps reads
+red   the canvas pushed by a strip again
+red   the slim line without its shortest cross-link (ruling 14)
+red   the cross-link and the end on 32 px when wrapped (ruling 14)
+red   a separator before Case while You are in is out of sight
+unplanted:
+green vitest
+green views.spec, case-line-type.spec
+plants failing to go red, or unplanted red: 0
+plants exit 0

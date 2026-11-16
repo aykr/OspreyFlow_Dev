@@ -1,0 +1,12 @@
+v0.6.1 glass-rows B, gates after ruling 14 (739ffd1; 613929d adds only plants.sh's exit-1 rule), local Playwright slot 7
+== whole vitest at 739ffd1: Test Files 400 passed (400), Tests 3657 passed (3657)
+== whole keyboard suite at 613929d, the registry patch applied:
+Running 1434 tests using 6 workers
+  5 skipped
+  1429 passed (6.8m)
+kb exit 0
+   (at 739ffd1 with the every-harness diff too: 1435 run, 1429 passed, 5 skipped, 1 failed: map-view.spec's 'shrinking the map's box keeps the camera on the drawn nodes', untouched by B, 30 of 30 alone; the one test more is govuk-type-pass's show=lens&details=open, passed)
+== every-harness at 739ffd1, the every-harness diff applied:
+  1156 passed (17.9m)
+eh exit 0
+== plants at 613929d: 11 of 11 red, unplanted green (glass-rows-plants.613929d.log); the run at 739ffd1 was cut by another lane's pkill and is not counted
