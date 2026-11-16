@@ -654,6 +654,9 @@
 .canvas-toolbar__show .radial-menu__item { border-radius: 0; }
 /* The owner's rulings 6 and 7 (v0.6.1 glass-rows): under about 1132 px of its own width the toolbar's words
    shorten (`toolbarCompact.ts`) and it draws a little tighter, so it stays one row down to about 900 px. */
+/* Amendment 19 decision 6: a hidden toolbar is not drawn at all (the rule above would otherwise draw it). */
+.canvas-toolbar[hidden], .view-toolbar[hidden] { display: none; }
+.view-toolbar .toolbar-toggle { margin-left: auto; }
 .canvas-toolbar--compact { column-gap: var(--sp-8); }
 .canvas-toolbar--compact .radial-menu__item { padding: var(--sp-2) var(--sp-4); }
 .canvas-toolbar--compact select { max-width: 104px; }
@@ -858,7 +861,9 @@
 .session-prompt__actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; }
 .session-prompt__problem { margin: var(--sp-12) 0 0; color: var(--error); font-weight: 600; }
 /* ADR-115 E6 (DESIGN.md §5a): below 1100px the toolbar's "Last change" note gives its room back. */
-.canvas-toolbar__last-change { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary); }
+.canvas-toolbar__last-change {
+  flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-tertiary);
+}
 @media (max-width: 1099px) { .canvas-toolbar__last-change { display: none; } }
 
 /* The cases, each once, with each case's views beneath it (ADR-144 decision 5), in the case menu and

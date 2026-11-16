@@ -16,13 +16,16 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 
 import type { App as AppComponent } from "./App";
+import { forgetToolbarSettings } from "./canvas/toolbarVisibility";
 
 // The stand-in draws what App hands the canvas toolbar (v0.6.1 glass-rows A: strictness after Layout), inside the
 // canvas, where the real `GlassCanvas` draws its toolbar.
+// C: the toolbar's id, `hidden` while App says so, and *Hide toolbar* at its end, as `GlassCanvas` draws them (the
+// real toolbar's own hiding is held in a browser, `keyboard/glass-toolbar.spec.ts`).
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: ({ toolbarAfterLayout }: { toolbarAfterLayout?: import("react").ReactNode }) => (
+  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string }) => (
     <div role="application" aria-label="Network canvas" tabIndex={0}>
-      <div role="toolbar" aria-label="Canvas tools">{toolbarAfterLayout}</div>
+      <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{toolbarAfterLayout}{toolbarEnd}</div>
     </div>
   ),
 }));
@@ -558,5 +561,118 @@ describe("Match strictness in the canvas toolbar (Amendment 19 decision 5)", () 
     expect(within(row).getByRole("button", { name: "Add site" })).toBeTruthy();
     expect(within(row).getByRole("button", { name: "Draw boundary" })).toBeTruthy();
     expect(within(row).queryByRole("button", { name: /strictness/i })).toBeNull();
+  });
+});
+
+// v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4, 16 November 2026): a toolbar
+// that can be hidden. *Hide toolbar* at the toolbar's right end hides it and slims the case line, which then ends
+// with *Show toolbar*; each names the toolbar it controls and whether it is shown; focus moves between the two;
+// Alt+Shift+T does the same; the setting is the signed-in analyst's, in this browser; the Map has it, the Drawing
+// board does not.
+describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
+  const KEY = "ospreyflow.glass.toolbar.osprey-demo-analyst";
+  beforeEach(() => {
+    // The username the setting is kept under is the token's preferred_username, as the Studio's mode is.
+    vi.mocked(userManager.completeSignInFromRedirect).mockResolvedValue({
+      access_token: "a-token",
+      profile: { sub: "analyst-1", preferred_username: "osprey-demo-analyst", clearance: "OFFICIAL", org_unit: "unit-1", roles: [], receivable_handling_codes: [] },
+    } as never); // prettier-ignore
+  });
+  afterEach(() => forgetToolbarSettings());
+  const caseLine = () => screen.getByRole("region", { name: "You are in the Glass" });
+
+  test("Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    const hide = await within(tools).findByRole("button", { name: "Hide toolbar" });
+    expect(hide.getAttribute("aria-expanded")).toBe("true");
+    expect(hide.getAttribute("aria-controls")).toBe(tools.id);
+    expect(tools.id).not.toBe("");
+    await within(caseLine()).findByText(/^reads /);
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+
+    fireEvent.click(hide);
+    expect(tools.hidden).toBe(true);
+    // Out of the accessibility tree, not merely out of sight.
+    expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+    const show = within(caseLine()).getByRole("button", { name: "Show toolbar" });
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    expect(show.getAttribute("aria-controls")).toBe(tools.id);
+    expect(document.activeElement).toBe(show);
+    // The slim line (case's seam): no reads, the case and Saved views kept, Show toolbar last.
+    expect(caseLine().textContent).not.toMatch(/reads /);
+    expect(within(caseLine()).getByRole("button", { name: /^Saved views/ })).toBeTruthy();
+    expect(within(caseLine()).getAllByRole("button").at(-1)).toBe(show);
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+
+    fireEvent.click(show);
+    expect(tools.hidden).toBe(false);
+    expect(document.activeElement).toBe(within(tools).getByRole("button", { name: "Hide toolbar" }));
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+    expect(localStorage.getItem(KEY)).toBeNull();
+  });
+
+  test("the Glass opens as the analyst left it: hidden at the first draw", async () => {
+    localStorage.setItem(KEY, "hidden");
+    render(<App />);
+    const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
+    expect(show.getAttribute("aria-expanded")).toBe("false");
+    await screen.findByRole("application", { name: "Network canvas" });
+    expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+  });
+
+  test("another analyst's setting on this browser is not this one's", async () => {
+    localStorage.setItem("ospreyflow.glass.toolbar.someone-else", "hidden");
+    render(<App />);
+    expect(await screen.findByRole("toolbar", { name: "Canvas tools" })).toBeTruthy();
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+  });
+
+  test("Alt+Shift+T hides and shows it, focus moving as the buttons move it; not from a text field, and not Ctrl+Shift+T", async () => {
+    render(<App />);
+    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
+    await within(tools).findByRole("button", { name: "Hide toolbar" });
+    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", ctrlKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(false);
+    const search = screen.getByRole("combobox", { name: /Search entities/ });
+    fireEvent.keyDown(search, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(false);
+    fireEvent.keyDown(document.body, { key: "ˇ", code: "KeyT", altKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(true);
+    expect(document.activeElement).toBe(within(caseLine()).getByRole("button", { name: "Show toolbar" }));
+    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(tools.hidden).toBe(false);
+    expect(document.activeElement).toBe(within(tools).getByRole("button", { name: "Hide toolbar" }));
+  });
+
+  test("the Map has the same control and the same setting: its row hidden, Show toolbar on the line", async () => {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    const row = await screen.findByRole("toolbar", { name: "Map view" });
+    const hide = within(row).getByRole("button", { name: "Hide toolbar" });
+    expect(hide.getAttribute("aria-controls")).toBe(row.id);
+    fireEvent.click(hide);
+    expect(row.hidden).toBe(true);
+    expect(screen.queryByRole("toolbar", { name: "Map view" })).toBeNull();
+    const show = within(caseLine()).getByRole("button", { name: "Show toolbar" });
+    expect(document.activeElement).toBe(show);
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+    // One setting: back on the Graph its toolbar is hidden too.
+    fireEvent.click(screen.getByRole("button", { name: "Graph" }));
+    await screen.findByRole("application", { name: "Network canvas" });
+    expect(screen.queryByRole("toolbar", { name: "Canvas tools" })).toBeNull();
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+  });
+
+  test("the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and Alt+Shift+T does nothing there", async () => {
+    localStorage.setItem(KEY, "hidden");
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(screen.getByRole("button", { name: "Drawing board" }));
+    await within(caseLine()).findByText(/^reads /);
+    expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
+    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    expect(localStorage.getItem(KEY)).toBe("hidden");
   });
 });

@@ -1,0 +1,90 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/canvas/toolbarVisibility.test.ts (5 tests | 5 failed) 3ms
+   ❯ the remembered setting (3)
+     × is kept under ospreyflow.glass.toolbar.<username>, as hidden or not at all 2ms
+     × is one analyst's: another signed in on the same browser sees the toolbar 0ms
+     × is not remembered for nobody: with no one signed in nothing is written 0ms
+   ❯ Alt+Shift+T (2)
+     × is matched by the key's place, so a Mac's Option character does not matter 0ms
+     × is not Ctrl+Shift+T (a browser's reopen tab), nor T alone, nor with Cmd 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > the remembered setting > is kept under ospreyflow.glass.toolbar.<username>, as hidden or not at all
+TypeError: toolbarKey is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:13:12
+     11| describe("the remembered setting", () => {
+     12|   it("is kept under ospreyflow.glass.toolbar.<username>, as hidden or …
+     13|     expect(toolbarKey("osprey-demo-analyst")).toBe("ospreyflow.glass.t…
+       |            ^
+     14|     expect(readToolbarHidden("osprey-demo-analyst")).toBe(false);
+     15|     writeToolbarHidden("osprey-demo-analyst", true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > the remembered setting > is one analyst's: another signed in on the same browser sees the toolbar
+TypeError: writeToolbarHidden is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:23:5
+     21|
+     22|   it("is one analyst's: another signed in on the same browser sees the…
+     23|     writeToolbarHidden("analyst-a", true);
+       |     ^
+     24|     expect(readToolbarHidden("analyst-b")).toBe(false);
+     25|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > the remembered setting > is not remembered for nobody: with no one signed in nothing is written
+TypeError: writeToolbarHidden is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:28:5
+     26|
+     27|   it("is not remembered for nobody: with no one signed in nothing is w…
+     28|     writeToolbarHidden(null, true);
+       |     ^
+     29|     expect(localStorage.length).toBe(0);
+     30|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > Alt+Shift+T > is matched by the key's place, so a Mac's Option character does not matter
+TypeError: isToolbarShortcut is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:36:12
+     34|   const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown"…
+     35|   it("is matched by the key's place, so a Mac's Option character does …
+     36|     expect(isToolbarShortcut(key({ code: "KeyT", key: "T", altKey: tru…
+       |            ^
+     37|     expect(isToolbarShortcut(key({ code: "KeyT", key: "ˇ", altKey: tru…
+     38|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > Alt+Shift+T > is not Ctrl+Shift+T (a browser's reopen tab), nor T alone, nor with Cmd
+TypeError: isToolbarShortcut is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:40:12
+     38|   });
+     39|   it("is not Ctrl+Shift+T (a browser's reopen tab), nor T alone, nor w…
+     40|     expect(isToolbarShortcut(key({ code: "KeyT", key: "T", ctrlKey: tr…
+       |            ^
+     41|     expect(isToolbarShortcut(key({ code: "KeyT", key: "t" }))).toBe(fa…
+     42|     expect(isToolbarShortcut(key({ code: "KeyT", key: "T", altKey: tru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed (5)
+   Start at  06:58:22
+   Duration  375ms (environment 95%, tests 1%, transform 1%, import 1%, setup 1%, worker 1%)
+
+
+Slowest 5 tests:
+     2 ms  src/canvas/toolbarVisibility.test.ts > the remembered setting > is kept under ospreyflow.glass.toolbar.<username>, as hidden or not at all
+     0 ms  src/canvas/toolbarVisibility.test.ts > Alt+Shift+T > is matched by the key's place, so a Mac's Option character does not matter
+     0 ms  src/canvas/toolbarVisibility.test.ts > the remembered setting > is one analyst's: another signed in on the same browser sees the toolbar
+     0 ms  src/canvas/toolbarVisibility.test.ts > Alt+Shift+T > is not Ctrl+Shift+T (a browser's reopen tab), nor T alone, nor with Cmd
+     0 ms  src/canvas/toolbarVisibility.test.ts > the remembered setting > is not remembered for nobody: with no one signed in nothing is written

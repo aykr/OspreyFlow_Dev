@@ -1,0 +1,469 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+stderr | src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ ❯ src/App.chrome.test.tsx (38 tests | 4 failed) 9658ms
+   ✓ the case screen's chrome, variant B (ADR-145 Amendment 2) (3)
+     ✓ 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19) 241ms
+     ✓ the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 60ms
+     ✓ the column opens with the Inspector only, the other panels folded in their order 123ms
+   ✓ the dataset named once (ADR-145 Amendment 14 decision 4) (3)
+     ✓ the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 53ms
+     ✓ a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 54ms
+     ✓ the badge names the scope when the case's datasets cannot be read 65ms
+   ✓ the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) (2)
+     ✓ the scope badge stays where the banner names no dataset: You are in Rules and Monitoring 91ms
+     ✓ the scope badge stays where the banner names no dataset: You are in the Ingest Studio 78ms
+   ✓ the owner's navigation (ADR-145 Amendment 15) (10)
+     ✓ the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 100ms
+     ✓ Drawing board is a view: its own screen says it is a sketch that does not change the case's data 38ms
+     ✓ the strip names no mode and says no mode's note 21ms
+     ✓ the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 33ms
+     ✓ Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 113ms
+     ✓ Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it 145ms
+     ✓ History opens its panel without changing the view, a second press closes it, and closing returns focus to it 99ms
+     ✓ the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · reads … 44ms
+     ✓ Saved views opens its panel at the saved views list 82ms
+     ✓ the case switcher's last entry is All cases, which opens the Cases panel 1072ms
+   ✓ Build a report beside Reports (ADR-145 Amendment 15) (3)
+     ✓ is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab 73ms
+     ✓ is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed 43ms
+     ✓ is not offered, even to a builder, where there is no Superset 43ms
+   ✓ Part B after review (ADR-145 Amendment 15) (9)
+     ✓ in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel 1090ms
+     ✓ the Cases panel opened from All cases returns focus to the case menu's button when it closes 1115ms
+     ✓ Saved views is a toggle: expanded while its panel is open, a second press closes it 72ms
+     ✓ a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board 64ms
+     ✓ an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views 64ms
+     ✓ a drawing board chosen before the rights arrive gives way when they say the person may not investigate 101ms
+     ✓ Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current 138ms
+     ✓ the built-in Administrator, offered Connection strength alone, has it in the switch and current 55ms
+     ✓ exactly one view is current: one pressed in the switch, or none there and More views naming its own 175ms
+   ✓ Match strictness in the canvas toolbar (Amendment 19 decision 5) (2)
+     ✓ the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting 30ms
+     ✓ the Map keeps its row, Add site and Draw boundary, with no strictness in it 46ms
+   ❯ a toolbar that can be hidden (Amendment 19 decision 6) (6)
+     × Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them 1021ms
+     × the Glass opens as the analyst left it: hidden at the first draw 1049ms
+     ✓ another analyst's setting on this browser is not this one's 66ms
+     × Alt+Shift+T hides and shows it, focus moving as the buttons move it; not from a text field, and not Ctrl+Shift+T 1038ms
+     × the Map has the same control and the same setting: its row hidden, Show toolbar on the line 87ms
+     ✓ the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and Alt+Shift+T does nothing there 88ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them
+TestingLibraryElementError: Unable to find role="button" and name "Hide toolbar"
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Canvas tools"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"canvas-menu resolution-threshold-control"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-label[39m=[32m"Match strictness: Broad"[39m
+      [33mclass[39m=[32m"radial-menu__item"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mMatch strictness: Broad[0m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [0m ▾[0m
+      [36m</span>[39m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Canvas tools"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"canvas-menu resolution-threshold-control"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-label[39m=[32m"Match strictness: Broad"[39m
+      [33mclass[39m=[32m"radial-menu__item"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mMatch strictness: Broad[0m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [0m ▾[0m
+      [36m</span>[39m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.chrome.test.tsx:577:38
+    575|     render(<App />);
+    576|     const tools = await screen.findByRole("toolbar", { name: "Canvas t…
+    577|     const hide = await within(tools).findByRole("button", { name: "Hid…
+       |                                      ^
+    578|     expect(hide.getAttribute("aria-expanded")).toBe("true");
+    579|     expect(hide.getAttribute("aria-controls")).toBe(tools.id);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Glass opens as the analyst left it: hidden at the first draw
+TestingLibraryElementError: Unable to find role="button" and name "Show toolbar"
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"context-banner"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m>[39m
+    [0mYou are in the Glass[0m
+  [36m</h2>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__label"[39m
+  [36m>[39m
+    [0mCase[0m
+  [36m</span>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"menu"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33mclass[39m=[32m"btn menu-button menu-button--case"[39m
+      [33mtitle[39m=[32m"Kestrel"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"menu-button__label"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"visually-hidden"[39m
+        [36m>[39m
+          [0mCase:[0m
+        [36m</span>[39m
+        [0m [0m
+        [36m<span>[39m
+          [0mKestrel[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [0m▾[0m
+      [36m</span>[39m
+    [36m</button>[39m
+  [36m</div>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mSaved views[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33mclass[39m=[32m"context-banner__fit"[39m
+    [33mtitle[39m=[32m"reads Prison intel"[39m
+  [36m>[39m
+    [0mreads Prison intel[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mOpen this case's data in the Ingest Studio ↗[0m
+  [36m</button>[39m
+[36m</div>[39m
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"context-banner"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m>[39m
+    [0mYou are in the Glass[0m
+  [36m</h2>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__label"[39m
+  [36m>[39m
+    [0mCase[0m
+  [36m</span>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"menu"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33mclass[39m=[32m"btn menu-button menu-button--case"[39m
+      [33mtitle[39m=[32m"Kestrel"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"menu-button__label"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"visually-hidden"[39m
+        [36m>[39m
+          [0mCase:[0m
+        [36m</span>[39m
+        [0m [0m
+        [36m<span>[39m
+          [0mKestrel[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [0m▾[0m
+      [36m</span>[39m
+    [36m</button>[39m
+  [36m</div>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mSaved views[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33mclass[39m=[32m"context-banner__fit"[39m
+    [33mtitle[39m=[32m"reads Prison intel"[39m
+  [36m>[39m
+    [0mreads Prison intel[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mOpen this case's data in the Ingest Studio ↗[0m
+  [36m</button>[39m
+[36m</div>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.chrome.test.tsx:608:100
+    606|     localStorage.setItem(KEY, "hidden");
+    607|     render(<App />);
+    608|     const show = await within(await screen.findByRole("region", { name…
+       |                                                                                                    ^
+    609|     expect(show.getAttribute("aria-expanded")).toBe("false");
+    610|     await screen.findByRole("application", { name: "Network canvas" });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Alt+Shift+T hides and shows it, focus moving as the buttons move it; not from a text field, and not Ctrl+Shift+T
+TestingLibraryElementError: Unable to find role="button" and name "Hide toolbar"
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Canvas tools"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"canvas-menu resolution-threshold-control"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-label[39m=[32m"Match strictness: Broad"[39m
+      [33mclass[39m=[32m"radial-menu__item"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mMatch strictness: Broad[0m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [0m ▾[0m
+      [36m</span>[39m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Canvas tools"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"canvas-menu resolution-threshold-control"[39m
+  [36m>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-label[39m=[32m"Match strictness: Broad"[39m
+      [33mclass[39m=[32m"radial-menu__item"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mMatch strictness: Broad[0m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+      [36m>[39m
+        [0m ▾[0m
+      [36m</span>[39m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+ ❯ waitForWrapper ../../node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ src/App.chrome.test.tsx:624:25
+    622|     render(<App />);
+    623|     const tools = await screen.findByRole("toolbar", { name: "Canvas t…
+    624|     await within(tools).findByRole("button", { name: "Hide toolbar" });
+       |                         ^
+    625|     fireEvent.keyDown(document.body, { key: "T", code: "KeyT", ctrlKey…
+    626|     expect(tools.hidden).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Map has the same control and the same setting: its row hidden, Show toolbar on the line
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Hide toolbar"
+
+Here are the accessible roles:
+
+  button:
+
+  Name "Add site":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"btn"[39m
+  [36m/>[39m
+
+  --------------------------------------------------button:
+
+  Name "Draw boundary":
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"btn"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-label[39m=[32m"Map view"[39m
+  [33mclass[39m=[32m"view-toolbar"[39m
+  [33mrole[39m=[32m"toolbar"[39m
+[36m>[39m
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"btn"[39m
+  [36m>[39m
+    [0mAdd site[0m
+  [36m</button>[39m
+  [36m<button[39m
+    [33maria-pressed[39m=[32m"false"[39m
+    [33mclass[39m=[32m"btn"[39m
+  [36m>[39m
+    [0mDraw boundary[0m
+  [36m</button>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/App.chrome.test.tsx:643:30
+    641|     fireEvent.click(screen.getByRole("button", { name: "Map" }));
+    642|     const row = await screen.findByRole("toolbar", { name: "Map view" …
+    643|     const hide = within(row).getByRole("button", { name: "Hide toolbar…
+       |                              ^
+    644|     expect(hide.getAttribute("aria-controls")).toBe(row.id);
+    645|     fireEvent.click(hide);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed | 34 passed (38)
+   Start at  06:58:35
+   Duration  10.50s (tests 93%, environment 6%, import 1%)
+
+
+Slowest 30 of 38 tests:
+  1115 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1090 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+  1072 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1049 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Glass opens as the analyst left it: hidden at the first draw
+  1038 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Alt+Shift+T hides and shows it, focus moving as the buttons move it; not from a text field, and not Ctrl+Shift+T
+  1021 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them
+   241 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)
+   175 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   145 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   138 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   123 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+   113 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it
+   101 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a drawing board chosen before the rights arrive gives way when they say the person may not investigate
+   100 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current
+    99 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > History opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    91 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+    88 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and Alt+Shift+T does nothing there
+    87 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Map has the same control and the same setting: its row hidden, Show toolbar on the line
+    82 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Saved views opens its panel at the saved views list
+    78 ms  src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in the Ingest Studio
+    73 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab
+    72 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Saved views is a toggle: expanded while its panel is open, a second press closes it
+    66 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > another analyst's setting on this browser is not this one's
+    65 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the badge names the scope when the case's datasets cannot be read
+    64 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board
+    64 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views
+    60 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name
+    55 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the built-in Administrator, offered Connection strength alone, has it in the switch and current
+    54 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it
+    53 ms  src/App.chrome.test.tsx > the dataset named once (ADR-145 Amendment 14 decision 4) > the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it

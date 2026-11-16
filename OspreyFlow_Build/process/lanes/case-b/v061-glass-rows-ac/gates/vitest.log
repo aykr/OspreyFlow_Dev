@@ -1,0 +1,648 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ✓ src/ingest/ConnectScreenMarking.test.tsx (22 tests) 1925ms
+ ✓ src/patterns/QueryBuilderPanel.test.tsx (27 tests) 2230ms
+stderr | src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ ✓ src/App.views.test.tsx (3 tests) 2605ms
+   ✓ saved views and the way back to the whole case (ADR-145 Amendment 17, ADR-144 Amendment 6) (3)
+     ✓ a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views 978ms
+ ✓ src/matrix/MatrixView.test.tsx (20 tests) 2625ms
+   ✓ MatrixView — the tables (8)
+     ✓ pages a long view and says plainly which rows are shown (rule 2) 983ms
+   ✓ MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) (3)
+     ✓ PageDown and PageUp turn the page 621ms
+ ✓ src/App.matrix.test.tsx (3 tests) 3106ms
+   ✓ the view switch offers the Graph, the Map and the drawing board (ADR-145 Amendment 15), and the Matrix one click away under More views 693ms
+   ✓ a selection made on the canvas is the Matrix's selection, and the Matrix's goes back to the canvas 579ms
+   ✓ Expand and Show on a row go to the Graph and use the canvas's own Expand and centring 561ms
+ ✓ src/App.ontologyRetry.test.tsx (2 tests) 3946ms
+   ✓ the ontology read at sign-in (2)
+     ✓ a first read that fails is read again, and the Query builder panel appears 1116ms
+     ✓ a first read that answers is read once 1583ms
+ ✓ src/admin/PeopleAndRoles.test.tsx (12 tests) 1122ms
+ ✓ src/admin/AdminPlace.test.tsx (39 tests) 1831ms
+ ✓ src/ingest/ConnectScreenDeduplicate.test.tsx (18 tests) 1777ms
+ ✓ src/App.help.test.tsx (15 tests) 2608ms
+   ✓ the rail's Help over every view the rail reaches (13)
+     ✓ in the graph, Help opens the panel and a second press closes it 311ms
+ ✓ src/explore/ExplorePanel.test.tsx (20 tests) 1510ms
+ ✓ src/workingset/BatchExpansion.test.tsx (28 tests) 1176ms
+ ✓ src/admin/adminWords.test.tsx (22 tests) 955ms
+ ✓ src/investigation/CaseBrief.test.tsx (23 tests) 1024ms
+ ✓ src/questions/QuestionsPanel.test.tsx (49 tests) 6981ms
+   ✓ QuestionsPanel (11)
+     ✓ says in the Conduit's words when there is nothing to read (ADR-098 Amendment 7: never for want of documents) 317ms
+   ✓ QuestionsPanel · read from, will read, the engine (14)
+     ✓ defaults to Selected items when something is selected, and says what it is about and will read, from the Conduit 311ms
+     ✓ never counts in the Glass: the figures are the Conduit's, even when the canvas holds more selected 313ms
+     ✓ with nothing selected reads everything on the graph, and Selected items is not offered 310ms
+     ✓ choosing Everything on the graph asks the Conduit again and sends that choice with the question 335ms
+     ✓ names the engine that will answer even when there is only one 311ms
+     ✓ lists the engines that cannot answer this question with their reasons, even with no choice to make 311ms
+     ✓ says the routing's refusal when no engine may answer 311ms
+     ✓ asks again when the timeline window has moved by the time the question box is focused, as the question reads it 629ms
+     ✓ asks nothing when the canvas's selection changes under Everything on the graph, since nothing it sends changes 719ms
+     ✓ keeps the case's own reasons beneath the engine choice while will read is refused 317ms
+   ✓ QuestionsPanel · Whole case (6)
+     ✓ sends the question's words with will read, and says what the search found by how each is read 326ms
+     ✓ asks again as the question changes, since its words are what is searched 622ms
+     ✓ says the search's fallback, counts that may be incomplete and a second page never read 321ms
+     ✓ says in the Conduit's words why a question too long to search was refused 321ms
+ ✓ src/alerts/RulesPlaceQueue.test.tsx (19 tests) 1104ms
+ ✓ src/reports/PacksTab.test.tsx (17 tests) 1301ms
+ ✓ src/investigation/CasePicker.test.tsx (27 tests) 1023ms
+   ✓ CasePicker (9)
+     ✓ says what the chosen case is for and has a way back to Start 300ms
+ ✓ src/ingest/dag/PipelineStudio.test.tsx (16 tests) 1485ms
+ ✓ src/reports/ReportsView.test.tsx (16 tests) 845ms
+ ✓ src/App.test.tsx (52 tests) 8713ms
+   ✓ windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) (6)
+     ✓ a token near expiry is renewed in the background, with no navigation, and the next call carries it 725ms
+     ✓ an unattended window lets its token lapse: no renewal, and nothing asked 2557ms
+ ✓ src/reader/DocumentReader.test.tsx (20 tests) 1201ms
+ ✓ src/alerts/RuleEditor.test.tsx (10 tests) 1103ms
+ ✓ src/ingest/publish/ScheduleEditor.test.tsx (9 tests) 924ms
+   ✓ the structured schedule (9)
+     ✓ explains a chosen schedule in words with its next five runs, then saves it with its zone 395ms
+ ✓ src/admin/sections/Models.test.tsx (16 tests) 1219ms
+stderr | src/App.crossfilter.test.tsx > a filter's dimming reaches the status bar when the sign-in completes after the Glass opened
+[ECharts] Can't get DOM width or height. Please check dom.clientWidth and dom.clientHeight. They should not be 0.For example, you may need to call this in the callback of window.onload.
+
+ ✓ src/App.crossfilter.test.tsx (1 test) 1344ms
+   ✓ a filter's dimming reaches the status bar when the sign-in completes after the Glass opened 450ms
+ ✓ src/admin/Schedules.test.tsx (11 tests) 888ms
+   ✓ Schedules and runs (8)
+     ✓ is a tab only for an account holding operate_schedules 335ms
+ ✓ src/App.chrome.test.tsx (38 tests) 10533ms
+   ✓ the case screen's chrome, variant B (ADR-145 Amendment 2) (3)
+     ✓ 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19) 579ms
+   ✓ the owner's navigation (ADR-145 Amendment 15) (10)
+     ✓ the case switcher's last entry is All cases, which opens the Cases panel 1150ms
+   ✓ Part B after review (ADR-145 Amendment 15) (9)
+     ✓ in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel 1121ms
+     ✓ the Cases panel opened from All cases returns focus to the case menu's button when it closes 1137ms
+     ✓ exactly one view is current: one pressed in the switch, or none there and More views naming its own 568ms
+   ✓ a toolbar that can be hidden (Amendment 19 decision 6) (6)
+     ✓ the Map has the same control and the same setting: its row hidden, Show toolbar on the line 401ms
+ ✓ src/alerts/SentenceBuilder.test.tsx (12 tests) 952ms
+   ✓ the sentence builder (8)
+     ✓ previews the rule on the last 90 days: the count, up to five examples, and that nothing was written 384ms
+ ✓ src/ingest/ConnectScreenUpload.test.tsx (10 tests) 1006ms
+ ✓ src/reports/TrendsTab.test.tsx (18 tests) 1590ms
+ ✓ src/ingest/sources/sources.test.tsx (15 tests) 1015ms
+   ✓ the register wizard (2)
+     ✓ goes Connection, File, Governance, refuses to register until governance is complete, and sends what was chosen 383ms
+ ✓ src/copyWords.test.ts (3 tests) 1244ms
+   ✓ the Glass's copy says pipeline (3)
+     ✓ in every string, template and line of JSX text a person can be shown 1242ms
+ ✓ src/ingest/studio/rightsGate.test.tsx (15 tests) 1222ms
+ ✓ src/copyNoClient.test.ts (3 tests) 1806ms
+   ✓ the Glass's copy names no client and no setting still to be confirmed (3)
+     ✓ in every string, template and line of JSX text a person can be shown 1805ms
+ ✓ src/App.search.test.tsx (38 tests) 11842ms
+   ✓ the search results page (ADR-145 Amendment 15 Part A) (20)
+     ✓ Enter in the search box opens the results in the main area, the heading focused, no view current 666ms
+     ✓ Back to Graph returns to the graph as it was, and focus to the search box 398ms
+     ✓ Show on graph seeds every record the result stands for and returns to the graph 339ms
+     ✓ closing a document read from the results shows them again, focus in them, never on the view beneath 356ms
+     ✓ the rail's Ask & Chat over the results replaces them, its heading focused, the view inert beneath; Back returns to the view, not the results 311ms
+     ✓ a suggestion moved to with the arrow keys is still chosen by Enter, as before 533ms
+   ✓ the Ask & Chat page (ADR-145 Amendment 18) (18)
+     ✓ Show all on graph under an answer leaves the page for the graph, reads the answer's items by id, focus on the canvas (v0.6.0 #5 on the page) 369ms
+     ✓ the rail's Ask & Chat while a document read from the results is open shows the page at once, the reader closed 326ms
+     ✓ a search while a document read from an answer is open shows the results at once, the reader closed 390ms
+     ✓ a document read from an answer with Help's panel open keeps focus in the reader 357ms
+     ✓ the rail's Ask & Chat while a document read from an answer is open shows the page in one press, the reader closed 302ms
+     ✓ Help's panel is mounted once while a document read from the results is open 351ms
+     ✓ the case line's cross-link to the Ingest Studio leaves the page: back in the Glass by the cross-link it is gone 512ms
+ ✓ src/alerts/StageD.test.tsx (18 tests) 1617ms
+   ✓ maker–checker on a whole-deployment rule (decision 7) (5)
+     ✓ offers Approve and Reject to a second administrator-author, and sends each 303ms
+ ✓ keyboard/playwrightPorts.test.ts (18 tests) 732ms
+   ✓ each lane's Playwright runs use ports of their own (18)
+     ✓ ../a11y/playwright.config.ts: two slots never share a port 393ms
+ ✓ src/admin/PeopleAdminRole.test.tsx (5 tests) 1202ms
+   ✓ People and roles offers only what the giver may give (route A2) (5)
+     ✓ a people manager alone is not offered Admin, and each box says why, by the screens' names for rights 537ms
+stderr | src/admin/sections/Connections.test.tsx > Connections > names an S3 bucket and Athena with no field for a key or a secret, and sends none
+Encountered two children with the same key, `c2`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
+
+ ✓ src/admin/sections/Connections.test.tsx (6 tests) 1369ms
+   ✓ Connections (6)
+     ✓ is a tab for administer_system alone, lists the built-in Files, and names a new one 449ms
+     ✓ names an S3 bucket and Athena with no field for a key or a secret, and sends none 432ms
+ ✓ src/connections/FindConnectionsPanel.test.tsx (10 tests) 1115ms
+   ✓ choosing the two ends (3)
+     ✓ takes each end from a search, and asks for the fewest degrees with no degree given 330ms
+ ✓ src/alerts/RulesPlace.test.tsx (12 tests) 1035ms
+   ✓ the Alerts place (8)
+     ✓ lists the queue by name and explains an alert with its transactions 358ms
+ ✓ src/admin/sections/Maps.test.tsx (8 tests) 971ms
+ ✓ src/timeline/Timeline.cells.test.tsx (8 tests) 793ms
+   ✓ the weekly view's Choose cells control (7)
+     ✓ is in the options menu in the weekly view and not in the density view 361ms
+ ✓ src/workingset/ViewOverCapDialog.test.tsx (20 tests) 839ms
+ ✓ src/ingest/map/ElementInspector.handling.test.tsx (47 tests) 1038ms
+ ✓ src/search/SearchResults.test.tsx (28 tests) 1458ms
+ ✓ src/inspector/LinkChange.test.tsx (18 tests) 872ms
+ ✓ src/search/GlobalSearch.test.tsx (23 tests) 543ms
+ ✓ src/admin/PeopleEntraAdministrator.test.tsx (15 tests) 738ms
+ ✓ src/App.expandCap.test.tsx (2 tests) 1297ms
+   ✓ an expansion the cap refused (spec/00 §4) (2)
+     ✓ Save a smaller view shows the over-cap dialog with the expansion's words, the cap's figure, and no Try again 683ms
+ ✓ src/ingest/map/LinkList.test.tsx (13 tests) 729ms
+   ✓ LinkList: the links of the row template (6)
+     ✓ lists every link however many there are, in a region that scrolls 416ms
+ ✓ src/ingest/map/MapEditor.links.test.tsx (10 tests) 1534ms
+   ✓ Map: the links are reachable without a pointer (5)
+     ✓ lists the template's link beside the canvas 342ms
+ ✓ src/admin/sections/Datasets.test.tsx (7 tests) 815ms
+   ✓ Datasets (6)
+     ✓ shows a dataset's kind, policy, Authors and linked cases as counts, and only removed cases' dry runs 415ms
+ ✓ src/search/GlobalSearchFilters.test.tsx (8 tests) 835ms
+   ✓ the Filters button (2)
+     ✓ is there, with the panel closed until it is pressed 356ms
+ ✓ src/auth/SignInScreen.test.tsx (20 tests) 1370ms
+ ✓ src/inspector/Inspector.test.tsx (23 tests) 1249ms
+ ✓ src/ownership/OwnershipPlace.test.tsx (6 tests) 772ms
+   ✓ the Ownership place (6)
+     ✓ shows a customer's due diligence, every factor in words 334ms
+ ✓ src/ingest/runs/drawnMerge.test.tsx (6 tests) 825ms
+   ✓ Merge into a dataset… (6)
+     ✓ maps, matches, runs the dry run first, and merges what the dry run showed 341ms
+ ✓ src/ingest/runs/promotions.test.tsx (10 tests) 697ms
+   ✓ Analyst promotions (10)
+     ✓ lists each promotion, and an approver reviews and approves one 328ms
+ ✓ src/views/ViewsPanel.test.tsx (18 tests) 628ms
+ ✓ src/inspector/LinkEvents.test.tsx (13 tests) 692ms
+   ✓ LinkEvents (6)
+     ✓ lists the emails as the server orders them, with the total in the heading 305ms
+ ✓ src/alerts/OneQueue.test.tsx (11 tests) 838ms
+ ✓ src/inspector/LinkNotes.test.tsx (16 tests) 896ms
+ ✓ src/ingest/releases/ReleasesTab.test.tsx (12 tests) 944ms
+ ✓ src/ingest/IngestStudio.test.tsx (8 tests) 1037ms
+   ✓ IngestStudio: four places (8)
+     ✓ reads the registered sources again for the strip when the Sources tab edits one 383ms
+ ✓ src/strength/StrengthPanel.test.tsx (7 tests) 898ms
+ ✓ src/linktypes/ProposedTypes.test.tsx (6 tests) 733ms
+   ✓ ProposedTypes (6)
+     ✓ lists the unit's proposals with what each would be and why it was proposed 418ms
+ ✓ src/admin/PeopleEntra.test.tsx (10 tests) 946ms
+   ✓ Admin › People on Entra ID sign-in (3)
+     ✓ says Entra holds the accounts and offers add by object id, never invite, access, reset or remove 474ms
+ ✓ src/reports/AlertMonitoringBoard.test.tsx (6 tests) 787ms
+   ✓ the Alert monitoring board (5)
+     ✓ is the first board on the Dashboards, drawn by the Glass with no Superset token asked for it 417ms
+ ✓ src/ingest/runs/RunsTab.test.tsx (6 tests) 948ms
+   ✓ the Runs tab (6)
+     ✓ draws one row per deployed pipeline and a cell per day, in words 429ms
+ ✓ src/ingest/map/MapEditor.handling.test.tsx (4 tests) 676ms
+ ✓ src/home/HomePage.test.tsx (30 tests) 1141ms
+ ✓ src/layout/SidePanelStack.test.tsx (17 tests) 566ms
+ ✓ src/admin/sections/Audit.test.tsx (10 tests) 692ms
+   ✓ Admin › Audit (7)
+     ✓ shows what the Conduit sent, its words withheld where it withheld them, and the total 333ms
+ ✓ src/canvas/IconsMenu.test.tsx (11 tests) 490ms
+ ✓ src/investigation/NewCaseForm.test.tsx (10 tests) 758ms
+   ✓ NewCaseForm (10)
+     ✓ leads with the choice, Make a new dataset the default, and the datasets hidden 332ms
+ ✓ src/ingest/map/EntityList.test.tsx (6 tests) 632ms
+   ✓ EntityList: the entities of the row template (6)
+     ✓ lists every entity however many there are, in a region that scrolls 334ms
+ ✓ src/metrics/MetricsPanel.test.tsx (6 tests) 607ms
+   ✓ MetricsPanel ranking rows (1)
+     ✓ names each node as the canvas labels it, not by its id 325ms
+ ✓ src/admin/sections/ModelsUsage.test.tsx (4 tests) 465ms
+   ✓ limits (3)
+     ✓ sends whole numbers, blank as no limit, and shows the limits in words 323ms
+ ✓ src/timeline/Timeline.test.tsx (5 tests) 391ms
+ ✓ src/design/primitives/RadialMenu.test.tsx (24 tests) 564ms
+ ✓ src/investigation/CaseDatasets.test.tsx (10 tests) 635ms
+   ✓ a new case's data (4)
+     ✓ asks for the one dataset chosen 418ms
+ ✓ src/admin/needsYou/StudioNeedsYou.test.tsx (6 tests) 474ms
+ ✓ src/ingest/publish/PublishScreen.test.tsx (9 tests) 669ms
+   ✓ PublishScreen (7)
+     ✓ renders a pipeline run per branch and per stage, refusals in words 308ms
+ ✓ src/admin/AdminSections.test.tsx (16 tests) 578ms
+ ✓ src/ingest/sources/connectors.test.tsx (7 tests) 628ms
+   ✓ a source's read (4)
+     ✓ registers a SQL source by its read, never a file 352ms
+ ✓ src/reports/EmbeddedDashboards.test.tsx (7 tests) 455ms
+ ✓ src/map/MapControls.test.tsx (15 tests) 440ms
+ ✓ src/search/AddFromList.test.tsx (13 tests) 605ms
+ ✓ src/linktypes/ModelProposals.test.tsx (8 tests) 509ms
+ ✓ src/reports/AlertsPanel.test.tsx (7 tests) 381ms
+ ✓ src/admin/needsYou/NeedsYou.test.tsx (11 tests) 527ms
+ ✓ src/investigation/CaseAccessPanel.test.tsx (7 tests) 428ms
+ ✓ src/canvas/CanvasLegend.test.tsx (17 tests) 488ms
+ ✓ src/ingest/runs/ExternalOrchestration.test.tsx (9 tests) 404ms
+ ✓ src/layout/PanelFrames.test.tsx (13 tests) 299ms
+ ✓ src/ingest/publish/PublishScreen.deduplicate.test.tsx (6 tests) 420ms
+ ✓ src/design/headingFace.test.ts (14 tests) 385ms
+ ✓ src/admin/sections/GradingScheme.test.tsx (4 tests) 462ms
+ ✓ src/admin/OperationsFigures.test.tsx (4 tests) 563ms
+   ✓ OperationsFigures (4)
+     ✓ rolls the runs up, withholding a count it may not show, never drawing it as a number 303ms
+ ✓ src/reports/PublishedTab.test.tsx (6 tests) 575ms
+ ✓ src/export/ExportPanel.test.tsx (8 tests) 407ms
+ ✓ src/alerts/drawnWatchAlert.test.tsx (4 tests) 394ms
+ ✓ src/canvas/LabelsMenu.test.tsx (8 tests) 273ms
+ ✓ src/brand/brand.test.tsx (25 tests) 327ms
+ ✓ src/alerts/ListsPanel.test.tsx (6 tests) 412ms
+ ✓ src/ingest/map/MapEditor.source.test.tsx (4 tests) 374ms
+ ✓ src/ingest/map/MapEditor.rawIdentifiers.test.tsx (3 tests) 350ms
+   ✓ the Studio map shows no link-type key (build order step 30) (3)
+     ✓ the list, the form and the inspector name the type; none shows its key 329ms
+ ✓ src/canvas/ReasonPrompt.test.tsx (5 tests) 236ms
+ ✓ src/ingest/ConnectScreenPinned.test.tsx (3 tests) 381ms
+ ✓ src/shell/shell.test.tsx (15 tests) 308ms
+ ✓ src/ingest/checks/ChecksScreen.test.tsx (6 tests) 335ms
+   ✓ the step (2)
+     ✓ attaches a rule, holds on a hit, and cannot leave off a whole-deployment rule 304ms
+ ✓ src/strength/clientParity.test.tsx (10 tests) 422ms
+ ✓ src/ingest/publish/PublishScreen.drawnWatch.test.tsx (5 tests) 331ms
+ ✓ src/search/SearchFilters.test.tsx (8 tests) 375ms
+ ✓ src/brand/BrandFrame.test.tsx (10 tests) 300ms
+ ✓ src/help/RolesHelpPage.test.tsx (1 test) 480ms
+   ✓ the help page (1)
+     ✓ draws every right's words from roles.ts, and its way back has focus 478ms
+ ✓ src/content/AddFiles.test.tsx (3 tests) 337ms
+ ✓ src/investigation/CaseSettings.test.tsx (3 tests) 219ms
+ ✓ src/ingest/dag/NodePreview.test.tsx (6 tests) 340ms
+ ✓ src/home/answersFor.test.tsx (10 tests) 433ms
+   ✓ the Home section (7)
+     ✓ opens a case, a dataset's Model tab and Operations from what waits, each with its why 324ms
+ ✓ src/App.batchExpand.test.tsx (11 tests) 27380ms
+   ✓ an expansion the cap refused, run as a batch job (ADR-151) (11)
+     ✓ opens the batch job's panel, sends the expansion as asked, and opens its result as the lens 2398ms
+     ✓ offers no batch job while a view is open: an expansion there is not the case's 2263ms
+     ✓ a view asked for after Open the view wins, as any later view does (openLens) 2703ms
+     ✓ a second choice while the first runs opens its own panel, which follows the job the Conduit names 2177ms
+     ✓ someone else signing in in place takes the panel away, with its figures 2141ms
+     ✓ offers no second try of a failed job once a view is open 2515ms
+     ✓ the panel is drawn at the canvas's foot alone: not over Reports or the Studio while its job runs, and back on the Graph 2637ms
+     ✓ the panel is hidden over the search results, which draw no view, and back when they close 2293ms
+     ✓ the panel is hidden under the Ask & Chat page, and back when it closes 2191ms
+     ✓ going Home and back on the same page follows the job already started, never starting it again 4727ms
+ ✓ src/canvas/ViewActions.test.tsx (8 tests) 256ms
+ ✓ src/design/primitives/Drawer.test.tsx (12 tests) 291ms
+ ✓ src/ingest/map/MapEditor.rename.test.tsx (4 tests) 241ms
+ ✓ src/canvas/selectionActions.test.tsx (10 tests) 288ms
+ ✓ src/reports/DataFeedsTab.test.tsx (4 tests) 268ms
+ ✓ src/workingset/ViewOverCapGate.test.tsx (9 tests) 288ms
+ ✓ src/design/primitives/DropdownPanel.test.tsx (8 tests) 369ms
+ ✓ src/alerts/HeldRowsPanel.test.tsx (4 tests) 310ms
+ ✓ src/brand/govuk/GovukFooter.test.tsx (8 tests) 293ms
+ ✓ src/canvas/SelectionBar.test.tsx (14 tests) 331ms
+ ✓ src/assessment/JudgementsPanel.test.tsx (5 tests) 299ms
+ ✓ src/investigation/CaseSwitcher.test.tsx (6 tests) 304ms
+ ✓ src/ingest/verify/VerifyScreen.deduplicate.test.tsx (5 tests) 237ms
+ ✓ src/shell/places.test.tsx (17 tests) 387ms
+ ✓ src/inspector/SharedContacts.test.tsx (3 tests) 338ms
+ ✓ src/shell/topBarFold.test.tsx (8 tests) 182ms
+ ✓ src/statusbar/StatusBar.test.tsx (7 tests) 222ms
+ ✓ src/theme/ThemeToggle.test.tsx (7 tests) 265ms
+ ✓ src/inspector/StrengthExplained.test.tsx (2 tests) 244ms
+ ✓ src/shell/caseLine.test.tsx (6 tests) 344ms
+ ✓ src/views/SaveViewForm.test.tsx (5 tests) 362ms
+ ✓ src/investigation/CaseDomains.test.tsx (6 tests) 211ms
+ ✓ src/alerts/ScreeningAlert.test.tsx (1 test) 301ms
+ ✓ src/design/primitives/Popover.test.tsx (5 tests) 249ms
+ ✓ src/alerts/ruleStandards/ShowAsBpmn.test.tsx (6 tests) 400ms
+ ✓ src/reports/ReportsPlace.test.tsx (4 tests) 415ms
+ ✓ src/search/GlobalSearchLayout.test.tsx (3 tests) 392ms
+ ✓ src/boards/PromoteSheet.test.tsx (4 tests) 444ms
+   ✓ PromoteSheet (4)
+     ✓ ticks what may go, says why the rest cannot, and lists what was left out 360ms
+ ✓ src/investigation/CaseList.test.tsx (4 tests) 428ms
+ ✓ src/inspector/Inspector.rawIdentifiers.test.tsx (5 tests) 494ms
+   ✓ the Inspector shows no raw identifier (build order step 30) (5)
+     ✓ a Location: no store id, no site_ref, no geometry reference, no server path 326ms
+ ✓ src/admin/sections/DashboardsEntra.test.tsx (2 tests) 307ms
+ ✓ src/ingest/map/ElementInspector.content.test.tsx (14 tests) 394ms
+ ✓ src/reports/ExportControl.test.tsx (3 tests) 343ms
+ ✓ src/history/HistoryPanel.test.tsx (3 tests) 212ms
+ ✓ src/auth/AccountMenu.test.tsx (7 tests) 272ms
+ ✓ src/brand/govuk/SkipLink.test.tsx (2 tests) 330ms
+ ✓ src/shell/startScreen.test.tsx (4 tests) 498ms
+   ✓ the marking outside a case (4)
+     ✓ is shown on start 371ms
+ ✓ src/ingest/publish/runNowWait.test.tsx (3 tests) 407ms
+   ✓ the capture kit's wait for a run it started (3)
+     ✓ is the run-now request alone: the screen shows an older Succeeded while the new run is going 396ms
+ ✓ src/ingest/dag/PipelineCanvas.test.tsx (4 tests) 438ms
+   ✓ PipelineCanvas (2)
+     ✓ draws every node as a focusable button named by stage and label, and the edges 328ms
+ ✓ src/ingest/map/SourceFieldsPanel.ignore.test.tsx (3 tests) 423ms
+   ✓ keeps the note typed beside the field when Ignore is pressed 315ms
+ ✓ src/alerts/address.test.tsx (8 tests) 177ms
+ ✓ src/boards/BoardAlerts.test.tsx (2 tests) 378ms
+   ✓ the boards' Alerts panel (2)
+     ✓ shows the case's open alerts as the Conduit counts them, as words with nothing to open 370ms
+ ✓ src/inspector/LinkHistory.test.tsx (4 tests) 403ms
+ ✓ src/search/GlobalSearchAddMany.test.tsx (2 tests) 390ms
+ ✓ src/watches/MonitorPanel.test.tsx (4 tests) 174ms
+ ✓ src/canvas/CommunitiesControls.test.tsx (7 tests) 345ms
+ ✓ src/canvas/CapRefusalPrompt.test.tsx (4 tests) 247ms
+ ✓ src/welcome/WelcomeAbout.test.tsx (3 tests) 260ms
+ ✓ src/design/primitives/Toast.test.tsx (3 tests) 193ms
+ ✓ src/watches/HotlistPanel.test.tsx (7 tests) 252ms
+ ✓ src/shell/StartPage.test.tsx (1 test) 286ms
+ ✓ src/canvas/LayoutMenu.test.tsx (6 tests) 341ms
+ ✓ src/brand/govuk/PhaseBanner.test.tsx (16 tests) 310ms
+ ✓ src/inspector/EntityPicture.clears.test.tsx (1 test) 255ms
+ ✓ src/shell/brandButton.test.tsx (4 tests) 328ms
+ ✓ src/resolution/ThresholdControl.test.tsx (8 tests) 602ms
+   ✓ ResolutionThresholdControl (1)
+     ✓ is called Match strictness, on the slider and in what the bar shows 417ms
+ ✓ src/welcome/WorkspaceWelcome.test.tsx (6 tests) 383ms
+ ✓ src/design/primitives/ContextMenu.test.tsx (2 tests) 145ms
+ ✓ src/ingest/verify/VerifyScreen.rows.test.tsx (1 test) 208ms
+ ✓ src/ingest/map/FieldBindingEditor.bind.test.tsx (2 tests) 184ms
+ ✓ src/ingest/map/FieldBindingEditor.valuemap.test.tsx (4 tests) 322ms
+ ✓ src/inspector/LinkDetails.test.tsx (21 tests) 321ms
+ ✓ src/admin/refusals.test.tsx (2 tests) 472ms
+   ✓ Admin's refusals say why and which roles can (2)
+     ✓ a right the Conduit asks for, by the roles that hold it 459ms
+ ✓ src/reports/TrendChart.test.tsx (2 tests) 319ms
+   ✓ TrendChart (2)
+     ✓ says the span and each bar's period as days, never as timestamps 301ms
+ ✓ src/canvas/ZoomControls.test.tsx (3 tests) 326ms
+ ✓ src/reports/packAlert.test.tsx (10 tests) 327ms
+ ✓ src/testing/budgetRun.test.ts (6 tests) 217ms
+ ✓ src/canvas/CommunityBoxOverlay.test.tsx (6 tests) 349ms
+ ✓ src/ingest/verify/VerifyScreen.test.tsx (2 tests) 229ms
+ ✓ src/inspector/NeighbourhoodRisk.test.tsx (2 tests) 318ms
+ ✓ src/layout/Sash.test.tsx (7 tests) 272ms
+ ✓ src/explore/ExplorePanelAddMany.test.tsx (2 tests) 332ms
+   ✓ Where to start's add-many fold (2)
+     ✓ is offered, folded, when there is a canvas to draw on 321ms
+ ✓ src/testing/axeUndecided.test.ts (5 tests) 193ms
+ ✓ src/canvas/LargeExpansionPrompt.test.tsx (8 tests) 416ms
+ ✓ src/questions/AnswerActions.test.tsx (6 tests) 453ms
+ ✓ src/design/primitives/Combobox.test.tsx (4 tests) 377ms
+   ✓ with onSubmit, Enter on the typed words submits them while the options show, choosing none 330ms
+ ✓ src/crossfilter/mapBins.test.ts (2 tests) 71ms
+ ✓ src/views/ViewLensBanner.test.tsx (2 tests) 351ms
+   ✓ the view's notes from the drawing (2)
+     ✓ are not offered on a view that has none 304ms
+ ✓ src/auth/resolvedPrincipal.test.ts (15 tests) 81ms
+ ✓ src/canvas/layoutModes.test.ts (53 tests) 88ms
+ ✓ src/auth/tokenRenewal.test.ts (17 tests) 35ms
+ ✓ src/inspector/SelectionList.test.tsx (3 tests) 229ms
+ ✓ src/ingest/map/FieldBindingEditor.names.test.tsx (6 tests) 151ms
+ ✓ src/brand/govuk/GovukHeader.test.tsx (6 tests) 216ms
+ ✓ src/color/textContrast.test.ts (41 tests) 107ms
+ ✓ src/canvas/JudgementBadgeOverlay.test.tsx (6 tests) 245ms
+ ✓ src/theme/themeCookieSnippet.test.ts (17 tests) 81ms
+ ✓ src/design/undefinedTokens.test.ts (1 test) 45ms
+ ✓ src/ingest/map/ElementInspector.names.test.tsx (3 tests) 101ms
+ ✓ src/export/reportExport.test.ts (9 tests) 53ms
+ ✓ src/watches/StatusBadge.test.tsx (8 tests) 77ms
+ ✓ src/models/modelDeadline.test.ts (16 tests) 40ms
+ ✓ src/admin/updateNotice.test.ts (5 tests) 18ms
+stderr | src/map/HotspotHistogram.stale.test.tsx > HotspotHistogram, answers out of order > drops an older answer that arrives after a newer one
+The current testing environment is not configured to support act(...)
+
+ ✓ src/map/HotspotHistogram.stale.test.tsx (1 test) 64ms
+ ✓ src/canvas/linksAmong.test.ts (8 tests) 34ms
+ ✓ src/views/viewsApi.test.ts (10 tests) 35ms
+ ✓ src/boards/BoardsPlace.test.tsx (1 test) 77ms
+ ✓ src/auth/unauthorised.test.ts (20 tests) 60ms
+ ✓ src/ingest/map/ElementInspector.identifiers.test.tsx (2 tests) 85ms
+ ✓ src/home/homeData.test.ts (15 tests) 27ms
+ ✓ src/canvas/DegreeMarkOverlay.test.tsx (2 tests) 119ms
+ ✓ src/timeline/Timeline.elsewhere.test.tsx (2 tests) 110ms
+ ✓ src/map/gazetteers.test.ts (13 tests) 36ms
+ ✓ src/design/radiusTokens.test.ts (2 tests) 45ms
+ ✓ src/canvas/forceLayout.test.ts (10 tests) 35ms
+ ✓ src/map/style.test.ts (20 tests) 18ms
+ ✓ src/dossier/Dossier.test.tsx (2 tests) 104ms
+ ✓ src/explore/exploreApi.test.ts (3 tests) 28ms
+ ✓ src/canvas/removeNodes.test.ts (6 tests) 32ms
+ ✓ src/connections/connectionsApi.test.ts (11 tests) 49ms
+ ✓ src/map/pmtilesAuth.test.ts (4 tests) 26ms
+ ✓ src/map/places.test.ts (2 tests) 22ms
+ ✓ src/map/basemapAvailability.test.ts (5 tests) 79ms
+ ✓ src/shell/router.test.ts (5 tests) 135ms
+ ✓ src/reports/packExport.test.ts (12 tests) 9ms
+ ✓ src/canvas/communities.test.ts (29 tests) 108ms
+ ✓ src/ingest/map/FieldBindingEditor.parts.test.tsx (1 test) 69ms
+ ✓ keyboard/registryCoverage.test.ts (74 tests) 35ms
+ ✓ src/ingest/fileSize.test.ts (4 tests) 20ms
+stderr | src/timeline/TimelineStrip.test.tsx > the folded timeline's strip > draws one bar a bucket, the tallest full height, and names the range in mono
+The current testing environment is not configured to support act(...)
+
+stderr | src/timeline/TimelineStrip.test.tsx > the folded timeline's strip > says nothing it has not been given, and ignores the cyclical week
+The current testing environment is not configured to support act(...)
+
+ ✓ src/timeline/TimelineStrip.test.tsx (2 tests) 66ms
+ ✓ src/canvas/focusAnnouncement.test.ts (3 tests) 15ms
+ ✓ src/canvas/nodeAttributes.test.ts (57 tests) 12ms
+ ✓ src/help/rightNames.test.ts (4 tests) 21ms
+ ✓ src/help/roles.test.ts (6 tests) 10ms
+ ✓ src/design/designContract.test.ts (13 tests) 13ms
+ ✓ src/patterns/api.test.ts (15 tests) 15ms
+ ✓ src/workingset/useBatchExpansion.test.ts (5 tests) 20ms
+ ✓ src/auth/userManager.test.ts (2 tests) 14ms
+ ✓ src/investigation/openAttachment.test.ts (4 tests) 85ms
+ ✓ src/design/topBarStyle.test.ts (14 tests) 15ms
+ ✓ src/theme/theme.test.ts (23 tests) 47ms
+ ✓ src/investigation/investigationId.test.ts (5 tests) 39ms
+ ✓ src/matrix/matrixRows.test.ts (14 tests) 20ms
+ ✓ src/canvas/chunkedTextureRefresh.test.ts (5 tests) 7ms
+ ✓ src/crossfilter/store.test.ts (13 tests) 7ms
+ ✓ src/layout/layoutSizes.test.ts (13 tests) 5ms
+ ✓ src/auth/oidcConfig.test.ts (22 tests) 8ms
+ ✓ src/assessment/ReviewFlagChip.test.tsx (2 tests) 24ms
+ ✓ src/color/tokens.test.ts (37 tests) 8ms
+ ✓ src/map/geometries.test.ts (8 tests) 13ms
+ ✓ src/site/bilinear.test.ts (11 tests) 11ms
+ ✓ src/home/guides.test.ts (10 tests) 41ms
+ ✓ src/color/nodeGlyphs.test.ts (5 tests) 10ms
+ ✓ src/canvas/linkMenu.test.ts (10 tests) 4ms
+ ✓ src/workingset/store.test.ts (21 tests) 7ms
+ ✓ src/color/nodeVisual.test.ts (19 tests) 6ms
+ ✓ src/canvas/communityAssigner.test.ts (4 tests) 7ms
+ ✓ src/canvas/entityPictures.test.ts (7 tests) 64ms
+ ✓ src/brand/govuk/govukChrome.test.tsx (2 tests) 37ms
+ ✓ src/search/searchOptions.test.ts (20 tests) 6ms
+ ✓ src/canvas/expansionOutcome.test.ts (6 tests) 2ms
+ ✓ src/export/api.test.ts (5 tests) 8ms
+ ✓ src/auth/refusalWords.test.ts (11 tests) 4ms
+ ✓ src/ingest/map/mapGraphSync.test.ts (2 tests) 6ms
+ ✓ src/design/radialMenuStyle.test.ts (7 tests) 18ms
+ ✓ src/auth/launcherHandoff.test.ts (16 tests) 16ms
+ ✓ src/canvas/iconChoices.test.ts (19 tests) 37ms
+ ✓ src/ingest/dag/stagingSteps.test.ts (5 tests) 6ms
+ ✓ src/color/nodeVisualIcon.test.ts (9 tests) 14ms
+ ✓ src/inspector/linkChangeForm.test.ts (27 tests) 9ms
+ ✓ src/auth/signInAtLoad.test.ts (8 tests) 10ms
+ ✓ src/welcome/figure.test.ts (6 tests) 6ms
+ ✓ src/canvas/crowding.test.ts (6 tests) 6ms
+ ✓ src/ingest/runs/runsGrid.test.ts (6 tests) 9ms
+ ✓ src/ingest/dag/pipelineGraphEdit.test.ts (4 tests) 4ms
+ ✓ src/timeline/math.test.ts (11 tests) 5ms
+ ✓ src/strength/useOnReturn.test.tsx (2 tests) 24ms
+ ✓ src/canvas/labelStyle.test.ts (7 tests) 7ms
+ ✓ src/ingest/publish/scheduleChoice.test.ts (10 tests) 3ms
+ ✓ src/canvas/edgeSelection.test.ts (14 tests) 6ms
+ ✓ src/reader/designation.test.ts (4 tests) 14ms
+ ✓ src/ingest/map/mapCanvasColours.test.ts (10 tests) 4ms
+ ✓ src/design/fonts.test.ts (2 tests) 7ms
+ ✓ src/export/pngMark.test.ts (5 tests) 4ms
+ ✓ src/canvas/nodeLabel.test.ts (9 tests) 57ms
+ ✓ src/playback/math.test.ts (14 tests) 7ms
+ ✓ src/search/addFromListApi.test.ts (19 tests) 103ms
+ ✓ src/canvas/valueIcons.test.ts (9 tests) 4ms
+ ✓ src/questions/graphFacts.test.ts (9 tests) 9ms
+ ✓ src/ingest/rowTemplateSave.test.ts (1 test) 5ms
+ ✓ src/auth/disabledAccount.test.ts (6 tests) 3ms
+ ✓ src/design/shellSizes.test.ts (3 tests) 13ms
+ ✓ src/color/oklab.test.ts (6 tests) 17ms
+ ✓ src/crossfilter/lit.test.ts (15 tests) 6ms
+ ✓ src/assessment/api.test.ts (3 tests) 9ms
+ ✓ src/export/chartExport.test.ts (3 tests) 22ms
+ ✓ src/metrics/filters.test.ts (10 tests) 4ms
+ ✓ src/ingest/ConnectScreen.test.ts (4 tests) 3ms
+ ✓ src/timeline/cyclicalOption.test.ts (10 tests) 4ms
+ ✓ src/crossfilter/emergence.test.ts (4 tests) 5ms
+ ✓ src/map/conduitRequest.test.ts (5 tests) 2ms
+ ✓ src/alerts/amlTemplates.test.ts (5 tests) 3ms
+ ✓ src/inspector/sourceLocator.test.ts (6 tests) 5ms
+ ✓ compute-tier1/communities.test.mjs (3 tests) 5ms
+ ✓ src/reader/pendingSpans.test.ts (4 tests) 9ms
+ ✓ src/investigation/cases.test.ts (21 tests) 42ms
+ ✓ src/inspector/linkEventsApi.test.ts (5 tests) 5ms
+ ✓ src/canvas/edgeTypeMenu.test.ts (3 tests) 16ms
+ ✓ src/linktypes/linkTypesApi.test.ts (8 tests) 11ms
+ ✓ src/canvas/nodeAttributesTheme.test.ts (4 tests) 6ms
+ ✓ src/inspector/linkChangeApi.test.ts (12 tests) 28ms
+ ✓ src/canvas/singleFlight.test.ts (2 tests) 2ms
+ ✓ src/history/lastChange.test.ts (2 tests) 14ms
+ ✓ src/map/providers.test.ts (3 tests) 3ms
+ ✓ src/patterns/store.test.ts (22 tests) 7ms
+ ✓ src/export/subgraphExport.test.ts (4 tests) 5ms
+ ✓ src/explore/exploreOverlayPlace.test.ts (2 tests) 2ms
+ ✓ src/design/accordionStyle.test.ts (2 tests) 3ms
+ ✓ src/shell/topBarWidths.test.ts (2 tests) 5ms
+ ✓ src/workingset/deltaClient.test.ts (6 tests) 3ms
+ ✓ src/map/mapStart.test.ts (3 tests) 5ms
+ ✓ src/search/drawSearchResult.test.ts (4 tests) 3ms
+ ✓ src/inspector/emailDocuments.test.ts (4 tests) 49ms
+ ✓ src/testing/slowestReporter.test.ts (3 tests) 3ms
+ ✓ src/ingest/percent.test.ts (3 tests) 3ms
+ ✓ src/rights/visibility.test.ts (12 tests) 8ms
+ ✓ src/auth/callbackFrame.test.ts (6 tests) 3ms
+ ✓ src/assessment/judgementCounts.test.ts (4 tests) 3ms
+ ✓ src/ingest/map/rowTemplate.test.ts (19 tests) 9ms
+ ✓ src/map/geometry.test.ts (3 tests) 2ms
+ ✓ src/auth/refreshPlace.test.ts (22 tests) 9ms
+ ✓ src/reports/journey.test.ts (5 tests) 7ms
+ ✓ src/design/namesNotValues.test.ts (14 tests) 5ms
+ ✓ src/canvas/linkCollapse.test.ts (6 tests) 3ms
+ ✓ src/inspector/linkHandling.test.ts (2 tests) 4ms
+ ✓ src/canvas/valueIconsInNode.test.ts (10 tests) 5ms
+ ✓ src/canvas/labelChoices.test.ts (21 tests) 5ms
+ ✓ src/layout/panelOrder.test.ts (13 tests) 5ms
+ ✓ src/canvas/linkHover.test.ts (3 tests) 5ms
+ ✓ src/brand/govuk/syncGovukAssets.test.ts (3 tests) 5ms
+ ✓ src/workingset/deltaOps.test.ts (4 tests) 4ms
+ ✓ src/auth/signInArgs.test.ts (1 test) 4ms
+ ✓ src/shell/railMark.test.ts (2 tests) 8ms
+ ✓ src/analytics/api.test.ts (2 tests) 3ms
+ ✓ src/crossfilter/selectLit.test.ts (7 tests) 7ms
+ ✓ src/canvas/expansionPreview.test.ts (6 tests) 7ms
+ ✓ src/boards/boardModel.test.ts (8 tests) 10ms
+ ✓ src/linktypes/defineType.test.ts (9 tests) 7ms
+ ✓ src/alerts/strengthSentence.test.ts (3 tests) 5ms
+ ✓ src/home/homeKey.test.ts (10 tests) 5ms
+ ✓ src/map/contrast.test.ts (2 tests) 2ms
+ ✓ src/reader/readerApi.test.ts (2 tests) 7ms
+ ✓ src/canvas/nodeHitArea.test.ts (4 tests) 4ms
+ ✓ src/canvas/nodeIcons.test.ts (5 tests) 7ms
+ ✓ src/canvas/zoomBands.test.ts (3 tests) 3ms
+ ✓ src/resolution/explainView.test.ts (6 tests) 6ms
+ ✓ src/canvas/communityLinks.test.ts (7 tests) 3ms
+ ✓ src/reports/packText.test.ts (5 tests) 7ms
+ ✓ src/inspector/describeChange.test.ts (6 tests) 29ms
+ ✓ src/ontology/schema.test.ts (5 tests) 4ms
+ ✓ src/metrics/hulls.test.ts (4 tests) 5ms
+ ✓ src/site/api.test.ts (1 test) 4ms
+ ✓ src/strength/words.test.ts (6 tests) 30ms
+ ✓ src/canvas/iconImage.test.ts (7 tests) 5ms
+ ✓ src/canvas/expansionGate.test.ts (5 tests) 5ms
+ ✓ src/ingest/draftSave.test.ts (4 tests) 7ms
+ ✓ src/design/canvasGrid.test.ts (2 tests) 3ms
+ ✓ src/canvas/cameraMoves.test.ts (2 tests) 9ms
+ ✓ src/canvas/linkLabel.test.ts (6 tests) 11ms
+ ✓ src/alerts/templates.test.ts (1 test) 5ms
+ ✓ src/ingest/studio/datasets.test.ts (6 tests) 8ms
+ ✓ src/design/brassUse.test.ts (2 tests) 3ms
+ ✓ src/canvas/nodeDrag.test.ts (3 tests) 2ms
+ ✓ keyboard/mapMeaning.test.ts (3 tests) 5ms
+ ✓ src/map/HotspotHistogram.test.ts (4 tests) 5ms
+ ✓ src/design/canvasOverlays.test.ts (2 tests) 4ms
+ ✓ src/canvas/dottedEdgePatterns.test.ts (2 tests) 2ms
+ ✓ src/views/lensHandoff.test.ts (4 tests) 8ms
+ ✓ src/map/attributionChip.test.ts (4 tests) 5ms
+ ✓ src/inspector/intervalText.test.ts (3 tests) 4ms
+ ✓ src/analytics/eventsElsewhere.test.ts (3 tests) 3ms
+ ✓ src/time/utcStamp.test.ts (2 tests) 4ms
+ ✓ src/canvas/settledAnchor.test.ts (2 tests) 3ms
+ ✓ src/inspector/sourcesWithheld.test.ts (1 test) 2ms
+ ✓ src/reports/alertBadges.test.ts (1 test) 2ms
+ ✓ src/canvas/toolbarVisibility.test.ts (6 tests) 4ms
+ ✓ src/canvas/valueIconShown.test.ts (6 tests) 4ms
+ ✓ src/canvas/nodeGestures.test.ts (6 tests) 4ms
+ ✓ src/ingest/dag/studioMode.test.ts (4 tests) 5ms
+
+ Test Files  402 passed (402)
+      Tests  3666 passed (3666)
+   Start at  07:51:56
+   Duration  46.87s (environment 45%, tests 44%, import 9%, transform 1%, setup 1%)
+
+    Isolate  402 workers spawned · ~632ms startup each (spawn + environment, per file)
+             at least ~22.45s faster with isolate: false — reuses workers across files instead of one per file
+
+
+Slowest 30 of 3666 tests:
+  4727 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > going Home and back on the same page follows the job already started, never starting it again
+  2703 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > a view asked for after Open the view wins, as any later view does (openLens)
+  2637 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > the panel is drawn at the canvas's foot alone: not over Reports or the Studio while its job runs, and back on the Graph
+  2557 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > an unattended window lets its token lapse: no renewal, and nothing asked
+  2515 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > offers no second try of a failed job once a view is open
+  2398 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > opens the batch job's panel, sends the expansion as asked, and opens its result as the lens
+  2293 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > the panel is hidden over the search results, which draw no view, and back when they close
+  2263 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > offers no batch job while a view is open: an expansion there is not the case's
+  2191 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > the panel is hidden under the Ask & Chat page, and back when it closes
+  2177 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > a second choice while the first runs opens its own panel, which follows the job the Conduit names
+  2141 ms  src/App.batchExpand.test.tsx > an expansion the cap refused, run as a batch job (ADR-151) > someone else signing in in place takes the panel away, with its figures
+  1805 ms  src/copyNoClient.test.ts > the Glass's copy names no client and no setting still to be confirmed > in every string, template and line of JSX text a person can be shown
+  1583 ms  src/App.ontologyRetry.test.tsx > the ontology read at sign-in > a first read that answers is read once
+  1242 ms  src/copyWords.test.ts > the Glass's copy says pipeline > in every string, template and line of JSX text a person can be shown
+  1150 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1137 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1121 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+  1116 ms  src/App.ontologyRetry.test.tsx > the ontology read at sign-in > a first read that fails is read again, and the Query builder panel appears
+   983 ms  src/matrix/MatrixView.test.tsx > MatrixView — the tables > pages a long view and says plainly which rows are shown (rule 2)
+   978 ms  src/App.views.test.tsx > saved views and the way back to the whole case (ADR-145 Amendment 17, ADR-144 Amendment 6) > a saved view opened from the case line takes focus to its strip, is named on the case line, and Back to the whole case puts the case back and focus on Saved views
+   725 ms  src/App.test.tsx > windows stay signed in: the token is renewed silently before it expires (ADR-050 Amendment 1, rehearsal defect D1) > a token near expiry is renewed in the background, with no navigation, and the next call carries it
+   719 ms  src/questions/QuestionsPanel.test.tsx > QuestionsPanel · read from, will read, the engine > asks nothing when the canvas's selection changes under Everything on the graph, since nothing it sends changes
+   693 ms  src/App.matrix.test.tsx > the view switch offers the Graph, the Map and the drawing board (ADR-145 Amendment 15), and the Matrix one click away under More views
+   683 ms  src/App.expandCap.test.tsx > an expansion the cap refused (spec/00 §4) > Save a smaller view shows the over-cap dialog with the expansion's words, the cap's figure, and no Try again
+   666 ms  src/App.search.test.tsx > the search results page (ADR-145 Amendment 15 Part A) > Enter in the search box opens the results in the main area, the heading focused, no view current
+   629 ms  src/questions/QuestionsPanel.test.tsx > QuestionsPanel · read from, will read, the engine > asks again when the timeline window has moved by the time the question box is focused, as the question reads it
+   622 ms  src/questions/QuestionsPanel.test.tsx > QuestionsPanel · Whole case > asks again as the question changes, since its words are what is searched
+   621 ms  src/matrix/MatrixView.test.tsx > MatrixView — the keyboard (an ARIA grid: one Tab stop, arrows between cells) > PageDown and PageUp turn the page
+   579 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)
+   579 ms  src/App.matrix.test.tsx > a selection made on the canvas is the Matrix's selection, and the Matrix's goes back to the canvas

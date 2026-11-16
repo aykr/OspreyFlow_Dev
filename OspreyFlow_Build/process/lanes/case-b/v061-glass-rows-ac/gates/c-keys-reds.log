@@ -1,0 +1,58 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/welcome/WorkspaceWelcome.test.tsx (6 tests | 1 failed) 306ms
+   ❯ the workspace's welcome panel (5)
+     ✓ says what the canvas holds, and how to bring the panel back 177ms
+     ✓ offers the three latest history steps, and restores one as the History drawer does 90ms
+     ✓ does not offer a step that holds no canvas snapshot to pick up from (ADR-128: a brief edit) 15ms
+     × lists the keys worth knowing, each a key the Glass has, in key caps 14ms
+     ✓ closes from its own button 8ms
+   ✓ whether the welcome panel was closed (1)
+     ✓ is remembered per person, and is false for someone who has not closed it 0ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > lists the keys worth knowing, each a key the Glass has, in key caps
+AssertionError: expected [ '/', '←→', 'Enter', 'F', 'Esc', '?' ] to deeply equal [ Array(7) ]
+
+- Expected
++ Received
+
+@@ -2,8 +2,7 @@
+    "/",
+    "←→",
+    "Enter",
+    "F",
+    "Esc",
+-   "Alt+Shift+T",
+    "?",
+  ]
+
+ ❯ src/welcome/WorkspaceWelcome.test.tsx:79:34
+     77|     const keys = within(screen.getByRole("list", { name: "Keys worth k…
+     78|     const rows = keys.getAllByRole("listitem").map((li) => [li.querySe…
+     79|     expect(rows.map(([k]) => k)).toEqual(["/", "←→", "Enter", "F", "Es…
+       |                                  ^
+     80|     expect(rows[2]![1]).toContain("Expand the focused node by one hop"…
+     81|     // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6): the tool…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+   Start at  06:59:02
+   Duration  1.59s (environment 62%, tests 22%, import 13%, transform 2%, setup 1%)
+
+
+Slowest 6 tests:
+   177 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > says what the canvas holds, and how to bring the panel back
+    90 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > offers the three latest history steps, and restores one as the History drawer does
+    15 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > does not offer a step that holds no canvas snapshot to pick up from (ADR-128: a brief edit)
+    14 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > lists the keys worth knowing, each a key the Glass has, in key caps
+     8 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > closes from its own button
+     0 ms  src/welcome/WorkspaceWelcome.test.tsx > whether the welcome panel was closed > is remembered per person, and is false for someone who has not closed it

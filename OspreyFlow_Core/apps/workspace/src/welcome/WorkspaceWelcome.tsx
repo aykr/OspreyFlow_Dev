@@ -47,6 +47,8 @@ const KEYS: [string, string][] = [
   ["Enter", "Expand the focused node by one hop"],
   ["F", "Fit the graph to the window"],
   ["Esc", "Clear the selection"],
+  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6), on the Graph and the Map.
+  ["Alt+Shift+T", "Hide or show the toolbar (Option+Shift+T on a Mac)"],
   ["?", "Open or close this panel"],
 ];
 

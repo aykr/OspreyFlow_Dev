@@ -269,6 +269,13 @@ export interface GlassCanvasProps {
   /** v0.6.1 glass-rows A (ADR-145 Amendment 19 decision 5): drawn in the toolbar after Layout; App hands it
    * the Match strictness control. A control here reads `CanvasToolbarCompact` for its shorter words. */
   toolbarAfterLayout?: ReactNode;
+  /** v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6): drawn last in the toolbar, at its right end; App hands it
+   * *Hide toolbar*. */
+  toolbarEnd?: ReactNode;
+  /** Hides the toolbar: `hidden`, so out of the tab order and the accessibility tree, not only out of sight. */
+  toolbarHidden?: boolean;
+  /** The toolbar's id, which *Hide toolbar* and *Show toolbar* name in `aria-controls`. */
+  toolbarId?: string;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -487,6 +494,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       lens = false,
       lastChange,
       toolbarAfterLayout,
+      toolbarEnd,
+      toolbarHidden = false,
+      toolbarId,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -800,13 +810,16 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       const bar = toolbarRef.current;
       if (!bar || typeof ResizeObserver !== "function") return;
       const measure = () => {
-        const box = bar.getBoundingClientRect();
-        setToolbarHeight(Math.ceil(box.height) || null);
-        setToolbarCompact(isCompactToolbar(box.width));
+        setToolbarHeight(Math.ceil(bar.getBoundingClientRect().height) || null);
+        // The toolbar spans the canvas, so its width is the canvas's, read there: a hidden toolbar measures 0 wide, and
+        // shown again it would first draw the whole words, wrap, then shorten, moving the drawing area twice.
+        const width = containerRef.current?.getBoundingClientRect().width ?? 0;
+        if (width > 0) setToolbarCompact(isCompactToolbar(width));
       };
       measure();
       const observer = new ResizeObserver(measure);
       observer.observe(bar);
+      if (containerRef.current) observer.observe(containerRef.current);
       return () => observer.disconnect();
     }, []);
     const [gridOn, setGridOn] = useState<boolean>(() => {
@@ -3610,6 +3623,8 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         <div
           role="toolbar"
           aria-label="Canvas tools"
+          id={toolbarId}
+          hidden={toolbarHidden}
           className={toolbarCompact ? "canvas-toolbar canvas-toolbar--compact" : "canvas-toolbar"}
           ref={toolbarRef}
         >
@@ -3687,6 +3702,10 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               onExpandAll={() => setCollapsed(new Set())}
             />
           </div>
+          {/* ADR-115 E6: what last changed in the case, hidden below 1100px (DESIGN.md §5a). v0.6.1 glass-rows (the
+              owner's ruling 1, the toolbar one row): it takes only the room the row has left, ellipsised, so it never
+              wraps the row; it was inside View, where its whole width pushed View to a second row. */}
+          {lastChange && <span className="canvas-toolbar__note canvas-toolbar__last-change" title={lastChange}>{lastChange}</span>}
           <div role="group" aria-label="View" className="canvas-toolbar__group canvas-toolbar__group--end">
             <ViewActions
               nodeCount={graph.order}
@@ -3698,10 +3717,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
               onAddFiles={bearerToken && investigationId && !lens ? () => setAddingFiles({}) : undefined}
               onLinksAmongAll={bearerToken && investigationId && !lens ? () => void linksAmongOnCanvas(null) : undefined}
             />
-            {/* ADR-115 E6: what last changed in the case, hidden below 1100px (DESIGN.md §5a). */}
-            {lastChange && <span className="canvas-toolbar__note canvas-toolbar__last-change">{lastChange}</span>}
             {/* ADR-115 E4: the right panel's toggle, docked or overlaid (DESIGN.md §5a). */}
             <DetailsToggle />
+            {toolbarEnd}
           </div>
         </div>
         </CanvasToolbarCompact.Provider>
@@ -3936,7 +3954,13 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
           })()}
         <div
           className="canvas-corner"
-          style={toolbarHeight ? ({ "--canvas-toolbar-height": `${toolbarHeight}px` } as CSSProperties) : undefined}
+          style={
+            toolbarHidden
+              ? ({ "--canvas-toolbar-height": "0px" } as CSSProperties)
+              : toolbarHeight
+                ? ({ "--canvas-toolbar-height": `${toolbarHeight}px` } as CSSProperties)
+                : undefined
+          }
         >
           <CanvasLegend
             types={legendTypes}

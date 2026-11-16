@@ -1,0 +1,56 @@
+== A: Match strictness in the canvas toolbar
+AS IT MUST BE (red): A1 strictness back in the Graph's own row
+    the Graph draws no row of its own
+AS IT MUST BE (red): A2 the control handed to no toolbar
+    Match strictness is reached by Tab in the canvas toolbar
+AS IT MUST BE (red): A3 the short words never taken
+    on a narrow toolbar shows the shorter words
+AS IT MUST BE (red): A4 the toolbar's width not measured into its words
+    at 1219 px of toolbar (dark) the words are short
+    at 1024 px of toolbar (govuk) the words are short
+AS IT MUST BE (red): A5 the rulings' 1132 px line
+    at 1219 px of toolbar (dark) the words are short
+AS IT MUST BE (red): A6 the captions kept on a narrow toolbar
+    at 1024 px of toolbar (dark) the words are short
+AS IT MUST BE (red): A7 Last change back in View, wrapping the row
+    at 1240 px of toolbar (dark) the words are whole
+AS IT MUST BE (red): A8 an unchanged stop sent again
+    sends nothing: the setting it already has is not re-projected
+== C: a toolbar that can be hidden
+AS IT MUST BE (red): C1 the canvas toolbar never hidden
+    hidden means out of the tab order and the accessibility tree
+AS IT MUST BE (red): C2 hidden only by the attribute the toolbar's display overrides
+    hidden means out of the tab order and the accessibility tree
+    the Map's row hides the same way
+AS IT MUST BE (red): C3 focus left where it was
+    Hide toolbar is reached by Tab and pressed with Enter
+    Alt+Shift+T on the canvas hides the toolbar
+AS IT MUST BE (red): C4 one setting for every analyst
+    is kept under ospreyflow.glass.toolbar.<username>
+    is one analyst's
+AS IT MUST BE (red): C5 hidden on the Drawing board too
+    the Drawing board is not hidden
+AS IT MUST BE (red): C6 the key heard where there is no toolbar
+    the Drawing board is not hidden
+AS IT MUST BE (red): C7 the key heard in a text field
+    Alt+Shift+T hides and shows it
+AS IT MUST BE (red): C8 Ctrl+Shift+T taken as well
+    is not Ctrl+Shift+T
+    Alt+Shift+T hides and shows it
+AS IT MUST BE (red): C9 the Map's row never hidden
+    the Map has the same control and the same setting
+AS IT MUST BE (red): C10 the case line not slimmed
+    Hide toolbar hides the canvas toolbar, slims the case line
+AS IT MUST BE (red): C11 Show toolbar not saying what it controls
+    Hide toolbar hides the canvas toolbar
+AS IT MUST BE (red): C12 nothing hidden where storage is refused or nobody signed in
+    is not remembered for nobody, but still hides for this page
+    still hides for this page where the browser's storage refuses it
+AS IT MUST BE (red): C13 the key not listed in ?
+    lists the keys worth knowing
+AS IT MUST BE (red): C15 the width read off the toolbar, 0 while it is hidden (the first build's shape)
+    hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (640 px)
+== unplanted: every case green
+      Tests  64 passed (64)
+  3 passed (4.7s)
+  27 passed (22.8s)

@@ -84,6 +84,8 @@ import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
 import { seedElements } from "./connections/connectionsApi";
 import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
+import { HideToolbarButton, ShowToolbarButton } from "./canvas/ToolbarToggle";
+import { useViewToolbar, VIEW_TOOLBAR_ID } from "./canvas/toolbarVisibility";
 import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
@@ -1033,6 +1035,16 @@ export function App() {
   }, [addressed, addressedAlert, investigationId]);
   // Which place is open, and (so the switch can go back to it) the Glass view last open.
   const app = view === "ingest" ? "ingest" : view === "alerts" ? "rules" : "glass";
+  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4): the toolbar above the Graph's
+  // canvas or the Map can be hidden, the case line then slim with *Show toolbar* at its end. One setting for both,
+  // the signed-in analyst's in this browser; the Drawing board and the other views have no such toolbar.
+  const toolbarHere = app === "glass" && (view === "graph" || view === "map");
+  const {
+    hidden: toolbarHidden,
+    toggle: toggleToolbar,
+    hideRef: hideToolbarRef,
+    showRef: showToolbarRef,
+  } = useViewToolbar(principal?.username || null, toolbarHere);
   // ADR-128 decision 3: an attachment of the case brief opens where the thing lives (`openAttachment.ts`).
   const openBriefAttachment = (kind: AttachmentKind, id: string) => {
     const place = placeOf(kind, id);
@@ -2058,6 +2070,9 @@ export function App() {
             setView(lastGlassView());
           },
         })}
+        // Amendment 19 decision 6: with the view's toolbar hidden the line is slim, ending with *Show toolbar*.
+        slim={toolbarHidden}
+        end={toolbarHidden ? <ShowToolbarButton ref={showToolbarRef} onToggle={toggleToolbar} /> : undefined}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
       {/* ADR-097 step 1: the left rail, the Glass's alone (ADR-145 decision 1); the Studio has none. */}
@@ -2081,13 +2096,15 @@ export function App() {
         // ADR-097 step 1: what belongs to this view alone, docked above it. The Graph's row, which held
         // Match strictness alone, is withdrawn: strictness is in the canvas toolbar (ADR-145 Amendment 19
         // decision 5).
-        <div role="toolbar" aria-label="Map view" className="view-toolbar">
+        <div role="toolbar" aria-label="Map view" className="view-toolbar" id={VIEW_TOOLBAR_ID} hidden={toolbarHidden}>
           <Button aria-pressed={siteWizardOpen} onClick={() => setSiteWizardOpen((open) => !open)}>
             Add site
           </Button>
           <Button aria-pressed={boundaryToolOpen} onClick={() => setBoundaryToolOpen((open) => !open)}>
             Draw boundary
           </Button>
+          {/* Amendment 19 decision 6: the same control as the Graph's, at the row's right end. */}
+          <HideToolbarButton ref={hideToolbarRef} look="row" onToggle={toggleToolbar} />
         </div>
       )}
       <div style={{ flex: 1, display: "flex", minHeight: 0, position: "relative" }}>
@@ -2279,6 +2296,9 @@ export function App() {
                     onChangeSummary={setToast}
                   />
                 }
+                toolbarId={VIEW_TOOLBAR_ID}
+                toolbarHidden={toolbarHidden}
+                toolbarEnd={<HideToolbarButton ref={hideToolbarRef} onToggle={toggleToolbar} />}
                 graph={(lens?.workingSet ?? workingSetRef.current).graph}
                 store={(lens?.workingSet ?? workingSetRef.current).store}
                 ontology={ontology}

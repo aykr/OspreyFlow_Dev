@@ -2261,6 +2261,42 @@ test("Match strictness is reached by Tab in the canvas toolbar after Layout, set
   registerCovered("CANVAS_ACTIONS", "match-strictness-by-keyboard");
 });
 
+// --- A toolbar that can be hidden (v0.6.1 glass-rows C, ADR-145 Amendment 19 decision 6) -----------------------------
+// On the real canvas toolbar and case line, wired by App's own `useViewToolbar` (`glass-toolbar-harness.tsx`).
+test("Hide toolbar is reached by Tab and pressed with Enter; Show toolbar on the case line then has focus, and Enter on it brings the toolbar back with focus on Hide toolbar", async ({
+  page,
+}) => {
+  await page.goto("/keyboard/glass-toolbar-harness.html");
+  const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+  const hide = tools.getByRole("button", { name: "Hide toolbar" });
+  await expect(hide).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await tabTo(page, hide);
+  await page.keyboard.press("Enter");
+  await expect(tools).toHaveCount(0);
+  const show = page.getByRole("region", { name: "You are in the Glass" }).getByRole("button", { name: "Show toolbar" });
+  await expect(show).toBeFocused();
+  await expect(show).toHaveAttribute("aria-expanded", "false");
+  await page.keyboard.press("Enter");
+  await expect(tools).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Hide toolbar" })).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "hide-and-show-the-toolbar-by-keyboard");
+});
+
+test("Alt+Shift+T on the canvas hides the toolbar, focus on Show toolbar, and again shows it, focus on Hide toolbar", async ({ page }) => {
+  await page.goto("/keyboard/glass-toolbar-harness.html");
+  const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+  await expect(tools).toBeVisible();
+  await page.getByRole("application", { name: "Network canvas" }).focus();
+  await page.keyboard.press("Alt+Shift+KeyT");
+  await expect(tools).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Show toolbar" })).toBeFocused();
+  await page.keyboard.press("Alt+Shift+KeyT");
+  await expect(tools).toBeVisible();
+  await expect(tools.getByRole("button", { name: "Hide toolbar" })).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "alt-shift-t-hides-and-shows-the-toolbar");
+});
+
 test("a chosen label is still there after the page is reloaded, and Default puts it back", async ({
   page,
 }) => {
@@ -2966,7 +3002,9 @@ test("the legend docks below a wrapped toolbar and moves by keyboard from its gr
   page,
 }) => {
   await page.setViewportSize({ width: 760, height: 900 });
-  await page.goto("/keyboard/harness.html");
+  // A canvas 600 px wide: since the toolbar's short words (v0.6.1 glass-rows, the owner's ruling 7) the harness's
+  // 900 px canvas keeps it to one row, and a toolbar wraps only below about 900 px of its own width.
+  await page.goto("/keyboard/harness.html?width=600");
   const toolbar = page.getByRole("toolbar", { name: "Canvas tools" });
   const legend = page.locator(".canvas-legend");
   await expect(legend).toBeVisible();
