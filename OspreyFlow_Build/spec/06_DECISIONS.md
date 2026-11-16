@@ -40264,3 +40264,64 @@ which figures a builder reads in Superset. The probe is `process/lanes/platform-
    change shows in the record.
 3. **Carried to v0.6.1** (its own ADR): scoping a builder's reads to what their clearance and cases allow.
 
+
+### ADR-148, Amendment 22 (16 November 2026) — The POC seed runs as the Conduit's IRSA account, and step 9 ends with the seed's outcome
+
+**Amends Amendment 14 points 4 and 5.**
+
+**Context.** v0.6.0's package test ran `INSTALL.md` step 9 on the cloud-platform poc shape on 16 November
+2026. The seed failed at the HMP seed: HeadBucket on `ospreyflow-staging` was refused (ACCESS_DENIED). The
+record is platform-b's `records/20261116T092505Z-INSTALL-step9-seed.log` on the test server.
+
+**Amendment 14 point 4 was wrong.** It said the seed "calls nothing of AWS's". It does call AWS: the HMP
+seed stages its files in the deployment's staging bucket through `conduit_common.s3`, as the Conduit's
+ingest does. The bucket's name is `<MINIO_BUCKET_PREFIX>staging`, and the call is signed by the pod's own
+web identity. The Job had neither:
+- **No service account.** It held no IRSA role, so no token to sign with.
+- **No `MINIO_BUCKET_PREFIX`.** The bucket was the default `ospreyflow-staging`, which is not the
+  deployment's.
+
+So on cloud-platform the seed could never succeed. The render, the gate and the tests all held the
+wrong claim, because no case ran the HMP seed against the real buckets.
+
+A second fault was in step 9's block (point 5). The block was a subshell, followed by the search index's
+rebuild. Run as the runbook says, in one bash shell without `set -e`, a failed seed was followed by the
+rebuild. A rebuild that succeeded then ended the block 0, so the step reported success after a failed
+seed.
+
+**Decision.**
+1. **The seed's Job runs as the Conduit's IRSA account** (`secrets.irsa.service_account`, the chart's
+   `seed.serviceAccountName`), with its token mounted. Its role holds the buckets. It is given the
+   platform's S3 secret's `bucket_prefix` as `MINIO_BUCKET_PREFIX`, as the Conduit is. It still holds no
+   other key of ours: the graph's and ClickHouse's passwords by name, and the case store's variables.
+2. **Its egress gains S3 and STS** (`reach.always`): the bucket, and STS for the web identity's exchange.
+   It is still never Entra, a model engine or a map source.
+3. **The policy gate admits it as an IRSA pod.** `seed` is in `TOKEN_ALLOWED` and `IRSA_PODS`. The gate
+   refuses it with the namespace's default account's token, or under any account but IRSA's.
+4. **Step 9 ends with the seed's outcome.** After the subshell, a seed that did not succeed (not created,
+   not started, overrun or failed) is named last and ends the block failed, and nothing runs after it.
+   The rebuild runs only after a seed that succeeded, and the block then ends with the rebuild's status.
+   This holds as a person runs the block, without `set -e`, and as a script runs it, with `set -e`. The
+   sweep of every block the renderers write (cloud-platform's INSTALL, UPGRADE and the rest, for each
+   shape) found no other subshell followed by a command.
+
+**Consequences.** The seed now holds the same bucket role as the Conduit, the worker and the search
+index's Jobs. That is wider than Amendment 14 intended, but it is the least the HMP seed needs. The Job
+still runs only when step 9 starts it, with the Conduit and the worker at none. platform-b proves it live
+on the test server under lease b.
+
+**Tests that fail if it is violated:**
+- `tests/harness/test_cloud_platform_seed_irsa.py`:
+  - the account and the prefix, as the Conduit's;
+  - the chart's account and token;
+  - S3 and STS egress;
+  - the gate admitting the seed under IRSA's account, and refusing the default account, another
+    account and the gateway's;
+  - step 9 without `set -e` ending failed on each failure with no rebuild started, and ending with the
+    rebuild's status on success.
+- `tests/harness/test_cloud_platform_seed.py`: the keys, now with the S3 secret's prefix alone, and the
+  egress row's hosts.
+- `tests/cp_policy_check/test_cp_egress_order.py`: Helm's output with IRSA's account and token, the
+  default account's token refused, and the manifest's seed holding a token.
+
+Red first: `process/lanes/platform/v060-seed-irsa/red.txt`. Plants: `plants.txt` there, 9/9 red.

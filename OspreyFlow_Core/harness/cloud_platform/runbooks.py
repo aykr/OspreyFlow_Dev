@@ -453,7 +453,8 @@ stop and raise it with the client's Entra administrator before anyone else is to
 
 
 #: The POC seed path's optional block (ADR-148 Amendment 14), run after step 7 if at all. Plain text,
-#: not an f-string: `<rebuild>` is the search index's rebuild where the deployment has one.
+#: not an f-string: `<rebuild>` is the search index's rebuild (an `else` branch, after a seed that
+#: succeeded) where the deployment has one.
 _SEED_BLOCK = """\
 (
 set -e
@@ -507,7 +508,13 @@ kubectl -n "$NS" get job "$J" -o jsonpath='{.status.succeeded}' | grep -qx 1 \\
 kubectl -n "$NS" logs "job/$J"   # every line the seeds report
 seeded=1
 )
-<rebuild>"""
+# The block ends with the seed's outcome: a seed that did not succeed is named last, nothing runs
+# after it, and the block ends failed.
+if [ "$?" != 0 ]; then
+  echo "the seed did not succeed: what it says above. Nothing after it was run."
+  false
+<rebuild>fi
+"""
 
 _SEARCH_REBUILD = """\
 # The search index rebuilt from the graph as it stands (ADR-150 decision 4): five minutes to start,
@@ -533,7 +540,7 @@ def _seed_section(values: dict[str, Any]) -> str:
     POC wants it. Not part of the order (`bash later`); nothing where the shape renders no seed."""
     if "seed" not in values:
         return ""
-    rebuild = _SEARCH_REBUILD if "searchIndex" in values else ""
+    rebuild = "else\n" + _SEARCH_REBUILD if "searchIndex" in values else ""
     return """
 ## 9. Optional: spec 08's acceptance data (a POC alone)
 

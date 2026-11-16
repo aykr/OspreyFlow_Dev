@@ -2,10 +2,11 @@
 CronJob held suspended in the Conduit's image, which the install runbook's optional block starts
 with the Conduit and the worker scaled to none. It runs `scripts.seed_poc` (spec 08's three
 seeds into one case whose first Author is the first administrator), holding the case store's
-address and credentials from the platform's secret, the graph's and ClickHouse's passwords by
-name, and nothing else of ours; no service account token (it calls nothing of AWS's); and egress
-to ArcadeDB, ClickHouse and the managed networks alone. Rendered for the poc shape alone (the
-owner, 13 November 2026: a POC seed path)."""
+address and credentials and the buckets' prefix from the platform's secrets, the graph's and
+ClickHouse's passwords by name, and nothing else of ours; the Conduit's IRSA account and its token
+(the HMP seed stages its files in the buckets: `test_cloud_platform_seed_irsa.py`, v0.6.0's package
+test); and egress to ArcadeDB, ClickHouse, the managed networks, S3 and STS alone. Rendered for the
+poc shape alone (the owner, 13 November 2026: a POC seed path)."""
 
 from __future__ import annotations
 
@@ -38,9 +39,10 @@ def test_the_seed_holds_the_stores_it_writes_and_nothing_else_of_ours() -> None:
     ours = sorted(e["secret"] for e in seed["env"] if "secret" in e)
     assert ours == ["ARCADEDB_ROOT_PASSWORD", "CLICKHOUSE_PASSWORD"]
     platform = {e["secretKeyRef"]["name"] for e in seed["env"] if "secretKeyRef" in e}
-    assert platform == {
-        "rds-postgresql-instance-output"
-    }  # the case store's, no other of the platform's
+    # The case store's, and the buckets' prefix (the S3 secret's `bucket_prefix` alone).
+    assert platform == {"rds-postgresql-instance-output", "s3-bucket-output"}
+    s3 = [e for e in seed["env"] if e.get("secretKeyRef", {}).get("name") == "s3-bucket-output"]
+    assert [e["name"] for e in s3] == ["MINIO_BUCKET_PREFIX"]
     for needed in (
         "POSTGRES_HOST",
         "POSTGRES_PORT",
@@ -49,17 +51,19 @@ def test_the_seed_holds_the_stores_it_writes_and_nothing_else_of_ours() -> None:
         "POSTGRES_DB",
     ):
         assert needed in names
-    assert not any(n.startswith(("VALKEY", "LITELLM", "OPENSEARCH", "MINIO")) for n in names)
+    assert not any(n.startswith(("VALKEY", "LITELLM", "OPENSEARCH")) for n in names)
+    assert [n for n in names if n.startswith("MINIO")] == ["MINIO_BUCKET_PREFIX"]
     # The case's unit is not rendered: the first administrator's own, from the people store.
     assert "OSPREY_ORG_UNIT" not in names
 
 
-def test_the_seed_reaches_the_graph_clickhouse_and_the_case_store_alone() -> None:
+def test_the_seed_reaches_the_graph_clickhouse_the_case_store_and_the_buckets_alone() -> None:
     values = _values(_config("poc"))
     [row] = [w for w in values["egress"]["workloads"] if w["name"] == "seed"]
     assert sorted(p["name"] for p in row["toPods"]) == ["arcadedb", "clickhouse"]
     assert row.get("managed") is True
-    assert not row.get("hosts"), "the seed calls nothing outside the cluster (no S3, STS or Entra)"
+    # S3 and STS (the buckets, signed by the IRSA role), never Entra or a model engine.
+    assert sorted(h.split(".")[0] for h in row["hosts"]) == ["s3", "sts"]
 
 
 def test_the_seed_is_the_pocs_alone() -> None:
@@ -112,13 +116,15 @@ def _seed_block(config: str = "poc") -> str | None:
     return re.search(r"^```bash later\n(.*?)^```\n", section, re.S | re.M).group(1)  # type: ignore[union-attr]
 
 
-def _run_seed(tmp_path, scenario: str) -> tuple[int, str, list[str]]:  # type: ignore[no-untyped-def]
+def _run_seed(tmp_path, scenario: str, *, set_e: bool = True) -> tuple[int, str, list[str]]:  # type: ignore[no-untyped-def]
+    """The block under a stub kubectl: with `set -e` as a script runs it, or without, as a person
+    runs it in a bash shell (`test_cloud_platform_seed_irsa`)."""
     import subprocess
 
     block = _seed_block()
     assert block is not None
     bin_ = tmp_path / "bin"
-    bin_.mkdir()
+    bin_.mkdir(parents=True)
     (bin_ / "kubectl").write_text(_KUBECTL)
     (bin_ / "sleep").write_text("#!/bin/bash\n")
     for tool in ("kubectl", "sleep"):
@@ -131,8 +137,9 @@ def _run_seed(tmp_path, scenario: str) -> tuple[int, str, list[str]]:  # type: i
         "NS": "ospreyflow-poc",
     }
     done = subprocess.run(
-        ["bash", "-c", "set -e\n" + block], capture_output=True, text=True, timeout=60, env=env
-    )
+        ["bash", "-c", ("set -e\n" if set_e else "") + block],
+        capture_output=True, text=True, timeout=60, env=env,
+    )  # fmt: skip
     return done.returncode, done.stdout + done.stderr, calls.read_text().splitlines()
 
 

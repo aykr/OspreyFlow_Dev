@@ -68,8 +68,9 @@ egress:
     # ClickHouse too: its BACKUP TO S3 runs as its own backup role (ADR-148 Amendment 7, P9), as do
     # P9's backup and restore pods.
     # The search index's rebuild and drift check (ADR-150) sign as the namespace's role, so reach STS.
+    # The POC seed (ADR-148 Amendment 14) stages the HMP seed's files in the buckets, as that role.
     always: [api, worker, report-sync, clickhouse, backup, backup-claims, restore, restore-claims,
-             search-rebuild, search-drift]
+             search-rebuild, search-drift, seed]
     engines: [litellm]
     maps: [api]
     mail: []

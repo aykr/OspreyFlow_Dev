@@ -417,20 +417,24 @@ def test_a_secret_of_its_own_for_clickhouse_and_p9_s_pods_passes(
     ]
 
 
-def test_the_seed_holds_the_graph_s_and_clickhouse_s_passwords_alone_and_no_token(
+def test_the_seed_holds_the_graph_s_and_clickhouse_s_passwords_alone_and_irsa_s_token(
     rendered: tuple[list[dict[str, Any]], dict[str, Any], str],
 ) -> None:
     """The POC seed path's Job (ADR-148 Amendment 14), in Helm's own output: the graph's and
-    ClickHouse's passwords by name, no token. Given our Secret whole or another key of it, or its
-    account's token, or IRSA's account, it is refused as any pod not listed is."""
-    docs, _, registry = copy.deepcopy(rendered)
+    ClickHouse's passwords by name, and the Conduit's IRSA account with its token (the HMP seed
+    stages its files in the buckets; v0.6.0's package test, `test_cloud_platform_seed_irsa`). Given
+    our Secret whole or another key of it, or the namespace's default account's token, it is
+    refused as any pod is."""
+    docs, values, registry = copy.deepcopy(rendered)
     cronjobs = {d["metadata"]["name"]: d for d in docs if d["kind"] == "CronJob"}
     doc = cronjobs.get("ospreyflow-seed")
     if doc is None:
         pytest.skip("the seed is the poc's alone")
     assert check_manifests(docs, registry, controller_namespace=CONTROLLER) == []
     spec = pod_spec(doc)
-    assert spec["automountServiceAccountToken"] is False and "serviceAccountName" not in spec
+    api = next(w for w in values["workloads"] if w["name"] == "api")
+    assert spec["automountServiceAccountToken"] is True
+    assert spec["serviceAccountName"] == api["serviceAccountName"]
     container = spec["containers"][0]
     refs = [e.get("valueFrom", {}).get("secretKeyRef", {}) for e in container["env"]]
     held = sorted(r["key"] for r in refs if r.get("name") == "ospreyflow-secrets")
@@ -438,10 +442,10 @@ def test_the_seed_holds_the_graph_s_and_clickhouse_s_passwords_alone_and_no_toke
     another = {"name": "ospreyflow-secrets", "key": "OSPREY_OIDC_CLIENT_SECRET"}
     given = {"name": "OSPREY_OIDC_CLIENT_SECRET", "valueFrom": {"secretKeyRef": another}}
     container["env"].append(given)
-    spec["automountServiceAccountToken"] = True
+    spec.pop("serviceAccountName")
     found = check_manifests(docs, registry, controller_namespace=CONTROLLER)
     assert sorted((v.rule, v.detail) for v in found) == [
-        ("token", "mounts its service account's token"),
+        ("token", "mounts the namespace's default account's token"),
         ("whole-secret", "is given ospreyflow-secrets's OSPREY_OIDC_CLIENT_SECRET"),
     ]
 
@@ -458,8 +462,8 @@ def test_every_cronjob_the_poc_chart_renders_is_in_the_manifest() -> None:
     assert rendered - set(listed) == set()
     # And the other way: every CronJob the manifest lists is one Helm renders.
     assert {n for n, j in listed.items() if j["kind"] == "CronJob"} - rendered == set()
-    # The seed's own, as rendered: held suspended, bounded, no token.
+    # The seed's own, as rendered: held suspended, bounded, IRSA's token.
     seed = next(d for d in docs if d["kind"] == "CronJob" and d["metadata"]["name"] == SEED_JOB)
     assert seed["spec"]["suspend"] is True
     assert seed["spec"]["jobTemplate"]["spec"]["activeDeadlineSeconds"] == 2100
-    assert pod_spec(seed)["automountServiceAccountToken"] is False
+    assert pod_spec(seed)["automountServiceAccountToken"] is True

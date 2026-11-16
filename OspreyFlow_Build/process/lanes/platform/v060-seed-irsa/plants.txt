@@ -1,0 +1,40 @@
+ .../tests/cp_policy_check/test_cp_egress_order.py  | 22 +++++++++------
+ .../tests/harness/test_cloud_platform_seed.py      | 32 +++++++++++++---------
+ OspreyFlow_Build/tools/cp_policy_check.py          |  7 +++--
+ .../deploy/helm/ospreyflow/templates/seed.yaml     |  8 ++++--
+ OspreyFlow_Core/harness/cloud_platform/__init__.py | 30 +++++++++++++-------
+ .../harness/cloud_platform/profile.yaml            |  3 +-
+ OspreyFlow_Core/harness/cloud_platform/runbooks.py | 14 ++++++++--
+ 7 files changed, 74 insertions(+), 42 deletions(-)
+plant 1: the seed without the IRSA account (OspreyFlow_Core/harness/cloud_platform/__init__.py) -> RED
+    test_the_seed_runs_as_the_conduit_s_account_with_its_bucket_prefix
+plant 2: the seed without the bucket prefix (OspreyFlow_Core/harness/cloud_platform/__init__.py) -> RED
+    test_the_seed_runs_as_the_conduit_s_account_with_its_bucket_prefix
+    test_the_seed_holds_the_stores_it_writes_and_nothing_else_of_ours
+plant 3: the chart's seed with no token (OspreyFlow_Core/deploy/helm/ospreyflow/templates/seed.yaml) -> RED
+    test_the_chart_mounts_the_seed_s_token_under_its_account
+plant 4: the chart's seed with no account (OspreyFlow_Core/deploy/helm/ospreyflow/templates/seed.yaml) -> RED
+    test_the_chart_mounts_the_seed_s_token_under_its_account
+plant 5: the seed with no S3 or STS egress (OspreyFlow_Core/harness/cloud_platform/profile.yaml) -> RED
+    test_the_seed_reaches_s3_and_sts
+    test_the_seed_reaches_the_graph_clickhouse_the_case_store_and_the_buckets_alone
+plant 6: the gate's IRSA_PODS without the seed (OspreyFlow_Build/tools/cp_policy_check.py) -> RED
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[IRSA-True-said0]
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[someone-else-True-said2]
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[GATEWAY-True-said3]
+plant 7: the gate's TOKEN_ALLOWED without the seed (OspreyFlow_Build/tools/cp_policy_check.py) -> RED
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[IRSA-True-said0]
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[None-True-said1]
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[someone-else-True-said2]
+    test_the_policy_gate_admits_the_seed_as_an_irsa_pod[GATEWAY-True-said3]
+plant 8: a failed seed's status swallowed (OspreyFlow_Core/harness/cloud_platform/runbooks.py) -> RED
+    test_a_failed_seed_ends_the_block_failed_without_set_e[seed-fails]
+    test_a_failed_seed_ends_the_block_failed_without_set_e[never-starts]
+    test_a_failed_seed_ends_the_block_failed_without_set_e[overruns]
+    test_a_failed_seed_ends_the_block_failed_without_set_e[create-fails]
+plant 9: the rebuild after the seed whatever it did (v0.6.0's block) (OspreyFlow_Core/harness/cloud_platform/runbooks.py) -> RED
+    test_a_failed_seed_ends_the_block_failed_without_set_e[seed-fails]
+    test_a_failed_seed_ends_the_block_failed_without_set_e[never-starts]
+    test_a_failed_seed_ends_the_block_failed_without_set_e[overruns]
+    test_a_failed_seed_ends_the_block_failed_without_set_e[create-fails]
+9/9 plants red
