@@ -3,6 +3,9 @@
 
 - `OspreyEmbedded`, the guest role a Glass viewer's token carries: Superset's read-only Gamma, plus
   reading the reporting mart's schema and nothing else.
+- `OspreyReader`, a Reports Viewer's role and every account's at registration
+  (`superset_config.py`): Gamma less its writes (`osprey_roles.py`, the owner's ruling of
+  16 November 2026). It reads no mart: like Gamma, it holds no schema access.
 - `OspreyEmbedder`, the role of the service user the Conduit signs in as: the same, plus granting a
   guest token and marking a dashboard embeddable. Its password is `SUPERSET_EMBEDDER_PASSWORD`, a
   deployment secret; the user is local to Superset and never a person.
@@ -26,6 +29,13 @@ with app.app_context():
     from superset.models.core import Database
 
     gamma = sm.find_role("Gamma")
+    from osprey_roles import READER, is_reader_permission
+
+    reader = sm.find_role(READER) or sm.add_role(READER)
+    reader.permissions = [
+        p for p in gamma.permissions
+        if is_reader_permission(p.permission.name, p.view_menu.name)
+    ]
     # Superset's own name for the schema permission — since 4.1 it includes the catalog
     # ("[db].[catalog].[schema]"); a name written by hand without it matched no chart.
     database = db.session.query(Database).filter_by(database_name=MART_DATABASE).one()

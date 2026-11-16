@@ -571,7 +571,7 @@ ADR-052 Amendment 12). Each interface below has one owner and one direction:
 | Reporting mart | report-sync → Postgres `osprey_reports` | the feed's rows, upserted; per-case pull times and failures | owned by report-sync; never the Conduit's tables |
 | Mart reader | Superset / a BI tool → `osprey_reports` | `SELECT` only | the read-only login `osprey_reports_reader` |
 | Embedded board | Glass → Conduit (`/v1/reports/dashboards`) → Superset (guest token) | a five-minute read-only token for one board, rows limited to its identity | `read_reports`; the viewer could count every figure the identity counts; framed only by the Glass |
-| Superset sign-in (OIDC) | Superset → identity provider | a person's identity; `osprey-admin` → Superset Admin, other roles → Gamma | id_token verified against the realm's keys and issuer |
+| Superset sign-in (OIDC) | Superset → identity provider | a person's identity; `osprey-admin` → Superset Admin, other roles → OspreyReader (read-only; ADR-148 Amendment 21) | id_token verified against the realm's keys and issuer |
 
 **Three axes of authorisation, never folded into one.** *Clearance and handling* decide what a
 principal can **see**, applied in the adapter's query (§5, rule 3). *Case levels* — Viewer, Editor,

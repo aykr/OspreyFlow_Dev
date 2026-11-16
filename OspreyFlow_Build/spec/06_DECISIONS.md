@@ -40226,3 +40226,41 @@ each close it, focus on the opener; a view chosen leaves it) and `keyboard/quest
 `back-from-ask-and-chat-by-keyboard` and `select-a-graph-fact-from-the-ask-page-by-keyboard` (the page over the real
 canvas), each harness on `useAskPage`; and `a11y/every-harness.spec.ts`'s `places-harness.html` `open=questions` and
 `questions-harness.html` (the real panel inside the page) in the dark, light and GOV.UK looks. The red record is `process/lanes/case-b/v060-fullpage/`.
+
+### ADR-148, Amendment 21 (16 November 2026) — Superset's roles: a reader reads, a builder reads the whole mart
+
+*v0.6.0's package test, row 3 on candidate `38fafb8` (the owner's rulings of 16 November 2026). By platform-b. It
+amends Amendment 9 point 3 ("`read_reports` is its read-only Gamma") and states what the decision log was silent on:
+which figures a builder reads in Superset. The probe is `process/lanes/platform-b/v060/stage4/PROBE_SUPERSET_ROLES.md`.*
+
+1. **A Reports Viewer is Superset's `OspreyReader`, and so is every account at registration.** Superset's built-in
+   Gamma is not read-only: in the pinned image it holds `can_write` on Dashboard, Chart, Tag and Theme, tagging,
+   removing a board's embedding, chart customisations, cache invalidation, file handling and the user
+   registrations' writes (its whole table, as `superset init` makes it: `tests/fixtures/superset/gamma_permissions.txt`),
+   and a Reports Viewer saved a dashboard on R1. `OspreyReader` is Gamma less every permission named for a write,
+   default-deny, but for five that keep a person's own session's state (a board's filters, the two permalinks, the
+   explore form, their own preferences), each named with its reason (`deploy/superset/osprey_roles.py`), made by
+   `osprey_setup.py` at every start. `AUTH_ROLES_MAPPING` maps `reports_viewer` (and the other non-building keys) to
+   it, and `AUTH_USER_REGISTRATION_ROLE` is it: Flask-AppBuilder 5.0.2 adds that role to every account at every
+   sign-in while registration is on, so an administrator is Admin and OspreyReader, a builder Alpha and
+   OspreyReader, a Reports Viewer OspreyReader alone. Like Gamma it holds no access to the mart's schema: a Reports
+   Viewer's session read of the mart is refused 403 (the probe). This holds on every profile's Superset, Keycloak's
+   as well as Entra ID's.
+   Tests: `tests/test_superset_reader_role.py` (held to Gamma's own table; red on Gamma; a write left in red),
+   `tests/harness/test_superset_entra_sign_in.py::test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only`,
+   and the package test's dashboards check ("the Reports Viewer is refused saving one (403)", "the Reports
+   Viewer's own Superset session reads no figure of the mart (403)").
+2. **A builder reads the whole reporting mart.** `manage_dashboards` is Superset's Alpha (Amendment 9 point 3), which
+   holds access to every data source: in their own Superset session a builder reads every figure in the mart, every
+   dashboard identity's rows, whatever their clearance, unit or level on any case (measured on R1: a planted row of
+   another identity counted at SECRET, read through the administrator's chart, the builder's own and the dataset
+   directly). The row-level rule restricting the mart to one identity (ADR-111's embedding: `dashboard = '<client id>'`)
+   is carried by the guest token alone, on the embedded path. **So `manage_dashboards` is given only to people
+   cleared for every dashboard identity's cases**, which the administration guide (§6a.7) and the user guide (§9)
+   say. Rule 3 is not claimed for this path in v0.6.0: Superset reads the mart as itself.
+   Test: the dashboards check records it on every run, never as a pass or a fail
+   (`RECORD a builder's own Superset session reads the whole mart …`, held by
+   `tests/test_v052_dashboards_check.py::test_the_check_passes_on_a_deployment_that_refuses_what_it_should`), so a
+   change shows in the record.
+3. **Carried to v0.6.1** (its own ADR): scoping a builder's reads to what their clearance and cases allow.
+

@@ -7,7 +7,7 @@ stubbed (neither is installed here; the R1 run on kind is the live proof):
   no Keycloak address and no multi-tenant endpoint;
 - who signed in is the Conduit's own resolution of the person (`GET /v1/me`, `/v1/me/rights`) with the
   delegated token Entra returned, never a token claim: the username is the principal's id (the object
-  id), `administer_system` is Admin, `read_reports` Gamma, neither no account;
+  id), `administer_system` is Admin, `read_reports` the read-only OspreyReader, neither no account;
 - every refusal or failure of the Conduit refuses the sign-in (fails closed).
 
 The Conduit here is a stand-in answering with the real response models (`schemas.rights`) and
@@ -200,7 +200,7 @@ def test_the_role_is_the_conduit_s_rights_and_the_account_its_principal(
 
 def test_a_token_s_own_roles_are_never_read(monkeypatch, conduit: Conduit) -> None:
     """An Entra token's `roles` are app roles (Amendment 8): an access token claiming osprey-admin
-    for a person whose rights are reports only is Gamma."""
+    for a person whose rights are reports only is the read-only OspreyReader."""
     import base64
 
     body = base64.urlsafe_b64encode(json.dumps({"roles": ["osprey-admin"], "tid": TENANT}).encode())
@@ -261,11 +261,13 @@ def test_small_s_rate_limit_address_is_as_before(monkeypatch) -> None:
 
 def test_a_builder_is_superset_s_alpha_and_a_reports_viewer_stays_read_only(monkeypatch) -> None:
     """The owner's ruling of 13 November 2026 (Q2): a holder of `manage_dashboards` builds (Alpha:
-    charts and dashboards on the data sources it may read, the mart alone); a Reports Viewer is Gamma,
-    read-only; an administrator is Admin. Superset's own roles grant the rest, which the v0.5.2 R1 run's
-    dashboards check measures (a builder saves a chart, a Reports Viewer is refused)."""
+    charts and dashboards on the data sources it may read, the mart alone); a Reports Viewer is the
+    read-only OspreyReader, never Gamma, which writes (the owner's ruling, 16 November 2026;
+    `tests/test_superset_reader_role.py`); an administrator is Admin. Superset's own roles grant the rest,
+    which the package test's dashboards check measures (a builder saves a chart, a Reports Viewer is
+    refused)."""
     mapping = _entra(monkeypatch).AUTH_ROLES_MAPPING
     assert mapping["dashboard_builder"] == ["Alpha"]
-    assert mapping["reports_viewer"] == ["Gamma"] and mapping["osprey-admin"] == ["Admin"]
+    assert mapping["reports_viewer"] == ["OspreyReader"] and mapping["osprey-admin"] == ["Admin"]
     assert not {"Alpha", "Admin"} & {r for k, v in mapping.items() if k != "osprey-admin" and k != "dashboard_builder" for r in v}
 

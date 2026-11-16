@@ -1556,7 +1556,12 @@ assigned in *Admin › People and roles*, which keeps them in the deployment's o
   `GET /v1/me/rights` alone (any other route answers 403 `route_not_admitted`). Superset's role is
   the person's rights here, read again at each sign-in: `administer_system` is its Admin,
   `manage_dashboards` its builder (Alpha), whom *Build a report* in the Glass sends there,
-  `read_reports` its read-only Gamma, and a person with none of them is not let in.
+  `read_reports` its OspreyReader, which reads and changes nothing there (every account holds it too),
+  and a person with none of them is not let in.
+  **A builder reads the whole reporting mart** (ADR-148 Amendment 21): in their own Superset session,
+  every figure every dashboard identity's report sync pulled, whatever its clearance or case. The rule
+  keeping a board's rows to its own dashboard identity holds only for a board shown in the Glass.
+  **Give `manage_dashboards` only to people cleared for every dashboard identity's cases.**
 - **A dashboard identity** (ADR-148 Amendment 10), registered in *Admin › Dashboard identities* by its app
   registration's application id and a name (the dashboard's), signs the report sync in with an
   app-only token carrying the app role `Dashboard.Read`; it reads the case list and the report feed

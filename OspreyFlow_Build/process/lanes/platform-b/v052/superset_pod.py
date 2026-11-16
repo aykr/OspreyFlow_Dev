@@ -52,13 +52,20 @@ def _client(glass: str, hint: str | None = None) -> httpx.Client:
                  "X-Forwarded-Port": "443"}  # fmt: skip
     client = httpx.Client(base_url=SUPERSET, headers=forwarded, follow_redirects=False, timeout=60)
     if hint and _jar(hint).is_file():
-        for name, value in json.loads(_jar(hint).read_text()).items():
-            client.cookies.set(name, value)
+        kept = json.loads(_jar(hint).read_text())
+        # Each cookie back with its domain and path, so the session Superset sets next (its csrf_token
+        # answer carries the CSRF secret in a fresh session) replaces this one rather than sitting beside
+        # it: a jar of names and values alone kept two `session` cookies, the stale one first, and every
+        # write was refused "The CSRF session token is missing." (v0.6.0's package test, 16 November 2026).
+        # A jar written before is names and values.
+        for c in kept if isinstance(kept, list) else [{"name": n, "value": v} for n, v in kept.items()]:
+            client.cookies.set(c["name"], c["value"], domain=c.get("domain", ""), path=c.get("path", "/"))
     return client
 
 
 def _keep(client: httpx.Client, hint: str) -> None:
-    _jar(hint).write_text(json.dumps({c.name: c.value for c in client.cookies.jar}))
+    _jar(hint).write_text(json.dumps([{"name": c.name, "value": c.value, "domain": c.domain, "path": c.path}
+                                      for c in client.cookies.jar]))  # fmt: skip
 
 
 def signin(glass: str, hint: str) -> dict[str, Any]:

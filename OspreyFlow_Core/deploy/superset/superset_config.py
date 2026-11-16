@@ -3,10 +3,10 @@ environment the deployment renders — nothing secret in this file.
 
 **Single sign-on.** People sign in through the deployment's identity provider (`osprey-superset`,
 a confidential client). Their roles come from the access token the provider returns to Superset over
-the deployment's own network — `osprey-admin` is Superset's Admin, every other OspreyFlow role its
-read-only Gamma — synchronised at each sign-in. The browser is sent to the provider's public
-address; Superset's own calls use its internal one, including fetching the keys its id_token is
-verified against.
+the deployment's own network — `osprey-admin` is Superset's Admin, every other OspreyFlow role the
+read-only OspreyReader (`osprey_roles.py`: Gamma less its writes) — synchronised at each sign-in.
+The browser is sent to the provider's public address; Superset's own calls use its internal one,
+including fetching the keys its id_token is verified against.
 
 **It reads only the mart,** through `REPORT_MART_READER`, a login that may select from
 `osprey_reports` and nothing else (registered by `osprey_entrypoint.py`).
@@ -35,7 +35,10 @@ SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{_metadata_db}{_tls}"
 
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
-AUTH_USER_REGISTRATION_ROLE = "Gamma"
+# The owner's ruling, 16 November 2026: Flask-AppBuilder adds this role to EVERY account at every
+# sign-in while registration is on, so it is the read-only OspreyReader (`osprey_roles.py`, made by
+# `osprey_setup.py`), never Superset's Gamma, which writes dashboards and charts.
+AUTH_USER_REGISTRATION_ROLE = "OspreyReader"
 AUTH_ROLES_SYNC_AT_LOGIN = True
 AUTH_ROLES_MAPPING = {
     "osprey-admin": ["Admin"],
@@ -43,9 +46,9 @@ AUTH_ROLES_MAPPING = {
     # `administer_system` builds reports (Superset's Alpha), from "Build a report" (Entra ID's role
     # keys).
     "dashboard_builder": ["Alpha"],
-    "reports_viewer": ["Gamma"],
-    "analyst": ["Gamma"],
-    "data_engineer": ["Gamma"],
+    "reports_viewer": ["OspreyReader"],
+    "analyst": ["OspreyReader"],
+    "data_engineer": ["OspreyReader"],
 }
 
 #: Rendered on the cloud-platform profile, whose people sign in with Entra ID (ADR-148 decision 9).
@@ -157,7 +160,8 @@ def _entra_user_info(response: dict, access_token: str) -> dict:  # type: ignore
     """The account is the Conduit's principal: its id (the Entra object id) is the username, and its
     rights decide the role, re-read at every sign-in (`AUTH_ROLES_SYNC_AT_LOGIN`):
     `administer_system` is Superset's Admin, `manage_dashboards` its builder (Alpha),
-    `read_reports` its read-only Gamma, none of them no account at all. Only the displayed name
+    `read_reports` the read-only OspreyReader (Gamma less its writes; every account holds it too, as
+    the registration role), none of them no account at all. Only the displayed name
     comes from the ID token (verified by Superset's OAuth client against the tenant)."""
     if not access_token:
         raise NotForReports("no delegated token came back from Entra ID")

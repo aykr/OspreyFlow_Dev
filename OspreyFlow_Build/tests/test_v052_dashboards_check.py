@@ -24,7 +24,7 @@ POD = Path(__file__).resolve().parents[1] / "process/lanes/platform-b/v052/super
 CHECK = Path(__file__).resolve().parents[1] / "process/lanes/platform-b/v052/dashboards_check.py"
 GLASS = "ospreyflow.r1.test"
 TENANT = "00000000-1111-4222-8333-444444444444"
-ROLES = {"reader@r1.test": "Gamma", "builder@r1.test": "Alpha"}  # nobody@r1.test: refused by Superset
+ROLES = {"reader@r1.test": "OspreyReader", "builder@r1.test": "Alpha"}  # nobody@r1.test: refused by Superset
 #: Superset's username is the Conduit's principal, the Entra object id (deploy/superset/superset_config.py
 #: `_entra_user_info`: "its id (the Entra object id) is the username"), never the sign-in name.
 OIDS = {"admin@r1.test": "50000000-0000-4000-8000-0000000000a1", "reader@r1.test": "50000000-0000-4000-8000-0000000000b1",
@@ -45,6 +45,12 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
     module = _load(POD, "superset_pod_under_test")
     codes: dict[str, str] = {}
     sessions: dict[str, str] = {}
+    #: The CSRF secret each session holds, as Flask keeps it in the signed session cookie: Superset's
+    #: csrf_token GET answers a fresh session carrying it, and a write is judged by the session it
+    #: presents (the first `session` cookie, as werkzeug reads it). A write whose session holds no
+    #: secret is refused "The CSRF session token is missing." (v0.6.0's package test, 16 November 2026:
+    #: a jar reloaded without its cookies' domain kept the stale session first).
+    held_csrf: dict[str, str] = {}
     fake: dict[str, Any] = {"honours_forwarding": True, "boards": {}, "csrf_checked": True, "redirect_suffix": "",
                             "mart": ["app-id", "app-id", "another-identity"], "rls": "app-id"}
 
@@ -84,24 +90,32 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
                 return httpx.Response(302, headers={"location": "/login/"})
             sessions[f"s-{hint}"] = hint
             return httpx.Response(302, headers={"location": "/", "set-cookie": f"session=s-{hint}; Path=/"})
-        cookie = request.headers.get("cookie", "")
-        who = sessions.get(cookie.removeprefix("session=")) if cookie.startswith("session=") else None
+        presented = [part.strip().removeprefix("session=") for part in request.headers.get("cookie", "").split(";")
+                     if part.strip().startswith("session=")]  # fmt: skip
+        current = presented[0] if presented else ""
+        who = sessions.get(current)
         role = {**ROLES, "admin@r1.test": "Admin"}.get(who or "")
         if path == "/api/v1/me/":
             return httpx.Response(200, json={"result": {"username": OIDS[who]}}) if who else httpx.Response(401)
         if path == "/api/v1/me/roles/":
             return httpx.Response(200, json={"result": {"roles": {role: []}}}) if who else httpx.Response(401)
         if path == "/api/v1/security/csrf_token/":
-            return httpx.Response(200, json={"result": f"csrf-{who}"}) if who else httpx.Response(401)
+            if not who:
+                return httpx.Response(401)
+            fresh = f"{current}+csrf"
+            sessions[fresh], held_csrf[fresh] = who, f"csrf-{who}"
+            return httpx.Response(200, json={"result": f"csrf-{who}"}, headers={"set-cookie": f"session={fresh}; Path=/"})
         boards = fake["boards"]
         if path == "/api/v1/dashboard/" and request.method == "POST":
             # Flask-AppBuilder's refusals, in its order: no session, then no CSRF token, then the role, then
             # the slug's uniqueness.
             if not who:
                 return httpx.Response(401, json={"msg": "Missing Authorization Header"})
-            if fake["csrf_checked"] and request.headers.get("x-csrftoken") != f"csrf-{who}":
+            if fake["csrf_checked"] and current not in held_csrf:
+                return httpx.Response(400, json={"errors": [{"message": "400 Bad Request: The CSRF session token is missing."}]})
+            if fake["csrf_checked"] and request.headers.get("x-csrftoken") != held_csrf[current]:
                 return httpx.Response(400, json={"errors": [{"message": "400 Bad Request: The CSRF token is missing."}]})
-            if role == "Gamma":
+            if role == "OspreyReader":
                 return httpx.Response(403, json={"message": "Forbidden"})
             body = json.loads(request.content)
             if body.get("slug") and body["slug"] in boards:
@@ -117,7 +131,7 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
             kept = fake.setdefault("made", {}).get(path)
             return httpx.Response(200, json={"result": [kept] if kept else []})
         if path in ("/api/v1/dataset/", "/api/v1/chart/") and request.method == "POST":
-            if not who or request.headers.get("x-csrftoken") != f"csrf-{who}":
+            if not who or request.headers.get("x-csrftoken") != held_csrf.get(current):
                 return httpx.Response(401 if not who else 400)
             if role != "Admin":
                 return httpx.Response(403)
@@ -209,7 +223,7 @@ def test_the_check_s_plan_and_its_people() -> None:
     assert set(check.SUPERSET_ROLE) | {"nobody@r1.test"} == set(check.PEOPLE)
     assert check.ROLES["builder@r1.test"] == ["reports_viewer", "right:manage_dashboards"]
     assert json.dumps(check.SUPERSET_ROLE) == json.dumps(
-        {"admin@r1.test": ["Admin"], "builder@r1.test": ["Alpha"], "reader@r1.test": ["Gamma"]})
+        {"admin@r1.test": ["Admin"], "builder@r1.test": ["Alpha"], "reader@r1.test": ["OspreyReader"]})
 
 
 def test_the_report_sync_is_given_what_install_s_step_6a_tells_the_client_to_give() -> None:
@@ -310,10 +324,14 @@ LEAKS = {
     "no reports right is given the listing": "no reports right is refused the listing",
     "no reports right is given a guest token": "no reports right is refused the listing",
     "Superset signs in the person with no reports right": "refused by Superset at sign-in",
-    "Superset lets Gamma build": "the Reports Viewer is refused saving one",
+    "Superset lets the Reports Viewer build": "the Reports Viewer is refused saving one",
     "Superset opens the board without a guest token": "nothing opens without it",
     "Superset names the account by its sign-in name": "the Conduit's principal (the object id)",
     "the person with no reports right is stopped by Entra, never reaching Superset": "refused by Superset at sign-in",
+    # Beyond the mapped role and the registration role (v0.6.0's package test, 16 November 2026: the role set, not a list).
+    "Superset gives the builder Admin": "builder@r1.test signs in to Superset as Alpha",
+    "Superset gives the reader Alpha": "reader@r1.test signs in to Superset as OspreyReader",
+    "Superset lets the Reports Viewer read the mart": "the Reports Viewer's own Superset session reads no figure",
 }
 
 
@@ -447,18 +465,33 @@ def _superset(conduit: Any, leak: str = "") -> Any:
             if hint == "nobody@r1.test" and leak != "Superset signs in the person with no reports right":
                 return {"signed_in": False, "stage": "superset", "status": 302, "location": "/login/", "me": 401}
             held = conduit.roles.get(OIDS.get(hint, "x"), [])
-            role = "Admin" if "osprey-admin" in held else "Alpha" if "right:manage_dashboards" in held else "Gamma"
+            role = "Admin" if "osprey-admin" in held else "Alpha" if "right:manage_dashboards" in held else "OspreyReader"
+            # As Flask-AppBuilder 5.0.2 gives them (`_oauth_calculate_user_roles`, read from the running
+            # Superset image, v0.6.0's package test, 16 November 2026): the mapped role and, while
+            # registration is on, AUTH_USER_REGISTRATION_ROLE (OspreyReader) always, as a set; it listed
+            # first, so only a check comparing sets passes.
+            roles = ["OspreyReader"] + [r for r in [role] if r != "OspreyReader"]
+            if hint == "builder@r1.test" and leak == "Superset gives the builder Admin":
+                roles.append("Admin")
+            if hint == "reader@r1.test" and leak == "Superset gives the reader Alpha":
+                roles.append("Alpha")
             name = hint if leak == "Superset names the account by its sign-in name" else OIDS.get(hint, hint)
-            return {"signed_in": True, "username": name, "roles": [role]}
+            return {"signed_in": True, "username": name, "roles": roles}
         if action == "build":
             gamma = args[0] == "reader@r1.test"
-            return {"status": 201 if not gamma or leak == "Superset lets Gamma build" else 403, "id": 7}
+            return {"status": 201 if not gamma or leak == "Superset lets the Reports Viewer build" else 403, "id": 7}
         if action == "embedded":
             assert args[1] == "@secret", "the guest token travels as a secret, never an argument"
             return {"with_token": 200 if secret == GUEST else 401, "without": 200 if leak == "Superset opens the board without a guest token" else 401}
         if action == "chart":
             return {"status": 201, "dataset": 3, "chart": 5}
         if action == "chartdata" and args[0] == "session":
+            # As Superset answers a person's own session: Admin and Alpha read every row of the mart (ADR-148
+            # Amendment 21); the read-only OspreyReader holds no access to it, refused 403 (the probe of 16 Nov).
+            held = conduit.roles.get(OIDS.get(args[1], "x"), [])
+            reads = "osprey-admin" in held or "right:manage_dashboards" in held
+            if not reads and leak != "Superset lets the Reports Viewer read the mart":
+                return {"status": 403}
             return {"status": 200, "dashboards": sorted(conduit.mart)}
         if action == "chartdata":
             assert args[4] == "@secret" and secret == GUEST
@@ -483,6 +516,9 @@ def test_the_check_passes_on_a_deployment_that_refuses_what_it_should(tmp_path: 
     _, r1 = _run(tmp_path)
     record = (r1.records / "dashboards.log").read_text()
     assert "FAIL" not in record and record.count("PASS") >= 20
+    # ADR-148 Amendment 21: a builder's whole-mart read is recorded, both identities named, never judged.
+    [stated] = [line for line in record.splitlines() if line.startswith("RECORD a builder's own Superset session")]
+    assert r1.report_sync in stated and "r1-another-identity-counted-at-secret" in stated, stated
     printed = capsys.readouterr().out + record
     # Nothing secret or bearer leaves the run: the report sync's secret, a guest token, a person's token.
     assert SECRET not in printed and GUEST not in printed and "fake.{" not in printed

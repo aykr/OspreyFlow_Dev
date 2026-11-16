@@ -15,10 +15,11 @@ engineers, and the [architecture guide](architecture-guide.md), for how it is bu
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.72** · 2026-11-15 · For OspreyFlow v0.6.0 · Issued
+**Version 1.73** · 2026-11-16 · For OspreyFlow v0.6.0 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.73 | 2026-11-16 | §9's **Reports**: in the boards' editor a builder sees the figures behind every board, for every case and clearance, so the right to manage dashboards is given only to people cleared for all of them (ADR-148 Amendment 21, the owner's ruling of 16 November). |
 | 1.72 | 2026-11-15 | Ask & Chat (§6) opens as a page over the view, as the search results do, with **Back to** the view; the results page and the Ask page replace each other; the rail's row in §3 says so (ADR-145 Amendment 18, v0.6.0); *Show all on graph*'s words past the limit say *Save as a view* is under the answer in Ask & Chat, since the page has gone. Held by `tests/test_user_guide_ask_chat.py` and `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.71 | 2026-11-15 | §6, *An answer's items* (v0.6.0 item 5, the owner's closed list): **Show all on graph** puts an answer's items on the case's graph, selected, a saved view closed first, what it cannot show a count and past the limit nothing; **Save as a view** names the view from the question and saves it as a saved view of the case. Held by `tests/test_user_guide_ask_items.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.70 | 2026-11-15 | §7.5: **What raises alerts** says why a hotlist or watch stopped, in the same words under *Stopped*; a stopped rule says nothing more (v0.6.0 #14, ADR-044 Amendment 1). Held by `tests/test_user_guide_alert_sources_stopped_why.py`. PDF made by the orchestrator at merge. |
@@ -1530,7 +1531,9 @@ Beside Figures, as your rights allow: **Trends**, **Packs** (report packs, expor
 **Reports**, in the view switch (it was named *Dashboards*), is the one door to the deployment's
 boards, drawn inside the Glass and showing only those you may open. Where the deployment has its
 reporting, **Build a report (opens in new tab)**, beside the switch, opens the boards' own editor at
-`bi.`, for whoever may manage dashboards. The same boards are at `bi.` in front of the deployment's address,
+`bi.`, for whoever may manage dashboards. There a builder sees the figures behind every board, for
+every case and clearance: a board's rows are kept to its own cases only when it is shown in the Glass,
+so this right is given only to people cleared for all of them. The same boards are at `bi.` in front of the deployment's address,
 signed in the same way. The first is **Alert monitoring**: alerts raised each week and by rule,
 closed by outcome, time to close, hotlist matches, and the team view.
 
