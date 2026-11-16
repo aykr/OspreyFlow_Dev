@@ -40264,7 +40264,8 @@ item; decisions 1 to 4 built by the case lane, 5 and 6 by case-b.
 5. **Match strictness** is a compact control in the Graph's toolbar, after Layout: its name and setting on a button
    ("Match strictness: Balanced ▾") that opens the same three-stop slider; the same announcement ("Match strictness:
    Balanced — n merged, n split, n affected"). The Graph's separate row (`App.tsx`'s view toolbar) is withdrawn. While
-   the toolbar is narrower than 1132 px (measured by the toolbar itself, so a docked panel counts), the button shows
+   the canvas is narrower than 1220 px of its own width, measured (so a docked panel counts; the owner's ruling 11), the
+   button shows
    **Strictness: Balanced ▾**, *Hide toolbar* shows **Hide**, and the *Layout* and *Show* captions go, each control
    keeping its full accessible name and each group its name (the owner's rulings 1, 6 and 7). Narrower than about 900
    px, with a panel docked on a small window, it wraps as it did.
@@ -40275,7 +40276,9 @@ item; decisions 1 to 4 built by the case lane, 5 and 6 by case-b.
      words: ruling 9). *Back to the whole case* is on the slim line whenever a saved view is open.
    - The hidden toolbar is out of the tab order and the accessibility tree, not merely invisible. The button states
      `aria-expanded` and `aria-controls`; focus moves to *Show toolbar* on hiding and to *Hide toolbar* on showing.
-     Showing or hiding moves the canvas once, by the toolbar's height, the graph keeping its centre and zoom.
+     Showing or hiding moves the drawing area's top once, by the toolbar's height, the graph keeping its centre and
+     zoom (on the Graph the toolbar lies over the canvas, so the canvas element itself moves only by what the slim line
+     gives back).
    - The shortcut is **Alt+Shift+T** (Option+Shift+T on a Mac), outside text fields, listed in "?".
    - Remembered per signed-in analyst in the browser (`ospreyflow.glass.toolbar.<username>`, as the Studio remembers
      its mode, ADR-140 decision 3). One setting for the Graph and the Map; the Drawing board's head, its title, is never
@@ -40287,4 +40290,8 @@ strip, focus on the name, *Details*, the alert's way back), `keyboard/views.spec
 *Details* and Esc, the canvas's top unmoved at 1440, 1280 and 1024 in each look; axe and the contrast probe on the new
 controls), `keyboard/rules-place.spec.ts`, `keyboard/view-over-cap.spec.ts` and `keyboard/case-line-type.spec.ts` (the
 fold's order). The keyboard registry's `open-a-saved-views-details-from-the-case-line-by-keyboard`. Decisions 5 and 6:
-case-b's, named when built. The red records are `process/lanes/case/gates/glass-rows-reds.*.log` and case-b's.
+`keyboard/glass-toolbar.spec.ts`; `keyboard/keyboard.spec.ts`'s `match-strictness-by-keyboard`,
+`hide-and-show-the-toolbar-by-keyboard` and `alt-shift-t-hides-and-shows-the-toolbar`; `src/App.chrome.test.tsx`'s
+"Match strictness in the canvas toolbar" and "a toolbar that can be hidden" blocks; `src/canvas/toolbarVisibility.test.ts`;
+`src/resolution/ThresholdControl.test.tsx`. The red records and plants are `process/lanes/case/gates/glass-rows-*.log`
+(with `process/lanes/case/glass-rows/plants.sh`) and `process/lanes/case-b/v061-glass-rows-ac/`.
