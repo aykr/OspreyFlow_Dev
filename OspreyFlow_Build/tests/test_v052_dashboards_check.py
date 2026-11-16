@@ -314,6 +314,9 @@ LEAKS = {
     "Superset opens the board without a guest token": "nothing opens without it",
     "Superset names the account by its sign-in name": "the Conduit's principal (the object id)",
     "the person with no reports right is stopped by Entra, never reaching Superset": "refused by Superset at sign-in",
+    # Beyond the mapped role and Gamma (v0.6.0's package test, 16 November 2026: the role set, not a list).
+    "Superset gives the builder Admin": "builder@r1.test signs in to Superset as Alpha",
+    "Superset gives the reader Alpha": "reader@r1.test signs in to Superset as Gamma",
 }
 
 
@@ -448,8 +451,17 @@ def _superset(conduit: Any, leak: str = "") -> Any:
                 return {"signed_in": False, "stage": "superset", "status": 302, "location": "/login/", "me": 401}
             held = conduit.roles.get(OIDS.get(hint, "x"), [])
             role = "Admin" if "osprey-admin" in held else "Alpha" if "right:manage_dashboards" in held else "Gamma"
+            # As Flask-AppBuilder 5.0.2 gives them (`_oauth_calculate_user_roles`, read from the running
+            # Superset image, v0.6.0's package test, 16 November 2026): the mapped role and, while
+            # registration is on, AUTH_USER_REGISTRATION_ROLE (Gamma) always, as a set; Gamma listed
+            # first, so only a check comparing sets passes.
+            roles = ["Gamma"] + [r for r in [role] if r != "Gamma"]
+            if hint == "builder@r1.test" and leak == "Superset gives the builder Admin":
+                roles.append("Admin")
+            if hint == "reader@r1.test" and leak == "Superset gives the reader Alpha":
+                roles.append("Alpha")
             name = hint if leak == "Superset names the account by its sign-in name" else OIDS.get(hint, hint)
-            return {"signed_in": True, "username": name, "roles": [role]}
+            return {"signed_in": True, "username": name, "roles": roles}
         if action == "build":
             gamma = args[0] == "reader@r1.test"
             return {"status": 201 if not gamma or leak == "Superset lets Gamma build" else 403, "id": 7}

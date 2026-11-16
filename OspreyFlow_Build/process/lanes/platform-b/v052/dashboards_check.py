@@ -209,8 +209,12 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
     # 3 and 4. Superset's sign-in, its roles, building.
     for hint in ("admin@r1.test", "builder@r1.test", "reader@r1.test"):
         s = ask("signin", hint)
+        # The role set, not a list: Flask-AppBuilder 5.0.2 always adds AUTH_USER_REGISTRATION_ROLE (Gamma,
+        # read-only, within Admin and Alpha) to the mapped role while registration is on, at every sign-in
+        # (v0.6.0's package test, 16 November 2026). Nothing beyond the two: a builder never Admin, a
+        # reader never Alpha or Admin (tests/test_v052_dashboards_check.py's LEAKS).
         ok(f"{hint} signs in to Superset as {SUPERSET_ROLE[hint][0]}",
-           s.get("signed_in") is True and s.get("roles") == SUPERSET_ROLE[hint], s)
+           s.get("signed_in") is True and set(s.get("roles") or []) == {*SUPERSET_ROLE[hint], "Gamma"}, s)
         # Superset keys its user by the Entra object id (Amendment 9): the Conduit's principal, not a name.
         ok(f"{hint}'s Superset account is the Conduit's principal (the object id)", s.get("username") == people[hint], s)
     s = ask("build", "admin@r1.test", "R1 board", BOARD)
