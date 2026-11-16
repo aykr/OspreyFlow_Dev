@@ -1,7 +1,9 @@
-"""User guide §5.13, *Saved views*, held to the code that draws them (ADR-145 Amendment 17, ADR-144 Amendment 6; rule
-12): the strip's way back and its words in their order (`ViewLensBanner.tsx`), the panel's *The whole case* row and a
-default-named view's second line (`ViewsPanel.tsx`), the canvas's notice in a saved view (`GlassCanvas.tsx`), and the
-case line's button (`ContextBanner.tsx`). Each claim is read from the code's own strings, never its comments.
+"""User guide §5.13, *Saved views*, held to the code that draws them (ADR-145 Amendment 19, which withdrew Amendment
+17's strip; ADR-144 Amendment 6; rule 12): the case line's saved view, its parts in their order and its *Details*
+(`views/SavedViewOnTheLine.tsx`, drawn by `shell/ContextBanner.tsx` from App's `caseState`), the panel's *The whole
+case* row and a default-named view's second line (`ViewsPanel.tsx`), the canvas's notice in a saved view
+(`GlassCanvas.tsx`), and the case line's button (`ContextBanner.tsx`). Each claim is read from the code's own strings,
+never its comments.
 """
 
 from __future__ import annotations
@@ -28,57 +30,78 @@ def saved_views() -> str:
     return fold(section(USER, "### 5.13"))
 
 
-def strip_order(strip: str) -> list[str]:
-    """The strip's own parts it draws, in the order it draws them: a part it no longer draws is left out, so the
-    list is short."""
-    parts = ["Back to the whole case", "Saved view: <span", '{shared ? "Shared" : "Private"}', "{note &&",
-             "Nothing in a saved view changes the case."]  # fmt: skip
-    return sorted((p for p in parts if p in strip), key=strip.find)
+def line_order(line: str) -> list[str]:
+    """The case line's saved-view parts, in the order it draws them: a part it no longer draws is left out, so the list
+    is short."""
+    parts = ['Saved view: <span className="context-banner__view-name">', '{state.shared ? "Shared" : "Private"}',
+             "Details <span", "{state.from.backLabel}", "Back to the whole case"]  # fmt: skip
+    return sorted((p for p in parts if p in line), key=line.find)
 
 
-def test_the_strip_starts_with_the_way_back_and_says_what_the_guide_says_in_its_order() -> None:
-    strip = screen("views/ViewLensBanner.tsx")
-    assert strip_order(strip) == ["Back to the whole case", "Saved view: <span", '{shared ? "Shared" : "Private"}',
-                                  "{note &&", "Nothing in a saved view changes the case."]  # fmt: skip
-    assert '"govuk-back-link view-lens-banner__whole"' in strip, "under GOV.UK, GOV.UK's back link"
-    assert "useEffect(() => strip.current?.focus(), []);" in strip, "focus comes to the strip"
-    assert "You are looking at the whole case." in strip
+def items(code: str) -> str:
+    """`CaseStateItems`, the parts the state adds to the line."""
+    return code[code.index("export function CaseStateItems(") : code.index("export function SavedViewDetails(")]
+
+
+def details(code: str) -> str:
+    """`SavedViewDetails`, the panel *Details* opens."""
+    return code[code.index("export function SavedViewDetails(") :]
+
+
+def test_the_case_line_says_what_is_open_in_the_guides_order() -> None:
+    code = screen("views/SavedViewOnTheLine.tsx")
+    line = items(code)
+    assert line_order(line) == ['Saved view: <span className="context-banner__view-name">', '{state.shared ? "Shared" : "Private"}',
+                                "Details <span", "{state.from.backLabel}", "Back to the whole case"]  # fmt: skip
+    assert '"govuk-back-link context-banner__whole"' in line, "under GOV.UK, GOV.UK's back link"
+    assert "if (id !== null) named.current?.focus();" in line, "focus comes to the saved view's name"
+    assert '<span className="context-banner__state">Whole case</span>' in line
+    assert "aria-expanded={detailsOpen} aria-controls={DETAILS_ID}" in line
+    panel = details(code)
+    assert '{note && <p className="case-line-details__line">{note}</p>}' in panel
+    assert 'export const NOTHING_CHANGES = "Nothing in a saved view changes the case.";' in code and "{NOTHING_CHANGES}" in panel
+    assert "{state.from.label}" in panel and "{state.from.backLabel}" in panel
+    assert "Notes from the drawing ({annotations.length})" in panel
+    assert 'if (event.key !== "Escape") return;' in panel
     text = saved_views()
-    assert ("The strip above the graph starts with **Back to the whole case** (the GOV.UK back link in that look), then "
-            '"Saved view: ‹name›", its *Private* or *Shared* tag, how many of its items could not be shown when any '
-            'could not, and "Nothing in a saved view changes the case."') in text  # fmt: skip
-    assert 'With no saved view open the strip says "You are looking at the whole case."' in text
-    assert ("Focus moves to the strip, **Back to the whole case** is the next Tab, and it returns focus to **Saved views "
-            "(n)**.") in text  # fmt: skip
+    assert ('The case line says so: "Saved view: ‹name›", its *Private* or *Shared* tag, **Details ▾** and **Back to the '
+            "whole case** (the GOV.UK back link in that look).") in text  # fmt: skip
+    assert ("**Details** opens over the graph and says how many of its items could not be shown when any could not, "
+            '"Nothing in a saved view changes the case.", and, for a saved view opened from an alert, "From alert '
+            '‹title›" with **← Back to the alert**; for a merged drawing it offers **Notes from the drawing (n)**. Esc '
+            "closes it.") in text  # fmt: skip
+    assert 'With no saved view open the case line ends "Whole case".' in text
+    assert ("Focus moves to the saved view's name on the case line; **Details** is the next Tab, then **Back to the "
+            "whole case**, which returns focus to **Saved views (n)**.") in text  # fmt: skip
 
 
-def test_a_strip_drawn_in_another_order_is_flagged() -> None:
-    """The real strip with its way back moved after the note, as main's strip had it, and with its note reworded."""
-    strip = screen("views/ViewLensBanner.tsx")
-    back = strip.index("Back to the whole case")
-    moved = strip[:back] + strip[back + len("Back to the whole case") :]
-    moved = moved.replace("Nothing in a saved view changes the case.", "Nothing in a saved view changes the case. Back to the whole case")
-    assert strip_order(moved)[0] != "Back to the whole case"
-    reworded = strip.replace("Nothing in a saved view changes the case.", "Nothing in a view changes the case.")
-    assert "Nothing in a saved view changes the case." not in strip_order(reworded)
+def test_a_line_drawn_in_another_order_is_flagged() -> None:
+    """The real line with its way back moved before the name, and *Details* dropped."""
+    line = items(screen("views/SavedViewOnTheLine.tsx"))
+    back = line.index("Back to the whole case")
+    moved = line[:back] + line[back + len("Back to the whole case") :]
+    moved = moved.replace("Saved view: <span", "Back to the whole case Saved view: <span", 1)
+    assert line_order(moved)[0] == "Back to the whole case"
+    assert "Details <span" not in line_order(line.replace("Details <span", "More <span"))
 
 
-def test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says() -> None:
+def test_the_app_draws_the_state_the_panel_and_the_way_back_as_the_guide_says() -> None:
     app = screen("App.tsx")
     assert 'title={casesOpen === "views" ? "Saved views" : "Cases"}' in app, "the drawer's title from the case line"
     # The whole case's Open is the back link's own handler, so it does what Back to the whole case does.
     assert "onOpenWholeCase={backToTheWholeCase}" in app
-    assert '{view === "graph" && !lens && investigationId && <WholeCaseStrip />}' in app
+    # No strip: the state is the case line's, from App's caseState.
+    assert "WholeCaseStrip" not in app and "ViewLensBanner" not in app
+    assert not (SRC / "views/ViewLensBanner.tsx").exists()
+    assert "caseState={caseState}" in app and "onBack: backToTheWholeCase," in app
     back = app[app.index("const backToTheWholeCase = (): void => {") :]
     assert "requestAnimationFrame(() => focusSavedViewsButton());" in back[: back.index("};")]
-    assert 'label: "Opened from an alert",' in app and 'backLabel: "← Back to the alert",' in app
+    assert "label: `From alert ${lensFromAlert.title}`," in app and 'backLabel: "← Back to the alert",' in app
     # The Cases panel lists each case's saved views too: its list opens one.
     cases = app[app.index("<CaseList") :]
     assert "onOpenView={(caseId, chosen: CaseView) => {" in cases[:2000]
-    strip = screen("views/ViewLensBanner.tsx")
-    assert "{from && <span className=\"view-lens-banner__from\">{from.label}</span>}" in strip
-    assert strip.index("Back to the whole case") < strip.index("{from.label}") < strip.index("Saved view: <span")
-    assert strip.index("Nothing in a saved view changes the case.") < strip.index("{from.backLabel}")
+    banner = screen("shell/ContextBanner.tsx")
+    assert "<CaseStateItems" in banner and "<SavedViewDetails" in banner
     text = saved_views()
     assert ("**Saved views (n)**, on the case line, opens the **Saved views** panel: on the case's own screen it is the "
             "one route to them, and the **Cases** panel, from **All cases**, still lists each case's saved views.") in text  # fmt: skip
@@ -87,8 +110,7 @@ def test_the_app_draws_the_strip_the_panel_and_the_way_back_as_the_guide_says() 
     amendment = decisions[decisions.index("### ADR-144, Amendment 6 (14 November 2026)") :][:3000]
     assert ("The case line's **Saved views (n)** is the one route on the case's own screen to its saved views; "
             "*All cases* still lists each case's saved views") in amendment  # fmt: skip
-    assert ('A saved view opened from an alert says "Opened from an alert" straight after the way back, and offers '
-            "**← Back to the alert** after the note.") in text  # fmt: skip
+    assert "A saved view opened from an alert also offers **← Back to the alert** on the case line itself." in text
 
 
 def test_the_list_starts_with_the_whole_case_and_tells_default_named_views_apart() -> None:

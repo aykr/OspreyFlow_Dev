@@ -29919,9 +29919,10 @@ Conduit half) and L3.2b (the Glass half). ADR-144 and Amendment 1 are unchanged 
    the chosen nodes, their positions and the timeline's window, and leaves its threshold unset.
 4. **An opened view is a read-only lens (the owner's ruling of 8 November 2026, the option recommended to
    them).** Opening a view puts its items on the canvas in place of the case's working set, as a working
-   set of the Glass's own that is never joined to the case's delta stream. A banner names the view and its
-   *Private* or *Shared* tag, counts what it could not show without saying which or why, and offers
-   *Back to the case*. Nothing in a view changes the case's working set: no expand, links among, paths or
+   set of the Glass's own that is never joined to the case's delta stream. The case line names the view and
+   its *Private* or *Shared* tag and offers *Back to the whole case*; its *Details* counts what it could
+   not show, without saying which or why (these words ADR-145 Amendment 19's, 16 November 2026; a banner
+   over the canvas said them before). Nothing in a view changes the case's working set: no expand, links among, paths or
    messages put on, remove, or manual same-as or split. The selection bar offers *Save as a view*, *Ask
    the model about these…* and *Clear*; a node's menu offers only an allowlist of actions that change
    nothing, and a link's menu likewise (no confirm, mark as not the same, explain or change: the
@@ -40226,3 +40227,64 @@ each close it, focus on the opener; a view chosen leaves it) and `keyboard/quest
 `back-from-ask-and-chat-by-keyboard` and `select-a-graph-fact-from-the-ask-page-by-keyboard` (the page over the real
 canvas), each harness on `useAskPage`; and `a11y/every-harness.spec.ts`'s `places-harness.html` `open=questions` and
 `questions-harness.html` (the real panel inside the page) in the dark, light and GOV.UK looks. The red record is `process/lanes/case-b/v060-fullpage/`.
+
+### ADR-145, Amendment 19 (16 November 2026) — the saved view's state on the case line; strictness in the toolbar; a toolbar that can be hidden
+
+The owner, 16 November 2026 (`process/lanes/v061/glass-rows/OWNER_BRIEF_2026-11-16.md`, the case lane's
+`PROPOSAL.md` and `OWNER_RULINGS_2026-11-16.md`, rulings 1 to 10): on the GOV.UK demo the rows above the graph took
+more than a third of the window (measured at 1440 × 900: 252 of 900 px above the drawing area). Amends Amendment 17
+decisions 2 and 3 and Amendment 15's case line; ADR-144 Amendment 2 decision 4's banner words follow it. v0.6.1's first
+item; decisions 1 to 4 built by the case lane, 5 and 6 by case-b.
+
+1. **No strip.** The strip under the case line (*You are looking at the whole case.*, and the saved view's banner over
+   the canvas, `views/ViewLensBanner.tsx`) is withdrawn. What is open is said on the case line, which is always drawn,
+   so opening or closing a saved view moves the canvas by nothing. This is now stated, and held by a test of the
+   canvas's top to the pixel at 1440, 1280 and 1024 wide in the dark, light and GOV.UK looks. (Amendment 17 kept the
+   strip so that a saved view was never a surprise; the strip was 31 px with the whole case and 37 px with a saved view,
+   so the canvas moved 6 px when one opened, and it pushed the canvas's foot 31 to 37 px below the window.)
+2. **The case line's state**, after *Saved views (n)*. With no saved view open the line ends **Whole case**; with one
+   open it reads **Saved view: ‹name›** with its **Shared** or **Private** tag, **Details ▾**, and **Back to the whole
+   case** (a link's look; GOV.UK's back link under GOV.UK), which does what Amendment 17's way back did. The Map and
+   the Matrix show the case, so on the Map the line says *Whole case*; a view with no canvas says nothing.
+   - **Details** is a disclosure (`aria-expanded`, `aria-controls`) that opens over the canvas, under the line's right
+     end, so it moves nothing; Esc closes it and focus goes back to it. It holds the count of what could not be shown (a
+     count, never which or why: ADR-144 decision 2), **Nothing in a saved view changes the case.**, where the view was
+     opened from with its own way back (**From alert ‹title›** and **← Back to the alert**, ADR-146 decision 6), and,
+     for a merged drawing, **Notes from the drawing (n)** (ADR-143 Amendment 2 decision 7).
+   - A view opened from an alert also shows **← Back to the alert** on the line itself, before *Back to the whole case*.
+3. **Focus.** Opening a saved view moves focus to the line's **Saved view: ‹name›** (wherever it was asked for: the
+   saved views panel, the over-cap dialog). The next Tab is *Details* (then *← Back to the alert* where there is one),
+   then *Back to the whole case*, which returns focus to *Saved views*.
+4. **The line folds, it does not wrap** (the owner's ruling 10). As the line runs short, in turn: (1) the cross-link
+   takes its short words; (2) "reads …" is ellipsised, then (3) goes out of sight (kept for a screen reader and in its
+   title) while the saved view's name is ellipsised (its whole words in its title); (4) the case switcher is ellipsised,
+   down to 8em, its whole name in its title and its accessible name; (5) "You are in the Glass" goes out of sight, still
+   the region's name. Only then do whole items wrap. *Saved views (n)*, the tag, *Details* and *Back to the whole case*
+   never fold.
+5. **Match strictness** is a compact control in the Graph's toolbar, after Layout: its name and setting on a button
+   ("Match strictness: Balanced ▾") that opens the same three-stop slider; the same announcement ("Match strictness:
+   Balanced — n merged, n split, n affected"). The Graph's separate row (`App.tsx`'s view toolbar) is withdrawn. While
+   the toolbar is narrower than 1132 px (measured by the toolbar itself, so a docked panel counts), the button shows
+   **Strictness: Balanced ▾**, *Hide toolbar* shows **Hide**, and the *Layout* and *Show* captions go, each control
+   keeping its full accessible name and each group its name (the owner's rulings 1, 6 and 7). Narrower than about 900
+   px, with a panel docked on a small window, it wraps as it did.
+6. **A toolbar that can be hidden.**
+   - **Hide toolbar**, at the right end of the Graph's and the Map's toolbar, hides that toolbar. The case line becomes
+     one slim line: "Case ‹switcher› · Saved views (n) · ‹state› · Open in the Ingest Studio ↗ · **Show toolbar**"
+     ("You are in the Glass" out of sight but still the region's name, no "reads …"; the cross-link stays, in its short
+     words: ruling 9). *Back to the whole case* is on the slim line whenever a saved view is open.
+   - The hidden toolbar is out of the tab order and the accessibility tree, not merely invisible. The button states
+     `aria-expanded` and `aria-controls`; focus moves to *Show toolbar* on hiding and to *Hide toolbar* on showing.
+     Showing or hiding moves the canvas once, by the toolbar's height, the graph keeping its centre and zoom.
+   - The shortcut is **Alt+Shift+T** (Option+Shift+T on a Mac), outside text fields, listed in "?".
+   - Remembered per signed-in analyst in the browser (`ospreyflow.glass.toolbar.<username>`, as the Studio remembers
+     its mode, ADR-140 decision 3). One setting for the Graph and the Map; the Drawing board's head, its title, is never
+     hidden (ruling 4).
+
+**Tests.** Decisions 1 to 4: `src/shell/caseLine.test.tsx` (the slim form and its end slot, the state, *Details*, Esc,
+focus to the name, in both brands), `src/App.views.test.tsx` and `src/App.test.tsx` (the real App: *Whole case*, no
+strip, focus on the name, *Details*, the alert's way back), `keyboard/views.spec.ts` (by keyboard alone: the way back,
+*Details* and Esc, the canvas's top unmoved at 1440, 1280 and 1024 in each look; axe and the contrast probe on the new
+controls), `keyboard/rules-place.spec.ts`, `keyboard/view-over-cap.spec.ts` and `keyboard/case-line-type.spec.ts` (the
+fold's order). The keyboard registry's `open-a-saved-views-details-from-the-case-line-by-keyboard`. Decisions 5 and 6:
+case-b's, named when built. The red records are `process/lanes/case/gates/glass-rows-reds.*.log` and case-b's.
