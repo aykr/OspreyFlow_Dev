@@ -254,3 +254,5 @@ b53f303 4f209e8 platform v060-step6-all-pods
 cad5802 4fefa51 case v060-case-line-fonts
 853a964 74cc258 rules-b v060-focus-move-audit
 698609a ad1758c platform-b v060-chart-before-listing
+1b3a2a8 6f27077 case-b v061p-ask-drawer
+cd6c5ae 50f0ab7 rules-b v061p-small-index-feed
