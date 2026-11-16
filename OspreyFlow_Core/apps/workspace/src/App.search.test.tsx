@@ -299,15 +299,20 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Back to Graph" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    const again = await screen.findByRole("region", { name: "Ask & Chat" });
+    // Opened again from the rail: the drawer (ADR-145 Amendment 20), its box empty.
+    const again = await screen.findByRole("dialog", { name: "Ask & Chat" });
     expect((within(again).getByRole("textbox") as HTMLTextAreaElement).value).toBe("");
   });
 
-  // ADR-145 Amendment 18 (v0.6.0 #4): Ask & Chat is a page over the view, and the two pages replace each other.
-  test("the rail's Ask & Chat over the results replaces them, its heading focused, the view inert beneath; Back returns to the view, not the results", async () => {
+  // ADR-145 Amendment 18 (v0.6.0 #4): Ask & Chat's page is over the view, and the two pages replace each other.
+  // Amendment 20: the rail opens its drawer beside the results; Expand makes it the page, which replaces them.
+  test("the rail's Ask & Chat over the results opens its drawer beside them; expanded it replaces them, its heading focused, the view inert beneath; Back returns to the view, not the results", async () => {
     await openResults();
     const rail = screen.getByRole("navigation", { name: "Workspace" });
     fireEvent.click(within(rail).getByRole("button", { name: "Ask & Chat" }));
+    const drawer = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    expect(screen.getByRole("heading", { name: "Search results for 'Kestrel'" })).toBeTruthy();
+    fireEvent.click(within(drawer).getByRole("button", { name: "Expand Ask & Chat to the full page" }));
     const page = await screen.findByRole("region", { name: "Ask & Chat" });
     expect(screen.queryByRole("heading", { name: "Search results for 'Kestrel'" })).toBeNull();
     expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull();
@@ -326,8 +331,7 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
   test("a search from the Ask & Chat page replaces it with the results", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    await screen.findByRole("region", { name: "Ask & Chat" });
+    await expandAsk();
     fireEvent.change(box(), { target: { value: "Kestrel" } });
     fireEvent.keyDown(box(), { key: "Enter" });
     await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
@@ -337,8 +341,7 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
   test("choosing a view leaves the Ask & Chat page, that view current", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    await screen.findByRole("region", { name: "Ask & Chat" });
+    await expandAsk();
     fireEvent.click(within(group()).getByRole("button", { name: "Map" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
     expect(pressed()).toEqual(["Map"]);
@@ -369,11 +372,11 @@ describe("the search results page (ADR-145 Amendment 15 Part A)", () => {
 // ADR-145 Amendment 18 decisions 3 and 5 (v0.6.0 #4): what the drawer did, the page does, and every way out of the
 // results leaves it too.
 describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
+  /** The page: the rail's drawer, expanded (Amendment 20). */
   async function openAsk(): Promise<HTMLElement> {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    return screen.findByRole("region", { name: "Ask & Chat" });
+    return expandAsk();
   }
 
   test("a document opened from an answer is read over the view, the page hidden, and shown again when it closes, focus on its heading", async () => {
@@ -392,11 +395,12 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     const page = await openAsk();
     fireEvent.click(within(group()).getByRole("button", { name: "Map" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    // Opened again from the rail, the drawer: a marker leaves it the same way (Amendment 20).
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    const reopened = await screen.findByRole("region", { name: "Ask & Chat" });
+    const reopened = await screen.findByRole("dialog", { name: "Ask & Chat" });
     expect(reopened).not.toBe(page);
     fireEvent.click(await within(reopened).findByRole("button", { name: "Show on the graph: Kestrel, paid, Invoice 44, [G-1]" }));
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull());
     expect(pressed()).toEqual(["Graph"]);
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("application", { name: "Network canvas" })));
   });
@@ -406,8 +410,7 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     await openAsk();
     fireEvent.click(within(group()).getByRole("button", { name: "Map" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    const page = await expandAsk();
     fireEvent.click(await within(page).findByRole("button", { name: "Show all on graph" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
     expect(pressed()).toEqual(["Graph"]);
@@ -423,8 +426,7 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     const panel = await screen.findByRole("dialog", { name: "Saved views" });
     fireEvent.click(await within(panel).findByRole("button", { name: /^Open/ }));
     await screen.findByText(/^Saved view:/);
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    const page = await expandAsk();
     fireEvent.click(await within(page).findByRole("button", { name: "Show all on graph" }));
     await waitFor(() => expect(screen.queryByText(/^Saved view:/)).toBeNull());
     await waitFor(() => expect(sent.some((s) => s.url.endsWith("/inv-1/working-set/add-by-ids"))).toBe(true));
@@ -432,12 +434,13 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
 
   // The orchestrator, 15 November 2026: a page opened while a document is read over the view shows at once; the reader
   // closes, as the page takes the view's place (the results page the same).
-  test("the rail's Ask & Chat while a document read from the results is open shows the page at once, the reader closed", async () => {
+  test("the rail's Ask & Chat while a document read from the results is open shows its drawer at once, the reader closed", async () => {
     await openResults();
     fireEvent.click(await screen.findByRole("button", { name: "Open Invoice 44" }));
     await screen.findByRole("dialog", { name: /^Reading/ });
     fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
-    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    // The drawer, beside the results shown again (Amendment 20), which keep the view out of reach.
+    const page = await screen.findByRole("dialog", { name: "Ask & Chat" });
     expect(screen.queryByRole("dialog", { name: /^Reading/ })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(within(page).getByRole("heading", { name: "Ask & Chat" })));
     expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
@@ -575,21 +578,136 @@ describe("the Ask & Chat page (ADR-145 Amendment 18)", () => {
     expect(document.activeElement).toBe(heading);
   });
 
-  test("a case opened to ask the model (the hand-off's view=questions, ADR-098 decision 4) opens on the page", async () => {
+  // Amendment 20 decision 4: each opening is the drawer; only the results' Ask line opens the page.
+  test("a case opened to ask the model (the hand-off's view=questions, ADR-098 decision 4) opens on the drawer", async () => {
     sessionStorage.setItem("ospreyflow.launcherHandoff", JSON.stringify({ view: "questions", at: Date.now() }));
     render(<App />);
-    const page = await screen.findByRole("region", { name: "Ask & Chat" });
-    expect(within(page).getByRole("button", { name: "Back to Graph" })).toBeTruthy();
-    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+    const drawer = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    expect(within(drawer).getByRole("button", { name: "Expand Ask & Chat to the full page" })).toBeTruthy();
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).toBeNull();
   });
 
-  test("the canvas's Ask the model about these… opens the page over the graph, asking in the saved view", async () => {
+  test("the canvas's Ask the model about these… opens the drawer beside the graph, asking in the saved view", async () => {
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     fireEvent.click(screen.getByRole("button", { name: "Ask the model about these…" }));
+    const drawer = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    expect(within(drawer).getByText(/Questions on 1 item/)).toBeTruthy();
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).toBeNull();
+  });
+});
+
+/** The rail's Ask & Chat, then the drawer's Expand: Amendment 18's page (ADR-145 Amendment 20). */
+async function expandAsk(): Promise<HTMLElement> {
+  fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" }));
+  const drawer = await screen.findByRole("dialog", { name: "Ask & Chat" });
+  fireEvent.click(within(drawer).getByRole("button", { name: "Expand Ask & Chat to the full page" }));
+  return screen.findByRole("region", { name: "Ask & Chat" });
+}
+
+// ADR-145 Amendment 20 (v0.6.1, the owner, 16 November 2026): the rail opens Ask & Chat as a drawer beside the view;
+// Expand makes it Amendment 18's page, Show as a drawer returns, and the panel inside is the same one throughout.
+describe("Ask & Chat's drawer (ADR-145 Amendment 20)", () => {
+  async function openDrawer(): Promise<HTMLElement> {
+    render(<App />);
+    await screen.findByRole("application", { name: "Network canvas" });
+    fireEvent.click(railAsk());
+    return screen.findByRole("dialog", { name: "Ask & Chat" });
+  }
+  const railAsk = () => within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" });
+
+  test("the rail opens the drawer beside the view: its heading focused, the view in reach, the opener a dialog's, expanded", async () => {
+    const drawer = await openDrawer();
+    await waitFor(() => expect(document.activeElement).toBe(within(drawer).getByRole("heading", { name: "Ask & Chat" })));
+    expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull();
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).toBeNull();
+    expect(railAsk().getAttribute("aria-haspopup")).toBe("dialog");
+    expect(railAsk().getAttribute("aria-expanded")).toBe("true");
+    expect(drawer.classList.contains("drawer")).toBe(true);
+  });
+
+  test("Escape inside the drawer closes it, focus on the rail's opener; Escape outside it leaves it open", async () => {
+    const drawer = await openDrawer();
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: "Ask & Chat" })).toBe(drawer);
+    fireEvent.keyDown(within(drawer).getByRole("heading", { name: "Ask & Chat" }), { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull());
+    expect(document.activeElement).toBe(railAsk());
+    expect(railAsk().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  test("Expand keeps the question typed in the same panel, never mounted again; Show as a drawer returns, focus on Expand", async () => {
+    const drawer = await openDrawer();
+    const question = within(drawer).getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(question, { target: { value: "Who paid Kestrel?" } });
+    fireEvent.click(within(drawer).getByRole("button", { name: "Expand Ask & Chat to the full page" }));
     const page = await screen.findByRole("region", { name: "Ask & Chat" });
-    expect(within(page).getByText(/Questions on 1 item/)).toBeTruthy();
+    expect(within(page).getByRole("textbox")).toBe(question);
+    expect(question.value).toBe("Who paid Kestrel?");
+    await waitFor(() => expect(document.activeElement).toBe(within(page).getByRole("heading", { name: "Ask & Chat" })));
     expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
+    expect(railAsk().getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(within(page).getByRole("button", { name: "Show as a drawer" }));
+    const again = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    expect(within(again).getByRole("textbox")).toBe(question);
+    expect(question.value).toBe("Who paid Kestrel?");
+    await waitFor(() => expect(document.activeElement).toBe(within(again).getByRole("button", { name: "Expand Ask & Chat to the full page" })));
+    expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).toBeNull();
+  });
+
+  test("the shape is not remembered: closed from the page, the next opening is the drawer", async () => {
+    await openDrawer();
+    fireEvent.click(screen.getByRole("button", { name: "Expand Ask & Chat to the full page" }));
+    const page = await screen.findByRole("region", { name: "Ask & Chat" });
+    fireEvent.click(within(page).getByRole("button", { name: "Back to Graph" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Ask & Chat" })).toBeNull());
+    expect(document.activeElement).toBe(railAsk());
+    fireEvent.click(railAsk());
+    expect(await screen.findByRole("dialog", { name: "Ask & Chat" })).toBeTruthy();
+  });
+
+  test("a view chosen keeps the drawer beside the new view, as Explore and History are kept", async () => {
+    const drawer = await openDrawer();
+    fireEvent.click(within(group()).getByRole("button", { name: "Map" }));
+    await waitFor(() => expect(pressed()).toEqual(["Map"]));
+    expect(screen.getByRole("dialog", { name: "Ask & Chat" })).toBe(drawer);
+  });
+
+  test("a search keeps the drawer beside the results", async () => {
+    const drawer = await openDrawer();
+    fireEvent.change(box(), { target: { value: "Kestrel" } });
+    fireEvent.keyDown(box(), { key: "Enter" });
+    await screen.findByRole("heading", { name: "Search results for 'Kestrel'" });
+    expect(screen.getByRole("dialog", { name: "Ask & Chat" })).toBe(drawer);
+  });
+
+  test("another place closes the drawer: back in the Glass it is gone", async () => {
+    await openDrawer();
+    const places = screen.getByRole("navigation", { name: "Places" });
+    fireEvent.click(within(places).getByRole("button", { name: /^Ingest Studio$/ }));
+    await screen.findByRole("region", { name: "You are in the Ingest Studio" });
+    fireEvent.click(within(places).getByRole("button", { name: /^The Glass$/ }));
+    await screen.findByRole("region", { name: "You are in the Glass" });
+    expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull();
+  });
+
+  test("a document opened from an answer in the drawer hides it, and closing the reader shows it again, focus on its heading", async () => {
+    const drawer = await openDrawer();
+    fireEvent.click(await within(drawer).findByRole("button", { name: "Invoice 44" }));
+    const reader = await screen.findByRole("dialog", { name: /^Reading/ });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Ask & Chat" })).toBeNull());
+    fireEvent.click(within(reader).getByRole("button", { name: "Close" }));
+    const again = await screen.findByRole("dialog", { name: "Ask & Chat" });
+    expect(again).toBe(drawer);
+    await waitFor(() => expect(document.activeElement).toBe(within(again).getByRole("heading", { name: "Ask & Chat" })));
+  });
+
+  test("Help's keys panel with the drawer open is drawn once, over the view, not inside the drawer", async () => {
+    const drawer = await openDrawer();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Help" }));
+    const keys = await screen.findByRole("dialog", { name: "Welcome back" });
+    expect(document.querySelectorAll(".workspace-welcome")).toHaveLength(1);
+    expect(drawer.contains(keys)).toBe(false);
   });
 });
 

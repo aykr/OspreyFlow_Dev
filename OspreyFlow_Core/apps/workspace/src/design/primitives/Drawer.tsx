@@ -25,12 +25,36 @@ function underTheChrome(): number | null {
   return Math.max(0, ...chrome.map((el) => Math.round(el.getBoundingClientRect().bottom)));
 }
 
+/** Where a drawer's top lies while it is open (`underTheChrome`): measured before the first paint, and again whenever
+ * the chrome or the window changes size (the bar wraps on a narrow window, ADR-115 Amendment 3) or the page scrolls
+ * (the GOV.UK footer is below). Shared with Ask & Chat's drawer (`questions/AskPage.tsx`, ADR-145 Amendment 20), which
+ * is a drawer and a page in turn and so cannot be this component. */
+export function useTopUnderTheChrome(open: boolean): number | null {
+  const [top, setTop] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const fit = () => setTop(underTheChrome());
+    fit();
+    // jsdom has no ResizeObserver.
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
+    for (const el of document.querySelectorAll(CHROME_ABOVE)) observer?.observe(el);
+    window.addEventListener("resize", fit);
+    window.addEventListener("scroll", fit, { passive: true });
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", fit);
+      window.removeEventListener("scroll", fit);
+    };
+  }, [open]);
+  return top;
+}
+
 /** An overlay: shadow, no hairline (`spec/02_GLASS_FRONTEND.md` §8). Used
  * for the Inspector and named-step history panel. Not modal (ADR-145 Amendment 14 decision 2): it neither
  * traps focus nor makes the page behind it inert, and the navigation beside it stays usable. */
 export function Drawer({ open, onClose, title, children, returnFocusTo }: DrawerProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [top, setTop] = useState<number | null>(null);
+  const top = useTopUnderTheChrome(open);
   // The latest `onClose`, read when Escape is pressed. A parent may pass a new one on every
   // render; keyed on it, the effect below re-ran on each keystroke in a field inside the drawer and
   // took focus back to the drawer (9 October 2026, *Record an assessment*).
@@ -60,24 +84,6 @@ export function Drawer({ open, onClose, title, children, returnFocusTo }: Drawer
       if (!lost) return;
       const back = opener?.isConnected ? opener : (returnRef.current?.() ?? null);
       back?.focus();
-    };
-  }, [open]);
-
-  // Measured before the first paint, and again whenever the chrome or the window changes size (the bar
-  // wraps on a narrow window, ADR-115 Amendment 3) or the page scrolls (the GOV.UK footer is below).
-  useLayoutEffect(() => {
-    if (!open) return;
-    const fit = () => setTop(underTheChrome());
-    fit();
-    // jsdom has no ResizeObserver.
-    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(fit) : null;
-    for (const el of document.querySelectorAll(CHROME_ABOVE)) observer?.observe(el);
-    window.addEventListener("resize", fit);
-    window.addEventListener("scroll", fit, { passive: true });
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", fit);
-      window.removeEventListener("scroll", fit);
     };
   }, [open]);
 
