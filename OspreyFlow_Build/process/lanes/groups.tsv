@@ -188,3 +188,5 @@ platform-b	v060-stage3-done	Housekeeping	Client install
 orchestrator	v060-build	Housekeeping	Client install
 orchestrator	v060-websites	Housekeeping	After the client's install
 platform-b	v060-search-jobs-pg	Housekeeping	Client install
+orchestrator	v060-c2-ci	Housekeeping	Client install
+demo	v060-govuk-rebuild	Housekeeping	Small

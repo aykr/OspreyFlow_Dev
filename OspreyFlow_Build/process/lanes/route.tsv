@@ -24,7 +24,10 @@ rp	The release path: images push stamped; the dev release workflow retired; rele
 2	Test: the leak test and the timings at client size (rules-b, on sol, from STAGE2_SHEET.md); CI green on main (the orchestrator)	rules-b	2026-11-15	2026-11-15	y	1	rules-b:v060-stage2-official
 3	Package: the candidate prepared on a branch (platform-b, on sol, the checklist up to the owner's word); its merge is the candidate	platform-b	2026-11-15	2026-11-16	y	1,2	platform-b:v060-stage3-done
 sj	Stage 4's find: the cloud-platform search Jobs given the managed database's settings (the owner's word, 15 Nov); then a new candidate	platform-b	2026-11-15	2026-11-16	y	-	platform-b:v060-search-jobs-pg
-4	Package test: one fresh install of v0.6.0 on the client platform's stand-in, with every check	platform-b	2026-11-16	2026-11-16	y	3,sj	platform-b:v060-stage4-package-test
-5	Release, on the owner's word given in advance (conditions in v060/OWNER_WORD_IN_ADVANCE); then the GOV.UK demo rebuilt fresh from v0.6.0 at once (the demo lane, on sol, from REBUILD_2026-11-18.md)	orchestrator	2026-11-16	2026-11-16	y	4	-
-ws	The websites ospreyflow.org and ospreyflow.net published (the owner's word, 15 Nov): repositories named, checkouts ready; waits on the owner's client-names hash file and DNS	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
-p3	ospreyflow.app, the standard-look demo beside the GOV.UK one (Part 3): offline parts tonight, the server after the package test; waits on the owner's DNS, Porkbun API key and a cutover window	platform	2026-11-15	2026-11-18	n	-	platform:part3
+c2	CI green on the new candidate 0c158b8 (the search Jobs fix in), then the release dry run re-checked on it	orchestrator	2026-11-16	2026-11-16	y	sj	orchestrator:v060-c2-ci
+4	Package test: one fresh install of v0.6.0 on the candidate 0c158b8 from row 0, every check (about 5 h)	platform-b	2026-11-16	2026-11-16	y	c2	platform-b:v060-stage4-package-test
+5	Release v0.6.0 on the owner's word given in advance: the product repository and its tag, the release workflow's signed images	orchestrator	2026-11-16	2026-11-16	y	4	-
+rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
+gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-
+ws	The websites ospreyflow.org and ospreyflow.net: LIVE on http (the owner's DNS, 16 Nov); HTTPS switched on as GitHub issues each certificate	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites
+p3	ospreyflow.app, the standard-look demo (Part 3): offline work done; the server proof, install and cutover after the GOV.UK rebuild; needs the owner's O1-O8 (DNS, Porkbun key, lease, window)	platform	2026-11-15	2026-11-18	n	gm	platform:part3
