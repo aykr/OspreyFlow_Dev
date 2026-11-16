@@ -24,7 +24,7 @@ rp	The release path: images push stamped; the dev release workflow retired; rele
 2	Test: the leak test and the timings at client size (rules-b, on sol, from STAGE2_SHEET.md); CI green on main (the orchestrator)	rules-b	2026-11-15	2026-11-15	y	1	rules-b:v060-stage2-official
 3	Package: the candidate prepared on a branch (platform-b, on sol, the checklist up to the owner's word); its merge is the candidate	platform-b	2026-11-15	2026-11-16	y	1,2	platform-b:v060-stage3-done
 sj	Stage 4's find: the cloud-platform search Jobs given the managed database's settings (the owner's word, 15 Nov); then a new candidate	platform-b	2026-11-15	2026-11-16	y	-	platform-b:v060-search-jobs-pg
-c2	CI green on the next candidate (38fafb8 plus the read-only Reports Viewer fix)	orchestrator	2026-11-16	2026-11-16	y	sr	orchestrator:v060-c2-ci
+c2	CI green on the next candidate (the read-only Reports Viewer added to 38fafb8, which was green)	orchestrator	2026-11-16	2026-11-16	y	sr	orchestrator:v060-c2-ci
 kp	CI's keyboard races: every keyboard spec's press waits for its button to be enabled; joins the next candidate	rules-b	2026-11-16	2026-11-16	y	-	rules-b:v060-press-enabled
 rv	Package test's second find: the report sync opens Valkey with its password and TLS on cloud-platform (the owner, 16 Nov)	platform-b	2026-11-16	2026-11-16	y	-	platform-b:v060-report-sync-valkey
 sr	Package test's third find: Reports Viewers could build their own dashboards; a read-only role for them and as Superset's automatic role (the owner, 16 Nov)	platform-b	2026-11-16	2026-11-16	y	-	platform-b:v060-superset-reader
