@@ -492,7 +492,7 @@ async def _main(argv: list[str] | None = None, *, dsn: str | None = None) -> int
         ArcadeDBConfig.from_env(os.environ.get("ARCADEDB_DATABASE", "ospreyflow"))
     )
     valkey_config = ValkeyConfig.from_env()
-    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    valkey = Valkey(**valkey_config.client_kwargs())
     conn = await asyncpg.connect(dsn)
     sql = _Sql(client)
     types = _type_names(load_default_ontology())

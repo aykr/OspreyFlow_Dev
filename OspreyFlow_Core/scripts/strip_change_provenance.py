@@ -129,7 +129,7 @@ async def _main() -> int:
     database = os.environ.get("ARCADEDB_DATABASE", "ospreyflow")
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database))
     valkey_config = ValkeyConfig.from_env()
-    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    valkey = Valkey(**valkey_config.client_kwargs())
     try:
         report = await strip(
             GraphArcadeDBAdapter(client, load_uk_le_scheme()),

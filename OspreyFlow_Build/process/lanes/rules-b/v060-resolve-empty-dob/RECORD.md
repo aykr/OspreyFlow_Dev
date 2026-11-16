@@ -30,7 +30,7 @@ was.
   already unformatted on main (line 61), and is left so.
 - **Offline**, pinned to dead ports, on the Mac: `tests/resolve`, the resolution scenarios
   (`test_phase6_extraction_and_resolution.py`, `test_fixture_corp_shape.py`,
-  `test_phase8_exit_criterion_end_to_end.py`), `services/api/test_evaluation.py` and `test_seed_pid.py`.
+  `test_phase8_exit_criterion_end_to_end.py`), `tests/services/api/test_evaluation.py` and `test_seed_pid.py`.
   - 250 passed. Every one of the other 27 (11 failed, 16 errors) is a connection to the absent Postgres, ArcadeDB
     or Valkey; none is an assertion.
   - Those 27 need a stack. See "Live" below.

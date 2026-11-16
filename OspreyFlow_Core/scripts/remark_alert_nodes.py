@@ -98,7 +98,7 @@ async def _main(argv: list[str] | None = None) -> int:
     )
     alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
     valkey_config = ValkeyConfig.from_env()
-    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    valkey = Valkey(**valkey_config.client_kwargs())
     graph = GraphArcadeDBAdapter(client, scheme)
     try:
         working_set = WorkingSetService(graph, ValkeyWorkingSetStore(valkey), scheme, valkey=valkey)

@@ -289,7 +289,7 @@ async def _main(args: argparse.Namespace) -> int:
     audit = await AuditWriter.connect(dsn)
     history = await InvestigationHistoryStore.connect(dsn)
     valkey_config = ValkeyConfig.from_env()
-    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    valkey = Valkey(**valkey_config.client_kwargs())
     try:
         graph = GraphArcadeDBAdapter(client, scheme)
         deps = build_revert_deps(

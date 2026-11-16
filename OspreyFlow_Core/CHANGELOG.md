@@ -173,6 +173,10 @@ around: one view switch, a case line that says what is open, and "view" kept for
   had one (every source loaded without that column), the matching run for people failed every time,
   without saying so, and no two records of one person were ever linked. People with a date of birth
   are matched as before.
+- **The report sync reaches a Valkey that needs a password or TLS.** On the cloud-platform shape, where
+  Valkey is the platform's own over TLS with a password, it was refused as soon as a dashboard was
+  registered, and restarted again and again without pulling anything. It now opens Valkey as the rest
+  of OspreyFlow does. The Lite and Small shapes were not affected.
 
 ## v0.5.1 — 2026-11-14
 

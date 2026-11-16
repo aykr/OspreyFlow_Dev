@@ -287,7 +287,7 @@ async def _main(args: argparse.Namespace) -> int:
     scheme = load_uk_le_scheme()
     graph = GraphArcadeDBAdapter(client, scheme)
     valkey_config = ValkeyConfig.from_env()
-    valkey = Valkey(host=valkey_config.host, port=valkey_config.port, db=valkey_config.db)
+    valkey = Valkey(**valkey_config.client_kwargs())
     history = await InvestigationHistoryStore.connect(dsn)
     # A drawn merge's copies and links are reverted as a load's own writes, so they leave every
     # case's working set as a load's do (`scripts.revert_load`'s same reverter).
