@@ -107,6 +107,7 @@ from services.ingest.staging_catalogue import DEPLOYMENT_WIDE
 from services.ingest.transforms import STRUCTURED_PARTS
 from services.ingest.watermark import RefreshRead
 from services.resolve.trigger import service_principal
+from services.search_index.client import SearchIndexConfigError
 from services.search_index.pending import PendingIds, pending_node_ids
 from services.search_index.run import IndexFeed, start_index_feed
 from services.search_index.run import configured as search_index_configured
@@ -1656,15 +1657,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if job_loop_in_conduit()
         else None
     )
-    # ADR-150 Amendment 4: there too, where this shape has an OpenSearch, the Conduit feeds the
-    # search index, as the worker does (one holder of the lease, stopped at shutdown, its client
-    # closed). It reads through the adapter itself, as the worker's does, never the stamping graph
-    # the routes are given; no route reaches it (`test_index_feed_reach.py`).
-    index_feed = (
-        conduit_index_feed(getattr(graph, "inner", graph), extraction_candidates, valkey, ontology)
-        if index_feed_in_conduit()
-        else None
-    )
     promotion_task = asyncio.create_task(
         promotion_ageing_module.run_every(
             app.state.promotion_sweep,
@@ -1672,6 +1664,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                   or promotion_ageing_module.SWEEP_SECONDS),
         )
     )  # fmt: skip
+    # ADR-150 Amendment 4: there too, where this shape has an OpenSearch, the Conduit feeds the
+    # search index, as the worker does (one holder of the lease, stopped at shutdown, its client
+    # closed). It reads through the adapter itself, as the worker's does, never the stamping graph
+    # the routes are given; no route reaches it (`test_index_feed_reach.py`). Started last, at
+    # the `try`, so nothing that raises before it can leave the feed running.
+    index_feed = (
+        conduit_index_feed(getattr(graph, "inner", graph), extraction_candidates, valkey, ontology)
+        if index_feed_in_conduit()
+        else None
+    )
 
     try:
         yield
@@ -1680,21 +1682,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         schedule_task.cancel()
         monitoring_task.cancel()
         promotion_task.cancel()
-        # Both stops at once, so the feed's batch and the loop's job finish side by side within
-        # one `JOB_LOOP_STOP_SECONDS`, as the worker's shared stop has them do.
-        if index_feed is not None:
-            index_feed.stop.set()
-        if job_loop_task is not None:
-            # A job in hand finishes and is acknowledged; the loop then sees the stop and ends.
-            job_loop_stop.set()
-            try:
-                await asyncio.wait_for(job_loop_task, timeout=JOB_LOOP_STOP_SECONDS)
-            except TimeoutError:
-                job_loop_task.cancel()
-        if index_feed is not None:
-            # Before the stores it reads are closed below: the batch in hand finishes, or its rows
-            # stay in the outbox for the next start.
-            await index_feed.close(timeout=JOB_LOOP_STOP_SECONDS)
+        # The job loop and the feed, under one deadline, before the stores they read are closed.
+        await stop_background(job_loop_task, job_loop_stop, index_feed)
         await investigations.close()
         await custom_roles.close()
         await admin_people.close()
@@ -2299,9 +2288,36 @@ async def with_custom_roles(app_: Any, principal: Principal) -> Principal:
     return cast("Principal", await store.expand(principal))
 
 
-#: How long shutdown waits for the Conduit's job loop to finish the job in hand: one `run_once`
-#: blocks for `worker_main.BLOCK_MS` waiting for an entry, then the stop is seen.
-JOB_LOOP_STOP_SECONDS = 10.0
+#: How long shutdown waits, in all, for the Conduit's job loop to finish the job in hand and its
+#: index feed the batch in hand (ADR-150 Amendment 4): one deadline for both, 2 s inside Docker's
+#: default 10 s stop grace, so neither is killed mid-close. One `run_once` blocks for
+#: `worker_main.BLOCK_MS` (2 s) waiting for an entry before it sees the stop.
+JOB_LOOP_STOP_SECONDS = 8.0
+
+
+async def stop_background(
+    job_loop_task: asyncio.Task[Any] | None,
+    job_loop_stop: asyncio.Event,
+    index_feed: IndexFeed | None,
+    seconds: float = JOB_LOOP_STOP_SECONDS,
+) -> None:
+    """Stops the job loop and the index feed together, within `seconds` in all: both stops are set
+    at once; the loop's job and the feed's batch finish side by side, and whichever is still running
+    at the deadline is cancelled (a job is redelivered, a batch's rows stay in the outbox); then
+    the feed's client is closed."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + seconds
+    if index_feed is not None:
+        index_feed.stop.set()
+    if job_loop_task is not None:
+        # A job in hand finishes and is acknowledged; the loop then sees the stop and ends.
+        job_loop_stop.set()
+        try:
+            await asyncio.wait_for(job_loop_task, timeout=seconds)
+        except TimeoutError:
+            job_loop_task.cancel()
+    if index_feed is not None:
+        await index_feed.close(timeout=max(0.0, deadline - loop.time()))
 
 
 def job_loop_in_conduit(environ: Mapping[str, str] | None = None) -> bool:
@@ -2326,16 +2342,18 @@ def conduit_index_feed(
     ontology: Any,
     environ: Mapping[str, str] | None = None,
 ) -> IndexFeed | None:
-    """The Conduit's feed (ADR-150 Amendment 4), or None with the reason logged when its settings
-    are refused (a CA file that is not there, an unknown signing, sigv4 with no region): the query
-    side falls back on the same settings rather than fail every search, so the start must not fail
-    on them either. Search then stays on the graph's exact search, and says so."""
+    """The Conduit's feed (ADR-150 Amendment 4), or None with the refusal logged when its settings
+    are refused (`SearchIndexConfigError`: a CA file that is not there, an unknown signing, sigv4
+    with no region): the query side falls back on the same settings rather than fail every search,
+    so the start must not fail on them either. Search then stays on the graph's exact search, and
+    says so. Any other error is raised: a defect never quietly leaves the deployment unfed."""
     try:
         feed = start_index_feed(
             source, texts, valkey, _conduit_feed_name(), ontology, environ=environ
         )
-    except Exception:  # noqa: BLE001 - said, and the Conduit starts without a feed
-        logger.exception("the Conduit cannot feed the search index: its settings were refused")
+    except SearchIndexConfigError as refused:
+        # The refusal's own words name the setting; any other error is a defect, and is raised.
+        logger.error("the Conduit cannot feed the search index: %s", refused)
         return None
     if feed is not None:
         logger.info("the Conduit is feeding the search index %s", feed.alias)
