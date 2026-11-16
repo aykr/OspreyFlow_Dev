@@ -1,0 +1,10 @@
+plant 1: one pod (v0.6.0's command) -> RED
+    test_the_check_finds_the_line_in_any_api_pod_however_far_back
+    test_the_check_selects_the_api_pods_by_the_chart_s_own_label
+plant 2: every pod at -l's default ten lines -> RED
+    test_the_check_finds_the_line_in_any_api_pod_however_far_back
+plant 3: a label the chart does not give -> RED
+    test_the_check_stops_with_the_conduit_s_own_words_after_a_refused_sign_in
+    test_the_check_finds_the_line_in_any_api_pod_however_far_back
+    test_the_check_selects_the_api_pods_by_the_chart_s_own_label
+3/3 plants red

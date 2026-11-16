@@ -198,3 +198,6 @@ platform-b	v060-report-sync-valkey	Housekeeping	Client install
 platform-b	v060-stage4	Housekeeping	Client install
 platform-b	v060-superset-reader	Housekeeping	Client install
 platform	v060-seed-irsa	Housekeeping	Client install
+orchestrator	v060-glass-merge	Housekeeping	Client install
+orchestrator	v060-c3-ci	Housekeeping	Client install
+platform-b	v060-stage4-glass	Housekeeping	Client install

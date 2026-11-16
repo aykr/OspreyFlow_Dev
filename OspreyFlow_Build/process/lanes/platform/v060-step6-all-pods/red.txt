@@ -1,0 +1,45 @@
+...FF                                                                    [100%]
+=================================== FAILURES ===================================
+________ test_the_check_finds_the_line_in_any_api_pod_however_far_back _________
+
+keypair = (<cryptography.hazmat.bindings._rust.openssl.rsa.RSAPrivateKey object at 0x10a102370>, <cryptography.hazmat.bindings._rust.openssl.rsa.RSAPublicKey object at 0x10a22cbd0>)
+jwks_url = 'http://127.0.0.1:63005/jwks.json'
+caplog = <_pytest.logging.LogCaptureFixture object at 0x10a22b1a0>
+tmp_path = PosixPath('/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-13458/test_the_check_finds_the_line_0')
+
+    def test_the_check_finds_the_line_in_any_api_pod_however_far_back(  # type: ignore[no-untyped-def]
+        keypair, jwks_url, caplog, tmp_path
+    ) -> None:
+        """Two api pods; the refusal in the second, with more than ten lines after it (every request
+        since is logged). Read as one pod, or by the label at its default tail, it would be missed."""
+        quiet = "starting\nGET /healthz 200\n"
+        refused = _conduit_line(keypair, jwks_url, caplog)
+        busy = "starting\n" + refused + "\n" + "GET /healthz 200\n" * 20
+        done = _run(_block(), [quiet, busy], tmp_path)
+>       assert done.returncode != 0, done.stdout
+E       AssertionError: no sign-in refused for its token version so far
+E         
+E       assert 0 != 0
+E        +  where 0 = CompletedProcess(args=['bash', '-c', 'said="$(kubectl -n "$NS" logs deploy/api --since=24h 2>/dev/null | grep -m1 -F "...its token version so far"\nfi\n'], returncode=0, stdout='no sign-in refused for its token version so far\n', stderr='').returncode
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_token_version.py:135: AssertionError
+----------------------------- Captured stderr call -----------------------------
+127.0.0.1 - - [16/Nov/2026 11:09:14] "GET /jwks.json HTTP/1.1" 200 -
+------------------------------ Captured log call -------------------------------
+WARNING  principal_auth:__init__.py:1661 token version: the API's app registration issues v1.0 access tokens (issuer https://sts.windows.net/00000000-1111-4222-8333-444444444444/), and this deployment expects v2.0 (cloud_platform.claims.token_version: "2.0"): set requestedAccessTokenVersion to 2 in the API registration's manifest, or set token_version to "1.0" in osprey.yaml and render again
+_________ test_the_check_selects_the_api_pods_by_the_chart_s_own_label _________
+
+    def test_the_check_selects_the_api_pods_by_the_chart_s_own_label() -> None:
+        """The selector the stand-in admits is the label the chart gives the api pods."""
+        core = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
+        helpers = core / "deploy" / "helm" / "ospreyflow" / "templates" / "_helpers.tpl"
+        assert "app.kubernetes.io/name: {{ .name }}" in helpers.read_text(encoding="utf-8")
+>       assert f"-l {API_PODS} " in _block()
+E       assert '-l app.kubernetes.io/name=api ' in 'said="$(kubectl -n "$NS" logs deploy/api --since=24h 2>/dev/null | grep -m1 -F "token version: " || true)"\nif [ -n "... said, render again (step 4) and install"; false\nelse\n  echo "no sign-in refused for its token version so far"\nfi\n'
+E        +  where 'said="$(kubectl -n "$NS" logs deploy/api --since=24h 2>/dev/null | grep -m1 -F "token version: " || true)"\nif [ -n "... said, render again (step 4) and install"; false\nelse\n  echo "no sign-in refused for its token version so far"\nfi\n' = _block()
+
+../OspreyFlow_Build/tests/harness/test_cloud_platform_token_version.py:145: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_token_version.py::test_the_check_finds_the_line_in_any_api_pod_however_far_back
+FAILED ../OspreyFlow_Build/tests/harness/test_cloud_platform_token_version.py::test_the_check_selects_the_api_pods_by_the_chart_s_own_label
+2 failed, 3 passed in 2.12s

@@ -389,7 +389,8 @@ first administrator's first sign-in (section 8, item 2). Before anyone has signe
 sign-in has been refused for this so far.
 
 ```bash
-said="$(kubectl -n "$NS" logs deploy/api --since=24h 2>/dev/null | grep -m1 -F "{TOKEN_VERSION_LOG}" || true)"
+# Every api pod's log, whole (`logs deploy/api` reads one pod; `-l` alone reads ten lines a pod).
+said="$(kubectl -n "$NS" logs -l app.kubernetes.io/name=api --since=24h --tail=-1 --prefix 2>/dev/null | grep -m1 -F "{TOKEN_VERSION_LOG}" || true)"
 if [ -n "$said" ]; then
   echo "$said"; echo "sign-in is refused for the token version: fix it as said, render again (step 4) and install"; false
 else
