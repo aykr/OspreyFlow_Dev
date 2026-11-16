@@ -1,3 +1,9 @@
+**16 Nov 05:50Z, the orchestrator: no progress overnight.** platform-b did not act on the 22:30Z fix brief (its last beat
+was ~22:00Z; its session is open, most likely held at an approval prompt or the message unread). The orchestrator did not
+check that the brief was picked up: its miss. The brief is resent; the fix, CI, a new candidate and the package test
+rerun follow (about 1-2 h + 80 min + 5 h), so the release about midday-15:00Z Mon and the GOV.UK rebuild after.
+If platform-b's window shows an approval waiting, that is the owner's to answer.
+
 <!-- STOP, at the top as the owner's word (v060/OWNER_WORD_IN_ADVANCE §2) asks -->
 **STOP, 15 Nov ~21:49Z: v0.6.0 stage 4 (the package test) stopped at row 1, on C 09f1fbe, a product defect (§2.2).**
 INSTALL's step 5 rolled out every workload, then its search index rebuild Job (ADR-150 decision 4) failed:
