@@ -142,38 +142,52 @@ def test_section_6_says_earlier_questions_close_to_their_line_as_the_panel_does(
     assert "hidden={!open}" in PANEL and "not reached by Tab until it is open" in text
 
 
-def test_section_6_says_ask_and_chat_is_a_page_with_its_way_back_as_the_glass_draws_it() -> None:
-    """ADR-145 Amendment 18 (v0.6.0 #4): the guide says Ask & Chat is a page, not a drawer, with its
-    *Back to* the view, the rail's second press, and the results page in its place, each read from
-    the code that draws it."""
-    page = (SRC / "questions" / "AskPage.tsx").read_text(encoding="utf-8")
-    app = (SRC / "App.tsx").read_text(encoding="utf-8")
-    hook = (SRC / "questions" / "useAskPage.ts").read_text(encoding="utf-8")
-    m = re.search(r"^\*\*A page of its own\.\*\*(.*?)(?:\n\n)", GUIDE, re.MULTILINE | re.DOTALL)
-    assert m, "§6's paragraph on Ask & Chat's page"
+def test_section_6_says_ask_and_chat_is_a_drawer_with_expand_to_a_page_as_the_glass_draws_it() -> None:
+    """ADR-145 Amendment 20 (v0.6.1): the guide says Ask & Chat opens as a drawer beside the view, whose Expand makes it
+    Amendment 18's page and whose page turns back by Show as a drawer, each opening the drawer; its way out, the rail's
+    second press, Esc in the drawer and the results page in the page's place, each read from the code that draws it."""
+    page = re.sub(r"\s+", " ", (SRC / "questions" / "AskPage.tsx").read_text(encoding="utf-8"))
+    app = re.sub(r"\s+", " ", (SRC / "App.tsx").read_text(encoding="utf-8"))
+    hook = re.sub(r"\s+", " ", (SRC / "questions" / "useAskPage.ts").read_text(encoding="utf-8"))
+    m = re.search(r"^\*\*A drawer, or a page\.\*\*(.*?)(?:\n\n)", GUIDE, re.MULTILINE | re.DOTALL)
+    assert m, "§6's paragraph on Ask & Chat's drawer and page"
     text = re.sub(r"\s+", " ", m.group(1))
-    # The page's way back is named as the page names it, and the drawer is gone from App.
+    # The drawer, its Expand and Close, and the page's Show as a drawer and Back, named as the Glass names them.
+    assert 'className={drawer ? "panel__title drawer__title ask-surface__head"' in page
+    assert 'aria-label="Expand Ask & Chat to the full page"' in page and "> Expand </button>" in page
+    assert 'aria-label="Close Ask & Chat" onClick={onBack}> Close </button>' in page
+    assert "> Show as a drawer </button>" in page
     assert "{`Back to ${backLabel}`}" in page
+    assert "Ask & Chat opens as a drawer at the right of the screen, beside the view" in text
+    assert "**Expand**, at the top of the drawer, turns it into a page filling the main area" in text
+    assert "**Show as a drawer**, beside its heading, turns it back" in text
     assert "**Back to** the view (*Back to Map*, say)" in text
-    # Any drawer titled Ask & Chat, by its words or by RAIL_LABELS: matched on the title alone,
-    # since a drawer's `onClose={() => …}` carries a `>` before its title.
-    assert not re.search(r'title=\{?(?:"Ask & Chat"|RAIL_LABELS\.questions)', app)
-    assert "<AskPage" in app
-    # The rail's second press closes it, and focus returns to the rail's opener.
+    # The panel goes with it: one element in both shapes, never mounted again.
+    assert 'form={ask.expanded ? "page" : "drawer"}' in app and "onExpand={ask.expand}" in app
+    assert "the question you were typing, the engine you chose and your place in the conversation go with it" in text
+    # Each opening is the drawer: the rail's toggle opens it, and the shape is reset on closing.
     assert "onSelect: ask.toggle" in app
-    assert "toggle: () => (open && !reading ? back() : openPage())" in hook
+    assert "toggle: () => (open && !reading ? back() : openDrawer())," in hook
+    assert "const close = () => { setOpen(false); setExpanded(false); };" in hook
+    assert "Each time you open Ask & Chat it opens as the drawer." in text
+    # Close, Esc inside the drawer and the rail's second press close it, focus back on the rail's opener.
     assert "focusRailOpener(RAIL_LABELS.questions)" in hook
-    assert "pressing Ask & Chat on the rail again" in text
+    assert 'if (event.key !== "Escape" || event.defaultPrevented) return;' in page
+    assert "**Close**, Esc inside the drawer, or pressing Ask & Chat on the rail again closes it" in text
     assert "focus returns to Ask & Chat on the rail" in text
-    # The two pages replace each other: a search leaves the page, and the page leaves the results.
-    assert re.search(r"const openPage = \(\) => \{\s*other\.leave\(\);", hook)
-    assert "useAskPage(readerDocumentId !== null, results," in app
+    # The two pages replace each other: a search leaves the page (not the drawer), and the page leaves the results.
+    assert re.search(r"openPage: \(\) => \{ other\.leave\(\);", hook)
+    assert "const leavePage = () => { if (expanded) close(); };" in hook and "leave: leavePage," in hook
     assert "ask.leave(); // the results replace Ask & Chat's page" in app
     assert "shows the results in its place" in text
     assert "Back from either goes to the view, not to the other" in text
-    # §3's rail row says the same, since the rail is where the page is opened.
+    # A view chosen keeps the drawer; another place closes it.
+    assert "viewChosen: () => { other.leave(); leavePage(); }," in hook
+    assert "leaveBoth: () => { other.leave(); close(); }," in hook
+    assert "the drawer stays beside a view or a search you choose, and closes when you go to another place" in text
+    # §3's rail row says the same, since the rail is where Ask & Chat is opened.
     rail = re.search(r"^\| \*\*Left rail\*\* \|(.*)$", GUIDE, re.MULTILINE)
     assert rail, "§3's Left rail row"
-    assert "Ask & Chat opens as a page over it (§6)" in rail.group(1)
-    assert "each opening its panel beside the view" not in rail.group(1)
+    assert "Explore, Ask & Chat and History each open their panel beside the view, and Ask & Chat's **Expand** makes it a page over the view (§6)" in rail.group(1)
+    assert "opens as a page over it" not in rail.group(1)
 
