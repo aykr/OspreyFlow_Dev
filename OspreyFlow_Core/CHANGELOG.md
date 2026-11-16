@@ -169,6 +169,10 @@ around: one view switch, a case line that says what is open, and "view" kept for
   alone (ADR-124 Amendment 18).
 - **The search results page is drawn over the graph's toolbar and zoom**, in every look; before, they
   showed through it.
+- **People are matched again where no person has a date of birth.** If none of a deployment's people
+  had one (every source loaded without that column), the matching run for people failed every time,
+  without saying so, and no two records of one person were ever linked. People with a date of birth
+  are matched as before.
 
 ## v0.5.1 — 2026-11-14
 

@@ -1,0 +1,5 @@
+# Red first: tests/resolve/test_resolver.py on main ec28df1, before the fix (2026-11-16T06:41:10Z)
+# both raise: _duckdb.BinderException: Binder Error: No function matches the given name and argument types 'year(INTEGER)'
+FAILED ../OspreyFlow_Build/tests/resolve/test_resolver.py::test_a_population_with_no_date_of_birth_at_all_resolves_without_raising
+FAILED ../OspreyFlow_Build/tests/resolve/test_resolver.py::test_the_same_name_with_no_date_of_birth_still_becomes_a_candidate
+2 failed, 10 passed in 1.20s
