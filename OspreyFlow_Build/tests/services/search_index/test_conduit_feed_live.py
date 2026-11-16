@@ -163,7 +163,14 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
         written.extend(backlog)
         assert loop.run_until_complete(_pending(arcadedb, backlog)) == BACKLOG
         conduit = _ConduitInstance(
-            jwks_url, extra_env={"OSPREY_JOB_WORKER": "conduit", "OSPREY_SEARCH_INDEX_ALIAS": alias}
+            jwks_url,
+            extra_env={
+                # What Small's render tells its Conduit (`harness.render`, deployment.env): the job
+                # loop is the Conduit's, and where OpenSearch is; the lease pins only its port.
+                "OSPREY_JOB_WORKER": "conduit",
+                "OPENSEARCH_HOST": os.environ.get("OPENSEARCH_HOST") or "localhost",
+                "OSPREY_SEARCH_INDEX_ALIAS": alias,
+            },
         )
         left, drained_in = loop.run_until_complete(wait_for_backlog(backlog))
         rate = (BACKLOG - left) / drained_in if drained_in else 0.0
