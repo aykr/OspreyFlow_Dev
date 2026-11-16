@@ -1178,7 +1178,14 @@ def checks() -> None:
         ok(f"it is {'verified' if step == 'verify' else 'published'}", r.status_code == 200, r.text[:300])
     r = c.post(f"{base}/recipes/{rid}/run", headers=admin, json={})
     ok("it runs, and makes entities", r.status_code == 200 and r.json().get("nodes_created", 0) > 0, r.text[:300])
-    r = c.post(f"/v1/investigations/{case}/search", headers=admin, json={"query": "R1Synthetic", "limit": 5})
+    # The indexer writes a moment after the load (ADR-150): asked again every 5 s for up to 60 s, as the
+    # alert below is waited for (v0.6.0's package test, 16 November 2026: the search at once found
+    # nothing, the worker's write landed a second later; tests/test_r1_kind_search_wait.py).
+    for _ in range(12):
+        r = c.post(f"/v1/investigations/{case}/search", headers=admin, json={"query": "R1Synthetic", "limit": 5})
+        if r.status_code == 200 and r.json().get("nodes"):
+            break
+        time.sleep(5)
     ok("what it loaded is found", r.status_code == 200 and r.json().get("nodes"), r.text[:300])
     for _ in range(30):
         r = c.get(f"/v1/investigations/{case}/alert-queue", headers=admin, params={"status": "all"})
