@@ -84,7 +84,7 @@ def test_the_install_s_own_checks_are_the_ones_the_guide_names() -> None:
 def test_v060_is_said_to_be_installed_fresh_and_the_move_not_rehearsed() -> None:
     """The owner's plan of 15 November 2026: v0.6.0 is installed fresh, with no upgrade from any earlier version, and
     its package test is a fresh install, so the steps above are for a release after it and not yet rehearsed."""
-    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() == "v0.6.0"
+    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() in ("v0.6.0", "v0.6.1")  # v0.6.1, the patch (16 Nov)
     text = upgrade_paragraph()
     assert "v0.6.0 itself is installed fresh, into a namespace of its own: a namespace on an earlier release stays on it" in text
     assert "For a release after v0.6.0 there is no separate upgrade runbook." in text

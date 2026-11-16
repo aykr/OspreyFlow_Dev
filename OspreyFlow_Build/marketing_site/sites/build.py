@@ -20,8 +20,8 @@ from pathlib import Path
 OUT = Path(__file__).resolve().parent
 SOURCE = OUT / 'source'
 CHANGELOG = OUT.parents[2] / 'OspreyFlow_Core' / 'CHANGELOG.md'
-#: The release every claim on the pages was last checked against (docs lane, 15 November 2026: sites-v060-facts.md).
-CHECKED_AGAINST = 'v0.6.0'
+#: The release every claim on the pages was last checked against (docs lane, 15 November 2026: sites-v060-facts.md; v0.6.1 by the orchestrator, 16 November: its two items touch no claim on the pages).
+CHECKED_AGAINST = 'v0.6.1'
 sys.path.insert(0, str(OUT))
 import overview as OV, govanim as GV  # noqa: E402
 

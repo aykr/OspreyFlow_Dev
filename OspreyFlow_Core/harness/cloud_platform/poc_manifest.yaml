@@ -1,4 +1,4 @@
-# The cloud-platform profile, shape: poc, at v0.6.0: the one source for its containers, images, sizing,
+# The cloud-platform profile, shape: poc, at v0.6.1: the one source for its containers, images, sizing,
 # managed services, Entra registrations and egress (ROUTE_052.md, "the manifest is the one source").
 #
 # Held to the render both ways by tests/harness/test_poc_manifest.py: anything rendered and not listed
@@ -10,7 +10,7 @@
 #
 # Sizes are the profile's proposals (profile.yaml `resources` and `poc.cpu_limits`), not measurements:
 # step 4 (v052-measure) measures them on the client-size load.
-version: v0.6.0
+version: v0.6.1
 shape: poc
 
 # One of each (the poc shape's DEVELOPMENT_REPLICAS); Superset and the report sync too (the owner, 13 Nov).
