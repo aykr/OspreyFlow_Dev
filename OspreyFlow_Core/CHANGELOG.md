@@ -189,6 +189,9 @@ around: one view switch, a case line that says what is open, and "view" kept for
 - **A failed POC seed now ends step 9 failed.** The step went on to rebuild the search index after a
   seed that had failed, and then ended as if it had succeeded. It now stops after a failed seed, and
   its last line says that the seed did not succeed.
+- **Step 6's token-version check now reads every Conduit pod's log.** It read the log of one pod alone,
+  and the cloud-platform shape runs two, so it could say that no sign-in had been refused while the other
+  pod was refusing every one.
 
 ## v0.5.1 — 2026-11-14
 
