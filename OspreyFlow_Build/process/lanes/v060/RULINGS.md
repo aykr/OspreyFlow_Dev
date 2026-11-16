@@ -86,3 +86,5 @@ and discards the others; nothing is released on a partial pass. Pushes still go 
 cancels a run in progress).
 - CI speed: split the long jobs (test, conformance, glass-perf-a11y-keyboard) across parallel runners and cache dependencies (uv, npm, docker layers), which also guards against PyPI timeouts like 16 Nov's; a ci.yml change, to the owner as a diff
 - **First item of v0.6.1: the Glass, fewer rows above the canvas and a toolbar that can be hidden** (the owner, 16 Nov; brief at `v061/glass-rows/OWNER_BRIEF_2026-11-16.md`, sketch in Claude outputs/ospreyflow_glass_rows_2026-11-16/). The case lane; estimate, proposals, the draft ADR amendment and the measured gain before any building; nothing merges before v0.6.0 is released
+- The report sync tested against a real Valkey that requires TLS and a password (rule 15; the stand-in accepted plaintext)
+- The report sync's loop survives a Valkey error (logs and retries rather than exiting into a crash loop)
