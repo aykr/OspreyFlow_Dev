@@ -1,0 +1,63 @@
+== red on main: main's App.tsx, ContextBanner.tsx and ViewLensBanner.tsx under b68a4af's tests
+     × keeps the case and Saved views, names the region as before, and drops You are in and reads from sight 79ms
+     × draws the end slot last on the line, in both forms 6ms
+     ✓ is the full line without slim: You are in in sight and reads drawn 4ms
+     × keeps the case and Saved views, names the region as before, and drops You are in and reads from sight 4ms
+     × draws the end slot last on the line, in both forms 4ms
+     ✓ is the full line without slim: You are in in sight and reads drawn 2ms
+     × ends Whole case with no saved view open, and names no saved view 4ms
+     × names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name 3ms
+     × Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details 2ms
+     × offers no notes on a view that has none, and no count when nothing was left out 6ms
+     × keeps the state on the slim line, Back to the whole case with it 2ms
+     × ends Whole case with no saved view open, and names no saved view 2ms
+     × names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name 2ms
+     × Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details 2ms
+     × offers no notes on a view that has none, and no count when nothing was left out 5ms
+     × keeps the state on the slim line, Back to the whole case with it 2ms
+     × Open the evidence, then Back to the alert, returns to the same alert, still open 1250ms
+     × a saved view opened from the case line is said on the case line, focus on its name, with no strip over the canvas; Back to the whole case puts the case back and focus on Saved views 158ms
+     × the Saved views drawer holds the saved views alone, and The whole case closes the open view 1101ms
+⎯⎯⎯⎯⎯⎯ Failed Tests 17 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  17 failed | 2 passed | 52 skipped (71)
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toBeVisible() failed
+    Error: expect(locator).toHaveText(expected) failed
+    Error: expect(locator).toHaveText(expected) failed
+    Error: expect(locator).toHaveText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toContainText(expected) failed
+    Error: expect(locator).toBeVisible() failed
+    Error: expect(locator).toBeVisible() failed
+    Error: expect(locator).toBeVisible() failed
+  22 failed
+    keyboard/case-line-type.spec.ts:49:3 › ospreyflow dark: every part of the case line is on the top bar's font size and line height, the place bold 
+    keyboard/case-line-type.spec.ts:49:3 › ospreyflow light: every part of the case line is on the top bar's font size and line height, the place bold 
+    keyboard/case-line-type.spec.ts:49:3 › govuk light: every part of the case line is on the top bar's font size and line height, the place bold 
+    keyboard/case-line-type.spec.ts:100:3 › ospreyflow dark: the long names give way in the ruled order, their whole words kept in the page and the title 
+    keyboard/case-line-type.spec.ts:100:3 › ospreyflow light: the long names give way in the ruled order, their whole words kept in the page and the title 
+    keyboard/case-line-type.spec.ts:100:3 › govuk light: the long names give way in the ruled order, their whole words kept in the page and the title 
+    keyboard/rules-place.spec.ts:70:1 › the evidence is opened, and Back to the alert returns to it, still open, by keyboard 
+    keyboard/views.spec.ts:75:1 › Back to the whole case is reached from the case line over an opened saved view by keyboard 
+    keyboard/views.spec.ts:87:1 › a saved view's Details are opened from the case line and closed by Esc, by keyboard 
+    keyboard/views.spec.ts:111:5 › ospreyflow dark 1440: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › ospreyflow dark 1280: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › ospreyflow dark 1024: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › ospreyflow light 1440: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › ospreyflow light 1280: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › ospreyflow light 1024: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › govuk light 1440: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › govuk light 1280: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:111:5 › govuk light 1024: a saved view opened from the case line is said there, focus on its name, the canvas unmoved, and Back to the whole case returns to Saved views 
+    keyboard/views.spec.ts:153:3 › the case line's saved view and its open Details pass axe and the contrast probe (dark) 
+    keyboard/views.spec.ts:153:3 › the case line's saved view and its open Details pass axe and the contrast probe (light) 
+    keyboard/views.spec.ts:153:3 › the case line's saved view and its open Details pass axe and the contrast probe (govuk) 
+    keyboard/views.spec.ts:171:1 › a merged drawing's notes are opened and closed from its view's Details on the case line by keyboard 
+  18 passed (3.3m)
