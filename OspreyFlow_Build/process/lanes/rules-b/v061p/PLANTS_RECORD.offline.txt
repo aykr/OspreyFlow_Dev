@@ -1,7 +1,11 @@
-offline: 4 of 6 plants, the live file left out
-built: GREEN - 14 passed in 5.19s
-F2 the Conduit feeds without an OpenSearch to feed [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_conduit_feeds_the_index_only_where_it_runs_the_job_loop_and_there_is_one[conduit-no-index] | 1 failed, 4 passed in 3.81s
-F3 the Conduit feeds beside a worker [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_cluster_s_conduit_never_feeds_beside_its_worker | 1 failed in 3.93s
+offline: 8 of 10 plants, the live file left out
+built: GREEN - 18 passed in 5.35s
+F2 the Conduit feeds without an OpenSearch to feed [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_conduit_feeds_the_index_only_where_it_runs_the_job_loop_and_there_is_one[conduit-no-index] | 1 failed, 4 passed in 3.82s
+F3 the Conduit feeds beside a worker [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_cluster_s_conduit_never_feeds_beside_its_worker | 1 failed in 4.05s
 F4 the worker runs an indexer of its own beside the helper [OspreyFlow_Core/services/api/worker_main.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_worker_and_the_conduit_start_the_feed_one_way | 1 failed in 0.79s
-F5 the Conduit reads the feed's unfiltered read itself [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py::test_no_route_or_other_module_reaches_the_indexers_reads | 1 failed in 1.42s
-restored: GREEN - 14 passed in 5.39s
+F5 the Conduit reads the feed's unfiltered read itself [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_index_feed_reach.py::test_no_route_or_other_module_reaches_the_indexers_reads | 1 failed in 1.44s
+F7 the lifespan never closes the feed [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores | 1 failed in 0.53s
+F8 the feed's stop waits for the job loop [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores | 1 failed in 0.57s
+F9 a refused search setting stops the Conduit's start [OspreyFlow_Core/services/api/app.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_refused_search_settings_start_the_conduit_without_a_feed | 1 failed in 3.93s
+F10 a feed's close leaves its client open [OspreyFlow_Core/services/search_index/run.py]: RED - FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_a_feed_s_close_stops_it_and_closes_what_it_opened | FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed.py::test_a_feed_past_its_bound_is_cancelled_and_still_closes_its_client | 2 failed in 1.03s
+restored: GREEN - 18 passed in 5.34s

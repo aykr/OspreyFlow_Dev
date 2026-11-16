@@ -30,36 +30,92 @@ LIVE = (LIVE_FILE,)
 
 PLANTS: list[tuple[str, str, str, str, list[str]]] = [
     # decision 1: the Conduit starts the feed where it runs the job loop
-    ("F1 the Conduit never starts the feed (236e31e's behaviour)", APP,
-     "        if index_feed_in_conduit()\n        else None\n    )  # fmt: skip\n",
-     "        if False\n        else None\n    )  # fmt: skip\n",
-     [FEEDS]),
-    ("F2 the Conduit feeds without an OpenSearch to feed", APP,
-     "    return job_loop_in_conduit(environ) and search_index_configured(environ)\n",
-     "    return job_loop_in_conduit(environ)\n",
-     [f"{OFFLINE}::test_the_conduit_feeds_the_index_only_where_it_runs_the_job_loop_and_there_is_one"]),
-    ("F3 the Conduit feeds beside a worker", APP,
-     "    return job_loop_in_conduit(environ) and search_index_configured(environ)\n",
-     "    return search_index_configured(environ)\n",
-     [f"{OFFLINE}::test_cluster_s_conduit_never_feeds_beside_its_worker"]),
-    ("F4 the worker runs an indexer of its own beside the helper", WORKER,
-     "        if feed is not None:\n            logger.info(",
-     "        if feed is None:\n            run_indexer(None, None, None, None)\n"
-     "        if feed is not None:\n            logger.info(",
-     [f"{OFFLINE}::test_the_worker_and_the_conduit_start_the_feed_one_way"]),
+    (
+        "F1 the Conduit never starts the feed (236e31e's behaviour)",
+        APP,
+        "        if index_feed_in_conduit()\n        else None\n    )\n",
+        "        if False\n        else None\n    )\n",
+        [FEEDS],
+    ),
+    (
+        "F2 the Conduit feeds without an OpenSearch to feed",
+        APP,
+        "    return job_loop_in_conduit(environ) and search_index_configured(environ)\n",
+        "    return job_loop_in_conduit(environ)\n",
+        [
+            f"{OFFLINE}::test_the_conduit_feeds_the_index_only_where_it_runs_the_job_loop_and_there_is_one"
+        ],
+    ),
+    (
+        "F3 the Conduit feeds beside a worker",
+        APP,
+        "    return job_loop_in_conduit(environ) and search_index_configured(environ)\n",
+        "    return search_index_configured(environ)\n",
+        [f"{OFFLINE}::test_cluster_s_conduit_never_feeds_beside_its_worker"],
+    ),
+    (
+        "F4 the worker runs an indexer of its own beside the helper",
+        WORKER,
+        "        if feed is not None:\n            logger.info(",
+        "        if feed is None:\n            run_indexer(None, None, None, None)\n"
+        "        if feed is not None:\n            logger.info(",
+        [f"{OFFLINE}::test_the_worker_and_the_conduit_start_the_feed_one_way"],
+    ),
     # decision 4 (rule 4): app.py naming a feed read is caught by the reach test
-    ("F5 the Conduit reads the feed's unfiltered read itself", APP,
-     "    if index_feed is not None:\n        logger.info(",
-     "    _feed_read = getattr(graph, \"nodes_for_index\", None)\n"
-     "    if index_feed is not None:\n        logger.info(",
-     [f"{REACH}::test_no_route_or_other_module_reaches_the_indexers_reads"]),
+    (
+        "F5 the Conduit reads the feed's unfiltered read itself",
+        APP,
+        "        if index_feed_in_conduit()\n        else None\n    )\n",
+        "        if index_feed_in_conduit()\n        else None\n    )\n"
+        '    _feed_read = getattr(graph, "nodes_for_index", None)\n',
+        [f"{REACH}::test_no_route_or_other_module_reaches_the_indexers_reads"],
+    ),
     # decision 3: a rebuild leaves the outbox it covered
-    ("F6 a rebuild clears the outbox rows it covered", REBUILD,
-     "        await client.indices.update_aliases(body={\"actions\": actions})\n",
-     "        await client.indices.update_aliases(body={\"actions\": actions})\n"
-     "        _rows = await source.pending_index(100_000)\n"
-     "        await source.clear_pending_index([r.ref for r in _rows])\n",
-     [LEAVES]),
+    (
+        "F6 a rebuild clears the outbox rows it covered",
+        REBUILD,
+        '        await client.indices.update_aliases(body={"actions": actions})\n',
+        '        await client.indices.update_aliases(body={"actions": actions})\n'
+        "        _rows = await source.pending_index(100_000)\n"
+        "        await source.clear_pending_index([r.ref for r in _rows])\n",
+        [LEAVES],
+    ),
+    # decision 1's third bullet: stopped at shutdown, before the stores, beside the job loop
+    (
+        "F7 the lifespan never closes the feed",
+        APP,
+        "            await index_feed.close(timeout=JOB_LOOP_STOP_SECONDS)\n",
+        "",
+        [
+            f"{OFFLINE}::test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores"
+        ],
+    ),
+    (
+        "F8 the feed's stop waits for the job loop",
+        APP,
+        "        if index_feed is not None:\n            index_feed.stop.set()\n",
+        "",
+        [
+            f"{OFFLINE}::test_the_lifespan_stops_the_feed_with_the_job_loop_and_closes_it_before_the_stores"
+        ],
+    ),
+    (
+        "F9 a refused search setting stops the Conduit's start",
+        APP,
+        "    except Exception:  # noqa: BLE001 - said, and the Conduit starts without a feed\n",
+        "    except ImportError:\n",
+        [f"{OFFLINE}::test_refused_search_settings_start_the_conduit_without_a_feed"],
+    ),
+    (
+        "F10 a feed's close leaves its client open",
+        "OspreyFlow_Core/services/search_index/run.py",
+        "        for close in self.closing:\n            await close()\n",
+        "",
+        [
+            f"{OFFLINE}::test_a_feed_s_close_stops_it_and_closes_what_it_opened",
+            f"{OFFLINE}::test_a_feed_past_its_bound_is_cancelled_and_still_closes_its_client",
+        ],
+    ),
 ]
 
 

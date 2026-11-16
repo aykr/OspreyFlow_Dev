@@ -1,0 +1,97 @@
+# Red first: 236e31e's code with the live test as at 5734c16 (tree 228d4af, tmp branch since deleted), stack b, lease rules-b of 2026-11-16T18:34:16Z
+Running on ospreyflow-test (stack b, osprey-runs/rules-b/OspreyFlow_Core/), logged at osprey-runs/rules-b.meta/runs/20261116T184538Z-b1108519/log: .venv/bin/pytest -c ../OspreyFlow_Build/pytest.ini -p no:cacheprovider -p no:randomly -q -s ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py
+
+the backlog of 2000: 0 drained in 120.5 s (0 rows/s, from the Conduit's start, its lease wait included)
+F.
+=================================== FAILURES ===================================
+______ test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls ______
+
+jwks_url = 'http://127.0.0.1:44863/jwks.json'
+
+    def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url: str) -> None:
+        """Small's shape: the Conduit drains the job streams itself and nothing else runs. A backlog
+        written before it started drains, a write made while it runs becomes searchable, and it stops on
+        SIGTERM within its own bound. Red on 236e31e: nothing starts `run_indexer` in the Conduit, so
+        the backlog's rows stay and no document is ever written."""
+        alias = f"test-conduit-feed-{uuid.uuid4().hex[:10]}"
+        tag = uuid.uuid4().hex[:8]
+        arcadedb = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+        graph = GraphArcadeDBAdapter(arcadedb, load_uk_le_scheme())
+        search = search_client(
+            SearchIndexConfig.from_env({**os.environ, "OSPREY_SEARCH_INDEX_ALIAS": alias})
+        )
+        written: list[str] = []
+        conduit: _ConduitInstance | None = None
+    
+        async def setup() -> list[str]:
+            await arcadedb.create_database_if_absent()
+            await graph.apply_schema(ONTOLOGY)
+            await _remove(arcadedb, [])  # what an earlier run of this file left, if anything
+            return await _written(graph, [_person(f"Backlog{tag}{n}") for n in range(BACKLOG)])
+    
+        async def wait_for_backlog(ids: Sequence[str]) -> tuple[int, float]:
+            started = time.monotonic()
+            left = await _pending(arcadedb, ids)
+            while left and time.monotonic() - started < BACKLOG_WITHIN:
+                await asyncio.sleep(0.5)
+                left = await _pending(arcadedb, ids)
+            return left, time.monotonic() - started
+    
+        async def write_and_find() -> tuple[str, list[str], float]:
+            name = f"Quillon{tag}"
+            (node,) = await _written(graph, [_person(name)])
+            written.append(node)
+            started = time.monotonic()
+            found = await _found_by_name(search, alias, name)
+            while node not in found and time.monotonic() - started < SEARCHABLE_WITHIN:
+                await asyncio.sleep(0.25)
+                found = await _found_by_name(search, alias, name)
+            return node, found, time.monotonic() - started
+    
+        loop = asyncio.new_event_loop()
+        try:
+            backlog = loop.run_until_complete(setup())
+            written.extend(backlog)
+            assert loop.run_until_complete(_pending(arcadedb, backlog)) == BACKLOG
+            conduit = _ConduitInstance(
+                jwks_url,
+                extra_env={
+                    # What Small's render tells its Conduit (`harness.render`, deployment.env): the job
+                    # loop is the Conduit's, and where OpenSearch is; the lease pins only its port.
+                    "OSPREY_JOB_WORKER": "conduit",
+                    "OPENSEARCH_HOST": os.environ.get("OPENSEARCH_HOST") or "localhost",
+                    "OSPREY_SEARCH_INDEX_ALIAS": alias,
+                },
+            )
+            left, drained_in = loop.run_until_complete(wait_for_backlog(backlog))
+            rate = (BACKLOG - left) / drained_in if drained_in else 0.0
+            print(
+                f"\nthe backlog of {BACKLOG}: {BACKLOG - left} drained in {drained_in:.1f} s "
+                f"({rate:.0f} rows/s, from the Conduit's start, its lease wait included)"
+            )
+>           assert left == 0, (
+                f"{left} of the backlog's {BACKLOG} outbox rows still pending after "
+                f"{drained_in:.0f} s: "
+                "nothing in a Conduit with no worker feeds the search index"
+            )
+E           AssertionError: 2000 of the backlog's 2000 outbox rows still pending after 120 s: nothing in a Conduit with no worker feeds the search index
+E           assert 2000 == 0
+
+../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py:190: AssertionError
+=============================== warnings summary ===============================
+tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+  /root/osprey-runs/rules-b/OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py:174: ConduitStartTime: a Conduit came up in 12.3 s (http://127.0.0.1:46949)
+    conduit = _ConduitInstance(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 30 durations =============================
+138.89s call     tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+0.67s call     tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.40s setup    tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.15s teardown tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+0.13s teardown tests/services/search_index/test_conduit_feed_live.py::test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it
+0.03s setup    tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/search_index/test_conduit_feed_live.py::test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls
+1 failed, 1 passed, 1 warning in 141.27s (0:02:21)
+Wall time: 142 s, exit 1 (stack b, the lease rules-b took at 2026-11-16T18:34:16Z; set-up before it 6 s)

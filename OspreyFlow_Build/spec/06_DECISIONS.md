@@ -40458,16 +40458,19 @@ the outboxes (decision 4) and nothing drained them.
      as theirs.
    - **It reads through the adapter itself**, as the worker's does (the stamping graph's `inner`), and the text store the
      Conduit already holds.
-   - **It stops at shutdown**, after the job loop and before the stores it reads are closed: the batch in hand finishes
-     within `JOB_LOOP_STOP_SECONDS` (10 s) or is cancelled, its rows left in the outbox for the next start (delivery is at
-     least once, decision 2); then its client is closed.
+   - **It stops at shutdown**, its stop set with the job loop's, and closed before the stores it reads are: the batch in
+     hand finishes within `JOB_LOOP_STOP_SECONDS` (10 s) or is cancelled, its rows left in the outbox for the next start
+     (delivery is at least once, decision 2); then its client is closed.
+   - **A refused search setting never stops the Conduit.** Settings `SearchIndexConfig` refuses (a CA file that is not
+     there, an unknown signing, sigv4 with no region) are logged and the Conduit starts without a feed, as the query side
+     falls back on the same settings (`app.conduit_index_feed`).
 2. **A backlog drains in order, a batch at a time.** Each pass reads up to 500 rows of the graph's outbox in record-id
    order (`pending_index`, `ORDER BY @rid`) and 500 of the text outbox in its own order, writes their documents and
    clears the rows, and goes again at once while rows remain (`run_indexer` waits its 1 s only when a pass found none).
    A document is the node's state when its batch reads it, so the order decides only which change reaches search first,
    never what the index holds at the end. While an outbox holds more than `PENDING_LIMIT` rows search falls back
-   (ADR-149); it returns to the index by itself once the drain brings both outboxes under it. No restart and no rebuild
-   is needed: a deployment that already has a backlog (the GOV.UK demo's) drains it when its Conduit runs this release.
+   (ADR-149); it returns to the index by itself once the drain brings both outboxes under it. No rebuild is needed: a
+   deployment that already has a backlog (the GOV.UK demo's) drains it once its Conduit runs this release.
 3. **A rebuild leaves the outbox it covered.** Decision 4 stands: the rebuild never clears an outbox row, not even one
    whose node it read after the row's write committed. The feed can hold a batch read before the rebuild began and
    write it after the alias moves; had the rebuild cleared that node's later row, the older state would stay with nothing
@@ -40481,7 +40484,13 @@ the outboxes (decision 4) and nothing drained them.
    unchanged: the query side's access filter (ADR-149) and its leak tests (`test_search_leak_live.py`,
    `test_ask_whole_case_leak_live.py`) do not depend on which process wrote the documents, and run in the same live gate.
 
-**Measured.** MEASURED-PLACEHOLDER
+**Measured** on test stack b under rules-b's lease of 2026-11-16T18:34:16Z (the server otherwise idle but for the
+protected GOV.UK demo beside it), by `test_conduit_feed_live.py` at 5734c16: a backlog of 2,000 node rows drained in
+1.0 s from the Conduit's start, about 1,960 rows a second (a lower bound: any rows ahead of them in the shared outbox
+are inside the same second), and a write was found by a name search 0.79 s after it committed. At that rate a backlog
+the size of the GOV.UK demo's (several hundred thousand rows; 300,000, say) would drain in about three minutes. That
+is an estimate from a small, simple backlog, not a measurement at that size: larger nodes, texts and a busy host are
+slower.
 
 **Tests that fail if it is violated.**
 - `tests/services/search_index/test_conduit_feed_live.py`'s
@@ -40489,14 +40498,24 @@ the outboxes (decision 4) and nothing drained them.
   tells it, with no worker anywhere, against the leased stack's ArcadeDB, Postgres, Valkey and OpenSearch: a backlog
   written before it started drains to none, a later write is found by a name search within 30 s (Amendment 3 point 3's
   wait), and SIGTERM stops it. Red on 236e31e (the record: `process/lanes/rules-b/v061p/`).
-- the same file's `test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it` (decision 3), and its plant, a
-  rebuild that clears the rows it covered, red.
+- the same file's `test_a_rebuild_leaves_the_outbox_it_covered_and_the_feed_drains_it` (decision 3), and plant F6, a
+  rebuild that clears the rows it covered, red. It holds that the rows survive a rebuild; the race they guard against
+  is argued above, not reproduced.
+- `test_conduit_feed.py`'s shutdown cases: `IndexFeed.close` sets the stop, waits for the batch or cancels it past its
+  bound, and closes the client either way; the lifespan sets the feed's stop with the job loop's and closes the feed
+  before the first store; a refused search setting starts the Conduit without a feed (logged), as the query side falls
+  back on it. Plants F7 to F10 red (`PLANTS_RECORD.offline.txt`).
 - `tests/services/search_index/test_conduit_feed.py` (offline): where the Conduit feeds (both ways, each environment),
   Small's and local-lite's render as they are, cluster's never, no feed without an OpenSearch, and the worker and the
   Conduit starting it one way (`start_index_feed`, neither running `run_indexer` or building an indexer of its own).
 - rule 4: `test_index_feed_reach.py`, unchanged.
 
+**Not shown by a test:** the order of a backlog's drain (it is `pending_index`'s `ORDER BY @rid`, and decides only which
+change reaches search first), and the product's search leaving its fallback once the outboxes are under
+`PENDING_LIMIT` (the live case reads the index, not the search route; the fallback's rule is ADR-149's and unchanged).
+
 **Consequences.** On Small and local-lite every load, demo packs included, reaches search as it is written, and the
-demo's "demo add should feed the index" finding is answered by the same change. The Conduit does a little more: one
-outbox read a second while idle, and a batch's 500 nodes in memory while busy. The install's own rebuild (Amendment 2)
-is unchanged.
+demo's "demo add should feed the index" finding is answered by the same change. The Conduit does a little more: while
+idle, a read of each outbox and the lease's renewal in Valkey once a second; while busy, a batch's 500 nodes in
+memory. A Conduit stopping takes at most `JOB_LOOP_STOP_SECONDS` for the feed and the job loop together, inside
+Docker's default 10 s grace. The install's own rebuild (Amendment 2) is unchanged.
