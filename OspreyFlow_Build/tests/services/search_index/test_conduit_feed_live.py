@@ -23,9 +23,12 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import socket
+import threading
 import time
 import uuid
 from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
@@ -62,10 +65,17 @@ DATASET = "Z3004ZZ"
 #: ADR-150 Amendment 3 point 3: a search straight after a write asks again for up to 30 s (and M6's
 #: alarm is a p95 over 30 s). The lag measured is printed on every run, a pass included.
 SEARCHABLE_WITHIN = 30.0
-#: The backlog's own drain: a dead holder's lease (an earlier Conduit's, killed) runs out first.
-BACKLOG_WITHIN = LEASE_SECONDS + 90.0
-#: Large enough to measure the drain's rate (Amendment 4's measured line), four batches of 500.
-BACKLOG = 2000
+#: The backlog: large enough that its drain spans many polls, so the rate is measured over seconds,
+#: not one poll (Amendment 4's measured line). Written in transactions of `CHUNK`.
+BACKLOG = 10_000
+CHUNK = 2_000
+#: How often the sampler reads the outbox while the feed drains it.
+POLL_SECONDS = 0.1
+#: The wait for the backlog, from the whole outbox at the start, so rows other live files left
+#: ahead of this file's (the CI job runs the pid and poc seeds first) never make it flake: a dead
+#: holder's lease runs out (`LEASE_SECONDS`), then every row ahead and its own drain at a floor
+#: rate an eighth of the one measured on stack b (about 1,960 rows a second at 5734c16).
+FLOOR_ROWS_PER_SECOND = 250.0
 
 
 def _person(family_name: str) -> NodeWrite:
@@ -114,14 +124,20 @@ async def _found_by_name(search: AsyncOpenSearch, alias: str, name: str) -> list
 PERSON = f"`{groovy_identifier(physical_type_name('Person'))}`"
 
 
+async def _outbox_total(client: ArcadeDBClient) -> int:
+    """Every row of the graph's outbox, this file's and any other's."""
+    rows = await client.sql("SELECT count(*) AS n FROM IndexPending")
+    return int(rows[0]["n"]) if rows else 0
+
+
 async def _lease_holder() -> str:
     """Who holds the indexer's lease in the stack's Valkey (`run.LEASE_KEY`)."""
     from valkey.asyncio import Valkey
 
-    from services.api.config import ApiConfig
+    from services.api.config import ValkeyConfig
     from services.search_index.run import LEASE_KEY
 
-    client = Valkey(**ApiConfig.from_env().valkey.client_kwargs())
+    client = Valkey(**ValkeyConfig.from_env().client_kwargs())
     try:
         held = await client.get(LEASE_KEY)
     finally:
@@ -141,11 +157,51 @@ async def _remove(client: ArcadeDBClient, ids: Sequence[str]) -> None:
         await client.sql(f"DELETE FROM {PERSON} WHERE id IN :ids", params={"ids": ids})
 
 
+@dataclass
+class Sample:
+    at: float
+    own: int  # this file's backlog rows still pending
+    total: int  # every row of the outbox
+
+
+def _sample_until_drained(ids: Sequence[str], until: float, out: list[Sample]) -> None:
+    """In a thread of its own, from before the Conduit is spawned: the outbox read every
+    `POLL_SECONDS` until this file's rows are gone or `until` passes."""
+
+    async def sample() -> None:
+        client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+        try:
+            while time.monotonic() < until:
+                own, total = await _pending(client, ids), await _outbox_total(client)
+                out.append(Sample(time.monotonic(), own, total))
+                if own == 0:
+                    return
+                await asyncio.sleep(POLL_SECONDS)
+        finally:
+            await client.aclose()
+
+    asyncio.run(sample())
+
+
+def _drain_rate(samples: Sequence[Sample]) -> tuple[float, float, int] | None:
+    """Rows cleared from the whole outbox a second, between the last poll before the feed reached
+    this file's rows and the first poll after it had cleared them all: (rate, seconds, rows).
+    None where no poll fell before the feed reached them."""
+    full = [x for x in samples if x.own == BACKLOG]
+    done = [x for x in samples if x.own == 0]
+    if not full or not done:
+        return None
+    a, b = full[-1], done[0]
+    seconds, rows = b.at - a.at, a.total - b.total
+    return (rows / seconds if seconds > 0 else 0.0), seconds, rows
+
+
 def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url: str) -> None:
     """Small's shape: the Conduit drains the job streams itself and nothing else runs. A backlog
-    written before it started drains, a write made while it runs becomes searchable, and it stops on
-    SIGTERM within its own bound. Red on 236e31e: nothing starts `run_indexer` in the Conduit, so
-    the backlog's rows stay and no document is ever written."""
+    written before it started drains, this Conduit holds the indexer's lease, a write made while
+    it runs becomes searchable, and it stops on SIGTERM within its own bound. Red on 236e31e:
+    nothing starts `run_indexer` in the Conduit, so the backlog's rows stay and no document is
+    ever written."""
     alias = f"test-conduit-feed-{uuid.uuid4().hex[:10]}"
     tag = uuid.uuid4().hex[:8]
     arcadedb = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
@@ -160,15 +216,11 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
         await arcadedb.create_database_if_absent()
         await graph.apply_schema(ONTOLOGY)
         await _remove(arcadedb, [])  # what an earlier run of this file left, if anything
-        return await _written(graph, [_person(f"Backlog{tag}{n}") for n in range(BACKLOG)])
-
-    async def wait_for_backlog(ids: Sequence[str]) -> tuple[int, float]:
-        started = time.monotonic()
-        left = await _pending(arcadedb, ids)
-        while left and time.monotonic() - started < BACKLOG_WITHIN:
-            await asyncio.sleep(0.5)
-            left = await _pending(arcadedb, ids)
-        return left, time.monotonic() - started
+        ids: list[str] = []
+        for start in range(0, BACKLOG, CHUNK):
+            people = [_person(f"Backlog{tag}{n}") for n in range(start, start + CHUNK)]
+            ids += await _written(graph, people)
+        return ids
 
     async def write_and_find() -> tuple[str, list[str], float]:
         name = f"Quillon{tag}"
@@ -186,6 +238,15 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
         backlog = loop.run_until_complete(setup())
         written.extend(backlog)
         assert loop.run_until_complete(_pending(arcadedb, backlog)) == BACKLOG
+        ahead = loop.run_until_complete(_outbox_total(arcadedb))
+        within = LEASE_SECONDS + 30.0 + ahead / FLOOR_ROWS_PER_SECOND
+        samples: list[Sample] = []
+        sampler = threading.Thread(
+            target=_sample_until_drained,
+            args=(backlog, time.monotonic() + 60.0 + within, samples),
+            daemon=True,
+        )
+        sampler.start()
         conduit = _ConduitInstance(
             jwks_url,
             extra_env={
@@ -196,27 +257,34 @@ def test_a_conduit_with_no_worker_feeds_the_index_and_its_outbox_falls(jwks_url:
                 "OSPREY_SEARCH_INDEX_ALIAS": alias,
             },
         )
-        left, drained_in = loop.run_until_complete(wait_for_backlog(backlog))
-        rate = (BACKLOG - left) / drained_in if drained_in else 0.0
-        print(
-            f"\nthe backlog of {BACKLOG}: {BACKLOG - left} drained in {drained_in:.1f} s "
-            f"({rate:.0f} rows/s, from the Conduit's start, its lease wait included)"
-        )
+        sampler.join(timeout=60.0 + within + 30.0)
+        left = samples[-1].own if samples else BACKLOG
+        print(f"\nthe outbox held {ahead} rows at the start, this file's {BACKLOG} among them; "
+              f"waited at most {within:.0f} s")  # fmt: skip
         assert left == 0, (
-            f"{left} of the backlog's {BACKLOG} outbox rows still pending after "
-            f"{drained_in:.0f} s: "
+            f"{left} of the backlog's {BACKLOG} outbox rows still pending after {within:.0f} s: "
             "nothing in a Conduit with no worker feeds the search index"
         )
-        # The feeder was this Conduit, not a stray one on the stack's Valkey: it holds the lease.
+        measured = _drain_rate(samples)
+        if measured is None:
+            print("the drain rate was not measured: no poll fell before the feed reached the rows")
+        else:
+            rate, seconds, rows = measured
+            print(f"the feed cleared {rows} outbox rows in {seconds:.2f} s, {rate:.0f} rows/s "
+                  f"(polled every {POLL_SECONDS} s, from the last poll before it reached this "
+                  "file's rows to the first after it had cleared them)")  # fmt: skip
+        # The feeder was this Conduit process, and no stray one on the stack's Valkey.
         holder = loop.run_until_complete(_lease_holder())
-        assert holder.startswith("conduit-"), f"the indexer's lease is held by {holder!r}"
+        expected = f"conduit-{socket.gethostname()}-{conduit._process.pid}"  # noqa: SLF001
+        assert holder == expected, f"the indexer's lease is held by {holder!r}, not {expected!r}"
         node, found, lag = loop.run_until_complete(write_and_find())
-        print(f"a write was searchable {lag:.2f} s after it committed (lease {LEASE_SECONDS} s)")
+        print(f"a write was found {lag:.2f} s after it committed, each search after a forced "
+              "refresh (a real search waits up to the index's 1 s refresh more)")  # fmt: skip
         assert node in found, f"the write was not searchable within {SEARCHABLE_WITHIN:.0f} s"
         assert loop.run_until_complete(_pending(arcadedb, [node])) == 0
 
-        # Stopped at shutdown: the feed ends with the job loop, so SIGTERM ends the process within
-        # the lifespan's own bound. uvicorn (0.29 on) re-raises the signal once shutdown is done.
+        # Stopped at shutdown: the feed ends with the job loop, under one deadline, so SIGTERM
+        # ends the process. uvicorn (0.29 on) re-raises the signal once shutdown is done.
         process = conduit._process  # noqa: SLF001
         process.send_signal(signal.SIGTERM)
         try:
