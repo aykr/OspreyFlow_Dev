@@ -13,21 +13,23 @@ and none ran the Job's own settings through the code that reads them (rule 12).
 So this renders the poc's values (the shape that renders the Jobs), templates them with the chart
 as Helm does, gives each container the environment Kubernetes would (the ConfigMaps it reads whole,
 then its own variables in order, a secret's key by a stand-in value, `$(VAR)` expanded from what is
-already set), and asks the rebuild's own configuration path where it would connect. The Conduit is
-resolved the same way first, as the control: it reaches the managed database today, so a failure
-for a Job is the Job's settings, not this resolution. Helm runs as its pinned image, so this needs
-Docker, as `test_helm_chart.py` does.
+already set), and asks the rebuild's own configuration path, in a process given that environment
+alone, where it would connect. The Conduit is resolved the same way first, as the control: it
+reaches the managed database today, so a failure for a Job is the Job's settings, not this
+resolution. Helm runs as its pinned image, so this needs Docker, as `test_helm_chart.py` does.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
+import subprocess
+import sys
 from typing import Any
 
 import pytest
 import yaml
-from services.api.config import PostgresConfig
 from tools.cp_policy_check import FIXTURES, helm_template, render_values
 
 #: The managed database's settings, as the platform's RDS secret would hold them (stand-ins), by the
@@ -97,41 +99,52 @@ def _environment(
     return env
 
 
-def _where(env: dict[str, str], monkeypatch: pytest.MonkeyPatch) -> PostgresConfig:
-    for name in [n for n in os.environ if n.startswith("POSTGRES_")]:
-        monkeypatch.delenv(name)
-    for name, value in env.items():
-        if name.startswith("POSTGRES_"):
-            monkeypatch.setenv(name, value)
-    return PostgresConfig.from_env()
+#: The rebuild's own configuration path, run in a process given the container's environment alone:
+#: nothing of this test runner's own (a developer's POSTGRES_* or a CI runner's) can stand in for
+#: what the pod would be given. It reads where it would connect and never connects.
+_WHERE = """
+import json
+from services.api.config import PostgresConfig
+c = PostgresConfig.from_env()
+print(json.dumps({"host": c.host, "port": c.port, "user": c.user, "password": c.password,
+                  "database": c.database, "sslmode": c.sslmode}))
+"""
 
 
-def _expected(config: PostgresConfig) -> None:
+def _where(env: dict[str, str]) -> dict[str, Any]:
+    done = subprocess.run(
+        [sys.executable, "-c", _WHERE],
+        env={**env, "PATH": os.environ.get("PATH", ""), "PYTHONPATH": os.pathsep.join(sys.path)},
+        capture_output=True, text=True, timeout=60, check=False,
+    )  # fmt: skip
+    assert done.returncode == 0, done.stderr
+    return dict(json.loads(done.stdout))
+
+
+def _expected(config: dict[str, Any]) -> None:
     managed = (MANAGED["POSTGRES_HOST"], int(MANAGED["POSTGRES_PORT"]))
-    assert (config.host, config.port) == managed, (
-        f"connects to {config.host}:{config.port}, not the managed database"
+    assert (config["host"], config["port"]) == managed, (
+        f"connects to {config['host']}:{config['port']}, not the managed database"
     )
-    assert (config.user, config.password, config.database) == (
+    assert (config["user"], config["password"], config["database"]) == (
         MANAGED["POSTGRES_USER"], MANAGED["POSTGRES_PASSWORD"], MANAGED["POSTGRES_DB"],
     )  # fmt: skip
-    assert config.sslmode == "require"
+    assert config["sslmode"] == "require"
 
 
-def test_the_conduit_reaches_the_managed_database(
-    manifests: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_conduit_reaches_the_managed_database(manifests: list[dict[str, Any]]) -> None:
     """The control: the resolution above gives the Conduit the managed database."""
     api = _container(manifests, "Deployment", "api")
-    _expected(_where(_environment(manifests, api, _managed(api)), monkeypatch))
+    _expected(_where(_environment(manifests, api, _managed(api))))
 
 
 @pytest.mark.parametrize("job", SEARCH_JOBS)
 def test_each_search_job_reaches_the_managed_database(
-    manifests: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch, job: str
+    manifests: list[dict[str, Any]], job: str
 ) -> None:
     managed = _managed(_container(manifests, "Deployment", "api"))
     container = _container(manifests, "CronJob", job)
-    _expected(_where(_environment(manifests, container, managed), monkeypatch))
+    _expected(_where(_environment(manifests, container, managed)))
 
 
 @pytest.mark.parametrize("job", SEARCH_JOBS)
