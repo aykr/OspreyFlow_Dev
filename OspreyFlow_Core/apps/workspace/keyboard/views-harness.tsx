@@ -1,7 +1,8 @@
 // Case views keyboard harness (ADR-144; the owner's ruling of 8 November 2026, Amendment 2): the Cases
 // drawer's *Views in this case* and the cases list with their views, the *Save as a view* form, and
-// the strip over an opened saved view. `?show=way-back` (ADR-145 Amendment 17): the case line's *Saved views (n)*, a
-// saved view opened from its panel into the strip as `App.tsx`'s `openLens` does, and *Back to the whole case*. The Conduit is a stand-in kept here, so that the axe scan of every
+// the case line over an opened saved view (ADR-145 Amendment 19: no strip). `?show=way-back`: the case line's *Saved
+// views (n)*, a saved view opened from its panel as `App.tsx`'s `openLens` does, said on the line, and *Back to the
+// whole case*. `?details=open` (with `show=lens` or `show=merged`) opens the line's *Details*; `&notes=open` its notes. The Conduit is a stand-in kept here, so that the axe scan of every
 // harness (`a11y/every-harness.spec.ts`) sees the panel filled: it answers each reader as the store
 // does, Alice's private view to Alice alone (`?as=bob` reads as another member of the case). What was
 // sent and what was opened are on `window.__VIEWS__`.
@@ -12,8 +13,9 @@ import "../src/design/tokens.css";
 import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { CaseList } from "../src/investigation/CaseList";
+import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { SaveViewForm } from "../src/views/SaveViewForm";
-import { ViewLensBanner, WholeCaseStrip } from "../src/views/ViewLensBanner";
+import type { CaseState } from "../src/views/SavedViewOnTheLine";
 import { ContextBanner, focusSavedViewsButton } from "../src/shell/ContextBanner";
 import { ViewsPanel } from "../src/views/ViewsPanel";
 import { applyHarnessBrand } from "./brandHarness";
@@ -96,23 +98,43 @@ if (params.get("asking") === "delete") {
   requestAnimationFrame(ask);
 }
 
-/** The way back to the whole case (`?show=way-back`, ADR-145 Amendment 17), as `App.tsx` draws it: the case line with
- * *Saved views (n)* and, while one is open, "› Saved view: ‹name›"; the saved views panel it opens (the real one); and
- * the strip over the canvas, *Back to the whole case* first, or "You are looking at the whole case." with none open.
- * Opening a saved view takes focus to the strip; the back link puts it on *Saved views* again. */
+/** The way back to the whole case (`?show=way-back`, ADR-145 Amendment 19), as `App.tsx` draws it: the case line with
+ * *Saved views (n)* and what is open, "Whole case" or "Saved view: ‹name›" with its tag, *Details* and *Back to the
+ * whole case*; the saved views panel it opens (the real one). Opening a saved view takes focus to its name on the line;
+ * the back link puts it on *Saved views* again. */
 function WayBack() {
   const [lens, setLens] = useState<{ id: string; name: string; shared: boolean } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   return (
-    <>
+    // The window's width, as App's line has it, so the line folds as it does there (Amendment 19 decision 4).
+    <div style={{ width: "calc(100vw - 2 * var(--sp-12))", display: "grid", gap: "var(--sp-16)" }}>
       <ContextBanner
         place="glass"
-        caseSwitcher={<span className="value">Operation Ledger (synthetic demo)</span>}
+        // The real switcher, as `App.tsx` passes it, so the line's fold reaches it (Amendment 19 decision 4, step 4).
+        caseSwitcher={<CaseSwitcher apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" currentId="c1" onOpen={() => undefined} onBrowse={() => undefined} />}
+        datasets={["Ledger payments (synthetic)"]}
+        crossLink={{ label: "Open this case's data in the Ingest Studio ↗", shortLabel: "Open in the Ingest Studio ↗", onFollow: () => undefined }}
         onViews={() => setPanelOpen((open) => !open)}
         viewsOpen={panelOpen}
         savedViews={views.c1!.length}
-        openView={lens?.name ?? null}
+        caseState={
+          lens
+            ? {
+                id: lens.id,
+                name: lens.name,
+                shared: lens.shared,
+                missing: 0,
+                onBack: () => {
+                  window.__VIEWS__!.back = true;
+                  setLens(null);
+                  requestAnimationFrame(() => focusSavedViewsButton());
+                },
+              }
+            : "whole"
+        }
       />
+      {/* What the line sits over: its top must not move when a saved view opens or closes (Amendment 19 decision 1). */}
+      <main aria-label="Canvas stand-in" style={{ height: 240, background: "var(--surface-sunken)" }} />
       {panelOpen && (
         <ViewsPanel
           apiBaseUrl="http://keyboard-test.invalid"
@@ -127,24 +149,31 @@ function WayBack() {
           }}
         />
       )}
-      {lens ? (
-        <ViewLensBanner
-          key={lens.id}
-          name={lens.name}
-          shared={lens.shared}
-          missing={0}
-          onBack={() => {
-            window.__VIEWS__!.back = true;
-            setLens(null);
-            requestAnimationFrame(() => focusSavedViewsButton());
-          }}
-        />
-      ) : (
-        <WholeCaseStrip />
-      )}
-    </>
+    </div>
   );
 }
+
+/** A saved view open, said on the case line as `App.tsx` draws it, over a stand-in canvas so *Details* has somewhere to
+ * open over. `?details=open` presses *Details*; `&notes=open` then its notes (for the axe scan of the open list). */
+function OnTheLine({ state }: { state: CaseState }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", minHeight: 480 }}>
+      <ContextBanner place="glass" caseSwitcher={<span className="value">Operation Ledger (synthetic demo)</span>} onViews={() => undefined} savedViews={2} caseState={state} />
+      <main aria-label="Canvas stand-in" style={{ flex: 1, background: "var(--surface-sunken)" }} />
+    </div>
+  );
+}
+const pressWhenDrawn = (name: string, then?: () => void) => {
+  const go = () => {
+    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.replace("▾", "").trim() === name);
+    if (!button) return void requestAnimationFrame(go);
+    button.click();
+    then?.();
+  };
+  requestAnimationFrame(go);
+};
+if (params.get("details") === "open" || params.get("notes") === "open")
+  pressWhenDrawn("Details", () => (params.get("notes") === "open" ? pressWhenDrawn("Notes from the drawing (2)") : undefined));
 
 const listed = (
   <>
@@ -168,23 +197,19 @@ const listed = (
 createRoot(container).render(
   <div style={{ display: "grid", gap: "var(--sp-16)", padding: "var(--sp-12)", background: "var(--surface-panel)" }}>
     {show === "way-back" && <WayBack />}
-    {show === "lens" && (
-      <ViewLensBanner name="Payments in March" shared missing={2} onBack={() => (window.__VIEWS__!.back = true)} />
-    )}
-    {/* ADR-143 Amendment 2 decision 7 (L3.9): a merged drawing's view, with its notes. */}
+    {show === "lens" && <OnTheLine state={{ id: "v-shared", name: "Payments in March", shared: true, missing: 2, onBack: () => (window.__VIEWS__!.back = true) }} />}
+    {/* ADR-143 Amendment 2 decision 7 (L3.9): a merged drawing's view, with its notes in the line's *Details*. */}
     {show === "merged" && (
-      <ViewLensBanner
-        notesOpen={params.get("notes") === "open"}
-        name="Night visits"
-        shared={false}
-        missing={0}
-        onBack={() => (window.__VIEWS__!.back = true)}
-        annotations={[
-          { element_id: "e-1", kind: "node", label: "Mercer", marking: "OFFICIAL", grading: "B21", source_note: "Wing officer report, 4 Nov",
-            words: "Drawn by A. Field, merged as load promotion-night-1", merged: true },
-          { element_id: "e-2", kind: "node", label: "Night boat", marking: "OFFICIAL", grading: "C32", source_note: "Harbour log",
-            words: "Drawn by A. Field, not merged: it stays in the drawing, read-only", merged: false },
-        ]}  // prettier-ignore
+      <OnTheLine
+        state={{
+          id: "v-night", name: "Night visits", shared: false, missing: 0, onBack: () => (window.__VIEWS__!.back = true),
+          annotations: [
+            { element_id: "e-1", kind: "node", label: "Mercer", marking: "OFFICIAL", grading: "B21", source_note: "Wing officer report, 4 Nov",
+              words: "Drawn by A. Field, merged as load promotion-night-1", merged: true },
+            { element_id: "e-2", kind: "node", label: "Night boat", marking: "OFFICIAL", grading: "C32", source_note: "Harbour log",
+              words: "Drawn by A. Field, not merged: it stays in the drawing, read-only", merged: false },
+          ],
+        }}  // prettier-ignore
       />
     )}
     {show === "form" && (

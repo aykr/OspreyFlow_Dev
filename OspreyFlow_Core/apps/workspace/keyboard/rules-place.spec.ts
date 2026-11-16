@@ -70,17 +70,23 @@ test("an address the reader may not see says so as for a missing alert, and Back
 test("the evidence is opened, and Back to the alert returns to it, still open, by keyboard", async ({ page }) => {
   await page.goto("/keyboard/rules-place-harness.html?address=a1");
   await press(page, page.getByRole("button", { name: "Open the evidence" }));
-  const banner = page.getByRole("region", { name: "Saved view", exact: true });
-  await expect(banner.getByText("Opened from an alert")).toBeVisible();
+  // ADR-145 Amendment 19: the saved view is said on the case line, focus on its name; *Details* holds where it came
+  // from, and the way back to the alert is on the line itself, before *Back to the whole case*.
+  const caseLine = page.getByRole("region", { name: "You are in the Glass" });
+  const named = caseLine.getByText("Saved view: From alert: Structuring", { exact: true });
+  await expect(named).toBeVisible();
   expect(await page.evaluate(() => window.__RULES__?.evidence)).toEqual([{ alertId: "a1", nodeIds: ["n1"] }]);
   registerCovered(REGISTRY, "open-the-evidence-by-keyboard");
-  // Focus lands on the strip when the saved view opens (ADR-145 Amendment 17); Back to the whole case is its first
-  // item, then the way back to the alert.
-  await expect(banner).toBeFocused();
+  await expect(named).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(banner.getByRole("button", { name: "Back to the whole case" })).toBeFocused();
+  const details = caseLine.getByRole("button", { name: "Details", exact: true });
+  await expect(details).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("region", { name: "Saved view details" })).toContainText("From alert Structuring");
+  await page.keyboard.press("Escape");
+  await expect(details).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(banner.getByRole("button", { name: "← Back to the alert" })).toBeFocused();
+  await expect(caseLine.getByRole("button", { name: "← Back to the alert" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/alerts\/a1(\?|$)/);
   await expect(page.getByRole("button", { name: /Open alert:.*Structuring/ })).toHaveAttribute("aria-pressed", "true");

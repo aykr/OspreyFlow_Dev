@@ -119,7 +119,7 @@ import { caseIsOpenable, listCases, openCase, openCaseView } from "./investigati
 import { caseForDataset } from "./ingest/studio/datasets";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
-import { ViewLensBanner, WholeCaseStrip } from "./views/ViewLensBanner";
+import type { CaseState } from "./views/SavedViewOnTheLine";
 import { ViewsPanel } from "./views/ViewsPanel";
 import { type CaseView, type CaseViewOpened, listViews, openView, saveView } from "./views/viewsApi";
 import { bringFactIntoView } from "./questions/graphFacts";
@@ -1890,6 +1890,34 @@ export function App() {
               },
       })),
   );
+  // ADR-145 Amendment 19 decisions 1–2: what the case line says is on the canvas. The saved view is the Graph's (the
+  // Map and the Matrix show the case); a view with no canvas says nothing.
+  const caseState: CaseState | null =
+    app !== "glass" || !investigationId
+      ? null
+      : view === "graph" && lens
+        ? {
+            id: lens.opened.view.id,
+            name: lens.opened.view.name,
+            shared: lens.opened.view.shared ?? false,
+            missing: lens.opened.missing,
+            annotations: lens.opened.annotations ?? [],
+            onBack: backToTheWholeCase,
+            from: lensFromAlert
+              ? {
+                  label: `From alert ${lensFromAlert.title}`,
+                  backLabel: "← Back to the alert",
+                  onBack: () => {
+                    const { alertId } = lensFromAlert;
+                    closeLens();
+                    navigate(alertPath(alertId));
+                  },
+                }
+              : undefined,
+          }
+        : view === "graph" || view === "map"
+          ? "whole"
+          : null;
   const showsWorkingSetTools =
     // Rules and Monitoring is a place of its own (ADR-146 decision 2), not a view over the working set.
     showsInspector(rights) && !["ingest", "alerts", "dossier", "reports", "dashboards"].includes(view);
@@ -2000,7 +2028,7 @@ export function App() {
         onViews={app === "glass" ? () => setCasesOpen((open) => (open ? false : "views")) : undefined}
         viewsOpen={casesOpen !== false}
         savedViews={savedViewCount && savedViewCount.caseId === investigationId ? savedViewCount.count : null}
-        openView={app === "glass" && view === "graph" && lens ? lens.opened.view.name : null}
+        caseState={caseState}
         caseSwitcher={
           <CaseSwitcher
             apiBaseUrl={API_BASE_URL}
@@ -2236,30 +2264,7 @@ export function App() {
         )}
         {view !== "ingest" && view !== "dossier" && view !== "alerts" && view !== "strength" && view !== "ownership" && view !== "reports" && view !== "dashboards" && view !== "boards" && (
           <div style={{ flex: 1, position: "relative" }}>
-            {view === "graph" && lens && (
-              <ViewLensBanner
-                name={lens.opened.view.name}
-                shared={lens.opened.view.shared ?? false}
-                missing={lens.opened.missing}
-                annotations={lens.opened.annotations ?? []}
-                onBack={backToTheWholeCase}
-                from={
-                  lensFromAlert
-                    ? {
-                        label: "Opened from an alert",
-                        backLabel: "← Back to the alert",
-                        onBack: () => {
-                          const { alertId } = lensFromAlert;
-                          closeLens();
-                          navigate(alertPath(alertId));
-                        },
-                      }
-                    : undefined
-                }
-              />
-            )}
-            {/* ADR-145 Amendment 17: with no saved view open, the strip says the whole case is on screen. */}
-            {view === "graph" && !lens && investigationId && <WholeCaseStrip />}
+            {/* ADR-145 Amendment 19: no strip over the canvas; what is open is said on the case line (`caseState`). */}
             {view === "graph" && viewProblem && (
               <p role="alert" className="view-lens-banner">
                 {viewProblem}

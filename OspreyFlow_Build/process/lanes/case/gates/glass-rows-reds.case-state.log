@@ -1,0 +1,948 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace
+
+ ❯ src/shell/caseLine.test.tsx (16 tests | 10 failed) 120ms
+   ✓ the case line's slim form (ospreyflow) (3)
+     ✓ keeps the case and Saved views, names the region as before, and drops You are in and reads from sight 70ms
+     ✓ draws the end slot last on the line, in both forms 8ms
+     ✓ is the full line without slim: You are in in sight and reads drawn 2ms
+   ✓ the case line's slim form (govuk) (3)
+     ✓ keeps the case and Saved views, names the region as before, and drops You are in and reads from sight 4ms
+     ✓ draws the end slot last on the line, in both forms 5ms
+     ✓ is the full line without slim: You are in in sight and reads drawn 2ms
+   ❯ the case line's state (ospreyflow) (5)
+     × ends Whole case with no saved view open, and names no saved view 5ms
+     × names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name 3ms
+     × Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details 3ms
+     × offers no notes on a view that has none, and no count when nothing was left out 5ms
+     × keeps the state on the slim line, Back to the whole case with it 2ms
+   ❯ the case line's state (govuk) (5)
+     × ends Whole case with no saved view open, and names no saved view 2ms
+     × names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name 2ms
+     × Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details 2ms
+     × offers no notes on a view that has none, and no count when nothing was left out 4ms
+     × keeps the state on the slim line, Back to the whole case with it 2ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 10 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > ends Whole case with no saved view open, and names no saved view
+TestingLibraryElementError: Unable to find an element with the text: Whole case. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"context-banner"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m>[39m
+    [0mYou are in the Glass[0m
+  [36m</h2>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__label"[39m
+  [36m>[39m
+    [0mCase[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mCase: Kestrel[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mSaved views (7)[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33mclass[39m=[32m"context-banner__fit"[39m
+    [33mtitle[39m=[32m"reads Prison intel"[39m
+  [36m>[39m
+    [0mreads Prison intel[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mOpen this case's data in the Ingest Studio ↗[0m
+  [36m</button>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:73:27
+     71|     render(line({ caseState: "whole" }));
+     72|     const region = screen.getByRole("region", { name: "You are in the …
+     73|     expect(within(region).getByText("Whole case")).toBeTruthy();
+       |                           ^
+     74|     expect(region.textContent).not.toContain("Saved view:");
+     75|     expect(within(region).queryByRole("button", { name: "Back to the w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name
+TestingLibraryElementError: Unable to find an element with the text: /^Saved view:/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"context-banner"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m>[39m
+    [0mYou are in the Glass[0m
+  [36m</h2>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__label"[39m
+  [36m>[39m
+    [0mCase[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mCase: Kestrel[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mSaved views (7)[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33mclass[39m=[32m"context-banner__fit"[39m
+    [33mtitle[39m=[32m"reads Prison intel"[39m
+  [36m>[39m
+    [0mreads Prison intel[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mOpen this case's data in the Ingest Studio ↗[0m
+  [36m</button>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:83:34
+     81|     render(line({ caseState: { id: "v1", name: "Vance network", shared…
+     82|     const region = screen.getByRole("region", { name: "You are in the …
+     83|     const named = within(region).getByText(/^Saved view:/);
+       |                                  ^
+     84|     expect(named.textContent).toBe("Saved view: Vance network");
+     85|     expect(document.activeElement).toBe(named);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details
+TestingLibraryElementError: Unable to find an element with the text: Private. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"context-banner"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m>[39m
+    [0mYou are in the Glass[0m
+  [36m</h2>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__label"[39m
+  [36m>[39m
+    [0mCase[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mCase: Kestrel[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mSaved views (7)[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33mclass[39m=[32m"context-banner__fit"[39m
+    [33mtitle[39m=[32m"reads Prison intel"[39m
+  [36m>[39m
+    [0mreads Prison intel[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mOpen this case's data in the Ingest Studio ↗[0m
+  [36m</button>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:108:27
+    106|     }));  // prettier-ignore
+    107|     const region = screen.getByRole("region", { name: "You are in the …
+    108|     expect(within(region).getByText("Private")).toBeTruthy();
+       |                           ^
+    109|     // The way back to the alert stays on the line itself.
+    110|     fireEvent.click(within(region).getByRole("button", { name: "← Back…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > offers no notes on a view that has none, and no count when nothing was left out
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Details"
+
+Here are the accessible roles:
+
+  region:
+
+  Name "You are in the Glass":
+  [36m<div[39m
+    [33maria-labelledby[39m=[32m"context-banner-title"[39m
+    [33mclass[39m=[32m"context-banner"[39m
+    [33mrole[39m=[32m"region"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "You are in the Glass":
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "Case: Kestrel":
+  [36m<button[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Saved views (7)":
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Open this case's data in the Ingest Studio ↗":
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33maria-labelledby[39m=[32m"context-banner-title"[39m
+      [33mclass[39m=[32m"context-banner"[39m
+      [33mrole[39m=[32m"region"[39m
+    [36m>[39m
+      [36m<h2[39m
+        [33mclass[39m=[32m"context-banner__place"[39m
+        [33mid[39m=[32m"context-banner-title"[39m
+      [36m>[39m
+        [0mYou are in the Glass[0m
+      [36m</h2>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mclass[39m=[32m"context-banner__sep"[39m
+      [36m>[39m
+        [0m·[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mclass[39m=[32m"context-banner__label"[39m
+      [36m>[39m
+        [0mCase[0m
+      [36m</span>[39m
+      [36m<button[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0mCase: Kestrel[0m
+      [36m</button>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mclass[39m=[32m"context-banner__sep"[39m
+      [36m>[39m
+        [0m·[0m
+      [36m</span>[39m
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-haspopup[39m=[32m"dialog"[39m
+        [33mclass[39m=[32m"context-banner__section"[39m
+        [33mdata-saved-views-button[39m=[32m""[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0mSaved views (7)[0m
+      [36m</button>[39m
+      [36m<span[39m
+        [33maria-hidden[39m=[32m"true"[39m
+        [33mclass[39m=[32m"context-banner__sep"[39m
+      [36m>[39m
+        [0m·[0m
+      [36m</span>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"context-banner__fit"[39m
+        [33mtitle[39m=[32m"reads Prison intel"[39m
+      [36m>[39m
+        [0mreads Prison intel[0m
+      [36m</span>[39m
+      [36m<button[39m
+        [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [0mOpen this case's data in the Ingest Studio ↗[0m
+      [36m</button>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:137:28
+    135|     applyBrand(brand);
+    136|     render(line({ caseState: { id: "v2", name: "Wing B", shared: true,…
+    137|     fireEvent.click(screen.getByRole("button", { name: "Details" }));
+       |                            ^
+    138|     const panel = screen.getByRole("region", { name: "Saved view detai…
+    139|     expect(within(panel).queryByRole("button", { name: /Notes from the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > keeps the state on the slim line, Back to the whole case with it
+TestingLibraryElementError: Unable to find an element with the text: /^Saved view:/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"context-banner"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<h2[39m
+    [33mclass[39m=[32m"context-banner__place visually-hidden"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m>[39m
+    [0mYou are in the Glass[0m
+  [36m</h2>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__label"[39m
+  [36m>[39m
+    [0mCase[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mCase: Kestrel[0m
+  [36m</button>[39m
+  [36m<span[39m
+    [33maria-hidden[39m=[32m"true"[39m
+    [33mclass[39m=[32m"context-banner__sep"[39m
+  [36m>[39m
+    [0m·[0m
+  [36m</span>[39m
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mSaved views (7)[0m
+  [36m</button>[39m
+  [36m<button[39m
+    [33mclass[39m=[32m"btn btn--ghost context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m>[39m
+    [0mOpen in the Ingest Studio ↗[0m
+  [36m</button>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:147:27
+    145|     render(line({ slim: true, caseState: { id: "v1", name: "Vance netw…
+    146|     const region = screen.getByRole("region", { name: "You are in the …
+    147|     expect(within(region).getByText(/^Saved view:/).textContent).toBe(…
+       |                           ^
+    148|     expect(within(region).getByRole("button", { name: "Back to the who…
+    149|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (govuk) > ends Whole case with no saved view open, and names no saved view
+TestingLibraryElementError: Unable to find an element with the text: Whole case. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"govuk-notification-banner context-banner--govuk context-banner--folded"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"govuk-notification-banner__content"[39m
+  [36m>[39m
+    [36m<h2[39m
+      [33mclass[39m=[32m"govuk-notification-banner__title context-banner__place"[39m
+      [33mid[39m=[32m"context-banner-title"[39m
+    [36m>[39m
+      [0mYou are in the Glass[0m
+    [36m</h2>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__label"[39m
+    [36m>[39m
+      [0mCase[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mCase: Kestrel[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-haspopup[39m=[32m"dialog"[39m
+      [33mclass[39m=[32m"govuk-link context-banner__section"[39m
+      [33mdata-saved-views-button[39m=[32m""[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mSaved views (7)[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"context-banner__fit"[39m
+      [33mtitle[39m=[32m"reads Prison intel"[39m
+    [36m>[39m
+      [0mreads Prison intel[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"govuk-link context-banner__cross"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mOpen this case's data in the Ingest Studio ↗[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:73:27
+     71|     render(line({ caseState: "whole" }));
+     72|     const region = screen.getByRole("region", { name: "You are in the …
+     73|     expect(within(region).getByText("Whole case")).toBeTruthy();
+       |                           ^
+     74|     expect(region.textContent).not.toContain("Saved view:");
+     75|     expect(within(region).queryByRole("button", { name: "Back to the w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (govuk) > names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name
+TestingLibraryElementError: Unable to find an element with the text: /^Saved view:/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"govuk-notification-banner context-banner--govuk context-banner--folded"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"govuk-notification-banner__content"[39m
+  [36m>[39m
+    [36m<h2[39m
+      [33mclass[39m=[32m"govuk-notification-banner__title context-banner__place"[39m
+      [33mid[39m=[32m"context-banner-title"[39m
+    [36m>[39m
+      [0mYou are in the Glass[0m
+    [36m</h2>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__label"[39m
+    [36m>[39m
+      [0mCase[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mCase: Kestrel[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-haspopup[39m=[32m"dialog"[39m
+      [33mclass[39m=[32m"govuk-link context-banner__section"[39m
+      [33mdata-saved-views-button[39m=[32m""[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mSaved views (7)[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"context-banner__fit"[39m
+      [33mtitle[39m=[32m"reads Prison intel"[39m
+    [36m>[39m
+      [0mreads Prison intel[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"govuk-link context-banner__cross"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mOpen this case's data in the Ingest Studio ↗[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:83:34
+     81|     render(line({ caseState: { id: "v1", name: "Vance network", shared…
+     82|     const region = screen.getByRole("region", { name: "You are in the …
+     83|     const named = within(region).getByText(/^Saved view:/);
+       |                                  ^
+     84|     expect(named.textContent).toBe("Saved view: Vance network");
+     85|     expect(document.activeElement).toBe(named);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (govuk) > Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details
+TestingLibraryElementError: Unable to find an element with the text: Private. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"govuk-notification-banner context-banner--govuk context-banner--folded"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"govuk-notification-banner__content"[39m
+  [36m>[39m
+    [36m<h2[39m
+      [33mclass[39m=[32m"govuk-notification-banner__title context-banner__place"[39m
+      [33mid[39m=[32m"context-banner-title"[39m
+    [36m>[39m
+      [0mYou are in the Glass[0m
+    [36m</h2>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__label"[39m
+    [36m>[39m
+      [0mCase[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mCase: Kestrel[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-haspopup[39m=[32m"dialog"[39m
+      [33mclass[39m=[32m"govuk-link context-banner__section"[39m
+      [33mdata-saved-views-button[39m=[32m""[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mSaved views (7)[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33mclass[39m=[32m"context-banner__fit"[39m
+      [33mtitle[39m=[32m"reads Prison intel"[39m
+    [36m>[39m
+      [0mreads Prison intel[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"govuk-link context-banner__cross"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mOpen this case's data in the Ingest Studio ↗[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:108:27
+    106|     }));  // prettier-ignore
+    107|     const region = screen.getByRole("region", { name: "You are in the …
+    108|     expect(within(region).getByText("Private")).toBeTruthy();
+       |                           ^
+    109|     // The way back to the alert stays on the line itself.
+    110|     fireEvent.click(within(region).getByRole("button", { name: "← Back…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (govuk) > offers no notes on a view that has none, and no count when nothing was left out
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Details"
+
+Here are the accessible roles:
+
+  region:
+
+  Name "You are in the Glass":
+  [36m<div[39m
+    [33maria-labelledby[39m=[32m"context-banner-title"[39m
+    [33mclass[39m=[32m"govuk-notification-banner context-banner--govuk context-banner--folded"[39m
+    [33mrole[39m=[32m"region"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  heading:
+
+  Name "You are in the Glass":
+  [36m<h2[39m
+    [33mclass[39m=[32m"govuk-notification-banner__title context-banner__place"[39m
+    [33mid[39m=[32m"context-banner-title"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  button:
+
+  Name "Case: Kestrel":
+  [36m<button[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Saved views (7)":
+  [36m<button[39m
+    [33maria-expanded[39m=[32m"false"[39m
+    [33maria-haspopup[39m=[32m"dialog"[39m
+    [33mclass[39m=[32m"govuk-link context-banner__section"[39m
+    [33mdata-saved-views-button[39m=[32m""[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  Name "Open this case's data in the Ingest Studio ↗":
+  [36m<button[39m
+    [33mclass[39m=[32m"govuk-link context-banner__cross"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33maria-labelledby[39m=[32m"context-banner-title"[39m
+      [33mclass[39m=[32m"govuk-notification-banner context-banner--govuk context-banner--folded"[39m
+      [33mrole[39m=[32m"region"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"govuk-notification-banner__content"[39m
+      [36m>[39m
+        [36m<h2[39m
+          [33mclass[39m=[32m"govuk-notification-banner__title context-banner__place"[39m
+          [33mid[39m=[32m"context-banner-title"[39m
+        [36m>[39m
+          [0mYou are in the Glass[0m
+        [36m</h2>[39m
+        [36m<span[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"context-banner__sep"[39m
+        [36m>[39m
+          [0m·[0m
+        [36m</span>[39m
+        [36m<span[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"context-banner__label"[39m
+        [36m>[39m
+          [0mCase[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mCase: Kestrel[0m
+        [36m</button>[39m
+        [36m<span[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"context-banner__sep"[39m
+        [36m>[39m
+          [0m·[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33maria-expanded[39m=[32m"false"[39m
+          [33maria-haspopup[39m=[32m"dialog"[39m
+          [33mclass[39m=[32m"govuk-link context-banner__section"[39m
+          [33mdata-saved-views-button[39m=[32m""[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mSaved views (7)[0m
+        [36m</button>[39m
+        [36m<span[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mclass[39m=[32m"context-banner__sep"[39m
+        [36m>[39m
+          [0m·[0m
+        [36m</span>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"context-banner__fit"[39m
+          [33mtitle[39m=[32m"reads Prison intel"[39m
+        [36m>[39m
+          [0mreads Prison intel[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"govuk-link context-banner__cross"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [0mOpen this case's data in the Ingest Studio ↗[0m
+        [36m</button>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:137:28
+    135|     applyBrand(brand);
+    136|     render(line({ caseState: { id: "v2", name: "Wing B", shared: true,…
+    137|     fireEvent.click(screen.getByRole("button", { name: "Details" }));
+       |                            ^
+    138|     const panel = screen.getByRole("region", { name: "Saved view detai…
+    139|     expect(within(panel).queryByRole("button", { name: /Notes from the…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/10]⎯
+
+ FAIL  src/shell/caseLine.test.tsx > the case line's state (govuk) > keeps the state on the slim line, Back to the whole case with it
+TestingLibraryElementError: Unable to find an element with the text: /^Saved view:/. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<div[39m
+  [33maria-labelledby[39m=[32m"context-banner-title"[39m
+  [33mclass[39m=[32m"govuk-notification-banner context-banner--govuk context-banner--folded"[39m
+  [33mrole[39m=[32m"region"[39m
+[36m>[39m
+  [36m<div[39m
+    [33mclass[39m=[32m"govuk-notification-banner__content"[39m
+  [36m>[39m
+    [36m<h2[39m
+      [33mclass[39m=[32m"govuk-notification-banner__title context-banner__place visually-hidden"[39m
+      [33mid[39m=[32m"context-banner-title"[39m
+    [36m>[39m
+      [0mYou are in the Glass[0m
+    [36m</h2>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__label"[39m
+    [36m>[39m
+      [0mCase[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mCase: Kestrel[0m
+    [36m</button>[39m
+    [36m<span[39m
+      [33maria-hidden[39m=[32m"true"[39m
+      [33mclass[39m=[32m"context-banner__sep"[39m
+    [36m>[39m
+      [0m·[0m
+    [36m</span>[39m
+    [36m<button[39m
+      [33maria-expanded[39m=[32m"false"[39m
+      [33maria-haspopup[39m=[32m"dialog"[39m
+      [33mclass[39m=[32m"govuk-link context-banner__section"[39m
+      [33mdata-saved-views-button[39m=[32m""[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mSaved views (7)[0m
+    [36m</button>[39m
+    [36m<button[39m
+      [33mclass[39m=[32m"govuk-link context-banner__cross"[39m
+      [33mtype[39m=[32m"button"[39m
+    [36m>[39m
+      [0mOpen in the Ingest Studio ↗[0m
+    [36m</button>[39m
+  [36m</div>[39m
+[36m</div>[39m
+ ❯ Object.getElementError ../../node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ ../../node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ src/shell/caseLine.test.tsx:147:27
+    145|     render(line({ slim: true, caseState: { id: "v1", name: "Vance netw…
+    146|     const region = screen.getByRole("region", { name: "You are in the …
+    147|     expect(within(region).getByText(/^Saved view:/).textContent).toBe(…
+       |                           ^
+    148|     expect(within(region).getByRole("button", { name: "Back to the who…
+    149|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  10 failed | 6 passed (16)
+   Start at  06:48:59
+   Duration  754ms (environment 64%, tests 18%, import 12%, transform 6%)
+
+
+Slowest 16 tests:
+    70 ms  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > keeps the case and Saved views, names the region as before, and drops You are in and reads from sight
+     8 ms  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > draws the end slot last on the line, in both forms
+     5 ms  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > offers no notes on a view that has none, and no count when nothing was left out
+     5 ms  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > draws the end slot last on the line, in both forms
+     5 ms  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > ends Whole case with no saved view open, and names no saved view
+     4 ms  src/shell/caseLine.test.tsx > the case line's state (govuk) > offers no notes on a view that has none, and no count when nothing was left out
+     4 ms  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > keeps the case and Saved views, names the region as before, and drops You are in and reads from sight
+     3 ms  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details
+     3 ms  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name
+     2 ms  src/shell/caseLine.test.tsx > the case line's slim form (ospreyflow) > is the full line without slim: You are in in sight and reads drawn
+     2 ms  src/shell/caseLine.test.tsx > the case line's slim form (govuk) > is the full line without slim: You are in in sight and reads drawn
+     2 ms  src/shell/caseLine.test.tsx > the case line's state (govuk) > Details opens over the canvas with the count, the case untouched, the way it came and the drawing's notes; Esc closes it to Details
+     2 ms  src/shell/caseLine.test.tsx > the case line's state (govuk) > ends Whole case with no saved view open, and names no saved view
+     2 ms  src/shell/caseLine.test.tsx > the case line's state (govuk) > names the open saved view with its tag, offers Details and Back to the whole case, and takes focus to its name
+     2 ms  src/shell/caseLine.test.tsx > the case line's state (govuk) > keeps the state on the slim line, Back to the whole case with it
+     2 ms  src/shell/caseLine.test.tsx > the case line's state (ospreyflow) > keeps the state on the slim line, Back to the whole case with it

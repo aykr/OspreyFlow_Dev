@@ -6,8 +6,8 @@
 // (its reload into that case is recorded on `window.__RULES__.went`, not made), and any other id is
 // answered as missing, as the Conduit answers an alert the reader may not see. `?brand=govuk` draws
 // it in the GOV.UK frame. *Open the evidence* (ADR-146 decision 6) is recorded on
-// `window.__RULES__.evidence` and opens the real lens banner (`views/ViewLensBanner.tsx`) as `App.tsx`
-// draws it over the case, with *← Back to the alert*; `App.test.tsx` proves App's own wiring.
+// `window.__RULES__.evidence` and opens the saved view as `App.tsx` says it, on the real case line
+// (`shell/ContextBanner.tsx`, ADR-145 Amendment 19), with *← Back to the alert*; `App.test.tsx` proves App's own wiring.
 import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
 
@@ -19,7 +19,7 @@ import { PLAIN_APPEARANCE } from "../src/brand/brand";
 import { openAlertInItsCase, useAlertAtAddress } from "../src/alerts/address";
 import { RulesPlace } from "../src/alerts/RulesPlace";
 import { alertPath, navigate, useAddress } from "../src/shell/router";
-import { ViewLensBanner } from "../src/views/ViewLensBanner";
+import { ContextBanner } from "../src/shell/ContextBanner";
 
 declare global {
   interface Window {
@@ -85,17 +85,24 @@ function Harness() {
   }, [state, alertId]);
   if (lensOf) {
     return (
-      <ViewLensBanner
-        name="From alert: Structuring"
-        shared={false}
-        missing={0}
-        onBack={() => setLensOf(null)}
-        from={{
-          label: "Opened from an alert",
-          backLabel: "← Back to the alert",
-          onBack: () => {
-            setLensOf(null);
-            navigate(alertPath(lensOf));
+      <ContextBanner
+        place="glass"
+        caseSwitcher={<span className="value">Harbour (synthetic demo)</span>}
+        onViews={() => undefined}
+        savedViews={1}
+        caseState={{
+          id: `evidence-${lensOf}`,
+          name: "From alert: Structuring",
+          shared: false,
+          missing: 0,
+          onBack: () => setLensOf(null),
+          from: {
+            label: "From alert Structuring",
+            backLabel: "← Back to the alert",
+            onBack: () => {
+              setLensOf(null);
+              navigate(alertPath(lensOf));
+            },
           },
         }}
       />

@@ -15,13 +15,13 @@
 // (`ingest/IngestStudio.tsx`, Lane 1's) — the banner would need a hook there to name it — and that
 // dataset's "feeds n cases" (no route gives a dataset's cases as the reader may see them, and an
 // unfiltered count is refused by rule 7; `02_GLASS_FRONTEND.md` §2.0a).
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
 import { currentBrand } from "../brand/brand";
+import { CaseStateItems, SavedViewDetails, type CaseState } from "../views/SavedViewOnTheLine";
 import { caseDatasets, caseLabel, listCases } from "../investigation/cases";
 import { PLACE_NAME, type PlaceId } from "./places";
-import { barWraps } from "./TopBar";
 import "./places.css";
 
 export interface CrossLink {
@@ -61,8 +61,10 @@ export interface ContextBannerProps {
   viewsOpen?: boolean;
   /** How many saved views of the case this reader may see, for *Saved views (n)*; `null` while read or refused. */
   savedViews?: number | null;
-  /** The saved view open over the canvas, named after the case as "› Saved view: ‹name›" (Amendment 17); none, nothing. */
-  openView?: string | null;
+  /** What is on the canvas (ADR-145 Amendment 19 decisions 1–2, replacing Amendment 17's strip and its "› Saved view"):
+   * "Whole case", or the saved view open with its tag, *Details* and *Back to the whole case*; none, nothing (a place
+   * or a view with no canvas). */
+  caseState?: CaseState | null;
   /** ADR-145 Amendment 19 decision 6: the slim line, while the view's toolbar is hidden. "You are in …" is kept for a
    * screen reader only (it still names the region), "reads …" is not drawn, and the cross-link keeps its short words. */
   slim?: boolean;
@@ -120,22 +122,38 @@ export function useCaseContext(
   return read && read.id === investigationId ? read : { name: null, datasets: null };
 }
 
-export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, openView, slim = false, end }: ContextBannerProps) {
+/** `TopBar`'s `barWraps` over the line's own items: whether any of them starts below the first row. *Details*, drawn over
+ * the canvas (`data-off-line`), is not one of them. */
+function lineWraps(line: HTMLElement): boolean {
+  const boxes = [...line.children]
+    .filter((child) => !child.hasAttribute("data-off-line"))
+    .map((child) => child.getBoundingClientRect())
+    .filter((box) => box.width > 0 && box.height > 0);
+  if (boxes.length < 2) return false;
+  const firstRowBottom = Math.min(...boxes.map((box) => box.bottom));
+  return boxes.some((box) => box.top >= firstRowBottom - 0.5);
+}
+
+export function ContextBanner({ place, sections = [], caseSwitcher, datasets, note, crossLink, onViews, viewsOpen = false, savedViews, caseState = null, slim = false, end }: ContextBannerProps) {
   const govuk = currentBrand() === "govuk";
   // The line stays one line where the top bar does (the owner's word and ruling, 15 November 2026), measured as the top
-  // bar folds (`TopBar`'s `barWraps`), in steps: 0, everything at its full words; 1, the cross-link's short words; 2, the
-  // open saved view's name and "reads …" ellipsized (their whole words kept in the page and in their title), nothing
-  // else; 3, if even that cannot hold one line, whole items wrap, the cross-link still short. Again from 0 whenever the
-  // line's width changes or a web font arrives.
+  // bar folds (`lineWraps`, `TopBar`'s rule over the line's own items), in steps (ADR-145 Amendment 19 decision 4): 0,
+  // everything at its full words; 1, the cross-link's short words; 2, "reads …" ellipsized (its whole words in its
+  // title); 3, "reads …" out of sight (kept for a screen reader) and the open saved view's name ellipsized; 4, the case
+  // switcher ellipsized too (its whole name in its title and its accessible name, down to 8em); 5, "You are in …" out
+  // of sight, still the region's name (the owner's ruling 10, 16 November 2026); 6, if even that cannot hold one line,
+  // whole items wrap, the cross-link still short. *Saved views (n)*, *Details*, the tag and *Back to the whole case*
+  // never fold. Again from 0 whenever the line's width changes or a web font arrives.
   const row = useRef<HTMLDivElement>(null);
   const [fold, setFold] = useState({ step: 0, pass: 0 });
   const shortLabel = crossLink?.shortLabel;
   useLayoutEffect(() => {
     const element = row.current;
     if (!element) return;
-    if (fold.step < 2 && barWraps(element)) setFold((current) => ({ ...current, step: current.step === 0 && shortLabel ? 1 : 2 }));
-    else if (fold.step === 2 && element.scrollWidth > element.clientWidth + 1) setFold((current) => ({ ...current, step: 3 }));
-  }, [fold.step, fold.pass, shortLabel, crossLink?.label, datasets, place]);
+    if (fold.step < 2 && lineWraps(element)) setFold((current) => ({ ...current, step: current.step === 0 && shortLabel ? 1 : 2 }));
+    else if (fold.step >= 2 && fold.step <= 5 && element.scrollWidth > element.clientWidth + 1)
+      setFold((current) => ({ ...current, step: current.step + 1 }));
+  }, [fold.step, fold.pass, shortLabel, crossLink?.label, datasets, place, caseState, slim]);
   useLayoutEffect(() => {
     const element = row.current;
     if (!element || typeof ResizeObserver === "undefined") return;
@@ -145,7 +163,7 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       if (element.clientWidth !== width) {
         width = element.clientWidth;
         again();
-      } else if (barWraps(element)) {
+      } else if (lineWraps(element)) {
         flushSync(() => setFold((current) => (current.step < 2 ? { ...current, step: current.step + 1 } : current)));
       }
     });
@@ -161,7 +179,25 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     };
   }, []);
   const short = slim || fold.step >= 1;
-  const squeezed = fold.step === 2;
+  const squeezed = fold.step >= 2 && fold.step <= 5;
+  const rowClass = [squeezed && "context-banner--squeezed", squeezed && fold.step >= 4 && "context-banner--fold-case"].filter(Boolean).join(" ");
+  const placeHidden = slim || (squeezed && fold.step >= 5);
+  // *Details* of the open saved view (Amendment 19 decision 2): closed again whenever another view opens, and focus
+  // back on its button when Esc closes it.
+  const [details, setDetails] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const viewId = caseState && caseState !== "whole" ? caseState.id : null;
+  const detailsOpen = details.open && details.id === viewId && viewId !== null;
+  const detailsButton = useRef<HTMLButtonElement>(null);
+  const closeDetails = () => {
+    setDetails({ open: false, id: viewId });
+    detailsButton.current?.focus();
+  };
+  // Esc anywhere on the line, *Details* itself included, closes it while it is open (a disclosure's own key).
+  const onLineKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if (event.key !== "Escape" || !detailsOpen) return;
+    event.stopPropagation();
+    closeDetails();
+  };
   // The place opens the line in both brands (ADR-132 Amendment 8 folded GOV.UK's title into it), so each
   // part after it is set off by a separator.
   const next = () => <span className="context-banner__sep" aria-hidden="true">·</span>;
@@ -204,12 +240,6 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
           {next()}
           <span className="context-banner__label" aria-hidden="true">Case</span>
           {caseSwitcher}
-          {/* ADR-145 Amendment 17: what is open, after the case's name; nothing while the whole case is. */}
-          {openView && (
-            <span className="context-banner__open-view context-banner__fit" title={`Saved view: ${openView}`}>
-              › Saved view: {openView}
-            </span>
-          )}
           {onViews && (
             <>
               {next()}
@@ -225,6 +255,18 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
               </button>
             </>
           )}
+          {/* ADR-145 Amendment 19: what is on the canvas, after *Saved views (n)*. */}
+          {caseState && (
+            <CaseStateItems
+              state={caseState}
+              govuk={govuk}
+              sep={next}
+              fitName={squeezed && fold.step >= 3}
+              detailsOpen={detailsOpen}
+              onDetails={() => setDetails({ open: !detailsOpen, id: viewId })}
+              detailsButton={detailsButton}
+            />
+          )}
         </>
       )}
       {place === "rules" && caseSwitcher && (
@@ -238,7 +280,10 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
       {place === "glass" && datasets && !slim && (
         <>
           {next()}
-          <span className="context-banner__fit" title={datasets.length > 0 ? `reads ${names(datasets)}` : undefined}>
+          <span
+            className={squeezed && fold.step >= 3 ? "context-banner__reads visually-hidden" : squeezed ? "context-banner__reads context-banner__fit" : "context-banner__reads"}
+            title={datasets.length > 0 ? `reads ${names(datasets)}` : undefined}
+          >
             {datasets.length > 0 ? `reads ${names(datasets)}` : "reads no dataset"}
           </span>
         </>
@@ -264,6 +309,8 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
         </button>
       )}
       {end && <span className="context-banner__end">{end}</span>}
+      {/* Over the canvas, under the line: off the line's own row, so it neither folds the line nor moves the canvas. */}
+      {detailsOpen && caseState && caseState !== "whole" && <SavedViewDetails state={caseState} govuk={govuk} onClose={closeDetails} />}
     </>
   );
   if (govuk) {
@@ -271,8 +318,8 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     // content. "You are in …" is still the region's heading and name, at the start of the row, at its size.
     return (
       <div className="govuk-notification-banner context-banner--govuk context-banner--folded" role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
-        <div ref={row} className={squeezed ? "govuk-notification-banner__content context-banner--squeezed" : "govuk-notification-banner__content"}>
-          <h2 className={slim ? "govuk-notification-banner__title context-banner__place visually-hidden" : "govuk-notification-banner__title context-banner__place"} id="context-banner-title">
+        <div ref={row} className={`govuk-notification-banner__content ${rowClass}`.trim()} onKeyDown={onLineKeyDown}>
+          <h2 className={placeHidden ? "govuk-notification-banner__title context-banner__place visually-hidden" : "govuk-notification-banner__title context-banner__place"} id="context-banner-title">
             {YOU_ARE_IN[place]}
           </h2>
           {line}
@@ -281,8 +328,8 @@ export function ContextBanner({ place, sections = [], caseSwitcher, datasets, no
     );
   }
   return (
-    <div ref={row} className={squeezed ? "context-banner context-banner--squeezed" : "context-banner"} role="region" aria-labelledby="context-banner-title" aria-describedby={described}>
-      <h2 className={slim ? "context-banner__place visually-hidden" : "context-banner__place"} id="context-banner-title">
+    <div ref={row} className={`context-banner ${rowClass}`.trim()} role="region" aria-labelledby="context-banner-title" aria-describedby={described} onKeyDown={onLineKeyDown}>
+      <h2 className={placeHidden ? "context-banner__place visually-hidden" : "context-banner__place"} id="context-banner-title">
         {YOU_ARE_IN[place]}
       </h2>
       {line}

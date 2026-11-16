@@ -145,9 +145,22 @@ function Harness() {
         viewsOpen={panels.has("cases")}
         // ADR-145 Amendment 17: *Saved views (n)*, the harness's case holding two this reader may see.
         savedViews={2}
-        // `?openview=1`: a saved view open over the canvas, named after the case ("› Saved view: …", Amendment 17).
-        // `?long=1`: a long case name, a long saved view name and a long dataset, as a demo's are.
-        openView={place === "glass" && params.get("openview") === "1" ? (params.get("long") === "1" ? "Every payment between the three Ledger accounts in March and April" : "Payments in March") : null}
+        // ADR-145 Amendment 19: what is on the canvas, on the case line. `?openview=1`: a saved view open, said there
+        // ("Saved view: ‹name›", its tag, Details, Back to the whole case); otherwise "Whole case". `?long=1`: a long case
+        // name, a long saved view name and a long dataset, as a demo's are.
+        caseState={
+          place !== "glass"
+            ? null
+            : params.get("openview") === "1"
+              ? {
+                  id: "v-open",
+                  name: params.get("long") === "1" ? "Every payment between the three Ledger accounts in March and April" : "Payments in March",
+                  shared: true,
+                  missing: 0,
+                  onBack: () => undefined,
+                }
+              : "whole"
+        }
         caseSwitcher={place === "admin" ? undefined : caseMenu}
         datasets={place === "glass" ? (params.get("long") === "1" ? ["Prison Intelligence Dataset (synthetic)", "the Ledger visits log"] : ["Prison intel"]) : null}
         crossLink={crossLinkFor(place, places, CASES[caseId] ?? caseId, ["Prison intel"], {

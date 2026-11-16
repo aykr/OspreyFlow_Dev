@@ -55,7 +55,7 @@ test("the whole case is opened from the panel by keyboard while a saved view is 
   await expect(row(page, "whole-case")).not.toContainText("Open now");
   await tabTo(page, "Open the whole case");
   await expect.poll(() => opened(page)).toEqual(["whole-case"]);
-  await expect(page.locator("#lens")).toHaveText("You are looking at the whole case.");
+  await expect(page.locator("#lens")).toHaveText("Whole case");
   await expect(page.locator("[data-saved-views-button]")).toBeFocused();
   registerCovered(REGISTRY, "open-the-whole-case-from-the-panel-by-keyboard");
 });
