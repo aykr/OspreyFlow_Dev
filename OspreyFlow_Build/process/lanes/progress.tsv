@@ -196,4 +196,4 @@ case	v061-glass-rows	M	building	v0.6.1 first item (the owner, 16 Nov): fewer row
 rules-b	v060-resolve-empty-dob	S	done	v0.6.0 (the owner, 16 Nov): resolution for Person works when no Person has a date_of_birth (an all-empty date column typed as a date); red first	lane/rules-b-v060-resolve-empty-dob
 case-b	v061-glass-rows-ac	M	building	v0.6.1 glass rows A+C (strictness into the toolbar, Hide and Show toolbar, Alt+Shift+T, the remembered setting, Map), split from case's B; merges after B and after v0.6.0
 rules-b	v060-press-enabled	S	building	CI's keyboard races: every keyboard spec's press waits for its button to be enabled; test-only
-platform-b	v060-report-sync-valkey	S	building	v0.6.0 (the owner, 16 Nov): the report sync opens Valkey with its password and TLS (cloud-platform)
+platform-b	v060-report-sync-valkey	S	done	v0.6.0 (the owner, 16 Nov): the report sync opens Valkey with its password and TLS (cloud-platform)	lane/platform-b-v060-report-sync-valkey

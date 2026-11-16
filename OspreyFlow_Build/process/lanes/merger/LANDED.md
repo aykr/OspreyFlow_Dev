@@ -243,3 +243,4 @@ dca173a 2346bb0 platform-b v060-candidate-records
 687ae02 b377bed platform-b v060-search-jobs-pg
 54d6855 d69c735 platform-b v060-r1-search-wait
 b9470cd be4f780 rules-b v060-resolve-empty-dob
+4d5d61d 9f3f280 platform-b v060-report-sync-valkey
