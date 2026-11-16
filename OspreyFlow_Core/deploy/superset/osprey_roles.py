@@ -1,16 +1,17 @@
-"""`OspreyReader`, the Superset role of a Reports Viewer and of every account at registration: Superset's
-Gamma less every write (the owner's ruling, 16 November 2026; `superset_config.py` maps the Reports
-Viewer to it and makes it `AUTH_USER_REGISTRATION_ROLE`, which Flask-AppBuilder adds to every account).
+"""`OspreyReader`, the Superset role of a Reports Viewer and of every account at registration:
+Superset's Gamma less every write (the owner's ruling, 16 November 2026; `superset_config.py` maps
+the Reports Viewer to it and makes it `AUTH_USER_REGISTRATION_ROLE`, which Flask-AppBuilder adds
+to every account).
 
-Gamma is not read-only: in this image it holds `can_write` on Dashboard, Chart, Tag and Theme, tagging,
-removing a board's embedding, the chart customisations, a cache's invalidation, file handling and the
-user registrations' writes (`tests/fixtures/superset/gamma_permissions.txt`, its table as `superset init`
-makes it). A Reports Viewer saved a dashboard in v0.6.0's package test.
+Gamma is not read-only: in this image it holds `can_write` on Dashboard, Chart, Tag and Theme,
+tagging, removing a board's embedding, the chart customisations, a cache's invalidation, file
+handling and the user registrations' writes (`tests/fixtures/superset/gamma_permissions.txt`, its
+table as `superset init` makes it). A Reports Viewer saved a dashboard in v0.6.0's package test.
 
-Default-deny: every permission named for a write is left out, but for the few that keep a person's own
-session's state, named in `SESSION_STATE` with what each is for. A write a later Superset gives Gamma
-is left out until someone names it here. Pure, so `tests/test_superset_reader_role.py` holds it to
-Gamma's own table; `osprey_setup.py` applies it at every start."""
+Default-deny: every permission named for a write is left out, but for the few that keep a person's
+own session's state, named in `SESSION_STATE` with what each is for. A write a later Superset
+gives Gamma is left out until someone names it here. Pure, so `tests/test_superset_reader_role.py`
+holds it to Gamma's own table; `osprey_setup.py` applies it at every start."""
 
 from __future__ import annotations
 
@@ -28,7 +29,7 @@ WRITES = frozenset({
 
 #: The writes a reader keeps: each the person's own session's state, never shared content.
 SESSION_STATE = frozenset({
-    ("can_write", "DashboardFilterStateRestApi"),  # a board's native filters, as this person set them
+    ("can_write", "DashboardFilterStateRestApi"),  # a board's native filters, as they set them
     ("can_write", "DashboardPermalinkRestApi"),  # a link to the board as they see it, to share
     ("can_write", "ExploreFormDataRestApi"),  # a chart's form while they look at it
     ("can_write", "ExplorePermalinkRestApi"),  # a link to that view of a chart

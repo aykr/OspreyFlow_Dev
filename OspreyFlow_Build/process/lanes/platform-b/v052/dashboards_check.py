@@ -166,6 +166,13 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
         if not cond:
             raise SystemExit(f"check failed: {what} (record {log})")
 
+    def note(what: str, said: Any) -> None:
+        """A stated behaviour, recorded so that a later change shows in the record; neither passes nor fails."""
+        line = f"RECORD {what}: {str(said)[:300]}"
+        print(line)
+        lines.append(line)
+        log.write_text("\n".join(lines) + "\n")
+
     config = yaml.safe_load(r1.CONFIG.read_text())
     claims = config["cloud_platform"]["claims"]
     reporting = config.get("reporting") or {}
@@ -273,17 +280,31 @@ def run(r1: Any = None, ask: Any = None, sleep: Any = time.sleep) -> None:
     ok("a chart on the mart's figures is on the board", s.get("status") in (200, 201) and s.get("chart"), s)
     dataset, chart = str(s["dataset"]), str(s["chart"])
     mart(r1, PLANT_ROW)
+    builder_roles = f"/v1/admin/people/{people['builder@r1.test']}/roles"
     try:
         control = ask("chartdata", "session", "admin@r1.test", str(board_id), dataset, chart)
         through = ask("chartdata", "guest", str(board_id), dataset, chart, "@secret", secret=guest_token or "")
+        # ADR-148 Amendment 21: a builder's own Superset session reads the whole mart, stated for v0.6.0 and
+        # scoped in v0.6.1; recorded, not judged. The builder is one again for the read (Superset re-reads the
+        # role at sign-in), and a Reports Viewer again after it, as the checks below expect.
+        c.put(builder_roles, headers=admin, json={"roles": ROLES["builder@r1.test"]})
+        ask("signin", "builder@r1.test")
+        building = ask("chartdata", "session", "builder@r1.test", str(board_id), dataset, chart)
+        reading = ask("chartdata", "session", "reader@r1.test", str(board_id), dataset, chart)
     finally:
         mart(r1, REMOVE_ROW)
+        c.put(builder_roles, headers=admin, json={"roles": ["reports_viewer"]})
+        ask("signin", "builder@r1.test")
     ok("the administrator's own session sees the identity's rows and the planted one (the control)",
        control.get("status") == 200 and {app_id, OTHER} <= set(control.get("dashboards") or []), control)
     ok("the guest token reads the identity's own rows, and only them (its row-level security)",
        through.get("status") == 200 and through.get("dashboards") == [app_id], through)
     ok("another identity's row, counted at SECRET, is absent through the guest token",
        OTHER not in (through.get("dashboards") or []), through)
+    note("a builder's own Superset session reads the whole mart, every identity's rows (ADR-148 Amendment 21: "
+         "stated for v0.6.0, scoped in v0.6.1)", building)
+    ok("the Reports Viewer's own Superset session reads no figure of the mart (403)",
+       reading.get("status") == 403, reading)
     nobody = token("nobody@r1.test")
     listing, _ = offered(nobody)
     refused, _ = guest(nobody)

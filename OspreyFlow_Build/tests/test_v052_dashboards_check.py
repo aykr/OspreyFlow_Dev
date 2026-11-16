@@ -331,6 +331,7 @@ LEAKS = {
     # Beyond the mapped role and the registration role (v0.6.0's package test, 16 November 2026: the role set, not a list).
     "Superset gives the builder Admin": "builder@r1.test signs in to Superset as Alpha",
     "Superset gives the reader Alpha": "reader@r1.test signs in to Superset as OspreyReader",
+    "Superset lets the Reports Viewer read the mart": "the Reports Viewer's own Superset session reads no figure",
 }
 
 
@@ -485,6 +486,12 @@ def _superset(conduit: Any, leak: str = "") -> Any:
         if action == "chart":
             return {"status": 201, "dataset": 3, "chart": 5}
         if action == "chartdata" and args[0] == "session":
+            # As Superset answers a person's own session: Admin and Alpha read every row of the mart (ADR-148
+            # Amendment 21); the read-only OspreyReader holds no access to it, refused 403 (the probe of 16 Nov).
+            held = conduit.roles.get(OIDS.get(args[1], "x"), [])
+            reads = "osprey-admin" in held or "right:manage_dashboards" in held
+            if not reads and leak != "Superset lets the Reports Viewer read the mart":
+                return {"status": 403}
             return {"status": 200, "dashboards": sorted(conduit.mart)}
         if action == "chartdata":
             assert args[4] == "@secret" and secret == GUEST
@@ -509,6 +516,9 @@ def test_the_check_passes_on_a_deployment_that_refuses_what_it_should(tmp_path: 
     _, r1 = _run(tmp_path)
     record = (r1.records / "dashboards.log").read_text()
     assert "FAIL" not in record and record.count("PASS") >= 20
+    # ADR-148 Amendment 21: a builder's whole-mart read is recorded, both identities named, never judged.
+    [stated] = [line for line in record.splitlines() if line.startswith("RECORD a builder's own Superset session")]
+    assert r1.report_sync in stated and "r1-another-identity-counted-at-secret" in stated, stated
     printed = capsys.readouterr().out + record
     # Nothing secret or bearer leaves the run: the report sync's secret, a guest token, a person's token.
     assert SECRET not in printed and GUEST not in printed and "fake.{" not in printed

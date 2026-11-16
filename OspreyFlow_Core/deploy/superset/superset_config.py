@@ -4,9 +4,9 @@ environment the deployment renders — nothing secret in this file.
 **Single sign-on.** People sign in through the deployment's identity provider (`osprey-superset`,
 a confidential client). Their roles come from the access token the provider returns to Superset over
 the deployment's own network — `osprey-admin` is Superset's Admin, every other OspreyFlow role the
-read-only OspreyReader (`osprey_roles.py`: Gamma less its writes) — synchronised at each sign-in. The browser is sent to the provider's public
-address; Superset's own calls use its internal one, including fetching the keys its id_token is
-verified against.
+read-only OspreyReader (`osprey_roles.py`: Gamma less its writes) — synchronised at each sign-in.
+The browser is sent to the provider's public address; Superset's own calls use its internal one,
+including fetching the keys its id_token is verified against.
 
 **It reads only the mart,** through `REPORT_MART_READER`, a login that may select from
 `osprey_reports` and nothing else (registered by `osprey_entrypoint.py`).
@@ -35,8 +35,8 @@ SQLALCHEMY_DATABASE_URI = f"postgresql+psycopg2://{_pg}/{_metadata_db}{_tls}"
 
 AUTH_TYPE = AUTH_OAUTH
 AUTH_USER_REGISTRATION = True
-# The owner's ruling, 16 November 2026: Flask-AppBuilder adds this role to EVERY account at every sign-in
-# while registration is on, so it is the read-only OspreyReader (`osprey_roles.py`, made by
+# The owner's ruling, 16 November 2026: Flask-AppBuilder adds this role to EVERY account at every
+# sign-in while registration is on, so it is the read-only OspreyReader (`osprey_roles.py`, made by
 # `osprey_setup.py`), never Superset's Gamma, which writes dashboards and charts.
 AUTH_USER_REGISTRATION_ROLE = "OspreyReader"
 AUTH_ROLES_SYNC_AT_LOGIN = True

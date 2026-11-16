@@ -124,5 +124,6 @@ def test_superset_reads_the_realm_s_roles_on_keycloak(monkeypatch) -> None:
     token = _access_token({"preferred_username": "ana", "roles": ["osprey-admin"]})
     info = config.OspreySecurityManager.oauth_user_info(None, "keycloak", {"access_token": token})
     assert info["role_keys"] == ["osprey-admin"]
-    # Gamma for everyone the mapping names nothing for (Flask-AppBuilder's registration role).
-    assert config.AUTH_USER_REGISTRATION_ROLE == "Gamma"
+    # The read-only OspreyReader for everyone (Flask-AppBuilder's registration role, which it adds to every
+    # account); never Gamma, which writes dashboards and charts (the owner's ruling, 16 November 2026).
+    assert config.AUTH_USER_REGISTRATION_ROLE == "OspreyReader"

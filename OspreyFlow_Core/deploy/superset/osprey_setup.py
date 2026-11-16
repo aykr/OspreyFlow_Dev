@@ -4,8 +4,8 @@
 - `OspreyEmbedded`, the guest role a Glass viewer's token carries: Superset's read-only Gamma, plus
   reading the reporting mart's schema and nothing else.
 - `OspreyReader`, a Reports Viewer's role and every account's at registration
-  (`superset_config.py`): Gamma less its writes (`osprey_roles.py`, the owner's ruling of 16 November
-  2026). It reads no mart: like Gamma, it holds no schema access.
+  (`superset_config.py`): Gamma less its writes (`osprey_roles.py`, the owner's ruling of
+  16 November 2026). It reads no mart: like Gamma, it holds no schema access.
 - `OspreyEmbedder`, the role of the service user the Conduit signs in as: the same, plus granting a
   guest token and marking a dashboard embeddable. Its password is `SUPERSET_EMBEDDER_PASSWORD`, a
   deployment secret; the user is local to Superset and never a person.
