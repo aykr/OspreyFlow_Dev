@@ -306,6 +306,36 @@ def test_a_secret_reaches_the_pod_script_through_stdin_alone(pod: Any, monkeypat
     assert pod._secret("@secret") == GUEST and pod._secret("7") == "7"
 
 
+def test_the_embedder_action_finds_the_conduit_s_modules_under_python_isolated(tmp_path: Path) -> None:
+    """`superset_pod.py embedder` imports the Conduit's own `services.api.superset_embed`, which imports `schemas`;
+    the pod runs it as `python -I -`, which ignores PYTHONPATH, where the api image puts its packages (v0.6.0's
+    package test row 3: ModuleNotFoundError: No module named 'schemas'). Run here the same way, against a
+    stand-in module tree reached only through PYTHONPATH."""
+    import os
+    import subprocess
+    import sys
+
+    app, packages = tmp_path / "app", tmp_path / "packages"
+    (app / "services" / "api").mkdir(parents=True)
+    (packages / "schemas").mkdir(parents=True)
+    for folder in (app / "services", app / "services" / "api", packages / "schemas"):
+        (folder / "__init__.py").write_text("")
+    (packages / "schemas" / "admin.py").write_text("DashboardIdentity = object\n")
+    (app / "services" / "api" / "superset_embed.py").write_text(
+        "from schemas.admin import DashboardIdentity\n"
+        "class SupersetSettings:\n    @classmethod\n    def from_env(cls):\n        return cls()\n"
+        "class SupersetEmbedder:\n    def __init__(self, settings): pass\n"
+        "    async def dashboards(self): return [(6, 'r1-board-another-unit', 't'), (1, 'r1-board', 't')]\n"
+        "    async def aclose(self): pass\n")  # fmt: skip
+    script = (Path(__file__).resolve().parents[1] / "process/lanes/platform-b/v052/superset_pod.py").read_text()
+    script = script.replace('sys.path.insert(0, "/app")', f'sys.path.insert(0, {str(app)!r})')
+    env = {**os.environ, "PYTHONPATH": f"{app}{os.pathsep}{packages}"}
+    done = subprocess.run([sys.executable, "-I", "-", "ospreyflow.r1.test", "embedder"], input=script, env=env,
+                          capture_output=True, text=True, timeout=60, check=False)  # fmt: skip
+    assert done.returncode == 0, done.stderr[-500:]
+    assert json.loads(done.stdout.strip().splitlines()[-1]) == {"slugs": ["r1-board", "r1-board-another-unit"]}
+
+
 def test_the_stdin_the_check_sends_with_a_secret_is_python_the_pod_runs(tmp_path: Path) -> None:
     """The text `pod()` sends kubectl when a guest token travels with it, compiled and run as `python -I -` would
     (v0.6.0's package test row 3 on 0b51705: the secret's lines went before superset_pod.py's

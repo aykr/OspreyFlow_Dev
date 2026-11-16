@@ -201,7 +201,12 @@ def embedder() -> dict[str, Any]:
     """The boards the Conduit's own embedder sees in Superset (`services.api.superset_embed`, as the Conduit
     lists them): every board with a slug that Superset shows it, a published one holding a chart it reads."""
     import asyncio
+    import os
 
+    # Run as `python -I -`, which ignores PYTHONPATH: the api image's own paths (its packages, `schemas`) are put
+    # back by hand (v0.6.0's package test row 3: ModuleNotFoundError: No module named 'schemas').
+    for entry in reversed([p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p]):
+        sys.path.insert(0, entry)
     sys.path.insert(0, "/app")
     from services.api.superset_embed import SupersetEmbedder, SupersetSettings
 
