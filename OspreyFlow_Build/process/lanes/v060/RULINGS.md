@@ -88,3 +88,4 @@ cancels a run in progress).
 - **First item of v0.6.1: the Glass, fewer rows above the canvas and a toolbar that can be hidden** (the owner, 16 Nov; brief at `v061/glass-rows/OWNER_BRIEF_2026-11-16.md`, sketch in Claude outputs/ospreyflow_glass_rows_2026-11-16/). The case lane; estimate, proposals, the draft ADR amendment and the measured gain before any building; nothing merges before v0.6.0 is released
 - The report sync tested against a real Valkey that requires TLS and a password (rule 15; the stand-in accepted plaintext)
 - The report sync's loop survives a Valkey error (logs and retries rather than exiting into a crash loop)
+- The drawn-merge sheet moves focus only when first drawn and when sent, not after each choice (WCAG 3.2.2 On Input; rules-b's audit, 16 Nov), then the spec's waits removed
