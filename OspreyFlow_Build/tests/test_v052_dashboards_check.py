@@ -45,6 +45,12 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
     module = _load(POD, "superset_pod_under_test")
     codes: dict[str, str] = {}
     sessions: dict[str, str] = {}
+    #: The CSRF secret each session holds, as Flask keeps it in the signed session cookie: Superset's
+    #: csrf_token GET answers a fresh session carrying it, and a write is judged by the session it
+    #: presents (the first `session` cookie, as werkzeug reads it). A write whose session holds no
+    #: secret is refused "The CSRF session token is missing." (v0.6.0's package test, 16 November 2026:
+    #: a jar reloaded without its cookies' domain kept the stale session first).
+    held_csrf: dict[str, str] = {}
     fake: dict[str, Any] = {"honours_forwarding": True, "boards": {}, "csrf_checked": True, "redirect_suffix": "",
                             "mart": ["app-id", "app-id", "another-identity"], "rls": "app-id"}
 
@@ -84,22 +90,30 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
                 return httpx.Response(302, headers={"location": "/login/"})
             sessions[f"s-{hint}"] = hint
             return httpx.Response(302, headers={"location": "/", "set-cookie": f"session=s-{hint}; Path=/"})
-        cookie = request.headers.get("cookie", "")
-        who = sessions.get(cookie.removeprefix("session=")) if cookie.startswith("session=") else None
+        presented = [part.strip().removeprefix("session=") for part in request.headers.get("cookie", "").split(";")
+                     if part.strip().startswith("session=")]  # fmt: skip
+        current = presented[0] if presented else ""
+        who = sessions.get(current)
         role = {**ROLES, "admin@r1.test": "Admin"}.get(who or "")
         if path == "/api/v1/me/":
             return httpx.Response(200, json={"result": {"username": OIDS[who]}}) if who else httpx.Response(401)
         if path == "/api/v1/me/roles/":
             return httpx.Response(200, json={"result": {"roles": {role: []}}}) if who else httpx.Response(401)
         if path == "/api/v1/security/csrf_token/":
-            return httpx.Response(200, json={"result": f"csrf-{who}"}) if who else httpx.Response(401)
+            if not who:
+                return httpx.Response(401)
+            fresh = f"{current}+csrf"
+            sessions[fresh], held_csrf[fresh] = who, f"csrf-{who}"
+            return httpx.Response(200, json={"result": f"csrf-{who}"}, headers={"set-cookie": f"session={fresh}; Path=/"})
         boards = fake["boards"]
         if path == "/api/v1/dashboard/" and request.method == "POST":
             # Flask-AppBuilder's refusals, in its order: no session, then no CSRF token, then the role, then
             # the slug's uniqueness.
             if not who:
                 return httpx.Response(401, json={"msg": "Missing Authorization Header"})
-            if fake["csrf_checked"] and request.headers.get("x-csrftoken") != f"csrf-{who}":
+            if fake["csrf_checked"] and current not in held_csrf:
+                return httpx.Response(400, json={"errors": [{"message": "400 Bad Request: The CSRF session token is missing."}]})
+            if fake["csrf_checked"] and request.headers.get("x-csrftoken") != held_csrf[current]:
                 return httpx.Response(400, json={"errors": [{"message": "400 Bad Request: The CSRF token is missing."}]})
             if role == "Gamma":
                 return httpx.Response(403, json={"message": "Forbidden"})
@@ -117,7 +131,7 @@ def pod(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Any:
             kept = fake.setdefault("made", {}).get(path)
             return httpx.Response(200, json={"result": [kept] if kept else []})
         if path in ("/api/v1/dataset/", "/api/v1/chart/") and request.method == "POST":
-            if not who or request.headers.get("x-csrftoken") != f"csrf-{who}":
+            if not who or request.headers.get("x-csrftoken") != held_csrf.get(current):
                 return httpx.Response(401 if not who else 400)
             if role != "Admin":
                 return httpx.Response(403)
