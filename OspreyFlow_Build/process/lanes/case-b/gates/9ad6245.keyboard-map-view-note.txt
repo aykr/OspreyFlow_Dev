@@ -1,0 +1,8 @@
+map-view.spec.ts "shrinking the map's box keeps the camera on the drawn nodes" (slot 3, this Mac):
+1. whole keyboard suite at 9ad6245, workers 8: failed (the camera never settled on the yards within 10 s; 9ad6245.keyboard.txt);
+2. the spec alone at 9ad6245, workers 1, straight after: failed the same way (9ad6245.keyboard-map-view-rerun.txt);
+3. the spec alone on main's own workspace code (bf8d1fe's apps/workspace checked out, then restored): 10 passed (bf8d1fe.keyboard-map-view-on-main.txt);
+4. the case alone at 9ad6245, twice more: passed, passed.
+No file under src/map, nor the map harness's imports, is touched by this branch, and none references Drawer, askPage or
+--w-drawer; the only shared stylesheet change is primitives.css's `:root { --w-drawer }`. Read as the WebGL map's settle
+time on a loaded machine, not this change; recorded, not claimed green.
