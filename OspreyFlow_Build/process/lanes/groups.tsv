@@ -208,3 +208,6 @@ orchestrator	v060-release	Housekeeping	Client install
 orchestrator	v060-post-merges	Housekeeping	Housekeeping
 orchestrator	v060-close	Housekeeping	Housekeeping
 demo	v060-gemini-checks	Models and maps	Small
+case-b	v061p-ask-drawer	Four places, the Glass and Admin	Client install
+rules-b	v061p-small-index-feed	Four places, the Glass and Admin	Small
+orchestrator	v061p-release	Housekeeping	Client install

@@ -43,4 +43,7 @@ ws	The websites ospreyflow.org and ospreyflow.net: live on HTTPS since 16 Nov 06
 p3	ospreyflow.app, the standard-look demo (Part 3): stage P stopped 16 Nov after P3 (shared image tags; named-Small sign-in step); MOVED TO v0.6.1 on the owner's word, p3-* torn down	platform	2026-11-15	2026-11-18	n	gm	platform:part3
 gB	Glass rows, B (built as v0.6.1, joining v0.6.0): the case line carries the state, no strip, ADR-145 Am 19	case	2026-11-16	2026-11-17	n	-	case:v061-glass-rows
 gAC	Glass rows, A and C (built as v0.6.1, joining v0.6.0): Match strictness in the toolbar; Hide and Show toolbar, T on the canvas, remembered; the Map has the buttons	case-b	2026-11-16	2026-11-17	n	-	case-b:v061-glass-rows-ac
-cl	This part of the development closed (the owner, 16 Nov): every lane closed with its HANDOFF, the clean-up done, the orchestrator last; v0.6.1 waits for the owner	orchestrator	2026-11-16	2026-11-16	n	mp,rb,gm	orchestrator:v060-close
+cl	This part of the development closed (the owner, 16 Nov): every lane closed with its HANDOFF, the clean-up done, the orchestrator last; v0.6.1 waits for the owner	orchestrator	2026-11-16	2026-11-17	n	mp,rb,gm,pR	orchestrator:v060-close
+pA	v0.6.1 patch A: Ask & Chat a drawer by default with Expand (ADR-145 Am 20)	case-b	2026-11-16	2026-11-17	y	-	case-b:v061p-ask-drawer
+pB	v0.6.1 patch B: search on Small fed by the Conduit (ADR-150 Am 4)	rules-b	2026-11-16	2026-11-17	y	-	rules-b:v061p-small-index-feed
+pR	v0.6.1 patch released (CI, keyboard, every-harness, a fresh Small install); the GOV.UK demo updated on the owner's word	orchestrator	2026-11-17	2026-11-17	y	pA,pB	orchestrator:v061p-release
