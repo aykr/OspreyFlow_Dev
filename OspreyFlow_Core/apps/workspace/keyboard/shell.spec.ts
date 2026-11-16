@@ -109,7 +109,7 @@ test("each rail panel is opened and closed by keyboard, the view kept and focus 
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Map", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("glass, map, on case kestrel")).toBeVisible();
-  // Ask & Chat is a page over the view, not a drawer (v0.6.0 #4): its own case follows.
+  // Ask & Chat's drawer has its own cases below (ADR-145 Amendment 20): its opener toggles App's hook, not this list.
   for (const name of ["Explore", "History"]) {
     const opener = rail.getByRole("button", { name, exact: true });
     await opener.focus();
@@ -237,6 +237,8 @@ test("Expand turns the Ask & Chat drawer into the page by keyboard, and Back to 
   await expect(askPage.getByRole("heading", { name: "Ask & Chat" })).toBeFocused();
   await expect(place).toHaveAttribute("inert", "");
   await expect(opener).toHaveAttribute("aria-expanded", "true");
+  // The page is no dialog: its opener says so while it shows (and says it opens one again as the drawer).
+  await expect(opener).not.toHaveAttribute("aria-haspopup");
   await page.keyboard.press("Shift+Tab");
   await expect(askPage.getByRole("button", { name: "Back to Map" })).toBeFocused();
   await page.keyboard.press("Enter");

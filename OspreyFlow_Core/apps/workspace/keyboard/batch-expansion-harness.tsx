@@ -14,6 +14,8 @@ import { createRoot } from "react-dom/client";
 
 import "../src/design/tokens.css";
 import "../src/design/primitives.css";
+import { AskPage } from "../src/questions/AskPage";
+import { useAskPage } from "../src/questions/useAskPage";
 import { openView } from "../src/views/viewsApi";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
 import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
@@ -90,11 +92,24 @@ const REQUEST: BatchExpansionRequest = {
   refused: { error: "limit_exceeded", cap_kind: "nodes", cap: 50_000, would_be: 61_200, options: ["save_as_view", "filter", "promote_to_batch"] },
 };
 
+// `?ask=drawer`: Ask & Chat's drawer open beside the panel, by App's own hook (ADR-145 Amendment 20), so a case can see
+// the panel make room for it. Drawn first, so the panel's own heading still takes focus on opening.
+function AskBeside() {
+  const ask = useAskPage(false, { leave: () => undefined }, "drawer");
+  if (!ask.open) return null;
+  return (
+    <AskPage form={ask.expanded ? "page" : "drawer"} backLabel="Graph" onBack={ask.back} onDismiss={ask.dismiss} onExpand={ask.expand} onCollapse={ask.collapse} takeFocus={false}>
+      <p>Ask a question about this case.</p>
+    </AskPage>
+  );
+}
+
 function Harness() {
   const [open, setOpen] = useState(true);
   const [opened, setOpened] = useState<string | null>(null);
   return (
     <>
+      {params.get("ask") === "drawer" && <AskBeside />}
       {opened && <p>The lens shows the view “{opened}”.</p>}
       {open && (
         <BatchExpansion

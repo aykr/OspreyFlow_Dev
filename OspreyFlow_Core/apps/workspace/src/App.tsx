@@ -763,7 +763,7 @@ export function App() {
     if (!investigationId) return;
     if (lens) closeLens();
     setView("graph");
-    // ADR-145 Amendment 18: the answer is on Ask & Chat's page; the page goes, as a marker's does (one hook,
+    // ADR-145 Amendments 18 and 20: the page goes (the drawer stays beside the graph), as for a marker (one hook,
     // `questions/useAskPage.ts`), the items are shown once the canvas is back in reach, and focus goes to it.
     ask.showOnGraph(
       () =>
@@ -1879,7 +1879,7 @@ export function App() {
   // panel and marked expanded while it is open, never pressed (`railMark`); opening or closing one never changes
   // the view.
   const railOpen = new Set<RailEntry>(
-    // Ask & Chat's opener is expanded while its page shows, not while it is hidden for a document read from an answer.
+    // Ask & Chat's opener is expanded while it shows in either shape, not while it is hidden for a document read.
     ([["explore", exploreOpen], ["questions", ask.shown], ["history", historyOpen]] as const)
       .filter(([, open]) => open)
       .map(([id]) => id),
@@ -1887,7 +1887,8 @@ export function App() {
   const mark = (id: RailEntry) => railMark(id, { view, open: railOpen });
   const railTools = [
     { id: "explore", label: RAIL_LABELS.explore, icon: "explore" as const, onSelect: () => setExploreOpen((open) => !open), ...mark("explore") },
-    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: ask.toggle, ...mark("questions") },
+    // A drawer's opener says it opens a dialog; while Ask & Chat is the page it opens none (ADR-145 Amendment 20).
+    { id: "questions", label: RAIL_LABELS.questions, icon: "questions" as const, onSelect: ask.toggle, opensPage: ask.expanded, ...mark("questions") },
     { id: "history", label: RAIL_LABELS.history, icon: "history" as const, onSelect: () => setHistoryOpen((open) => !open), ...mark("history") },
   ].filter((entry) => (railEntries(rights) as string[]).includes(entry.id));
   const railSplit = splitRail(railTools);
@@ -2792,7 +2793,7 @@ export function App() {
         <AskPage
           form={ask.expanded ? "page" : "drawer"}
           backLabel={view === "dossier" ? "Messages" : (VIEW_LABELS as Record<string, string>)[view] ?? "Graph"}
-          onBack={ask.back}
+          onBack={ask.back} onDismiss={ask.dismiss}
           onExpand={ask.expand}
           onCollapse={ask.collapse}
           hidden={ask.pageHidden}
@@ -2809,10 +2810,13 @@ export function App() {
             bearerToken={bearerToken}
             investigationId={investigationId}
             onDelta={(delta) => workingSetRef.current.store.getState().applyDelta(delta as WorkingSetDelta)}
-            onOpenDocument={(id) => {
-              setReaderFallback(undefined);
-              setReaderDocumentId(id);
-            }}
+            // From an answer: focus comes back to Ask & Chat when the reader closes (ADR-145 Amendment 20).
+            onOpenDocument={(id) =>
+              ask.readFromAnswer(() => {
+                setReaderFallback(undefined);
+                setReaderDocumentId(id);
+              })
+            }
             // ADR-129: the graph facts asked about are what is selected and one link around it, and
             // inside the timeline window when one is set; a `[G-n]` chosen in an answer selects what
             // it stands for on the canvas and brings it into view.
@@ -2821,11 +2825,11 @@ export function App() {
               linkIds: selectedLink ? [selectedLink.id] : [],
             }}
             getTimelineWindow={() => crossFilterRef.current?.store.getState().window ?? null}
-            // A marker shows its fact on the graph: the page gives the view back, on the Graph, and the fact is
+            // A marker shows its fact on the graph: the page gives the view back (the drawer stays beside it), on the Graph, and the fact is
             // brought into view there once the canvas is in reach again.
             onSelectFacts={(citation) => {
               setView("graph");
-              // The page left, the item brought into view, focus on the canvas (ADR-145 Amendment 18).
+              // The page left or the drawer kept, the item brought into view, focus on the canvas (ADR-145 Amendments 18 and 20).
               ask.showOnGraph(() => {
                 if (glassCanvasRef.current) bringFactIntoView(glassCanvasRef.current, citation);
               });

@@ -206,6 +206,8 @@ function Harness() {
                 id, label: RAIL_LABELS[id], icon: id,
                 // Ask & Chat opens its drawer (ADR-145 Amendment 20), by App's own hook.
                 onSelect: id === "questions" ? ask.toggle : () => toggle(id),
+                // While Ask & Chat is the page its opener opens no dialog, as App's (ADR-145 Amendment 20).
+                opensPage: id === "questions" && ask.expanded,
                 // Marked by the same `railMark` as `App.tsx`, never a copy: expanded while its panel is open.
                 ...railMark(id, { view, open: ask.shown ? new Set([...panels, "questions" as RailEntry]) : panels }),
               })))}
@@ -222,7 +224,7 @@ function Harness() {
               <AskPage
                 form={ask.expanded ? "page" : "drawer"}
                 backLabel={VIEW_LABELS[view as keyof typeof VIEW_LABELS] ?? "Graph"}
-                onBack={ask.back}
+                onBack={ask.back} onDismiss={ask.dismiss}
                 onExpand={ask.expand}
                 onCollapse={ask.collapse}
                 hidden={ask.pageHidden}

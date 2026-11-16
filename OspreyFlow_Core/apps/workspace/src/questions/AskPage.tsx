@@ -12,12 +12,14 @@ import type { AskForm } from "./useAskPage";
 import "./askPage.css";
 
 export interface AskPageProps {
-  /** The drawer (the default opening) or the page (Expand, the results' Ask line). */
+  /** The drawer (the default, as each opening is) or the page (Expand, the results' Ask line). */
   form?: AskForm;
   /** The name of the view the person left ("Graph"), for the page's back link. */
   backLabel: string;
-  /** Closes Ask & Chat entirely: the page's Back, the drawer's Close, Escape inside the drawer. */
+  /** Closes Ask & Chat entirely, focus to its opener: the page's Back, the drawer's Close, Escape inside the drawer. */
   onBack: () => void;
+  /** Escape with focus outside the drawer: closes it, focus left where it is (`onBack` where not given). */
+  onDismiss?: () => void;
   /** The drawer's Expand. */
   onExpand?: () => void;
   /** The page's *Show as a drawer*. */
@@ -31,6 +33,9 @@ export interface AskPageProps {
   takeFocus?: boolean;
   children: ReactNode;
 }
+
+/** On the document's root while Ask & Chat's drawer shows (`askPage.css` reads it). */
+export const BESIDE_DRAWER = "data-ask-drawer";
 
 /** The item at the top of what scrolls, and how far below that top it lies. */
 interface ScrollAnchor {
@@ -63,9 +68,10 @@ function restoreAnchor(anchor: ScrollAnchor | null, scroller: HTMLElement | null
 }
 
 export function AskPage({
-  form = "page",
+  form = "drawer",
   backLabel,
   onBack,
+  onDismiss,
   onExpand,
   onCollapse,
   hidden = false,
@@ -85,19 +91,29 @@ export function AskPage({
   useEffect(() => {
     if (takeFocus) heading.current?.focus();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps -- on opening only
-  // Escape inside the drawer closes it, focus to the rail's opener (`onBack`), as the drawer did before Amendment 18.
-  // Only inside: Escape elsewhere keeps its own meaning (the canvas's selection, a menu). The page has none (Amendment
-  // 18 point 4). A control inside that takes Escape for itself (a menu, a dialog) marks it handled.
+  // Escape anywhere closes the drawer, as every drawer's does (`Drawer`; the orchestrator's ruling, 16 November 2026):
+  // from inside it, focus goes to its opener (`onBack`); from elsewhere (the canvas), focus stays where it is
+  // (`onDismiss`), as a drawer leaves it. The page has none (Amendment 18 point 4).
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
+  const onDismissRef = useRef(onDismiss ?? onBack);
+  onDismissRef.current = onDismiss ?? onBack;
   useLayoutEffect(() => {
     if (!drawer || hidden) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.defaultPrevented) return;
-      if (event.target instanceof Node && section.current?.contains(event.target)) onBackRef.current();
+      if (event.key !== "Escape") return;
+      const inside = document.activeElement instanceof Node && section.current?.contains(document.activeElement);
+      (inside ? onBackRef : onDismissRef).current();
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
+  }, [drawer, hidden]);
+  // While the drawer shows, what else lies at the window's right makes room for it (`askPage.css`): the results page's
+  // Filters and the batch job's panel, which it would otherwise cover, still in the tab order (the lane review).
+  useLayoutEffect(() => {
+    if (!drawer || hidden) return;
+    document.documentElement.setAttribute(BESIDE_DRAWER, "");
+    return () => document.documentElement.removeAttribute(BESIDE_DRAWER);
   }, [drawer, hidden]);
   // A change of shape keeps the scroll on the item that was at the top, and moves focus: Expand to the page's heading,
   // where a keyboard user hears where they are; *Show as a drawer* to Expand, the control that undoes it.
@@ -116,7 +132,7 @@ export function AskPage({
     change?.();
   };
   const className = drawer
-    ? `drawer ask-drawer${govuk ? " ask-drawer--govuk" : ""}`
+    ? "drawer ask-drawer"
     : govuk
       ? "ask-page ask-page--govuk"
       : "ask-page";

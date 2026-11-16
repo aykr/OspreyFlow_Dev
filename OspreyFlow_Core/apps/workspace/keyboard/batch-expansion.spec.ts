@@ -121,6 +121,30 @@ for (const look of ["dark", "light", "govuk"] as const) {
   }
 }
 
+// ADR-145 Amendment 20 (the lane review): beside Ask & Chat's drawer the panel moves clear of it, in each look and at
+// a wide and a narrow window, so none of its controls lies under the drawer while Tab still reaches it.
+for (const look of ["dark", "light", "govuk"] as const) {
+  for (const width of [1440, 1024]) {
+    test(`beside Ask & Chat's drawer the batch job's panel lies clear of it (${look}, ${width})`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await open(page, "job=following&ask=drawer", look);
+      const drawer = page.getByRole("dialog", { name: "Ask & Chat" });
+      await expect(drawer).toBeVisible();
+      const d = (await drawer.boundingBox())!;
+      const p = (await panel(page).boundingBox())!;
+      expect(p.x + p.width, "the panel's right edge left of the drawer").toBeLessThanOrEqual(d.x);
+      expect(p.x, "the panel inside the window").toBeGreaterThanOrEqual(0);
+      for (const control of await panel(page).getByRole("button").all()) {
+        const covered = await control.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return !el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        });
+        expect(covered, `${await control.textContent()} drawn over`).toBe(false);
+      }
+    });
+  }
+}
+
 test("every registered batch job action has its own proving test case above", () => {
   assertAllCovered(REGISTRY, BATCH_EXPANSION_ACTIONS);
 });

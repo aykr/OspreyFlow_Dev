@@ -157,14 +157,14 @@ function Harness() {
           <AskPage
             form={ask.expanded ? "page" : "drawer"}
             backLabel="Graph"
-            onBack={ask.back}
+            onBack={ask.back} onDismiss={ask.dismiss}
             onExpand={ask.expand}
             onCollapse={ask.collapse}
             hidden={ask.pageHidden}
           >
             <p>Ask a question about this case.</p>
             {/* A document cited by an answer, read over the view, the page hidden meanwhile (the reader is a stand-in). */}
-            <button type="button" className="btn" onClick={() => setReading("a document from an answer")}>
+            <button type="button" className="btn" onClick={() => ask.readFromAnswer(() => setReading("a document from an answer"))}>
               Read a document from an answer
             </button>
           </AskPage>
@@ -181,7 +181,8 @@ function Harness() {
             onBack={results.back}
             onShow={(nodes) => {
               window.__SEARCH__!.shown.push(nodes.map((n) => n.id));
-              results.leave();
+              // As App's: the results and Ask & Chat's page left, its drawer kept (ADR-145 Amendment 20).
+              ask.viewChosen();
             }}
             onOpenDocument={(id) => {
               window.__SEARCH__!.opened.push(id);

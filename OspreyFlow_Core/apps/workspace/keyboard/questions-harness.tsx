@@ -159,6 +159,7 @@ function Page() {
         window.__QUESTIONS__!.closed = (window.__QUESTIONS__!.closed ?? 0) + 1;
         ask.back();
       }}
+      onDismiss={ask.dismiss}
     >
       <Panel />
     </AskPage>

@@ -642,8 +642,15 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     const opener = within(screen.getByRole("navigation", { name: "Workspace" })).getByRole("button", { name: "Ask & Chat" });
     fireEvent.click(opener);
     await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("true"));
-    // Beside the drawer the view is in reach, and so is Show toolbar (ADR-145 Amendment 20); expanded, neither is.
+    // Beside the drawer the view is in reach, and so are Show toolbar and T on the canvas (ADR-145 Amendment 20);
+    // expanded, neither is.
     expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+    const canvas = screen.getByRole("application", { name: "Network canvas" });
+    canvas.focus();
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    await vi.waitFor(() => expect(localStorage.getItem(KEY)).not.toBe("hidden"));
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    await vi.waitFor(() => expect(localStorage.getItem(KEY)).toBe("hidden"));
     fireEvent.click(screen.getByRole("button", { name: "Expand Ask & Chat to the full page" }));
     await screen.findByRole("region", { name: "Ask & Chat" });
     expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
