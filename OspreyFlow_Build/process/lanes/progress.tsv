@@ -185,7 +185,7 @@ rules	v060-upgrade-cache	S	done	v0.6.0 (the owner, 15 Nov): every image's upgrad
 admin	v060-cli-scope	S	done	v0.6.0 (the owner, 15 Nov): `ospreyflow run` on Entra sends the scope Entra requires (AADSTS1002012 without it), beside #18	lane/admin-v060-i18-run-app-role
 platform-b	v060-release-path	S	done	v0.6.0: images push passes the upgrade stamp; the dev release.yml retired and release_local following the product workflow; the tag check in the product workflow (owner diffs)	lane/platform-b-v060-stamp-release
 rules-b	v060-stage2-official	M	done	v0.6.0 stage 2: the official leak test, never-join and client-size timings on stack d (run before #4 merges; #4 is Glass-only)	lane/rules-b-stage2-official
-platform-b	v060-stage4-package-test	L	building	v0.6.0 stage 4: the package test on C = 09f1fbe (fresh install only, every check, the memory sampler), started 15 Nov ~21:40Z under the owner's lease
+platform-b	v060-stage4-package-test	L	done	v0.6.0 stage 4: the package test on C = 09f1fbe (fresh install only, every check, the memory sampler), started 15 Nov ~21:40Z under the owner's lease; superseded by later candidates
 platform-b	v060-stage3-done	S	done	v0.6.0 stage 3: the candidate C = 09f1fbe (CI 43756479074 green), its dry run green; no Core change needed	lane/platform-b-v060-candidate-records
 orchestrator	v060-build	S	done	v0.6.0 stage 1, Build: every closed-list item merged (#4 last, d7cf5a0), CI green on 09f1fbe	-
 orchestrator	v060-websites	S	done	The websites published to gh-pages (org f22e611, net a38ec0f) with Pages on and each domain set, 16 Nov ~06:30Z; live once the owner's DNS resolves, then Enforce HTTPS
@@ -197,11 +197,11 @@ rules-b	v060-resolve-empty-dob	S	done	v0.6.0 (the owner, 16 Nov): resolution for
 case-b	v061-glass-rows-ac	M	done	v0.6.1 glass rows A+C (strictness into the toolbar, Hide and Show toolbar, Alt+Shift+T, the remembered setting, Map), split from case's B; merges after B and after v0.6.0
 rules-b	v060-press-enabled	S	done	CI's keyboard races: every keyboard spec's press waits for its button to be enabled; test-only	lane/rules-b-v060-press-enabled
 platform-b	v060-report-sync-valkey	S	done	v0.6.0 (the owner, 16 Nov): the report sync opens Valkey with its password and TLS (cloud-platform)	lane/platform-b-v060-report-sync-valkey
-platform-b	v060-stage4	M	building	v0.6.0 stage 4: the package test on 38fafb8, every row
+platform-b	v060-stage4	M	done	v0.6.0 stage 4: PASSED on b6d33ce, every row (RECORD_b6d33ce.md); stands for 529f0f4 (the owner, 16 Nov)
 platform-b	v060-superset-reader	S	done	v0.6.0 (the owner, 16 Nov): a read-only OspreyReader role for Reports Viewers and as the registration role; the probe first	lane/platform-b-v060-superset-reader
 platform	v060-seed-irsa	S	done	v0.6.0: the POC seed Job on cloud-platform gets its IRSA service account and bucket prefix; a failed seed fails INSTALL step 9	lane/platform-v060-seed-irsa
 orchestrator	v060-glass-merge	S	done	the Glass rows merged into v0.6.0 (the owner, 16 Nov); pushed as fb7f336 by case as deputy
-orchestrator	v060-c3-ci	S	building	CI on the candidate with the Glass rows: fb7f336, run 43864213118
-platform-b	v060-stage4-glass	M	building	the package test on the candidate with the Glass rows: fb7f336; stage 3 PASS 12:17Z, row 0 started
+orchestrator	v060-c3-ci	S	building	CI on the Glass candidate 529f0f4, run 43883311468 (fb7f336 and b6d33ce red, fixed)
+platform-b	v060-stage4-glass	M	done	the package test on the Glass candidate: fb7f336 stopped at 5/6 for the a11y fix; b6d33ce PASSED, every row
 platform	v060-step6-all-pods	S	done	v0.6.0 (case as deputy, 16 Nov; platform-b row 9b on ea5fc61): INSTALL step 6's token-version check reads every api pod; red first	lane/platform-v060-step6-all-pods
 platform-b	v060-stage4-ea5	S	done	the package test on ea5fc61, rows 0-9; ended at 9b's finding
