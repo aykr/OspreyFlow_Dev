@@ -991,10 +991,13 @@ def _copy_repo(tmp: Path) -> tuple[Any, str, str, str]:
 
     tmp.mkdir(parents=True, exist_ok=True)
     git("init", "-q")
-    (tmp / "f").write_text("v0.5.1's files\n")
+    (tmp / "OspreyFlow_Core").mkdir()
+    (tmp / "OspreyFlow_Build").mkdir()
+    (tmp / "OspreyFlow_Build" / "gate.py").write_text("the run's tooling\n")
+    (tmp / "OspreyFlow_Core" / "f").write_text("v0.5.1's files\n")
     git("add", "-A"), git("commit", "-q", "-m", "the copy sent for this run")
     old = git("rev-parse", "HEAD").strip()
-    (tmp / "f").write_text("the candidate's files\n")
+    (tmp / "OspreyFlow_Core" / "f").write_text("the candidate's files\n")
     git("add", "-A"), git("commit", "-q", "--allow-empty", "-m", "the copy sent for this run")
     upgrade = git("rev-parse", "HEAD").strip()
     git("add", "-A"), git("commit", "-q", "--allow-empty", "-m", "the copy sent for this run")
@@ -1005,6 +1008,16 @@ def test_the_candidate_is_the_kept_renders_commit_with_this_copys_files(tmp_path
     git, _old, upgrade, head = _copy_repo(tmp_path)
     assert head != upgrade
     assert iv.candidate_from_copy([upgrade, upgrade, None], git) == upgrade
+
+
+def test_a_tooling_change_after_the_install_still_names_the_candidate(tmp_path: Path) -> None:
+    """The product is OspreyFlow_Core alone (the images and the render are made from it): a fix to the run's own
+    tooling under OspreyFlow_Build, applied to the copy after the install, leaves the candidate the same (v0.6.0's
+    package test row 6 on 0b51705: the whole tree compared, a gate's fix refused the candidate)."""
+    git, _old, upgrade, _head = _copy_repo(tmp_path)
+    (tmp_path / "OspreyFlow_Build" / "gate.py").write_text("the run's tooling, fixed\n")
+    git("add", "-A"), git("commit", "-q", "-m", "the copy sent for this run")
+    assert iv.candidate_from_copy([upgrade], git) == upgrade
 
 
 @pytest.mark.parametrize(
