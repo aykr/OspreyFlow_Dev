@@ -13,6 +13,15 @@ async function open(page: Page, brand: string, theme: string, width = 1440, long
   await page.goto(`/keyboard/places-harness.html?openview=1${long ? "&long=1" : ""}${brand === "govuk" ? "&brand=govuk" : ""}`);
   await page.evaluate((chosen) => document.documentElement.setAttribute("data-theme", chosen), theme);
   await expect(page.getByRole("region", { name: "You are in the Glass" }).getByText(/^reads /)).toBeVisible();
+  // Widths are measured in the look's own face, as the product draws it: a harness drawn in the fallback measured
+  // Linux's wider DejaVu on CI and folded the line at 1440 (run 43869826530, 16 November 2026), where this Mac's
+  // narrower system face fitted.
+  const face = await page.evaluate(() => {
+    const ui = getComputedStyle(document.documentElement).getPropertyValue("--ui").trim();
+    const first = ui.split(",")[0].trim();
+    return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+  });
+  expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
 }
 
 /** Each part of the row with its computed type, and the top bar's. */

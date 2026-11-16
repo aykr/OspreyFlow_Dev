@@ -1,0 +1,484 @@
+
+Running 81 tests using 1 worker
+
+  ✘   1 apps/workspace/keyboard/case-line-type.spec.ts:58:3 › ospreyflow dark: every part of the case line is on the top bar's font size and line height, the place bold (433ms)
+  ✘   2 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1440 wide the case line is one line high where the top bar is (181ms)
+  ✘   3 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1280 wide the case line is one line high where the top bar is (177ms)
+  ✘   4 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1024 wide the case line is one line high where the top bar is (181ms)
+  ✘   5 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1440 wide, the long names, the case line is one line high where the top bar is (173ms)
+  ✘   6 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1280 wide, the long names, the case line is one line high where the top bar is (172ms)
+  ✘   7 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1024 wide, the long names, the case line is one line high where the top bar is (177ms)
+  ✘   8 apps/workspace/keyboard/case-line-type.spec.ts:58:3 › ospreyflow light: every part of the case line is on the top bar's font size and line height, the place bold (174ms)
+  ✘   9 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1440 wide the case line is one line high where the top bar is (175ms)
+  ✘  10 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1280 wide the case line is one line high where the top bar is (170ms)
+  ✘  11 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1024 wide the case line is one line high where the top bar is (177ms)
+  ✘  12 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1440 wide, the long names, the case line is one line high where the top bar is (171ms)
+  ✘  13 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1280 wide, the long names, the case line is one line high where the top bar is (185ms)
+  ✘  14 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1024 wide, the long names, the case line is one line high where the top bar is (171ms)
+  ✓  15 apps/workspace/keyboard/case-line-type.spec.ts:58:3 › govuk light: every part of the case line is on the top bar's font size and line height, the place bold (188ms)
+  ✓  16 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › govuk light: at 1440 wide the case line is one line high where the top bar is (164ms)
+  ✓  17 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › govuk light: at 1280 wide the case line is one line high where the top bar is (173ms)
+  ✓  18 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › govuk light: at 1024 wide the case line is one line high where the top bar is (167ms)
+  ✓  19 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › govuk light: at 1440 wide, the long names, the case line is one line high where the top bar is (170ms)
+  ✓  20 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › govuk light: at 1280 wide, the long names, the case line is one line high where the top bar is (167ms)
+  ✓  21 apps/workspace/keyboard/case-line-type.spec.ts:70:5 › govuk light: at 1024 wide, the long names, the case line is one line high where the top bar is (171ms)
+  ✘  22 apps/workspace/keyboard/case-line-type.spec.ts:90:3 › ospreyflow dark: the cross-link keeps its full words with room and takes its short ones without, again on widening (153ms)
+  ✘  23 apps/workspace/keyboard/case-line-type.spec.ts:90:3 › ospreyflow light: the cross-link keeps its full words with room and takes its short ones without, again on widening (170ms)
+  ✓  24 apps/workspace/keyboard/case-line-type.spec.ts:90:3 › govuk light: the cross-link keeps its full words with room and takes its short ones without, again on widening (182ms)
+  ✘  25 apps/workspace/keyboard/case-line-type.spec.ts:109:3 › ospreyflow dark: the long names give way in the ruled order, their whole words kept in the page and the title (158ms)
+  ✘  26 apps/workspace/keyboard/case-line-type.spec.ts:109:3 › ospreyflow light: the long names give way in the ruled order, their whole words kept in the page and the title (171ms)
+  ✓  27 apps/workspace/keyboard/case-line-type.spec.ts:109:3 › govuk light: the long names give way in the ruled order, their whole words kept in the page and the title (204ms)
+  ✓  28 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 1440 wide, the slim line is never taller than the full one (261ms)
+  ✓  29 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 1440 wide with a saved view open, the slim line is never taller than the full one (257ms)
+  ✓  30 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 1024 wide, the slim line is never taller than the full one (257ms)
+  ✓  31 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 1024 wide with a saved view open, the slim line is never taller than the full one (256ms)
+  ✓  32 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 940 wide, the slim line is never taller than the full one (256ms)
+  ✓  33 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 940 wide with a saved view open, the slim line is never taller than the full one (286ms)
+  ✓  34 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 900 wide, the slim line is never taller than the full one (254ms)
+  ✓  35 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 900 wide with a saved view open, the slim line is never taller than the full one (256ms)
+  ✓  36 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 760 wide, the slim line is never taller than the full one (256ms)
+  ✓  37 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 760 wide with a saved view open, the slim line is never taller than the full one (274ms)
+  ✓  38 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 640 wide, the slim line is never taller than the full one (255ms)
+  ✓  39 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 640 wide with a saved view open, the slim line is never taller than the full one (291ms)
+  ✓  40 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 600 wide, the slim line is never taller than the full one (289ms)
+  ✓  41 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 600 wide with a saved view open, the slim line is never taller than the full one (289ms)
+  ✓  42 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 540 wide, the slim line is never taller than the full one (256ms)
+  ✓  43 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 540 wide with a saved view open, the slim line is never taller than the full one (290ms)
+  ✓  44 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 400 wide, the slim line is never taller than the full one (257ms)
+  ✓  45 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow dark: at 400 wide with a saved view open, the slim line is never taller than the full one (289ms)
+  ✓  46 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 1440 wide, the slim line is never taller than the full one (258ms)
+  ✓  47 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 1440 wide with a saved view open, the slim line is never taller than the full one (264ms)
+  ✓  48 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 1024 wide, the slim line is never taller than the full one (257ms)
+  ✓  49 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 1024 wide with a saved view open, the slim line is never taller than the full one (261ms)
+  ✓  50 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 940 wide, the slim line is never taller than the full one (254ms)
+  ✓  51 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 940 wide with a saved view open, the slim line is never taller than the full one (256ms)
+  ✓  52 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 900 wide, the slim line is never taller than the full one (256ms)
+  ✓  53 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 900 wide with a saved view open, the slim line is never taller than the full one (254ms)
+  ✓  54 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 760 wide, the slim line is never taller than the full one (256ms)
+  ✓  55 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 760 wide with a saved view open, the slim line is never taller than the full one (256ms)
+  ✓  56 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 640 wide, the slim line is never taller than the full one (256ms)
+  ✓  57 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 640 wide with a saved view open, the slim line is never taller than the full one (255ms)
+  ✓  58 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 600 wide, the slim line is never taller than the full one (285ms)
+  ✓  59 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 600 wide with a saved view open, the slim line is never taller than the full one (289ms)
+  ✓  60 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 540 wide, the slim line is never taller than the full one (273ms)
+  ✓  61 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 540 wide with a saved view open, the slim line is never taller than the full one (278ms)
+  ✓  62 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 400 wide, the slim line is never taller than the full one (272ms)
+  ✓  63 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › ospreyflow light: at 400 wide with a saved view open, the slim line is never taller than the full one (293ms)
+  ✓  64 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 1440 wide, the slim line is never taller than the full one (274ms)
+  ✓  65 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 1440 wide with a saved view open, the slim line is never taller than the full one (272ms)
+  ✓  66 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 1024 wide, the slim line is never taller than the full one (271ms)
+  ✓  67 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 1024 wide with a saved view open, the slim line is never taller than the full one (272ms)
+  ✓  68 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 940 wide, the slim line is never taller than the full one (272ms)
+  ✓  69 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 940 wide with a saved view open, the slim line is never taller than the full one (290ms)
+  ✓  70 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 900 wide, the slim line is never taller than the full one (272ms)
+  ✓  71 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 900 wide with a saved view open, the slim line is never taller than the full one (288ms)
+  ✓  72 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 760 wide, the slim line is never taller than the full one (271ms)
+  ✓  73 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 760 wide with a saved view open, the slim line is never taller than the full one (290ms)
+  ✓  74 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 640 wide, the slim line is never taller than the full one (273ms)
+  ✓  75 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 640 wide with a saved view open, the slim line is never taller than the full one (305ms)
+  ✓  76 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 600 wide, the slim line is never taller than the full one (290ms)
+  ✓  77 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 600 wide with a saved view open, the slim line is never taller than the full one (312ms)
+  ✓  78 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 540 wide, the slim line is never taller than the full one (291ms)
+  ✓  79 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 540 wide with a saved view open, the slim line is never taller than the full one (305ms)
+  ✓  80 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 400 wide, the slim line is never taller than the full one (289ms)
+  ✓  81 apps/workspace/keyboard/case-line-type.spec.ts:151:7 › govuk light: at 400 wide with a saved view open, the slim line is never taller than the full one (306ms)
+
+
+  1) apps/workspace/keyboard/case-line-type.spec.ts:58:3 › ospreyflow dark: every part of the case line is on the top bar's font size and line height, the place bold 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:59:5
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--f4032--line-height-the-place-bold/error-context.md
+
+  2) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1440 wide the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--3f373-e-high-where-the-top-bar-is/error-context.md
+
+  3) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1280 wide the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--80c12-e-high-where-the-top-bar-is/error-context.md
+
+  4) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1024 wide the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--cab9e-e-high-where-the-top-bar-is/error-context.md
+
+  5) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1440 wide, the long names, the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--76b83-e-high-where-the-top-bar-is/error-context.md
+
+  6) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1280 wide, the long names, the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--d262d-e-high-where-the-top-bar-is/error-context.md
+
+  7) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1024 wide, the long names, the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--a9e2e-e-high-where-the-top-bar-is/error-context.md
+
+  8) apps/workspace/keyboard/case-line-type.spec.ts:58:3 › ospreyflow light: every part of the case line is on the top bar's font size and line height, the place bold 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:59:5
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--10c33--line-height-the-place-bold/error-context.md
+
+  9) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1440 wide the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--8d044-e-high-where-the-top-bar-is/error-context.md
+
+  10) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1280 wide the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--8400d-e-high-where-the-top-bar-is/error-context.md
+
+  11) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1024 wide the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--f0312-e-high-where-the-top-bar-is/error-context.md
+
+  12) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1440 wide, the long names, the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--33a0e-e-high-where-the-top-bar-is/error-context.md
+
+  13) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1280 wide, the long names, the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--31dea-e-high-where-the-top-bar-is/error-context.md
+
+  14) apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1024 wide, the long names, the case line is one line high where the top bar is 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:71:7
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--42631-e-high-where-the-top-bar-is/error-context.md
+
+  15) apps/workspace/keyboard/case-line-type.spec.ts:90:3 › ospreyflow dark: the cross-link keeps its full words with room and takes its short ones without, again on widening 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:91:5
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--42814-s-without-again-on-widening/error-context.md
+
+  16) apps/workspace/keyboard/case-line-type.spec.ts:90:3 › ospreyflow light: the cross-link keeps its full words with room and takes its short ones without, again on widening 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:91:5
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--14a81-s-without-again-on-widening/error-context.md
+
+  17) apps/workspace/keyboard/case-line-type.spec.ts:109:3 › ospreyflow dark: the long names give way in the ruled order, their whole words kept in the page and the title 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:110:5
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--bcbbb-t-in-the-page-and-the-title/error-context.md
+
+  18) apps/workspace/keyboard/case-line-type.spec.ts:109:3 › ospreyflow light: the long names give way in the ruled order, their whole words kept in the page and the title 
+
+    Error: the look's face 'Atkinson Hyperlegible Next' loaded; is the server allowed to serve node_modules?
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      22 |     return { first, loaded: [...document.fonts].some((f) => f.status === "loaded" && `"${f.family.replace(/"/g, "")}"` === first.replace(/'/g, '"')) };
+      23 |   });
+    > 24 |   expect(face.loaded, `the look's face ${face.first} loaded; is the server allowed to serve node_modules?`).toBe(true);
+         |                                                                                                             ^
+      25 | }
+      26 |
+      27 | /** Each part of the row with its computed type, and the top bar's. */
+        at open (/Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:24:109)
+        at /Users/ayankar/dev/osprey-wt/case/OspreyFlow_Core/apps/workspace/keyboard/case-line-type.spec.ts:110:5
+
+    Error Context: apps/workspace/test-results/case-line-type-ospreyflow--18931-t-in-the-page-and-the-title/error-context.md
+
+  18 failed
+    apps/workspace/keyboard/case-line-type.spec.ts:58:3 › ospreyflow dark: every part of the case line is on the top bar's font size and line height, the place bold 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1440 wide the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1280 wide the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1024 wide the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1440 wide, the long names, the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1280 wide, the long names, the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow dark: at 1024 wide, the long names, the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:58:3 › ospreyflow light: every part of the case line is on the top bar's font size and line height, the place bold 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1440 wide the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1280 wide the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1024 wide the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1440 wide, the long names, the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1280 wide, the long names, the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:70:5 › ospreyflow light: at 1024 wide, the long names, the case line is one line high where the top bar is 
+    apps/workspace/keyboard/case-line-type.spec.ts:90:3 › ospreyflow dark: the cross-link keeps its full words with room and takes its short ones without, again on widening 
+    apps/workspace/keyboard/case-line-type.spec.ts:90:3 › ospreyflow light: the cross-link keeps its full words with room and takes its short ones without, again on widening 
+    apps/workspace/keyboard/case-line-type.spec.ts:109:3 › ospreyflow dark: the long names give way in the ruled order, their whole words kept in the page and the title 
+    apps/workspace/keyboard/case-line-type.spec.ts:109:3 › ospreyflow light: the long names give way in the ruled order, their whole words kept in the page and the title 
+  63 passed (28.2s)
