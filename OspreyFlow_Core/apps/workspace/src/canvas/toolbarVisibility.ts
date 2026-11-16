@@ -72,7 +72,7 @@ export function useToolbarHidden(username: string | null): [boolean, (hidden: bo
 /** The key that hides or shows the toolbar: T, with no modifier, while the graph's canvas has focus, as F, L and G are (the
  * owner's ruling of 16 November 2026, WCAG 2.1.4's "active only on focus"). Alt+Shift+T, first chosen, is Chrome's own
  * key on Windows and Linux for focusing its toolbar; no combination with a modifier was free in every browser and screen
- * reader. Sources: process/lanes/case-b/v061-glass-rows-ac/KEY.md. */
+ * reader. The sources are in the lane's build record. */
 export function isToolbarKey(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "altKey" | "metaKey">): boolean {
   return (event.key === "t" || event.key === "T") && !event.ctrlKey && !event.altKey && !event.metaKey;
 }

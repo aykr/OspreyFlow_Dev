@@ -25,7 +25,7 @@ for f in "${FILES[@]}"; do cp "$f" "$SAVED/$(basename "$f")"; done
 restore() { for f in "${FILES[@]}"; do cp "$SAVED/$(basename "$f")" "$f"; done; }
 trap 'restore; cp "$SAVED/registry-as-found.ts" "$REG"; rm -rf "$SAVED"' EXIT
 fails=0
-js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/resolution src/canvas/toolbarVisibility.test.ts src/canvas/ToolbarToggle.test.tsx src/welcome/WorkspaceWelcome.test.tsx 2>&1); }
+js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/resolution src/canvas/toolbarVisibility.test.ts src/canvas/ToolbarToggle.test.tsx src/welcome/WorkspaceWelcome.test.tsx src/App.views.test.tsx 2>&1); }
 kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts keyboard.spec.ts -g "Match strictness|Hide toolbar is reached|T on the focused canvas" --workers=2 --reporter=line 2>&1); }
 gt() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts glass-toolbar.spec.ts --workers=4 --reporter=line 2>&1); }
 red() { grep -E "×|^\s+[0-9]+\) |^FAILED" <<<"$1" | grep -qF "$2"; }
@@ -111,7 +111,7 @@ plant "T2 T heard anywhere on the page (a window listener, the first key's shape
   "T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing"
 plant "T2b T heard anywhere on the page (browser)" "$VIS" 's/(  useEffect\(\(\) => \{\n    const which = focusRef\.current;)/  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (isToolbarKey(event)) toggleByKey(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [toggleByKey]);\n$1/' kb \
   "T on the focused canvas hides the toolbar and shows it again"
-plant "T3 T moving focus off the canvas as the buttons do" "$VIS" 's/    if \(!here\) return;\n    focusRef\.current = null;/    if (!here) return;\n    focusRef.current = setting ? "hide" : "show";/' js \
+plant "T3 T moving focus off the canvas as the buttons do" "$VIS" 's/(  const toggleByKey = useCallback\(\(\) => \{\n)    focusRef\.current = null;/$1    focusRef.current = setting ? "hide" : "show";/' js \
   "T on the canvas hides and shows it, focus staying on the canvas"
 plant "T4 T not wired to the canvas" "$APP" 's/\n\s*onToolbarKey=\{toggleToolbarByKey\}//' js \
   "T on the canvas hides and shows it"
@@ -132,6 +132,10 @@ plant "S3 the canvas not telling App its toolbar is narrow" "$CANVAS" 's/\n\s*us
 at 912 px of toolbar (govuk) the words are short"
 plant "S4 Show toolbar's name lost with its words" "$TOGGLE" 's/      aria-label="Show toolbar"\n//' js \
   "reads Show on a narrow toolbar, its name still Show toolbar"
+
+echo "== cross-cutting, on B's line"
+plant "X1 the slim line without the saved view's state (Back to the whole case lost with the toolbar hidden)" "$APP" 's/caseState=\{caseState\}/caseState={toolbarHidden ? null : caseState}/' js \
+  "with the toolbar hidden, a saved view opened from the slim line says so there"
 
 echo "== unplanted: every case green"
 out="$(js)"; grep -E "Tests " <<<"$out"; grep -q "×" <<<"$out" && { echo "UNPLANTED RED (jsdom)"; fails=1; }

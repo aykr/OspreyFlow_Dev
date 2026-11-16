@@ -997,8 +997,8 @@ untouched. Held by `keyboard/glass-toolbar.spec.ts`, `keyboard.spec.ts`'s three 
 *hide-and-show-the-toolbar-by-keyboard*, *t-on-the-canvas-hides-and-shows-the-toolbar*), `App.chrome.test.tsx` and
 `canvas/toolbarVisibility.test.ts`. The key was first Alt+Shift+T, which Chrome on Windows and Linux binds to focusing its
 own toolbar; no combination with a modifier was free in every browser and screen reader, so the owner ruled T on the
-canvas (16 November 2026; the sources, untested on live screen readers, in
-`process/lanes/case-b/v061-glass-rows-ac/KEY.md`).
+canvas (16 November 2026; the browsers' and screen readers' own published key lists were checked, not a live screen
+reader; the sources are in the lane's build record).
 
 **Moving nodes by hand (owner, 6 October 2026; the spec was silent).** Dragging a node moves it, and moves
 the whole selection when the node is in it; the camera does not pan while a node is held, and the click
