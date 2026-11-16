@@ -160,6 +160,8 @@ from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tests.scenarios.index_wait import search_until, settled
+
 import httpx
 import pytest
 import yaml
@@ -1216,8 +1218,11 @@ def cdr_load() -> dict:
         # /v1/search` could not find an ingested `Endpoint` at all, because `search_nodes` matched
         # the declared identifier *kinds* (`e164`) rather than the `value_normalised` the engine
         # actually writes. With search working there is a stable handle on every run.
-        found = client.post(
-            _in_case("/v1/search"), json={"query": B1_NORMALISED_NUMBER, "limit": 5}
+        # Where search reads the index, it follows the load through ADR-150's outbox: asked again until
+        # it has the number, up to 30 s, the wait recorded (ADR-150 Amendment 3).
+        found = search_until(
+            client.post, _in_case("/v1/search"), {"query": B1_NORMALISED_NUMBER, "limit": 5},
+            what="B1's number after the CDR load",
         )
         assert found.status_code == 200, found.text
         hits = found.json()["nodes"]
@@ -2009,7 +2014,10 @@ def test_a1_a_site_grid_is_placed_and_its_cells_become_location_entities(
     # **The cells are `Location` entities in the graph**, reached the way an analyst reaches
     # anything: by searching for one of them. The recipe gives each cell a
     # `site_ref`, which `Location` declares as an identifier.
-    found = analyst.post(_in_case("/v1/search"), json={"query": f"{site['id']}-r0-c0", "limit": 5})
+    found = search_until(
+        analyst.post, _in_case("/v1/search"), {"query": f"{site['id']}-r0-c0", "limit": 5},
+        what="A1's first cell after drawing the grid",
+    )
     assert found.status_code == 200, found.text
     hits = found.json()["nodes"]
     assert hits, (
@@ -2055,7 +2063,9 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         == 200
     )
     cell_query = {"query": f"{site_id}-r0-c0", "limit": 10}
-    first = analyst.post(_in_case("/v1/search"), json=cell_query).json()["nodes"]
+    first = search_until(
+        analyst.post, _in_case("/v1/search"), cell_query, what="A1's cell before the redraw"
+    ).json()["nodes"]
     assert len(first) == 1, f"one cell should carry this site_ref, found {len(first)}"
 
     assert (
@@ -2064,7 +2074,11 @@ def test_a1_redrawing_the_grid_does_not_duplicate_its_cells(
         ).status_code
         == 200
     )
-    second = analyst.post(_in_case("/v1/search"), json=cell_query).json()["nodes"]
+    # Read once the index has settled: a read at once would see it before the redraw reached it, and
+    # could miss a duplicate written late (ADR-150 Amendment 3).
+    second = settled(
+        analyst.post, _in_case("/v1/search"), cell_query, what="A1's cell after the redraw"
+    )
     assert [n["id"] for n in second] == [n["id"] for n in first], (
         f"redrawing the grid created new cells rather than referencing the existing ones: "
         f"{[n['id'] for n in first]} -> {[n['id'] for n in second]}"
@@ -2145,11 +2159,10 @@ def test_a1_a_cells_geometry_reference_resolves_to_its_centroid(
         == 200
     )
 
-    cells = analyst.post(
-        _in_case("/v1/search"), json={"query": f"{site_id}-r1-c2", "limit": 5}
-    ).json()[
-        "nodes"
-    ]
+    cells = search_until(
+        analyst.post, _in_case("/v1/search"), {"query": f"{site_id}-r1-c2", "limit": 5},
+        what="A1's cell r1-c2 for its centroid",
+    ).json()["nodes"]
     assert len(cells) == 1, f"one cell should carry this site_ref, found {len(cells)}"
     ref = cells[0]["properties"]["geometry_ref"]
     assert ref, "the cell carries no geometry_ref at all, so there is nothing to resolve"
