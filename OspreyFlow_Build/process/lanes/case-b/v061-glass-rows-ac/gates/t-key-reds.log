@@ -1,0 +1,247 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - import "./src/testing/slowestReporter" without a file extension (vitest.config.ts:4:29). Add the file extension
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v5.0.5 /Users/ayankar/dev/osprey-wt/case-b/OspreyFlow_Core/apps/workspace
+
+ ❯ src/canvas/toolbarVisibility.test.ts (6 tests | 2 failed) 7ms
+   ✓ the remembered setting (4)
+     ✓ is kept under ospreyflow.glass.toolbar.<username>, as hidden or not at all 2ms
+     ✓ is one analyst's: another signed in on the same browser sees the toolbar 0ms
+     ✓ is not remembered for nobody, but still hides for this page: with no one signed in nothing is written 0ms
+     ✓ still hides for this page where the browser's storage refuses it 1ms
+   ❯ the canvas's T (2)
+     × is T or t, with no modifier 2ms
+     × is not T with Ctrl, Alt or Cmd (a browser's or the system's), nor another letter 0ms
+ ✓ src/canvas/LayoutMenu.test.tsx (6 tests) 181ms
+ ✓ src/canvas/ReasonPrompt.test.tsx (5 tests) 221ms
+ ✓ src/canvas/CapRefusalPrompt.test.tsx (4 tests) 150ms
+ ❯ src/welcome/WorkspaceWelcome.test.tsx (6 tests | 1 failed) 289ms
+   ❯ the workspace's welcome panel (5)
+     ✓ says what the canvas holds, and how to bring the panel back 160ms
+     ✓ offers the three latest history steps, and restores one as the History drawer does 83ms
+     ✓ does not offer a step that holds no canvas snapshot to pick up from (ADR-128: a brief edit) 31ms
+     × lists the keys worth knowing, each a key the Glass has, in key caps 9ms
+     ✓ closes from its own button 3ms
+   ✓ whether the welcome panel was closed (1)
+     ✓ is remembered per person, and is false for someone who has not closed it 0ms
+ ✓ src/canvas/LabelsMenu.test.tsx (8 tests) 195ms
+ ✓ src/canvas/selectionActions.test.tsx (10 tests) 218ms
+ ✓ src/canvas/SelectionBar.test.tsx (14 tests) 267ms
+ ✓ src/canvas/CanvasLegend.test.tsx (17 tests) 382ms
+ ✓ src/canvas/IconsMenu.test.tsx (11 tests) 467ms
+ ✓ src/canvas/layoutModes.test.ts (53 tests) 51ms
+ ✓ src/canvas/linksAmong.test.ts (8 tests) 22ms
+ ✓ src/canvas/forceLayout.test.ts (10 tests) 33ms
+ ✓ src/canvas/ViewActions.test.tsx (8 tests) 203ms
+ ✓ src/canvas/JudgementBadgeOverlay.test.tsx (6 tests) 106ms
+ ✓ src/canvas/DegreeMarkOverlay.test.tsx (2 tests) 57ms
+ ✓ src/welcome/WelcomeAbout.test.tsx (3 tests) 151ms
+ ✓ src/canvas/CommunityBoxOverlay.test.tsx (6 tests) 162ms
+ ✓ src/canvas/LargeExpansionPrompt.test.tsx (8 tests) 234ms
+ ✓ src/canvas/CommunitiesControls.test.tsx (7 tests) 170ms
+ ✓ src/canvas/ZoomControls.test.tsx (3 tests) 170ms
+ ✓ src/canvas/focusAnnouncement.test.ts (3 tests) 19ms
+ ✓ src/canvas/valueIconsInNode.test.ts (10 tests) 11ms
+ ✓ src/canvas/communities.test.ts (29 tests) 23ms
+ ✓ src/canvas/removeNodes.test.ts (6 tests) 18ms
+ ✓ src/canvas/zoomBands.test.ts (3 tests) 5ms
+ ✓ src/canvas/chunkedTextureRefresh.test.ts (5 tests) 7ms
+ ✓ src/canvas/expansionPreview.test.ts (6 tests) 4ms
+ ✓ src/canvas/nodeAttributes.test.ts (57 tests) 8ms
+ ✓ src/canvas/entityPictures.test.ts (7 tests) 7ms
+ ✓ src/canvas/nodeLabel.test.ts (9 tests) 3ms
+ ✓ src/canvas/labelStyle.test.ts (7 tests) 4ms
+ ✓ src/canvas/valueIcons.test.ts (9 tests) 6ms
+ ✓ src/canvas/cameraMoves.test.ts (2 tests) 7ms
+ ✓ src/canvas/singleFlight.test.ts (2 tests) 3ms
+ ✓ src/welcome/figure.test.ts (6 tests) 4ms
+ ✓ src/canvas/iconImage.test.ts (7 tests) 3ms
+ ✓ src/canvas/expansionOutcome.test.ts (6 tests) 4ms
+ ✓ src/canvas/nodeDrag.test.ts (3 tests) 5ms
+ ✓ src/canvas/dottedEdgePatterns.test.ts (2 tests) 4ms
+ ✓ src/canvas/communityAssigner.test.ts (4 tests) 4ms
+ ✓ src/canvas/linkMenu.test.ts (10 tests) 4ms
+ ✓ src/canvas/crowding.test.ts (6 tests) 5ms
+ ✓ src/canvas/edgeTypeMenu.test.ts (3 tests) 2ms
+ ✓ src/canvas/communityLinks.test.ts (7 tests) 3ms
+ ✓ src/canvas/nodeAttributesTheme.test.ts (4 tests) 9ms
+ ✓ src/canvas/linkCollapse.test.ts (6 tests) 6ms
+ ✓ src/canvas/edgeSelection.test.ts (14 tests) 5ms
+ ✓ src/canvas/linkHover.test.ts (3 tests) 5ms
+ ✓ src/canvas/expansionGate.test.ts (5 tests) 5ms
+ ✓ src/canvas/linkLabel.test.ts (6 tests) 5ms
+ ✓ src/canvas/nodeHitArea.test.ts (4 tests) 3ms
+ ✓ src/canvas/iconChoices.test.ts (19 tests) 7ms
+ ✓ src/canvas/settledAnchor.test.ts (2 tests) 2ms
+ ✓ src/canvas/labelChoices.test.ts (21 tests) 5ms
+ ✓ src/canvas/valueIconShown.test.ts (6 tests) 3ms
+ ✓ src/canvas/nodeIcons.test.ts (5 tests) 4ms
+ ✓ src/canvas/nodeGestures.test.ts (6 tests) 3ms
+stderr | src/App.chrome.test.tsx > the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) > the scope badge stays where the banner names no dataset: You are in Rules and Monitoring
+Each child in a list should have a unique "key" prop.
+
+Check the render method of `AlertQueue`. See https://react.dev/link/warning-keys for more information.
+
+ ❯ src/App.chrome.test.tsx (39 tests | 1 failed) 6997ms
+   ✓ the case screen's chrome, variant B (ADR-145 Amendment 2) (3)
+     ✓ 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19) 378ms
+     ✓ the switcher's Rules and Monitoring carries the open count, open, claimed and proposed for closing but not closed (rule 3: as the reader's queue says), its count in its name 58ms
+     ✓ the column opens with the Inspector only, the other panels folded in their order 83ms
+   ✓ the dataset named once (ADR-145 Amendment 14 decision 4) (3)
+     ✓ the context row names the case's one dataset once: no scope badge beside the case, a cross-link without it 47ms
+     ✓ a case that reads no dataset says so once, in the banner (reads no dataset), not as NO DATA beside it 43ms
+     ✓ the badge names the scope when the case's datasets cannot be read 39ms
+   ✓ the scope badge where the banner names no dataset (ADR-145 Amendment 14 decision 4) (2)
+     ✓ the scope badge stays where the banner names no dataset: You are in Rules and Monitoring 48ms
+     ✓ the scope badge stays where the banner names no dataset: You are in the Ingest Studio 51ms
+   ✓ the owner's navigation (ADR-145 Amendment 15) (10)
+     ✓ the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current 83ms
+     ✓ Drawing board is a view: its own screen says it is a sketch that does not change the case's data 31ms
+     ✓ the strip names no mode and says no mode's note 18ms
+     ✓ the rail holds the panel openers alone: Explore, Ask & Chat, History, then Help and the names toggle 21ms
+     ✓ Explore opens its panel without changing the view, a second press closes it, and closing returns focus to it 52ms
+     ✓ Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it 67ms
+     ✓ History opens its panel without changing the view, a second press closes it, and closing returns focus to it 84ms
+     ✓ the case line: You are in the Glass · Case ‹switcher› · Saved views (n) · Whole case · reads … 38ms
+     ✓ Saved views opens its panel at the saved views list 51ms
+     ✓ the case switcher's last entry is All cases, which opens the Cases panel 1082ms
+   ✓ Build a report beside Reports (ADR-145 Amendment 15) (3)
+     ✓ is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab 70ms
+     ✓ is not offered to a Reports Viewer, who holds no manage_dashboards, where Superset is deployed 37ms
+     ✓ is not offered, even to a builder, where there is no Superset 39ms
+   ✓ Part B after review (ADR-145 Amendment 15) (9)
+     ✓ in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel 1060ms
+     ✓ the Cases panel opened from All cases returns focus to the case menu's button when it closes 1100ms
+     ✓ Saved views is a toggle: expanded while its panel is open, a second press closes it 59ms
+     ✓ a Reports Viewer's switch is Reports, with Figures under More views: no graph, map or drawing board 63ms
+     ✓ an investigator without read_reports or trace_ownership has Graph, Map and Drawing board, and Matrix and Connection strength under More views 58ms
+     ✓ a drawing board chosen before the rights arrive gives way when they say the person may not investigate 100ms
+     ✓ Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current 134ms
+     ✓ the built-in Administrator, offered Connection strength alone, has it in the switch and current 54ms
+     ✓ exactly one view is current: one pressed in the switch, or none there and More views naming its own 168ms
+   ✓ Match strictness in the canvas toolbar (Amendment 19 decision 5) (2)
+     ✓ the Graph draws no row of its own; strictness is in the canvas toolbar, naming the setting 27ms
+     ✓ the Map keeps its row, Add site and Draw boundary, with no strictness in it 44ms
+   ❯ a toolbar that can be hidden (Amendment 19 decision 6) (7)
+     ✓ Hide toolbar hides the canvas toolbar, slims the case line, and Show toolbar there brings it back, focus moving between them 37ms
+     ✓ the Glass opens as the analyst left it: hidden at the first draw 20ms
+     ✓ under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and the key does nothing; back on the view, both are as left 34ms
+     ✓ another analyst's setting on this browser is not this one's 16ms
+     × T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing 28ms
+     ✓ the Map has the same control and the same setting: its row hidden, Show toolbar on the line 70ms
+     ✓ the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and T does nothing there 45ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/App.chrome.test.tsx:668:26
+    666|     fireEvent.keyDown(screen.getByRole("combobox", { name: /Search ent…
+    667|     fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey:…
+    668|     expect(tools.hidden).toBe(false);
+       |                          ^
+    669|     const canvas = screen.getByRole("application", { name: "Network ca…
+    670|     canvas.focus();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > the canvas's T > is T or t, with no modifier
+TypeError: isToolbarKey is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:54:12
+     52|   const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown"…
+     53|   it("is T or t, with no modifier", () => {
+     54|     expect(isToolbarKey(key({ key: "t" }))).toBe(true);
+       |            ^
+     55|     expect(isToolbarKey(key({ key: "T", shiftKey: true }))).toBe(true);
+     56|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  src/canvas/toolbarVisibility.test.ts > the canvas's T > is not T with Ctrl, Alt or Cmd (a browser's or the system's), nor another letter
+TypeError: isToolbarKey is not a function
+ ❯ src/canvas/toolbarVisibility.test.ts:58:12
+     56|   });
+     57|   it("is not T with Ctrl, Alt or Cmd (a browser's or the system's), no…
+     58|     expect(isToolbarKey(key({ key: "T", ctrlKey: true, shiftKey: true …
+       |            ^
+     59|     expect(isToolbarKey(key({ key: "T", altKey: true, shiftKey: true }…
+     60|     expect(isToolbarKey(key({ key: "t", metaKey: true }))).toBe(false);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > lists the keys worth knowing, each a key the Glass has, in key caps
+AssertionError: expected [ Array(7) ] to deeply equal [ '/', '←→', 'Enter', 'F', 'T', …(2) ]
+
+- Expected
++ Received
+
+  [
+    "/",
+    "←→",
+    "Enter",
+    "F",
+-   "T",
+    "Esc",
++   "Alt+Shift+T",
+    "?",
+  ]
+
+ ❯ src/welcome/WorkspaceWelcome.test.tsx:79:34
+     77|     const keys = within(screen.getByRole("list", { name: "Keys worth k…
+     78|     const rows = keys.getAllByRole("listitem").map((li) => [li.querySe…
+     79|     expect(rows.map(([k]) => k)).toEqual(["/", "←→", "Enter", "F", "T"…
+       |                                  ^
+     80|     expect(rows[2]![1]).toContain("Expand the focused node by one hop"…
+     81|     // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  3 failed | 56 passed (59)
+      Tests  4 failed | 546 passed (550)
+   Start at  08:18:14
+   Duration  7.97s (environment 51%, tests 35%, import 9%, transform 3%, setup 1%, worker 1%)
+
+    Isolate  59 workers spawned · ~356ms startup each (spawn + environment, per file)
+             at least ~1.55s faster with isolate: false — reuses workers across files instead of one per file
+
+
+Slowest 30 of 550 tests:
+  1100 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > the Cases panel opened from All cases returns focus to the case menu's button when it closes
+  1082 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the case switcher's last entry is All cases, which opens the Cases panel
+  1060 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > in the Ingest Studio the case menu's All cases opens the case picker, as before, not the Glass's Cases panel
+   378 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > 24 controls stand before the canvas, in this order (the owner's navigation, ADR-145 Amendment 15; strictness in the canvas toolbar, Amendment 19)
+   170 ms  src/canvas/LargeExpansionPrompt.test.tsx > LargeExpansionPrompt > names the node being expanded and the relationship, so it is clear what asked
+   168 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > exactly one view is current: one pressed in the switch, or none there and More views naming its own
+   160 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > says what the canvas holds, and how to bring the panel back
+   158 ms  src/canvas/ReasonPrompt.test.tsx > ReasonPrompt > names what is being asked and puts focus in the reason box
+   145 ms  src/canvas/LayoutMenu.test.tsx > LayoutMenu > offers all seven layouts
+   142 ms  src/canvas/ZoomControls.test.tsx > ZoomControls > is one group, Zoom, of Zoom in, Zoom out and Fit to view, each doing its own thing
+   134 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > Ownership chosen before the rights arrive gives way when they do not offer it, and one view is current
+   133 ms  src/canvas/IconsMenu.test.tsx > IconsMenu and icons chosen by value (ADR-128 Decision 4) > says, for a type whose icon depends on a value, that a choice here replaces those icons
+   127 ms  src/welcome/WelcomeAbout.test.tsx > WelcomeAbout > names the four places as the help page names them, claiming nothing not built
+   125 ms  src/canvas/selectionActions.test.tsx > the selection's actions in the right-click menu > are the bar's own, in its words and order: two selected, every action offered
+   123 ms  src/canvas/SelectionBar.test.tsx > SelectionBar > says how many once, and offers each action on the selection
+   115 ms  src/canvas/CapRefusalPrompt.test.tsx > says the cap's own figure and that nothing has been added
+   114 ms  src/canvas/CommunitiesControls.test.tsx > CommunitiesControls > is one button until switched on, and says whether it is on
+   113 ms  src/canvas/LabelsMenu.test.tsx > LabelsMenu > is closed until the button is pressed, and says it is open
+   109 ms  src/canvas/ViewActions.test.tsx > ViewActions > offers nothing to do to selected nodes: that is the selection bar's (ADR-097 step 1)
+   100 ms  src/canvas/IconsMenu.test.tsx > IconsMenu > lists the default (saying what it is), every drawing, and none
+   100 ms  src/App.chrome.test.tsx > Part B after review (ADR-145 Amendment 15) > a drawing board chosen before the rights arrive gives way when they say the person may not investigate
+    85 ms  src/canvas/CanvasLegend.test.tsx > CanvasLegend > lists each type in view with its count, most first
+    84 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > History opens its panel without changing the view, a second press closes it, and closing returns focus to it
+    83 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > the top bar's one view switch is Graph · Map · Drawing board · Reports · More views, exactly one current
+    83 ms  src/App.chrome.test.tsx > the case screen's chrome, variant B (ADR-145 Amendment 2) > the column opens with the Inspector only, the other panels folded in their order
+    83 ms  src/welcome/WorkspaceWelcome.test.tsx > the workspace's welcome panel > offers the three latest history steps, and restores one as the History drawer does
+    73 ms  src/canvas/CommunityBoxOverlay.test.tsx > CommunityBoxOverlay > gives each box a button to fold that group, named by its size
+    70 ms  src/App.chrome.test.tsx > a toolbar that can be hidden (Amendment 19 decision 6) > the Map has the same control and the same setting: its row hidden, Show toolbar on the line
+    70 ms  src/App.chrome.test.tsx > Build a report beside Reports (ADR-145 Amendment 15) > is offered to a builder where Superset is deployed, beside Reports, opening Superset in a new tab
+    67 ms  src/App.chrome.test.tsx > the owner's navigation (ADR-145 Amendment 15) > Ask & Chat opens its panel without changing the view, a second press closes it, and closing returns focus to it

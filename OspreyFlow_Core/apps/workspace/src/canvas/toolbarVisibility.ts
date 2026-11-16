@@ -69,29 +69,23 @@ export function useToolbarHidden(username: string | null): [boolean, (hidden: bo
   return [hidden, set];
 }
 
-/** Alt+Shift+T (Option+Shift+T on a Mac), matched by the key's place so the Option character does not matter. Not
- * Ctrl+Shift+T, a browser's reopen-tab; WCAG 2.1.4 leaves a key with a modifier free of a way to turn it off. */
-export function isToolbarShortcut(event: KeyboardEvent): boolean {
-  return event.code === "KeyT" && event.altKey && event.shiftKey && !event.ctrlKey && !event.metaKey;
+/** The key that hides or shows the toolbar: T, with no modifier, while the graph's canvas has focus, as F, L and G are (the
+ * owner's ruling of 16 November 2026, WCAG 2.1.4's "active only on focus"). Alt+Shift+T, first chosen, is Chrome's own
+ * key on Windows and Linux for focusing its toolbar; no combination with a modifier was free in every browser and screen
+ * reader. Sources: process/lanes/case-b/v061-glass-rows-ac/KEY.md. */
+export function isToolbarKey(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "altKey" | "metaKey">): boolean {
+  return (event.key === "t" || event.key === "T") && !event.ctrlKey && !event.altKey && !event.metaKey;
 }
 
-export const TOOLBAR_SHORTCUT = "Alt+Shift+T";
-
-// Inputs that take typed text; a checkbox, a slider or a button is not one, so the key works there (the lane-reviewer's
-// item 11: every INPUT was refused, the strictness slider and the checkboxes too).
-const TYPED = new Set(["text", "search", "email", "url", "tel", "password", "number", "date", "datetime-local", "month", "time", "week"]);
-
-/** Whether a key pressed here is the field's own typing. */
-export function isTextField(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable || target.tagName === "TEXTAREA" || target.tagName === "SELECT") return true;
-  return target instanceof HTMLInputElement && TYPED.has(target.type);
-}
+export const TOOLBAR_KEY = "T";
 
 export interface ViewToolbar {
   /** Whether the toolbar is hidden here: never where the view has no such toolbar. */
   hidden: boolean;
+  /** The buttons' toggle: focus moves to the other button. */
   toggle: () => void;
+  /** The canvas's T: focus stays on the canvas, where the key was pressed and where nothing was lost. */
+  toggleByKey: () => void;
   /** *Hide toolbar* and *Show toolbar*, for focus to move between them. */
   hideRef: RefObject<HTMLButtonElement | null>;
   showRef: RefObject<HTMLButtonElement | null>;
@@ -99,9 +93,9 @@ export interface ViewToolbar {
 
 /**
  * The toolbar's hiding as App wires it (and the keyboard harness, with the same code): `here` is whether the view
- * on screen has a toolbar that can be hidden (the Graph and the Map; not the Drawing board, the owner's ruling 4).
- * Focus goes to *Show toolbar* on hiding and back to *Hide toolbar* on showing, by the button or the key alike;
- * Alt+Shift+T works outside text fields, as `?` does (`useHelpKey`).
+ * on screen has a toolbar that can be hidden (the Graph and the Map, not the Drawing board, the owner's ruling 4; not
+ * while a page lies over the view). Focus goes to *Show toolbar* on hiding and back to *Hide toolbar* on showing by
+ * the buttons; the canvas's T leaves it on the canvas.
  */
 export function useViewToolbar(username: string | null, here: boolean): ViewToolbar {
   const [setting, setSetting] = useToolbarHidden(username);
@@ -113,22 +107,17 @@ export function useViewToolbar(username: string | null, here: boolean): ViewTool
     focusRef.current = setting ? "hide" : "show";
     setSetting(!setting);
   }, [setting, setSetting]);
+  // Only the canvas calls it, and the canvas is not drawn where the toolbar cannot be hidden (the Drawing board) and is
+  // inert under a page over the view, so it needs no guard of its own.
+  const toggleByKey = useCallback(() => {
+    focusRef.current = null;
+    setSetting(!setting);
+  }, [setting, setSetting]);
   useEffect(() => {
     const which = focusRef.current;
     if (which === null) return;
     focusRef.current = null;
     (which === "show" ? showRef : hideRef).current?.focus();
   }, [hidden]);
-  useEffect(() => {
-    if (!here) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (!isToolbarShortcut(event) || event.repeat) return;
-      if (isTextField(event.target)) return;
-      event.preventDefault();
-      toggle();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [here, toggle]);
-  return { hidden, toggle, hideRef, showRef };
+  return { hidden, toggle, toggleByKey, hideRef, showRef };
 }

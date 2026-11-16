@@ -2283,18 +2283,42 @@ test("Hide toolbar is reached by Tab and pressed with Enter; Show toolbar on the
   registerCovered("CANVAS_ACTIONS", "hide-and-show-the-toolbar-by-keyboard");
 });
 
-test("Alt+Shift+T on the canvas hides the toolbar, focus on Show toolbar, and again shows it, focus on Hide toolbar", async ({ page }) => {
+// The owner's ruling of 16 November 2026: T, with no modifier, while the canvas has focus (as F, L and G are; WCAG
+// 2.1.4, active only on focus); Alt+Shift+T was Chrome's own toolbar key on Windows and Linux.
+test("T on the focused canvas hides the toolbar and shows it again, focus staying on the canvas; T typed in a field, or pressed with focus elsewhere, does nothing", async ({ page }) => {
   await page.goto("/keyboard/glass-toolbar-harness.html");
   const tools = page.getByRole("toolbar", { name: "Canvas tools" });
+  const canvas = page.getByRole("application", { name: "Network canvas" });
   await expect(tools).toBeVisible();
-  await page.getByRole("application", { name: "Network canvas" }).focus();
+  // Each checked on its own, so two that each toggled could not cancel out. Focus elsewhere: on a toolbar button, on
+  // the case line.
+  const stillShown = async () => {
+    await page.waitForTimeout(150);
+    await expect(tools).toBeVisible();
+  };
+  await tools.getByRole("button", { name: "Hide toolbar" }).focus();
+  await page.keyboard.press("t");
+  await stillShown();
+  await page.getByRole("button", { name: /^Case: Kestrel/ }).focus();
+  await page.keyboard.press("t");
+  await stillShown();
+  // Typed in a field: the Layout picker, inside the canvas itself.
+  await tools.getByRole("combobox", { name: "Layout" }).focus();
+  await page.keyboard.press("t");
+  await stillShown();
+  // Alt+Shift+T, the first key, is the browser's again.
+  await canvas.focus();
   await page.keyboard.press("Alt+Shift+KeyT");
+  await stillShown();
+  await canvas.focus();
+  await page.keyboard.press("t");
   await expect(tools).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Show toolbar" })).toBeFocused();
-  await page.keyboard.press("Alt+Shift+KeyT");
+  await expect(page.getByRole("button", { name: "Show toolbar" })).toBeVisible();
+  await expect(canvas).toBeFocused();
+  await page.keyboard.press("T");
   await expect(tools).toBeVisible();
-  await expect(tools.getByRole("button", { name: "Hide toolbar" })).toBeFocused();
-  registerCovered("CANVAS_ACTIONS", "alt-shift-t-hides-and-shows-the-toolbar");
+  await expect(canvas).toBeFocused();
+  registerCovered("CANVAS_ACTIONS", "t-on-the-canvas-hides-and-shows-the-toolbar");
 });
 
 test("a chosen label is still there after the page is reloaded, and Default puts it back", async ({

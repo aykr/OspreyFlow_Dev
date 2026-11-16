@@ -20,13 +20,13 @@ FILES=("$APP" "$CANVAS" "$CTRL" "$VIS" "$COMPACT" "$TOGGLE" "$CSS" "$KEYS" "$REG
 : "${OSPREY_PORTS_SLOT:?set the Playwright slot of this lane}"
 SAVED="$(mktemp -d)"
 cp "$REG" "$SAVED/registry-as-found.ts"
-grep -q '"hide-and-show-the-toolbar-by-keyboard"' "$REG" || git apply "$HERE/registry.patch" || exit 2
+grep -q '"t-on-the-canvas-hides-and-shows-the-toolbar"' "$REG" || git apply "$HERE/registry.patch" || exit 2
 for f in "${FILES[@]}"; do cp "$f" "$SAVED/$(basename "$f")"; done
 restore() { for f in "${FILES[@]}"; do cp "$SAVED/$(basename "$f")" "$f"; done; }
 trap 'restore; cp "$SAVED/registry-as-found.ts" "$REG"; rm -rf "$SAVED"' EXIT
 fails=0
 js() { (cd "$WS" && npx vitest run src/App.chrome.test.tsx src/resolution src/canvas/toolbarVisibility.test.ts src/welcome/WorkspaceWelcome.test.tsx 2>&1); }
-kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts keyboard.spec.ts -g "Match strictness|Hide toolbar is reached|Alt\+Shift\+T on the canvas" --workers=2 --reporter=line 2>&1); }
+kb() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts keyboard.spec.ts -g "Match strictness|Hide toolbar is reached|T on the focused canvas" --workers=2 --reporter=line 2>&1); }
 gt() { (cd "$WS" && npx playwright test --config keyboard/playwright.config.ts glass-toolbar.spec.ts --workers=4 --reporter=line 2>&1); }
 red() { grep -E "×|^\s+[0-9]+\) |^FAILED" <<<"$1" | grep -qF "$2"; }
 check() {
@@ -73,20 +73,12 @@ plant "C2 hidden only by the attribute the toolbar's display overrides" "$CSS" '
   "hidden means out of the tab order and the accessibility tree
 the Map's row hides the same way"
 plant "C3 focus left where it was" "$VIS" 's/\(which === "show" \? showRef : hideRef\)\.current\?\.focus\(\);//' kb \
-  "Hide toolbar is reached by Tab and pressed with Enter
-Alt+Shift+T on the canvas hides the toolbar"
+  "Hide toolbar is reached by Tab and pressed with Enter"
 plant "C4 one setting for every analyst" "$VIS" 's/`ospreyflow\.glass\.toolbar\.\$\{username\}`/"ospreyflow.glass.toolbar"/' js \
   "is kept under ospreyflow.glass.toolbar.<username>
 is one analyst's"
 plant "C5 hidden on the Drawing board too" "$VIS" 's/const hidden = here && setting;/const hidden = setting;/' js \
   "the Drawing board is not hidden"
-plant "C6 the key heard where there is no toolbar" "$VIS" 's/if \(!here\) return;\n(\s*const onKey)/$1/' js \
-  "the Drawing board is not hidden"
-plant "C7 the key heard in a text field" "$VIS" 's/if \(target && \(\["INPUT", "TEXTAREA", "SELECT"\]\.includes\(target\.tagName\) \|\| target\.isContentEditable\)\) return;//' js \
-  "Alt+Shift+T hides and shows it"
-plant "C8 Ctrl+Shift+T taken as well" "$VIS" 's/event\.altKey && event\.shiftKey && !event\.ctrlKey && !event\.metaKey/(event.altKey || event.ctrlKey) \&\& event.shiftKey \&\& !event.metaKey/' js \
-  "is not Ctrl+Shift+T
-Alt+Shift+T hides and shows it"
 plant "C9 the Map's row never hidden" "$APP" 's/(id=\{VIEW_TOOLBAR_ID\}) hidden=\{toolbarHidden\}>/$1>/' js \
   "the Map has the same control and the same setting"
 plant "C10 the case line not slimmed" "$APP" 's/slim=\{toolbarHidden\}/slim={false}/' js \
@@ -96,31 +88,39 @@ plant "C11 Show toolbar not saying what it controls" "$TOGGLE" 's/(export const 
 plant "C12 nothing hidden where storage is refused or nobody signed in" "$VIS" 's/  thisPage\.set\(username \?\? "", hidden\);\n//' js \
   "is not remembered for nobody, but still hides for this page
 still hides for this page where the browser's storage refuses it"
-plant "C13 the key not listed in ?" "$KEYS" 's/  \["Alt\+Shift\+T", "Hide or show the toolbar \(Option\+Shift\+T on a Mac\)"\],\n//' js \
+plant "C13 the key not listed in ?" "$KEYS" 's/  \["T", "Hide or show the toolbar \(on the graph\)"\],\n//' js \
   "lists the keys worth knowing"
 plant "C15 the width read off the toolbar, 0 while it is hidden (the first build's shape)" "$CANVAS" 's/const width = containerRef\.current\?\.getBoundingClientRect\(\)\.width \?\? 0;\n(\s*)if \(width > 0\) setToolbarCompact\(isCompactToolbar\(width\)\);/setToolbarCompact(isCompactToolbar(bar.getBoundingClientRect().width));/' gt \
-  "hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (640 px)"
+  "hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (400 px)"
 
 echo "== the lane-reviewer's items"
 plant "C16 Show toolbar and the key under a page over the view" "$APP" 's/ && !pageOver;\n/;\n/' js \
   "under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar"
-plant "C17 every input taken as a text field" "$VIS" 's/return target instanceof HTMLInputElement && TYPED\.has\(target\.type\);/return target instanceof HTMLInputElement;/' js \
-  "Alt+Shift+T works from a control that is not a text field"
-plant "C18 the setting read after the first draw" "$VIS" 's/const hidden = here && setting;/const [ready, setReady] = useState(false); useEffect(() => setReady(true), []); const hidden = here \&\& setting \&\& ready;/; s/import \{ useCallback, useEffect, useRef,/import { useCallback, useEffect, useRef, useState,/' js \
-  "the Glass opens as the analyst left it: hidden at the first draw"
-plant "C18b the setting read after the first draw (browser)" "$VIS" 's/const hidden = here && setting;/const [ready, setReady] = useState(false); useEffect(() => setReady(true), []); const hidden = here \&\& setting \&\& ready;/; s/import \{ useCallback, useEffect, useRef,/import { useCallback, useEffect, useRef, useState,/' gt \
-  "the setting is the analyst's and survives a reload"
 plant "C19 the camera touched when the toolbar hides or shows" "$CANVAS" 's/(    const \[gridOn, setGridOn\])/    useEffect(() => { const camera = sigmaRef.current?.getCamera(); if (camera \&\& toolbarHidden !== undefined) camera.setState({ ratio: camera.getState().ratio * 1.25 }); }, [toolbarHidden]);\n$1/' gt \
   "keeping the graph's centre and zoom (1280 px)
-keeping the graph's centre and zoom (640 px)"
+keeping the graph's centre and zoom (400 px)"
 plant "C20 Hide and Show toolbar drawn below the contrast floor" "$CSS" 's/(\.view-toolbar \.toolbar-toggle \{ margin-left: auto; \})/$1\n.toolbar-toggle { color: var(--border-subtle) !important; }/' gt \
   "the toolbar's new controls, hidden, pass axe and the contrast probe (dark)
 the toolbar's new controls, hidden, pass axe and the contrast probe (light)
 the toolbar's new controls, hidden, pass axe and the contrast probe (govuk)
 the toolbar's new controls, shown, strictness open, pass axe and the contrast probe (light)"
-plant "K1 the ? panel's 40 px key column" "$CSS" 's/grid-template-columns: max-content minmax\(0, 1fr\); column-gap/grid-template-columns: var(--sp-40) minmax(0, 1fr); column-gap/' gt \
-  "the ? panel lists Alt+Shift+T without its key running over its words"
-
+echo "== the canvas's T (the owner's ruling of 16 November 2026)"
+plant "T1 T taken with a modifier (Alt+Shift+T, Chrome's own, again)" "$VIS" 's/&& !event\.ctrlKey && !event\.altKey && !event\.metaKey;/\&\& !event.ctrlKey \&\& !event.metaKey;/' js \
+  "is not T with Ctrl, Alt or Cmd"
+plant "T2 T heard anywhere on the page (a window listener, the first key's shape)" "$VIS" 's/(  useEffect\(\(\) => \{\n    const which = focusRef\.current;)/  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (isToolbarKey(event)) toggleByKey(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [toggleByKey]);\n$1/' js \
+  "T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing"
+plant "T2b T heard anywhere on the page (browser)" "$VIS" 's/(  useEffect\(\(\) => \{\n    const which = focusRef\.current;)/  useEffect(() => { const onKey = (event: KeyboardEvent) => { if (isToolbarKey(event)) toggleByKey(); }; window.addEventListener("keydown", onKey); return () => window.removeEventListener("keydown", onKey); }, [toggleByKey]);\n$1/' kb \
+  "T on the focused canvas hides the toolbar and shows it again"
+plant "T3 T moving focus off the canvas as the buttons do" "$VIS" 's/    if \(!here\) return;\n    focusRef\.current = null;/    if (!here) return;\n    focusRef.current = setting ? "hide" : "show";/' js \
+  "T on the canvas hides and shows it, focus staying on the canvas"
+plant "T4 T not wired to the canvas" "$APP" 's/\n\s*onToolbarKey=\{toggleToolbarByKey\}//' js \
+  "T on the canvas hides and shows it"
+plant "T5 the canvas's T missing (the browser)" "$CANVAS" 's/if \(onToolbarKey && isToolbarKey\(e\)\) \{/if (false) {/' kb \
+  "T on the focused canvas hides the toolbar and shows it again"
+plant "T6 the canvas's T taken from inside it (the Layout picker), the target guard dropped" "$CANVAS" 's/      if \(e\.target !== e\.currentTarget\) return;\n/      if (e.target !== e.currentTarget \&\& !isToolbarKey(e)) return;\n/' kb \
+  "T on the focused canvas hides the toolbar and shows it again"
+plant "C18 the canvas first drawn shown, the setting handed on a draw late" "$APP" 's/(                toolbarHidden=)\{toolbarHidden\}/$1\{drawnLate\}/; s/(  const pageOver = results\.viewInert \|\| ask\.viewInert;\n)/$1  const [drawnLate, setDrawnLate] = useState(false);\n/; s/(  \} = useViewToolbar\(principal\?\.username \|\| null, toolbarHere\);\n)/$1  useEffect(() => setDrawnLate(toolbarHidden), [toolbarHidden]);\n/' js \
+  "the Glass opens as the analyst left it: hidden at the first draw"
 echo "== unplanted: every case green"
 out="$(js)"; grep -E "Tests " <<<"$out"; grep -q "×" <<<"$out" && { echo "UNPLANTED RED (jsdom)"; fails=1; }
 out="$(kb)"; grep -E "passed|failed" <<<"$out" | tail -2; grep -q "failed" <<<"$out" && { echo "UNPLANTED RED (keyboard)"; fails=1; }

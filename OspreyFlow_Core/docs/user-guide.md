@@ -348,8 +348,9 @@ its links in the view back with it.
 
 **Hiding the toolbar.** **Hide toolbar**, at the right-hand end of the graph's toolbar, hides it and
 gives its room to the graph. The case line then becomes one short line, with **Show toolbar** at its
-right-hand end to bring it back. Alt+Shift+T (Option+Shift+T on a Mac) does the same. The map's toolbar
-hides in the same way, under the same setting; the drawing board has no toolbar to hide. OspreyFlow
+right-hand end to bring it back. With the graph selected (click it, or Tab to it), press T to hide or
+show the toolbar. The map's toolbar hides in the same way, with its buttons, under the same setting; the
+drawing board has no toolbar to hide. OspreyFlow
 remembers your choice in this browser, so the Glass opens as you left it. On a narrow window the
 toolbar's words are shorter (**Strictness** and **Hide**), so it stays on one row.
 

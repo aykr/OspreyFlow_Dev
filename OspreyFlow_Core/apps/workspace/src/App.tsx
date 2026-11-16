@@ -1135,6 +1135,7 @@ export function App() {
   const {
     hidden: toolbarHidden,
     toggle: toggleToolbar,
+    toggleByKey: toggleToolbarByKey,
     hideRef: hideToolbarRef,
     showRef: showToolbarRef,
   } = useViewToolbar(principal?.username || null, toolbarHere);
@@ -2300,6 +2301,7 @@ export function App() {
                 }
                 toolbarId={VIEW_TOOLBAR_ID}
                 toolbarHidden={toolbarHidden}
+                onToolbarKey={toggleToolbarByKey}
                 toolbarEnd={<HideToolbarButton ref={hideToolbarRef} onToggle={toggleToolbar} />}
                 graph={(lens?.workingSet ?? workingSetRef.current).graph}
                 store={(lens?.workingSet ?? workingSetRef.current).store}

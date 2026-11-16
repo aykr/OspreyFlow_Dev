@@ -5,7 +5,7 @@ import { forwardRef, useContext } from "react";
 
 import { currentBrand } from "../brand/brand";
 import { CanvasToolbarCompact } from "./toolbarCompact";
-import { TOOLBAR_SHORTCUT, VIEW_TOOLBAR_ID } from "./toolbarVisibility";
+import { VIEW_TOOLBAR_ID } from "./toolbarVisibility";
 
 export interface ToolbarToggleProps {
   onToggle: () => void;
@@ -27,8 +27,7 @@ export const HideToolbarButton = forwardRef<HTMLButtonElement, HideToolbarButton
       aria-label="Hide toolbar"
       aria-expanded={true}
       aria-controls={VIEW_TOOLBAR_ID}
-      aria-keyshortcuts={TOOLBAR_SHORTCUT}
-      title={`Hide toolbar (${TOOLBAR_SHORTCUT}; Option+Shift+T on a Mac)`}
+      title="Hide toolbar (T on the graph)"
       onClick={onToggle}
     >
       {compact ? "Hide" : "Hide toolbar"}
@@ -46,8 +45,7 @@ export const ShowToolbarButton = forwardRef<HTMLButtonElement, ToolbarToggleProp
       className={govuk ? "govuk-link toolbar-toggle toolbar-toggle--show" : "btn btn--ghost toolbar-toggle toolbar-toggle--show"}
       aria-expanded={false}
       aria-controls={VIEW_TOOLBAR_ID}
-      aria-keyshortcuts={TOOLBAR_SHORTCUT}
-      title={`Show toolbar (${TOOLBAR_SHORTCUT}; Option+Shift+T on a Mac)`}
+      title="Show toolbar (T on the graph)"
       onClick={onToggle}
     >
       Show toolbar

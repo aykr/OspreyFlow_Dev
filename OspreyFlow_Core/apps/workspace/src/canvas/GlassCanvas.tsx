@@ -25,6 +25,7 @@
 //   and still unmeasured; past the cap the scatter stays as it is.
 import { DetailsToggle } from "../layout/PanelFrames";
 import { CanvasToolbarCompact, isCompactToolbar } from "./toolbarCompact";
+import { isToolbarKey } from "./toolbarVisibility";
 import { linkHoverText } from "./linkHover";
 import { nodeWithinReach } from "./nodeHitArea";
 import { createNodeBorderProgram } from "@sigma/node-border";
@@ -277,6 +278,8 @@ export interface GlassCanvasProps {
   toolbarHidden?: boolean;
   /** The toolbar's id, which *Hide toolbar* and *Show toolbar* name in `aria-controls`. */
   toolbarId?: string;
+  /** T on the canvas (the owner's ruling of 16 November 2026): App hides or shows the toolbar. */
+  onToolbarKey?: () => void;
   /** The link now selected, or `null` when none is. Selecting a link clears the node selection,
    * and selecting a node clears the link, so the Inspector shows one thing at a time. */
   onEdgeSelect?: (edge: Edge | null) => void;
@@ -498,6 +501,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       toolbarEnd,
       toolbarHidden = false,
       toolbarId,
+      onToolbarKey,
       onEdgeSelect,
       onFocusChange,
       onViewMessages,
@@ -2279,6 +2283,12 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
       // family: without Shift, cycle the selection; with it, cycle everything. The order is
       // `graph.nodes()`' own, which is insertion order and therefore stable within a session —
       // enough for "walk to the other one", which is all this is for.
+      // v0.6.1 glass-rows C: T hides or shows the toolbar, on the canvas alone (WCAG 2.1.4, active only on focus).
+      if (onToolbarKey && isToolbarKey(e)) {
+        e.preventDefault();
+        onToolbarKey();
+        return;
+      }
       if ((e.key === "f" || e.key === "F") && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // ADR-097 step 2: F fits everything in view, as the zoom cluster's Fit does.
         e.preventDefault();

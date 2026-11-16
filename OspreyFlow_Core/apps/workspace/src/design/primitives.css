@@ -814,9 +814,7 @@
 }
 .workspace-welcome__step:hover { background: var(--surface-hover); }
 .workspace-welcome__step .value { font-size: var(--fs-11); color: var(--text-tertiary); }
-/* The key column as wide as its widest key (Alt+Shift+T, v0.6.1 glass-rows), so a long key never runs over its words. */
-.workspace-welcome__keys { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: var(--sp-8); }
-.workspace-welcome__keys li { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; align-items: center; }
+.workspace-welcome__keys li { display: grid; grid-template-columns: var(--sp-40) minmax(0, 1fr); align-items: center; gap: var(--sp-8); }
 /* A view pushed past the cap (ADR-124 decision 2): centred over the canvas, a shadow and no hairline, as
    the welcome panel is; the reader's own figure, two ways out. */
 .view-over-cap {

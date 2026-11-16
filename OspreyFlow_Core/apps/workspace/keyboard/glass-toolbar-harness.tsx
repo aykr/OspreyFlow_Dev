@@ -1,6 +1,6 @@
 // v0.6.1 glass-rows A and C (ADR-145 Amendment 19 decisions 5 and 6): the case line and the real canvas, wired as
 // `App.tsx` wires them, by the same `useViewToolbar` (the toolbar hidden or shown, the setting the analyst's, focus
-// moving between *Hide toolbar* and *Show toolbar*, Alt+Shift+T) and the same `ResolutionThresholdControl` in the
+// moving between *Hide toolbar* and *Show toolbar*, T on the canvas) and the same `ResolutionThresholdControl` in the
 // canvas toolbar after Layout. `glass-toolbar.spec.ts` and `keyboard.spec.ts` drive it; every-harness scans it.
 //   ?user=…        the signed-in analyst (osprey-demo-analyst; `none` for nobody signed in);
 //   ?width=…       the canvas's width in pixels, so the toolbar's own width decides its words;
@@ -84,7 +84,7 @@ window.__GLASS_TOOLBAR__ = {
 };
 
 function Screen() {
-  const { hidden, toggle, hideRef, showRef } = useViewToolbar(username, true);
+  const { hidden, toggle, toggleByKey, hideRef, showRef } = useViewToolbar(username, true);
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
       <ClassificationStrip marking="OFFICIAL" />
@@ -130,6 +130,7 @@ function Screen() {
               }
               toolbarId={VIEW_TOOLBAR_ID}
               toolbarHidden={hidden}
+              onToolbarKey={toggleByKey}
               toolbarEnd={<HideToolbarButton ref={hideRef} onToggle={toggle} />}
             />
           )}

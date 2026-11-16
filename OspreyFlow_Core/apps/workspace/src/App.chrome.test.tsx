@@ -24,11 +24,13 @@ import { forgetToolbarSettings } from "./canvas/toolbarVisibility";
 // real toolbar's own hiding is held in a browser, `keyboard/glass-toolbar.spec.ts`).
 // Each draw's `toolbarHidden` is kept, so the first draw can be held to the analyst's setting (`canvasDraws`).
 const canvasDraws: (boolean | undefined)[] = [];
+// The canvas's T is the real `GlassCanvas`'s (`keyboard.spec.ts`); the stand-in hands its key to `onToolbarKey`, so App's
+// wiring of what T does is held here.
 vi.mock("./canvas/GlassCanvas", () => ({
-  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string }) => {
+  GlassCanvas: ({ toolbarAfterLayout, toolbarEnd, toolbarHidden, toolbarId, onToolbarKey }: { toolbarAfterLayout?: import("react").ReactNode; toolbarEnd?: import("react").ReactNode; toolbarHidden?: boolean; toolbarId?: string; onToolbarKey?: () => void }) => {
     canvasDraws.push(toolbarHidden);
     return (
-      <div role="application" aria-label="Network canvas" tabIndex={0}>
+      <div role="application" aria-label="Network canvas" tabIndex={0} onKeyDown={(e) => { if (e.key === "t" && e.target === e.currentTarget) onToolbarKey?.(); }}>
         <div role="toolbar" aria-label="Canvas tools" id={toolbarId} hidden={toolbarHidden}>{toolbarAfterLayout}{toolbarEnd}</div>
       </div>
     );
@@ -572,7 +574,7 @@ describe("Match strictness in the canvas toolbar (Amendment 19 decision 5)", () 
 // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's rulings 3 and 4, 16 November 2026): a toolbar
 // that can be hidden. *Hide toolbar* at the toolbar's right end hides it and slims the case line, which then ends
 // with *Show toolbar*; each names the toolbar it controls and whether it is shown; focus moves between the two;
-// Alt+Shift+T does the same; the setting is the signed-in analyst's, in this browser; the Map has it, the Drawing
+// T on the focused canvas does the same, focus staying on the canvas (the owner's ruling of 16 November 2026); the setting is the signed-in analyst's, in this browser; the Map has it, the Drawing
 // board does not.
 describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
   const KEY = "ospreyflow.glass.toolbar.osprey-demo-analyst";
@@ -630,7 +632,7 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     expect(canvasDraws.every((hidden) => hidden === true)).toBe(true);
   });
 
-  test("under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and Alt+Shift+T does nothing; back on the view, both are as left", async () => {
+  test("under the Ask & Chat page (ADR-145 Amendment 18) there is no Show toolbar and the key does nothing; back on the view, both are as left", async () => {
     localStorage.setItem(KEY, "hidden");
     render(<App />);
     const show = await within(await screen.findByRole("region", { name: "You are in the Glass" })).findByRole("button", { name: "Show toolbar" });
@@ -641,31 +643,11 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     expect(screen.getByRole("application", { name: "Network canvas" }).closest("[inert]")).not.toBeNull();
     // Showing it would send focus to Hide toolbar inside the inert view, and lose it.
     expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
-    const before = document.activeElement;
-    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    fireEvent.keyDown(document.body, { key: "t", code: "KeyT" });
     expect(localStorage.getItem(KEY)).toBe("hidden");
-    expect(document.activeElement).toBe(before);
     fireEvent.click(opener);
     await vi.waitFor(() => expect(opener.getAttribute("aria-expanded")).toBe("false"));
     expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
-  });
-
-  test("Alt+Shift+T works from a control that is not a text field: a checkbox or a slider", async () => {
-    render(<App />);
-    const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
-    await within(tools).findByRole("button", { name: "Hide toolbar" });
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    document.body.appendChild(box);
-    fireEvent.keyDown(box, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
-    expect(tools.hidden).toBe(true);
-    const range = document.createElement("input");
-    range.type = "range";
-    document.body.appendChild(range);
-    fireEvent.keyDown(range, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
-    expect(tools.hidden).toBe(false);
-    box.remove();
-    range.remove();
   });
 
   test("another analyst's setting on this browser is not this one's", async () => {
@@ -675,21 +657,29 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
   });
 
-  test("Alt+Shift+T hides and shows it, focus moving as the buttons move it; not from a text field, and not Ctrl+Shift+T", async () => {
+  test("T on the canvas hides and shows it, focus staying on the canvas; T anywhere else does nothing", async () => {
     render(<App />);
     const tools = await screen.findByRole("toolbar", { name: "Canvas tools" });
     await within(tools).findByRole("button", { name: "Hide toolbar" });
-    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", ctrlKey: true, shiftKey: true });
+    // Elsewhere: on the page, or typed in search; each checked on its own, so two that each toggled could not cancel out.
+    fireEvent.keyDown(document.body, { key: "t", code: "KeyT" });
     expect(tools.hidden).toBe(false);
-    const search = screen.getByRole("combobox", { name: /Search entities/ });
-    fireEvent.keyDown(search, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    fireEvent.keyDown(screen.getByRole("combobox", { name: /Search entities/ }), { key: "t", code: "KeyT" });
     expect(tools.hidden).toBe(false);
-    fireEvent.keyDown(document.body, { key: "ˇ", code: "KeyT", altKey: true, shiftKey: true });
-    expect(tools.hidden).toBe(true);
-    expect(document.activeElement).toBe(within(caseLine()).getByRole("button", { name: "Show toolbar" }));
     fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
     expect(tools.hidden).toBe(false);
-    expect(document.activeElement).toBe(within(tools).getByRole("button", { name: "Hide toolbar" }));
+    expect(localStorage.getItem(KEY)).toBeNull();
+    const canvas = screen.getByRole("application", { name: "Network canvas" });
+    canvas.focus();
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    expect(tools.hidden).toBe(true);
+    expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
+    // The key's place is the canvas, which keeps focus: nothing was lost to move it from.
+    expect(document.activeElement).toBe(canvas);
+    expect(localStorage.getItem(KEY)).toBe("hidden");
+    fireEvent.keyDown(canvas, { key: "t", code: "KeyT" });
+    expect(tools.hidden).toBe(false);
+    expect(document.activeElement).toBe(canvas);
   });
 
   test("the Map has the same control and the same setting: its row hidden, Show toolbar on the line", async () => {
@@ -712,14 +702,14 @@ describe("a toolbar that can be hidden (Amendment 19 decision 6)", () => {
     expect(within(caseLine()).getByRole("button", { name: "Show toolbar" })).toBeTruthy();
   });
 
-  test("the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and Alt+Shift+T does nothing there", async () => {
+  test("the Drawing board is not hidden: its line is the full one with no Show toolbar, whatever the setting, and T does nothing there", async () => {
     localStorage.setItem(KEY, "hidden");
     render(<App />);
     await screen.findByRole("application", { name: "Network canvas" });
     fireEvent.click(screen.getByRole("button", { name: "Drawing board" }));
     await within(caseLine()).findByText(/^reads /);
     expect(within(caseLine()).queryByRole("button", { name: "Show toolbar" })).toBeNull();
-    fireEvent.keyDown(document.body, { key: "T", code: "KeyT", altKey: true, shiftKey: true });
+    fireEvent.keyDown(document.body, { key: "t", code: "KeyT" });
     expect(localStorage.getItem(KEY)).toBe("hidden");
   });
 });

@@ -985,17 +985,20 @@ the groups, one row, no shadow); each control keeps its own keyboard case.
 *Hide toolbar* at the right-hand end of the canvas toolbar, and of the Map's row (*Add site*, *Draw boundary*),
 hides that toolbar: `hidden`, so out of the tab order and the accessibility tree. The case line is then slim (`ContextBanner`'s
 `slim`) with *Show toolbar* at its right-hand end. Each names the toolbar in `aria-controls` and says whether it is shown in
-`aria-expanded`; focus moves to *Show toolbar* on hiding and back to *Hide toolbar* on showing. Alt+Shift+T
-(Option+Shift+T on a Mac), matched by the key's place, does the same outside fields that take typed text, and is listed in
-"?". The setting is the signed-in analyst's in this browser (`ospreyflow.glass.toolbar.<username>`, "hidden" or absent),
+`aria-expanded`; focus moves to *Show toolbar* on hiding and back to *Hide toolbar* on showing. **T**, with no
+modifier, while the graph's canvas has focus, does the same, focus staying on the canvas (as F, L and G act there; WCAG
+2.1.4, active only on focus), and is listed in "?" as "T — Hide or show the toolbar (on the graph)". The Map has the
+buttons only (T on the map's container is on v0.6.1's list for the platform lane). The setting is the signed-in analyst's in this browser (`ospreyflow.glass.toolbar.<username>`, "hidden" or absent),
 read before the first draw; where nothing can be kept (no one signed in, storage refused) it holds for the page. One
 setting for the Graph and the Map; the Drawing board has no such toolbar and its line is always the full one; while a
-page lies over the view (Amendment 18) the line is the full one and the key does nothing. On the Graph the canvas
+page lies over the view (Amendment 18) the line is the full one (the canvas, inert, takes no key). On the Graph the canvas
 toolbar lies over the canvas, so hiding moves the drawing area's top up by the toolbar's height, once, and the camera is
 untouched. Held by `keyboard/glass-toolbar.spec.ts`, `keyboard.spec.ts`'s three cases (*match-strictness-by-keyboard*,
-*hide-and-show-the-toolbar-by-keyboard*, *alt-shift-t-hides-and-shows-the-toolbar*), `App.chrome.test.tsx` and
-`canvas/toolbarVisibility.test.ts`. Chrome on Windows and Linux binds Shift+Alt+T to focusing its own toolbar; on the
-Graph and the Map the Glass takes it.
+*hide-and-show-the-toolbar-by-keyboard*, *t-on-the-canvas-hides-and-shows-the-toolbar*), `App.chrome.test.tsx` and
+`canvas/toolbarVisibility.test.ts`. The key was first Alt+Shift+T, which Chrome on Windows and Linux binds to focusing its
+own toolbar; no combination with a modifier was free in every browser and screen reader, so the owner ruled T on the
+canvas (16 November 2026; the sources, untested on live screen readers, in
+`process/lanes/case-b/v061-glass-rows-ac/KEY.md`).
 
 **Moving nodes by hand (owner, 6 October 2026; the spec was silent).** Dragging a node moves it, and moves
 the whole selection when the node is in it; the camera does not pan while a node is held, and the click

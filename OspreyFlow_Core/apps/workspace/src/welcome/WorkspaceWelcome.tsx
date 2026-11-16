@@ -46,9 +46,9 @@ const KEYS: [string, string][] = [
   ["←→", "Move between nodes on the canvas"],
   ["Enter", "Expand the focused node by one hop"],
   ["F", "Fit the graph to the window"],
+  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's ruling of 16 November 2026): on the canvas.
+  ["T", "Hide or show the toolbar (on the graph)"],
   ["Esc", "Clear the selection"],
-  // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6), on the Graph and the Map.
-  ["Alt+Shift+T", "Hide or show the toolbar (Option+Shift+T on a Mac)"],
   ["?", "Open or close this panel"],
 ];
 

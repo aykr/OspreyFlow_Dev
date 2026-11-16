@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 // v0.6.1 glass-rows C (ADR-145 Amendment 19 decision 6; the owner's ruling 3, 16 November 2026): whether the
 // view's toolbar is hidden is remembered per signed-in analyst in this browser, as the Studio remembers its
-// mode (`ospreyflow.studio.mode.<username>`), and Alt+Shift+T hides or shows it.
+// mode (`ospreyflow.studio.mode.<username>`), and T on the focused canvas hides or shows it.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { forgetToolbarSettings, isToolbarShortcut, readToolbarHidden, toolbarKey, writeToolbarHidden } from "./toolbarVisibility";
+import { forgetToolbarSettings, isToolbarKey, readToolbarHidden, toolbarKey, writeToolbarHidden } from "./toolbarVisibility";
 
 afterEach(() => {
   localStorage.clear();
@@ -46,17 +46,18 @@ describe("the remembered setting", () => {
   });
 });
 
-describe("Alt+Shift+T", () => {
+// The owner's ruling of 16 November 2026 (Alt+Shift+T replaced: Chrome's own toolbar key on Windows and Linux): T, with
+// no modifier, while the graph's canvas has focus, as F, L and G are (WCAG 2.1.4, active only on focus).
+describe("the canvas's T", () => {
   const key = (init: KeyboardEventInit) => new KeyboardEvent("keydown", init);
-  it("is matched by the key's place, so a Mac's Option character does not matter", () => {
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "T", altKey: true, shiftKey: true }))).toBe(true);
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "ˇ", altKey: true, shiftKey: true }))).toBe(true);
+  it("is T or t, with no modifier", () => {
+    expect(isToolbarKey(key({ key: "t" }))).toBe(true);
+    expect(isToolbarKey(key({ key: "T", shiftKey: true }))).toBe(true);
   });
-  it("is not Ctrl+Shift+T (a browser's reopen tab), nor T alone, nor with Cmd", () => {
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "T", ctrlKey: true, shiftKey: true }))).toBe(false);
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "t" }))).toBe(false);
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "T", altKey: true }))).toBe(false);
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "T", altKey: true, shiftKey: true, metaKey: true }))).toBe(false);
-    expect(isToolbarShortcut(key({ code: "KeyT", key: "T", altKey: true, shiftKey: true, ctrlKey: true }))).toBe(false);
+  it("is not T with Ctrl, Alt or Cmd (a browser's or the system's), nor another letter", () => {
+    expect(isToolbarKey(key({ key: "T", ctrlKey: true, shiftKey: true }))).toBe(false);
+    expect(isToolbarKey(key({ key: "T", altKey: true, shiftKey: true }))).toBe(false);
+    expect(isToolbarKey(key({ key: "t", metaKey: true }))).toBe(false);
+    expect(isToolbarKey(key({ key: "f" }))).toBe(false);
   });
 });

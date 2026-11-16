@@ -46,18 +46,9 @@ test("the setting is the analyst's and survives a reload: the Glass opens hidden
   await open(page);
   await tools(page).getByRole("button", { name: "Hide toolbar" }).click();
   expect(await page.evaluate(() => localStorage.getItem("ospreyflow.glass.toolbar.osprey-demo-analyst"))).toBe("hidden");
-  // From before the page's first script: was the toolbar ever in the page and not hidden, if only for a moment?
-  await page.addInitScript(() => {
-    const seen = { shown: false };
-    (window as unknown as { __TOOLBAR_SEEN__: typeof seen }).__TOOLBAR_SEEN__ = seen;
-    new MutationObserver(() => {
-      const bar = document.getElementById("glass-view-toolbar");
-      if (bar && !bar.hidden) seen.shown = true;
-    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["hidden"] });
-  });
+  // The first draw is held hidden in jsdom (`App.chrome.test.tsx`, plant C18); a watch of the page's mutations here could
+  // not be shown red by a late hide (the plants' C18b), so it is not claimed here.
   await page.reload();
-  await expect(page.locator("#glass-view-toolbar")).toHaveCount(1);
-  expect(await page.evaluate(() => (window as unknown as { __TOOLBAR_SEEN__: { shown: boolean } }).__TOOLBAR_SEEN__.shown)).toBe(false);
   await expect(caseLine(page).getByRole("button", { name: "Show toolbar" })).toBeVisible();
   await expect(tools(page)).toHaveCount(0);
   await open(page, "user=someone-else");
@@ -80,8 +71,9 @@ test("the Map's row hides the same way, under the same setting", async ({ page }
 // top of the drawing area, from the toolbar's bottom edge to the canvas's own top; the canvas element moves only by
 // what the slim line gives back (nothing where both forms are one line). Each is watched every frame, so a move in
 // two steps (a jump and a settle) is seen.
-// At 640 px the full line is two rows and the slim one one, so the canvas element itself moves too (once).
-for (const viewport of [1280, 640]) test(`hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (${viewport} px)`, async ({ page }) => {
+// At 400 px the full line is three rows and the slim one two (measured on B's line), so the canvas element itself moves
+// too, once.
+for (const viewport of [1280, 400]) test(`hiding and showing moves the drawing area's top once each way, by the toolbar's height, keeping the graph's centre and zoom (${viewport} px)`, async ({ page }) => {
   await page.setViewportSize({ width: viewport, height: 800 });
   await open(page);
   await expect.poll(() => page.evaluate(() => window.__GLASS_TOOLBAR__!.cameraState())).not.toBeNull();
@@ -123,7 +115,7 @@ for (const viewport of [1280, 640]) test(`hiding and showing moves the drawing a
   const shown = await read();
   expect(shown.seen.drawing).toEqual([drawingBefore, hidden.seen.drawing[1], drawingBefore]);
   expect(shown.camera).toEqual(before.camera);
-  if (viewport === 640) expect(before.line - hidden.line).toBeGreaterThan(20);
+  if (viewport === 400) expect(before.line - hidden.line).toBeGreaterThan(20);
 });
 
 // The owner's rulings 1, 6 and 7: the toolbar stays one row; when its own width is narrow its words shorten
@@ -179,22 +171,3 @@ for (const look of ["dark", "light", "govuk"] as const) {
     });
   }
 }
-
-// The lane-reviewer's item 6: "Alt+Shift+T" in its key cap is wider than the panel's old 40 px key column, and ran over
-// its words. Each key now ends before its words begin.
-test("the ? panel lists Alt+Shift+T without its key running over its words", async ({ page }) => {
-  await page.goto("/keyboard/top-bar-harness.html");
-  await page.getByRole("button", { name: "Help" }).click();
-  const keys = page.getByRole("list", { name: "Keys worth knowing" });
-  await expect(keys).toBeVisible();
-  await page.evaluate(() => document.fonts.ready);
-  const overlaps = await keys.evaluate((list) =>
-    [...list.querySelectorAll("li")].flatMap((li) => {
-      const cap = li.querySelector("kbd")!.getBoundingClientRect();
-      const words = li.querySelector("kbd")!.nextElementSibling?.getBoundingClientRect();
-      return words && cap.right > words.left ? [li.textContent] : [];
-    }),
-  );
-  expect(overlaps).toEqual([]);
-  await expect(keys.getByText("Alt+Shift+T")).toBeVisible();
-});
