@@ -40325,3 +40325,29 @@ on the test server under lease b.
   default account's token refused, and the manifest's seed holding a token.
 
 Red first: `process/lanes/platform/v060-seed-irsa/red.txt`. Plants: `plants.txt` there, 9/9 red.
+
+### ADR-150, Amendment 3 (16 November 2026) — The index follows a write: what an analyst sees, measured
+
+*v0.6.0's package test, row 4 on candidate `0b51705` (the owner's ruling of 16 November 2026). By platform-b. It states
+what the decision's design implied and nothing said: the index is written after the graph, not with it.*
+
+1. **The search index follows a write asynchronously.** A graph write records its nodes in the outbox in its own
+   transaction (decision 1), and the indexer drains the outbox in batches (decision 2): the index has the write once a
+   batch carrying it is acknowledged, not when the write returns. **Where search reads the index alone** (the poc and
+   cloud-platform shapes, and any deployment with `components.search: opensearch`), **a search made at once after a
+   load or a drawn grid may not find it yet.** Nothing is lost: the outbox delivers at least once (decision 2).
+2. **Measured on R1** (kind on the test server, the poc shape, OpenSearch 2.17 behind the domain stand-in, the
+   install idle but for the run): after the Studio's CDR load, B1's number was found **1.2 s** later; after a grid
+   was drawn, its first cell **1.1 s**, a cell before a redraw **2.2 s**, and a cell for its centroid **1.1 s**; after a
+   redraw, the cell's read had settled at **5.6 s** (the 5 s quiet window included), with no duplicate. On the run
+   before the waits, the worker's index writes landed between about 5 and 25 s after the run's loads began
+   (`process/lanes/platform-b/v060/stage4/`, the spec 08 records). These are measurements of that run, not a bound.
+3. **Spec 08's closing pass waits for it and measures it on every run.** Its cases that search straight after a
+   write ask again, up to 30 s, and record each wait (`tests/scenarios/index_wait.py`, the run's
+   `spec08-search-waits` record); a read after a write that should change nothing (a redraw) is made once the
+   answer has stayed the same for 5 s, so a duplicate written late is still seen. Tests:
+   `tests/scenarios/test_index_wait.py` (a single read shown missing a write the index reaches a moment later),
+   and the closing pass's own cases.
+4. **Not promised:** a figure for the lag under load or on a client's domain; the guides say what an analyst sees in
+   v0.6.1.
+
