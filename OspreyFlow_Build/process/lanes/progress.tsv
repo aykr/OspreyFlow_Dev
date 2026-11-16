@@ -107,7 +107,7 @@ platform	part3	L	building	Part 3: ospreyflow.app beside the GOV.UK demo on one s
 platform-b	v052-superset	M	done	v0.5.2: Superset on Entra ID, embedded dashboards, the render (ADR-148 Am 9, 11)
 admin	v052-identities	M	done	v0.5.2: dashboard identities and report sync on Entra ID (ADR-148 Am 10)
 platform	v052-standin	M	done	v0.5.2: R1's Entra stand-in signs (token, authorize)
-platform-b	v052-r1	L	todo	v0.5.2: R1 on kind with a dashboards check (with platform)
+platform-b	v052-r1	L	done	OVERTAKEN: R1 on kind with the dashboards check ran in full as v0.6.0's package test (rows 2-3 on ea5fc61, fb7f336, b6d33ce; platform-b's HANDOFF, 16 Nov). Was: v0.5.2: R1 on kind with a dashboards check (with platform)
 platform	v052-manifest	M	done	v0.5.2 step 2: the poc manifest and its render test
 platform	v052-opensearch	M	done	v0.5.2 step 3a: OpenSearch on poc
 rules	v052-index	L	done	v0.5.2 step 3c: the index feed, rebuild, drift check
