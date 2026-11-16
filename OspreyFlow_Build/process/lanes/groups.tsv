@@ -197,3 +197,4 @@ rules-b	v060-press-enabled	Housekeeping	Client install
 platform-b	v060-report-sync-valkey	Housekeeping	Client install
 platform-b	v060-stage4	Housekeeping	Client install
 platform-b	v060-superset-reader	Housekeeping	Client install
+platform	v060-seed-irsa	Housekeeping	Client install

@@ -199,3 +199,4 @@ rules-b	v060-press-enabled	S	done	CI's keyboard races: every keyboard spec's pre
 platform-b	v060-report-sync-valkey	S	done	v0.6.0 (the owner, 16 Nov): the report sync opens Valkey with its password and TLS (cloud-platform)	lane/platform-b-v060-report-sync-valkey
 platform-b	v060-stage4	M	building	v0.6.0 stage 4: the package test on 38fafb8, every row
 platform-b	v060-superset-reader	S	done	v0.6.0 (the owner, 16 Nov): a read-only OspreyReader role for Reports Viewers and as the registration role; the probe first	lane/platform-b-v060-superset-reader
+platform	v060-seed-irsa	S	building	v0.6.0: the POC seed Job on cloud-platform gets its IRSA service account and bucket prefix; a failed seed fails INSTALL step 9
