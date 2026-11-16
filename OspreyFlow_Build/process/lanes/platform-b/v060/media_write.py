@@ -4,7 +4,7 @@ the verify holds every bucket to being written by the deployment.
 
 The write is the Glass's own: an entity's picture, `PUT /v1/investigations/{id}/nodes/{node}/picture`
 (ADR-105; spec 03), whose image the Conduit stores in the media store. The entity is the person R1's checks
-loaded (`R1Synthetic`, in the check list's case); the image a synthetic 1x1 PNG made here (rule 9); the
+loaded (`R1Synthetic`, in the check list's case), put on the case's canvas first; the image a synthetic 1x1 PNG made here (rule 9); the
 picture then read back as the entity's own (`POST /v1/investigations/{id}/pictures`). Run through
 `r1_live.sh media`, with R1's own environment; `tests/test_v060_media_write.py` holds it.
 """
@@ -39,6 +39,11 @@ def write(c: Any, admin: dict[str, str], case: str) -> dict[str, Any]:
     person = next((n for n in nodes if n.get("type") == "Person"), None)
     if person is None:
         raise SystemExit(f"no R1Synthetic person to give a picture: {found.status_code} {found.text[:200]}")
+    # On the case's canvas first, as an analyst sets a picture on an entity they are looking at: the picture service
+    # reads the node from the case's working set (`entity_pictures._entity`), not from search (row 6: 404).
+    seeded = c.post(f"/v1/investigations/{case}/seed", headers=admin, json={"nodes": [person], "edges": []})
+    if seeded.status_code != 200:
+        raise SystemExit(f"the person could not be put on the case's canvas: {seeded.status_code} {seeded.text[:200]}")
     put = c.put(f"/v1/investigations/{case}/nodes/{person['id']}/picture", headers={**admin, "Content-Type": "image/png"},
                 params={"name": NAME, "classification": "OFFICIAL", "legal_basis": "synthetic test data (R1)"},
                 content=png())  # fmt: skip

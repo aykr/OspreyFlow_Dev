@@ -6,7 +6,10 @@ answers the entity's picture only once one was stored (rule 15).
 What a mistake would do, and the case that catches it (rule 12):
 - a write the route refuses, taken for written: `test_a_refused_picture_stops_in_words`;
 - a picture "set" that is not the entity's own: `test_a_picture_not_read_back_stops_in_words`;
-- an image that is not one: `test_the_image_is_a_real_png`.
+- an image that is not one: `test_the_image_is_a_real_png`;
+- a picture asked for an entity not on the case's canvas (the service reads the node from the working set,
+  `entity_pictures._entity`; v0.6.0's row 6: 404 node_not_found): the stand-in refuses it as the real one does,
+  so `test_the_picture_is_written_and_read_back` needs the person seeded first.
 """
 
 from __future__ import annotations
@@ -37,11 +40,14 @@ class _Answer:
 
 class _Conduit:
     def __init__(self, *, keeps: bool = True) -> None:
-        self.keeps, self.stored = keeps, {}
+        self.keeps, self.stored, self.canvas = keeps, {}, set()
 
     def post(self, path: str, headers: dict[str, str], json: dict[str, Any]) -> _Answer:
         if path.endswith("/search"):
             return _Answer(200, {"nodes": [{"id": "p1", "type": "Person"}]})
+        if path.endswith("/seed"):
+            self.canvas |= {n["id"] for n in json["nodes"]}
+            return _Answer(200, {"delta": {}})
         if path.endswith("/pictures"):
             return _Answer(200, {"pictures": {n: self.stored[n] for n in json["node_ids"] if n in self.stored}})
         raise AssertionError(path)
@@ -56,6 +62,8 @@ class _Conduit:
         if not params.get("legal_basis"):
             return _Answer(422, {"detail": "legal_basis required"})
         node = path.split("/")[5]
+        if node not in self.canvas:  # the picture service reads the node from the case's working set alone
+            return _Answer(404, {"error": "node_not_found"})
         if self.keeps:
             self.stored[node] = "doc-1"
         return _Answer(200, {"document_id": "doc-1"})
