@@ -25,8 +25,8 @@ rp	The release path: images push stamped; the dev release workflow retired; rele
 3	Package: the candidate prepared on a branch (platform-b, on sol, the checklist up to the owner's word); its merge is the candidate	platform-b	2026-11-15	2026-11-16	y	1,2	platform-b:v060-stage3-done
 sj	Stage 4's find: the cloud-platform search Jobs given the managed database's settings (the owner's word, 15 Nov); then a new candidate	platform-b	2026-11-15	2026-11-16	y	-	platform-b:v060-search-jobs-pg
 c2	CI green on the new candidate 0c158b8 (the search Jobs fix in), then the release dry run re-checked on it	orchestrator	2026-11-16	2026-11-16	y	sj	orchestrator:v060-c2-ci
-4	Package test: one fresh install of v0.6.0 on the candidate 0c158b8 from row 0, every check (about 5 h)	platform-b	2026-11-16	2026-11-16	y	c2	platform-b:v060-stage4-package-test
-5	Release v0.6.0 on the owner's word given in advance: the product repository and its tag, the release workflow's signed images	orchestrator	2026-11-16	2026-11-16	y	4	-
+4	Package test: one fresh install of v0.6.0 on the candidate 0c158b8 from row 0, every check (about 5 h)	platform-b	2026-11-16	2026-11-16	y	sj	platform-b:v060-stage4-package-test
+5	Release v0.6.0 on the owner's word given in advance: the product repository and its tag, the release workflow's signed images	orchestrator	2026-11-16	2026-11-16	y	4,c2	-
 rb	The GOV.UK demo rebuilt fresh from v0.6.0 (govuk.ospreyflow.app): tiles ahead, backup, fresh install, settlements, checks	demo	2026-11-16	2026-11-16	y	5	demo:v060-govuk-rebuild
 gm	The owner enters the Gemini key on the rebuilt demo; then the Gemini checks (engine choice, one answer, budget, egress). From here the demo is protected	owner	2026-11-16	2026-11-16	y	rb	-
 ws	The websites ospreyflow.org and ospreyflow.net: LIVE on http (the owner's DNS, 16 Nov); HTTPS switched on as GitHub issues each certificate	orchestrator	2026-11-16	2026-11-16	n	-	orchestrator:v060-websites

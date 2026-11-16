@@ -75,3 +75,4 @@ Once the v0.6.0 rebuild is complete and the owner has entered the Gemini key, **
 rebuild, update, settings change, restore, port or certificate change, and no step of Part 3's cutover. A change is
 proposed to the owner in one line (what changes, the expected downtime, the way back) and waits for their word.
 Reading it (checks, health, the gate) is not a disruption.
+- 16 Nov ~06:50Z: stage 4 may start before CI completes on the candidate, in parallel; the release still needs CI fully green on that exact commit (the owner, amending the word in advance for this run).
