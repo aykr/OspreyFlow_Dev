@@ -12,7 +12,7 @@ status file, the dial and the accounts file: `slice-line/README.md`. Set-up only
 
 ## Acceptance test
 
-`OspreyFlow_Build/scripts/slice_line/tests/test_gates.py`, through `tests/run.sh`: each gate shown refusing a
+`OspreyFlow_Build/scripts/slice_line/tests/test_gates.py`, through `OspreyFlow_Build/scripts/slice_line/tests/run.sh`: each gate shown refusing a
 planted violation in the shape its real call site produces.
 
 ## Checks
