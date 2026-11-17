@@ -63,7 +63,14 @@ def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
         tip = c.git(["rev-parse", branch], c.REPO, check=False) if branch_exists(branch) else ""
         verify = c.read_json(rec / f"verify-{tip}.json") if tip else None
         tests = c.read_json(rec / f"tests-{tip}.json") if tip else None
-        kw = {"track": str(st.get("track") or s.get("track") or ""), "branch": branch, "account": st.get("account", "")}
+        track = str(st.get("track") or s.get("track") or "")
+        account = st.get("account", "")
+        if not account and track:
+            try:
+                account = c.account_for("builder", track)
+            except (OSError, KeyError, TypeError):
+                account = ""
+        kw = {"track": track, "branch": branch, "account": account}
         state, note, evidence, source = None, "", "", ""
         builds_entry = None
         if merged:
