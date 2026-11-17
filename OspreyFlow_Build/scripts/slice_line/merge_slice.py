@@ -11,8 +11,9 @@
   4. the branch touches no protected path (the owner's files, the never-staged files, the line itself);
   5. the acceptance test was red before the slice (the base, with the slice's acceptance files) ...
   6. ... and is green, with the slice's checks, on the merge result;
-  7. today's full gate is green on the merge result (FULL_GATE, on the test server through stack_lease.sh,
-     and the live files the change reaches, when there are any).
+  7. today's full gate is green on the merge result (FULL_GATE: make -k ci and make test in the merge tree's own
+     environment, built as CI builds it, never the main checkout's; then the live files the change reaches, when
+     there are any, on the test server through stack_lease.sh).
 Then main is fast-forwarded to the tested merge commit (never anything untested), push_main.sh runs, and
 board.py writes the board and the dashboard's status file. Nothing is changed on any refusal.
 """
@@ -22,10 +23,12 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 
@@ -44,8 +47,8 @@ class Refused(Exception):
     pass
 
 
-def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = False) -> int:
-    env = dict(os.environ)
+def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = False, env: dict | None = None) -> int:
+    env = dict(os.environ if env is None else env)
     env.setdefault("ARCADEDB_HTTP_PORT", "9")
     env.setdefault("POSTGRES_PORT", "9")
     with (log.open("a") if log else open(os.devnull, "w")) as fh:
@@ -54,14 +57,96 @@ def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = 
         return subprocess.run(cmd, cwd=str(cwd), shell=shell, stdout=fh, stderr=subprocess.STDOUT, env=env).returncode
 
 
+#: The full gate's offline targets, both run on the merge result whatever the first one says: `make -k ci` (the
+#: gates) and `make test` (the offline suite GitHub's `test` job runs; main went red on 17 November 2026 with
+#: `make -k ci` alone green there, because the rollup test is only in `make test`).
+FULL_GATE_TARGETS = (("make", "-k", "ci"), ("make", "test"))
+#: Closed ports: an offline run reaches no store, and never the owner's deployment on 2480 (port guard).
+OFFLINE_PORTS = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
+                 "CLICKHOUSE_HTTP_PORT": "59994"}
+#: What a caller's shell may carry that would point the gate at another environment (the main checkout's venv).
+SCRUBBED = ("VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "PYTHONPATH", "PYTHONHOME", "CONDA_PREFIX", "CONDA_DEFAULT_ENV",
+            "OSPREY_LANE", "OSPREY_PORTS_SLOT")
+
+
+class GateEnvError(Exception):
+    pass
+
+
+def ci_node_major(tree: Path) -> str:
+    """The Node major version CI's jobs set up (`node-version` in the tree's own ci.yml): exactly one."""
+    text = (tree / ".github/workflows/ci.yml").read_text()
+    majors = set(re.findall(r"node-version:\s*[\"']?(\d+)", text))
+    if len(majors) != 1:
+        raise GateEnvError(f"ci.yml names {len(majors)} Node versions ({', '.join(sorted(majors)) or 'none'}); "
+                           "the gate needs exactly one to build its environment as CI does.")
+    return majors.pop()
+
+
+def node_dir(major: str, path: str) -> Path:
+    """A bin folder whose `node` is CI's major: the line's own (~/.ospreyflow/slice-line/node/v<major>/bin), then PATH."""
+    for d in [c.DATA / "node" / f"v{major}" / "bin", *map(Path, path.split(os.pathsep))]:
+        node = d / "node"
+        if node.is_file() and os.access(node, os.X_OK):
+            v = subprocess.run([str(node), "--version"], capture_output=True, text=True, check=False).stdout.strip()
+            if v.startswith(f"v{major}."):
+                return d
+    raise GateEnvError(f"no Node {major} (CI's) is installed: put one at {c.DATA / 'node' / f'v{major}'} "
+                       f"(its bin/node), or on PATH. The gate does not run on another major.")
+
+
+def lane_slot(tree: Path, lane: str) -> str:
+    for ln in (tree / "OspreyFlow_Build/scripts/lane_ports.tsv").read_text().splitlines():
+        parts = ln.split("\t")
+        if not ln.startswith("#") and len(parts) >= 2 and parts[0] == lane:
+            return parts[1].strip()
+    raise GateEnvError(f"lane_ports.tsv gives the {lane} lane no Playwright slot.")
+
+
+def ci_env(tree: Path, log: Path) -> dict:
+    """The merge tree's own environment, built as GitHub's `test` job builds it, never the main checkout's.
+
+    A fresh venv from the lock (`uv sync --frozen`, no extras: the Mac's usual --all-extras venv carries spaCy,
+    which no-langchain-check refuses), `npm ci` from the lock under CI's Node major, and a shell with nothing
+    pointing elsewhere: no VIRTUAL_ENV, no other `.venv/bin` on PATH, the closed ports, the merger's slot.
+    """
+    core = tree / "OspreyFlow_Core"
+    if (core / ".venv").exists() or (core / "node_modules").exists():
+        raise GateEnvError(f"{core} already has a .venv or node_modules: the gate builds its own, fresh.")
+    env = {k: v for k, v in os.environ.items() if k not in SCRUBBED and not k.startswith("npm_config_")}
+    keep = [p for p in env.get("PATH", "").split(os.pathsep) if p and not p.rstrip("/").endswith("/.venv/bin")]
+    nd = node_dir(ci_node_major(tree), os.pathsep.join(keep))
+    env["PATH"] = os.pathsep.join([str(nd), *keep, str(Path.home() / ".local/bin")])
+    env.update(OFFLINE_PORTS, OSPREY_PORTS_SLOT=lane_slot(tree, GATE_LANE))
+    uv = shutil.which("uv", path=env["PATH"])
+    if not uv:
+        raise GateEnvError("uv is not installed (CI's setup-uv): the gate cannot build its venv.")
+    for cmd in ([uv, "sync", "--frozen"], [str(nd / "npm"), "ci", "--no-audit", "--no-fund"]):
+        if run(cmd, core, log, env=env) != 0:
+            raise GateEnvError(f"building the gate's environment failed at: {' '.join(cmd[1:3])}")
+    if not (core / ".venv/bin/python").is_file():
+        raise GateEnvError("uv sync made no .venv in the merge tree.")
+    return env
+
+
 def full_gate(tree: Path, base: str, log: Path) -> int:
-    """Today's full gate on the merge result: make -k ci on the test server, then the live files it reaches."""
+    """Today's full gate on the merge result, in its own CI-built environment: make -k ci and make test, then the
+    live files the change reaches (on the test server through the lease, as they need stores)."""
     lease = c.REPO / LEASE
-    code = run([str(lease), "offline", GATE_LANE, "--", "make", "-k", "ci"], tree / "OspreyFlow_Build", log)
-    if code != 0:
-        return code
-    sel = subprocess.run([str(c.REPO / "OspreyFlow_Core/.venv/bin/python"), "-m", "tools.live_select", "--base", base],
-                         cwd=str(tree / "OspreyFlow_Build"), capture_output=True, text=True)
+    try:
+        env = ci_env(tree, log)
+    except GateEnvError as e:
+        log.open("a").write(f"\nREFUSED: the gate's environment: {e}\n")
+        return 3
+    codes = []
+    for target in FULL_GATE_TARGETS:
+        started = time.monotonic()
+        codes.append(run(list(target), tree / "OspreyFlow_Build", log, env=env))
+        log.open("a").write(f"\n{' '.join(target)}: exit {codes[-1]} in {time.monotonic() - started:.0f} s\n")
+    if any(codes):
+        return next(x for x in codes if x)
+    sel = subprocess.run([str(tree / "OspreyFlow_Core/.venv/bin/python"), "-m", "tools.live_select", "--base", base],
+                         cwd=str(tree / "OspreyFlow_Build"), capture_output=True, text=True, env=env)
     if sel.returncode != 0:
         log.open("a").write(sel.stdout + sel.stderr)
         return sel.returncode

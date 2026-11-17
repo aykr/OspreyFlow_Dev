@@ -602,3 +602,114 @@ def test_a_seat_refuses_to_start_without_the_guard(world):
     (data / "bin/guard.py").write_text("import sys; sys.exit(0)\n")  # a guard that refuses nothing
     out = sh(run, w["repo"], w["env"], check=False)
     assert out.returncode == 3 and "differs from the install manifest" in out.stderr
+
+
+# ------------------------------------------------------------------ the full gate itself (not its stand-in)
+# The merge cases above replace FULL_GATE with TEST_GATE's exit code. These run the real full_gate, in a
+# subprocess as merge_slice.py runs it, against fake uv, npm, node and make that record what they were given:
+# the arguments, the folder, VIRTUAL_ENV, the ports and slot, the node and python a bare call would reach.
+
+FAKE = r'''#!/bin/sh
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "@NAME@" "$*" "$PWD" "${VIRTUAL_ENV:-}" \
+  "${ARCADEDB_HTTP_PORT:-}/${OSPREY_PORTS_SLOT:-}" "$(node --version 2>/dev/null)" "$(command -v python)" >> "@LOG@"
+@EXTRA@
+'''
+
+
+def fake(path, name, log, extra=""):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(FAKE.replace("@NAME@", name).replace("@LOG@", str(log)).replace("@EXTRA@", extra))
+    path.chmod(0o755)
+
+
+@pytest.fixture
+def gate(world):
+    """A merge tree shaped like this repository's, CI's Node 22 and a Node 24, and the main checkout's own venv."""
+    w, t = world, world["tmp"]
+    calls = t / "calls.tsv"
+    tree = t / "tree"
+    (tree / ".github/workflows").mkdir(parents=True)
+    (tree / ".github/workflows/ci.yml").write_text(
+        'jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@v4\n        with: { node-version: "22" }\n'
+        '  b:\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: "22"\n')
+    (tree / "OspreyFlow_Core").mkdir()
+    (tree / "OspreyFlow_Build/scripts").mkdir(parents=True)
+    (tree / "OspreyFlow_Build/scripts/lane_ports.tsv").write_text("# lane\tslot\nmerger\t13\ncase\t5\n")
+    bin_ = t / "fakebin"
+    venv_py = 'mkdir -p .venv/bin && cp "$0.python" .venv/bin/python' 
+    fake(bin_ / "uv", "uv", calls, f'[ "$1" = sync ] && {venv_py}\nexit 0')
+    fake(bin_ / "uv.python", "python", calls, 'echo "$0" >> "' + str(t / "pythons.txt") + '"\nexit 0')
+    fake(bin_ / "make", "make", calls, 'case " $* " in *" $FAKE_MAKE_FAIL "*) exit 2;; esac\nexit 0')
+    for major in ("22", "24"):
+        nb = t / f"node{major}/bin"
+        nb.mkdir(parents=True)
+        (nb / "node").write_text(f"#!/bin/sh\necho v{major}.1.0\n")
+        (nb / "node").chmod(0o755)
+        fake(nb / "npm", f"npm{major}", calls, "exit 0")
+    main_venv = w["repo"] / "OspreyFlow_Core/.venv/bin"
+    fake(main_venv / "python", "MAIN-CHECKOUT-PYTHON", calls, "exit 0")
+    return {**w, "tree": tree, "calls": calls, "bin": bin_, "main_venv": main_venv, "pythons": t / "pythons.txt",
+            "node22": t / "node22/bin", "node24": t / "node24/bin"}
+
+
+def run_gate(g, nodes=("node24", "node22"), fail=""):
+    env = dict(g["env"])
+    # the caller's shell as on this Mac: the main checkout's venv active and first on PATH
+    env["VIRTUAL_ENV"] = str(g["main_venv"].parent)
+    env["PATH"] = os.pathsep.join([str(g["main_venv"]), str(g["bin"]), *(str(g[n]) for n in nodes), "/usr/bin", "/bin"])
+    env["OSPREY_LANE"] = "case"
+    env["FAKE_MAKE_FAIL"] = fail
+    log = g["tmp"] / "gate.log"
+    code = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import merge_slice as m; "
+            "sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
+    p = subprocess.run([g["py"], "-c", code, str(g["lines"]), str(g["tree"]), str(log)], env=env,
+                       capture_output=True, text=True, check=False)
+    rows = [ln.split("\t") for ln in g["calls"].read_text().splitlines()] if g["calls"].exists() else []
+    calls = [dict(zip(("name", "args", "cwd", "venv", "ports", "node", "python"), r)) for r in rows]
+    return p.returncode, calls, (log.read_text() if log.exists() else "") + p.stderr
+
+
+def test_the_full_gate_runs_make_ci_and_make_test_in_the_merge_tree(gate):
+    rc, calls, out = run_gate(gate)
+    assert rc == 0, out
+    makes = [(c_["args"], c_["cwd"]) for c_ in calls if c_["name"] == "make"]
+    build = str(gate["tree"] / "OspreyFlow_Build")
+    assert makes == [("-k ci", build), ("test", build)]
+
+
+@pytest.mark.parametrize("red", ["test", "ci"])
+def test_the_full_gate_is_red_when_only_one_of_make_ci_and_make_test_is_red(gate, red):
+    rc, calls, _out = run_gate(gate, fail=red)
+    assert rc != 0
+    assert [c_["args"] for c_ in calls if c_["name"] == "make"] == ["-k ci", "test"]  # both ran, both reported
+    assert "MAIN-CHECKOUT-PYTHON" not in [c_["name"] for c_ in calls]
+
+
+def test_the_full_gate_builds_its_environment_as_ci_does_never_the_main_checkouts(gate):
+    rc, calls, out = run_gate(gate)
+    assert rc == 0, out
+    core = str(gate["tree"] / "OspreyFlow_Core")
+    order = [(c_["name"], c_["args"].split(" ")[0], c_["cwd"]) for c_ in calls]
+    assert order[:2] == [("uv", "sync", core), ("npm22", "ci", core)], order
+    assert [c_["args"] for c_ in calls if c_["name"] == "uv"] == ["sync --frozen"]  # from the lock, no extras
+    for c_ in calls:
+        assert c_["name"] != "MAIN-CHECKOUT-PYTHON", c_
+        assert c_["venv"] == "", c_                      # the caller's VIRTUAL_ENV is not carried in
+        assert c_["node"] == "v22.1.0", c_               # CI's major, though Node 24 is earlier on PATH
+        assert c_["ports"] == "59991/13", c_             # closed ports, the merger's Playwright slot
+        assert str(gate["main_venv"]) not in c_["python"], c_
+    # live_select ran on the merge tree's own venv
+    assert gate["pythons"].read_text().split() == [str(gate["tree"] / "OspreyFlow_Core/.venv/bin/python")]
+
+
+def test_the_full_gate_refuses_a_node_other_than_cis(gate):
+    rc, calls, out = run_gate(gate, nodes=("node24",))
+    assert rc == 3 and "no Node 22" in out
+    assert not [c_ for c_ in calls if c_["name"] == "make"]
+
+
+def test_the_full_gate_refuses_a_tree_that_already_has_an_environment(gate):
+    (gate["tree"] / "OspreyFlow_Core/.venv/bin").mkdir(parents=True)
+    rc, calls, out = run_gate(gate)
+    assert rc == 3 and "builds its own, fresh" in out
+    assert not [c_ for c_ in calls if c_["name"] == "make"]
