@@ -43,16 +43,21 @@ M = [
  ("slice_start.py", '        near = c.near_limit(acct)\n', '        near = None\n', "near_its_limit"),
  ("slice_start.py", '        if not c.signed_in(acct):', '        if False:', "signed_out"),
  ("run_seat.py", 'if not p.is_file() or sha(p) != manifest.get(h):', 'if False:', "seat_refuses_to_start"),
+ (".claude/agents/slice-verifier.md", 'tools: Read, Grep, Glob, Bash, StructuredOutput\n', 'tools: Read, Grep, Glob, Bash\n', "offered_structured_output"),
 ]
 bad = 0
 for f, old, new, test in M:
     d = S / "OspreyFlow_Build/scripts/slice_line"
     if d.exists(): shutil.rmtree(d)
     shutil.copytree(W / "OspreyFlow_Build/scripts/slice_line", d, ignore=shutil.ignore_patterns("__pycache__"))
-    t = (d / f).read_text()
+    agents = S / ".claude/agents"  # the seats' definitions, read by the suite from the repository's root
+    if agents.exists(): shutil.rmtree(agents)
+    shutil.copytree(W / ".claude/agents", agents)
+    target = S / f if f.startswith(".claude/") else d / f
+    t = target.read_text()
     if old not in t:
         print("NOT FOUND", f, test); bad += 1; continue
-    (d / f).write_text(t.replace(old, new, 1))
+    target.write_text(t.replace(old, new, 1))
     p = subprocess.run([PY, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", "-c", str(d / "tests/pytest.ini"), str(d / "tests"), "-k", test],
                        capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "PYTHONDONTWRITEBYTECODE": "1"})
     red = p.returncode != 0 and "failed" in p.stdout and "no tests ran" not in p.stdout

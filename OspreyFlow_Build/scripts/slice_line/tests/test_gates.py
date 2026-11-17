@@ -713,3 +713,18 @@ def test_the_full_gate_refuses_a_tree_that_already_has_an_environment(gate):
     rc, calls, out = run_gate(gate)
     assert rc == 3 and "builds its own, fresh" in out
     assert not [c_ for c_ in calls if c_["name"] == "make"]
+
+
+# ------------------------------------------------------------------ the verifier's verdict reaches the line
+# run_seat.py launches the verifier with --json-schema and reads its verdict from the result's structured_output.
+# Claude Code offers that answer through a StructuredOutput tool, and an agent definition's tools list is the
+# whole of what its session is offered: without it there, the verifier's "pass" came back as prose only, was
+# recorded as "no verdict returned", and stopped the dry run's slice (17 November 2026; shown live with an
+# inline agent on Claude Code 2.1.326, both ways).
+
+
+def test_the_verifier_is_offered_structured_output_for_its_verdict():
+    agent = (SRC.parents[2] / ".claude/agents/slice-verifier.md").read_text()
+    tools = next(ln for ln in agent.splitlines() if ln.startswith("tools:"))
+    assert '"--json-schema"' in (SRC / "run_seat.py").read_text()  # the coupling this case guards
+    assert "StructuredOutput" in [t.strip() for t in tools[len("tools:"):].split(",")], tools

@@ -1,7 +1,7 @@
 ---
 name: slice-verifier
 description: Read-only verifier for one slice of the v0.6.2 slice line, started only by run_seat.py, never the session that built the slice. Returns pass, or findings with evidence.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, StructuredOutput
 model: opus
 effort: high
 color: purple
