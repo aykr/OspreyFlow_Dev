@@ -10,6 +10,7 @@ down, and when it cannot answer (the refusal the draft let through).
 from __future__ import annotations
 
 import os
+import select
 import shutil
 import subprocess
 import time
@@ -1357,16 +1358,36 @@ def test_the_start_call_returns_while_the_run_goes_on(lease, tmp_path: Path) -> 
     # must-fix 1: `pkill -f "sleep 6"` ended any such process of the same user, on a shared server).
     sentinel = str(tmp_path / "start-call-sentinel")
     bystander = subprocess.Popen(["sleep", "60"])
+    # Ordered by events, not by the clock (17 November 2026: "< 3 s" from the call failed under make test's 12
+    # workers, the copy and set-up before "Running on" alone taking 3.6 s). The run waits until this case releases
+    # it, then marks that it ended. If the start call held ssh until the run ended, "Running on" could only come
+    # after the release, which this case gives only once it has the line: so the line never comes (the 120 s
+    # below is a hang guard, not a measure), or comes with the run already ended. How long the set-up takes under
+    # load does not matter to either.
+    release, ended = tmp_path / "run-release", tmp_path / "run-ended"
+    run = (
+        "import os,sys,time; r,d=sys.argv[1:3]; t=time.monotonic(); "
+        "[time.sleep(0.05) for _ in iter(lambda: os.path.exists(r) or time.monotonic()-t>120, True)]; "
+        "open(d,mode=chr(119)).close()"
+    )
     caller = subprocess.Popen(
-        ["bash", str(SCRIPT), "remote", "case", "--", "python3", "-c", "import time; time.sleep(6)", sentinel],
+        ["bash", str(SCRIPT), "remote", "case", "--", "python3", "-c", run, str(release), str(ended), sentinel],
         cwd=wt / "OspreyFlow_Build", env=env, stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
     )  # fmt: skip
     try:
-        started = time.monotonic()
-        line = caller.stderr.readline() if caller.stderr else ""
+        assert caller.stderr is not None
+        ready, _, _ = select.select([caller.stderr], [], [], 120)
+        assert ready, "the start call held ssh until the run ended: no 'Running on' while the run waited"
+        line = caller.stderr.readline()
         assert "Running on" in line, line
-        assert time.monotonic() - started < 3, "the start call held ssh until the run ended"
+        assert not ended.exists(), "the start call returned only after the run had ended"
+        release.touch()
+        for _ in range(1200):  # the run went on after the start call returned, and ends once released
+            if ended.exists():
+                break
+            time.sleep(0.05)
+        assert ended.exists(), "the run was not running after the start call returned"
     finally:
         caller.kill()
         caller.wait()
