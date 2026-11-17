@@ -649,8 +649,9 @@ def test_a_seat_refuses_to_start_without_the_guard(world):
 # the arguments, the folder, VIRTUAL_ENV, the ports and slot, the node and python a bare call would reach.
 
 FAKE = r'''#!/bin/sh
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "@NAME@" "$*" "$PWD" "${VIRTUAL_ENV:-}" \
-  "${ARCADEDB_HTTP_PORT:-}/${OSPREY_PORTS_SLOT:-}" "$(node --version 2>/dev/null)" "$(command -v python)" >> "@LOG@"
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "@NAME@" "$*" "$PWD" "${VIRTUAL_ENV:-}" \
+  "${ARCADEDB_HTTP_PORT:-}/${OSPREY_PORTS_SLOT:-}" "$(node --version 2>/dev/null)" "$(command -v python)" \
+  "${UV_PYTHON:-}" >> "@LOG@"
 @EXTRA@
 '''
 
@@ -669,7 +670,7 @@ def gate(world):
     tree = t / "tree"
     (tree / ".github/workflows").mkdir(parents=True)
     (tree / ".github/workflows/ci.yml").write_text(
-        'jobs:\n  a:\n    steps:\n      - uses: actions/setup-node@v4\n        with: { node-version: "22" }\n'
+        'env:\n  UV_PYTHON: "3.12"\njobs:\n  a:\n    steps:\n      - uses: actions/setup-node@v4\n        with: { node-version: "22" }\n'
         '  b:\n    steps:\n      - uses: actions/setup-node@v4\n        with:\n          node-version: "22"\n')
     (tree / "OspreyFlow_Core").mkdir()
     (tree / "OspreyFlow_Build/scripts").mkdir(parents=True)
@@ -677,7 +678,9 @@ def gate(world):
     bin_ = t / "fakebin"
     venv_py = 'mkdir -p .venv/bin && cp "$0.python" .venv/bin/python' 
     fake(bin_ / "uv", "uv", calls, f'[ "$1" = sync ] && {venv_py}\nexit 0')
-    fake(bin_ / "uv.python", "python", calls, 'echo "$0" >> "' + str(t / "pythons.txt") + '"\nexit 0')
+    fake(bin_ / "uv.python", "python", calls,
+         '[ "$1" = --version ] && { echo "Python ${FAKE_VENV_PYTHON:-3.12.9}"; exit 0; }\n'
+         'echo "$0" >> "' + str(t / "pythons.txt") + '"\nexit 0')
     fake(bin_ / "make", "make", calls, 'case " $* " in *" $FAKE_MAKE_FAIL "*) exit 2;; esac\nexit 0')
     for major in ("22", "24"):
         nb = t / f"node{major}/bin"
@@ -691,20 +694,22 @@ def gate(world):
             "node22": t / "node22/bin", "node24": t / "node24/bin"}
 
 
-def run_gate(g, nodes=("node24", "node22"), fail=""):
+def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9"):
     env = dict(g["env"])
     # the caller's shell as on this Mac: the main checkout's venv active and first on PATH
     env["VIRTUAL_ENV"] = str(g["main_venv"].parent)
     env["PATH"] = os.pathsep.join([str(g["main_venv"]), str(g["bin"]), *(str(g[n]) for n in nodes), "/usr/bin", "/bin"])
     env["OSPREY_LANE"] = "case"
     env["FAKE_MAKE_FAIL"] = fail
+    env["FAKE_VENV_PYTHON"] = venv_python
+    env["UV_PYTHON"] = "3.13"  # the caller's own choice, as on this Mac: never the gate's
     log = g["tmp"] / "gate.log"
     code = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import merge_slice as m; "
             "sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
     p = subprocess.run([g["py"], "-c", code, str(g["lines"]), str(g["tree"]), str(log)], env=env,
                        capture_output=True, text=True, check=False)
     rows = [ln.split("\t") for ln in g["calls"].read_text().splitlines()] if g["calls"].exists() else []
-    calls = [dict(zip(("name", "args", "cwd", "venv", "ports", "node", "python"), r)) for r in rows]
+    calls = [dict(zip(("name", "args", "cwd", "venv", "ports", "node", "python", "uv_python"), r)) for r in rows]
     return p.returncode, calls, (log.read_text() if log.exists() else "") + p.stderr
 
 
@@ -731,6 +736,7 @@ def test_the_full_gate_builds_its_environment_as_ci_does_never_the_main_checkout
     order = [(c_["name"], c_["args"].split(" ")[0], c_["cwd"]) for c_ in calls]
     assert order[:2] == [("uv", "sync", core), ("npm22", "ci", core)], order
     assert [c_["args"] for c_ in calls if c_["name"] == "uv"] == ["sync --frozen"]  # from the lock, no extras
+    assert [c_["uv_python"] for c_ in calls if c_["name"] == "uv"] == ["3.12"]  # CI's Python, not the caller's
     for c_ in calls:
         assert c_["name"] != "MAIN-CHECKOUT-PYTHON", c_
         assert c_["venv"] == "", c_                      # the caller's VIRTUAL_ENV is not carried in
@@ -767,3 +773,9 @@ def test_the_verifier_is_offered_structured_output_for_its_verdict():
     tools = next(ln for ln in agent.splitlines() if ln.startswith("tools:"))
     assert '"--json-schema"' in (SRC / "run_seat.py").read_text()  # the coupling this case guards
     assert "StructuredOutput" in [t.strip() for t in tools[len("tools:"):].split(",")], tools
+
+
+def test_the_full_gate_refuses_a_venv_on_another_python_than_cis(gate):
+    rc, calls, out = run_gate(gate, venv_python="3.13.4")
+    assert rc == 3 and "not CI's Python 3.12" in out
+    assert not [c_ for c_ in calls if c_["name"] == "make"]

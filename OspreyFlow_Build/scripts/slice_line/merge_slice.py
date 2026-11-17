@@ -66,7 +66,7 @@ OFFLINE_PORTS = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKE
                  "CLICKHOUSE_HTTP_PORT": "59994"}
 #: What a caller's shell may carry that would point the gate at another environment (the main checkout's venv).
 SCRUBBED = ("VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "PYTHONPATH", "PYTHONHOME", "CONDA_PREFIX", "CONDA_DEFAULT_ENV",
-            "OSPREY_LANE", "OSPREY_PORTS_SLOT")
+            "OSPREY_LANE", "OSPREY_PORTS_SLOT", "UV_PYTHON")
 
 
 class GateEnvError(Exception):
@@ -81,6 +81,17 @@ def ci_node_major(tree: Path) -> str:
         raise GateEnvError(f"ci.yml names {len(majors)} Node versions ({', '.join(sorted(majors)) or 'none'}); "
                            "the gate needs exactly one to build its environment as CI does.")
     return majors.pop()
+
+
+def ci_python(tree: Path) -> str:
+    """The Python CI's jobs run (`UV_PYTHON` in the tree's own ci.yml): exactly one. Without it uv takes whichever
+    Python it finds first; on the Mac that was 3.13 while CI runs 3.12 (the dry run, 17 November 2026)."""
+    text = (tree / ".github/workflows/ci.yml").read_text()
+    versions = set(re.findall(r"^\s*UV_PYTHON:\s*[\"']?([0-9][0-9.]*)", text, re.M))
+    if len(versions) != 1:
+        raise GateEnvError(f"ci.yml sets UV_PYTHON {len(versions)} ways ({', '.join(sorted(versions)) or 'none'}); "
+                           "the gate needs exactly one to build its environment as CI does.")
+    return versions.pop()
 
 
 def node_dir(major: str, path: str) -> Path:
@@ -106,7 +117,7 @@ def lane_slot(tree: Path, lane: str) -> str:
 def ci_env(tree: Path, log: Path) -> dict:
     """The merge tree's own environment, built as GitHub's `test` job builds it, never the main checkout's.
 
-    A fresh venv from the lock (`uv sync --frozen`, no extras: the Mac's usual --all-extras venv carries spaCy,
+    A fresh venv from the lock on CI's Python (`UV_PYTHON` from ci.yml; `uv sync --frozen`, no extras: the Mac's usual --all-extras venv carries spaCy,
     which no-langchain-check refuses), `npm ci` from the lock under CI's Node major, and a shell with nothing
     pointing elsewhere: no VIRTUAL_ENV, no other `.venv/bin` on PATH, the closed ports, the merger's slot.
     """
@@ -117,15 +128,21 @@ def ci_env(tree: Path, log: Path) -> dict:
     keep = [p for p in env.get("PATH", "").split(os.pathsep) if p and not p.rstrip("/").endswith("/.venv/bin")]
     nd = node_dir(ci_node_major(tree), os.pathsep.join(keep))
     env["PATH"] = os.pathsep.join([str(nd), *keep, str(Path.home() / ".local/bin")])
-    env.update(OFFLINE_PORTS, OSPREY_PORTS_SLOT=lane_slot(tree, GATE_LANE))
+    py = ci_python(tree)
+    env.update(OFFLINE_PORTS, OSPREY_PORTS_SLOT=lane_slot(tree, GATE_LANE), UV_PYTHON=py)
     uv = shutil.which("uv", path=env["PATH"])
     if not uv:
         raise GateEnvError("uv is not installed (CI's setup-uv): the gate cannot build its venv.")
     for cmd in ([uv, "sync", "--frozen"], [str(nd / "npm"), "ci", "--no-audit", "--no-fund"]):
         if run(cmd, core, log, env=env) != 0:
             raise GateEnvError(f"building the gate's environment failed at: {' '.join(cmd[1:3])}")
-    if not (core / ".venv/bin/python").is_file():
+    venv_py = core / ".venv/bin/python"
+    if not venv_py.is_file():
         raise GateEnvError("uv sync made no .venv in the merge tree.")
+    said = subprocess.run([str(venv_py), "--version"], capture_output=True, text=True, check=False, env=env)
+    if not (said.stdout + said.stderr).strip().startswith(f"Python {py}."):
+        raise GateEnvError(f"the gate's venv runs {(said.stdout + said.stderr).strip() or 'nothing'}, not CI's "
+                           f"Python {py}.")
     return env
 
 

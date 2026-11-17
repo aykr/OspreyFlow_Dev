@@ -32,6 +32,8 @@ M = [
  ("merge_slice.py", ' and not p.rstrip("/").endswith("/.venv/bin")]', ']', "never_the_main_checkouts"),
  ("merge_slice.py", 'for cmd in ([uv, "sync", "--frozen"], [str(nd / "npm")', 'for cmd in ([str(nd / "npm")', "never_the_main_checkouts"),
  ("merge_slice.py", 'if v.startswith(f"v{major}."):', 'if True:', "node_other_than_cis"),
+ ("merge_slice.py", ', OSPREY_PORTS_SLOT=lane_slot(tree, GATE_LANE), UV_PYTHON=py)', ', OSPREY_PORTS_SLOT=lane_slot(tree, GATE_LANE))', "never_the_main_checkouts"),
+ ("merge_slice.py", 'if not (said.stdout + said.stderr).strip().startswith(f"Python {py}."):', 'if False:', "another_python_than_cis"),
  ("merge_slice.py", 'if (core / ".venv").exists() or (core / "node_modules").exists():', 'if False:', "already_has_an_environment"),
  ("merge_slice.py", 'if not c.frozen_matches(frozen, row):', 'if False:', "changed_frozen_command"),
  ("merge_slice.py", 'fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)', 'pass', "one_merge_at_a_time"),
