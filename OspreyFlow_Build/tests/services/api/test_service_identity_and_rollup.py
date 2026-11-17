@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -193,9 +194,13 @@ def ledger() -> Iterator[_Ledger]:
     QUOTAS.raised.clear()
     asyncio.run(QUOTAS.set(RunQuota(scope="unit", key="unit-1", runs_per_day=2)))
     asyncio.run(QUOTAS.set(RunQuota(scope="dataset", key="ds-1", runs_per_day=1)))
+    # Raised today, by the day the route reads (Europe/London), so it is inside any window the route
+    # asks for, whatever today is: a fixed date fell out of the 7-day window on 17 November 2026.
+    raised_at = datetime.now(UTC)
+    today = raised_at.astimezone(ZoneInfo("Europe/London")).date().isoformat()
     asyncio.run(QUOTAS.raise_once(
-        QuotaAlert("dataset", "ds-1", "2026-11-10", "unit-1's dataset reached its quota"),
-        at=datetime(2026, 11, 10, tzinfo=UTC),
+        QuotaAlert("dataset", "ds-1", today, "unit-1's dataset reached its quota"),
+        at=raised_at,
     ))  # fmt: skip
     found = _Ledger()
     app.dependency_overrides.update(
