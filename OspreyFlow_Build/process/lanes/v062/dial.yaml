@@ -1,0 +1,37 @@
+# The dial (slice-line/README.md, "The dial"). The owner's file: agents cannot edit it (the guard refuses).
+# It changes how many builders run and which model sits in each seat. It never changes a gate.
+#
+# current: auto = `day` from day_hours[0]:00 to day_hours[1]:00 (this Mac's local time), `night` otherwise.
+#          Or name a setting: thrift | balanced | sprint. Sprint is set only by the owner.
+# Model names are the aliases Claude Code 2.1.326 offers (haiku, sonnet, opus; fable is also offered, unused).
+# A setting takes effect at the next slice: a started slice keeps the setting it started with.
+current: auto
+day: balanced
+night: thrift
+day_hours: [7, 22]
+
+settings:
+  thrift:
+    builders: 1
+    rounds: 1
+    seats:
+      conductor: {model: sonnet, effort: medium}
+      scout:     {model: haiku,  effort: low}
+      builder:   {model: sonnet, effort: medium}
+      verifier:  {model: sonnet, effort: high, passes: [acceptance]}
+  balanced:
+    builders: 2
+    rounds: 2
+    seats:
+      conductor: {model: sonnet, effort: high}
+      scout:     {model: haiku,  effort: medium}
+      builder:   {model: sonnet, effort: high}
+      verifier:  {model: opus,   effort: high, passes: [acceptance]}
+  sprint:
+    builders: 4
+    rounds: 2
+    seats:
+      conductor: {model: opus,   effort: high}
+      scout:     {model: sonnet, effort: medium}
+      builder:   {model: opus,   effort: high}
+      verifier:  {model: opus,   effort: high, passes: [acceptance, security, accessibility]}

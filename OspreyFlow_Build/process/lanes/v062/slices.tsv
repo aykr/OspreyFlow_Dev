@@ -1,0 +1,7 @@
+# The v0.6.2 slice line's backlog file (slice-line/README.md, "The backlog file"). Tab-separated; '-' for empty.
+# build: the build id in the owner's plan (dashboard/index.html). A slice whose id is not in the plan is not started.
+# after: slices that must be merged first. track: blank lets the line choose. env: none, or full (venv and node).
+# acceptance_files, acceptance, checks: frozen when the slice starts; a change after that needs the owner's word.
+# Commands run from the root of the slice's worktree (or of the merge result).
+id	build	what	after	track	branch	env	acceptance_files	acceptance	checks
+BL1	BL1	The slice line set-up	-	1	lane/slice-line-setup	none	OspreyFlow_Build/scripts/slice_line/tests/test_gates.py	OspreyFlow_Build/scripts/slice_line/tests/run.sh	OspreyFlow_Build/scripts/slice_line/tests/run.sh

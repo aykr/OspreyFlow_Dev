@@ -1,0 +1,13 @@
+# Which account each seat and each track runs on (slice-line/README.md, "Accounts"). The owner's file: agents
+# cannot edit it. Account names only ("default", "sol"): never a token, a key or an address. "default" is
+# ~/.claude; any other name is ~/.claude-<name>, as the owner's shell defines claude-sol.
+# A change takes effect at the next slice: a started slice keeps its accounts to the end.
+seats:
+  conductor: default
+  scout: default        # scouts are the conductor's subagents, so they always share its account
+  verifier: sol
+tracks:
+  "1": default
+  "2": sol
+  "3": default          # Sprint only
+  "4": sol              # Sprint only

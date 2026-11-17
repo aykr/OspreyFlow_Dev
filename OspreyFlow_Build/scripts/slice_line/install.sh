@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Install the slice line's hooks in the fixed place outside every worktree (process/lanes/v062/slice-line/README.md,
+# "Where the guard runs from"). Run by the owner (the guard refuses it from any agent):
+#
+#   OspreyFlow_Build/scripts/slice_line/install.sh
+#
+# Copies guard.py, stop_check.py and usage_hook.py from this checkout to ~/.ospreyflow/slice-line/bin, read-only,
+# with their SHA-256 in manifest.json; writes the fixed settings every seat is started with (--settings); records
+# origin's URL for push_main.sh; and records the owner's email addresses as SHA-256 hashes only (from git's
+# user.email and each signed-in account), so the guard can refuse them without the address ever being written.
+set -euo pipefail
+
+SRC="$(cd "$(dirname "$0")" && pwd)"
+BIN="$HOME/.ospreyflow/slice-line"
+REPO="$(dirname "$(git -C "$SRC" rev-parse --path-format=absolute --git-common-dir)")"
+mkdir -p "$BIN/bin" "$BIN/records" "$BIN/sessions" "$BIN/accounts"
+chmod u+w "$BIN/bin" "$BIN/bin/"* 2>/dev/null || true
+for f in guard.py stop_check.py usage_hook.py; do
+  cp "$SRC/$f" "$BIN/bin/$f"
+  chmod 0555 "$BIN/bin/$f"
+done
+/usr/bin/python3 - "$BIN" <<'PY'
+import hashlib, json, sys
+from pathlib import Path
+b = Path(sys.argv[1])
+m = {f: hashlib.sha256((b / "bin" / f).read_bytes()).hexdigest() for f in ("guard.py", "stop_check.py", "usage_hook.py")}
+(b / "manifest.json").write_text(json.dumps(m, indent=1))
+py = "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/"
+hook = lambda cmd, **kw: {"hooks": [{"type": "command", "command": py + cmd, **kw}]}
+settings = {"hooks": {
+    "SessionStart": [hook("guard.py session-start")],
+    "PreToolUse": [{"matcher": "*", **hook("guard.py pre")}],
+    "Stop": [{"hooks": [{"type": "command", "command": py + "stop_check.py", "timeout": 1800},
+                        {"type": "command", "command": py + "guard.py stop"}]}],
+    "SubagentStop": [hook("guard.py stop")],
+    "StopFailure": [hook("usage_hook.py stop-failure")],
+    "SessionEnd": [hook("usage_hook.py session-end")],
+}}
+(b / "settings.json").write_text(json.dumps(settings, indent=1))
+PY
+chmod 0555 "$BIN/bin"
+git -C "$REPO" remote get-url --push origin > "$BIN/origin.url"
+
+# The owner's addresses, hashed: never printed, never written in the clear.
+{
+  git -C "$REPO" config user.email 2>/dev/null || true
+  "$HOME/.local/bin/claude" auth status 2>/dev/null | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("email",""))' || true
+  for d in "$HOME"/.claude-*; do
+    [ -d "$d" ] || continue
+    CLAUDE_CONFIG_DIR="$d" "$HOME/.local/bin/claude" auth status 2>/dev/null | /usr/bin/python3 -c 'import json,sys; print(json.load(sys.stdin).get("email",""))' 2>/dev/null || true
+  done
+} | /usr/bin/python3 -c '
+import hashlib, sys
+seen = sorted({l.strip().lower() for l in sys.stdin if "@" in l})
+print("\n".join(hashlib.sha256(e.encode()).hexdigest() for e in seen))' > "$BIN/emails.sha256"
+
+echo "Installed in $BIN: $(wc -l < "$BIN/emails.sha256" | tr -d ' ') address hash(es); origin recorded; hooks:"
+cat "$BIN/manifest.json"

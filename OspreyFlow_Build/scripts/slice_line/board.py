@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""The board (process/lanes/v062/slice-line/README.md, "The board"): computed, never kept by hand.
+
+Prints each slice's state from the backlog file on main, the branches, the verifier's records and the test
+results, then writes the progress dashboard's status file whole (a temporary name, then renamed). This is
+the only writer of that file. It replaces the heartbeat.
+
+    board.py            print the board and write status.js
+    board.py --quiet    write status.js only (merge_slice.py and run_seat.py call this after each event)
+    board.py --usage    usage per slice and per account, from usage.tsv
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import common as c  # noqa: E402
+
+STATES = ("building", "verifying", "done", "stopped")
+
+
+class BadEntry(Exception):
+    pass
+
+
+def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
+          account: str = "", merged: dict | None = None, verify: dict | None = None) -> dict:
+    """One build's entry for status.js. Refuses an entry the dashboard must not show."""
+    if state not in STATES:
+        raise BadEntry(f"unknown state {state!r}")
+    if state == "done":
+        if not (merged and merged.get("merge") and merged.get("acceptance_run")):
+            raise BadEntry("done needs the acceptance test green on main: no merge record with its test run")
+        if not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):
+            raise BadEntry("done needs a verifier's pass record for the merged commit")
+        if not evidence or merged["merge"][:7] not in evidence or merged["acceptance_run"] not in evidence:
+            raise BadEntry("done needs evidence naming the commit and the test run")
+    if state == "stopped" and not note:
+        raise BadEntry("stopped needs, in note, the one decision the owner must make")
+    return {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
+
+
+def branch_exists(b: str) -> bool:
+    return bool(b) and bool(c.git(["branch", "--list", b], c.REPO, check=False))
+
+
+def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
+    rows, builds, problems = [], {}, []
+    ids = c.plan_ids()
+    for s in slices:
+        sid, build = s["id"], s["build"]
+        rec = c.rec_dir(sid)
+        st = c.state(sid)
+        frozen = c.read_json(rec / "frozen.json") or {}
+        branch = frozen.get("branch") or s.get("branch") or f"lane/slice-{sid}"
+        merged = c.read_json(rec / "merged.json")
+        tip = c.git(["rev-parse", branch], c.REPO, check=False) if branch_exists(branch) else ""
+        verify = c.read_json(rec / f"verify-{tip}.json") if tip else None
+        tests = c.read_json(rec / f"tests-{tip}.json") if tip else None
+        kw = {"track": str(st.get("track") or s.get("track") or ""), "branch": branch, "account": st.get("account", "")}
+        state, note, evidence, source = None, "", "", ""
+        builds_entry = None
+        if merged:
+            verify_m = c.read_json(rec / f"verify-{merged['tip']}.json")
+            state = "done"
+            evidence = f"commit {merged['merge'][:7]} on main; test run {merged['acceptance_run']}"
+            source = "merge record + verifier pass"
+            try:
+                builds_entry = entry("done", evidence=evidence, merged=merged, verify=verify_m, **kw)
+            except BadEntry as e:
+                problems.append(f"{sid}: not shown as done: {e}")
+                state, builds_entry = None, None
+        elif st.get("phase") == "stopped":
+            state, note, source = "stopped", st.get("note", ""), "stop record"
+        elif tip and verify and verify.get("verdict") == "pass":
+            state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
+        elif tip and tests and tests.get("green"):
+            state, note, source = "verifying", "checks green; verifier pending", "test record"
+        elif branch_exists(branch) and (st or not frozen):
+            state, source = "building", "branch exists, not green yet"
+            if st.get("round", 1) > 1:
+                note = f"round {st['round']} after the verifier's findings"
+        if state and state != "done":
+            try:
+                builds_entry = entry(state, note=note, evidence=evidence, **kw)
+            except BadEntry as e:
+                problems.append(f"{sid}: {e}")
+                builds_entry = None
+        if state and build not in ids:
+            problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
+        elif state and builds_entry:
+            builds[build] = builds_entry
+        if state == "stopped":
+            shown = f"stopped: {note[:60]}"
+        elif state:
+            shown = state
+        else:
+            waits = [d.strip() for d in (s.get("after") or "").split(",")
+                     if d.strip() and not c.read_json(c.rec_dir(d.strip()) / "merged.json")]
+            shown = f"waiting on {', '.join(waits)}" if waits else "ready"
+            source = "backlog file's after column"
+        rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
+                     "from": source, "track": kw["track"], "account": kw["account"]})
+    return rows, builds, problems
+
+
+def write_status(builds: dict, path: Path | None = None) -> Path:
+    path = path or c.STATUS_FILE
+    main = c.git(["rev-parse", "--short", "main"], c.REPO)
+    try:
+        dial = c.current_setting()
+    except Exception:
+        dial = "not set"
+    for k, v in builds.items():
+        if v.get("state") not in STATES:
+            raise BadEntry(f"{k}: unknown state")
+    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds}
+    text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
+            "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
+            f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, path)
+    return path
+
+
+def usage() -> None:
+    f = c.DATA / "usage.tsv"
+    if not f.exists():
+        print("No usage recorded yet.")
+        return
+    tot: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    for r in csv.DictReader(f.open(), delimiter="\t"):
+        k = (r["slice"], r["account"], r["seat"])
+        for i, col in enumerate(("input", "cache_create", "cache_read", "output")):
+            tot[k][i] += int(r[col] or 0)
+        tot[k][4] += float(r["cost_usd"] or 0)
+    print(f"{'slice':8} {'account':8} {'seat':18} {'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}")
+    for (s, a, seat), v in sorted(tot.items()):
+        print(f"{s:8} {a:8} {seat:18} {v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--quiet", action="store_true")
+    ap.add_argument("--usage", action="store_true")
+    ap.add_argument("--slices-from", default="main", help="a ref, or 'working' for the working copy")
+    a = ap.parse_args()
+    if a.usage:
+        usage()
+        return 0
+    try:
+        slices = c.load_slices(None if a.slices_from == "working" else a.slices_from)
+    except RuntimeError:
+        slices = []
+    rows, builds, problems = compute(slices)
+    path = write_status(builds)
+    if not a.quiet:
+        print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
+        print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
+        for r in rows:
+            print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
+        for acct in sorted({r['account'] for r in rows if r['account']} | {"default", "sol"}):
+            near, stop = c.near_limit(acct), c.account_stop(acct)
+            if near or stop:
+                print(f"account {acct}: " + (near or "") + (f"; stopped: {stop['error']} at {stop['at']}" if stop else ""))
+        pending = c.DATA / "push.pending"
+        if pending.exists():
+            print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")
+        print(f"status file: {path}")
+    for p in problems:
+        print(f"REPORT TO OWNER: {p}", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
