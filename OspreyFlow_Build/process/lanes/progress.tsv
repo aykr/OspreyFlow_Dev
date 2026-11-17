@@ -119,7 +119,7 @@ platform	v052-measure	S	done	v0.5.2 step 4: the measurement session	lane/platfor
 docs	v052-sweep	S	done	v0.5.2 step 5: the wording sweep	lane/docs-v052-am20
 admin	v052-heartbeat	M	done	The heartbeat's route view (the owner, 13 Nov) (merged ee440c1)
 case-b	v052-r1-driver	M	done	v0.5.2 step 6's driver: the manifest verifier and spec 08 runner, built ahead
-docs	v052-sweep-draft	S	todo	v0.5.2 step 5 drafted ahead: the non-search wording
+docs	v052-sweep-draft	S	done	CLOSED 17 Nov by the orchestrator: v0.5.2 never published (v0.6.0 replaced it); nothing left to sweep. Was: v0.5.2 step 5 drafted ahead: the non-search wording
 rules-b	v052-ask	L	done	v0.5.2 Part D: Ask & Chat (panel, server, Whole case)
 case-b	v052-selection	M	done	v0.5.2 Parts C and E: one set of actions for the selection; the typeface
 orchestrator	v051-cut	S	done	v0.5.1 cut: CI at the candidate, the upgrade rehearsal, the CHANGELOG, publish when green (the owner's word)
