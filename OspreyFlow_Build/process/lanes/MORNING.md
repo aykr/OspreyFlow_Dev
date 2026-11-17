@@ -1,3 +1,8 @@
+**17 Nov ~06:20Z, the orchestrator: v0.6.1 is released and on the GOV.UK demo** (release run 43972909216, step 10 passed;
+GOV.UK updated 16 Nov 22:52Z, backup 20261116T224526Z). **Gemini answers again**: one gateway call, 200 in 13.8 s.
+**For the owner (a browser look, no commands):** Ask & Chat opens as a drawer with Expand; one Ask & Chat question on
+Gemini in prison-intelligence; Admin › Models › Test the connection. Everything below this entry is history.
+
 **16 Nov ~17:40Z: the GOV.UK demo is rebuilt on v0.6.0** (govuk.ospreyflow.app from /opt/ospreyflow-v0.6.0; three stops on
 the way, each released by the orchestrator under the owner's FORWARD: the recorded home, the missing .git, the gazetteer
 on no case). Every check passed but Gemini's: the gate, four sign-ins, health, the GB map and a place search (hmp).
