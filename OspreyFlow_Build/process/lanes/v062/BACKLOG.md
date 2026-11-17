@@ -55,3 +55,19 @@ Stopped 16 Nov ~18:10Z (RULINGS "Part 3 moves"); lane `platform` closed at 63dde
 - The guides' screenshots, with v0.6.1's Ask drawer capture.
 - The release steps' step 10 needs a Docker daemon for `harness.signatures`: run it on the test server (as for v0.6.1),
   and say so in `RELEASE_STEPS.md`.
+
+## Findings from the owner's laptop reinstall (17 Nov)
+
+- A fresh clone of the release refuses `ospreyflow install --mode lite --starter ospreyflow-crime --yes`: "osprey.yaml
+  already exists and differs from what these answers make", though the file is the checkout's own committed one. A
+  client's first install should not need `--force`: treat an unmodified committed `osprey.yaml` as replaceable.
+  Red first: a test installing a starter over a clean checkout.
+- A Lite deployment from before v0.6.0 has no way forward but a fresh install, and `backup` needs it running; the owner's
+  was archived cold (volume tarballs) before `uninstall`. The guides could say so for Lite.
+- (17 Nov, the owner on the GOV.UK demo) **Invite a person** offers a clearance and handling codes above the inviter's
+  own: the demo admin (OFFICIAL, P) picked OFFICIAL-SENSITIVE with P, C, R and got 403 `above_your_clearance`
+  (`app.py` `_within_your_reach`, ADR-114 Am 5). The refusal shows only in the form's intro text, so the Invite button
+  seemed to do nothing. Offer only what the admin can give, and put the refusal by the button (an error summary).
+- (17 Nov, laptop) The first install's `compose up -d --wait` hit apply's 1,800 s limit (`harness/apply.py:378`) with
+  no container created, though the three images still missing then pulled in 49 s by hand; the re-run went through.
+  Pull before `up` as its own step with progress, so a stalled pull is named rather than timed out.
