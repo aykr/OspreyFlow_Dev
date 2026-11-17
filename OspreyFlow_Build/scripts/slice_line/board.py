@@ -50,71 +50,101 @@ def branch_exists(b: str) -> bool:
     return bool(b) and bool(c.git(["branch", "--list", b], c.REPO, check=False))
 
 
+def record(path: Path, problems: list[str], sid: str) -> dict | None:
+    """One record file: a dict, or None when there is none. A file that is there but unreadable, or not a JSON
+    object, is skipped and reported to the owner: one bad record never stops the board."""
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError) as e:
+        problems.append(f"{sid}: record {path.name} is unreadable ({e}); skipped")
+        return None
+    if not isinstance(data, dict):
+        problems.append(f"{sid}: record {path.name} is not a JSON object; skipped")
+        return None
+    return data
+
+
 def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
     rows, builds, problems = [], {}, []
     ids = c.plan_ids()
     for s in slices:
-        sid, build = s["id"], s["build"]
-        rec = c.rec_dir(sid)
-        st = c.state(sid)
-        frozen = c.read_json(rec / "frozen.json") or {}
-        branch = frozen.get("branch") or s.get("branch") or f"lane/slice-{sid}"
-        merged = c.read_json(rec / "merged.json")
-        tip = c.git(["rev-parse", branch], c.REPO, check=False) if branch_exists(branch) else ""
-        verify = c.read_json(rec / f"verify-{tip}.json") if tip else None
-        tests = c.read_json(rec / f"tests-{tip}.json") if tip else None
-        track = str(st.get("track") or s.get("track") or "")
-        account = st.get("account", "")
-        if not account and track:
-            try:
-                account = c.account_for("builder", track)
-            except (OSError, KeyError, TypeError):
-                account = ""
-        kw = {"track": track, "branch": branch, "account": account}
-        state, note, evidence, source = None, "", "", ""
-        builds_entry = None
-        if merged:
-            verify_m = c.read_json(rec / f"verify-{merged['tip']}.json")
-            state = "done"
-            evidence = f"commit {merged['merge'][:7]} on main; test run {merged['acceptance_run']}"
-            source = "merge record + verifier pass"
-            try:
-                builds_entry = entry("done", evidence=evidence, merged=merged, verify=verify_m, **kw)
-            except BadEntry as e:
-                problems.append(f"{sid}: not shown as done: {e}")
-                state, builds_entry = None, None
-        elif st.get("phase") == "stopped":
-            state, note, source = "stopped", st.get("note", ""), "stop record"
-        elif tip and verify and verify.get("verdict") == "pass":
-            state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
-        elif tip and tests and tests.get("green"):
-            state, note, source = "verifying", "checks green; verifier pending", "test record"
-        elif branch_exists(branch) and (st or not frozen):
-            state, source = "building", "branch exists, not green yet"
-            if st.get("round", 1) > 1:
-                note = f"round {st['round']} after the verifier's findings"
-        if state and state != "done":
-            try:
-                builds_entry = entry(state, note=note, evidence=evidence, **kw)
-            except BadEntry as e:
-                problems.append(f"{sid}: {e}")
-                builds_entry = None
-        if state and build not in ids:
-            problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
-        elif state and builds_entry:
-            builds[build] = builds_entry
-        if state == "stopped":
-            shown = f"stopped: {note[:60]}"
-        elif state:
-            shown = state
-        else:
-            waits = [d.strip() for d in (s.get("after") or "").split(",")
-                     if d.strip() and not c.read_json(c.rec_dir(d.strip()) / "merged.json")]
-            shown = f"waiting on {', '.join(waits)}" if waits else "ready"
-            source = "backlog file's after column"
-        rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
-                     "from": source, "track": kw["track"], "account": kw["account"]})
+        try:
+            one_slice(s, ids, rows, builds, problems)
+        except Exception as e:  # noqa: BLE001 -- anything else one slice's records do: that slice reported, every other one shown
+            sid = s.get("id", "?")
+            problems.append(f"{sid}: its records could not be read ({type(e).__name__}: {e}); skipped, nothing written")
+            rows.append({"slice": sid, "build": s.get("build", ""), "what": s.get("what", ""),
+                         "state": "records unreadable", "from": "reported to the owner", "track": "", "account": ""})
     return rows, builds, problems
+
+
+def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[str]) -> None:
+    """One slice's row and status entry, from its records; a bad record is skipped and reported (record())."""
+    sid, build = s["id"], s["build"]
+    rec = c.rec_dir(sid)
+    st = record(rec / "state.json", problems, sid) or {}
+    frozen = record(rec / "frozen.json", problems, sid) or {}
+    branch = frozen.get("branch") or s.get("branch") or f"lane/slice-{sid}"
+    merged = record(rec / "merged.json", problems, sid)
+    tip = c.git(["rev-parse", branch], c.REPO, check=False) if branch_exists(branch) else ""
+    verify = record(rec / f"verify-{tip}.json", problems, sid) if tip else None
+    tests = record(rec / f"tests-{tip}.json", problems, sid) if tip else None
+    track = str(st.get("track") or s.get("track") or "")
+    account = st.get("account", "")
+    if not account and track:
+        try:
+            account = c.account_for("builder", track)
+        except (OSError, KeyError, TypeError):
+            account = ""
+    kw = {"track": track, "branch": branch, "account": account}
+    state, note, evidence, source = None, "", "", ""
+    builds_entry = None
+    if merged:
+        verify_m = record(rec / f"verify-{merged.get('tip', '')}.json", problems, sid) if merged.get("tip") else None
+        state = "done"
+        evidence = f"commit {str(merged.get('merge', ''))[:7]} on main; test run {merged.get('acceptance_run', '')}"
+        source = "merge record + verifier pass"
+        try:
+            builds_entry = entry("done", evidence=evidence, merged=merged, verify=verify_m, **kw)
+        except BadEntry as e:
+            # skipped and reported; the slice is shown from its other records, as if there were no merge record
+            problems.append(f"{sid}: merge record skipped, not shown as done: {e}")
+            state, evidence, source, builds_entry = None, "", "", None
+    if state == "done":
+        pass  # the merge record and the verifier's pass speak for it
+    elif st.get("phase") == "stopped":
+        state, note, source = "stopped", st.get("note", ""), "stop record"
+    elif tip and verify and verify.get("verdict") == "pass":
+        state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
+    elif tip and tests and tests.get("green"):
+        state, note, source = "verifying", "checks green; verifier pending", "test record"
+    elif branch_exists(branch) and (st or not frozen):
+        state, source = "building", "branch exists, not green yet"
+        if st.get("round", 1) > 1:
+            note = f"round {st['round']} after the verifier's findings"
+    if state and state != "done":
+        try:
+            builds_entry = entry(state, note=note, evidence=evidence, **kw)
+        except BadEntry as e:
+            problems.append(f"{sid}: {e}")
+            builds_entry = None
+    if state and build not in ids:
+        problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
+    elif state and builds_entry:
+        builds[build] = builds_entry
+    if state == "stopped":
+        shown = f"stopped: {note[:60]}"
+    elif state:
+        shown = state
+    else:
+        waits = [d.strip() for d in (s.get("after") or "").split(",")
+                 if d.strip() and not c.read_json(c.rec_dir(d.strip()) / "merged.json")]
+        shown = f"waiting on {', '.join(waits)}" if waits else "ready"
+        source = "backlog file's after column"
+    rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
+                 "from": source, "track": kw["track"], "account": kw["account"]})
 
 
 def write_status(builds: dict, path: Path | None = None) -> Path:

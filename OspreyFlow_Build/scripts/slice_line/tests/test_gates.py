@@ -536,6 +536,45 @@ def test_a_forged_done_never_reaches_the_status_file(world):
     assert '"state": "done"' not in status
 
 
+@pytest.mark.parametrize(("name", "body", "said"), [
+    # the dry run's shape (17 November 2026): a merge record with no acceptance_run stopped the whole board
+    ("merged.json", '{"merge": "@TIP@", "tip": "@TIP@"}', "merge record skipped"),
+    ("merged.json", '{"merge": ', "merged.json is unreadable"),
+    ("merged.json", '["@TIP@"]', "merged.json is not a JSON object"),
+    ("state.json", "not json", "state.json is unreadable"),
+    ("frozen.json", '{"branch": 5}', "its records could not be read"),
+], ids=["merge-record-incomplete", "merge-record-not-json", "merge-record-a-list", "state-not-json",
+        "frozen-branch-not-a-name"])
+def test_a_bad_or_incomplete_record_is_skipped_and_reported_and_the_board_goes_on(world, name, body, said):
+    w = world
+    wt, tip = built(w)
+    rec = w["data"] / "records/S1" / name
+    status_file = w["repo"] / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/status.js"
+
+    def board():
+        p = sh([w["py"], str(w["lines"] / "board.py")], w["repo"], w["env"], check=False)
+        rows = {ln.split()[0]: ln for ln in p.stdout.splitlines() if ln.startswith(("S1 ", "S2 "))}
+        builds = status_file.read_text().split('"builds":', 1)[1] if status_file.exists() else ""
+        return p, rows, builds
+
+    kept = rec.read_bytes() if rec.exists() else None
+    if kept is not None:
+        rec.unlink()
+    _, without_rows, without_builds = board()  # the board with that record simply absent
+    if kept is not None:
+        rec.write_bytes(kept)
+    rec.write_text(body.replace("@TIP@", tip))
+    p, rows, builds = board()
+    assert p.returncode == 0 and "Traceback" not in p.stderr, p.stderr
+    assert "REPORT TO OWNER: S1: " in p.stderr and said in p.stderr, p.stderr
+    assert "S2" in rows, rows                        # every other slice still on the board
+    assert '"state": "done"' not in builds
+    if name == "frozen.json":                        # nothing of S1 can be read: shown as such, nothing written
+        assert "records unreadable" in rows["S1"] and '"CO1"' not in builds, (rows, builds)
+    else:                                            # skipped: S1 shown from its other records, as without it
+        assert rows["S1"] == without_rows["S1"] and builds.split('"updated"')[0] == without_builds.split('"updated"')[0]
+
+
 def test_a_slice_whose_build_id_is_not_in_the_plan_is_reported_not_started(world):
     p, _ = started(world, "S2")
     assert p.returncode != 0 and "REPORT TO OWNER" in (p.stdout + p.stderr)

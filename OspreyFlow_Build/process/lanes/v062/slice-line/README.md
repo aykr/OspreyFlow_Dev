@@ -39,8 +39,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (48 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (37 planted faults, 0 missed).
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (53 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (42 planted faults, 0 missed).
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -54,7 +54,7 @@ site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows
 | The line itself | guard, merge_slice.py | `.claude/`, `scripts/slice_line/`, the records, the status file, `OSPREY_*` overrides, nested `claude` |
 | Cannot stop on red | stop_check.py | the frozen checks and acceptance run at Stop; red (or uncommitted) sends back the failure lines only; after 6, stopped |
 | Merge | merge_slice.py | see the script's docstring: lock, frozen match, verifier pass for the tip, protected paths, red before, green after, **today's full gate**: `make -k ci` and `make test`, both run and both reported, in the merge tree's own environment built as CI's `test` job builds it (`uv sync --frozen`, `npm ci` under the Node major `ci.yml` names, no `VIRTUAL_ENV` or other `.venv/bin`, closed ports, the merger's slot), never the main checkout's; then the live files reached, through the lease |
-| Status file | board.py | `done` only with a merge record, its test run and a verifier pass; unknown build ids reported, not written |
+| Status file | board.py | `done` only with a merge record, its test run and a verifier pass; unknown build ids reported, not written; a bad or incomplete record skipped and reported, the slice shown from its other records and every other slice carried on |
 
 **What a hook cannot do** (documented, not worked around): no hook can stop text the model has already shown (the
 Stop hook catches a key or address in a final message and forces a correction, after the fact); shell commands
