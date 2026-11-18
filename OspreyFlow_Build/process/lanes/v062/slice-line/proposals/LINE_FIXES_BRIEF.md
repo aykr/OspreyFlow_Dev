@@ -3,6 +3,17 @@
 You are the one session the owner starts **outside the line** to fix the line itself. You edit a copy of it, run its
 tests, and hand back one set of diffs and one list of commands for the owner to apply. You apply nothing.
 
+## How the owner starts you (so you can edit a copy of the line and run its tests without the guard refusing it)
+
+The guard reads the repository's `.claude/settings.json` and refuses any edit under `scripts/slice_line/` or `.claude/`,
+in any checkout, including a scratch copy. A session started in a folder with no repository and no settings of its own
+loads no hooks (the owner's `~/.claude` and `~/.claude-sol` settings register none; checked 18 November). So:
+
+1. From the main checkout: `git worktree add -b lane/line-fixes ~/dev/line-fixes/work main`
+2. `cd ~/dev/line-fixes && claude` (the default account was at 7% of its seven-day limit, `sol` at 30%; the owner chooses)
+3. Paste: *Read `~/dev/line-fixes/work/OspreyFlow_Build/process/lanes/v062/slice-line/proposals/LINE_FIXES_BRIEF.md` and
+   do it. Work only in `~/dev/line-fixes/work`. Hand back in `~/dev/line-fixes/OUT` as the brief says.*
+
 ## Where you work, and the rules the guard cannot hold for you
 
 You are started in `~/dev/line-fixes/` (no repository, no hooks of the line). Your worktree is `~/dev/line-fixes/work`,
@@ -56,6 +67,32 @@ whole and unchained; builders, verifiers and scouts still refused), actions:
   files; acceptance red for a reason that matches no signature); and the use is logged and shown on the board and in the
   conductor's next report ("command corrected: old, new"). Never anything that changes what a check tests. Tests for each
   refusal, including a corrected command that adds, drops or swaps a test file.
+
+**(a2) A step that sends a verified slice back for another round (the owner's order of 18 November, after AD2).** The
+merge script refuses on a red gate and leaves the slice in `verified` with nothing that returns it to the builder; the
+owner has had to write `diffs/resume-ad2-round-2.sh` by hand (read it: it is your specification, including the findings
+record the builder's prompt needs, because `run_seat.py builder` reads only the newest `verify-*.json` for findings).
+Build: when `merge_slice.py merge` refuses on a red full gate, it records the failing tests (names and the failing lines
+from its log, not the whole log) as a findings record and sets the slice to a phase the board shows ("refused by the gate:
+N tests"). `resume.py <slice> send-back` returns it to `building` with those findings in the builder's prompt and the round
+advanced, **without an owner line while the slice is within its rounds limit** (it loosens nothing: it is the line's own
+rule that findings send a slice back until the limit); past the limit it needs the owner's `resume.tsv` line for
+`add-round` as well. It brings main's `RULINGS.md` to the worktree as the other actions do. Test it with AD2's real
+case: the branch `lane/slice-AD2` at 993a434 against main, whose merge fails `test_admin_sections.py`.
+
+**(b0) A rule that a slice's checks include every test that scans the files it touches (the owner's order, after AD2).**
+AD2's checks named the form's own tests; `test_admin_sections.py`, which walks the workspace's sources and counts the
+routes each Admin section reads, was nobody's, so the Stop hook and the verifier both missed what the full gate caught
+(`make test`, 7 minutes, at merge). Build a way for the line to know, from the files a slice's branch touches, which
+pure tests read those files, and to run them in the Stop hook and the verifier's checks: for example a reviewed map from
+a path prefix to the tests that scan it (kept in the repository, shown to be complete by a test that fails when a pure
+test walks a source tree the map does not name), or a selector built the way `tools/live_select.py` and
+`tools/live_map.tsv` select live tests. The map or selector is the line's, not the conductor's: the conductor cannot
+shrink what a slice's checks run. Bound the cost: only pure tests (closed ports), only those mapped to touched paths.
+**Required proof:** on `lane/slice-AD2` at 993a434 the Stop hook's selection includes `test_admin_sections.py` and
+therefore goes red; on main it is green; and a planted change to a workspace source file that adds an import to a section
+is caught the same way. Also report which other known whole-tree scanners exist (`tests/test_doc_citations_check.py` is
+one: it reads every document, which is how two briefs turned main red today) and map them.
 
 **(b) A dry run of a slice's frozen commands at `slice_start`.** It refuses to start a slice whose commands do not run.
 In a scratch worktree of main: the checks command, minus the slice's own new files, must exit 0 and reach its last step;
