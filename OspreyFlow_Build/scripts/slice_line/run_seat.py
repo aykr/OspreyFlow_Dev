@@ -177,6 +177,16 @@ def brief_text(slice_id: str) -> str:
         return "(no brief file on main)"
 
 
+def last_findings(slice_id: str) -> str:
+    """The newest findings record (a verifier's, or the merge gate's verify-gate-*), for the builder's prompt."""
+    last = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
+    if last:
+        v = c.read_json(last[-1]) or {}
+        if v.get("verdict") != "pass":
+            return "\n\nThe findings from the last round, to fix:\n" + json.dumps(v.get("findings"), indent=1)
+    return ""
+
+
 def rulings_note(tree: Path) -> str:
     """Main's RULINGS.md, brought into the seat's checkout (a snapshot from the slice's start) as an ignored copy."""
     copy = c.deliver_rulings(tree)
@@ -197,12 +207,7 @@ def builder(slice_id: str) -> int:
     if not frozen or st.get("phase") != "building":
         raise SystemExit(f"{slice_id} is not in the building phase ({st.get('phase')}): slice_start.py first.")
     seat = c.seat_settings("builder", st["setting"])
-    findings = ""
-    last = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
-    if last:
-        v = c.read_json(last[-1]) or {}
-        if v.get("verdict") != "pass":
-            findings = "\n\nThe verifier's findings from the last round, to fix:\n" + json.dumps(v.get("findings"), indent=1)
+    findings = last_findings(slice_id)
     prompt = (f"You are the builder for slice {slice_id} (build {frozen['build']}), round {st['round']} of "
               f"{st['rounds_limit']}. Your worktree is {frozen['worktree']}, on branch {frozen['branch']}.\n\n"
               f"The brief:\n{brief_text(slice_id)}\n\nFrozen for this slice (you cannot change them):\n"

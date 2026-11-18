@@ -89,6 +89,13 @@ M = [
  ("resume.py", '            if problems:\n', '            if False:\n', "not_proved_on_main"),
  ("dry_run.py", '            if code != 0:\n', '            if False:\n', "not_proved_on_main"),
  ("resume.py", '    copy = c.deliver_rulings(wt)\n', '    copy = None\n', "brings_the_rulings"),
+ ("merge_slice.py", '            refuse_to_builder(slice_id, tip, "today\'s full gate was red on the merge result", findings, len(names), "gate")\n', '', "red_full_gate_records"),
+ ("merge_slice.py", '                    why.append(ln.strip())\n', '                    pass\n', "red_full_gate_records"),
+ ("board.py", '    elif st.get("phase") == "refused":', '    elif False:', "red_full_gate_records"),
+ ("resume.py", '            if rnd < limit:\n', '            if True:\n', "past_the_rounds_limit"),
+ ("merge_slice.py", '    return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []', '    return []', "records_only_conflict"),
+ ("resume.py", '            if st.get("refused_for") == "records":', '            if False:', "records_only_conflict"),
+ ("run_seat.py", '        if v.get("verdict") != "pass":\n            return', '        if False:\n            return', "builders_prompt_carries"),
 ]
 bad = 0
 for f, old, new, test in M:

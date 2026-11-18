@@ -355,6 +355,62 @@ def verifier_pass(slice_id: str, tip: str) -> dict:
     return rec
 
 
+#: A failing test in the gate's log, as pytest, vitest and Playwright print it, and the lines that say why.
+FAILED_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)|^\s*(?:FAIL|✘|×)\s+(\S+.*)$")
+WHY_LINE = re.compile(r"^E\s{2,}\S|^\s*(?:Error|AssertionError|expect\()|^make(?:\[\d+\])?: \*\*\*|^make [\w -]+: exit [1-9]")
+MAX_WHY = 12
+
+
+def gate_findings(log_text: str) -> tuple[list[str], list[dict]]:
+    """The failing tests the gate's log names, and one finding each with its failing lines (not the whole log)."""
+    lines = log_text.splitlines()
+    names: list[str] = []
+    for ln in lines:
+        m = FAILED_TEST.match(ln)
+        if m:
+            name = (m.group(1) or m.group(2) or "").strip()
+            if name and name not in names:
+                names.append(name)
+    findings = []
+    for name in names:
+        short = name.split("::")[-1]
+        # pytest's section for this test: from its "___ name ___" header to the next header
+        start = next((i for i, ln in enumerate(lines) if ln.startswith("_") and f" {short} " in ln), None)
+        why = []
+        if start is not None:
+            for ln in lines[start + 1:]:
+                if ln.startswith("_") and ln.endswith("_") or ln.startswith("="):
+                    break
+                if WHY_LINE.search(ln):
+                    why.append(ln.strip())
+        findings.append({"file": name.split("::")[0].lstrip("./").replace("../", ""),
+                         "what": f"The merge gate's full run failed {name}: " + (" | ".join(why[:MAX_WHY]) or "see the log"),
+                         "evidence": "the merge log's failing lines (a merge-*.log in this slice's records)"})
+    if not findings:
+        why = [ln.strip() for ln in lines if WHY_LINE.search(ln)][:MAX_WHY]
+        findings.append({"file": "", "what": "The merge gate's full run was red: " + (" | ".join(why) or "see the log"),
+                         "evidence": "the merge log (a merge-*.log in this slice's records)"})
+    return names, findings
+
+
+def refuse_to_builder(slice_id: str, tip: str, why: str, findings: list[dict], tests: int, refused_for: str) -> None:
+    """Record the gate's refusal as findings the builder's prompt carries, and put the slice where the board shows it;
+    resume.py send-back returns it to the builder."""
+    c.write_json(c.rec_dir(slice_id) / f"verify-gate-{tip}.json",
+                 {"slice": slice_id, "commit": tip, "verdict": "findings", "passes": [], "findings": findings,
+                  "note": f"written by merge_slice.py: {why}; not a verifier session", "at": c.now()})
+    c.set_state(slice_id, phase="refused", refused_for=refused_for, refused_tests=tests, refused_at=c.now(),
+                note=f"refused by the gate: {tests} tests" if refused_for == "gate" else why)
+
+
+def records_only_conflict(base: str, tip: str) -> list[str]:
+    """The files the tip conflicts with main in, when every one is in the records folder; [] otherwise."""
+    p = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, tip], cwd=c.REPO,
+                       capture_output=True, text=True)
+    files = [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []
+    return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
     trees: list[Path] = []
@@ -398,6 +454,14 @@ def merge(slice_id: str) -> dict:
         trees.append(after)
         msg = f"merge: slice {slice_id} ({frozen['build']}) {branch} {tip[:10]}\n\nSlice-Merge: {slice_id}\nSlice-Tip: {tip}"
         if subprocess.run(["git", "merge", "--no-ff", "-m", msg, tip], cwd=after, capture_output=True).returncode != 0:
+            files = records_only_conflict(base, tip)
+            if files:
+                refuse_to_builder(slice_id, tip, "a merge conflict in the records folder alone", [{
+                    "file": files[0], "what": "The branch conflicts with main only in the records folder (" +
+                    ", ".join(files) + "): resume.py send-back merges main into it, taking main's records.",
+                    "evidence": "git merge-tree on main and the tip"}], 0, "records")
+                raise Refused(f"{branch} does not merge cleanly onto main, in the records folder alone ("
+                              + ", ".join(files) + "): resume.py send-back merges main into it.")
             raise Refused(f"{branch} does not merge cleanly onto main: the builder rebases it.")
         merged = c.git(["rev-parse", "HEAD"], after)
         for name in ("acceptance", "checks"):
@@ -406,6 +470,8 @@ def merge(slice_id: str) -> dict:
 
         # 7. today's full gate on the merge result
         if FULL_GATE(after, base, log) != 0:
+            names, findings = gate_findings(log.read_text(errors="replace") if log.exists() else "")
+            refuse_to_builder(slice_id, tip, "today's full gate was red on the merge result", findings, len(names), "gate")
             raise Refused(f"today's full gate is red on the merge result. See {log}")
 
         if c.git(["rev-parse", "HEAD"], c.REPO) != base:

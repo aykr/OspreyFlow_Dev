@@ -70,7 +70,10 @@ without a tool call; the line's own cap is 6 red stops.
    commands **frozen** (only the owner's `refreeze.py` changes them); account, track, dial setting, rounds fixed.
 3. `run_seat.py builder <ID>` until green, then `run_seat.py verifier <ID>`. Findings go back to the builder until
    the rounds limit; then the slice stops and its note names the one decision the owner must make.
-4. `merge_slice.py merge <ID>`: main fast-forwarded to the tested merge commit, then `push_main.sh`.
+4. `merge_slice.py merge <ID>`: main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
+   (or a merge refused for a conflict in the records folder alone) leaves the slice `refused`: the failing tests and
+   their failing lines (not the whole log) are written as a findings record (`verify-gate-<tip>.json`), the board
+   shows "refused by the gate: N tests", and `resume.py <ID> send-back` returns it to the builder with those findings.
 5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
 
 ## Resuming a slice

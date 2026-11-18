@@ -62,7 +62,9 @@ def world(tmp_path):
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
     gate.write_text(gate.read_text().replace("FULL_GATE = full_gate",
-                                             "FULL_GATE = lambda t, b, l: (os.environ.get('TEST_LIVE_NOTE') and "
+                                             "FULL_GATE = lambda t, b, l: (os.environ.get('TEST_GATE_LOG') and "
+                                             "l.open('a').write(open(os.environ['TEST_GATE_LOG']).read()) and 0) or "
+                                             "(os.environ.get('TEST_LIVE_NOTE') and "
                                              "l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE']) and 0) "
                                              "or int(os.environ.get('TEST_GATE', '0'))"))
     v062 = repo / "OspreyFlow_Build/process/lanes/v062"
@@ -350,8 +352,8 @@ def built(w, accept="test -f feature.txt", feature=True, extra=None):
     return wt, sh("git rev-parse HEAD", wt).stdout.strip()
 
 
-def merge(w, gate="0", live_note=""):
-    env = {**w["env"], "TEST_GATE": gate, "TEST_LIVE_NOTE": live_note}
+def merge(w, gate="0", live_note="", gate_log=""):
+    env = {**w["env"], "TEST_GATE": gate, "TEST_LIVE_NOTE": live_note, "TEST_GATE_LOG": gate_log}
     p = sh([w["py"], str(w["lines"] / "merge_slice.py"), "merge", "S1"], w["repo"], env, check=False)
     return p
 

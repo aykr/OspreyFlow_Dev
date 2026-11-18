@@ -117,6 +117,10 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         pass  # the merge record and the verifier's pass speak for it
     elif st.get("phase") == "stopped":
         state, note, source = "stopped", st.get("note", ""), "stop record"
+    elif st.get("phase") == "refused":  # the dashboard knows four states: a refused slice waits as a stopped one
+        state, source = "stopped", "merge refusal"
+        note = (f"refused by the gate: {st.get('refused_tests', 0)} tests" if st.get("refused_for") == "gate"
+                else st.get("note") or "refused by the merge script") + "; resume.py send-back returns it to the builder"
     elif tip and verify and verify.get("verdict") == "pass":
         state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
     elif tip and tests and tests.get("green"):
@@ -135,7 +139,9 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
     elif state and builds_entry:
         builds[build] = builds_entry
-    if state == "stopped":
+    if st.get("phase") == "refused" and state == "stopped":
+        shown = note.split(";")[0][:60]
+    elif state == "stopped":
         shown = f"stopped: {note[:60]}"
     elif state:
         shown = state
