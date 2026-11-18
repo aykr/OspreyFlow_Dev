@@ -110,6 +110,28 @@ tell, 37 not code.
   avoids changing `TargetModelDraftInput` (`packages/schemas/dataset_model.py:83`, which would regenerate the TypeScript
   types). Failing test first, including the second writer and the stale version.
 
+### New row (18 Nov): the client-name check cannot read inside a PDF, an image or a video
+
+`client_name_check.py` (BL6) reads a file that is not UTF-8 as printable runs of four or more characters
+(`identifier_check._read`). Real text inside a PDF, an image or a video (compressed streams, a PDF's own text, an image's
+pixels or a video's frames and captions) is therefore not covered: a client name in any of them would pass. The three
+files the owner exempted (RULINGS.md, "three compressed files exempt") are the known chance hits; every other such file
+is unchecked in the same way. Wanted when the owner opens it: an extractor for each kind (PDF text, image text by OCR,
+video captions) behind the same hashed list, or a stated list of the files that matter for the published sites.
+
+### Found by the merge gate on AD2's first merge attempt (18 Nov, ~14:00 UTC)
+
+- **A new HIGH finding stops every merge on the Mac:** `trivy fs` (`core-check`) reports picomatch 4.0.7,
+  CVE-2026-112366 (denial of service through repeated extglob patterns), no fixed version, reached through vite,
+  vitest and tinyglobby/fdir, all dev tooling (`npm ls picomatch`). No slice touched `package-lock.json`: main fails
+  it today. The repository's way is a dated entry in `OspreyFlow_Core/.trivyignore` on the owner's word, with the
+  threat model stated and a revisit trigger (as for CVE-2026-85061 and the Pillow entry). Awaiting the owner.
+- **AD2's change fails `make test`:** `tests/services/api/test_admin_sections.py` reads 69 more routes into the People
+  section, and `schedule_preview_route` is now read by People as well as Operations. The new code in `People.tsx` imports
+  something that pulls the workspace's other modules into the section's walk. The slice's checks did not include this
+  server-side scan, so neither the builder's Stop hook nor the verifier saw it; the full gate did. Back to the builder
+  with that file in its checks.
+
 ### New row (18 Nov): GitHub's two warnings on the CI workflow
 
 Both show as annotations on the green run of 18 Nov (run 44257704285) and both need a change to the CI workflow file under
@@ -121,3 +143,11 @@ Both show as annotations on the green run of 18 Nov (run 44257704285) and both n
    workflow's `ubuntu-latest` jobs move to a newer Ubuntu without a change of ours. Either pin `ubuntu-24.04` or run the
    suite on `ubuntu-26.04` first; the choice is the owner's. `UV_PYTHON`, the Node major and the browsers the jobs
    install are the likeliest to move with it.
+
+### New row (18 Nov, the owner's word): site plans need rotation and pitch; neither binding allows them
+
+`OspreyFlow_Build/spec/00_ARCHITECTURE.md:70` says rotation and pitch are "Needed for site geospatial, where an aerial
+photograph is rarely north-aligned". Neither binding that draws the graph over the map allows them: the workspace's own
+`apps/workspace/src/map/sigmaMaplibreLayer.ts` (`@sigma/layer-maplibre` 3.0.0's code) sets `minPitch`/`maxPitch` to 0 and
+turns sigma's camera rotation off, and `@sigma/layer-maplibre` 4.0.1 does the same and also makes the map
+non-interactive. This was true before GG6 and stays true after it. **Decided when R8 (GG5 on the plan) is planned.**

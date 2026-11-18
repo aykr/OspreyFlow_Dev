@@ -18,8 +18,8 @@ the client's name (full name and abbreviation) stays only in `OspreyFlow_Core/NO
 `OspreyFlow_Core/services/laurium/NOTICE`, `OspreyFlow_Build/tools/licence_check.py` and
 `OspreyFlow_Core/services/laurium/licence_gate.py`; everywhere else it is reworded to "UK public sector client", and
 where text credits Laurium, to "the library's publisher". Laurium's own name may stay in the product and its records but
-never in a published website file (`publish_pages.sh`'s set: `deploy/index.html`, `intro-video.html`,
-`public-sector.html`, `monitoring.html`, `assets/`, and `sites/org/` and `sites/net/` whole; never the two READMEs).
+never in a published website file (`publish_pages.sh`'s set: from `OspreyFlow_Build/marketing_site/deploy/`, the
+index, intro-video, public-sector and monitoring pages and `assets/`, and `sites/org/` and `sites/net/` whole; never the two READMEs).
 
 1. **The check** (new `OspreyFlow_Build/tools/client_name_check.py`, target `client-name-check` in
    `OspreyFlow_Build/Makefile`, added to `ci:`). It uses `marketing_site/client_hashes.py` (`known`, `named`, `ABSENT`)

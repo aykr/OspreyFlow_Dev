@@ -25,7 +25,7 @@ fields (`People.tsx:1052`); the pattern to reuse is `govuk-error-summary` with a
 
 ## Acceptance test
 
-New vitest `apps/workspace/src/admin/sections/PeopleInvite.test.tsx`: an inviter at OFFICIAL is not offered
+A new vitest file named PeopleInvite, beside `People.tsx` in `apps/workspace/src/admin/sections/`: an inviter at OFFICIAL is not offered
 OFFICIAL-SENSITIVE, nor a handling code outside their receivable set; a 403 from the route (forced by the test's fetch
 double, which also refuses the way the real route does) puts an error summary beside the Invite button, naming the
 reason in words, and focus goes to it. Plus a new case in `apps/workspace/keyboard/admin.spec.ts` (rule 13): invite by

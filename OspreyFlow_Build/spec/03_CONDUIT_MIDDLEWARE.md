@@ -184,8 +184,12 @@ Someone else's private board, another case's board and no board at all answer al
 `item_not_found`. Each refusal of a drawing is said in words before anything is written:
 `above_the_ceiling` (409, naming the case's highest allowed marking: the strictest its datasets
 set, a composite's members' among them, the deployment's highest where none is set; Amendment 2
-decision 3; `test_the_ceiling_of_a_case_reading_a_composite_is_its_members`), `above_your_clearance`
-(409), `not_in_the_model` (422: a node type of the case's model only, C14, never `Alert` or
+decision 3; `test_the_ceiling_of_a_case_reading_a_composite_is_its_members`),
+`above_the_deployments_highest_marking` (422, the documents' own refusal: a drawn item, link, edit,
+match decision or picture, uploaded or chosen, marked above the deployment's highest marking is
+refused before anything is kept, in words that name the deployment's limit and never the item's
+marking or content; ADR-148 decision 10, SE1; `test_deployment_ceiling_drawn_items.py`),
+`above_your_clearance` (409), `not_in_the_model` (422: a node type of the case's model only, C14, never `Alert` or
 `Document`; a link type of the model only, never a resolution, picture or alert link),
 `not_a_property` (422: a type's required property missing, or one it does not declare),
 `ends_not_on_the_board` (422), `wrong_ends` (422), `already_drawn` (409: the same link already

@@ -86,6 +86,24 @@ is not frozen), and their commands bring their own environment (F4). A builder i
 `node_modules` until its own command makes one. The fix is a `slice_start.py` that builds the worktree's environment
 itself (`uv sync --frozen`, `npm ci`, as `ci_env` does) instead of calling the lanes' script.
 
+## F7. A stopped slice has no way back
+
+Found when BL6 stopped on 18 November (six red Stop hooks: a wrong path in the conductor's frozen checks, `make -C
+OspreyFlow_Build` after a `cd OspreyFlow_Core`). Once the checks are corrected (`refreeze.py`, the owner's, and records
+mode refuses to commit the change first) nothing returns the slice to `building`: `run_seat.py builder` refuses any
+other phase, and the red-stop records stay. `diffs/resume-bl6.sh` does it by hand. The line needs a `resume` step (after
+`refreeze`) that clears the stop and logs it. Also: a frozen command is checked by no one before the slice starts; a
+dry run of each checks command on the base, in a scratch worktree, would have caught this one in a minute.
+
+## F8. A Playwright command needs a port slot the line never gives it
+
+AD2 stopped (18 November) on `OSPREY_PORTS_SLOT is not set` for a linked worktree: the builder's Stop hook, and the merge
+script's acceptance and checks runs (`run()` sets only the closed ports; only the full gate's `ci_env` sets a slot),
+start no slot. The drafted commands set one themselves (`export OSPREY_PORTS_SLOT=<n>`; 16 for AD2, 17 for GG1; proven on
+main in a scratch worktree: 47 keyboard tests, exit 0, no `node_modules` left). The conductor's first dry run of AD2 stopped
+at vitest and never reached Playwright; the rule now is that a dry run reaches the last step of the command, or the
+table says which step it did not reach. The fix for the line: `slice_start.py` gives each slice a slot of its own.
+
 ## F5. A worktree has no hashed client-name list
 
 `slice_start.py` makes the worktree from git; the list is gitignored. The builder of BL6 cannot see a single hit without

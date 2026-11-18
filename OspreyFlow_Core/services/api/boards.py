@@ -35,6 +35,8 @@ from datetime import UTC, datetime
 from hashlib import sha256
 from typing import Any, Protocol
 
+from services.ingest.ceiling import AboveTheDeploymentCeiling, DeploymentCeiling
+
 from adapters.media_objectstore import content_type_of, reference_for
 from conduit_common.identity import new_edge_id, new_id
 from ontology.handling import HandlingScheme, merge_handling
@@ -159,6 +161,9 @@ class Boards:
     cap_breach: Callable[[int, int], Any] | None = None
     #: Decision 9: a case's own proposed link types are usable on its boards at once.
     case_types: _CaseTypes | None = None
+    #: ADR-148 decision 10 (SE1): the deployment's highest marking. `None` is no deployment ceiling
+    #: (a board built without one, as the unit tests do); the app always gives one.
+    deployment_ceiling: DeploymentCeiling | None = None
 
     # --- where drawing goes ---------------------------------------------------------------
 
@@ -199,10 +204,15 @@ class Boards:
         return Into(layer, ceiling, chosen[0].id if chosen else None, drawn_dataset=False)
 
     def check_marking(self, marking: str, ceiling: str, principal: Principal) -> None:
+        """Every write site's first question, asked before anything is kept. The deployment's own
+        highest marking comes before the case's (ADR-148 decision 10): refused with the documents'
+        refusal, in words that say the deployment's limit and never the item's content."""
         if marking not in self.scheme.classification:
             raise DrawingRefused(
                 "not_a_marking", f"{marking} is not a marking of this deployment", status=422
             )
+        if self.deployment_ceiling is not None and self.deployment_ceiling.above(marking):
+            raise AboveTheDeploymentCeiling(self.deployment_ceiling.marking, "write")
         if not self.scheme.clears(ceiling, marking):
             raise DrawingRefused(
                 "above_the_ceiling",

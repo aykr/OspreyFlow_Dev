@@ -110,3 +110,10 @@ CVE-2026-114605 exp:2026-12-14
 # dnspython again (excessive memory and CPU use; fixed in 2.9.2, on the same newer-Python line as above):
 # found by v0.5.1's release scan on 14 November 2026 and accepted by the owner on the same ground.
 CVE-2026-128089 exp:2026-12-14
+# picomatch 4.0.7 (HIGH: denial of service through repeated extglob patterns; no fixed version yet), found by the merge
+# gate on 18 November 2026 when the vulnerability database updated. Checked that day: it is in no image we build (only
+# build and test tooling: vite, vitest, tinyglobby/fdir, none in a final image or in the production dependency tree), and
+# nothing in the product passes a person's input to it as a pattern. Excepted on the owner's word until the date of the
+# entries above. Revisit trigger: a patched picomatch release, or either of those two facts changing (for example, a
+# runtime service that depends on it).
+CVE-2026-112366 exp:2026-12-14

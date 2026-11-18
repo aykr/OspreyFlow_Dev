@@ -3,6 +3,65 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 18 November 2026: MapLibre 6 now, Sigma 4 first in the GOV.UK modules (GG6, GG2, GG5)
+
+The owner's word, 18 November 2026 (about 14:15 UTC), on the evidence in `slices/GG6.md`:
+
+1. **GG6 is a new slice on the plan, under the standing approval.** Today's workspace moves to `maplibre-gl` `>=6.4.1 <7`
+   on Sigma 3. ADR-014 Amendment 2 is **accepted by the owner**, not proposed. The acceptance must include: the map
+   loading tiles in a real browser on the new version; the performance budget; and `make trivy` passing with the
+   CVE-2026-85061 entry gone. Nothing in the evidence was run in a browser, so every claim there is unproved until a test
+   shows it. **If a browser run shows a regression, the slice stops and the owner is told. No fallback to 5.x**: trivy
+   still fails it.
+2. **The GOV.UK graph and map modules (R4, R8; GG2 and GG5 on the plan) start on Sigma 4.** R4's first step proves the
+   performance budget (`spec/02_GLASS_FRONTEND.md` §5) on Sigma 4, and falls back to Sigma 3 if it cannot. **The shared
+   package imports no `sigma`, `@sigma/*` or `maplibre-gl`** (the check that fails if it does, shown red and then green in
+   scratch, is described in the evidence; it is wired in only after it is shown red in the tree, rule 15).
+3. **Moving today's React workspace to Sigma 4 is decided after R4 has met the budget.** It is not planned now.
+
+## 18 November 2026: GitHub failures that are not ours (standing)
+
+The owner's word, about 13:20 UTC, on a run of main whose `conformance-recognise` job failed in the image build
+(`stanza.download`: `ConnectionResetError`, no test of ours failing):
+
+1. A job that failed on a **download, network or runner fault, with no test of our code failing**: the conductor reruns
+   it (`gh run rerun --failed`), up to **twice**, without asking, and tells the owner afterwards.
+2. While such a run is in progress or being rerun, slices that pass the **full gate on the Mac may merge on the Mac**.
+3. **Nothing is pushed to origin until GitHub's run on main is green.** (The push script defers while a run is in
+   progress; the conductor therefore makes no commit to main in the moment between a run finishing red and its rerun
+   starting, and says if it could not keep that.)
+4. If a rerun fails a second time, or **any job fails in our code**, the conductor stops merging and brings it to the
+   owner **at once**, with the job, the failing test and the commit.
+
+Every report says which of these applied.
+
+## 18 November 2026: how the line runs, to cut down what needs the owner's hand
+
+The owner's four rulings of 18 November 2026 (about 12:40 UTC).
+
+1. **Standing approval to start a slice.** The conductor may start any slice whose build id is already on the owner's
+   plan without asking, once it has (a) run the slice's acceptance and checks commands in a scratch worktree on main and
+   shown the acceptance **red for the right reason** and the checks **green**, and (b) passed the citation check on the
+   brief. Still the owner's: scope, rulings, protected files, the GOV.UK demo, the live step, a new build id, and anything
+   that loosens or exempts a check. *How the conductor reads (a):* where the checks command names the slice's own new test
+   file, which cannot exist on main, the check is run without that file and the table says so.
+2. **Batches.** A stopped slice does not interrupt the owner. The conductor carries on with every other slice it can and
+   brings the open decisions together, as numbered questions with options, at **13:00 and 18:00** the owner's time
+   (this Mac's clock), or sooner only if every track is stopped. Security faults and anything that cannot be undone still
+   come at once.
+3. **The conductor's own malformed command.** Once the line has a step for it, the conductor may correct and resume a
+   slice that stopped **only because the conductor's own command was malformed**, provided the corrected command runs the
+   same test files, is proved on main first, is logged, and the owner is told afterwards. Never to change what a check
+   tests. Until that step exists, the conductor keeps giving the owner a resume script. (The step's own limits are in the
+   line, not in this file: the conductor can edit this file, so no authority here is enough on its own.)
+4. **Fix the line's gaps now** (reverses "leave them"). One session outside the line, started by the owner, with the brief
+   `slice-line/proposals/LINE_FIXES_BRIEF.md`, in this priority order: (a) a resume step, and the step in 3; (b) a dry run
+   of a slice's frozen commands at `slice_start`, which refuses to start a slice whose commands do not run; (c) the test
+   settings the Stop hook and the merge script lack (the Playwright slot, `env: full`: F4, F6, F8); (d) the hashed list
+   reaching a slice's worktree without the owner (F5); (e) usage recorded per slice, seat and account; (f) a red GitHub run
+   stops merging and shows on the board (F2); (g) BL1's record name (F3), then F1's three protections. Each with a test
+   shown failing first; one set of diffs and one list of commands for the owner to apply.
+
 ## 18 November 2026: three compressed files exempt from the client-name check (BL6)
 
 The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
