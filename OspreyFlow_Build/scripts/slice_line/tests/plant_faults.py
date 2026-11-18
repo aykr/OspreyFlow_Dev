@@ -125,6 +125,12 @@ M = [
  ("run_seat.py", '    usage_hook.conductor_row(Path(tp), session, account)', '    pass', "never_twice"),
  ("board.py", '        print(f"{a:8} {line(v)}  {windows_of(a)}")', '        print(f"{a:8} {line(v)}")', "board_usage_totals"),
  ("board.py", '            out.append(f"{shown}: not reported by its sessions\' stream")', '            pass', "board_usage_totals"),
+ ("merge_slice.py", '        if ci["state"] == "red":\n', '        if False:\n', "failed_run_on_main"),
+ ("common.py", '            return {"state": "red", "run": run, "url": url, "why": "cancelled, with nothing newer"}', '            return {"state": "green", "run": run, "url": url, "why": "x"}', "cancelled_run_with_nothing_newer"),
+ ("merge_slice.py", '        if ci["state"] != "green":\n', '        if False:\n', "cannot_be_read_refuses"),
+ ("common.py", '            return {"state": "unknown", "run": None, "url": "", "why": "no run on main has completed"}', '            return {"state": "green", "run": None, "url": "", "why": "x"}', "cannot_be_read_refuses_never_green"),
+ ("board.py", '            print(f"main is red: run {ci[\'run\']}', '            print(f"main: run {ci[\'run\']}', "board_prints_main_is_red"),
+ ("board.py", '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, ci=ci)', '    ci = c.main_ci()\n    path = write_status(builds, owed=owed)', "board_prints_main_is_red"),
 ]
 bad = 0
 for f, old, new, test in M:

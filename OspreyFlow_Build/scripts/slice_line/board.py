@@ -161,7 +161,7 @@ def owed_list(problems: list[str]) -> list[dict]:
     return [{"test": t, **o} for t, o in sorted(owed.items())]
 
 
-def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None) -> Path:
+def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
     try:
@@ -171,7 +171,8 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
     for k, v in builds.items():
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
-    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or []}
+    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
+            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"}}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -240,9 +241,14 @@ def main() -> int:
         slices = []
     rows, builds, problems = compute(slices)
     owed = owed_list(problems)
-    path = write_status(builds, owed=owed)
+    ci = c.main_ci()
+    path = write_status(builds, owed=owed, ci=ci)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
+        if ci["state"] == "red":
+            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: no merge until it is green")
+        elif ci["state"] != "green":
+            print(f"main's GitHub run cannot be read ({ci['why']}): no merge until it can")
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")

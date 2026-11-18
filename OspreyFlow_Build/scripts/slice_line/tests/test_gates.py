@@ -35,6 +35,24 @@ def sh(cmd, cwd, env=None, check=True, input=None):
 
 # ------------------------------------------------------------------ fixtures
 
+GREEN_RUN = '[{"databaseId": 44000000001, "conclusion": "success", "status": "completed", "url": "https://github.invalid/r/1"}]'
+GH = r"""#!/bin/sh
+# a stand-in for gh: `gh run list --branch main [--status completed] --limit 1 --json <fields>` only
+[ -n "${FAKE_GH_EXIT:-}" ] && { echo "error connecting to api.github.com" >&2; exit "$FAKE_GH_EXIT"; }
+green='@GREEN@'
+completed="${FAKE_GH_COMPLETED:-$green}"
+latest="${FAKE_GH_LATEST:-$completed}"
+[ "$1 $2" = "run list" ] || { echo "unknown command \"$1 $2\" for gh" >&2; exit 1; }
+case " $* " in *" --branch main "*) ;; *) echo "this stand-in answers only for main" >&2; exit 1;; esac
+case " $* " in *" --json "*) ;; *) echo "this stand-in answers only --json" >&2; exit 1;; esac
+case " $* " in *" --limit 1 "*) ;; *) echo "this stand-in answers only --limit 1" >&2; exit 1;; esac
+case " $* " in
+  *" --status completed "*) printf '%s\n' "$completed";;
+  *" --status "*) echo "[]";;
+  *) printf '%s\n' "$latest";;
+esac
+""".replace("@GREEN@", GREEN_RUN)
+
 #: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
 #: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules).
@@ -63,13 +81,20 @@ def world(tmp_path):
         if (SRC / f).exists():
             shutil.copy(SRC / f, data / "bin" / f)
     (data / "emails.sha256").write_text(hashlib.sha256(OWNER.encode()).hexdigest() + "\n")
+    # gh, as merge_slice.py and board.py call it (run list on main, --json fields); a call in another shape is refused
+    # as the real gh refuses an unknown flag. FAKE_GH_COMPLETED: the latest completed run's JSON list; FAKE_GH_LATEST:
+    # the newest run of any status; FAKE_GH_EXIT: a failing gh (signed out, offline).
+    ghbin = tmp_path / "ghbin"
+    ghbin.mkdir()
+    (ghbin / "gh").write_text(GH)
+    (ghbin / "gh").chmod(0o755)
     fake_claude = tmp_path / "claude"
     fake_claude.write_text('#!/bin/sh\necho \'{"loggedIn": true}\'\n')
     fake_claude.chmod(0o755)
     env = {**os.environ, "HOME": str(home), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "t",
            "GIT_AUTHOR_EMAIL": "t@t.invalid", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.invalid",
            "OSPREY_PUSH_NO_CI_CHECK": "1", "OSPREY_CLAUDE_BIN": str(fake_claude),
-           "OSPREY_SLICE_WT_ROOT": str(tmp_path / "wt")}
+           "OSPREY_SLICE_WT_ROOT": str(tmp_path / "wt"), "PATH": f"{ghbin}{os.pathsep}{os.environ.get('PATH', '')}"}
     for k in ("OSPREY_SLICE_HOME", "OSPREY_SEAT", "OSPREY_SLICE", "OSPREY_SLICE_WORKTREE", "OSPREY_STATUS_FILE"):
         env.pop(k, None)
     origin = tmp_path / "origin.git"

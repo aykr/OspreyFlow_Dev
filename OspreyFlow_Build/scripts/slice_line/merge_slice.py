@@ -5,7 +5,9 @@
     merge_slice.py records -m "<msg>" <path>...  the conductor's records, OspreyFlow_Build/process/lanes/v062/ only
 
 `merge` refuses unless every one of these holds, in this order, and stops at the first that does not:
-  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted;
+  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted; and main's
+     latest completed GitHub run is green (a failed one, a cancelled one with nothing newer, or one gh cannot read
+     refuses: F2);
   2. the slice was started (its frozen record exists) and main's backlog row still matches what was frozen;
   3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it;
   4. the branch touches no protected path (the owner's files, the never-staged files, the line itself);
@@ -459,6 +461,12 @@ def merge(slice_id: str) -> dict:
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
     try:
         base = main_ready()
+        ci = c.main_ci()  # F2: while main is red, every merge is refused (ADR-142 Amendment 9)
+        if ci["state"] == "red":
+            raise Refused(f"main is red: GitHub run {ci['run']} ({ci['why']}) {ci['url']}. No merge until a run on main "
+                          "is green (RULINGS.md, GitHub failures: the conductor reruns a fault that is not ours).")
+        if ci["state"] != "green":
+            raise Refused(f"main's GitHub run cannot be read, so it is not taken as green: {ci['why']}.")
         frozen = c.read_json(rec / "frozen.json")
         if not frozen:
             raise Refused(f"{slice_id} was never started (no frozen record).")

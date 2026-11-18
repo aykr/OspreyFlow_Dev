@@ -301,3 +301,40 @@ def allocate_slot(slice_id: str) -> int:
         if slot not in taken and all(p < 65536 for p in ports) and not ports & spoken:
             return slot
     raise SystemExit("No Playwright port slot is free for a new slice: the owner frees one (a merged or removed slice).")
+
+
+#: main's GitHub run (F2): the latest completed run on main, read with gh. Never taken as green unless it says success.
+GH_FIELDS = "databaseId,conclusion,status,url"
+
+
+def _gh_runs(*args: str) -> list[dict]:
+    p = subprocess.run(["gh", "run", "list", "--branch", "main", *args, "--limit", "1", "--json", GH_FIELDS],
+                       cwd=str(REPO), capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise ValueError(f"gh exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")
+    runs = json.loads(p.stdout)
+    if not isinstance(runs, list):
+        raise ValueError("gh's answer is not a list of runs")
+    return runs
+
+
+def main_ci() -> dict:
+    """{state: green | red | unknown, run, url, why}: red for a failed run, or a cancelled one with nothing newer;
+    unknown when gh cannot be read or no run has completed (refused like red, never taken as green)."""
+    try:
+        done = _gh_runs("--status", "completed")
+        if not done:
+            return {"state": "unknown", "run": None, "url": "", "why": "no run on main has completed"}
+        last = done[0]
+        run, url, concl = last.get("databaseId"), last.get("url", ""), last.get("conclusion")
+        if concl == "success":
+            return {"state": "green", "run": run, "url": url, "why": "success"}
+        if concl == "cancelled":
+            newest = _gh_runs()
+            if newest and newest[0].get("databaseId") != run:
+                return {"state": "green", "run": run, "url": url,
+                        "why": f"cancelled, with a newer run {newest[0].get('databaseId')} ({newest[0].get('status')})"}
+            return {"state": "red", "run": run, "url": url, "why": "cancelled, with nothing newer"}
+        return {"state": "red", "run": run, "url": url, "why": str(concl)}
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        return {"state": "unknown", "run": None, "url": "", "why": f"gh could not be read ({e})"}
