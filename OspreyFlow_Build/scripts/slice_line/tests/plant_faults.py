@@ -131,6 +131,11 @@ M = [
  ("common.py", '            return {"state": "unknown", "run": None, "url": "", "why": "no run on main has completed"}', '            return {"state": "green", "run": None, "url": "", "why": "x"}', "cannot_be_read_refuses_never_green"),
  ("board.py", '            print(f"main is red: run {ci[\'run\']}', '            print(f"main: run {ci[\'run\']}', "board_prints_main_is_red"),
  ("board.py", '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, ci=ci)', '    ci = c.main_ci()\n    path = write_status(builds, owed=owed)', "board_prints_main_is_red"),
+ ("guard.py", '    r"(?:^|[\\s;&|(`\'\\"\\\\/=])(?:claude|claude-sol|claude-ayan)(?=$|[\\s;&|)`\'\\"<>])"', '    r"(?:^|[\\s;&|(`])(?:claude|claude-sol|claude-ayan)(?:\\s|$)"', "seat_launch_every_variant"),
+ ("guard.py", '    r"|claude-code\\b"\n', '', "seat_launch_every_variant"),
+ ("guard.py", '    r"|\\$\\{?\\w+\\}?\\s*[\'\\"]?aude\\b"\n', '', "seat_launch_every_variant"),
+ ("guard.py", '    r"|[\'\\"]\\s*\\+?\\s*[\'\\"]aude\\b"\n', '', "seat_launch_every_variant"),
+ ("guard.py", '    r"|\\bc(?:\'\'|\\"\\")+l|\\bcl(?:\'\'|\\"\\")+a"\n', '', "seat_launch_every_variant"),
 ]
 bad = 0
 for f, old, new, test in M:

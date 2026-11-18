@@ -77,8 +77,16 @@ WRITE_MARKERS = re.compile(
     r"open\(|write_text|write_bytes|\.write\(|\bunzip\b|\btar\b"
 )
 GIT_WRITE = {"commit", "merge", "rebase", "reset", "cherry-pick", "revert", "am", "pull", "update-ref"}
-SEAT_LAUNCH = re.compile(r"(?:^|[\s;&|(`])(?:claude|claude-sol|claude-ayan)(?:\s|$)|CLAUDE_CONFIG_DIR=|disableAllHooks|"
-                         r"--setting-sources|\.local/bin/claude\b")
+#: Starting Claude Code by its command's text (F1, layer 1: a floor, not a wall; the seat shim, layer 2, does not
+#: depend on the text). The name as a command word or a path's last part, quoted, escaped or after any separator; the
+#: npm package (npx, node .../cli.js); a name built in the shell or by concatenation, or split by empty quotes.
+SEAT_LAUNCH = re.compile(
+    r"(?:^|[\s;&|(`'\"\\/=])(?:claude|claude-sol|claude-ayan)(?=$|[\s;&|)`'\"<>])"
+    r"|claude-code\b"
+    r"|\$\{?\w+\}?\s*['\"]?aude\b"
+    r"|['\"]\s*\+?\s*['\"]aude\b"
+    r"|\bc(?:''|\"\")+l|\bcl(?:''|\"\")+a"
+    r"|CLAUDE_CONFIG_DIR=|disableAllHooks|--setting-sources|\.local/bin/claude\b")
 ALLOWED_SCRIPT = re.compile(
     r"^\s*(?:[\w./~\-]*python[\d.]*\s+)?[\w./~\-]*OspreyFlow_Build/scripts/slice_line/"
     r"(merge_slice|run_seat|slice_start|board|resume)\.py(?:\s+[^;&|`$()<>\n]*)?\s*$"
