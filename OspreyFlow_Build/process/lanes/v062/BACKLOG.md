@@ -119,6 +119,19 @@ files the owner exempted (RULINGS.md, "three compressed files exempt") are the k
 is unchecked in the same way. Wanted when the owner opens it: an extractor for each kind (PDF text, image text by OCR,
 video captions) behind the same hashed list, or a stated list of the files that matter for the published sites.
 
+### Found by the merge gate on AD2's first merge attempt (18 Nov, ~14:00 UTC)
+
+- **A new HIGH finding stops every merge on the Mac:** `trivy fs` (`core-check`) reports picomatch 4.0.7,
+  CVE-2026-112366 (denial of service through repeated extglob patterns), no fixed version, reached through vite,
+  vitest and tinyglobby/fdir, all dev tooling (`npm ls picomatch`). No slice touched `package-lock.json`: main fails
+  it today. The repository's way is a dated entry in `OspreyFlow_Core/.trivyignore` on the owner's word, with the
+  threat model stated and a revisit trigger (as for CVE-2026-85061 and the Pillow entry). Awaiting the owner.
+- **AD2's change fails `make test`:** `tests/services/api/test_admin_sections.py` reads 69 more routes into the People
+  section, and `schedule_preview_route` is now read by People as well as Operations. The new code in `People.tsx` imports
+  something that pulls the workspace's other modules into the section's walk. The slice's checks did not include this
+  server-side scan, so neither the builder's Stop hook nor the verifier saw it; the full gate did. Back to the builder
+  with that file in its checks.
+
 ### New row (18 Nov): GitHub's two warnings on the CI workflow
 
 Both show as annotations on the green run of 18 Nov (run 44257704285) and both need a change to the CI workflow file under
