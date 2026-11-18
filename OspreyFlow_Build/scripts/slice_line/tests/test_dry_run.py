@@ -54,11 +54,16 @@ def test_slice_start_refuses_bl6s_make_path_after_a_cd(world):
     assert "make names a folder that does not exist" in said and "on main" in said, said
 
 
-def test_slice_start_refuses_ad2s_playwright_with_no_port_slot(world):
+def test_the_dry_run_refuses_ad2s_playwright_with_no_port_slot(world):
+    """AD2's commands as of 18 November, proved with no slot: refused, by signature. (slice_start.py now gives every
+    slice a slot of its own, so the same command starts: test_settings.py.)"""
     w = world
     row(w, checks="cd OspreyFlow_Core && sh ../tools/keyboard.sh", extra={"tools/keyboard.sh": PLAYWRIGHT})
-    said = not_started(w, started(w)[0])
-    assert "OSPREY_PORTS_SLOT is not set" in said or "no port slot" in said, said
+    code = (f"import sys, json; sys.path.insert(0, {str(w['lines'])!r}); import common as c, dry_run; "
+            "print(json.dumps(dry_run.prove(c.slice_row('S1'), slot=None)))")
+    p = sh([w["py"], "-c", code], w["repo"], w["env"])
+    said = " ".join(json.loads(p.stdout.splitlines()[-1]))
+    assert "OSPREY_PORTS_SLOT is not set" in said and "Playwright in a linked worktree with no port slot" in said, said
 
 
 def test_slice_start_says_which_step_of_the_chain_it_did_not_reach(world):

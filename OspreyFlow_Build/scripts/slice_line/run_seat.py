@@ -217,7 +217,8 @@ def builder(slice_id: str) -> int:
     prompt += rulings_note(wt)
     log = c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"
     res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
-                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt)}, log)
+                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                  **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})}, log)
     sess = c.read_json(c.rec_dir(slice_id) / "sessions.json") or {"builder": [], "verifier": []}
     sess["builder"].append(res.get("session_id"))
     c.write_json(c.rec_dir(slice_id) / "sessions.json", sess)

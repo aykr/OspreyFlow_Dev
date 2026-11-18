@@ -62,10 +62,11 @@ def touched(tree: str, base: str) -> List[str]:
     return [ln for ln in p.stdout.splitlines() if ln.strip()]
 
 
-def command(tree: str, tests: List[str]) -> str:
-    """How the selected tests run, from the tree's root: pure (closed ports), on the tree's own environment."""
+def command(tree: str, tests: List[str], python: str = "") -> str:
+    """How the selected tests run, from the tree's root: pure (closed ports), on the tree's own environment (or the
+    `python` the caller's environment gives, as the merge script's CI-built one does)."""
     venv = Path(tree) / "OspreyFlow_Core/.venv/bin/python"
-    py = str(venv) if venv.is_file() else "uv run --frozen python"
+    py = python or (str(venv) if venv.is_file() else "uv run --frozen python")
     files = " ".join("../OspreyFlow_Build/" + t for t in tests)
     return (f"cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9 {py} -m pytest -c ../OspreyFlow_Build/pytest.ini "
             f"-q -p no:cacheprovider {files}")

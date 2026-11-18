@@ -21,8 +21,8 @@ M = [
  ("stop_check.py", 'if reds >= MAX_RED:', 'if False:', "red_six_times"),
  ("merge_slice.py", '    rec = c.read_json(c.rec_dir(slice_id) / f"verify-{tip}.json")\n    if not rec:\n        raise', '    rec = c.read_json(c.rec_dir(slice_id) / f"verify-{tip}.json")\n    return rec or {}\n    if not rec:\n        raise', "no_verifier_record"),
  ("merge_slice.py", 'if not tp.is_file() or tip not in tp.read_text(errors="ignore"):', 'if False:', "never_saw_the_commit"),
- ("merge_slice.py", 'if run(frozen["acceptance"], before, log, shell=True) == 0:', 'if False:', "never_red"),
- ("merge_slice.py", 'if frozen.get(name) and run(frozen[name], after, log, shell=True) != 0:', 'if False:', "refuses_a_red_branch"),
+ ("merge_slice.py", 'if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:', 'if False:', "never_red"),
+ ("merge_slice.py", 'if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:', 'if False:', "refuses_a_red_branch"),
  ("merge_slice.py", 'if FULL_GATE(after, base, log) != 0:', 'if False:', "full_gate_is_red"),
  ("merge_slice.py", '        if bad:\n', '        if False:\n', "protected_path"),
  ("merge_slice.py", 'FULL_GATE_TARGETS = (("make", "-k", "ci"), ("make", "test"))', 'FULL_GATE_TARGETS = (("make", "-k", "ci"),)', "runs_make_ci_and_make_test"),
@@ -107,6 +107,14 @@ M = [
  ("dry_run.py", '            elif malformed(out):\n', '            elif False:\n', "red_only_for_a_malformed"),
  ("dry_run.py", '        out.append(cmd[last:p] + f\'&& {{ echo {n} >> "{marks}"; }} &&\')', '        out.append(cmd[last:p] + "&&")', "which_step_of_the_chain"),
  ("dry_run.py", '                if body is not None:\n', '                if False:\n', "stands_in_the_slices_own"),
+ ("common.py", '        if slot not in taken and all(p < 65536 for p in ports) and not ports & spoken:', '        if True:', "slot_clear_of_the_lanes"),
+ ("stop_check.py", '        env["OSPREY_PORTS_SLOT"] = str(slot)  # the slice', '        pass  # the slice', "give_a_playwright_command"),
+ ("slice_start.py", '    problems = dry_run.prove(row, slot=slot, log=log)', '    problems = dry_run.prove(row, slot=None, log=log)', "give_a_playwright_command"),
+ ("merge_slice.py", '    if slot not in (None, ""):\n        env["OSPREY_PORTS_SLOT"] = str(slot)', '    if False:\n        env["OSPREY_PORTS_SLOT"] = str(slot)', "ci_built_environment"),
+ ("merge_slice.py", '        drop_env(after)  # the full gate builds its own, fresh\n', '', "ci_built_environment"),
+ ("merge_slice.py", '        if venv:\n            env["UV_PROJECT_ENVIRONMENT"] = str(venv)', '        if False:\n            env["UV_PROJECT_ENVIRONMENT"] = str(venv)', "ci_built_environment"),
+ ("slice_start.py", '    if row["env"] == "full":', '    if False:', "env_full_builds"),
+ ("merge_slice.py", '        if scans and run(scan_select.command(', '        if False and run(scan_select.command(', "scans_of_the_touched_files"),
 ]
 bad = 0
 for f, old, new, test in M:

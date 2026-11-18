@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import dry_run  # noqa: E402
+import merge_slice as ms  # noqa: E402
 
 
 def running_builders() -> dict:
@@ -63,7 +64,8 @@ def start(slice_id: str) -> dict:
 
     log = c.DATA / "dry-runs" / f"{slice_id}-start-{c.now().replace(':', '')}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
-    problems = dry_run.prove(row, log=log)
+    slot = c.allocate_slot(slice_id)
+    problems = dry_run.prove(row, slot=slot, log=log)
     if problems:
         raise SystemExit(f"NOT STARTED: {slice_id}'s frozen commands do not run as written, proved on main in a scratch "
                          "worktree (nothing was created):\n- " + "\n- ".join(problems) + f"\nThe whole run: {log}")
@@ -71,18 +73,23 @@ def start(slice_id: str) -> dict:
     branch = row["branch"] or f"lane/slice-{slice_id}"
     wt = c.WT_ROOT / f"slice-{slice_id}"
     base = c.git(["rev-parse", "main"], c.REPO)
-    if row["env"] == "full":
-        subprocess.run([str(c.REPO / "OspreyFlow_Build/scripts/lanes_launch.sh"), "setup", f"slice-{slice_id}"], check=True)
-    else:
-        c.git(["worktree", "add", "-b", branch, str(wt), "main"], c.REPO)
-        c.git(["update-index", "--skip-worktree", "OspreyFlow_Core/osprey.yaml"], wt, check=False)
+    c.git(["worktree", "add", "-b", branch, str(wt), "main"], c.REPO)
+    c.git(["update-index", "--skip-worktree", "OspreyFlow_Core/osprey.yaml"], wt, check=False)
+    if row["env"] == "full":  # F6: the worktree's own environment, built as CI builds it (never lanes_launch.sh)
+        try:
+            ms.slice_env(wt, log, slot)
+        except ms.GateEnvError as e:
+            c.git(["worktree", "remove", "--force", str(wt)], c.REPO, check=False)
+            c.git(["branch", "-D", branch], c.REPO, check=False)
+            raise SystemExit(f"NOT STARTED: {slice_id}'s environment (env: full) could not be built: {e}. "
+                             f"The worktree was removed. See {log}")
     rec = c.rec_dir(slice_id)
     frozen = {"slice": slice_id, "build": row["build"], "branch": branch, "worktree": str(wt), "base": base,
               **{k: row[k] for k in c.FROZEN_KEYS}, "frozen_at": c.now()}
     c.write_json(rec / "frozen.json", frozen)
     c.write_json(rec / "sessions.json", {"builder": [], "verifier": []})
     st = c.set_state(slice_id, phase="building", round=1, rounds_limit=conf["rounds"], setting=setting,
-                     track=track, account=account, verifier_account=verifier_account, started=c.now())
+                     track=track, account=account, verifier_account=verifier_account, started=c.now(), slot=slot)
     subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"])
     return {**frozen, **st}
 
@@ -92,4 +99,4 @@ if __name__ == "__main__":
         raise SystemExit("usage: slice_start.py <slice>")
     s = start(sys.argv[1])
     print(f"Started {s['slice']} ({s['build']}) on {s['branch']} in {s['worktree']}: track {s['track']}, "
-          f"account {s['account']}, dial {s['setting']}, rounds {s['rounds_limit']}.")
+          f"account {s['account']}, dial {s['setting']}, rounds {s['rounds_limit']}, Playwright slot {s['slot']}.")

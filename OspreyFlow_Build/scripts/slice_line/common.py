@@ -252,3 +252,52 @@ def owner_changes() -> list[dict]:
         return []
     rows = [ln.split("\t") for ln in OWNER_CHANGES.read_text().splitlines()[1:] if ln.strip()]
     return [dict(zip(("at", "slice", "action", "detail"), r + [""] * (4 - len(r)))) for r in rows]
+
+
+#: A slice's Playwright port slot (F8): its own, from SLOT_FIRST up, clear of every lane's in scripts/lane_ports.tsv, of
+#: every unmerged slice's (its recorded slot, or one its frozen commands export), and with every port it moves
+#: (OspreyFlow_Core/apps' lanePort(<base>) + 100 x slot) clear of the test stacks' ports (scripts/lane_stacks.tsv), the
+#: owner's deployment's and every other slot's: the rules tests/test_lane_ports.py holds the lanes' table to.
+SLOT_FIRST = 16
+SLOT_STEP = 100
+OWNER_PORTS = {2480, 5432, 80, 8000, 8080, 8081, 5173}
+
+
+def _tsv_rows(path: Path) -> list[list[str]]:
+    if not path.is_file():
+        return []
+    return [ln.split("\t") for ln in path.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
+
+
+def taken_slots(but: str = "") -> set[int]:
+    taken = {int(r[1]) for r in _tsv_rows(REPO / "OspreyFlow_Build/scripts/lane_ports.tsv")
+             if len(r) >= 2 and r[1].strip().isdigit()}
+    if RECORDS.exists():
+        for d in RECORDS.iterdir():
+            if d.name == but or (d / "merged.json").exists():
+                continue
+            st = read_json(d / "state.json") or {}
+            if isinstance(st.get("slot"), int):
+                taken.add(st["slot"])
+            fz = read_json(d / "frozen.json") or {}
+            for k in FROZEN_KEYS:
+                taken |= {int(n) for n in re.findall(r"OSPREY_PORTS_SLOT=(\d+)", fz.get(k) or "")}
+    return taken
+
+
+def allocate_slot(slice_id: str) -> int:
+    bases: set[int] = set()
+    apps = REPO / "OspreyFlow_Core/apps"
+    if apps.is_dir():
+        for p in apps.rglob("*.ts"):
+            if "node_modules" not in p.parts:
+                bases |= {int(n) for n in re.findall(r"lanePort\((\d+)\)", p.read_text(errors="replace"))}
+    stacks = {int(r[3]) for r in _tsv_rows(REPO / "OspreyFlow_Build/scripts/lane_stacks.tsv")
+              if len(r) >= 4 and r[3].strip().isdigit()}
+    taken = taken_slots(but=slice_id)
+    spoken = stacks | OWNER_PORTS | {b + SLOT_STEP * s for s in taken | {0} for b in bases}
+    for slot in range(SLOT_FIRST, 600):
+        ports = {b + SLOT_STEP * slot for b in bases}
+        if slot not in taken and all(p < 65536 for p in ports) and not ports & spoken:
+            return slot
+    raise SystemExit("No Playwright port slot is free for a new slice: the owner frees one (a merged or removed slice).")

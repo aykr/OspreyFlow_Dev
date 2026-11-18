@@ -71,10 +71,17 @@ without a tool call; the line's own cap is 6 red stops.
    `&&` chain (a red run names the step it did not reach); the acceptance must be red for a reason no
    malformed-command signature matches. Otherwise nothing is created. Then worktree `~/dev/osprey-wt/slice-<ID>` on
    `lane/slice-<ID>`; the acceptance and checks commands **frozen** (a change needs the owner's word: `resume.py`
-   refreeze, or the conductor's own `correct-command`); account, track, dial setting, rounds fixed.
+   refreeze, or the conductor's own `correct-command`); account, track, dial setting, rounds fixed; and a
+   **Playwright port slot** of the slice's own (from 16 up, clear of `scripts/lane_ports.tsv`'s lanes, of every
+   unmerged slice's slot, and of the stacks' and the owner's ports), set wherever its frozen commands run: the dry
+   run, the builder's session and its Stop hook, and the merge script's acceptance and checks runs. `env: full`
+   builds the worktree's own environment as CI builds it (`uv sync --frozen`, `npm ci` under CI's Node); the
+   lanes' launcher is not used.
 3. `run_seat.py builder <ID>` until green, then `run_seat.py verifier <ID>`. Findings go back to the builder until
    the rounds limit; then the slice stops and its note names the one decision the owner must make.
-4. `merge_slice.py merge <ID>`: main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
+4. `merge_slice.py merge <ID>`: the acceptance (red before) and the checks and scans (green after) run in an
+   environment built as CI builds it, its venv outside the tree, with the slice's slot; `node_modules` is removed
+   before the full gate, which builds its own. Then main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
    (or a merge refused for a conflict in the records folder alone) leaves the slice `refused`: the failing tests and
    their failing lines (not the whole log) are written as a findings record (`verify-gate-<tip>.json`), the board
    shows "refused by the gate: N tests", and `resume.py <ID> send-back` returns it to the builder with those findings.

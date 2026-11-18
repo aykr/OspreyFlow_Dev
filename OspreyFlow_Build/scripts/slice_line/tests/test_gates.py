@@ -35,6 +35,22 @@ def sh(cmd, cwd, env=None, check=True, input=None):
 
 # ------------------------------------------------------------------ fixtures
 
+#: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
+#: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
+#: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules).
+STAND_IN_GATE = """def _stand_in_gate(t, b, l):
+    if os.environ.get('TEST_GATE_LOG'):
+        l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())
+    if os.environ.get('TEST_LIVE_NOTE'):
+        l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE'])
+    if os.environ.get('TEST_GATE_SEES'):
+        have = [n for n in ('.venv', 'node_modules') if (t / 'OspreyFlow_Core' / n).exists()]
+        Path(os.environ['TEST_GATE_SEES']).write_text(' '.join(have) or 'clean')
+    return int(os.environ.get('TEST_GATE', '0'))
+
+
+FULL_GATE = _stand_in_gate"""
+
 
 @pytest.fixture
 def world(tmp_path):
@@ -62,12 +78,7 @@ def world(tmp_path):
     lines = repo / "OspreyFlow_Build/scripts/slice_line"
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
-    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate",
-                                             "FULL_GATE = lambda t, b, l: (os.environ.get('TEST_GATE_LOG') and "
-                                             "l.open('a').write(open(os.environ['TEST_GATE_LOG']).read()) and 0) or "
-                                             "(os.environ.get('TEST_LIVE_NOTE') and "
-                                             "l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE']) and 0) "
-                                             "or int(os.environ.get('TEST_GATE', '0'))"))
+    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE))
     v062 = repo / "OspreyFlow_Build/process/lanes/v062"
     v062.mkdir(parents=True)
     real = SRC.parents[1] / "process/lanes/v062"

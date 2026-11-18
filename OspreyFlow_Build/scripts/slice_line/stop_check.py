@@ -44,10 +44,16 @@ def failures_only(output: str) -> str:
     return "\n".join(keep)
 
 
-def run(cmd: str, cwd: str) -> tuple:
+def run(cmd: str, cwd: str, slot=None) -> tuple:
     env = dict(os.environ)
     env.setdefault("ARCADEDB_HTTP_PORT", "9")  # a pure check never reaches a live store
     env.setdefault("POSTGRES_PORT", "9")
+    if slot not in (None, ""):
+        env["OSPREY_PORTS_SLOT"] = str(slot)  # the slice's own Playwright slot (slice_start.py), F8
+    venv = Path(cwd) / "OspreyFlow_Core/.venv"
+    if (venv / "bin/python").is_file():  # env: full built the worktree's own (F6): first on PATH
+        env["VIRTUAL_ENV"] = str(venv)
+        env["PATH"] = str(venv / "bin") + os.pathsep + env.get("PATH", "")
     try:
         p = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT_S, env=env)
         return p.returncode, (p.stdout or "") + "\n" + (p.stderr or "")
@@ -77,6 +83,10 @@ def main() -> int:
                           ": the slice was not started by slice_start.py. Stop and say so in one line."}))
         return 0
 
+    try:
+        slot = json.loads((rec / "state.json").read_text()).get("slot")
+    except (OSError, ValueError):
+        slot = None
     red_file = rec / "red_stops"
     reds = int(red_file.read_text()) if red_file.exists() else 0
 
@@ -90,7 +100,7 @@ def main() -> int:
         cmd = frozen.get(name) or ""
         if not cmd:
             continue
-        code, out = run(cmd, wt)
+        code, out = run(cmd, wt, slot)
         results.append({"name": name, "command": cmd, "exit": code})
         if code != 0:
             problems.append("RED: " + name + " (exit " + str(code) + "): " + cmd + "\n" + failures_only(out))
@@ -108,7 +118,7 @@ def main() -> int:
                         "); the owner reinstalls the line (install.sh). Stop and say so in one line.")
     if scans:
         cmd = scan_select.command(wt, scans)
-        code, out = run(cmd, wt)
+        code, out = run(cmd, wt, slot)
         results.append({"name": "scans", "command": cmd, "exit": code, "tests": scans})
         if code != 0:
             problems.append("RED: scans (exit " + str(code) + "): the pure tests that walk the files this slice "

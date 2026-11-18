@@ -38,6 +38,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import owed as owed_tests  # noqa: E402
+import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
 OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
@@ -151,6 +152,46 @@ def ci_env(tree: Path, log: Path) -> dict:
         raise GateEnvError(f"the gate's venv runs {(said.stdout + said.stderr).strip() or 'nothing'}, not CI's "
                            f"Python {py}.")
     return env
+
+
+def slice_env(tree: Path, log: Path, slot: int | str | None = None, venv: Path | None = None) -> dict:
+    """The environment a slice's frozen commands run in, built as CI's `test` job builds it (F4, F6), so a command
+    need not carry its own `uv run` or `npm ci`: a venv from the lock on CI's Python (`uv sync --frozen`; into `venv`,
+    outside the tree, when given, else the tree's own OspreyFlow_Core/.venv), first on PATH; `npm ci` under CI's Node
+    in the tree; closed ports; and the slice's Playwright slot (F8). A tree with no Python project or no Node lock
+    gets none of that part. A command's own `export OSPREY_PORTS_SLOT=` or UV_PROJECT_ENVIRONMENT= still wins."""
+    core = tree / "OspreyFlow_Core"
+    env = {k: v for k, v in os.environ.items() if k not in SCRUBBED and not k.startswith("npm_config_")}
+    path = [p for p in env.get("PATH", "").split(os.pathsep) if p and not p.rstrip("/").endswith("/.venv/bin")]
+    env.update(OFFLINE_PORTS)
+    if slot not in (None, ""):
+        env["OSPREY_PORTS_SLOT"] = str(slot)
+    if (core / "pyproject.toml").is_file():
+        py = ci_python(tree)
+        uv = shutil.which("uv", path=os.pathsep.join([*path, str(Path.home() / ".local/bin")]))
+        if not uv:
+            raise GateEnvError("uv is not installed (CI's setup-uv): the slice's environment cannot be built.")
+        target = venv or core / ".venv"
+        env["UV_PYTHON"] = py
+        if venv:
+            env["UV_PROJECT_ENVIRONMENT"] = str(venv)
+        if run([uv, "sync", "--frozen"], core, log, env={**env, "PATH": os.pathsep.join(path)}) != 0:
+            raise GateEnvError("building the slice's environment failed at: uv sync --frozen")
+        env["VIRTUAL_ENV"] = str(target)
+        path.insert(0, str(target / "bin"))
+    if (core / "package-lock.json").is_file():
+        nd = node_dir(ci_node_major(tree), os.pathsep.join(path))
+        path.insert(0, str(nd))
+        if run([str(nd / "npm"), "ci", "--no-audit", "--no-fund"], core, log, env={**env, "PATH": os.pathsep.join(path)}) != 0:
+            raise GateEnvError("building the slice's environment failed at: npm ci")
+    env["PATH"] = os.pathsep.join(path)
+    return env
+
+
+def drop_env(tree: Path) -> None:
+    """What slice_env put in a merge tree, removed, so the full gate builds its own, fresh (ci_env refuses either)."""
+    for name in ("node_modules", ".venv"):
+        shutil.rmtree(tree / "OspreyFlow_Core" / name, ignore_errors=True)
 
 
 #: The client names' hashed list (OspreyFlow_Build/marketing_site/client_hashes.py), gitignored, kept on this Mac only
@@ -446,7 +487,14 @@ def merge(slice_id: str) -> dict:
             dest = before / f
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(subprocess.run(["git", "show", f"{tip}:{f}"], cwd=c.REPO, capture_output=True, check=True).stdout)
-        if run(frozen["acceptance"], before, log, shell=True) == 0:
+        slot = c.state(slice_id).get("slot")
+        envs = Path(tempfile.mkdtemp(prefix=f"slice-{slice_id}-envs-"))
+        trees.append(envs)
+        try:
+            env_before = slice_env(before, log, slot, envs / "before")
+        except GateEnvError as e:
+            raise Refused(f"the acceptance run's environment could not be built: {e}. See {log}")
+        if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:
             raise Refused("the acceptance test passes without the slice's code: it was never red. See " + str(log))
 
         # 6. green on the merge result
@@ -464,9 +512,24 @@ def merge(slice_id: str) -> dict:
                               + ", ".join(files) + "): resume.py send-back merges main into it.")
             raise Refused(f"{branch} does not merge cleanly onto main: the builder rebases it.")
         merged = c.git(["rev-parse", "HEAD"], after)
+        try:
+            env_after = slice_env(after, log, slot, envs / "after")
+        except GateEnvError as e:
+            raise Refused(f"the merge result's environment could not be built: {e}. See {log}")
         for name in ("acceptance", "checks"):
-            if frozen.get(name) and run(frozen[name], after, log, shell=True) != 0:
+            if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:
                 raise Refused(f"the slice's {name} is red on the merge result. See {log}")
+        # the pure tests that scan what the slice touched (scan_map.tsv), on the merge result
+        scans = scan_select.not_named(scan_select.select(touched, scan_select.entries()),
+                                      frozen.get("checks") or "", frozen.get("acceptance") or "")
+        if scans and run(scan_select.command(after, scans, python=(
+                str(Path(env_after["VIRTUAL_ENV"]) / "bin/python") if env_after.get("VIRTUAL_ENV") else "")), after, log, shell=True, env=env_after) != 0:
+            names, findings = gate_findings(log.read_text(errors="replace"))
+            refuse_to_builder(slice_id, tip, "the scans of the files it touches were red on the merge result", findings,
+                              len(names), "gate")
+            raise Refused("the pure tests that scan the files this slice touches are red on the merge result ("
+                          + ", ".join(scans) + f"). See {log}")
+        drop_env(after)  # the full gate builds its own, fresh
 
         # 7. today's full gate on the merge result
         if FULL_GATE(after, base, log) != 0:
@@ -495,6 +558,7 @@ def merge(slice_id: str) -> dict:
     finally:
         for t in trees:
             drop_tree(t)
+            shutil.rmtree(t, ignore_errors=True)
         fh.close()
 
 

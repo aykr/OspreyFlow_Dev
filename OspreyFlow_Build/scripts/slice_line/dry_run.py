@@ -26,6 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
+import merge_slice as ms  # noqa: E402
 
 #: The conductor's own malformed commands, as the line has met them (18 November 2026: BL6's `make -C` path after a
 #: `cd`; AD2's Playwright with no port slot). Add one only for a failure that can never be a test's own.
@@ -121,16 +122,6 @@ def tail(out: str, n: int = 12) -> str:
     return "\n".join([ln for ln in out.splitlines() if ln.strip()][-n:])
 
 
-def run_env(slot: str | None = None) -> dict:
-    env = dict(os.environ)
-    for k in ("VIRTUAL_ENV", "OSPREY_PORTS_SLOT"):
-        env.pop(k, None)
-    env.update(ARCADEDB_HTTP_PORT="9", POSTGRES_PORT="9")
-    if slot:
-        env["OSPREY_PORTS_SLOT"] = str(slot)
-    return env
-
-
 def scratch_tree(ref: str = "main") -> Path:
     d = Path(tempfile.mkdtemp(prefix="slice-dryrun-"))
     shutil.rmtree(d)
@@ -147,15 +138,23 @@ def acceptance_files(spec: dict) -> list[str]:
     return [f.strip() for f in (spec.get("acceptance_files") or "").split(",") if f.strip()]
 
 
-def prove(spec: dict, slot: str | None = None, tip: str | None = None, log: Path | None = None,
-          env_for=None) -> list[str]:
+def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log: Path | None = None) -> list[str]:
     """Why the slice's commands are not proved on main (empty when they are). `spec` holds acceptance_files,
-    acceptance and checks; `tip`, the slice's branch tip, gives its acceptance files to the acceptance run.
-    `env_for(tree)`, when given, builds the run's environment for a tree (the merge gate's way)."""
+    acceptance and checks; `slot` is the slice's Playwright slot; `tip`, the slice's branch tip, gives its acceptance
+    files to the acceptance run. The runs get the environment the merge script's runs get (merge_slice.slice_env:
+    built as CI builds it, its venv outside the scratch tree, closed ports, the slot)."""
     problems: list[str] = []
     tree = scratch_tree("main")
+    venv = Path(tempfile.mkdtemp(prefix="slice-dryrun-venv-"))
+    if log is None:
+        fd, name = tempfile.mkstemp(prefix="slice-dryrun-", suffix=".log")
+        os.close(fd)
+        log = Path(name)
     try:
-        env = env_for(tree) if env_for else run_env(slot)
+        try:
+            env = ms.slice_env(tree, log, slot, venv)
+        except ms.GateEnvError as e:
+            return [f"the environment for the commands could not be built on main: {e}"]
         files = acceptance_files(spec)
         new = [f for f in files if not (tree / f).exists()]
         if spec.get("checks"):
@@ -189,7 +188,6 @@ def prove(spec: dict, slot: str | None = None, tip: str | None = None, log: Path
                 problems.append(f"the acceptance command is red on main for a malformed command ({malformed(out)}), "
                                 "not for the slice's missing work:\n" + tail(out))
     finally:
-        if env_for and hasattr(env_for, "cleanup"):
-            env_for.cleanup()
+        shutil.rmtree(venv, ignore_errors=True)
         drop_tree(tree)
     return problems
