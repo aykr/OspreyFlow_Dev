@@ -26,8 +26,8 @@ ci: core-check slice-line-check lint-tools licence-check design-check ui-words-c
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
-# The v0.6.2 slice line's gates (process/lanes/v062/slice-line/README.md), each shown red first: 41 cases, and
-# tests/plant_faults.py's 28 planted faults all caught (rule 15).
+# The v0.6.2 slice line's gates (process/lanes/v062/slice-line/README.md), each shown red first: the gate cases in
+# tests/test_gates.py, and tests/plant_faults.py's planted faults, each of which must turn its case red (rule 15).
 slice-line-check:
 	../OspreyFlow_Build/scripts/slice_line/tests/run.sh
 
