@@ -40,3 +40,9 @@ green); the keyboard spec for admin.
 ## Out of scope
 
 The server check; the model form (AD1); PL4's shared-package move (this slice is merged before it starts).
+
+## Round instruction from the owner (18 November 2026)
+
+To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
+
+To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.

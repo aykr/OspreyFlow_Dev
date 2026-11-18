@@ -111,3 +111,9 @@ Stop and ask rather than answer:
 - a browser regression on 6.x;
 - a licence the checker refuses among 6.x's new dependencies;
 - zustand moving in a way that changes the working set's own tests.
+
+## Round instruction from the owner (18 November 2026)
+
+To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
+
+To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.

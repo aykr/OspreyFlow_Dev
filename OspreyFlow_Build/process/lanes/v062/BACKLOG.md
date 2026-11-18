@@ -151,3 +151,18 @@ photograph is rarely north-aligned". Neither binding that draws the graph over t
 `apps/workspace/src/map/sigmaMaplibreLayer.ts` (`@sigma/layer-maplibre` 3.0.0's code) sets `minPitch`/`maxPitch` to 0 and
 turns sigma's camera rotation off, and `@sigma/layer-maplibre` 4.0.1 does the same and also makes the map
 non-interactive. This was true before GG6 and stays true after it. **Decided when R8 (GG5 on the plan) is planned.**
+
+### New row (18 Nov): the board shows "verifying" for a slice sent back while its old verifier pass is still on the tip
+
+Found when AD2 and GG6 were refrozen by the owner's scripts on 18 November: the board's state logic checks a passing
+verifier record on the branch tip before it looks at the phase, so a slice in the building phase with an unchanged tip
+shows "verifying, verifier passed" until the builder commits. The dashboard then tells a reader the slice waits for the
+merge script when it waits for its builder. The fix is in the line (a line-fixes slice): the phase "building" wins
+over a verifier pass recorded for an earlier frozen command set or round, and a test plants it in that shape.
+
+### New row (18 Nov): a finding does not say whether it is a fault in behaviour or a gap in a test
+
+The owner asked on 18 November to see that split in the conductor's reports. The verifier's answer schema (in the seat
+runner) has what, evidence, file and line only. For AD2, BL6 and GG6 in their extra rounds the split is asked for through
+each brief, as a prefix on "what". The fix is a kind field (fault or test gap) in the schema and the record, and the
+board's note counting each.
