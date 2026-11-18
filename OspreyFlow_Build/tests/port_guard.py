@@ -307,6 +307,35 @@ def stack_ports_all() -> dict[int, str]:
     return ports
 
 
+#: The closed ports an offline run pins the stores to (59991 to 59994, the object store's 59995, OpenSearch's 59999):
+#: nothing may listen there, or a test meant to find its store absent would find a stranger.
+CLOSED_PORTS = range(59991, 60000)
+
+
+def reserved_ports() -> set[int]:
+    """Every port this guard keeps for something else: each stack's (`stack_ports_all`) and the closed ones."""
+    return set(stack_ports_all()) | set(CLOSED_PORTS)
+
+
+def outside_reserved(bind: Callable[[], Any], tries: int = 50) -> Any:
+    """A loopback server `bind()` made on a port the guard does not reserve. `bind()` asks for port 0; the system's
+    ephemeral range (49152 to 65535 on macOS, 32768 to 60999 on Linux) holds the stacks' Postgres ports 55433 to
+    55439 and the closed ports, and a test server given one of them is refused by this guard at the connection
+    (test_auth_entra_claims.py, 17 November 2026, on 55437 and 55438). A server on a reserved port is kept open
+    until the search ends, so the system cannot hand the same port back, then closed."""
+    reserved, refused = reserved_ports(), []
+    try:
+        for _ in range(tries):
+            server = bind()
+            if server.server_address[1] not in reserved:
+                return server
+            refused.append(server)
+        raise RuntimeError(f"no loopback port outside the guard's reserved ones in {tries} tries")
+    finally:
+        for s in refused:
+            s.server_close()
+
+
 def refusal(found: list[str]) -> str:
     return (
         "Refused: this test run would reach a live deployment on this machine.\n"

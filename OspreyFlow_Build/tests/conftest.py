@@ -33,6 +33,7 @@ from jwt.algorithms import RSAAlgorithm
 # The owner's answer of 1 November 2026: no test run reaches a live deployment on this machine
 # (ports 2480, 5432, 80, 8080, 8081), refused at start-up and at every connection.
 from tests.port_guard import pytest_configure, pytest_report_header  # noqa: F401
+from tests.port_guard import outside_reserved
 
 # `pytest.mark.store`, enforced at the connection (admin's T1 part 2): an unmarked test that reaches a store's port is
 # reported, or failed with OSPREY_STORE_MARK=fail (tests/store_mark.py).
@@ -90,7 +91,7 @@ def jwks_dir(tmp_path: Path) -> Iterator[tuple[Path, str]]:
     fetch sees the new content, the same as a real JWKS endpoint's
     content changing without the server restarting."""
     handler = partial(SimpleHTTPRequestHandler, directory=str(tmp_path))
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    server = outside_reserved(lambda: ThreadingHTTPServer(("127.0.0.1", 0), handler))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -239,7 +240,7 @@ def token_exchange_url(
     against that same fixture's own JWKS document without a second keypair to keep in sync."""
     private_key, _ = keypair
     handler = _make_token_exchange_handler(token_exchange_registry, private_key)
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    server = outside_reserved(lambda: ThreadingHTTPServer(("127.0.0.1", 0), handler))
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:

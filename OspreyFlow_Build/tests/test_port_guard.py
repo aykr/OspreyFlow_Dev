@@ -23,6 +23,7 @@ What a mistake would do, and the case that catches it (rule 12):
 from __future__ import annotations
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -441,3 +442,45 @@ def test_a_leased_object_store_named_without_its_lease_stops_at_start_up(
         assert "MINIO_ENDPOINT=localhost:9000" in said and "stack a" in said
     else:
         assert run.returncode == 0, said
+
+
+class _Bound:
+    """A stand-in for a bound server: the port the system gave it, and whether it was closed."""
+
+    def __init__(self, port: int) -> None:
+        self.server_address = ("127.0.0.1", port)
+        self.closed = False
+
+    def server_close(self) -> None:
+        self.closed = True
+
+
+def test_a_test_server_given_a_reserved_port_is_bound_again_outside_them() -> None:
+    """The ephemeral range holds stack ports and the closed ones; a server on one is refused by the guard at the
+    connection (test_auth_entra_claims.py, 17 November 2026: 55437 and 55438). `outside_reserved` binds again."""
+    from tests.port_guard import CLOSED_PORTS, outside_reserved, stack_ports_all
+
+    stack_pg = next(p for p in stack_ports_all() if 49152 <= p <= 65535)  # a stack's port inside the range
+    given = [_Bound(stack_pg), _Bound(59995), _Bound(51234)]
+    handed = iter(given)
+    server = outside_reserved(lambda: next(handed))
+    assert server is given[2] and server.server_address[1] == 51234
+    assert given[0].closed and given[1].closed and not given[2].closed  # the refused ones closed, after the search
+    assert 59995 in CLOSED_PORTS and 59991 in CLOSED_PORTS and 59999 in CLOSED_PORTS
+
+
+def test_no_port_outside_the_reserved_ones_is_said_not_looped_on() -> None:
+    from tests.port_guard import outside_reserved
+
+    with pytest.raises(RuntimeError, match="no loopback port outside"):
+        outside_reserved(lambda: _Bound(59992), tries=3)
+
+
+def test_the_jwks_servers_bind_through_outside_reserved() -> None:
+    """The servers test_auth_entra_claims.py signs in against: conftest's `jwks_dir` and `token_exchange_url`, and its own
+    counting one."""
+    here = Path(__file__).resolve().parent
+    for f in (here / "conftest.py", here / "services/api/test_auth_entra_claims.py"):
+        text = f.read_text()
+        assert re.search(r'outside_reserved\(\s*lambda: ThreadingHTTPServer\(\("127\.0\.0\.1", 0\)', text), f
+        assert not re.search(r'(?<!lambda: )ThreadingHTTPServer\(\s*\("127\.0\.0\.1", 0\)', text), f

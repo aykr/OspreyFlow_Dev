@@ -1265,8 +1265,10 @@ class _CountingKeys:
             def log_message(self, *args: object) -> None:
                 return None
 
-        self.server = ThreadingHTTPServer(
-            ("127.0.0.1", 0), partial(Handler, directory=str(directory))
+        from tests.port_guard import outside_reserved
+
+        self.server = outside_reserved(
+            lambda: ThreadingHTTPServer(("127.0.0.1", 0), partial(Handler, directory=str(directory)))
         )
         self.server.daemon_threads = True
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
