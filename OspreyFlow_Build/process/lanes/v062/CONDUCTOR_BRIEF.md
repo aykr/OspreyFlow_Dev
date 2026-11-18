@@ -23,6 +23,11 @@ pick a slice, and write the ones a slice needs into its brief.
 
 Run each script whole, nothing chained before or after it: the guard allows the line's scripts only so.
 
+A stopped or refused slice goes back to building only through `resume.py <ID> <action>` (README, "Resuming a slice"):
+`send-back` and `correct-command` are yours to run within the limits the script holds; `refreeze`, `add-round` and
+`clear-stop` need the owner's line in `resume.tsv`, which only the owner writes. Every report names each command you
+corrected ("command corrected: old -> new", from the board).
+
 ## Reporting to the owner
 
 - One summary a day: the board, what merged, what stopped, usage per slice and per account (`board.py --usage`).

@@ -54,6 +54,29 @@ def transcript_usage(path: Path) -> dict:
     return tot
 
 
+def window(account: str, name: str):
+    """The account's share of a window, as its seat sessions' streams last reported it ("" when never reported)."""
+    try:
+        st = json.loads((DATA / "accounts" / (account + ".json")).read_text())
+        return ((st.get("windows") or {}).get(name) or {}).get("utilization", "")
+    except (OSError, ValueError):
+        return ""
+
+
+def conductor_row(tp: Path, session: str, account: str) -> None:
+    """The conductor's own session as one usage row, its scouts' (subagent) transcripts summed in."""
+    tot = transcript_usage(tp)
+    sub = tp.with_suffix("") / "subagents"
+    if sub.is_dir():
+        for f in sub.glob("*.jsonl"):
+            t = transcript_usage(f)
+            for k in ("input", "cache_create", "cache_read", "output"):
+                tot[k] += t[k]
+    append_usage([now(), "(all)", "", "conductor+scouts", account, tot["model"], "", session, tot["input"],
+                  tot["cache_create"], tot["cache_read"], tot["output"], "", window(account, "five_hour"),
+                  window(account, "seven_day")])
+
+
 def main() -> int:
     mode = sys.argv[1] if len(sys.argv) > 1 else ""
     seat = os.environ.get("OSPREY_SEAT", "")
@@ -73,16 +96,7 @@ def main() -> int:
             "slice": os.environ.get("OSPREY_SLICE", ""), "message": (event.get("last_assistant_message") or "")[:300],
         }, indent=1))
     if mode == "session-end" and seat == "conductor":
-        tp = Path(event.get("transcript_path") or "")
-        tot = transcript_usage(tp)
-        sub = tp.with_suffix("") / "subagents"
-        if sub.is_dir():
-            for f in sub.glob("*.jsonl"):
-                t = transcript_usage(f)
-                for k in ("input", "cache_create", "cache_read", "output"):
-                    tot[k] += t[k]
-        append_usage([now(), "(all)", "", "conductor+scouts", account, tot["model"], "", event.get("session_id", ""),
-                      tot["input"], tot["cache_create"], tot["cache_read"], tot["output"], "", "", ""])
+        conductor_row(Path(event.get("transcript_path") or ""), event.get("session_id", ""), account)
     return 0
 
 

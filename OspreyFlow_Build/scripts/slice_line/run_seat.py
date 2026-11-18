@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -25,7 +26,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 
-HOOKS = ("guard.py", "stop_check.py", "usage_hook.py")
+HOOKS = ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")
+#: The seat shim (seat_shim.sh, installed under bin/shim/ by install.sh): every seat's `claude`, first on its PATH.
+SHIM_NAMES = ("claude", "claude-sol", "claude-ayan")
 TOOLS = {
     "builder": "Read,Grep,Glob,Edit,Write,Bash",
     "verifier": "Read,Grep,Glob,Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status *)",
@@ -76,6 +79,12 @@ def preflight(account: str, cwd: Path) -> dict:
               c.REPO / ".claude/settings.local.json", cwd / ".claude/settings.json", cwd / ".claude/settings.local.json"):
         if f.is_file() and "disableAllHooks" in f.read_text():
             raise NotLoaded(f"REFUSED TO START: {f} turns hooks off (disableAllHooks).")
+    shim = c.BIN / "bin/shim"
+    for name in SHIM_NAMES:
+        p = shim / name
+        if not p.is_file() or not manifest.get("shim/claude") or sha(p) != manifest.get("shim/claude"):
+            raise NotLoaded(f"REFUSED TO START: the seat shim ({p}) is missing or differs from the install manifest: "
+                            "run install.sh.")
     if c.account_stop(account):
         raise NotLoaded(f"STOPPED: account {account} is stopped ({c.account_stop(account)['error']}); the owner decides.")
     if not c.signed_in(account):
@@ -107,15 +116,29 @@ def append_usage(slice_id: str, build: str, seat: str, account: str, model: str,
         fh.write("\t".join(str(x) for x in row) + "\n")
 
 
+def seat_command(seat: str, account: str, model: str, effort: str, env_extra: dict, token: str,
+                 session: str = "") -> tuple[list[str], dict]:
+    """The seat's command and environment: started through the seat shim with a one-time launch token (F1, layer 3),
+    the shim's folder first on the seat's PATH, so every `claude` the seat itself runs meets the shim's refusal."""
+    shim = c.BIN / "bin/shim"
+    launch_token = uuid.uuid4().hex
+    (c.DATA / "launch").mkdir(parents=True, exist_ok=True)
+    (c.DATA / "launch" / launch_token).write_text(f"{seat} {env_extra.get('OSPREY_SLICE', '')} {c.now()}\n")
+    env = c.claude_env(account)
+    env.update({"OSPREY_SEAT": seat, "OSPREY_SEAT_TOKEN": token, "OSPREY_ACCOUNT": account,
+                "OSPREY_SLICE_HOME": str(c.DATA), "OSPREY_CLAUDE_BIN": c.CLAUDE, "OSPREY_LAUNCH_TOKEN": launch_token,
+                **env_extra})
+    env["PATH"] = os.pathsep.join([str(shim), *[p for p in env.get("PATH", "").split(os.pathsep) if p and p != str(shim)]])
+    args = [str(shim / "claude"), "--agent", f"slice-{seat}", "--settings", str(c.BIN / "settings.json"),
+            "--session-id", session or str(uuid.uuid4()), "--model", model, "--effort", effort]
+    return args, env
+
+
 def launch(seat: str, account: str, cwd: Path, prompt: str, model: str, effort: str, env_extra: dict,
            log: Path, extra: list[str] | None = None, interactive: bool = False) -> dict:
     manifest = preflight(account, cwd)
     token, session = uuid.uuid4().hex, str(uuid.uuid4())
-    env = c.claude_env(account)
-    env.update({"OSPREY_SEAT": seat, "OSPREY_SEAT_TOKEN": token, "OSPREY_ACCOUNT": account,
-                "OSPREY_SLICE_HOME": str(c.DATA), **env_extra})
-    args = [c.CLAUDE, "--agent", f"slice-{seat}", "--settings", str(c.BIN / "settings.json"),
-            "--session-id", session, "--model", model, "--effort", effort]
+    args, env = seat_command(seat, account, model, effort, env_extra, token, session)
     if not interactive:
         args += ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                  "--permission-mode", "dontAsk", "--allowedTools", TOOLS[seat]]
@@ -177,6 +200,25 @@ def brief_text(slice_id: str) -> str:
         return "(no brief file on main)"
 
 
+def last_findings(slice_id: str) -> str:
+    """The newest findings record (a verifier's, or the merge gate's verify-gate-*), for the builder's prompt."""
+    last = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
+    if last:
+        v = c.read_json(last[-1]) or {}
+        if v.get("verdict") != "pass":
+            return "\n\nThe findings from the last round, to fix:\n" + json.dumps(v.get("findings"), indent=1)
+    return ""
+
+
+def rulings_note(tree: Path) -> str:
+    """Main's RULINGS.md, brought into the seat's checkout (a snapshot from the slice's start) as an ignored copy."""
+    copy = c.deliver_rulings(tree)
+    if not copy:
+        return "\n\nThe owner's rulings as on main today could not be copied into your checkout: read RULINGS.md there."
+    return (f"\n\nThe owner's rulings as on main today are in {copy} (your checkout's own RULINGS.md is from the "
+            "slice's start and may be older): read them before you begin; they bind this slice.")
+
+
 def stop_slice(slice_id: str, note: str) -> None:
     c.set_state(slice_id, phase="stopped", note=note)
     board()
@@ -188,21 +230,18 @@ def builder(slice_id: str) -> int:
     if not frozen or st.get("phase") != "building":
         raise SystemExit(f"{slice_id} is not in the building phase ({st.get('phase')}): slice_start.py first.")
     seat = c.seat_settings("builder", st["setting"])
-    findings = ""
-    last = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
-    if last:
-        v = c.read_json(last[-1]) or {}
-        if v.get("verdict") != "pass":
-            findings = "\n\nThe verifier's findings from the last round, to fix:\n" + json.dumps(v.get("findings"), indent=1)
+    findings = last_findings(slice_id)
     prompt = (f"You are the builder for slice {slice_id} (build {frozen['build']}), round {st['round']} of "
               f"{st['rounds_limit']}. Your worktree is {frozen['worktree']}, on branch {frozen['branch']}.\n\n"
               f"The brief:\n{brief_text(slice_id)}\n\nFrozen for this slice (you cannot change them):\n"
               f"- acceptance files: {frozen['acceptance_files']}\n- acceptance: {frozen['acceptance']}\n"
               f"- checks: {frozen['checks']}{findings}")
     wt = Path(frozen["worktree"])
+    prompt += rulings_note(wt)
     log = c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"
     res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
-                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt)}, log)
+                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                  **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})}, log)
     sess = c.read_json(c.rec_dir(slice_id) / "sessions.json") or {"builder": [], "verifier": []}
     sess["builder"].append(res.get("session_id"))
     c.write_json(c.rec_dir(slice_id) / "sessions.json", sess)
@@ -244,6 +283,7 @@ def verifier(slice_id: str) -> int:
     else:
         c.git(["worktree", "add", "--detach", str(vt), tip], c.REPO)
     base = frozen["base"]
+    rulings = rulings_note(vt)
     diffstat = c.git(["diff", "--stat", f"{base}...{tip}"], c.REPO)
     passes = []
     for focus in seat.get("passes", ["acceptance"]):
@@ -253,7 +293,7 @@ def verifier(slice_id: str) -> int:
                   f"{frozen['acceptance_files']}\nAcceptance: {frozen['acceptance']}\nChecks: {frozen['checks']}\n"
                   f"The builder's test record (green):\n{json.dumps(tests, indent=1)}\n\nWhat changed:\n{diffstat}\n\n"
                   f"Use git diff {base}...{tip} and Read. Return verdict 'pass', or 'findings' with evidence (file, "
-                  f"line, what is wrong and how you know). Put the commit {tip} in your answer.")
+                  f"line, what is wrong and how you know). Put the commit {tip} in your answer.{rulings}")
         log = c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl"
         res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
                      {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,
@@ -294,10 +334,26 @@ def verifier(slice_id: str) -> int:
     return 1
 
 
+def conductor_usage(session: str, account: str) -> None:
+    """The conductor's own row (one per session, its scouts' with it), when its SessionEnd hook wrote none: none had
+    appeared by 18 November 2026. Never a second row for a session."""
+    f = c.DATA / "usage.tsv"
+    if f.exists() and any(ln.split("\t")[7:8] == [session] for ln in f.read_text().splitlines()[1:]):
+        return
+    tp = transcript_of(account, session)
+    if not tp:
+        return
+    import usage_hook
+    usage_hook.DATA = c.DATA
+    usage_hook.conductor_row(Path(tp), session, account)
+
+
 def conductor() -> int:
     seat = c.seat_settings("conductor")
-    launch("conductor", c.account_for("conductor"), c.REPO, "", seat["model"], seat["effort"], {},
-           c.DATA / "conductor" / f"{c.now()}.log", interactive=True)
+    account = c.account_for("conductor")
+    res = launch("conductor", account, c.REPO, "", seat["model"], seat["effort"], {},
+                 c.DATA / "conductor" / f"{c.now()}.log", interactive=True)
+    conductor_usage(res["session_id"], account)
     return 0
 
 

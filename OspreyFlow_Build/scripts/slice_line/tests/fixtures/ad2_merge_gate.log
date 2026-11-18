@@ -1,0 +1,97 @@
+# AD2's real refusal, reproduced 18 November 2026 on main 8951b38 merged with lane/slice-AD2 993a434:
+# make test's pytest output for tests/services/api/test_admin_sections.py, in the shape the merge log holds it.
+$ make -k ci   (in /tmp/slice-AD2-merge/OspreyFlow_Build)
+ruff check: all checks passed
+
+make -k ci: exit 0 in 412 s
+$ make test   (in /tmp/slice-AD2-merge/OspreyFlow_Build)
+........................................................................ [ 12%]
+F.............F.................F.                                       [100%]
+=================================== FAILURES ===================================
+___________ test_each_built_section_s_routes_need_its_right[people] ____________
+
+section = 'people'
+
+    @pytest.mark.parametrize("section", [s["id"] for s in built()])
+    def test_each_built_section_s_routes_need_its_right(section: str) -> None:
+        s = next(x for x in built() if x["id"] == section)
+        routes = section_routes(WORKSPACE_SRC, s["screen"], _routes())
+        assert routes, f"{section}: its screen's walk found no route; the scan is not reading it"
+>       assert unguarded(s["right"], _guarded_part(section, routes)) == []
+E       AssertionError: assert [('POST', '/v...ns', []), ...] == []
+E         
+E         Left contains 69 more items, first extra item: ('POST', '/v1/investigations', ['create_case'])
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_admin_sections.py:206: AssertionError
+___ test_each_section_s_routes_refuse_a_principal_without_its_right[people] ____
+
+section = 'people'
+
+    @pytest.mark.parametrize("section", [s["id"] for s in built()])
+    def test_each_section_s_routes_refuse_a_principal_without_its_right(section: str) -> None:
+        """Over HTTP, without the stores: a principal holding every right but the section's, granted
+        singly, is refused on each of the section's routes by the right's own check (403
+        `right_required`), never answered."""
+        from services.api.app import app, get_principal
+    
+        s = next(x for x in built() if x["id"] == section)
+        routes = _guarded_part(section, section_routes(WORKSPACE_SRC, s["screen"], _routes()))
+        who = Principal(id=f"section-{section}", clearance="SECRET", org_unit="unit-1",
+                        roles=[f"right:{r.value}" for r in Right if r.value != s["right"]])  # fmt: skip
+        app.dependency_overrides[get_principal] = lambda: who
+        client = TestClient(app, raise_server_exceptions=False)
+        answers: list[tuple[str, int, str]] = []
+        try:
+            for route in routes:
+                method = sorted(route.methods or {"GET"})[0]
+                response = client.request(
+                    method, _path(route), headers={"Authorization": "Bearer x"}, json={}
+                )
+                answers.append(
+                    (
+                        route.path,
+                        response.status_code,
+                        s["right"] if "right_required" in response.text else "",
+                    )
+                )
+        finally:
+            app.dependency_overrides.pop(get_principal, None)
+        # A section reading only a reference catalogue has none to refuse (`REFERENCE_READS`).
+        assert answers or section in REFERENCE_READS, section
+>       assert all(code == 403 and why for _, code, why in answers), answers
+E       AssertionError: [('/v1/investigations', 500, ''), ('/v1/datasets', 200, ''), ('/v1/datasets', 500, ''), ('/v1/investigations/{investig...datasets', 500, ''), ('/v1/investigations/{investigation_id}/datasets', 500, ''), ('/v1/investigations', 500, ''), ...]
+E       assert False
+E        +  where False = all(<generator object test_each_section_s_routes_refuse_a_principal_without_its_right.<locals>.<genexpr> at 0x12f1f2a40>)
+
+../OspreyFlow_Build/tests/services/api/test_admin_sections.py:271: AssertionError
+_________ test_each_shared_read_is_read_by_exactly_the_sections_named __________
+
+    def test_each_shared_read_is_read_by_exactly_the_sections_named() -> None:
+        routes = {r.name: r for r in _routes()}
+        assert not _checks(routes["get_handling_scheme_route"]), "the handling scheme is no longer open"
+        for name, (named, _) in SHARED.items():
+            readers = {
+                s["id"]
+                for s in built()
+                if routes[name]
+                in _reached(screen_fragments(WORKSPACE_SRC, s["screen"]), [routes[name]])
+            }
+>           assert readers == named, name
+E           AssertionError: schedule_preview_route
+E           assert {'operations', 'people'} == frozenset({'operations'})
+E             
+E             Extra items in the left set:
+E             'people'
+E             Use -v to get more diff
+
+../OspreyFlow_Build/tests/services/api/test_admin_sections.py:373: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_sections.py::test_each_built_section_s_routes_need_its_right[people]
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_sections.py::test_each_section_s_routes_refuse_a_principal_without_its_right[people]
+FAILED ../OspreyFlow_Build/tests/services/api/test_admin_sections.py::test_each_shared_read_is_read_by_exactly_the_sections_named
+3 failed, 31 passed in 6.51s
+make test: a part above failed
+make[1]: *** [test] Error 1
+
+make test: exit 2 in 431 s

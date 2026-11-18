@@ -5,7 +5,9 @@
     merge_slice.py records -m "<msg>" <path>...  the conductor's records, OspreyFlow_Build/process/lanes/v062/ only
 
 `merge` refuses unless every one of these holds, in this order, and stops at the first that does not:
-  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted;
+  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted; and main's
+     latest completed GitHub run is green (a failed one, a cancelled one with nothing newer, or one gh cannot read
+     refuses: F2);
   2. the slice was started (its frozen record exists) and main's backlog row still matches what was frozen;
   3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it;
   4. the branch touches no protected path (the owner's files, the never-staged files, the line itself);
@@ -38,9 +40,11 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import owed as owed_tests  # noqa: E402
+import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
-OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml")
+OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
+               f"{c.V062_REL}/resume.tsv")
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
     "OspreyFlow_Build/scripts/slice_line/", *OWNER_FILES,
@@ -150,6 +154,46 @@ def ci_env(tree: Path, log: Path) -> dict:
         raise GateEnvError(f"the gate's venv runs {(said.stdout + said.stderr).strip() or 'nothing'}, not CI's "
                            f"Python {py}.")
     return env
+
+
+def slice_env(tree: Path, log: Path, slot: int | str | None = None, venv: Path | None = None) -> dict:
+    """The environment a slice's frozen commands run in, built as CI's `test` job builds it (F4, F6), so a command
+    need not carry its own `uv run` or `npm ci`: a venv from the lock on CI's Python (`uv sync --frozen`; into `venv`,
+    outside the tree, when given, else the tree's own OspreyFlow_Core/.venv), first on PATH; `npm ci` under CI's Node
+    in the tree; closed ports; and the slice's Playwright slot (F8). A tree with no Python project or no Node lock
+    gets none of that part. A command's own `export OSPREY_PORTS_SLOT=` or UV_PROJECT_ENVIRONMENT= still wins."""
+    core = tree / "OspreyFlow_Core"
+    env = {k: v for k, v in os.environ.items() if k not in SCRUBBED and not k.startswith("npm_config_")}
+    path = [p for p in env.get("PATH", "").split(os.pathsep) if p and not p.rstrip("/").endswith("/.venv/bin")]
+    env.update(OFFLINE_PORTS)
+    if slot not in (None, ""):
+        env["OSPREY_PORTS_SLOT"] = str(slot)
+    if (core / "pyproject.toml").is_file():
+        py = ci_python(tree)
+        uv = shutil.which("uv", path=os.pathsep.join([*path, str(Path.home() / ".local/bin")]))
+        if not uv:
+            raise GateEnvError("uv is not installed (CI's setup-uv): the slice's environment cannot be built.")
+        target = venv or core / ".venv"
+        env["UV_PYTHON"] = py
+        if venv:
+            env["UV_PROJECT_ENVIRONMENT"] = str(venv)
+        if run([uv, "sync", "--frozen"], core, log, env={**env, "PATH": os.pathsep.join(path)}) != 0:
+            raise GateEnvError("building the slice's environment failed at: uv sync --frozen")
+        env["VIRTUAL_ENV"] = str(target)
+        path.insert(0, str(target / "bin"))
+    if (core / "package-lock.json").is_file():
+        nd = node_dir(ci_node_major(tree), os.pathsep.join(path))
+        path.insert(0, str(nd))
+        if run([str(nd / "npm"), "ci", "--no-audit", "--no-fund"], core, log, env={**env, "PATH": os.pathsep.join(path)}) != 0:
+            raise GateEnvError("building the slice's environment failed at: npm ci")
+    env["PATH"] = os.pathsep.join(path)
+    return env
+
+
+def drop_env(tree: Path) -> None:
+    """What slice_env put in a merge tree, removed, so the full gate builds its own, fresh (ci_env refuses either)."""
+    for name in ("node_modules", ".venv"):
+        shutil.rmtree(tree / "OspreyFlow_Core" / name, ignore_errors=True)
 
 
 #: The client names' hashed list (OspreyFlow_Build/marketing_site/client_hashes.py), gitignored, kept on this Mac only
@@ -354,6 +398,62 @@ def verifier_pass(slice_id: str, tip: str) -> dict:
     return rec
 
 
+#: A failing test in the gate's log, as pytest, vitest and Playwright print it, and the lines that say why.
+FAILED_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)|^\s*(?:FAIL|✘|×)\s+(\S+.*)$")
+WHY_LINE = re.compile(r"^E\s{2,}\S|^\s*(?:Error|AssertionError|expect\()|^make(?:\[\d+\])?: \*\*\*|^make [\w -]+: exit [1-9]")
+MAX_WHY = 12
+
+
+def gate_findings(log_text: str) -> tuple[list[str], list[dict]]:
+    """The failing tests the gate's log names, and one finding each with its failing lines (not the whole log)."""
+    lines = log_text.splitlines()
+    names: list[str] = []
+    for ln in lines:
+        m = FAILED_TEST.match(ln)
+        if m:
+            name = (m.group(1) or m.group(2) or "").strip()
+            if name and name not in names:
+                names.append(name)
+    findings = []
+    for name in names:
+        short = name.split("::")[-1]
+        # pytest's section for this test: from its "___ name ___" header to the next header
+        start = next((i for i, ln in enumerate(lines) if ln.startswith("_") and f" {short} " in ln), None)
+        why = []
+        if start is not None:
+            for ln in lines[start + 1:]:
+                if ln.startswith("_") and ln.endswith("_") or ln.startswith("="):
+                    break
+                if WHY_LINE.search(ln):
+                    why.append(ln.strip())
+        findings.append({"file": name.split("::")[0].lstrip("./").replace("../", ""),
+                         "what": f"The merge gate's full run failed {name}: " + (" | ".join(why[:MAX_WHY]) or "see the log"),
+                         "evidence": "the merge log's failing lines (a merge-*.log in this slice's records)"})
+    if not findings:
+        why = [ln.strip() for ln in lines if WHY_LINE.search(ln)][:MAX_WHY]
+        findings.append({"file": "", "what": "The merge gate's full run was red: " + (" | ".join(why) or "see the log"),
+                         "evidence": "the merge log (a merge-*.log in this slice's records)"})
+    return names, findings
+
+
+def refuse_to_builder(slice_id: str, tip: str, why: str, findings: list[dict], tests: int, refused_for: str) -> None:
+    """Record the gate's refusal as findings the builder's prompt carries, and put the slice where the board shows it;
+    resume.py send-back returns it to the builder."""
+    c.write_json(c.rec_dir(slice_id) / f"verify-gate-{tip}.json",
+                 {"slice": slice_id, "commit": tip, "verdict": "findings", "passes": [], "findings": findings,
+                  "note": f"written by merge_slice.py: {why}; not a verifier session", "at": c.now()})
+    c.set_state(slice_id, phase="refused", refused_for=refused_for, refused_tests=tests, refused_at=c.now(),
+                note=f"refused by the gate: {tests} tests" if refused_for == "gate" else why)
+
+
+def records_only_conflict(base: str, tip: str) -> list[str]:
+    """The files the tip conflicts with main in, when every one is in the records folder; [] otherwise."""
+    p = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, tip], cwd=c.REPO,
+                       capture_output=True, text=True)
+    files = [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []
+    return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
     trees: list[Path] = []
@@ -361,6 +461,12 @@ def merge(slice_id: str) -> dict:
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
     try:
         base = main_ready()
+        ci = c.main_ci()  # F2: while main is red, every merge is refused (ADR-142 Amendment 9)
+        if ci["state"] == "red":
+            raise Refused(f"main is red: GitHub run {ci['run']} ({ci['why']}) {ci['url']}. No merge until a run on main "
+                          "is green (RULINGS.md, GitHub failures: the conductor reruns a fault that is not ours).")
+        if ci["state"] != "green":
+            raise Refused(f"main's GitHub run cannot be read, so it is not taken as green: {ci['why']}.")
         frozen = c.read_json(rec / "frozen.json")
         if not frozen:
             raise Refused(f"{slice_id} was never started (no frozen record).")
@@ -389,7 +495,14 @@ def merge(slice_id: str) -> dict:
             dest = before / f
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(subprocess.run(["git", "show", f"{tip}:{f}"], cwd=c.REPO, capture_output=True, check=True).stdout)
-        if run(frozen["acceptance"], before, log, shell=True) == 0:
+        slot = c.state(slice_id).get("slot")
+        envs = Path(tempfile.mkdtemp(prefix=f"slice-{slice_id}-envs-"))
+        trees.append(envs)
+        try:
+            env_before = slice_env(before, log, slot, envs / "before")
+        except GateEnvError as e:
+            raise Refused(f"the acceptance run's environment could not be built: {e}. See {log}")
+        if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:
             raise Refused("the acceptance test passes without the slice's code: it was never red. See " + str(log))
 
         # 6. green on the merge result
@@ -397,14 +510,39 @@ def merge(slice_id: str) -> dict:
         trees.append(after)
         msg = f"merge: slice {slice_id} ({frozen['build']}) {branch} {tip[:10]}\n\nSlice-Merge: {slice_id}\nSlice-Tip: {tip}"
         if subprocess.run(["git", "merge", "--no-ff", "-m", msg, tip], cwd=after, capture_output=True).returncode != 0:
+            files = records_only_conflict(base, tip)
+            if files:
+                refuse_to_builder(slice_id, tip, "a merge conflict in the records folder alone", [{
+                    "file": files[0], "what": "The branch conflicts with main only in the records folder (" +
+                    ", ".join(files) + "): resume.py send-back merges main into it, taking main's records.",
+                    "evidence": "git merge-tree on main and the tip"}], 0, "records")
+                raise Refused(f"{branch} does not merge cleanly onto main, in the records folder alone ("
+                              + ", ".join(files) + "): resume.py send-back merges main into it.")
             raise Refused(f"{branch} does not merge cleanly onto main: the builder rebases it.")
         merged = c.git(["rev-parse", "HEAD"], after)
+        try:
+            env_after = slice_env(after, log, slot, envs / "after")
+        except GateEnvError as e:
+            raise Refused(f"the merge result's environment could not be built: {e}. See {log}")
         for name in ("acceptance", "checks"):
-            if frozen.get(name) and run(frozen[name], after, log, shell=True) != 0:
+            if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:
                 raise Refused(f"the slice's {name} is red on the merge result. See {log}")
+        # the pure tests that scan what the slice touched (scan_map.tsv), on the merge result
+        scans = scan_select.not_named(scan_select.select(touched, scan_select.entries()),
+                                      frozen.get("checks") or "", frozen.get("acceptance") or "")
+        if scans and run(scan_select.command(after, scans, python=(
+                str(Path(env_after["VIRTUAL_ENV"]) / "bin/python") if env_after.get("VIRTUAL_ENV") else "")), after, log, shell=True, env=env_after) != 0:
+            names, findings = gate_findings(log.read_text(errors="replace"))
+            refuse_to_builder(slice_id, tip, "the scans of the files it touches were red on the merge result", findings,
+                              len(names), "gate")
+            raise Refused("the pure tests that scan the files this slice touches are red on the merge result ("
+                          + ", ".join(scans) + f"). See {log}")
+        drop_env(after)  # the full gate builds its own, fresh
 
         # 7. today's full gate on the merge result
         if FULL_GATE(after, base, log) != 0:
+            names, findings = gate_findings(log.read_text(errors="replace") if log.exists() else "")
+            refuse_to_builder(slice_id, tip, "today's full gate was red on the merge result", findings, len(names), "gate")
             raise Refused(f"today's full gate is red on the merge result. See {log}")
 
         if c.git(["rev-parse", "HEAD"], c.REPO) != base:
@@ -428,6 +566,7 @@ def merge(slice_id: str) -> dict:
     finally:
         for t in trees:
             drop_tree(t)
+            shutil.rmtree(t, ignore_errors=True)
         fh.close()
 
 

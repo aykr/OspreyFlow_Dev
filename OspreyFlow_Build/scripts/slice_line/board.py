@@ -117,6 +117,10 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         pass  # the merge record and the verifier's pass speak for it
     elif st.get("phase") == "stopped":
         state, note, source = "stopped", st.get("note", ""), "stop record"
+    elif st.get("phase") == "refused":  # the dashboard knows four states: a refused slice waits as a stopped one
+        state, source = "stopped", "merge refusal"
+        note = (f"refused by the gate: {st.get('refused_tests', 0)} tests" if st.get("refused_for") == "gate"
+                else st.get("note") or "refused by the merge script") + "; resume.py send-back returns it to the builder"
     elif tip and verify and verify.get("verdict") == "pass":
         state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
     elif tip and tests and tests.get("green"):
@@ -135,7 +139,9 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
     elif state and builds_entry:
         builds[build] = builds_entry
-    if state == "stopped":
+    if st.get("phase") == "refused" and state == "stopped":
+        shown = note.split(";")[0][:60]
+    elif state == "stopped":
         shown = f"stopped: {note[:60]}"
     elif state:
         shown = state
@@ -155,7 +161,7 @@ def owed_list(problems: list[str]) -> list[dict]:
     return [{"test": t, **o} for t, o in sorted(owed.items())]
 
 
-def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None) -> Path:
+def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
     try:
@@ -165,7 +171,8 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
     for k, v in builds.items():
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
-    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or []}
+    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
+            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"}}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -177,19 +184,46 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
 
 
 def usage() -> None:
+    """Usage per slice, account and seat, then totals per slice and per account with the account's windows beside them.
+    cost_usd is Claude Code's own list-price figure for each session: an estimate, never a bill."""
     f = c.DATA / "usage.tsv"
     if not f.exists():
         print("No usage recorded yet.")
         return
+    cols = ("input", "cache_create", "cache_read", "output")
     tot: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    per_slice: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    per_account: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
     for r in csv.DictReader(f.open(), delimiter="\t"):
-        k = (r["slice"], r["account"], r["seat"])
-        for i, col in enumerate(("input", "cache_create", "cache_read", "output")):
-            tot[k][i] += int(r[col] or 0)
-        tot[k][4] += float(r["cost_usd"] or 0)
-    print(f"{'slice':8} {'account':8} {'seat':18} {'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}")
+        for key, table in (((r["slice"], r["account"], r["seat"]), tot), (r["slice"], per_slice), (r["account"], per_account)):
+            for i, col in enumerate(cols):
+                table[key][i] += int(r[col] or 0)
+            table[key][4] += float(r["cost_usd"] or 0)
+    print("Usage. Cost is a list-price estimate, not a bill (Claude Code's own figure for each session).")
+    head = f"{'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}"
+    line = lambda v: f"{v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}"
+    print(f"\nper slice, account and seat\n{'slice':8} {'account':8} {'seat':20} {head}")
     for (s, a, seat), v in sorted(tot.items()):
-        print(f"{s:8} {a:8} {seat:18} {v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}")
+        print(f"{s:8} {a:8} {seat:20} {line(v)}")
+    print(f"\nper slice\n{'slice':8} {head}")
+    for s, v in sorted(per_slice.items()):
+        print(f"{s:8} {line(v)}")
+    print(f"\nper account (windows as the account's last session reported them)\n{'account':8} {head}  windows")
+    for a, v in sorted(per_account.items()):
+        print(f"{a:8} {line(v)}  {windows_of(a)}")
+
+
+def windows_of(account: str) -> str:
+    wins = (c.account_state(account).get("windows") or {})
+    out = []
+    for name in ("five_hour", "seven_day"):
+        info = wins.get(name) or {}
+        shown = name.replace("_", "-")
+        if info.get("utilization") is None:
+            out.append(f"{shown}: not reported by its sessions' stream")
+        else:
+            out.append(f"{shown} {info['utilization']:.0%}")
+    return "; ".join(out)
 
 
 def main() -> int:
@@ -207,9 +241,14 @@ def main() -> int:
         slices = []
     rows, builds, problems = compute(slices)
     owed = owed_list(problems)
-    path = write_status(builds, owed=owed)
+    ci = c.main_ci()
+    path = write_status(builds, owed=owed, ci=ci)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
+        if ci["state"] == "red":
+            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: no merge until it is green")
+        elif ci["state"] != "green":
+            print(f"main's GitHub run cannot be read ({ci['why']}): no merge until it can")
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
@@ -221,6 +260,9 @@ def main() -> int:
             print(f"live tests owed: {len(owed)} (merged with the live step off; a release is refused until each has run)")
             for o in owed:
                 print(f"  {o['test']}   slice {o['slice']}, merge {o['merge'][:10]}")
+        fixed = [r for r in c.owner_changes() if r["action"] == "correct-command"]
+        for r in fixed:
+            print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         pending = c.DATA / "push.pending"
         if pending.exists():
             print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")

@@ -32,7 +32,7 @@ DATA = Path(os.environ.get("OSPREY_SLICE_HOME") or str(BIN))
 # Paths are repository-relative (from the root of whichever checkout the path is in).
 PROTECTED = ("OspreyFlow_Core/Makefile", ".github/workflows/ci.yml")
 OWNER_ONLY = ("OspreyFlow_Build/process/lanes/v062/dial.yaml", "OspreyFlow_Build/process/lanes/v062/accounts.yaml",
-              "OspreyFlow_Build/process/lanes/v062/live_step.yaml")
+              "OspreyFlow_Build/process/lanes/v062/live_step.yaml", "OspreyFlow_Build/process/lanes/v062/resume.tsv")
 LINE_PREFIXES = (".claude/", "OspreyFlow_Build/scripts/slice_line/")
 NEVER_STAGED = ("OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/")
 RECORDS_ROOT = "OspreyFlow_Build/process/lanes/v062/"
@@ -77,11 +77,19 @@ WRITE_MARKERS = re.compile(
     r"open\(|write_text|write_bytes|\.write\(|\bunzip\b|\btar\b"
 )
 GIT_WRITE = {"commit", "merge", "rebase", "reset", "cherry-pick", "revert", "am", "pull", "update-ref"}
-SEAT_LAUNCH = re.compile(r"(?:^|[\s;&|(`])(?:claude|claude-sol|claude-ayan)(?:\s|$)|CLAUDE_CONFIG_DIR=|disableAllHooks|"
-                         r"--setting-sources|\.local/bin/claude\b")
+#: Starting Claude Code by its command's text (F1, layer 1: a floor, not a wall; the seat shim, layer 2, does not
+#: depend on the text). The name as a command word or a path's last part, quoted, escaped or after any separator; the
+#: npm package (npx, node .../cli.js); a name built in the shell or by concatenation, or split by empty quotes.
+SEAT_LAUNCH = re.compile(
+    r"(?:^|[\s;&|(`'\"\\/=])(?:claude|claude-sol|claude-ayan)(?=$|[\s;&|)`'\"<>])"
+    r"|claude-code\b"
+    r"|\$\{?\w+\}?\s*['\"]?aude\b"
+    r"|['\"]\s*\+?\s*['\"]aude\b"
+    r"|\bc(?:''|\"\")+l|\bcl(?:''|\"\")+a"
+    r"|CLAUDE_CONFIG_DIR=|disableAllHooks|--setting-sources|\.local/bin/claude\b")
 ALLOWED_SCRIPT = re.compile(
     r"^\s*(?:[\w./~\-]*python[\d.]*\s+)?[\w./~\-]*OspreyFlow_Build/scripts/slice_line/"
-    r"(merge_slice|run_seat|slice_start|board)\.py(?:\s+[^;&|`$()<>\n]*)?\s*$"
+    r"(merge_slice|run_seat|slice_start|board|resume)\.py(?:\s+[^;&|`$()<>\n]*)?\s*$"
 )
 OWNER_SCRIPTS = re.compile(r"\b(refreeze\.py|install\.sh|push_main\.sh)\b")
 
