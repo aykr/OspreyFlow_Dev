@@ -19,6 +19,11 @@ and trivy settings, so it cannot drift from them, and runs, in the workflow's or
 workflow's own GitHub identity), `harness.signatures`' verify and `gh release create` are printed as
 `[would] …`. A real push from here would publish unsigned single-platform images under the release's names, so it
 is refused: `--dry-run` is required.
+
+**No release while a live test is owed.** A slice the v0.6.2 slice line merged with its live step off leaves the live
+test files its change reaches owed until a live run has run them green
+(`OspreyFlow_Build/scripts/slice_line/owed.py`); this refuses before anything is built while any is owed, as
+`OspreyFlow_Build/scripts/publish_user_repo_update.sh` does before the product is published.
 """
 
 from __future__ import annotations
@@ -34,6 +39,16 @@ import yaml
 
 from harness import upgrade_stamp
 from harness.render import REPO_ROOT, git_sha
+
+#: The slice line's owed live tests (owed.py check: exit 1 while any is owed or its records cannot be read).
+OWED = REPO_ROOT.parent / "OspreyFlow_Build" / "scripts" / "slice_line" / "owed.py"
+
+
+def owed_refusal() -> str | None:
+    """Why a release must wait for the live tests owed, in owed.py's words, or None when none is owed."""
+    p = subprocess.run([sys.executable, str(OWED), "check"], capture_output=True, text=True, check=False)
+    return None if p.returncode == 0 else (p.stdout + p.stderr).strip()
+
 
 #: The product workflow (REPO_ROOT is the Core checkout, the product repository's root).
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
@@ -129,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run:
         print("release_local: refusing — the release is the product workflow's, signed with its own GitHub identity; "
               "a push from here would publish unsigned images under its names. Run with --dry-run.", file=sys.stderr)
+        return 1
+    refusal = owed_refusal()
+    if refusal:
+        print(f"release_local: refusing — live tests are owed:\n{refusal}", file=sys.stderr)
         return 1
     sha = git_sha()
     if sha == "unknown":

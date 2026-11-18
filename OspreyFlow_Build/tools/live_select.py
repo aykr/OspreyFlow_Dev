@@ -23,6 +23,11 @@ prints one live test path per line, relative to OspreyFlow_Build, for the lane's
   rule adds.
 - `tests/services/api/test_route_rights.py` is selected for every change (the lanes' rule), so the selection is never
   empty. A rule naming tests no live file matches is refused, so a typo cannot select nothing.
+- `--reached` leaves that floor out: only the files the change itself reaches, so a change every path of which a
+  `none` rule decides (documents, the build record) prints nothing. The slice line's merge gate asks this, so a
+  documentation-only slice takes no test stack (the dry run, 17 November 2026: a slice of two files under
+  `process/` ran test_route_rights.py on the test server through the floor alone). A file the change does reach,
+  test_route_rights.py included, is still printed.
 
 `--all` prints the full set, the nightly run on main. `--why` prints to stderr what each changed path chose.
 """
@@ -231,11 +236,13 @@ def _glob(pattern: str) -> re.Pattern[str]:
     return re.compile(out + r"\Z")
 
 
-def select(changed: Iterable[str], repo: Repo | None = None, *, why: list[str] | None = None) -> list[str]:
-    """The live test files the changed paths (relative to the repository root) can reach; never empty."""
+def select(changed: Iterable[str], repo: Repo | None = None, *, why: list[str] | None = None,
+           floor: bool = True) -> list[str]:
+    """The live test files the changed paths (relative to the repository root) can reach; never empty unless
+    `floor` is false (`--reached`), when route_rights is chosen only if the change reaches it."""
     repo = repo or Repo()
     live = repo.live_set()
-    chosen: set[str] = {ALWAYS}
+    chosen: set[str] = {ALWAYS} if floor else set()
     reaches: dict[str, set[Path]] | None = None
     note = why.append if why is not None else (lambda _: None)
     for c in changed:
@@ -281,10 +288,12 @@ def main(argv: list[str] | None = None, repo: Repo | None = None) -> int:
     parser.add_argument("--base", default="main")
     parser.add_argument("--all", action="store_true", help="the full live set (the nightly run)")
     parser.add_argument("--why", action="store_true", help="say on stderr what each changed path chose")
+    parser.add_argument("--reached", action="store_true",
+                        help="only the files the change reaches, without the route_rights floor (may print nothing)")
     args = parser.parse_args(argv)
     repo = repo or Repo()
     why: list[str] = []
-    picked = repo.live_set() if args.all else select(changed_paths(repo, args.base), repo, why=why)
+    picked = repo.live_set() if args.all else select(changed_paths(repo, args.base), repo, why=why, floor=not args.reached)
     if args.why:
         for w in why:
             print(w, file=sys.stderr)

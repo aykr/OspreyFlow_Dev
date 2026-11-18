@@ -22,10 +22,15 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
+ci: core-check slice-line-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
+# The v0.6.2 slice line's gates (process/lanes/v062/slice-line/README.md), each shown red first: 41 cases, and
+# tests/plant_faults.py's 28 planted faults all caught (rule 15).
+slice-line-check:
+	../OspreyFlow_Build/scripts/slice_line/tests/run.sh
+
 lanes-check:
 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.adr_reservations_check

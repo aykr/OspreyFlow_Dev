@@ -18,12 +18,36 @@
             "command": "$HOME/miniconda3/bin/graphify hook-guard read"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/guard.py pre"
+          }
+        ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(git push origin main)"
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/guard.py stop"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/guard.py stop"
+          }
+        ]
+      }
     ]
   }
 }
