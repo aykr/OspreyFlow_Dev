@@ -11,12 +11,17 @@
 //
 // The archive is answered by this spec, as the Conduit's ranged `local-source` route answers a real one:
 // 206 with `Content-Range` for a range, 416 for one past the end, and nothing for a path it does not hold.
-// It models what the real route refuses as well as what it grants (CLAUDE.md rule 15).
+// It refuses what the real route refuses as well as granting what it grants (CLAUDE.md rule 15): a read
+// without the exact `Authorization: Bearer ...` the harness gave the Map view gets a 401, as the Conduit's
+// does. `src/map/pmtilesAuth.ts` records the failure this guards: the `pmtiles` protocol builds an
+// unauthenticated source for any URL it was not given an authorised one for, every tile read then came
+// back 401 and the map drew nothing, silently.
 import { readFileSync } from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 
 import { FIXTURE_FILE, SAMPLES, buildMapTilesFixture } from "./mapTilesFixture";
+import { FIXTURE_BEARER_TOKEN } from "./mapTilesToken";
 
 test.use({ viewport: { width: 1100, height: 800 } });
 
@@ -28,12 +33,14 @@ const PAGE = "/keyboard/map-tiles-harness.html";
 interface Observed {
   ranges: { start: number; end: number }[];
   workerRequests: { url: string; status: number; type: string }[];
+  /** Reads of the archive refused for want of the bearer token. */
+  unauthorised: string[];
   /** Everything that went wrong on the page: script errors, console errors, failed or refused requests. */
   problems: string[];
 }
 
 async function observe(page: Page): Promise<Observed> {
-  const seen: Observed = { ranges: [], workerRequests: [], problems: [] };
+  const seen: Observed = { ranges: [], workerRequests: [], unauthorised: [], problems: [] };
   page.on("pageerror", (error) => seen.problems.push(`page error: ${error.message}`));
   page.on("console", (message) => {
     if (message.type() === "error") seen.problems.push(`console error: ${message.text()}`);
@@ -51,6 +58,12 @@ async function observe(page: Page): Promise<Observed> {
 
   // The archive, as a ranged route answers it.
   await page.route("**/fixture/map-tiles.pmtiles", async (route) => {
+    // The Conduit requires the token on every route, the ranged preflight and every tile read alike.
+    if (route.request().headers()["authorization"] !== `Bearer ${FIXTURE_BEARER_TOKEN}`) {
+      seen.unauthorised.push(`${route.request().method()} ${route.request().headers()["range"] ?? "(no range)"}`);
+      await route.fulfill({ status: 401, contentType: "application/json", body: '{"detail":"Not authenticated"}' });
+      return;
+    }
     const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers()["range"] ?? "");
     const common = { "accept-ranges": "bytes", etag: '"gg6-fixture"', "content-type": "application/octet-stream" };
     if (!range) {
@@ -175,14 +188,30 @@ test("the Map view draws a vector basemap read through pmtiles:// on maplibre-gl
     )
     .toEqual({ allInside: true, waterIsNotBare: true, landcoverIsNotBare: true, waterIsNotLandcover: true });
 
-  // 4. The worker. On 6.x the Glass serves its own (ADR-014 Amendment 2): it was asked for, answered
-  //    and is not a page; and nothing on the page failed or raised an error.
+  // 4. The worker. On 6.x the Glass serves its own (ADR-014 Amendment 2): it was asked for and answered as
+  //    a script (a module worker is refused otherwise); and nothing on the page failed or raised an error.
+  //    The tile reads were all authorised: the `pmtiles` protocol used the instance `MapView` registered
+  //    with the token, not an unauthenticated one of its own.
+  expect(seen.unauthorised, "reads of the archive reached the route without the bearer token").toEqual([]);
   if (atLeast(version, "6.0.0")) {
     expect(seen.workerRequests, "no request for the MapLibre worker file was made").not.toEqual([]);
   }
   for (const worker of seen.workerRequests) {
     expect(worker.status, `the worker request ${worker.url} was refused`).toBeLessThan(400);
-    expect(worker.type, `the worker request ${worker.url} was answered with a page, not a script`).not.toContain("text/html");
+    expect(worker.type, `the worker request ${worker.url} was not answered as JavaScript (a module worker is refused otherwise)`).toMatch(/javascript/);
+  }
+  // The production bundle, which the deployed image serves with a stock `mime.types` that has no `.mjs`
+  // (measured behind nginx:1.30, 18 November 2026): the worker file must be emitted with a `.js` name.
+  // Only the build can show this; the unit test of `assetFileNames` cannot tell that the build used it.
+  const expected = test.info().config.metadata["bundle"];
+  const bundle = await page.evaluate(() => window.__BUNDLE__);
+  if (expected !== undefined) expect(bundle, "this run was configured for a different kind of page").toBe(expected);
+  if (bundle === "production" && atLeast(version, "6.0.0")) {
+    for (const worker of seen.workerRequests) {
+      expect(new URL(worker.url).pathname, `the production bundle's worker is not a hashed .js file`).toMatch(
+        /\/maplibre-gl-worker-[^/]+\.js$/,
+      );
+    }
   }
   expect(seen.problems).toEqual([]);
 });

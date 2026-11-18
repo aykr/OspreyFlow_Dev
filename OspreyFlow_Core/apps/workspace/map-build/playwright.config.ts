@@ -12,6 +12,8 @@ export default defineConfig({
   testDir: "../keyboard",
   testMatch: "map-tiles.spec.ts",
   timeout: 60_000,
+  // What `map-tiles.spec.ts` checks the page against: this run is a production bundle, not the dev server.
+  metadata: { bundle: "production" },
   webServer: {
     command: `npx vite build --config map-build/vite.config.ts && npx vite preview --config map-build/vite.config.ts --port ${PORT} --strictPort`,
     port: PORT,

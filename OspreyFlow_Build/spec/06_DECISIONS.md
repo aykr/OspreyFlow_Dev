@@ -633,9 +633,14 @@ type-check; GG6 ran it. On `maplibre-gl` 6.19.0 (the lockfile's), in Chromium un
   is drawn by the real Map view: `keyboard/map-tiles.spec.ts` reads the version from the page (>= 6.4.1),
   sees the protocol read a tile block (not only the header and root directory), finds the canvas a
   different colour on the fixture's water, its land cover and the bare ground, and sees the worker file
-  asked for and answered as a script with nothing on the page failing. It passes under the Vite dev
-  server and under a production bundle served by `vite preview` (`map-build/playwright.config.ts`). The
-  archive's bytes are checked against the script that writes them.
+  asked for and answered with a JavaScript content type, with nothing on the page failing. The route
+  that answers the archive refuses (401) any read without the exact bearer token the harness gave the
+  Map view, as the Conduit's does, and the spec asserts none was refused: so the tile reads went through
+  the authorised `PMTiles` instance `MapView` registers, not an unauthenticated one the protocol builds
+  for itself (red with the token left out of `registerAuthorisedPmtilesSource`). It passes under the Vite
+  dev server and under a production bundle served by `vite preview` (`map-build/playwright.config.ts`),
+  and the production run also asserts that the worker URL is a hashed `.js` file. The archive's bytes are
+  checked against the script that writes them.
 - *The worker.* With the `setWorkerUrl` call removed the production run is red (no tile block is ever
   read: the worker is not found), as the amendment said it would be. **A third finding the amendment did
   not have:** the Glass's own image serves the bundle from `nginx:1.30-alpine`, whose stock `mime.types`
@@ -643,6 +648,9 @@ type-check; GG6 ran it. On `maplibre-gl` 6.19.0 (the lockfile's), in Chromium un
   refused: the bundle behind that nginx drew no tile (red in the browser), though the dev server and
   `vite preview`, which both know `.mjs`, were green. The build now emits the worker as a `.js` file
   (`vite.config.ts`, `assetFileNames`, with a unit test), and the same run behind that nginx is green.
+  That measurement behind nginx was made by hand and is not a committed test. What is committed is the
+  production run's assertion that the worker file the bundle emitted and loaded is a `.js` file served as
+  JavaScript (red with the `assetFileNames` rule reverted); it does not run nginx.
 - *The camera across a resize.* ADR-086 Amendment 1's two cases in `keyboard/map-view.spec.ts` and the
   three in `keyboard/map-canvas.spec.ts` pass, with the basemap switch and the place search.
 - *The attribution control.* `map-view.spec.ts`'s case passes, and is red with `attributionControl: true`
@@ -658,7 +666,8 @@ Still not checked: the **site image source** and the site calibration wizard on 
 pass, no browser case draws an image source); the map's **frame rate** on 6.x (`perf/perf.spec.ts`,
 which passes 4/4, measures the Graph canvas, which does not run MapLibre: no test times the Map view, and
 `02_GLASS_FRONTEND.md` §5 has no map budget); the bearer token on the site-image `transformRequest` against a
-real Conduit; any browser but Chromium; a machine with no WebGL 2 at all; and a strict content security
+real Conduit (the basemap's own tile reads carry it in the spec, against a route that refuses without it,
+but that route is a fixture, not a Conduit); any browser but Chromium; a machine with no WebGL 2 at all; and a strict content security
 policy (the workspace has none). The type-check passes, with `MapView.tsx` on a namespace import.
 
 **Also found, and not decided here.** `00_ARCHITECTURE.md` says rotation and pitch are needed for site
