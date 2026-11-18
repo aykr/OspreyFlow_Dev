@@ -77,6 +77,15 @@ Python environment outside the tree (`uv run --frozen` with `UV_PROJECT_ENVIRONM
 and its first merge attempt is the proof. A change to `merge_slice.py` to build the environment for the acceptance run
 would be the cleaner fix.
 
+## F6. `env: full` cannot start a slice
+
+`slice_start.py` line 65 calls `lanes_launch.sh setup slice-<ID>` for `env: full`, and that script knows only the old
+lanes (studio, case, admin, rules, platform, docs, demo and their `-b`): "Unknown lane 'slice-SE1'", exit 2, found on the
+first start (18 November, nothing written). The five rows therefore carry `env: none` (a plain worktree; the env column
+is not frozen), and their commands bring their own environment (F4). A builder in such a worktree has no `.venv` or
+`node_modules` until its own command makes one. The fix is a `slice_start.py` that builds the worktree's environment
+itself (`uv sync --frozen`, `npm ci`, as `ci_env` does) instead of calling the lanes' script.
+
 ## F5. A worktree has no hashed client-name list
 
 `slice_start.py` makes the worktree from git; the list is gitignored. The builder of BL6 cannot see a single hit without
