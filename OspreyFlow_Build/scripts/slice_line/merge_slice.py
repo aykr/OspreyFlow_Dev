@@ -37,6 +37,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
+import owed as owed_tests  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
 OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml")
@@ -151,6 +152,27 @@ def ci_env(tree: Path, log: Path) -> dict:
     return env
 
 
+#: The client names' hashed list (OspreyFlow_Build/marketing_site/client_hashes.py), gitignored, kept on this Mac only
+#: (the owner's ruling, 12 November 2026). The merge tree is a fresh checkout without it, so the gate copies it in
+#: from the main checkout, after the merge commit is made and only where the tree's own rules keep it out of git; a
+#: merge is refused without it (the owner, 18 November 2026, for BL6's client-name check).
+CLIENT_HASHES_REL = "OspreyFlow_Build/marketing_site/client_names.local.sha256"
+
+
+def bring_client_hashes(tree: Path) -> None:
+    src = c.REPO / CLIENT_HASHES_REL
+    if not src.is_file() or not src.read_text().strip():
+        raise GateEnvError(f"the client names' hashed list is missing from the main checkout ({src}): the gate checks "
+                           "every page and record against it, so no merge without it. The owner makes it with "
+                           "OspreyFlow_Build/marketing_site/client_hashes.py.")
+    if subprocess.run(["git", "-C", str(tree), "check-ignore", "-q", CLIENT_HASHES_REL]).returncode != 0:
+        raise GateEnvError(f"{CLIENT_HASHES_REL} is not ignored by git in the merge tree: the list is never committed, "
+                           "so it is not copied in.")
+    dest = tree / CLIENT_HASHES_REL
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dest)
+
+
 LIVE_STEP_FILE = c.REPO / c.V062_REL / "live_step.yaml"
 QUEUE_POLL_SECONDS = 60
 
@@ -213,6 +235,7 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
     (live_step.yaml: off, or on after the server's run queue clears)."""
     lease = c.REPO / LEASE
     try:
+        bring_client_hashes(tree)
         env = ci_env(tree, log)
     except GateEnvError as e:
         log.open("a").write(f"\nREFUSED: the gate's environment: {e}\n")
@@ -231,14 +254,19 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
         log.open("a").write(sel.stdout + sel.stderr)
         return sel.returncode
     reached = sel.stdout.split()
-    if not reached:
-        log.open("a").write("\nNo live test file is reached by this change: the live step takes no stack.\n")
-        return 0
     try:
         on, wait = live_step_setting()
     except GateEnvError as e:
         log.open("a").write(f"\nREFUSED: {e}\n")
         return 3
+    owed, unreadable = owed_tests.outstanding(c.DATA) if on else ({}, [])
+    if unreadable:
+        log.open("a").write("\nREFUSED: what live tests are owed cannot be read: " + "; ".join(unreadable) + "\n")
+        return 3
+    owed_paths = sorted(set(owed) - set(reached))
+    if not reached and not owed_paths:
+        log.open("a").write("\nNo live test file is reached by this change: the live step takes no stack.\n")
+        return 0
     if not on:
         log.open("a").write(f"\nLIVE STEP OFF (live_step.yaml): {len(reached)} live test files this change reaches "
                             "were not run:\n" + "".join(f"  {t}\n" for t in reached))
@@ -248,7 +276,11 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
     if blocked:
         log.open("a").write(f"\nREFUSED: the server's run queue did not clear in {wait} minutes: {blocked}\n")
         return 4
-    steps = [["acquire", GATE_LANE, "slice merge live gate"], ["up", GATE_LANE], ["live", GATE_LANE, "--base", base]]
+    if owed_paths:
+        log.open("a").write(f"\nThe live step also runs the {len(owed_paths)} live test files owed:\n"
+                            + "".join(f"  {t}\n" for t in owed_paths))
+    live = ["live", GATE_LANE, "--base", base, *(["--", *(f"../OspreyFlow_Build/{t}" for t in owed_paths)] if owed_paths else [])]
+    steps = [["acquire", GATE_LANE, "slice merge live gate"], ["up", GATE_LANE], live]
     code = 0
     try:
         for s in steps:
@@ -258,6 +290,9 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
     finally:
         run([str(lease), "down", GATE_LANE], tree / "OspreyFlow_Build", log)
         run([str(lease), "release", GATE_LANE], tree / "OspreyFlow_Build", log)
+    if code == 0 and (owed_paths or reached):
+        owed_tests.record_paid(sorted(set(owed_paths) | set(reached)), c.git(["rev-parse", "HEAD"], tree, check=False), log.name,
+                                 c.DATA)
     return code
 
 

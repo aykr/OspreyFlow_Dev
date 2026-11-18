@@ -39,8 +39,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (67 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (56 planted faults, 0 missed).
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (77 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (68 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -85,10 +85,22 @@ reach, `test_route_rights.py` included, is still run.
 The owner's `OspreyFlow_Build/process/lanes/v062/live_step.yaml` turns the step on or off; it is off from
 18 November 2026, until the demo's images no longer share tags with test builds. Off, nothing reaches the server: a
 change that reaches live files merges on the offline gates, and the merge log and `merged.json` (`live_step`) name
-each live file not run. On, the step first reads the server's run queue (`osprey-runs/QUEUE` and `pgrep -x make` on
+each live file not run. **Each is owed** (`OspreyFlow_Build/scripts/slice_line/owed.py`) until a live run that
+passed has run it since: the board prints what is owed and `status.js` carries it (`owed_live_tests`), and a release
+is refused while anything is owed or the records cannot be read (`owed.py check`, called by
+`OspreyFlow_Build/tools/release_local.py` and `OspreyFlow_Build/scripts/publish_user_repo_update.sh`). With the step
+on, each merge's live run also runs every owed file and, green, records them paid (`live-paid.json`). On, the step first reads the server's run queue (`osprey-runs/QUEUE` and `pgrep -x make` on
 each host in `scripts/lane_stack_hosts.tsv`): it goes when the queue is empty or has `merger` first and no make runs,
 waits a minute at a time for `queue_wait_minutes`, then refuses the merge. A queue that cannot be read is never taken
 as clear. A missing or unclear setting refuses the merge.
+
+## The client names' hashed list
+
+`OspreyFlow_Build/marketing_site/client_names.local.sha256` is gitignored and kept on this Mac only. The full gate
+copies it from the main checkout into the merge tree before `make -k ci`, after the merge commit is made and only
+where the tree's own ignore rules keep it out of git, so the sites' checks and BL6's client-name check run in the
+gate; a merge is refused when it is missing or empty there. GitHub's runners have no copy: there the check says in
+words that it did not run.
 
 ## Records mode
 

@@ -62,6 +62,18 @@ M = [
  ("merge_slice.py", 'except (OSError, yaml.YAMLError) as e:', 'except ZeroDivisionError as e:', "unclear_live_step_setting"),
  ("merge_slice.py", ', f"{c.V062_REL}/live_step.yaml")', ')', "protected_path"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/live_step.yaml")', ')', "owner_files"),
+ ("owed.py", '        if owed:\n            print(f"Refused: {len(owed)}', '        if False:\n            print(f"Refused: {len(owed)}', "is_owed_and_a_release_check"),
+ ("owed.py", '        if problems:\n            print("Refused: the slice', '        if False:\n            print("Refused: the slice', "unreadable_merge_record_refuses"),
+ ("owed.py", 'str(paid[t].get("at", "")) > o["at"]', 'True', "owed_again_after_it_was_paid"),
+ ("owed.py", '            problems.append(str(e))\n    paid', '            pass\n    paid', "unreadable_merge_record_refuses"),
+ ("board.py", '    owed = owed_list(problems)\n', '    owed = []\n', "board_shows_what_is_owed"),
+ ("merge_slice.py", '*(["--", *(f"../OspreyFlow_Build/{t}" for t in owed_paths)] if owed_paths else [])', '', "runs_what_is_owed"),
+ ("merge_slice.py", '    if code == 0 and (owed_paths or reached):', '    if owed_paths or reached:', "runs_what_is_owed"),
+ ("merge_slice.py", '    if not reached and not owed_paths:', '    if not reached:', "runs_what_is_owed"),
+ ("merge_slice.py", '        bring_client_hashes(tree)\n', '', "hashed_list"),
+ ("merge_slice.py", 'if not src.is_file() or not src.read_text().strip():', 'if not src.is_file():', "hashed_list_is_missing"),
+ ("merge_slice.py", '"check-ignore", "-q", CLIENT_HASHES_REL]).returncode != 0:', '"check-ignore", "-q", CLIENT_HASHES_REL]).returncode == 99:', "where_git_would_take_it"),
+ ("tests/run.sh", 'elif [ -x "$TOP/OspreyFlow_Core/.venv/bin/python" ]; then', 'elif false; then', "own_checkouts_venv"),
  (".claude/agents/slice-verifier.md", 'tools: Read, Grep, Glob, Bash, StructuredOutput\n', 'tools: Read, Grep, Glob, Bash\n', "offered_structured_output"),
 ]
 bad = 0

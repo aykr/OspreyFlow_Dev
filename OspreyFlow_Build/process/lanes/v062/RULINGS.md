@@ -5,6 +5,8 @@ client's name or abbreviation is written in this file, nor in any message about 
 
 ## 18 November 2026: the live step
 
+- Off, a change that reaches live tests merges on the offline gates; each live test not run is owed, the board shows
+  what is owed, and a release is refused until every owed live test has run.
 - The merge script's live step is off (`OspreyFlow_Build/process/lanes/v062/live_step.yaml`), until the demo's
   images no longer share tags with test builds. The owner turns it on. On, it waits for the server's run queue or
   refuses (`OspreyFlow_Build/process/lanes/v062/slice-line/README.md`, "The live step").
@@ -30,9 +32,10 @@ client's name or abbreviation is written in this file, nor in any message about 
   files' copyright line: 23 lines in 13 files, 9 of them in the four files that keep it. Two of the occurrences are
   inside a cited file path in `OspreyFlow_Build/spec/06_DECISIONS.md`; no file in the repository has that path, and the
   ruling covers it too. The two hits in tests are a docstring and a comment, which no code depends on.
-- **The hashed list is local.** `client_names.local.sha256` is gitignored (the owner's ruling, 12 November 2026), so
-  the merge script's fresh merge tree and GitHub's runners do not have it. The check must find it where it is kept,
-  and must say in words, never pass silently, wherever it is absent (as `client_hashes.ABSENT` does today).
+- **The hashed list is local.** `client_names.local.sha256` is gitignored (the owner's ruling, 12 November 2026) and
+  never committed. The owner, 18 November 2026: the merge gate reads it from the main checkout and refuses the merge
+  if it is missing (built: the full gate copies it into the merge tree); on GitHub the check says in words that it was
+  not run, never passes silently (as `client_hashes.ABSENT` does today).
 - **What "published" means.** `OspreyFlow_Build/marketing_site/publish_pages.sh` publishes, from `deploy/`,
   `index.html`, `intro-video.html`, `public-sector.html`, `monitoring.html`, `assets/` and `.nojekyll`; and each of
   `sites/org/` and `sites/net/` whole. `OspreyFlow_Build/marketing_site/sites/README.md` and

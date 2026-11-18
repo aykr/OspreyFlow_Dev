@@ -694,9 +694,15 @@ def gate(world):
          'first=${row%%|*}; makes=${row#*|}\n'
          '[ -n "$first" ] && echo "$first"; echo "<<end>>"; [ -n "$makes" ] && echo "$makes"; exit 0')
     lease = w["repo"] / "OspreyFlow_Build/scripts/stack_lease.sh"
-    fake(lease, "lease", calls, "exit 0")
+    fake(lease, "lease", calls, '[ "$1" = "${FAKE_LEASE_FAIL:-}" ] && exit 1\nexit 0')
     (w["repo"] / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv").write_text("# stack\thost\nb\ttestbox\nc\ttestbox\n")
     shutil.copy(w["repo"] / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv", tree / "OspreyFlow_Build/scripts/")
+    # the client names' hashed list: on the main checkout, gitignored; the merge tree is a git checkout without it
+    hashes = w["repo"] / "OspreyFlow_Build/marketing_site/client_names.local.sha256"
+    hashes.parent.mkdir(parents=True, exist_ok=True)
+    hashes.write_text(hashlib.sha256(b"a listed name").hexdigest() + "\n")
+    (tree / ".gitignore").write_text("OspreyFlow_Build/marketing_site/client_names.local.sha256\n")
+    sh("git init -q -b main && git add -A && git commit -q -m tree", tree, w["env"])
     fake(bin_ / "make", "make", calls, 'case " $* " in *" $FAKE_MAKE_FAIL "*) exit 2;; esac\nexit 0')
     for major in ("22", "24"):
         nb = t / f"node{major}/bin"
@@ -710,7 +716,8 @@ def gate(world):
             "node22": t / "node22/bin", "node24": t / "node24/bin"}
 
 
-def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9", live="", queue="|", ssh_exit=""):
+def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9", live="", queue="|", ssh_exit="",
+             lease_fail=""):
     env = dict(g["env"])
     # the caller's shell as on this Mac: the main checkout's venv active and first on PATH
     env["VIRTUAL_ENV"] = str(g["main_venv"].parent)
@@ -719,7 +726,7 @@ def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9", live=
     env["FAKE_MAKE_FAIL"] = fail
     env["FAKE_VENV_PYTHON"] = venv_python
     env["UV_PYTHON"] = "3.13"  # the caller's own choice, as on this Mac: never the gate's
-    env.update(FAKE_LIVE=live, FAKE_QUEUE=queue, FAKE_SSH_EXIT=ssh_exit)
+    env.update(FAKE_LIVE=live, FAKE_QUEUE=queue, FAKE_SSH_EXIT=ssh_exit, FAKE_LEASE_FAIL=lease_fail)
     log = g["tmp"] / "gate.log"
     code = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import merge_slice as m; "
             "m.QUEUE_POLL_SECONDS = 0.05; sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
@@ -884,3 +891,133 @@ def test_a_merge_with_the_live_step_off_records_the_live_files_it_did_not_run(wo
     assert p.returncode == 0, p.stderr
     rec = json.loads((w["data"] / "records/S1/merged.json").read_text())
     assert rec["live_step"] == note
+
+
+# ------------------------------------------------------------------ live tests owed (owed.py)
+# The owner, 18 November 2026: with the live step off, each live test not run is owed; the board shows what is owed,
+# and a release is refused until every owed live test has run.
+
+OWED_TEST = "tests/services/api/test_route_rights.py"
+
+
+def owe(w, slice_id, tests, at, merge="m" * 40):
+    d = w["data"] / "records" / slice_id
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "merged.json").write_text(json.dumps({"slice": slice_id, "merge": merge, "at": at,
+                                               "live_step": {"live_step": "off", "not_run": tests}}))
+
+
+def owed_check(w):
+    return sh([SYSPY, str(w["lines"] / "owed.py"), "check"], w["repo"], w["env"], check=False)
+
+
+def test_a_live_test_not_run_is_owed_and_a_release_check_refuses_naming_it(world):
+    w = world
+    assert owed_check(w).returncode == 0  # nothing merged: nothing owed
+    owe(w, "S1", [OWED_TEST], "2026-11-18T09:00:00Z")
+    p = owed_check(w)
+    assert p.returncode == 1 and OWED_TEST in p.stdout and "A release waits" in p.stderr
+
+
+def test_the_board_shows_what_is_owed(world):
+    w = world
+    owe(w, "S1", [OWED_TEST], "2026-11-18T09:00:00Z")
+    p = sh([w["py"], str(w["lines"] / "board.py")], w["repo"], w["env"], check=False)
+    assert p.returncode == 0, p.stderr
+    assert "live tests owed: 1" in p.stdout and OWED_TEST in p.stdout
+    status = (w["repo"] / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/status.js").read_text()
+    body = json.loads(status.split("window.OSPREY_STATUS = ", 1)[1].rstrip().rstrip(";"))
+    assert [o["test"] for o in body["owed_live_tests"]] == [OWED_TEST]
+
+
+def test_an_unreadable_merge_record_refuses_a_release_rather_than_say_nothing_is_owed(world):
+    w = world
+    d = w["data"] / "records/S1"
+    d.mkdir(parents=True)
+    (d / "merged.json").write_text("{not json")
+    p = owed_check(w)
+    assert p.returncode == 1 and "cannot be read" in p.stderr
+
+
+def test_the_live_step_on_runs_what_is_owed_and_pays_it_only_when_green(gate):
+    g = gate
+    live_step(g, on=True)
+    owe(g, "S0", ["tests/ingest/test_owed_one.py"], "2026-01-01T09:00:00Z")
+    rc, calls, out = run_gate(g, live="", lease_fail="live")  # a documentation-only change, but something is owed
+    assert rc != 0
+    live = [c_["args"] for c_ in calls if c_["name"] == "lease" and c_["args"].startswith("live")]
+    assert live == ["live merger --base base -- ../OspreyFlow_Build/tests/ingest/test_owed_one.py"], live
+    assert owed_check(g).returncode == 1  # red: still owed
+    g["calls"].unlink()
+    shutil.rmtree(g["tree"] / "OspreyFlow_Core/.venv")  # the next merge's tree is a fresh one
+    rc, calls, out = run_gate(g, live="")
+    assert rc == 0, out
+    assert owed_check(g).returncode == 0  # green: paid
+    paid = json.loads((g["data"] / "live-paid.json").read_text())
+    assert "tests/ingest/test_owed_one.py" in paid
+
+
+def test_a_test_owed_again_after_it_was_paid_is_owed(world):
+    w = world
+    owe(w, "S1", [OWED_TEST], "2026-11-18T09:00:00Z")
+    (w["data"] / "live-paid.json").write_text(json.dumps({OWED_TEST: {"at": "2026-11-18T10:00:00Z"}}))
+    assert owed_check(w).returncode == 0
+    owe(w, "S2", [OWED_TEST], "2026-11-18T11:00:00Z")
+    p = owed_check(w)
+    assert p.returncode == 1 and "slice S2" in p.stdout
+
+
+# ------------------------------------------------------------------ the client names' hashed list (BL6)
+# The owner, 18 November 2026: the merge gate reads the list from the main checkout and refuses the merge if it is
+# missing; the list is never committed.
+
+HASHES = "OspreyFlow_Build/marketing_site/client_names.local.sha256"
+
+
+def test_the_gate_brings_the_hashed_list_from_the_main_checkout_and_never_commits_it(gate):
+    rc, calls, out = run_gate(gate)
+    assert rc == 0, out
+    assert (gate["tree"] / HASHES).read_text() == (gate["repo"] / HASHES).read_text()
+    status = sh(["git", "status", "--porcelain", "--untracked-files=all"], gate["tree"], gate["env"]).stdout
+    assert "client_names" not in status and "marketing_site" not in status, status  # ignored: git never sees it
+
+
+@pytest.mark.parametrize("state", ["absent", "empty"])
+def test_the_gate_refuses_a_merge_when_the_hashed_list_is_missing(gate, state):
+    f = gate["repo"] / HASHES
+    f.unlink() if state == "absent" else f.write_text("")
+    rc, calls, out = run_gate(gate)
+    assert rc == 3 and "hashed list is missing from the main checkout" in out, out
+    assert not [c_ for c_ in calls if c_["name"] in ("make", "uv")]
+
+
+def test_the_gate_refuses_to_copy_the_list_where_git_would_take_it(gate):
+    (gate["tree"] / ".gitignore").write_text("")
+    rc, calls, out = run_gate(gate)
+    assert rc == 3 and "not ignored by git" in out, out
+    assert not (gate["tree"] / HASHES).exists()
+
+
+def test_the_suite_runs_on_its_own_checkouts_venv_never_the_main_checkouts_when_it_has_one(world):
+    """`make ci` runs this suite (slice-line-check), so the merge gate runs it in its CI-built tree."""
+    w, t = world, world["tmp"]
+    log = t / "python.log"
+
+    def venv(root, name):
+        b = root / "OspreyFlow_Core/.venv/bin"
+        b.mkdir(parents=True, exist_ok=True)
+        (b / "python").write_text(f'#!/bin/sh\necho {name} >> "{log}"\n')
+        (b / "python").chmod(0o755)
+
+    shutil.copytree(SRC / "tests", w["lines"] / "tests", ignore=shutil.ignore_patterns("__pycache__"))
+    sh("git add -A && git commit -q -m suite", w["repo"], w["env"])
+    tree = t / "mergetree"
+    sh(["git", "worktree", "add", "-q", "--detach", str(tree), "HEAD"], w["repo"], w["env"])
+    venv(w["repo"], "MAIN")
+    venv(tree, "TREE")
+    run = tree / "OspreyFlow_Build/scripts/slice_line/tests/run.sh"
+    env = {k: v for k, v in w["env"].items() if k != "SLICE_LINE_PY"}
+    sh(["bash", str(run)], tree, env)
+    shutil.rmtree(tree / "OspreyFlow_Core/.venv")
+    sh(["bash", str(run)], tree, env)
+    assert log.read_text().split() == ["TREE", "MAIN"]
