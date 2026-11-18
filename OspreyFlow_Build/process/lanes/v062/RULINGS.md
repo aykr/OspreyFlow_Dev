@@ -3,6 +3,22 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 18 November 2026: GitHub failures that are not ours (standing)
+
+The owner's word, about 13:20 UTC, on a run of main whose `conformance-recognise` job failed in the image build
+(`stanza.download`: `ConnectionResetError`, no test of ours failing):
+
+1. A job that failed on a **download, network or runner fault, with no test of our code failing**: the conductor reruns
+   it (`gh run rerun --failed`), up to **twice**, without asking, and tells the owner afterwards.
+2. While such a run is in progress or being rerun, slices that pass the **full gate on the Mac may merge on the Mac**.
+3. **Nothing is pushed to origin until GitHub's run on main is green.** (The push script defers while a run is in
+   progress; the conductor therefore makes no commit to main in the moment between a run finishing red and its rerun
+   starting, and says if it could not keep that.)
+4. If a rerun fails a second time, or **any job fails in our code**, the conductor stops merging and brings it to the
+   owner **at once**, with the job, the failing test and the commit.
+
+Every report says which of these applied.
+
 ## 18 November 2026: how the line runs, to cut down what needs the owner's hand
 
 The owner's four rulings of 18 November 2026 (about 12:40 UTC).
