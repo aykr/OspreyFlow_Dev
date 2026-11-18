@@ -110,6 +110,15 @@ tell, 37 not code.
   avoids changing `TargetModelDraftInput` (`packages/schemas/dataset_model.py:83`, which would regenerate the TypeScript
   types). Failing test first, including the second writer and the stale version.
 
+### New row (18 Nov): the client-name check cannot read inside a PDF, an image or a video
+
+`client_name_check.py` (BL6) reads a file that is not UTF-8 as printable runs of four or more characters
+(`identifier_check._read`). Real text inside a PDF, an image or a video (compressed streams, a PDF's own text, an image's
+pixels or a video's frames and captions) is therefore not covered: a client name in any of them would pass. The three
+files the owner exempted (RULINGS.md, "three compressed files exempt") are the known chance hits; every other such file
+is unchecked in the same way. Wanted when the owner opens it: an extractor for each kind (PDF text, image text by OCR,
+video captions) behind the same hashed list, or a stated list of the files that matter for the published sites.
+
 ### New row (18 Nov): GitHub's two warnings on the CI workflow
 
 Both show as annotations on the green run of 18 Nov (run 44257704285) and both need a change to the CI workflow file under
