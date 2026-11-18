@@ -8,6 +8,13 @@
 # with their SHA-256 in manifest.json; writes the fixed settings every seat is started with (--settings); records
 # origin's URL for push_main.sh; and records the owner's email addresses as SHA-256 hashes only (from git's
 # user.email and each signed-in account), so the guard can refuse them without the address ever being written.
+#
+#   OspreyFlow_Build/scripts/slice_line/install.sh --register-everywhere
+#
+# also registers the guard (PreToolUse, every tool; Stop) in every account's own settings on this Mac (~/.claude and
+# each ~/.claude-<account>), so a session started outside the checkout loads it too (F1). That binds the owner's own
+# sessions in every repository: COMMANDS.md of the line fixes says which rules then hold for them. Never without the
+# flag (the owner's word, 18 November 2026). Each settings file is copied aside first; the owner's own keys are kept.
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -66,3 +73,27 @@ print("\n".join(hashlib.sha256(e.encode()).hexdigest() for e in seen))' > "$BIN/
 
 echo "Installed in $BIN: $(wc -l < "$BIN/emails.sha256" | tr -d ' ') address hash(es); origin recorded; hooks:"
 cat "$BIN/manifest.json"
+
+if [ "${1:-}" = "--register-everywhere" ]; then
+  for d in "$HOME/.claude" "$HOME"/.claude-*; do
+    [ -d "$d" ] || continue
+    /usr/bin/python3 - "$d/settings.json" <<'PY'
+import json, shutil, sys, time
+from pathlib import Path
+f = Path(sys.argv[1])
+s = json.loads(f.read_text()) if f.exists() and f.read_text().strip() else {}
+if f.exists():
+    shutil.copyfile(f, f.with_name(f"settings.json.before-slice-line-{time.strftime('%Y%m%dT%H%M%S')}"))
+py = "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/"
+hooks = s.setdefault("hooks", {})
+for event, cmd, extra in (("PreToolUse", py + "guard.py pre", {"matcher": "*"}), ("Stop", py + "guard.py stop", {})):
+    have = [h.get("command") for e in hooks.get(event, []) for h in e.get("hooks", [])]
+    if cmd not in have:
+        hooks.setdefault(event, []).append({**extra, "hooks": [{"type": "command", "command": cmd}]})
+tmp = f.with_name(f.name + ".tmp")
+tmp.write_text(json.dumps(s, indent=2) + "\n")
+tmp.replace(f)
+print(f"The guard is registered in {f}.")
+PY
+  done
+fi

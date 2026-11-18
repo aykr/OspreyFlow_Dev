@@ -142,6 +142,9 @@ M = [
  ("seat_shim.sh", '  ""|*/*|.*) ;;\n', '  "") ;;\n', "token_that_is_not_one"),
  ("run_seat.py", '    env["PATH"] = os.pathsep.join([str(shim), *[p for p in env.get("PATH", "").split(os.pathsep) if p and p != str(shim)]])', '    pass', "first_on_the_seats_path"),
  ("run_seat.py", '        if not p.is_file() or not manifest.get("shim/claude") or sha(p) != manifest.get("shim/claude"):', '        if False:', "shim_is_not_installed"),
+ ("install.sh", '    if cmd not in have:\n', '    if True:\n', "adds_the_guard_to_every_account_once"),
+ ("install.sh", '        hooks.setdefault(event, []).append({**extra, "hooks": [{"type": "command", "command": cmd}]})', '        pass', "adds_the_guard_to_every_account_once"),
+ ("install.sh", 'if [ "${1:-}" = "--register-everywhere" ]; then', 'if true; then', "not_done_by_a_plain_install"),
 ]
 bad = 0
 for f, old, new, test in M:

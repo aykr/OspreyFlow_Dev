@@ -31,6 +31,10 @@ hook command names that fixed copy, never a worktree's. The repository's `.claud
 guard for every session in the repository (beside the graphify hooks); each seat is also started with
 `--settings ~/.ospreyflow/slice-line/settings.json`, so its hooks hold even if a worktree's settings were changed.
 A missing guard fails closed: the hook exits 2 and every tool call is refused.
+`install.sh --register-everywhere` (only with the flag: the owner's word, 18 November 2026) also registers the guard
+in every account's own settings on this Mac (`~/.claude`, `~/.claude-<account>`), so a session started outside the
+checkout loads it too; that binds the owner's own sessions in every repository by the rules the guard applies to a
+session with no seat.
 
 **The seat shim** (`seat_shim.sh`, F1): `install.sh` installs it as `bin/shim/claude`, `claude-sol` and `claude-ayan`
 (read-only, in the manifest). `run_seat.py` starts every seat through it, with the shim's folder first on the seat's
