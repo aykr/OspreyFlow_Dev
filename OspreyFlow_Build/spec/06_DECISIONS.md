@@ -40646,3 +40646,70 @@ demo's "demo add should feed the index" finding is answered by the same change. 
 idle, a read of each outbox and the lease's renewal in Valkey once a second; while busy, a batch's 500 nodes in
 memory. A Conduit stopping waits at most `JOB_LOOP_STOP_SECONDS` (8 s) for the feed and the job loop together, 2 s
 inside Docker's default 10 s grace (it was 10 s for the job loop alone before). The install's own rebuild (Amendment 2) is unchanged.
+
+### ADR-142, Amendment 9 (18 November 2026) — the v0.6.2 slice line: work cut by slice, gates as hooks and scripts, a computed board — PROPOSED
+
+**Context.** The owner's settings of 17 November 2026 and the slice line proposal of 16 November. The last cycle's
+faults were cut by layer and kept by promise: a heartbeat agents were asked to keep went stale; 251 carries crossed
+lanes; "done" was an agent's statement; rules were paragraphs that broke under pressure; the owner was the message
+bus. Built and shown red-then-green on `lane/slice-line-setup`, merged on 18 November 2026
+(`OspreyFlow_Build/process/lanes/v062/slice-line/README.md`), and run end to end on a dummy slice in a scratch clone on
+17 November.
+
+**Decision.** For v0.6.2, ADR-142's lanes give way to slices, and these decisions change:
+
+1. **Roles (decision 1).** One conductor (the owner's one session; writes no product code), scouts (read-only
+   subagents), one builder per slice in its own worktree on `lane/slice-<ID>`, and a verifier that never built the
+   slice. Builders and verifiers are separate `claude -p` sessions on the account `accounts.yaml` names, started by
+   `run_seat.py` with the guard loaded; permission mode `dontAsk` with each seat's tools pre-allowed (the verifier's
+   include `StructuredOutput`, through which its verdict reaches the line).
+2. **Merging and pushing (decision 6).** `merge_slice.py` is the only writer to `main`, one branch at a time, and
+   only with: the slice's frozen acceptance test red before the slice and green on the merge result; a verifier's
+   pass record for the branch's exact tip from a session that did not build it; no protected path touched; and
+   **today's full gate** green on the merge result. It fast-forwards main to the tested merge commit, then
+   `push_main.sh` pushes `main` to `origin` only: never another remote, branch or tag, never a force, and never while
+   a CI run on main is in progress (the push waits, recorded, rather than cancel the run). Agents never push.
+   `PUSH_LOG.md` gives way to `~/.ospreyflow/slice-line/push.log`. The conductor's records reach main through the
+   same script's records mode (`OspreyFlow_Build/process/lanes/v062/` only, never `dial.yaml`, `accounts.yaml` or
+   `live_step.yaml`).
+3. **The full gate.** `make -k ci` and `make test`, both run and both reported (main went red on 17 November 2026 with
+   `make -k ci` alone green: the rollup test is only in `make test`), in the merge tree's **own environment, built as
+   CI's `test` job builds it**: `uv sync --frozen` on the `UV_PYTHON` `ci.yml` sets, `npm ci` under the one Node major
+   `ci.yml` names (`~/.ospreyflow/slice-line/node/v<major>/` first), no `VIRTUAL_ENV`, no other `.venv/bin` on PATH,
+   the closed store ports and the merger's Playwright slot; never the main checkout's environment. A tree that
+   already has one, another Node major or another Python is refused. The client names' hashed list
+   (`OspreyFlow_Build/marketing_site/client_names.local.sha256`, gitignored, never committed) is copied in from the main
+   checkout first; a merge is refused without it.
+4. **The live step, and what is owed.** Then the live test files the change itself reaches
+   (`OspreyFlow_Build/tools/live_select.py --reached`: without the lanes' `test_route_rights.py` floor, so a change
+   that reaches none takes no stack) run on the test server through `stack_lease.sh`. The owner's `live_step.yaml`
+   turns the step on or off; it is off from 18 November 2026, until the demo's images no longer share tags with test
+   builds. **Off**, nothing reaches the server: a change that reaches live files merges on the offline gates, and
+   each live file not run is **owed** (`OspreyFlow_Build/scripts/slice_line/owed.py`): the board shows what is owed,
+   and a release is refused while anything is owed (`owed.py check`, called by `OspreyFlow_Build/tools/release_local.py`
+   and `OspreyFlow_Build/scripts/publish_user_repo_update.sh`). **On**, the step goes only when the server's run
+   queue is empty or has the merger first and no make runs there, waiting up to `queue_wait_minutes` and then
+   refusing; it also runs every owed file, and a green run pays them.
+5. **The heartbeat (decision 9)** gives way to `board.py`, computed from the backlog file on main, the branches, the
+   verifier's records and the test records; it is the only writer of the progress dashboard's `status.js`. A bad or
+   incomplete record is skipped and reported, never stopping the board.
+6. **Rules that refuse.** The standing rules' enforceable parts are PreToolUse hooks run from a fixed place outside
+   every worktree (`~/.ospreyflow/slice-line/bin/`): the owner's files, never-staged files, pushing, a builder outside
+   its worktree, writes to main, credentials and the owner's address, the GOV.UK demo and airbyte, and the line
+   itself. A builder's Stop hook runs the slice's frozen checks and sends back the failures only.
+7. **The dial, the accounts and the live step** are the owner's files; the dial and the accounts are read by no
+   gate. A started slice keeps its setting, its accounts and its frozen acceptance and checks; only the owner changes
+   them (`refreeze.py`).
+
+**What is not reopened.** Rule 14 (one agent per worktree, one holder of the dev stack), the lease and its stacks
+(decision 4), the server's run queue, and every standing rule in `OspreyFlow_Build/process/CLAUDE.md`.
+
+**Tests, named.** `OspreyFlow_Build/scripts/slice_line/tests/test_gates.py` (77 cases, through `OspreyFlow_Build/scripts/slice_line/tests/run.sh`, in
+`make ci` as `slice-line-check` and its own CI job) and `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py`
+(68 planted faults, each turning its test red); `OspreyFlow_Build/tests/test_live_select.py`'s `--reached` cases;
+`OspreyFlow_Build/tests/test_release_owed.py` for the release refusal.
+
+**Cost.** A merge waits for the full gate (about 22 minutes on the Mac on 17 November: the environment, `make -k ci`
+632 s, `make test` 410 s) and for main's own gate to be green: while main is red, every merge is refused. While the
+live step is off, live tests are owed rather than run, and a release waits for them. Shell commands are judged by
+their text, so the merge script's diff check, not the guard, is the backstop for a computed path.
