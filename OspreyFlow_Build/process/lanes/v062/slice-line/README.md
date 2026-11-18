@@ -178,7 +178,11 @@ Every seat session's stream reports its account's rate-limit windows; `run_seat.
 `~/.ospreyflow/slice-line/accounts/<account>.json`. At 90% of a window, no new slice starts on that account; the
 running slice finishes. A refused session (rate limit, signed out) stops its track (`StopFailure` hook). Work is
 never moved to the other account: the owner edits `accounts.yaml`. Usage per slice, seat and account is in
-`usage.tsv` (`board.py --usage`); the conductor's own (with its scouts') is one row per session (SessionEnd).
+`usage.tsv` (`board.py --usage`); the conductor's own (with its scouts') is one row per session: its SessionEnd hook
+writes it, and `run_seat.py conductor` writes it after the session when the hook did not (never twice).
+`board.py --usage` prints totals per slice and per account, each account's five-hour and seven-day windows beside
+it (or "not reported" where its sessions' stream never gave one: the default account's gives only seven-day), and
+says that cost is a list-price estimate, not a bill.
 
 ## Files outside the repository
 

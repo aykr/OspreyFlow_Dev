@@ -183,19 +183,46 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
 
 
 def usage() -> None:
+    """Usage per slice, account and seat, then totals per slice and per account with the account's windows beside them.
+    cost_usd is Claude Code's own list-price figure for each session: an estimate, never a bill."""
     f = c.DATA / "usage.tsv"
     if not f.exists():
         print("No usage recorded yet.")
         return
+    cols = ("input", "cache_create", "cache_read", "output")
     tot: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    per_slice: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    per_account: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
     for r in csv.DictReader(f.open(), delimiter="\t"):
-        k = (r["slice"], r["account"], r["seat"])
-        for i, col in enumerate(("input", "cache_create", "cache_read", "output")):
-            tot[k][i] += int(r[col] or 0)
-        tot[k][4] += float(r["cost_usd"] or 0)
-    print(f"{'slice':8} {'account':8} {'seat':18} {'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}")
+        for key, table in (((r["slice"], r["account"], r["seat"]), tot), (r["slice"], per_slice), (r["account"], per_account)):
+            for i, col in enumerate(cols):
+                table[key][i] += int(r[col] or 0)
+            table[key][4] += float(r["cost_usd"] or 0)
+    print("Usage. Cost is a list-price estimate, not a bill (Claude Code's own figure for each session).")
+    head = f"{'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}"
+    line = lambda v: f"{v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}"
+    print(f"\nper slice, account and seat\n{'slice':8} {'account':8} {'seat':20} {head}")
     for (s, a, seat), v in sorted(tot.items()):
-        print(f"{s:8} {a:8} {seat:18} {v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}")
+        print(f"{s:8} {a:8} {seat:20} {line(v)}")
+    print(f"\nper slice\n{'slice':8} {head}")
+    for s, v in sorted(per_slice.items()):
+        print(f"{s:8} {line(v)}")
+    print(f"\nper account (windows as the account's last session reported them)\n{'account':8} {head}  windows")
+    for a, v in sorted(per_account.items()):
+        print(f"{a:8} {line(v)}  {windows_of(a)}")
+
+
+def windows_of(account: str) -> str:
+    wins = (c.account_state(account).get("windows") or {})
+    out = []
+    for name in ("five_hour", "seven_day"):
+        info = wins.get(name) or {}
+        shown = name.replace("_", "-")
+        if info.get("utilization") is None:
+            out.append(f"{shown}: not reported by its sessions' stream")
+        else:
+            out.append(f"{shown} {info['utilization']:.0%}")
+    return "; ".join(out)
 
 
 def main() -> int:

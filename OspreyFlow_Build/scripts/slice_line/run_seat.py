@@ -311,10 +311,26 @@ def verifier(slice_id: str) -> int:
     return 1
 
 
+def conductor_usage(session: str, account: str) -> None:
+    """The conductor's own row (one per session, its scouts' with it), when its SessionEnd hook wrote none: none had
+    appeared by 18 November 2026. Never a second row for a session."""
+    f = c.DATA / "usage.tsv"
+    if f.exists() and any(ln.split("\t")[7:8] == [session] for ln in f.read_text().splitlines()[1:]):
+        return
+    tp = transcript_of(account, session)
+    if not tp:
+        return
+    import usage_hook
+    usage_hook.DATA = c.DATA
+    usage_hook.conductor_row(Path(tp), session, account)
+
+
 def conductor() -> int:
     seat = c.seat_settings("conductor")
-    launch("conductor", c.account_for("conductor"), c.REPO, "", seat["model"], seat["effort"], {},
-           c.DATA / "conductor" / f"{c.now()}.log", interactive=True)
+    account = c.account_for("conductor")
+    res = launch("conductor", account, c.REPO, "", seat["model"], seat["effort"], {},
+                 c.DATA / "conductor" / f"{c.now()}.log", interactive=True)
+    conductor_usage(res["session_id"], account)
     return 0
 
 

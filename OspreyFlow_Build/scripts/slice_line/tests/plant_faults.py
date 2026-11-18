@@ -118,6 +118,13 @@ M = [
  ("slice_start.py", '    hashes = bring_client_hashes(wt)\n', '    hashes = "The hashed client-name list was copied"\n', "hashed_list_into_the_worktree"),
  ("slice_start.py", '    if subprocess.run(["git", "-C", str(wt), "check-ignore", "-q", ms.CLIENT_HASHES_REL]).returncode != 0:', '    if False:', "where_git_would_take_it"),
  ("slice_start.py", '    if not src.is_file() or not src.read_text().strip():\n        return (f"The main', '    if False:\n        return (f"The main', "no_hashed_list"),
+ ("usage_hook.py", '        conductor_row(Path(event.get("transcript_path") or ""), event.get("session_id", ""), account)', '        pass', "session_end_hook_writes"),
+ ("usage_hook.py", '            tot[k] += t[k]\n    append_usage', '            pass\n    append_usage', "session_end_hook_writes"),
+ ("usage_hook.py", '                  tot["cache_create"], tot["cache_read"], tot["output"], "", window(account, "five_hour"),\n                  window(account, "seven_day")])', '                  tot["cache_create"], tot["cache_read"], tot["output"], "", "", ""])', "session_end_hook_writes"),
+ ("run_seat.py", '    if f.exists() and any(ln.split("\\t")[7:8] == [session] for ln in f.read_text().splitlines()[1:]):', '    if False:', "never_twice"),
+ ("run_seat.py", '    usage_hook.conductor_row(Path(tp), session, account)', '    pass', "never_twice"),
+ ("board.py", '        print(f"{a:8} {line(v)}  {windows_of(a)}")', '        print(f"{a:8} {line(v)}")', "board_usage_totals"),
+ ("board.py", '            out.append(f"{shown}: not reported by its sessions\' stream")', '            pass', "board_usage_totals"),
 ]
 bad = 0
 for f, old, new, test in M:
