@@ -23,13 +23,14 @@ const CONFIGS = [
   "./playwright.config.ts",
   "../map-verify/playwright.config.ts",
   "../perf/playwright.config.ts",
+  "../map-build/playwright.config.ts",
   "../export-capture/playwright.config.ts",
   "../../harness/a11y/playwright.config.ts",
   "../../harness/keyboard/playwright.config.ts",
 ] as const;
 
 /** Today's ports: what every config used before T2, and still uses with no slot. */
-const TODAY = /\b(518[3-6]|519[1-4]|721[7-9]|7220)\b/;
+const TODAY = /\b(518[3-7]|519[1-4]|721[7-9]|7220)\b/;
 
 type Server = { port?: number; url?: string; command?: string };
 type Loaded = { webServer?: Server | Server[]; use?: { baseURL?: string } };
