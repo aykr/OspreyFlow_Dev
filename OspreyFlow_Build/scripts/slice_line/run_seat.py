@@ -177,6 +177,15 @@ def brief_text(slice_id: str) -> str:
         return "(no brief file on main)"
 
 
+def rulings_note(tree: Path) -> str:
+    """Main's RULINGS.md, brought into the seat's checkout (a snapshot from the slice's start) as an ignored copy."""
+    copy = c.deliver_rulings(tree)
+    if not copy:
+        return "\n\nThe owner's rulings as on main today could not be copied into your checkout: read RULINGS.md there."
+    return (f"\n\nThe owner's rulings as on main today are in {copy} (your checkout's own RULINGS.md is from the "
+            "slice's start and may be older): read them before you begin; they bind this slice.")
+
+
 def stop_slice(slice_id: str, note: str) -> None:
     c.set_state(slice_id, phase="stopped", note=note)
     board()
@@ -200,6 +209,7 @@ def builder(slice_id: str) -> int:
               f"- acceptance files: {frozen['acceptance_files']}\n- acceptance: {frozen['acceptance']}\n"
               f"- checks: {frozen['checks']}{findings}")
     wt = Path(frozen["worktree"])
+    prompt += rulings_note(wt)
     log = c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"
     res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
                  {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt)}, log)
@@ -244,6 +254,7 @@ def verifier(slice_id: str) -> int:
     else:
         c.git(["worktree", "add", "--detach", str(vt), tip], c.REPO)
     base = frozen["base"]
+    rulings = rulings_note(vt)
     diffstat = c.git(["diff", "--stat", f"{base}...{tip}"], c.REPO)
     passes = []
     for focus in seat.get("passes", ["acceptance"]):
@@ -253,7 +264,7 @@ def verifier(slice_id: str) -> int:
                   f"{frozen['acceptance_files']}\nAcceptance: {frozen['acceptance']}\nChecks: {frozen['checks']}\n"
                   f"The builder's test record (green):\n{json.dumps(tests, indent=1)}\n\nWhat changed:\n{diffstat}\n\n"
                   f"Use git diff {base}...{tip} and Read. Return verdict 'pass', or 'findings' with evidence (file, "
-                  f"line, what is wrong and how you know). Put the commit {tip} in your answer.")
+                  f"line, what is wrong and how you know). Put the commit {tip} in your answer.{rulings}")
         log = c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl"
         res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
                      {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,

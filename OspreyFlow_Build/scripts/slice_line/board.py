@@ -221,6 +221,9 @@ def main() -> int:
             print(f"live tests owed: {len(owed)} (merged with the live step off; a release is refused until each has run)")
             for o in owed:
                 print(f"  {o['test']}   slice {o['slice']}, merge {o['merge'][:10]}")
+        fixed = [r for r in c.owner_changes() if r["action"] == "correct-command"]
+        for r in fixed:
+            print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         pending = c.DATA / "push.pending"
         if pending.exists():
             print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")

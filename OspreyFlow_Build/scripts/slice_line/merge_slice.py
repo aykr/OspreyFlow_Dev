@@ -40,7 +40,8 @@ import common as c  # noqa: E402
 import owed as owed_tests  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
-OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml")
+OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
+               f"{c.V062_REL}/resume.tsv")
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
     "OspreyFlow_Build/scripts/slice_line/", *OWNER_FILES,

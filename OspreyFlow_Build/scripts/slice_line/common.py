@@ -194,3 +194,61 @@ def set_state(slice_id: str, **kw) -> dict:
 
 def frozen_matches(frozen: dict, row: dict) -> bool:
     return all((frozen.get(k) or "") == (row.get(k) or "") for k in FROZEN_KEYS)
+
+
+def refreeze(slice_id: str, by: str) -> dict:
+    """Take the slice's frozen columns from main's backlog file, keeping the previous ones in the record's history."""
+    f = rec_dir(slice_id) / "frozen.json"
+    frozen = read_json(f) or {}
+    if not frozen:
+        raise SystemExit(f"{slice_id} has not started.")
+    row = slice_row(slice_id)
+    frozen.setdefault("history", []).append({k: frozen.get(k) for k in (*FROZEN_KEYS, "frozen_at")})
+    frozen.update({k: row[k] for k in FROZEN_KEYS})
+    frozen["frozen_at"] = now()
+    frozen["refrozen_by"] = by
+    write_json(f, frozen)
+    return frozen
+
+
+#: The owner's rulings reach a slice's worktree, which is a snapshot from the slice's start, as an untracked copy of
+#: main's RULINGS.md at a path every checkout's .gitignore keeps out of git (`Claude outputs/`), never as a commit on
+#: the slice's branch: a copy committed there conflicts with main the next time main's rulings change (BL6, 18
+#: November 2026). run_seat.py writes it before every builder and verifier session and names it in the prompt.
+RULINGS_REL = f"{V062_REL}/RULINGS.md"
+RULINGS_COPY_REL = "Claude outputs/slice-line/RULINGS.md"
+
+
+def deliver_rulings(tree: Path) -> str | None:
+    """Main's RULINGS.md, copied into `tree` where git ignores it; the copy's path, or None when it cannot be."""
+    try:
+        text = git(["show", f"main:{RULINGS_REL}"], REPO)
+    except RuntimeError:
+        return None
+    if subprocess.run(["git", "-C", str(tree), "check-ignore", "-q", RULINGS_COPY_REL]).returncode != 0:
+        return None
+    dest = Path(tree) / RULINGS_COPY_REL
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text + "\n")
+    return str(dest)
+
+
+#: The owner's written word for resume.py (README, "Resuming a slice"): lines `<slice> <action> <YYYY-MM-DD>`, one use
+#: each. Only the owner writes it (the guard's OWNER_ONLY); every use is logged in the data folder.
+RESUME_FILE = REPO / V062_REL / "resume.tsv"
+OWNER_CHANGES = DATA / "owner-changes.tsv"
+
+
+def log_owner_change(slice_id: str, action: str, detail: str) -> None:
+    OWNER_CHANGES.parent.mkdir(parents=True, exist_ok=True)
+    if not OWNER_CHANGES.exists():
+        OWNER_CHANGES.write_text("at\tslice\taction\tdetail\n")
+    with OWNER_CHANGES.open("a") as fh:
+        fh.write("\t".join([now(), slice_id, action, detail.replace("\t", " ").replace("\n", " ")]) + "\n")
+
+
+def owner_changes() -> list[dict]:
+    if not OWNER_CHANGES.exists():
+        return []
+    rows = [ln.split("\t") for ln in OWNER_CHANGES.read_text().splitlines()[1:] if ln.strip()]
+    return [dict(zip(("at", "slice", "action", "detail"), r + [""] * (4 - len(r)))) for r in rows]

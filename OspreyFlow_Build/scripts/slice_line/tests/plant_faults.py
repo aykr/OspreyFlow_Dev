@@ -1,11 +1,11 @@
 """Rule 15's red-then-green record for the slice line: one planted fault per gate, each shown turning its test red.
 
-Usage: plant_faults.py <scratch dir> <a checkout of this branch> <a python with pytest and PyYAML>
+Usage: plant_faults.py <scratch dir> <a checkout of this branch> <a python with pytest and PyYAML> [<only tests naming this>]
 The scratch dir must hold OspreyFlow_Build/process/lanes/v062 (dial.yaml, accounts.yaml, live_step.yaml). Expected: 0 not caught.
 """
 import shutil, subprocess, sys
 from pathlib import Path
-S = Path(sys.argv[1]); W = Path(sys.argv[2]); PY = sys.argv[3]
+S = Path(sys.argv[1]); W = Path(sys.argv[2]); PY = sys.argv[3]; ONLY = sys.argv[4] if len(sys.argv) > 4 else ""
 M = [
  ("guard.py", 'if re.search(r"\\bgit\\b[^;&|\\n]*\\bpush\\b", cmd)', 'if False', "push_new_remotes"),
  ("guard.py", 'PROTECTED = ("OspreyFlow_Core/Makefile", ".github/workflows/ci.yml")', 'PROTECTED = ()', "core_makefile"),
@@ -75,9 +75,25 @@ M = [
  ("merge_slice.py", '"check-ignore", "-q", CLIENT_HASHES_REL]).returncode != 0:', '"check-ignore", "-q", CLIENT_HASHES_REL]).returncode == 99:', "where_git_would_take_it"),
  ("tests/run.sh", 'elif [ -x "$TOP/OspreyFlow_Core/.venv/bin/python" ]; then', 'elif false; then', "own_checkouts_venv"),
  (".claude/agents/slice-verifier.md", 'tools: Read, Grep, Glob, Bash, StructuredOutput\n', 'tools: Read, Grep, Glob, Bash\n', "offered_structured_output"),
+ ("resume.py", '    if not have:\n', '    if False:\n', "refuses_without_the_owners_line"),
+ ("resume.py", '    if used >= have:\n', '    if False:\n', "line_is_used_once"),
+ ("guard.py", ', "OspreyFlow_Build/process/lanes/v062/resume.tsv")', ')', "resume_tsv_is_refused"),
+ ("resume.py", 'if phase != "stopped" or (rec / "red_stop.json").exists() or rnd < limit:', 'if False:', "add_round_refuses_a_slice_not_stopped"),
+ ("resume.py", '    beyond = [k for k in c.COLUMNS if k not in allowed and old[k] != new[k]]', '    beyond = []', "beyond_that_slices_frozen"),
+ ("resume.py", '    if dirty:\n        raise Refused(f"the worktree', '    if False:\n        raise Refused(f"the worktree', "refuses_while_a_merge_runs"),
+ ("resume.py", '    fh = ms.lock()\n', '    fh = open("/dev/null")\n', "refuses_while_a_merge_runs"),
+ ("resume.py", '    files = conflicts_with_main(wt)\n', '    files = []\n', "merges_main_into_a_branch"),
+ ("resume.py", '        why = dry_run.malformed(problem)\n        if not why or dry_run.genuine(problem) or not problem.startswith(("RED: checks", "RED: acceptance")):', '        why = "any"\n        if False:', "genuine_failing_assertion"),
+ ("resume.py", '        if a != b:\n', '        if False:\n', "changes_what_is_tested"),
+ ("resume.py", '            if (new.get(k) or "").count(marker) > (old.get(k) or "").count(marker):', '            if False:', "changes_what_is_tested and dash"),
+ ("resume.py", '            if problems:\n', '            if False:\n', "not_proved_on_main"),
+ ("dry_run.py", '            if code != 0:\n', '            if False:\n', "not_proved_on_main"),
+ ("resume.py", '    copy = c.deliver_rulings(wt)\n', '    copy = None\n', "brings_the_rulings"),
 ]
 bad = 0
 for f, old, new, test in M:
+    if ONLY and not any(o in f + " " + test for o in ONLY.split(",")):
+        continue
     d = S / "OspreyFlow_Build/scripts/slice_line"
     if d.exists(): shutil.rmtree(d)
     shutil.copytree(W / "OspreyFlow_Build/scripts/slice_line", d, ignore=shutil.ignore_patterns("__pycache__"))

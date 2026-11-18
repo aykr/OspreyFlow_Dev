@@ -44,7 +44,7 @@ site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
-| The owner's files | guard | Edit/Write of `OspreyFlow_Core/Makefile`, `.github/workflows/ci.yml`; shell writes naming them; `dial.yaml`, `accounts.yaml`, `live_step.yaml` |
+| The owner's files | guard | Edit/Write of `OspreyFlow_Core/Makefile`, `.github/workflows/ci.yml`; shell writes naming them; `dial.yaml`, `accounts.yaml`, `live_step.yaml`, `resume.tsv` |
 | Never staged | guard | `git add`/`commit -a` that would take `OspreyFlow_Core/osprey.yaml` or `OspreyFlow_Core/data/` |
 | No push, remote or repository | guard, push_main.sh | every `git push`, remote change, `gh repo create/edit`, write `gh api`; the push script refuses all but a merge-written main to the recorded origin, fast-forward only |
 | A builder in its worktree | guard | edits, `cd`, `-C`, `GIT_DIR`, writes naming another checkout; branch switches |
@@ -72,6 +72,35 @@ without a tool call; the line's own cap is 6 red stops.
    the rounds limit; then the slice stops and its note names the one decision the owner must make.
 4. `merge_slice.py merge <ID>`: main fast-forwarded to the tested merge commit, then `push_main.sh`.
 5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
+
+## Resuming a slice
+
+`resume.py <ID> <action>` is the only way back to `building` for a stopped or refused slice. The conductor runs it,
+whole and unchained (the guard refuses it to every other seat). Every action takes the merge lock, refuses a worktree
+with uncommitted changes, brings main's `RULINGS.md` into the worktree as an untracked copy that git ignores
+(`Claude outputs/slice-line/RULINGS.md`, named in the builder's and the verifier's prompts; never a commit on the
+slice's branch), and, where the branch conflicts with main only in the records folder, merges main into it, taking
+main's records, and sends the slice for a fresh check.
+
+| Action | For | Authority |
+| --- | --- | --- |
+| `refreeze` | commits `slices.tsv`, changed in that slice's frozen columns only, and refreezes them (history kept) | a line in `resume.tsv` |
+| `add-round` | a slice stopped at its rounds limit: round and limit each +1 | a line in `resume.tsv` |
+| `clear-stop` | a slice stopped on red checks: `red_stop.json` and `red_stops` removed | a line in `resume.tsv` |
+| `send-back` | a slice the merge gate refused: back to the builder with the gate's findings, its round advanced | none within the rounds limit; past it, the owner's `add-round` line as well |
+| `correct-command` | a slice stopped **only** by the conductor's own malformed command (ruling 3) | none: the limits are in the code |
+
+`resume.tsv` (`OspreyFlow_Build/process/lanes/v062/resume.tsv`) is the owner's: one line `<ID> <action> <YYYY-MM-DD>`
+(today, UTC), one use per line, each use logged in `owner-changes.tsv` in the data folder (time, slice, action,
+detail). `RULINGS.md` is never the authority: the conductor writes it.
+
+`correct-command`'s limits (`resume.py`, `dry_run.py`): the slice's last red output matches a malformed-command
+signature (`make: *** <dir>: No such file or directory`; `OSPREY_PORTS_SLOT is not set`) and nothing a failing test
+prints; the corrected acceptance and checks name exactly the same test files and add nothing that changes what is
+tested (`||`, `-k`, `--ignore`, ...); the corrected commands are proved on main in a scratch worktree first (checks
+green to the last step of their `&&` chain, the slice's own new files stood in by placeholders; acceptance red for a
+reason no signature matches); the use is logged, and the board prints "command corrected: old -> new" for the
+conductor's next report.
 
 ## The live step
 
