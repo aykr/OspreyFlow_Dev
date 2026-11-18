@@ -10,7 +10,7 @@ written down: the check holds them as the owner's hashes (`marketing_site/client
 on the machine that publishes) and prints a file, a line and a count, never a name, a hash or the line's text.
 
 **Scope.** Every git-tracked file (`git ls-files`); a file that is not UTF-8 is read for its runs of printable
-characters, as `identifier_check._read` does (with `BINARY_MINIMUM`'s limit). A name is found as the list's other readers find it (case, accents,
+characters, as `identifier_check._read` does, with no minimum length (three named files are exempt, see `CHANCE_IN_COMPRESSED`). A name is found as the list's other readers find it (case, accents,
 marks, spacing and an abbreviation's full stops folded), on a line or wrapped across several; a page's tags and
 attribute values are read as `identifier_check.readable` reads them. A hit on a wrapped name is reported on the line it
 starts.
@@ -63,11 +63,17 @@ PUBLISHED_FOLDERS = tuple(f"{_SITE}/{folder}/" for folder in ("deploy/assets", "
 LAURIUM = re.compile(r"laurium", re.IGNORECASE)
 #: A tree of this many files or more is scanned on every core.
 PARALLEL_FROM = 200
-#: In a file that is not text (a video, an image, a PDF) the printable runs are noise as much as metadata: a three-letter
-#: abbreviation turns up in 30 megabytes of video by chance (the intro video, a screenshot and a PDF each held one, all
-#: compressed data), and no reword can remove it. A run of fewer than this many characters is not read as a
-#: name there; a full name in an image's metadata still is. The owner's call to change (`tests/test_client_name_check_binary.py`).
-BINARY_MINIMUM = 5
+#: Three files whose compressed bytes spell the three-letter abbreviation by chance: each is a 4-character printable run
+#: inside a video, a screenshot and a PDF, and no reword can remove it. Exempt by exact path, and only while the file is
+#: not text, so a name written into one of them as text is still found; every other file that is not text is read in
+#: full, a short name included. Adding to this list is the owner's call.
+CHANCE_IN_COMPRESSED = frozenset(
+    {
+        "OspreyFlow_Build/marketing_site/OspreyFlow Intro Video.mp4",
+        "OspreyFlow_Build/marketing_site/deploy/assets/ps-govuk-matrix.jpg",
+        "OspreyFlow_Core/docs/pdf/user-guide.pdf",
+    }
+)
 _MARKUP = frozenset({".html", ".htm", ".svg"})
 EMPTY = "client_names.local.sha256 holds no names, so the tree was not checked against the client's names; run client_hashes.py to add them"
 
@@ -97,8 +103,7 @@ def _words(line: str, markup: bool) -> tuple[str, ...]:
 
 def client_lines(text: str, path: str, held: frozenset[str] | set[str], is_text: bool = True) -> list[int]:
     """The 1-based lines a name in `held` starts on. The file's words are read as one stream, each tagged with its line,
-    so a name wrapped across lines is found as it is written (a docstring's, a comment's, a paragraph's). In a file
-    that is not text, a run shorter than `BINARY_MINIMUM` characters is not a name (see there)."""
+    so a name wrapped across lines is found as it is written (a docstring's, a comment's, a paragraph's)."""
     markup = Path(path).suffix.lower() in _MARKUP
     words: list[str] = []
     where: list[int] = []
@@ -113,8 +118,6 @@ def client_lines(text: str, path: str, held: frozenset[str] | set[str], is_text:
             continue
         for end in range(start + 1, min(start + client_hashes.LONGEST, len(words)) + 1):
             run = " ".join(words[start:end])
-            if not is_text and len(run) < BINARY_MINIMUM:
-                continue
             hit = memo.get(run)
             if hit is None:
                 hit = memo[run] = hashlib.sha256(run.encode("utf-8")).hexdigest() in held
@@ -150,7 +153,7 @@ def scan_file(path: str) -> list[str]:
         return []
     text, is_text = identifier_check._read(file)
     hits: list[str] = []
-    if path not in KEEP_FILES:
+    if path not in KEEP_FILES and not (path in CHANCE_IN_COMPRESSED and not is_text):
         hits += [f"{path}:{n}: the client's name" for n in client_lines(text, path, _HELD, is_text)]
     if published(path):
         hits += [f"{path}:{n}: Laurium in a published file" for n in laurium_lines(text)]
