@@ -4,7 +4,7 @@
 #
 #   OspreyFlow_Build/scripts/slice_line/install.sh
 #
-# Copies guard.py, stop_check.py and usage_hook.py from this checkout to ~/.ospreyflow/slice-line/bin, read-only,
+# Copies guard.py, stop_check.py, usage_hook.py and the Stop hook's scan map (scan_select.py, scan_map.tsv) from this checkout to ~/.ospreyflow/slice-line/bin, read-only,
 # with their SHA-256 in manifest.json; writes the fixed settings every seat is started with (--settings); records
 # origin's URL for push_main.sh; and records the owner's email addresses as SHA-256 hashes only (from git's
 # user.email and each signed-in account), so the guard can refuse them without the address ever being written.
@@ -15,7 +15,7 @@ BIN="$HOME/.ospreyflow/slice-line"
 REPO="$(dirname "$(git -C "$SRC" rev-parse --path-format=absolute --git-common-dir)")"
 mkdir -p "$BIN/bin" "$BIN/records" "$BIN/sessions" "$BIN/accounts"
 chmod u+w "$BIN/bin" "$BIN/bin/"* 2>/dev/null || true
-for f in guard.py stop_check.py usage_hook.py; do
+for f in guard.py stop_check.py usage_hook.py scan_select.py scan_map.tsv; do
   cp "$SRC/$f" "$BIN/bin/$f"
   chmod 0555 "$BIN/bin/$f"
 done
@@ -23,7 +23,8 @@ done
 import hashlib, json, sys
 from pathlib import Path
 b = Path(sys.argv[1])
-m = {f: hashlib.sha256((b / "bin" / f).read_bytes()).hexdigest() for f in ("guard.py", "stop_check.py", "usage_hook.py")}
+m = {f: hashlib.sha256((b / "bin" / f).read_bytes()).hexdigest()
+     for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")}
 (b / "manifest.json").write_text(json.dumps(m, indent=1))
 py = "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/"
 hook = lambda cmd, **kw: {"hooks": [{"type": "command", "command": py + cmd, **kw}]}

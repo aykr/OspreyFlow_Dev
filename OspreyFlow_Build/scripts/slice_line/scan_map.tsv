@@ -1,0 +1,155 @@
+# The pure tests that walk the repository, and the path prefixes each walks (scan_select.py; README, "The scans a slice's
+# checks include"). The line's file: neither the conductor nor any slice can change it (the guard; the merge script's
+# protected paths). Columns: the test (relative to OspreyFlow_Build), its prefixes from the repository root (comma
+# separated; a folder ends in /), or - when it walks only its own temporary folder or reads named files, then why.
+# A slice's checks run every row whose prefixes a path its branch changes falls under. A pure test that walks a folder
+# and has no row fails the line's suite (test_the_real_scan_map_names_every_pure_walker_and_nothing_stale). First
+# review: 18 November 2026, by reading each test (the live tests, make test's --ignore list, are left out).
+tests/adapters/extract_laurium/test_laurium_call_sites.py	OspreyFlow_Core/services/,OspreyFlow_Core/packages/	scans Python for laurium_reads call sites
+tests/adapters/graph_arcadedb/test_every_read_withholds_by_its_principal.py	OspreyFlow_Core/packages/adapters/graph_arcadedb/	scans the adapter package's reads for principal withholding
+tests/cli/test_cli_dependencies.py	OspreyFlow_Core/cli/	scans cli/ospreyflow imports; installs the cli package
+tests/cli/test_images_verb.py	-	Renders named fixtures only; subprocess runs harness.render --help
+tests/cli/test_no_make_for_operators.py	OspreyFlow_Core/harness/,OspreyFlow_Core/scripts/,OspreyFlow_Core/cli/,OspreyFlow_Core/services/	scans Python for make calls aimed at operators
+tests/cli/test_refusal_words_reach_the_operator.py	-	walks only the fixture's temporary deployment; reads named Core files
+tests/cli/test_service_name_never_a_demo.py	OspreyFlow_Core/scripts/,OspreyFlow_Core/packages/demo_fixtures/	scans seeds and demo fixtures for service-name writes
+tests/cloud_platform_backup/test_backups_chart.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Build/tests/fixtures/cloud_platform/,OspreyFlow_Core/deploy/helm/ospreyflow/
+tests/cloud_platform_backup/test_backups_rows.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Core/deploy/helm/ospreyflow/
+tests/cloud_platform_backup/test_platform_backup_claims.py	-	walks only its own temporary folder
+tests/cloud_platform_backup/test_platform_backup_map_keys.py	-	product backup code walks only its temporary claims folder
+tests/cloud_platform_backup/test_restore_graph.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Build/tests/cloud_platform_backup/arcadedb/
+tests/connectors/test_s3_connector_live.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Build/tests/connectors/golden/s3/
+tests/cp_policy_check/test_cp_decommission_check.py	-	Named fixture; decommission check globs a temporary terraform folder
+tests/cp_policy_check/test_cp_egress_order.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Core/deploy/helm/ospreyflow/
+tests/cp_policy_check/test_cp_policy_check.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Core/,OspreyFlow_Build/tests/fixtures/cloud_platform/
+tests/cp_policy_check/test_rendered_terraform.py	-	Named fixtures rendered into a temporary folder for tofu
+tests/harness/test_access_key_proxy_fixtures_shared.py	OspreyFlow_Build/tests/	scans every test module for imports of the proxy fixtures
+tests/harness/test_apply_changed_settings.py	-	walks only its own temporary folder
+tests/harness/test_apply_keeps_secrets.py	-	walks only its own temporary folder
+tests/harness/test_backup_object_ownership.py	-	walks only its own temporary folder
+tests/harness/test_backup.py	-	walks only its own temporary folder
+tests/harness/test_cloud_platform_data_safety.py	-	Named files (RUNBOOK.md); stubs walked in temporary folder only
+tests/harness/test_cloud_platform_decommission_aws.py	-	Named fixtures rendered; bash runs in a temporary folder
+tests/harness/test_cloud_platform_egress.py	-	Named fixtures rendered only
+tests/harness/test_cloud_platform_entra_count.py	-	Named fixture and poc_manifest.yaml only
+tests/harness/test_cloud_platform_entra.py	-	renders named templates; imported helpers walk nothing real
+tests/harness/test_cloud_platform_gateway.py	-	renders named templates; imported helpers walk nothing real
+tests/harness/test_cloud_platform_opensearch.py	-	reads named chart and runbook files only
+tests/harness/test_cloud_platform_poc.py	-	Named fixtures and files; scripts written to temporary folder
+tests/harness/test_cloud_platform_render.py	-	reads named files only
+tests/harness/test_cloud_platform_search_jobs_postgres.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Core/deploy/helm/ospreyflow/
+tests/harness/test_cloud_platform_search_rebuild.py	-	renders named templates; imported helpers walk nothing real
+tests/harness/test_cloud_platform_seed_irsa.py	-	Reads named chart template seed.yaml; uses _token only
+tests/harness/test_cloud_platform_seed.py	-	renders named templates; imported helpers walk nothing real
+tests/harness/test_cloud_platform_token_version.py	-	reads named chart files only
+tests/harness/test_cloud_sources_render.py	-	Named fixtures rendered only
+tests/harness/test_deployment_guard.py	OspreyFlow_Build/tests/	deployment_guard rglobs every .py under the real tests folder
+tests/harness/test_deployment_models.py	OspreyFlow_Core/services/	scans services Python for model settings
+tests/harness/test_dockerfiles_numeric_user.py	OspreyFlow_Core/	walks all Dockerfiles in Core for a numeric final user
+tests/harness/test_env_writers_whole.py	OspreyFlow_Core/harness/,OspreyFlow_Core/scripts/,OspreyFlow_Core/cli/ospreyflow/	scans modules for in-place env file writes
+tests/harness/test_fresh_only.py	-	Named files; iterdir only over a temporary fake host folder
+tests/harness/test_gateway_backup.py	-	walks only its own temporary folder
+tests/harness/test_harness_frontend_copies.py	OspreyFlow_Core/apps/harness/src/,OspreyFlow_Core/apps/workspace/,OspreyFlow_Core/harness/Dockerfile	follows harness frontend imports against Dockerfile COPY lines
+tests/harness/test_ingest_uploads.py	-	walks only its temporary deployment output; Dockerfile read by name
+tests/harness/test_install_page_keys.py	-	walks only its own temporary folder
+tests/harness/test_laurium_cp_policy.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Build/tests/fixtures/cloud_platform/,OspreyFlow_Core/deploy/helm/ospreyflow/
+tests/harness/test_laurium_network_policy.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Build/tests/fixtures/cloud_platform/,OspreyFlow_Core/deploy/helm/ospreyflow/
+tests/harness/test_laurium_render.py	-	runs Docker (Helm, kubeconform or a stand-in store): not pure, so make test runs it; walks OspreyFlow_Build/tests/fixtures/cloud_platform/
+tests/harness/test_map_settings_backup.py	-	walks only its own temporary folder
+tests/harness/test_poc_manifest.py	-	Named manifest and VERSION; walk is over parsed data
+tests/harness/test_rendered_files_readable.py	-	walks only its own temporary folder
+tests/harness/test_store_volumes.py	-	walks only its own temporary folder
+tests/licence_check/test_data_licence_offenders.py	-	Synthetic manifests and the static demo registry; no walk
+tests/licence_check/test_java_runtime_check.py	-	reads the named api Dockerfile; tool's walk is never called
+tests/licence_check/test_licence_expressions.py	-	Synthetic package lists only
+tests/licence_check/test_runtime_licences.py	OspreyFlow_Core/	find_runtime_offenders()/main() rglob Dockerfile* over all of Core
+tests/packaging/test_internal_demo_exclusion.py	-	imports a walking tool but walks nothing; LICENSE/NOTICE by name
+tests/scenarios/test_pid_files.py	-	walks only its own temporary folder
+tests/scenarios/test_pid_plan.py	OspreyFlow_Build/tests/,OspreyFlow_Core/apps/,OspreyFlow_Core/packages/,OspreyFlow_Core/scripts/	searches source and fixtures for clashes with PID values and names
+tests/schemas/test_extraction_engine_setting.py	-	Named fixtures only
+tests/schemas/test_recipe_staging.py	OspreyFlow_Core/,OspreyFlow_Build/	git ls-files *.yaml over the repository for committed recipes
+tests/services/api/test_admin_sections.py	OspreyFlow_Core/apps/workspace/src/,OspreyFlow_Core/services/api/	walks Glass sources for each admin section's routes
+tests/services/api/test_analyst_link_types.py	OspreyFlow_Core/services/	scans services for promotion writers missing the check
+tests/services/api/test_audit_kinds.py	OspreyFlow_Core/services/,OspreyFlow_Core/scripts/	scans services and scripts for audit actions written
+tests/services/api/test_audit_section_routes.py	OspreyFlow_Core/services/,OspreyFlow_Core/scripts/	scans services and scripts for recorded audit actions
+tests/services/api/test_case_brief_status.py	OspreyFlow_Core/services/,OspreyFlow_Core/scripts/,OspreyFlow_Core/packages/	scans Python for modules naming the case brief
+tests/services/api/test_connection_binding.py	OspreyFlow_Core/services/	scans services for connector read callers
+tests/services/api/test_deployment_ceiling_staged.py	-	walks only its own temporary folder
+tests/services/api/test_deployment_ceiling_verify.py	-	walks only its temporary object store
+tests/services/api/test_deployment_ceiling.py	-	walks only its own temporary folder
+tests/services/api/test_grading_setting.py	OspreyFlow_Core/packages/,OspreyFlow_Core/services/,OspreyFlow_Core/scripts/,OspreyFlow_Core/cli/,OspreyFlow_Core/harness/,OspreyFlow_Core/apps/workspace/src/	scans product sources for grading scheme names
+tests/services/api/test_ingest_sources.py	-	walks only its own temporary folder
+tests/services/api/test_list_rows_parquet_live.py	-	reads named golden files only
+tests/services/api/test_lite_job_loop.py	OspreyFlow_Core/services/	scans services for submitted job types
+tests/services/api/test_load_published_recipe_sites.py	OspreyFlow_Core/services/api/	scans services/api for recipe load sites
+tests/services/api/test_model_engine_kinds.py	-	imported render helpers read named files only
+tests/services/api/test_place_routes.py	OspreyFlow_Core/apps/workspace/src/,OspreyFlow_Core/services/api/	walks Glass sources for routes called from the wrong place
+tests/services/api/test_recipe_repository.py	-	walks only its own temporary folder
+tests/services/api/test_revert_working_sets.py	OspreyFlow_Core/services/	scans services for CachedQuery prefixes
+tests/services/api/test_studio_expert_routes.py	-	walks only its temporary object store; fixtures by name
+tests/services/api/test_studio_publish_commit_file.py	-	walks only its own temporary folder
+tests/services/api/test_studio_release_routes.py	-	walks only its temporary object store
+tests/services/api/test_studio_staging_routes.py	-	walks only its own temporary folder
+tests/services/api/test_subscribed_lookup_call_sites.py	OspreyFlow_Core/services/,OspreyFlow_Core/cli/,OspreyFlow_Core/scripts/,OspreyFlow_Core/packages/	scans Python for lookup callers and stand-in list uses
+tests/services/api/test_trend_domains.py	OspreyFlow_Core/services/api/	scans services/api for callers of the domain check
+tests/services/laurium/test_licence_gate.py	-	Named Dockerfile and gate module only
+tests/services/report_sync/test_report_sync_valkey_settings.py	OspreyFlow_Core/services/,OspreyFlow_Core/harness/,OspreyFlow_Core/scripts/,OspreyFlow_Core/packages/,OspreyFlow_Core/cli/	scans Python for hand-built Valkey clients
+tests/services/search_index/test_conduit_feed.py	-	Named files and fixtures rendered only
+tests/services/search_index/test_index_feed_reach.py	OspreyFlow_Core/services/,OspreyFlow_Core/packages/,OspreyFlow_Core/scripts/,OspreyFlow_Core/cli/	scans Python for uses of the index feed
+tests/test_admin_guide_model_timeouts.py	-	reads named guides and renders named templates
+tests/test_case_collision_check.py	OspreyFlow_Core/,OspreyFlow_Build/,.github/,.claude/	git ls-files over the whole repository
+tests/test_colour_drift_check.py	OspreyFlow_Core/apps/workspace/src/	main() rglobs the Glass source; DESIGN.md and allowlist named
+tests/test_conduit_image_java_licence.py	-	Named Dockerfile only
+tests/test_connectors_are_carried_into_the_image.py	OspreyFlow_Core/packages/,OspreyFlow_Core/services/,OspreyFlow_Core/scripts/,OspreyFlow_Core/connectors/	scans image code for git execs and tests paths; lists connectors
+tests/test_copy_says_no_client.py	OspreyFlow_Core/services/api/,OspreyFlow_Core/services/ingest/,OspreyFlow_Core/packages/adapters/,OspreyFlow_Core/packages/schemas/,OspreyFlow_Core/packages/ontology/weights/	rglobs .py in scanned product folders; globs ontology weights
+tests/test_copy_says_pipeline.py	OspreyFlow_Core/services/api/,OspreyFlow_Core/services/ingest/,OspreyFlow_Core/packages/adapters/,OspreyFlow_Core/packages/schemas/	scans messages for the word recipe
+tests/test_core_stands_alone.py	OspreyFlow_Core/	git ls-files over OspreyFlow_Core for references to Build
+tests/test_data_folder.py	OspreyFlow_Data/	git ls-files over the data folder
+tests/test_demo_osprey_config_is_tier_1_only.py	OspreyFlow_Core/,OspreyFlow_Build/	git ls-files over the repository for maps.yaml files
+tests/test_doc_citations_check.py	OspreyFlow_Core/,OspreyFlow_Build/	find_broken() walks spec/process/tools/apps/services/etc.; cites anywhere
+tests/test_dockerignore.py	OspreyFlow_Core/,OspreyFlow_Build/,OspreyFlow_Data/,.claude/,.github/,CLAUDE.md	globs **/marker over the whole repository root
+tests/test_docs_pdf.py	OspreyFlow_Core/docs/	check() reads the real docs folder and rglobs docs/images
+tests/test_friction_assemble.py	-	Named 07_BUILD_PLAN.md; fragments globbed in a temporary folder
+tests/test_guide_6a_upgrade.py	-	Named fixtures rendered only
+tests/test_guide_navigation_words.py	OspreyFlow_Core/apps/workspace/src/,OspreyFlow_Build/marketing_site/sites/org/,OspreyFlow_Build/marketing_site/sites/net/	scans Glass sources and site pages for navigation words
+tests/test_guide_v052_admin.py	-	Named fixtures rendered; ast.walk over parsed code
+tests/test_guides_cloud_platform_search.py	-	Named fixtures rendered only
+tests/test_guides_cloud_platform.py	OspreyFlow_Build/tests/fixtures/cloud_platform/	Globs cloud-platform fixtures (*.yaml) and renders each
+tests/test_guides_drawn_merge.py	OspreyFlow_Core/services/,OspreyFlow_Core/scripts/	scans services and scripts Python for drawn merge uses
+tests/test_guides_no_client_words.py	-	reads named guides and source files only
+tests/test_guides_ports_and_search.py	OspreyFlow_Core/packages/ports/,OspreyFlow_Core/services/,OspreyFlow_Core/packages/adapters/,OspreyFlow_Build/marketing_site/sites/org/,OspreyFlow_Build/marketing_site/sites/net/	scans ports, full-text queries and site pages
+tests/test_guides_step5_freeze.py	OspreyFlow_Core/services/,OspreyFlow_Core/packages/	scans services and packages for SuppressionMarkStore users
+tests/test_guides_v051_gaps.py	OspreyFlow_Core/apps/workspace/src/	scans Glass .tsx files for full footer claimers
+tests/test_image_imports_are_carried.py	OspreyFlow_Core/services/api/,OspreyFlow_Core/services/ingest/,OspreyFlow_Core/services/report_sync/,OspreyFlow_Core/harness/,OspreyFlow_Core/packages/	scans image trees' imports; lists packages
+tests/test_lane_ports.py	OspreyFlow_Core/apps/,OspreyFlow_Build/process/lanes/	scans apps TypeScript for lane ports; lists lanes
+tests/test_lanes_launch.py	-	walks only its own temporary folder
+tests/test_no_branches_check.py	OspreyFlow_Core/apps/workspace/src/,OspreyFlow_Core/services/api/,OspreyFlow_Core/packages/schemas/	tree_files() rglobs the three scanned Core folders
+tests/test_no_test_module_shadows_the_product.py	OspreyFlow_Core/,OspreyFlow_Build/tests/	lists product top-level names and walks test folders
+tests/test_osprey_bundle.py	-	walks only its own temporary folder
+tests/test_people_section_words.py	OspreyFlow_Core/services/,OspreyFlow_Core/packages/principal_auth/,OspreyFlow_Core/harness/,OspreyFlow_Core/cli/,OspreyFlow_Core/packages/schemas/,OspreyFlow_Core/apps/workspace/src/,OspreyFlow_Core/docs/	scans product text for the people section words
+tests/test_product_tree_link_check.py	OspreyFlow_Build/spec/	find_violations scans every spec/**/*.md (spec_doc_paths)
+tests/test_provenance_annotation_check.py	OspreyFlow_Build/spec/	find_violations scans every spec/**/*.md (spec_doc_paths)
+tests/test_publish_seed.py	-	git ls-tree runs on a temporary fixture repository only
+tests/test_publish_user_repo.py	-	git archive runs on a temporary fixture repository only
+tests/test_r1_entra_standin.py	-	reads named gate scripts; no walk of the real tree
+tests/test_r1_kind_standins.py	-	Named gate files and platform fixture; render to a temporary folder
+tests/test_real_data_exceptions.py	-	reads named files only
+tests/test_refresh_before_the_gateway.py	-	walks only its own temporary folder
+tests/test_refresh_carries.py	-	walks only its temporary deployment folder
+tests/test_refresh_search_rebuild.py	-	walks only its temporary deployment folder
+tests/test_refresh.py	-	walks only its own temporary folder
+tests/test_seed_pid.py	OspreyFlow_Core/packages/demo_fixtures/	globs demo fixtures for PID recipe files
+tests/test_seed_recipe_methods_confined.py	OspreyFlow_Core/	scans every Core folder holding Python for confined method callers
+tests/test_sites_design.py	OspreyFlow_Build/marketing_site/sites/	globs and copies the real site folders
+tests/test_sites.py	OspreyFlow_Build/marketing_site/	walks marketing site pages and assets against build.py output
+tests/test_spec_doc_paths.py	OspreyFlow_Build/spec/	walks spec for Markdown documents
+tests/test_stack_lease_docker_reap.py	-	reads the named lease script only
+tests/test_stack_lease.py	-	walks only its own temporary folder
+tests/test_tier2_swap_demo_config.py	-	Named map config fixture only
+tests/test_ui_words_check.py	OspreyFlow_Core/apps/workspace/src/	find_banned() rglobs the real Glass source
+tests/test_unfiltered_node_lookup_confined.py	OspreyFlow_Core/services/,OspreyFlow_Core/scripts/,OspreyFlow_Core/packages/	scans Python for unfiltered node lookup callers
+tests/test_upgrade_stamp.py	OspreyFlow_Core/	git ls-files over Core for Dockerfiles
+tests/test_user_guide_ask_items.py	-	reads named guides only
+tests/test_user_guide_navigation.py	-	reads named guides only
+tests/test_user_guide_saved_views.py	-	reads named guides only
+tests/test_worker_isolation.py	OspreyFlow_Build/tests/	live_select Repo().live_set() rglobs test_*.py from the Makefile's list
+tests/test_write_store_marks.py	OspreyFlow_Build/tests/	live_select Repo().live_set() rglobs live test files

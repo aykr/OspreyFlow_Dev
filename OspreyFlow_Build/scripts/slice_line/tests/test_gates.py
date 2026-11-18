@@ -43,8 +43,9 @@ def world(tmp_path):
     data = home / ".ospreyflow" / "slice-line"
     (data / "bin").mkdir(parents=True)
     (data / "records").mkdir()
-    for f in ("guard.py", "stop_check.py", "usage_hook.py"):
-        shutil.copy(SRC / f, data / "bin" / f)
+    for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv"):
+        if (SRC / f).exists():
+            shutil.copy(SRC / f, data / "bin" / f)
     (data / "emails.sha256").write_text(hashlib.sha256(OWNER.encode()).hexdigest() + "\n")
     fake_claude = tmp_path / "claude"
     fake_claude.write_text('#!/bin/sh\necho \'{"loggedIn": true}\'\n')
@@ -642,7 +643,8 @@ def test_a_seat_refuses_to_start_without_the_guard(world):
     out = sh(run, w["repo"], w["env"], check=False)  # nothing installed: no manifest
     assert out.returncode == 3 and "the guard is not installed" in out.stderr
     data = w["data"]
-    m = {f: hashlib.sha256((data / "bin" / f).read_bytes()).hexdigest() for f in ("guard.py", "stop_check.py", "usage_hook.py")}
+    m = {f: hashlib.sha256((data / "bin" / f).read_bytes()).hexdigest()
+         for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")}
     (data / "manifest.json").write_text(json.dumps(m))
     (data / "bin/guard.py").write_text("import sys; sys.exit(0)\n")  # a guard that refuses nothing
     out = sh(run, w["repo"], w["env"], check=False)

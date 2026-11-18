@@ -76,6 +76,20 @@ without a tool call; the line's own cap is 6 red stops.
    shows "refused by the gate: N tests", and `resume.py <ID> send-back` returns it to the builder with those findings.
 5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
 
+## The scans a slice's checks include
+
+A slice's checks name its own tests; a pure test that walks the repository (as `test_admin_sections.py` walks the
+workspace's sources, which AD2's checks did not name, so only the full gate caught it, seven minutes into the merge)
+belongs to no slice. `OspreyFlow_Build/scripts/slice_line/scan_map.tsv`, the line's (no conductor or slice can change
+it), maps each pure test that walks a folder to the path prefixes it walks, or to `-` with why it is not selected (it
+walks only its own temporary folder, or it runs Docker and is not pure). The Stop hook runs, beside the frozen checks
+and acceptance, every mapped test whose prefixes a path the slice's branch changes (against its base) falls under and
+which the slice's own commands do not already run, on the worktree's own environment with closed ports; red is red,
+and the test record names the scans it ran, so the verifier sees them. A scan map that cannot be read is red.
+`scan_select.unmapped()` proves the map complete: a pure test (not in `make test`'s `--ignore` list) whose source, or
+a `tools/` module or test helper it imports or runs, walks a folder, with no row, fails the line's suite; so does a
+row naming a test or a prefix that is not there. `install.sh` installs the map and `scan_select.py` beside the hooks.
+
 ## Resuming a slice
 
 `resume.py <ID> <action>` is the only way back to `building` for a stopped or refused slice. The conductor runs it,

@@ -95,6 +95,25 @@ def main() -> int:
         if code != 0:
             problems.append("RED: " + name + " (exit " + str(code) + "): " + cmd + "\n" + failures_only(out))
 
+    # the pure tests that scan what the slice touched (scan_map.tsv, the line's): run as part of the checks
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import scan_select
+        scans = scan_select.not_named(scan_select.select(scan_select.touched(wt, frozen.get("base") or "main"),
+                                                         scan_select.entries()),
+                                      frozen.get("checks") or "", frozen.get("acceptance") or "")
+    except Exception as e:  # fail closed: a slice's checks are never run without the scans the line requires
+        scans = None
+        problems.append("RED: the line's scan map could not be read or applied (" + type(e).__name__ + ": " + str(e) +
+                        "); the owner reinstalls the line (install.sh). Stop and say so in one line.")
+    if scans:
+        cmd = scan_select.command(wt, scans)
+        code, out = run(cmd, wt)
+        results.append({"name": "scans", "command": cmd, "exit": code, "tests": scans})
+        if code != 0:
+            problems.append("RED: scans (exit " + str(code) + "): the pure tests that walk the files this slice "
+                            "touches (scan_map.tsv): " + ", ".join(scans) + "\n" + failures_only(out))
+
     sha = git(["rev-parse", "HEAD"], wt)
     if not problems:
         record = {"slice": slice_id, "commit": sha, "green": True, "run": "stop-" + uuid.uuid4().hex[:12],

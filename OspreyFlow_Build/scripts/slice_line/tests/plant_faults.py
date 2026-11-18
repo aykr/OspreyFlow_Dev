@@ -96,6 +96,12 @@ M = [
  ("merge_slice.py", '    return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []', '    return []', "records_only_conflict"),
  ("resume.py", '            if st.get("refused_for") == "records":', '            if False:', "records_only_conflict"),
  ("run_seat.py", '        if v.get("verdict") != "pass":\n            return', '        if False:\n            return', "builders_prompt_carries"),
+ ("scan_select.py", '    return sorted({t for t, prefixes, _ in table if any(p.startswith(prefixes) for p in touched)} if touched else set())', '    return []', "stop_hook_runs_the_scan_mapped"),
+ ("stop_check.py", '    if scans:\n', '    if False:\n', "stop_hook_runs_the_scan_mapped"),
+ ("stop_check.py", '        problems.append("RED: the line\'s scan map could not be read', '        (lambda *a: None)("RED: the line\'s scan map could not be read', "scan_map_cannot_be_read"),
+ ("scan_select.py", '    hit = bool(WALK.search(text))\n', '    hit = False\n', "pure_test_that_walks"),
+ ("scan_select.py", '            if f.is_file() and walks(build, f, seen, depth + 1):', '            if False:', "pure_test_that_walks"),
+ ("scan_select.py", '            if not (root / p).exists():', '            if False:', "finds_a_stale_row"),
 ]
 bad = 0
 for f, old, new, test in M:

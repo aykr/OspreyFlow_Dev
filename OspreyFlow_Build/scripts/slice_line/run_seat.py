@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 
-HOOKS = ("guard.py", "stop_check.py", "usage_hook.py")
+HOOKS = ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")
 TOOLS = {
     "builder": "Read,Grep,Glob,Edit,Write,Bash",
     "verifier": "Read,Grep,Glob,Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status *)",
