@@ -136,6 +136,12 @@ M = [
  ("guard.py", '    r"|\\$\\{?\\w+\\}?\\s*[\'\\"]?aude\\b"\n', '', "seat_launch_every_variant"),
  ("guard.py", '    r"|[\'\\"]\\s*\\+?\\s*[\'\\"]aude\\b"\n', '', "seat_launch_every_variant"),
  ("guard.py", '    r"|\\bc(?:\'\'|\\"\\")+l|\\bcl(?:\'\'|\\"\\")+a"\n', '', "seat_launch_every_variant"),
+ ("seat_shim.sh", 'case "$token" in\n', 'exec "$real" "$@"\ncase "$token" in\n', "seat_shim_refuses"),
+ ("seat_shim.sh", '    if [ -f "$data/launch/$token" ] && rm "$data/launch/$token" 2>/dev/null; then', '    if true; then', "token_that_is_not_one"),
+ ("seat_shim.sh", '      unset OSPREY_LAUNCH_TOKEN\n', '', "lets_run_seats_own_launch"),
+ ("seat_shim.sh", '  ""|*/*|.*) ;;\n', '  "") ;;\n', "token_that_is_not_one"),
+ ("run_seat.py", '    env["PATH"] = os.pathsep.join([str(shim), *[p for p in env.get("PATH", "").split(os.pathsep) if p and p != str(shim)]])', '    pass', "first_on_the_seats_path"),
+ ("run_seat.py", '        if not p.is_file() or not manifest.get("shim/claude") or sha(p) != manifest.get("shim/claude"):', '        if False:', "shim_is_not_installed"),
 ]
 bad = 0
 for f, old, new, test in M:

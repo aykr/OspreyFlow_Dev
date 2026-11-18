@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -26,6 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 
 HOOKS = ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")
+#: The seat shim (seat_shim.sh, installed under bin/shim/ by install.sh): every seat's `claude`, first on its PATH.
+SHIM_NAMES = ("claude", "claude-sol", "claude-ayan")
 TOOLS = {
     "builder": "Read,Grep,Glob,Edit,Write,Bash",
     "verifier": "Read,Grep,Glob,Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status *)",
@@ -76,6 +79,12 @@ def preflight(account: str, cwd: Path) -> dict:
               c.REPO / ".claude/settings.local.json", cwd / ".claude/settings.json", cwd / ".claude/settings.local.json"):
         if f.is_file() and "disableAllHooks" in f.read_text():
             raise NotLoaded(f"REFUSED TO START: {f} turns hooks off (disableAllHooks).")
+    shim = c.BIN / "bin/shim"
+    for name in SHIM_NAMES:
+        p = shim / name
+        if not p.is_file() or not manifest.get("shim/claude") or sha(p) != manifest.get("shim/claude"):
+            raise NotLoaded(f"REFUSED TO START: the seat shim ({p}) is missing or differs from the install manifest: "
+                            "run install.sh.")
     if c.account_stop(account):
         raise NotLoaded(f"STOPPED: account {account} is stopped ({c.account_stop(account)['error']}); the owner decides.")
     if not c.signed_in(account):
@@ -107,15 +116,29 @@ def append_usage(slice_id: str, build: str, seat: str, account: str, model: str,
         fh.write("\t".join(str(x) for x in row) + "\n")
 
 
+def seat_command(seat: str, account: str, model: str, effort: str, env_extra: dict, token: str,
+                 session: str = "") -> tuple[list[str], dict]:
+    """The seat's command and environment: started through the seat shim with a one-time launch token (F1, layer 3),
+    the shim's folder first on the seat's PATH, so every `claude` the seat itself runs meets the shim's refusal."""
+    shim = c.BIN / "bin/shim"
+    launch_token = uuid.uuid4().hex
+    (c.DATA / "launch").mkdir(parents=True, exist_ok=True)
+    (c.DATA / "launch" / launch_token).write_text(f"{seat} {env_extra.get('OSPREY_SLICE', '')} {c.now()}\n")
+    env = c.claude_env(account)
+    env.update({"OSPREY_SEAT": seat, "OSPREY_SEAT_TOKEN": token, "OSPREY_ACCOUNT": account,
+                "OSPREY_SLICE_HOME": str(c.DATA), "OSPREY_CLAUDE_BIN": c.CLAUDE, "OSPREY_LAUNCH_TOKEN": launch_token,
+                **env_extra})
+    env["PATH"] = os.pathsep.join([str(shim), *[p for p in env.get("PATH", "").split(os.pathsep) if p and p != str(shim)]])
+    args = [str(shim / "claude"), "--agent", f"slice-{seat}", "--settings", str(c.BIN / "settings.json"),
+            "--session-id", session or str(uuid.uuid4()), "--model", model, "--effort", effort]
+    return args, env
+
+
 def launch(seat: str, account: str, cwd: Path, prompt: str, model: str, effort: str, env_extra: dict,
            log: Path, extra: list[str] | None = None, interactive: bool = False) -> dict:
     manifest = preflight(account, cwd)
     token, session = uuid.uuid4().hex, str(uuid.uuid4())
-    env = c.claude_env(account)
-    env.update({"OSPREY_SEAT": seat, "OSPREY_SEAT_TOKEN": token, "OSPREY_ACCOUNT": account,
-                "OSPREY_SLICE_HOME": str(c.DATA), **env_extra})
-    args = [c.CLAUDE, "--agent", f"slice-{seat}", "--settings", str(c.BIN / "settings.json"),
-            "--session-id", session, "--model", model, "--effort", effort]
+    args, env = seat_command(seat, account, model, effort, env_extra, token, session)
     if not interactive:
         args += ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                  "--permission-mode", "dontAsk", "--allowedTools", TOOLS[seat]]

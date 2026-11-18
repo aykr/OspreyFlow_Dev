@@ -32,8 +32,15 @@ guard for every session in the repository (beside the graphify hooks); each seat
 `--settings ~/.ospreyflow/slice-line/settings.json`, so its hooks hold even if a worktree's settings were changed.
 A missing guard fails closed: the hook exits 2 and every tool call is refused.
 
-**A seat refuses to start unless the guard is loaded** (`run_seat.py`): the installed files must match the
-manifest; the fixed settings must register them; no settings file the session reads may set `disableAllHooks`;
+**The seat shim** (`seat_shim.sh`, F1): `install.sh` installs it as `bin/shim/claude`, `claude-sol` and `claude-ayan`
+(read-only, in the manifest). `run_seat.py` starts every seat through it, with the shim's folder first on the seat's
+PATH and a one-time launch token it has just written to the data folder; the shim runs the real `claude` only for
+that token, removing it, so the session never holds one. Any `claude` a seat runs itself meets the shim's refusal,
+whatever the command's text. An absolute path to the real binary, or `npx`/`node` running the package, does not pass
+through the shim: the guard's text match (`SEAT_LAUNCH`) is what refuses those.
+
+**A seat refuses to start unless the guard is loaded** (`run_seat.py`): the installed files, the seat shim included, must match
+the manifest; the fixed settings must register them; no settings file the session reads may set `disableAllHooks`;
 the account must be signed in and not stopped; and the session's own SessionStart hook must answer with the
 launch's one-time token before the prompt is sent (the prompt goes over stream-json input only after that).
 

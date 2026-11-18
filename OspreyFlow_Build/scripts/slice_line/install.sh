@@ -19,12 +19,21 @@ for f in guard.py stop_check.py usage_hook.py scan_select.py scan_map.tsv; do
   cp "$SRC/$f" "$BIN/bin/$f"
   chmod 0555 "$BIN/bin/$f"
 done
+# The seat shim (F1): every seat's `claude`, `claude-sol` and `claude-ayan`, first on its PATH (run_seat.py).
+mkdir -p "$BIN/bin/shim"
+chmod u+w "$BIN/bin/shim" "$BIN/bin/shim/"* 2>/dev/null || true
+for n in claude claude-sol claude-ayan; do
+  cp "$SRC/seat_shim.sh" "$BIN/bin/shim/$n"
+  chmod 0555 "$BIN/bin/shim/$n"
+done
+chmod 0555 "$BIN/bin/shim"
+mkdir -p "$BIN/launch"
 /usr/bin/python3 - "$BIN" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
 b = Path(sys.argv[1])
 m = {f: hashlib.sha256((b / "bin" / f).read_bytes()).hexdigest()
-     for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")}
+     for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv", "shim/claude")}
 (b / "manifest.json").write_text(json.dumps(m, indent=1))
 py = "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/"
 hook = lambda cmd, **kw: {"hooks": [{"type": "command", "command": py + cmd, **kw}]}
