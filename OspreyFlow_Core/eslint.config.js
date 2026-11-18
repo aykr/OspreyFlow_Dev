@@ -11,6 +11,7 @@ export default [
       "packages/schemas/generated/**",
       ".venv/**",
       "apps/workspace/dist/**",
+      "apps/workspace/map-build/dist/**",
       "apps/harness/dist/**",
       "deploy/generated/**", // a deployment's rendered files, copies of what is linted at its source
       "process/prototypes/**", // the Build folder's, when linted from there (ADR-054)
