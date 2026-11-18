@@ -14,12 +14,12 @@ import type {
   PersonCaseLevel,
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
-import { fetchResolvedPrincipal } from "../../auth/userManager";
 import { currentBrand } from "../../brand/brand";
 import { rightName } from "../../help/roles";
 import { PLACE_NAME, placesFor } from "../../shell/places";
 import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
+import { givableCodes, givableLevels, useInviter, type Inviter } from "../inviter";
 import {
   disablePlan,
   enablePerson,
@@ -159,41 +159,6 @@ function useScheme(api: AdminApi): Scheme {
       .catch(() => setScheme({ levels: [], codes: [] }));
   }, [api.apiBaseUrl, api.bearerToken]);
   return scheme;
-}
-
-/** What the person inviting holds, for what the invitation may offer: their clearance and the handling codes they can
- * receive (`GET /v1/me`). `null` while unread or when it does not answer: the form then offers the whole vocabulary and
- * the Conduit refuses what it must (`_within_your_reach`, 403) — the Glass's filter is a convenience, never the control. */
-export interface Inviter {
-  clearance: string;
-  codes: string[];
-}
-
-function useInviter(api: AdminApi): Inviter | null {
-  const [inviter, setInviter] = useState<Inviter | null>(null);
-  useEffect(() => {
-    let current = true;
-    void fetchResolvedPrincipal(api.apiBaseUrl, api.bearerToken).then((me) => {
-      if (current) setInviter(me ? { clearance: me.clearance, codes: me.receivable_handling_codes } : null);
-    });
-    return () => {
-      current = false;
-    };
-  }, [api.apiBaseUrl, api.bearerToken]);
-  return inviter;
-}
-
-/** The classifications an inviter may give, lowest first as the scheme orders them: their own and those below it, as the
- * Conduit's `_within_your_reach` allows. A clearance outside the scheme can give none. Unread, every one is offered. */
-export function givableLevels(levels: string[], inviter: Inviter | null): string[] {
-  if (!inviter) return levels;
-  const own = levels.indexOf(inviter.clearance);
-  return own < 0 ? [] : levels.slice(0, own + 1);
-}
-
-/** The handling codes an inviter may give: those they can receive themselves. Unread, every one is offered. */
-export function givableCodes(codes: string[], inviter: Inviter | null): string[] {
-  return inviter ? codes.filter((c) => inviter.codes.includes(c)) : codes;
 }
 
 /** How the person signs in next (ADR-114 Amendment 5): the identity provider's emailed link, or a
@@ -1276,7 +1241,7 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   const [entra, setEntra] = useState(false);
   const [administratorSets, setAdministratorSets] = useState<AccessField[]>([]);
   const scheme = useScheme(api);
-  const inviter = useInviter(api);
+  const inviter = useInviter();
   // The roles and the case levels are the row's context; either failing leaves the rest working.
   const readContext = () => {
     listRoles(api)
