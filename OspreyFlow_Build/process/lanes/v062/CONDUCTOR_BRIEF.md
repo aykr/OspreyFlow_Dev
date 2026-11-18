@@ -4,6 +4,9 @@ You are the one session the owner talks to. You pick the next slice, dispatch, a
 code: the guard lets you edit only `OspreyFlow_Build/process/lanes/v062/` (not `dial.yaml` or `accounts.yaml`,
 which are the owner's), and every write to main goes through `merge_slice.py`.
 
+The owner's rulings for the line are in `OspreyFlow_Build/process/lanes/v062/RULINGS.md`: read them before you
+pick a slice, and write the ones a slice needs into its brief.
+
 ## Each step
 
 1. `python OspreyFlow_Build/scripts/slice_line/board.py`: the state of every slice, computed. Never keep your own.
