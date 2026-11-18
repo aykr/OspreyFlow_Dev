@@ -94,6 +94,22 @@ tell, 37 not code.
   N11, C013, C082, H01).
 - **Not yet done:** placing the 154 open rows by part and theme (BL2's last clause).
 
+### The security slices after SE1 (the owner's rulings, 18 Nov); on the dashboard's plan by the owner's hand
+
+- **SE2 (C187), after SE1.** The governance edit
+  (`PATCH /v1/datasets/{dataset_id}/sources/{source_id}/governance`, `app.py` `edit_dataset_source_governance`;
+  `sources.py` `edit_governance`/`_governed`) gets the default-marking route's checks (`default_marking_problems`,
+  `sources.py:99-150`): the editor's clearance, the deployment's ceiling, and never below the source's current marking.
+  Failing access-control test first. The spec is silent on this route (`spec/03` line 684 gives only the gate); the
+  wording and status code are a spec edit in the same slice (rule 11), following the default-marking route's.
+- **SE3 (C186), after SE1; merged before the Studio's Model step (IS2) starts.** Only the draft's creator writes to a
+  model draft: `TargetModelStore.save_draft`/`open_draft` (`target_models.py:169-176`, in-memory `:245-255`, Postgres
+  `:418-434`) and their writers (`studio_release.py:525`, `target_models.py:286-287`, the PUT draft route
+  `app.py:11753-11765`) check `draft.created_by == principal.id` (as `studio_release.py:241` does) and confirm the
+  version as `replace_own_draft` does (`studio_release.py:228-237`). Keep the owner and version a store argument if that
+  avoids changing `TargetModelDraftInput` (`packages/schemas/dataset_model.py:83`, which would regenerate the TypeScript
+  types). Failing test first, including the second writer and the stale version.
+
 ### New row (18 Nov): GitHub's two warnings on the CI workflow
 
 Both show as annotations on the green run of 18 Nov (run 44257704285) and both need a change to the CI workflow file under

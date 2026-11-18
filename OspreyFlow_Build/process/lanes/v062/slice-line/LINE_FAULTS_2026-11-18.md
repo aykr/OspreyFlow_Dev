@@ -6,6 +6,19 @@ planted inputs (nothing was run that starts a session or pushes). None has a bui
 script refuse to any slice. They reach the owner as a diff, as `make-ci-wiring.diff` did, or as a session the owner
 starts for them.
 
+## The owner's decisions on these, 18 November 2026
+
+- **They wait: build first.** They stay in this file. Not started, no slice.
+- **Until F2 is fixed:** the conductor checks GitHub by hand before every merge (`gh run list --branch main`, the
+  latest completed run) and does not merge on a red run, nor while the last completed run is unreadable. A run still in
+  progress is not a reason to refuse: `push_main.sh` already defers the push.
+- **F1, when fixed, takes all three protections:** the wider text match, the launcher check (the seat shim) and the guard
+  registered for every session on this Mac.
+- **A correction to this file's first draft.** ADR-142 Amendment 9 on main says 77 cases and 68 planted faults, as the
+  README does; the conductor read the older copy in `slice-line/diffs/adr-142-amendment-9.diff` (41 and 28). Its sentence
+  "while main is red, every merge is refused" **stays**; F2 is what makes it true. Until then it describes a gate that
+  is not built (rule 12: no test fails if it is false).
+
 ## F1. A seat can start a Claude session the guard does not see
 
 The rule (`guard.py` `SEAT_LAUNCH`, line 80) matches the word `claude`, `claude-sol` or `claude-ayan` only after
@@ -33,8 +46,8 @@ red-before, green-after, the local full gate). `push_main.sh` asks only `gh run 
 (lines 32-39) and defers; a run that has **completed red** changes nothing. So today, if main's run fails, the next merge
 is built, tested locally, merged and pushed on top of it, and the board, which does not read GitHub, shows nothing.
 
-ADR-142 Amendment 9's Cost paragraph says the opposite: "while main is red, every merge is refused". No test fails if
-that sentence is false (rule 12): the invariant is stated in prose and implemented nowhere. It has been true of main
+ADR-142 Amendment 9's Cost paragraph (on main) says the opposite: "while main is red, every merge is refused". No test
+fails if that sentence is false (rule 12): the invariant is stated in prose and implemented nowhere. It has been true of main
 twice already: runs 44031786619 and 44040359545 completed `failure` on 17 November.
 
 Wanted (the owner, 18 November): the line stops merging and tells him. Shape: before `merge`, `merge_slice.py` reads the
