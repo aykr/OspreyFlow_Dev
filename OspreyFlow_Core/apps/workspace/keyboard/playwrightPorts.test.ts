@@ -30,7 +30,7 @@ const CONFIGS = [
 ] as const;
 
 /** Today's ports: what every config used before T2, and still uses with no slot. */
-const TODAY = /\b(518[3-7]|519[1-4]|721[7-9]|7220)\b/;
+const TODAY = /\b(518[3-6]|5189|519[1-4]|721[7-9]|7220)\b/;
 
 type Server = { port?: number; url?: string; command?: string };
 type Loaded = { webServer?: Server | Server[]; use?: { baseURL?: string } };
@@ -82,6 +82,31 @@ describe("each lane's Playwright runs use ports of their own", () => {
       today.every((port) => TODAY.test(String(port))),
       `${today}`,
     ).toBe(true);
+  });
+
+  it("the production-bundle run's port is held by no other Playwright config in apps/", async () => {
+    // GG6 round 2: it first took 5187, which deck-capture/ (not in CONFIGS, by design) serves its dev
+    // server on; with a reused server the "production" run could have been the dev server.
+    const here = dirname(fileURLToPath(import.meta.url));
+    const mine = await load("../map-build/playwright.config.ts", "0");
+    const held = new Set<number>();
+    for (const config of CONFIGS) {
+      if (config.includes("map-build")) continue;
+      for (const port of await load(config, "0")) held.add(port);
+    }
+    // deck-capture/ is outside CONFIGS: read its literal ports from its source.
+    const deck = readFileSync(
+      join(here, "../deck-capture/playwright.config.ts"),
+      "utf8",
+    );
+    for (const match of deck.matchAll(/\b(5\d{3}|7\d{3})\b/g))
+      held.add(Number(match[1]));
+    expect(held.has(5187)).toBe(true); // the reader above finds deck-capture's port at all
+    expect(mine.length).toBeGreaterThan(0);
+    expect(
+      mine.filter((port) => held.has(port)),
+      `map-build ${mine}`,
+    ).toEqual([]);
   });
 
   it("a slot that is not a whole number is refused in words", async () => {
