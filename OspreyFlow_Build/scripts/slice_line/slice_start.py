@@ -4,8 +4,9 @@
     slice_start.py <slice>
 
 Refuses a slice whose build id is not in the owner's plan (it is reported, not added), one waiting on a slice
-not yet merged, one beyond the dial's builder count, and one whose track's account is signed out, stopped, or
-near its limit. Otherwise: the slice's worktree on its own branch from main, its acceptance and checks commands
+not yet merged, one beyond the dial's builder count, one whose track's account is signed out, stopped, or
+near its limit, and one whose frozen commands do not run (dry_run.py: on main, in a scratch worktree, the checks
+reach the last step of their chain green and the acceptance is red for a reason no malformed command gives). Otherwise: the slice's worktree on its own branch from main, its acceptance and checks commands
 frozen (a change needs the owner's word: refreeze.py), and its account, track, dial setting and rounds fixed
 for the whole slice (an account changes only between slices).
 """
@@ -17,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
+import dry_run  # noqa: E402
 
 
 def running_builders() -> dict:
@@ -58,6 +60,13 @@ def start(slice_id: str) -> dict:
             raise SystemExit(f"STOPPED: {near}: no new slice starts on it. The owner decides; work is not moved to another account.")
         if not c.signed_in(acct):
             raise SystemExit(f"STOPPED: account {acct} is signed out. The owner signs in to it; nothing is started.")
+
+    log = c.DATA / "dry-runs" / f"{slice_id}-start-{c.now().replace(':', '')}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    problems = dry_run.prove(row, log=log)
+    if problems:
+        raise SystemExit(f"NOT STARTED: {slice_id}'s frozen commands do not run as written, proved on main in a scratch "
+                         "worktree (nothing was created):\n- " + "\n- ".join(problems) + f"\nThe whole run: {log}")
 
     branch = row["branch"] or f"lane/slice-{slice_id}"
     wt = c.WT_ROOT / f"slice-{slice_id}"

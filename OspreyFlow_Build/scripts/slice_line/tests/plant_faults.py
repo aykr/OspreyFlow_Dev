@@ -102,6 +102,11 @@ M = [
  ("scan_select.py", '    hit = bool(WALK.search(text))\n', '    hit = False\n', "pure_test_that_walks"),
  ("scan_select.py", '            if f.is_file() and walks(build, f, seen, depth + 1):', '            if False:', "pure_test_that_walks"),
  ("scan_select.py", '            if not (root / p).exists():', '            if False:', "finds_a_stale_row"),
+ ("slice_start.py", '    if problems:\n        raise SystemExit(f"NOT STARTED', '    if False:\n        raise SystemExit(f"NOT STARTED', "slice_start_refuses"),
+ ("dry_run.py", '            if code == 0:\n                problems.append("the acceptance command passes on main', '            if False:\n                problems.append("the acceptance command passes on main', "acceptance_that_is_never_red"),
+ ("dry_run.py", '            elif malformed(out):\n', '            elif False:\n', "red_only_for_a_malformed"),
+ ("dry_run.py", '        out.append(cmd[last:p] + f\'&& {{ echo {n} >> "{marks}"; }} &&\')', '        out.append(cmd[last:p] + "&&")', "which_step_of_the_chain"),
+ ("dry_run.py", '                if body is not None:\n', '                if False:\n', "stands_in_the_slices_own"),
 ]
 bad = 0
 for f, old, new, test in M:
@@ -120,7 +125,8 @@ for f, old, new, test in M:
     target.write_text(t.replace(old, new, 1))
     p = subprocess.run([PY, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", "-c", str(d / "tests/pytest.ini"), str(d / "tests"), "-k", test],
                        capture_output=True, text=True, env={"PATH": "/usr/bin:/bin", "HOME": "/tmp", "PYTHONDONTWRITEBYTECODE": "1"})
-    red = p.returncode != 0 and "failed" in p.stdout and "no tests ran" not in p.stdout
+    summary = ([ln for ln in p.stdout.splitlines() if ln.strip()] or [""])[-1]  # pytest's own last line, not a quoted one
+    red = p.returncode != 0 and " failed" in f" {summary}" and "no tests ran" not in summary
     print(("RED  " if red else "STILL GREEN ") + f"{f:16} -> {test}")
     bad += 0 if red else 1
 print("planted faults not caught:", bad)

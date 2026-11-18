@@ -66,8 +66,12 @@ without a tool call; the line's own cap is 6 red stops.
 
 1. The conductor writes `slices/<ID>.md` from `SLICE_BRIEF.template.md` and its row in `slices.tsv`, and commits
    them with `merge_slice.py records`. The build id must be one of the plan's (`dashboard/index.html`).
-2. `slice_start.py <ID>`: worktree `~/dev/osprey-wt/slice-<ID>` on `lane/slice-<ID>`; the acceptance and checks
-   commands **frozen** (only the owner's `refreeze.py` changes them); account, track, dial setting, rounds fixed.
+2. `slice_start.py <ID>`: first a **dry run** of the slice's commands on main in a scratch worktree (`dry_run.py`):
+   the checks, with the slice's own new files stood in by placeholders, must exit 0 and reach the last step of their
+   `&&` chain (a red run names the step it did not reach); the acceptance must be red for a reason no
+   malformed-command signature matches. Otherwise nothing is created. Then worktree `~/dev/osprey-wt/slice-<ID>` on
+   `lane/slice-<ID>`; the acceptance and checks commands **frozen** (a change needs the owner's word: `resume.py`
+   refreeze, or the conductor's own `correct-command`); account, track, dial setting, rounds fixed.
 3. `run_seat.py builder <ID>` until green, then `run_seat.py verifier <ID>`. Findings go back to the builder until
    the rounds limit; then the slice stops and its note names the one decision the owner must make.
 4. `merge_slice.py merge <ID>`: main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
