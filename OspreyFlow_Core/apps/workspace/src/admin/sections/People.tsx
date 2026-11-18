@@ -3,7 +3,7 @@
 // the places they open, their case levels (R3), access and state; the cases with no Author and
 // *Name an Author* (R1); *Disable…* with a transfer for everything they own (A4); inviting a person,
 // and refused organisation sign-ins. Behind `manage_people` (`admin/sections.json`).
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import type {
   AdminPeopleRows,
@@ -14,6 +14,7 @@ import type {
   PersonCaseLevel,
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
+import { fetchResolvedPrincipal } from "../../auth/userManager";
 import { currentBrand } from "../../brand/brand";
 import { rightName } from "../../help/roles";
 import { PLACE_NAME, placesFor } from "../../shell/places";
@@ -158,6 +159,41 @@ function useScheme(api: AdminApi): Scheme {
       .catch(() => setScheme({ levels: [], codes: [] }));
   }, [api.apiBaseUrl, api.bearerToken]);
   return scheme;
+}
+
+/** What the person inviting holds, for what the invitation may offer: their clearance and the handling codes they can
+ * receive (`GET /v1/me`). `null` while unread or when it does not answer: the form then offers the whole vocabulary and
+ * the Conduit refuses what it must (`_within_your_reach`, 403) — the Glass's filter is a convenience, never the control. */
+export interface Inviter {
+  clearance: string;
+  codes: string[];
+}
+
+function useInviter(api: AdminApi): Inviter | null {
+  const [inviter, setInviter] = useState<Inviter | null>(null);
+  useEffect(() => {
+    let current = true;
+    void fetchResolvedPrincipal(api.apiBaseUrl, api.bearerToken).then((me) => {
+      if (current) setInviter(me ? { clearance: me.clearance, codes: me.receivable_handling_codes } : null);
+    });
+    return () => {
+      current = false;
+    };
+  }, [api.apiBaseUrl, api.bearerToken]);
+  return inviter;
+}
+
+/** The classifications an inviter may give, lowest first as the scheme orders them: their own and those below it, as the
+ * Conduit's `_within_your_reach` allows. A clearance outside the scheme can give none. Unread, every one is offered. */
+export function givableLevels(levels: string[], inviter: Inviter | null): string[] {
+  if (!inviter) return levels;
+  const own = levels.indexOf(inviter.clearance);
+  return own < 0 ? [] : levels.slice(0, own + 1);
+}
+
+/** The handling codes an inviter may give: those they can receive themselves. Unread, every one is offered. */
+export function givableCodes(codes: string[], inviter: Inviter | null): string[] {
+  return inviter ? codes.filter((c) => inviter.codes.includes(c)) : codes;
 }
 
 /** How the person signs in next (ADR-114 Amendment 5): the identity provider's emailed link, or a
@@ -993,11 +1029,13 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
 function InviteForm({
   api,
   scheme,
+  inviter,
   ctx,
   onInvited,
 }: {
   api: AdminApi;
   scheme: Scheme;
+  inviter: Inviter | null;
   ctx: Context;
   onInvited: (d: SignInDelivery) => void;
 }) {
@@ -1013,9 +1051,20 @@ function InviteForm({
   const inviteWithheld = (role: string) =>
     roles.has(role) ? [] : withheldRights([...roles, role], [], ctx).filter((r) => !withheldRights(roles, [], ctx).includes(r));
   const [problem, setProblem] = useState<string | null>(null);
+  // Only what the inviter can give is offered (AD2); the Conduit still refuses what is beyond them.
+  const levels = givableLevels(scheme.levels, inviter);
+  const offeredCodes = givableCodes(scheme.codes, inviter);
   useEffect(() => {
-    if (!clearance && scheme.levels[0]) setClearance(scheme.levels[0]);
-  }, [scheme.levels, clearance]);
+    // The first offered level, and again if the inviter's own arrive after a level they cannot give was chosen.
+    if (levels[0] && !levels.includes(clearance)) setClearance(levels[0]);
+    else if (!levels.length && clearance) setClearance("");
+  }, [levels.join("\u0000"), clearance]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // A refusal is an error summary by the button, and focus goes to it (GOV.UK forms; `02_GLASS_FRONTEND.md`).
+  const summary = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (problem) summary.current?.focus();
+  }, [problem]);
+  const govuk = currentBrand() === "govuk";
   const field = { display: "grid", gap: "var(--sp-4)" } as const;
   return (
     <form
@@ -1030,7 +1079,7 @@ function InviteForm({
           email: email.trim() || null,
           clearance,
           org_unit: unit.trim(),
-          receivable_handling_codes: [...codes],
+          receivable_handling_codes: [...codes].filter((c) => offeredCodes.includes(c)),
           roles: ROLES.map((r) => r.id).filter((id) => roles.has(id)),
         })
           .then((delivery) => {
@@ -1049,7 +1098,13 @@ function InviteForm({
         They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
         are shown a one-time code to give them in person. Nobody can be given more than you hold.
       </p>
-      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+      {inviter && (
+        <p className="label" style={{ margin: 0 }}>
+          {`You hold ${inviter.clearance}, so you can give that clearance or lower, and ${
+            offeredCodes.length ? `the handling codes ${offeredCodes.join(", ")}` : "no handling code"
+          }.`}
+        </p>
+      )}
       <label className="label" style={field}>
         Sign-in name
         <Input aria-label="Sign-in name" value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -1072,7 +1127,7 @@ function InviteForm({
         <label className="label" style={{ ...field, flex: 1 }}>
           Clearance
           <Select aria-label="Invite clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
-            {scheme.levels.map((l) => (
+            {levels.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </Select>
@@ -1084,7 +1139,7 @@ function InviteForm({
       </div>
       <div className="label" style={field}>
         Handling codes they may receive
-        <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Invite with handling code ${c}`} />
+        <CodeChoices codes={offeredCodes} chosen={codes} onChange={setCodes} label={(c) => `Invite with handling code ${c}`} />
       </div>
       <div className="label" style={field}>
         Roles
@@ -1119,6 +1174,22 @@ function InviteForm({
           ))}
         </span>
       </div>
+      {problem && (
+        // The refusal, said by the button it is about: a focusable error summary (the pattern of the board editor's).
+        <div
+          ref={summary}
+          role="alert"
+          tabIndex={-1}
+          aria-labelledby="people-invite-problem-title"
+          className={govuk ? "govuk-error-summary" : undefined}
+          style={govuk ? undefined : { border: "2px solid var(--error)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-4)" }}
+        >
+          <h3 id="people-invite-problem-title" className={govuk ? "govuk-error-summary__title" : "value"} style={govuk ? undefined : { margin: 0 }}>
+            There is a problem
+          </h3>
+          <p className={govuk ? "govuk-error-summary__body" : undefined} style={{ margin: 0 }}>{problem}</p>
+        </div>
+      )}
       <Button type="submit" variant="primary" disabled={!username.trim() || !clearance || !unit.trim()}>
         Invite
       </Button>
@@ -1205,6 +1276,7 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   const [entra, setEntra] = useState(false);
   const [administratorSets, setAdministratorSets] = useState<AccessField[]>([]);
   const scheme = useScheme(api);
+  const inviter = useInviter(api);
   // The roles and the case levels are the row's context; either failing leaves the rest working.
   const readContext = () => {
     listRoles(api)
@@ -1327,6 +1399,7 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
         <InviteForm
           api={api}
           scheme={scheme}
+          inviter={inviter}
           ctx={ctx}
           onInvited={(delivery) => {
             setDelivered(delivery);
