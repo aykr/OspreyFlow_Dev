@@ -52,7 +52,7 @@ no-branches-check:
 # a published website file. Hashed names, a count and a place printed, never the name; where the owner's list is absent it
 # says so and passes (the merge gate copies it in). The tool reads only the standard library, so it runs under the product's
 # environment where there is one and under the machine's python3 where there is not (a fresh worktree). The proof it can
-# fail is tests/test_client_name_check.py and tests/test_client_name_check_binary.py, which `make test` runs.
+# fail is tests/test_client_name_check.py and tests/test_client_name_check_compressed.py, which `make test` runs.
 client-name-check:
 	$(IN_CORE) $(TOOLS) $(if $(wildcard $(CORE)/.venv/bin/python),$(PY),python3) -m tools.client_name_check
 

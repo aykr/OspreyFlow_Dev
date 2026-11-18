@@ -1,7 +1,8 @@
 """`tools.client_name_check` and files that are not text (slice BL6, round 2). The abbreviation is three letters and
 compressed bytes spell it by chance: the real tree has three such hits (a video, a screenshot and a PDF) that no reword
 can remove. Those three files are exempt by exact path, and only while they are not text; no other file that is not
-UTF-8 is exempt, and no minimum length applies to it. Planted as the real caller produces them: tracked files in a
+UTF-8 is exempt. Such a file is read as `identifier_check._read` reads it, runs of four printable characters or more,
+so the abbreviation is seen only with a printable byte beside it. Planted as the real caller produces them: tracked files in a
 repository, the names hashed into a list of the test's own.
 """
 
@@ -45,3 +46,16 @@ def test_the_abbreviation_in_any_other_file_that_is_not_utf_8_is_flagged(tmp_pat
 def test_the_exemption_is_by_exact_path(tmp_path: Path) -> None:
     other = "OspreyFlow_Build/marketing_site/deploy/assets/other.jpg"
     assert len(_scan(tmp_path, {other: NOT_TEXT})) == 1
+
+
+def test_the_shortest_run_that_is_read_is_flagged(tmp_path: Path) -> None:
+    """Four printable characters: the abbreviation and one byte beside it."""
+    content = b"\xff\x00\x80" + SYNTHETIC_ABBREVIATION.encode() + b")\x90\x91"
+    assert len(_scan(tmp_path, {"OspreyFlow_Core/data/other.log": content})) == 1
+
+
+def test_an_isolated_three_character_run_is_not_read(tmp_path: Path) -> None:
+    """The limit of reading by printable runs, stated so the docstring's claim has a test: a name three characters long
+    between bytes that are not printable is not seen (the backlog row on reading inside binary files)."""
+    content = b"\xff\x00\x80" + SYNTHETIC_ABBREVIATION.encode() + b"\x90\x91"
+    assert _scan(tmp_path, {"OspreyFlow_Core/data/other.log": content}) == []

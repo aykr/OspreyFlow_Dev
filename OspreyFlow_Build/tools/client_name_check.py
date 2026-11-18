@@ -10,7 +10,9 @@ written down: the check holds them as the owner's hashes (`marketing_site/client
 on the machine that publishes) and prints a file, a line and a count, never a name, a hash or the line's text.
 
 **Scope.** Every git-tracked file (`git ls-files`); a file that is not UTF-8 is read for its runs of printable
-characters, as `identifier_check._read` does, with no minimum length (three named files are exempt, see `CHANCE_IN_COMPRESSED`). A name is found as the list's other readers find it (case, accents,
+characters, as `identifier_check._read` does: runs of four printable characters or more, as `strings` reads them, so a
+three-letter abbreviation is seen only with a printable byte beside it (three named files are exempt, see
+`CHANCE_IN_COMPRESSED`). A name is found as the list's other readers find it (case, accents,
 marks, spacing and an abbreviation's full stops folded), on a line or wrapped across several; a page's tags and
 attribute values are read as `identifier_check.readable` reads them. A hit on a wrapped name is reported on the line it
 starts.
@@ -65,8 +67,12 @@ LAURIUM = re.compile(r"laurium", re.IGNORECASE)
 PARALLEL_FROM = 200
 #: Three files whose compressed bytes spell the three-letter abbreviation by chance: each is a 4-character printable run
 #: inside a video, a screenshot and a PDF, and no reword can remove it. Exempt by exact path, and only while the file is
-#: not text, so a name written into one of them as text is still found; every other file that is not text is read in
-#: full, a short name included. Adding to this list is the owner's call.
+#: not text, so a name written into one of them as text is still found; every other file that is not text is read as
+#: `identifier_check._read` reads it (runs of four printable characters or more). The owner's ruling of 18 November 2026
+#: (`process/lanes/v062/RULINGS.md`, "three compressed files exempt from the client-name check"): these three paths and
+#: no others, and adding any other file needs the owner's word each time. The exemption is the whole client check for
+#: the path, the full name too; a name inside the compressed bytes is not read (backlog: "The client-name check cannot
+#: read inside a PDF, an image or a video").
 CHANCE_IN_COMPRESSED = frozenset(
     {
         "OspreyFlow_Build/marketing_site/OspreyFlow Intro Video.mp4",
