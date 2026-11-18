@@ -18,7 +18,8 @@ Stopped 16 Nov ~18:10Z (RULINGS "Part 3 moves"); lane `platform` closed at 63dde
 4. **Then the demo**, beside GOV.UK on the test server: a GOV.UK backup first, the one-line notice, and a check that
    GOV.UK's containers and tags are unchanged afterwards. The alternative (install from v0.6.1's published images, whose
    names are their own) avoids 1 but not 2.
-5. The certificates' automatic renewal (item 7's second half).
+5. ~~The certificates' automatic renewal (item 7's second half).~~ **Done 18 Nov, outside the line, on the owner's word:**
+   `backlog/DEMO_CERTIFICATE_2026-11-18.md`. First automatic renewal due 18 Jan 2027, not yet seen.
 
 ## The owner's list (15 Nov), carried
 
@@ -34,8 +35,8 @@ Stopped 16 Nov ~18:10Z (RULINGS "Part 3 moves"); lane `platform` closed at 63dde
 - A disabled engine's way out closed
 - Connection limits from settings
 - Fine-grained access control on search
-- The production-shape work
-- Item 23, the cloud-platform shape's memory sizes from measured use
+- ~~The production-shape work~~ (L12: dropped, D17, 18 Nov)
+- ~~Item 23, the cloud-platform shape's memory sizes from measured use~~ (L14: dropped, D18, 18 Nov)
 - Bedrock beyond London (AWS's EU profile, for current Claude models): to decide (ruling 17)
 - (The websites ospreyflow.org and .net: published 16 Nov, done.)
 
@@ -71,3 +72,36 @@ Stopped 16 Nov ~18:10Z (RULINGS "Part 3 moves"); lane `platform` closed at 63dde
 - (17 Nov, laptop) The first install's `compose up -d --wait` hit apply's 1,800 s limit (`harness/apply.py:378`) with
   no container created, though the three images still missing then pulled in 49 s by hand; the re-run went through.
   Pull before `up` as its own step with progress, so a stalled pull is named rather than timed out.
+
+## 18 November 2026: the true backlog (BL2), recorded on the owner's rulings
+
+Judged overnight against main at 528d475, read only (no test run):
+`Claude outputs/ospreyflow_evidence_2026-11-18/BACKLOG_VERDICTS_2026-11-18.tsv` and `BACKLOG_SUMMARY.md` (git-ignored; the
+closures are committed in `backlog/CLOSURES_2026-11-18.tsv`). 326 rows: 116 built, 138 open, 16 partly built, 19 cannot
+tell, 37 not code.
+
+- **Closed, 153** (116 built + 37 not code), accepted by the owner 17 Nov: `backlog/CLOSURES_2026-11-18.tsv`. C023 stays
+  closed if ADR-120 Amendment 18 was the owner's ruling (reopen if not; not yet confirmed). The closures include C194
+  (the demo certificate's renewal), closed by `backlog/DEMO_CERTIFICATE_2026-11-18.md`.
+- **Removed, 3** (D17, D18): L12 (the production-shape work), H06 (spec 08's seeded rows on the proof-of-concept shape),
+  L14 (the cloud-platform shape's memory sizes). They were among the 19 that need a run.
+- **Open, marked "needs a run or a definition", 16** (the 19 less the three removed): C022, C043, C068, C076, C080, C131,
+  C150, C151, C153, C161, C167, C172, C178, C190, C235, L08. L08 (scheduled loads while the owner is away) is folded into the
+  whole-dataset load, IS6 (D16).
+- **Moved to PL5, demo fixes after the build** (D11, D15): C193 (demo accounts and resets for public demos) and L04 (a
+  model allowance per visitor, VA1 on the dashboard). C023 and the PID pipelines are already closed or in PL5.
+  Not moved, pending the owner's word: the defects found during the demo rebuild that are product faults (N05, N06, N07,
+  N11, C013, C082, H01).
+- **Not yet done:** placing the 154 open rows by part and theme (BL2's last clause).
+
+### New row (18 Nov): GitHub's two warnings on the CI workflow
+
+Both show as annotations on the green run of 18 Nov (run 44257704285) and both need a change to the CI workflow file under
+`.github/workflows/`, which is the owner's: it comes to him as a diff, never through a slice.
+
+1. "Node.js 20 is deprecated": `actions/checkout@v4` and `astral-sh/setup-uv@v3` target Node 20 and are being forced onto
+   Node 24. The fix is newer major versions of those actions (check what each publishes first).
+2. "The `ubuntu-latest` label will migrate to Ubuntu 26 beginning 19 October 2026" (runner-images issue 14748): the
+   workflow's `ubuntu-latest` jobs move to a newer Ubuntu without a change of ours. Either pin `ubuntu-24.04` or run the
+   suite on `ubuntu-26.04` first; the choice is the owner's. `UV_PYTHON`, the Node major and the browsers the jobs
+   install are the likeliest to move with it.
