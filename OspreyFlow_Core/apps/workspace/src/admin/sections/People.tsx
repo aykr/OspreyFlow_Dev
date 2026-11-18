@@ -1019,11 +1019,9 @@ function InviteForm({
   // Only what the inviter can give is offered (AD2); the Conduit still refuses what is beyond them.
   const levels = givableLevels(scheme.levels, inviter);
   const offeredCodes = givableCodes(scheme.codes, inviter);
-  useEffect(() => {
-    // The first offered level, and again if the inviter's own arrive after a level they cannot give was chosen.
-    if (levels[0] && !levels.includes(clearance)) setClearance(levels[0]);
-    else if (!levels.length && clearance) setClearance("");
-  }, [levels.join("\u0000"), clearance]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // The level chosen if it is offered, else the first offered: worked out as the form is drawn, so what the select shows
+  // is what is sent, even in the moment after the inviter's own arrive (an effect would leave one render sending the other).
+  const level = levels.includes(clearance) ? clearance : (levels[0] ?? "");
   // A refusal is an error summary by the button, and focus goes to it (GOV.UK forms; `02_GLASS_FRONTEND.md`).
   const summary = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1042,9 +1040,11 @@ function InviteForm({
           first_name: first.trim(),
           last_name: last.trim(),
           email: email.trim() || null,
-          clearance,
+          clearance: level,
           org_unit: unit.trim(),
-          receivable_handling_codes: [...codes].filter((c) => offeredCodes.includes(c)),
+          // What was ticked is what is asked: a code no longer offered (the inviter's own arrived after it was ticked) is
+          // still sent, and the Conduit's refusal is said in the summary, never dropped here without a word.
+          receivable_handling_codes: [...codes],
           roles: ROLES.map((r) => r.id).filter((id) => roles.has(id)),
         })
           .then((delivery) => {
@@ -1091,7 +1091,7 @@ function InviteForm({
       <div style={{ display: "flex", gap: "var(--sp-8)" }}>
         <label className="label" style={{ ...field, flex: 1 }}>
           Clearance
-          <Select aria-label="Invite clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
+          <Select aria-label="Invite clearance" value={level} onChange={(e) => setClearance(e.target.value)}>
             {levels.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
@@ -1155,7 +1155,7 @@ function InviteForm({
           <p className={govuk ? "govuk-error-summary__body" : undefined} style={{ margin: 0 }}>{problem}</p>
         </div>
       )}
-      <Button type="submit" variant="primary" disabled={!username.trim() || !clearance || !unit.trim()}>
+      <Button type="submit" variant="primary" disabled={!username.trim() || !level || !unit.trim()}>
         Invite
       </Button>
     </form>

@@ -415,7 +415,10 @@ test("an invitation the Conduit refuses reaches its error summary by keyboard", 
   await expect(summary).toContainText("You cannot give a clearance above your own (SECRET asked).");
   await expect(summary).toBeFocused();
   expect(asked).toContain("POST people");
-  // Shift+Tab from the summary reaches the fields above it, and Tab the Invite button beside it: it is on the path.
+  // Shift+Tab from the summary reaches the fields above it (the last of them, the last role), and Tab from there the
+  // Invite button beside it: the summary is not a Tab stop, and the button is on the path.
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByLabel("Invite as Rule author")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "Invite", exact: true })).toBeFocused();
   registerCovered(REGISTRY, "reach-an-invitation-refusal-summary-by-keyboard");

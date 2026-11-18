@@ -34,14 +34,18 @@ function reach(body: { clearance: string; receivable_handling_codes: string[] })
   return null;
 }
 
-/** `meRead`: whether `GET /v1/me` answers. Unread, the form cannot know what its inviter holds. */
-function serve(meRead: boolean) {
+/** `meRead`: whether `GET /v1/me` answers. Unread, the form cannot know what its inviter holds. `meGate`: when given,
+ * `GET /v1/me` answers only once it resolves, so the form can be filled before the inviter's own arrive. */
+function serve(meRead: boolean, meGate?: Promise<void>) {
   const posted: unknown[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(url).pathname;
-      if (path === "/v1/me") return meRead ? json(200, INVITER) : json(503, {});
+      if (path === "/v1/me") {
+        await meGate;
+        return meRead ? json(200, INVITER) : json(503, {});
+      }
       if (path === "/v1/handling-scheme") return json(200, SCHEME);
       const admin = path.replace("/v1/admin/", "");
       if (admin === "people" && init?.method === "POST") {
@@ -90,6 +94,44 @@ describe("Invite a person offers only what the inviter can give", () => {
     const form = await open();
     expect(optionNames(form)).toEqual(ORDER);
     expect(within(form).getByLabelText("Invite with handling code C")).toBeTruthy();
+  });
+});
+
+describe("a choice made before the inviter's own arrive is never changed without a word", () => {
+  /** Opens the form with `GET /v1/me` held back, fills it, and lets a caller choose before releasing it. */
+  const arrive = async (choose: (form: HTMLElement) => void) => {
+    let release: () => void = () => {};
+    const posted = serve(true, new Promise<void>((resolve) => (release = resolve)));
+    const form = await open();
+    expect(optionNames(form)).toEqual(ORDER); // not yet filtered
+    fireEvent.change(within(form).getByLabelText("Sign-in name"), { target: { value: "new.person" } });
+    fireEvent.change(within(form).getByLabelText("Invite unit"), { target: { value: "unit-1" } });
+    choose(form);
+    release();
+    await waitFor(() => expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"])); // now filtered
+    return { form, posted };
+  };
+
+  it("sends a ticked handling code the form then stops offering, and says the Conduit's refusal in the summary", async () => {
+    const { form, posted } = await arrive((f) => fireEvent.click(within(f).getByLabelText("Invite with handling code C")));
+    expect(within(form).queryByLabelText("Invite with handling code C")).toBeNull(); // no longer offered
+    fireEvent.click(within(form).getByRole("button", { name: "Invite" }));
+    const summary = await within(form).findByRole("alert");
+    expect(posted).toHaveLength(1);
+    expect((posted[0] as { receivable_handling_codes: string[] }).receivable_handling_codes).toEqual(["C"]); // asked, not dropped
+    expect(summary.textContent).toContain("You cannot give a handling code you do not hold yourself (C).");
+    expect(screen.queryByText("ABCD-EFGH-JKLM-NPQR")).toBeNull(); // not reported as sent
+  });
+
+  it("shows, and sends, the level it shows when the one chosen is no longer offered", async () => {
+    const { form, posted } = await arrive((f) =>
+      fireEvent.change(within(f).getByLabelText("Invite clearance"), { target: { value: "OFFICIAL-SENSITIVE" } }),
+    );
+    const select = within(form).getByLabelText("Invite clearance") as HTMLSelectElement;
+    expect(select.value).toBe("PUBLIC"); // the first offered, what the select shows
+    fireEvent.click(within(form).getByRole("button", { name: "Invite" }));
+    expect(await screen.findByText("ABCD-EFGH-JKLM-NPQR")).toBeTruthy();
+    expect((posted[0] as { clearance: string }).clearance).toBe(select.value);
   });
 });
 
