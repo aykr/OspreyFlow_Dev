@@ -60,7 +60,7 @@ const AUDIT_ENTRY = { recorded_at: "2026-11-08T09:00:00Z", who: "Demo Analyst",
 const AGEING = { alert_after_days: 3, promotions_recorded: false, waiting: [],
                  rules: [{ what: "A promotion waiting for review", after_days: 3, then: "After 3 days it is flagged overdue." }] };  // prettier-ignore
 
-async function serve(page: Page, opts: { owns?: boolean; entra?: boolean } = {}): Promise<string[]> {
+async function serve(page: Page, opts: { owns?: boolean; entra?: boolean; refuseInvite?: boolean } = {}): Promise<string[]> {
   const asked: string[] = [];
   let dashboards = [{ client_id: "osprey-dashboard-old", account_id: "sa-0", clearance: "OFFICIAL", org_unit: "verify" }];
   await page.route("**/*/v1/**", async (route) => {
@@ -90,6 +90,10 @@ async function serve(page: Page, opts: { owns?: boolean; entra?: boolean } = {})
       return json(201, { ...PERSON, id: sent.object_id, username: sent.object_id, name: sent.object_id, roles: [] });
     }
     if (path === "settings/promotion-alert-days" && request.method() === "PUT") return json(200, request.postDataJSON());
+    // AD2: the Conduit's `_within_your_reach`: an invitation above the inviter's own clearance is a 403.
+    if (path === "people" && request.method() === "POST" && opts.refuseInvite &&
+        (request.postDataJSON() as { clearance: string }).clearance === "SECRET")
+      return json(403, { detail: { error: "above_your_clearance", clearance: "SECRET" } });
     if (path === "people" && request.method() === "POST") {
       const sent = request.postDataJSON() as { username: string };
       return json(201, { person: { ...PERSON, id: "u2", username: sent.username, name: sent.username, must_set_password: true },
@@ -395,6 +399,26 @@ test("a person is invited by keyboard and their one-time code is shown", async (
   await expect(page.getByText("ABCD-EFGH-JKLM-NPQR")).toBeVisible();
   expect(asked).toContain("POST people");
   registerCovered(REGISTRY, "invite-a-person-by-keyboard");
+});
+
+// AD2: a refused invitation is said by the Invite button as an error summary, and focus goes to it. The inviter's own
+// clearance is unread here (`/v1/me` is not served), so the form offers SECRET and the route refuses it.
+test("an invitation the Conduit refuses reaches its error summary by keyboard", async ({ page }) => {
+  const asked = await serve(page, { refuseInvite: true });
+  await page.goto("/keyboard/admin-harness.html?rights=manage_people");
+  await page.getByLabel("Sign-in name").fill("new.person");
+  await page.getByLabel("Invite unit").fill("verify");
+  await page.getByLabel("Invite clearance").selectOption("SECRET"); // a native select, as the other walkthroughs drive one
+  await press(page, "Invite");
+  const summary = page.getByRole("alert");
+  await expect(summary).toContainText("There is a problem");
+  await expect(summary).toContainText("You cannot give a clearance above your own (SECRET asked).");
+  await expect(summary).toBeFocused();
+  expect(asked).toContain("POST people");
+  // Shift+Tab from the summary reaches the fields above it, and Tab the Invite button beside it: it is on the path.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("button", { name: "Invite", exact: true })).toBeFocused();
+  registerCovered(REGISTRY, "reach-an-invitation-refusal-summary-by-keyboard");
 });
 
 // ADR-148 Amendment 8: on Entra ID sign-in a person is added by object id, by keyboard alone.
