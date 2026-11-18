@@ -3,6 +3,22 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 18 November 2026: MapLibre 6 now, Sigma 4 first in the GOV.UK modules (GG6, GG2, GG5)
+
+The owner's word, 18 November 2026 (about 14:15 UTC), on the evidence in `slices/GG6.md`:
+
+1. **GG6 is a new slice on the plan, under the standing approval.** Today's workspace moves to `maplibre-gl` `>=6.4.1 <7`
+   on Sigma 3. ADR-014 Amendment 2 is **accepted by the owner**, not proposed. The acceptance must include: the map
+   loading tiles in a real browser on the new version; the performance budget; and `make trivy` passing with the
+   CVE-2026-85061 entry gone. Nothing in the evidence was run in a browser, so every claim there is unproved until a test
+   shows it. **If a browser run shows a regression, the slice stops and the owner is told. No fallback to 5.x**: trivy
+   still fails it.
+2. **The GOV.UK graph and map modules (R4, R8; GG2 and GG5 on the plan) start on Sigma 4.** R4's first step proves the
+   performance budget (`spec/02_GLASS_FRONTEND.md` §5) on Sigma 4, and falls back to Sigma 3 if it cannot. **The shared
+   package imports no `sigma`, `@sigma/*` or `maplibre-gl`** (the check that fails if it does, shown red and then green in
+   scratch, is described in the evidence; it is wired in only after it is shown red in the tree, rule 15).
+3. **Moving today's React workspace to Sigma 4 is decided after R4 has met the budget.** It is not planned now.
+
 ## 18 November 2026: GitHub failures that are not ours (standing)
 
 The owner's word, about 13:20 UTC, on a run of main whose `conformance-recognise` job failed in the image build

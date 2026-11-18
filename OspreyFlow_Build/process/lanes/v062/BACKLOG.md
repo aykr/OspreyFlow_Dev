@@ -143,3 +143,11 @@ Both show as annotations on the green run of 18 Nov (run 44257704285) and both n
    workflow's `ubuntu-latest` jobs move to a newer Ubuntu without a change of ours. Either pin `ubuntu-24.04` or run the
    suite on `ubuntu-26.04` first; the choice is the owner's. `UV_PYTHON`, the Node major and the browsers the jobs
    install are the likeliest to move with it.
+
+### New row (18 Nov, the owner's word): site plans need rotation and pitch; neither binding allows them
+
+`OspreyFlow_Build/spec/00_ARCHITECTURE.md:70` says rotation and pitch are "Needed for site geospatial, where an aerial
+photograph is rarely north-aligned". Neither binding that draws the graph over the map allows them: the workspace's own
+`apps/workspace/src/map/sigmaMaplibreLayer.ts` (`@sigma/layer-maplibre` 3.0.0's code) sets `minPitch`/`maxPitch` to 0 and
+turns sigma's camera rotation off, and `@sigma/layer-maplibre` 4.0.1 does the same and also makes the map
+non-interactive. This was true before GG6 and stays true after it. **Decided when R8 (GG5 on the plan) is planned.**
