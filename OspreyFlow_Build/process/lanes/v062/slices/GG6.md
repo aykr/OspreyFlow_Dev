@@ -46,8 +46,9 @@ Binding: `OspreyFlow_Build/spec/06_DECISIONS.md` ADR-014 (`:510`) and its Amendm
 ## Acceptance test
 
 Files:
-- `apps/workspace/keyboard/map-tiles.spec.ts` (new).
-- `apps/workspace/map-build/playwright.config.ts` (new): runs that same spec against a production bundle. Its
+- A new keyboard spec named map-tiles, beside the other specs in `apps/workspace/keyboard/`.
+- A new Playwright config named playwright.config.ts in a new folder `apps/workspace/map-build/` (the frozen
+  acceptance_files name both new paths in full): it runs that same spec against a production bundle. Its
   `webServer` builds the harness page with `vite build` and serves it with `vite preview` on a `lanePort(...)` port of
   its own. Its `testDir` is `../keyboard` and its `testMatch` is `map-tiles.spec.ts`.
 

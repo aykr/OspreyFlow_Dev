@@ -1,0 +1,18 @@
+# For the owner's review, not applied (option (a), with the expiry the neighbouring entries use: 14 December 2026; change it if
+# you want another). It excepts a finding in the scanner, so it is yours. Apply with:
+#   git apply OspreyFlow_Build/process/lanes/v062/slice-line/diffs/trivyignore-picomatch.diff
+# then commit OspreyFlow_Core/.trivyignore. Without it `make trivy` fails on main, so no merge on the Mac passes the full gate
+# and GG6's acceptance (which runs `make trivy`) cannot go green.
+diff --git a/OspreyFlow_Core/.trivyignore b/OspreyFlow_Core/.trivyignore
+--- a/OspreyFlow_Core/.trivyignore
++++ b/OspreyFlow_Core/.trivyignore
+@@ -110,3 +110,9 @@
+ # dnspython again (excessive memory and CPU use; fixed in 2.9.2, on the same newer-Python line as above):
+ # found by v0.5.1's release scan on 14 November 2026 and accepted by the owner on the same ground.
+ CVE-2026-128089 exp:2026-12-14
++# picomatch 4.0.7 (HIGH: denial of service through repeated extglob patterns; no fixed version yet), found by the merge
++# gate on 18 November 2026 when the vulnerability database updated. It is reached only through vite, vitest and
++# tinyglobby/fdir, which are build and test tooling: nothing in a shipped image or the running product imports it.
++# Excepted on the owner's word until the date of the entries above. Revisit trigger: a picomatch release that fixes
++# it, or those tools moving off 4.0.7.
++CVE-2026-112366 exp:2026-12-14
