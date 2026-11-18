@@ -12,8 +12,9 @@
   5. the acceptance test was red before the slice (the base, with the slice's acceptance files) ...
   6. ... and is green, with the slice's checks, on the merge result;
   7. today's full gate is green on the merge result (FULL_GATE: make -k ci and make test in the merge tree's own
-     environment, built as CI builds it, never the main checkout's; then the live files the change reaches, when
-     there are any, on the test server through stack_lease.sh).
+     environment, built as CI builds it, never the main checkout's; then the live step: the live files the change
+     itself reaches (live_select --reached), when there are any, on the test server through stack_lease.sh, once
+     the server's run queue is clear, or not at all while the owner's live_step.yaml has it off).
 Then main is fast-forwarded to the tested merge commit (never anything untested), push_main.sh runs, and
 board.py writes the board and the dashboard's status file. Nothing is changed on any refusal.
 """
@@ -32,12 +33,16 @@ import time
 import uuid
 from pathlib import Path
 
+import yaml
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 
+#: The owner's files in the records folder: no slice changes them and records mode never commits them.
+OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml")
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
-    "OspreyFlow_Build/scripts/slice_line/", f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml",
+    "OspreyFlow_Build/scripts/slice_line/", *OWNER_FILES,
 )
 LEASE = "OspreyFlow_Build/scripts/stack_lease.sh"
 GATE_LANE = "merger"
@@ -146,9 +151,66 @@ def ci_env(tree: Path, log: Path) -> dict:
     return env
 
 
+LIVE_STEP_FILE = c.REPO / c.V062_REL / "live_step.yaml"
+QUEUE_POLL_SECONDS = 60
+
+
+def live_step_setting() -> tuple[bool, int]:
+    """The owner's live_step.yaml: whether the live step runs, and how long it waits for the server's queue.
+    Missing, unreadable or not a plain true/false: the merge is refused, never guessed."""
+    try:
+        data = yaml.safe_load(LIVE_STEP_FILE.read_text())
+    except (OSError, yaml.YAMLError) as e:
+        raise GateEnvError(f"the owner's live step setting ({LIVE_STEP_FILE}) cannot be read: {e}")
+    data = data if isinstance(data, dict) else {}
+    on, wait = data.get("live_step"), data.get("queue_wait_minutes", 60)
+    if not isinstance(on, bool) or not isinstance(wait, int) or isinstance(wait, bool) or wait < 0:
+        raise GateEnvError(f"{LIVE_STEP_FILE} must say live_step: true or false, and queue_wait_minutes: a whole number.")
+    return on, wait
+
+
+def queue_hosts(tree: Path) -> list[str]:
+    """Every host a test stack runs on (scripts/lane_stack_hosts.tsv): the queue is checked on each."""
+    f = tree / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv"
+    rows = [ln.split("\t") for ln in (f.read_text().splitlines() if f.exists() else []) if ln and not ln.startswith("#")]
+    return sorted({r[1].strip() for r in rows if len(r) >= 2 and r[1].strip()})
+
+
+def queue_blocker(host: str) -> str | None:
+    """Why the merger may not run on `host` now, or None: the queue (osprey-runs/QUEUE) is empty or has the merger
+    first, and no make runs there. A host that cannot be read is a blocker, never taken as clear."""
+    queue = f"{os.environ.get('OSPREY_REMOTE_ROOT', 'osprey-runs')}/QUEUE"
+    p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", host,
+                        f"head -n 1 {queue} 2>/dev/null; echo '<<end>>'; pgrep -x make || true"],
+                       capture_output=True, text=True, check=False)
+    if p.returncode != 0 or "<<end>>" not in p.stdout:
+        return f"{host}: its run queue could not be read (ssh exit {p.returncode})"
+    first, _, makes = p.stdout.partition("<<end>>")
+    first = first.strip()
+    if first not in ("", GATE_LANE):
+        return f"{host}: the run queue has {first!r} first"
+    if makes.strip():
+        return f"{host}: make is running there (pids {' '.join(makes.split())})"
+    return None
+
+
+def wait_for_queue(tree: Path, wait_minutes: int, log: Path) -> str | None:
+    """Wait until every stack host's queue is clear; the last blocker if `wait_minutes` pass first."""
+    deadline = time.monotonic() + wait_minutes * 60
+    while True:
+        blockers = [b for h in queue_hosts(tree) if (b := queue_blocker(h))]
+        if not blockers:
+            return None
+        log.open("a").write("\nWaiting for the server's run queue: " + "; ".join(blockers) + "\n")
+        if time.monotonic() + QUEUE_POLL_SECONDS > deadline:
+            return "; ".join(blockers)
+        time.sleep(QUEUE_POLL_SECONDS)
+
+
 def full_gate(tree: Path, base: str, log: Path) -> int:
     """Today's full gate on the merge result, in its own CI-built environment: make -k ci and make test, then the
-    live files the change reaches (on the test server through the lease, as they need stores)."""
+    live step: the live files the change itself reaches, on the test server through the lease, as they need stores
+    (live_step.yaml: off, or on after the server's run queue clears)."""
     lease = c.REPO / LEASE
     try:
         env = ci_env(tree, log)
@@ -162,14 +224,30 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
         log.open("a").write(f"\n{' '.join(target)}: exit {codes[-1]} in {time.monotonic() - started:.0f} s\n")
     if any(codes):
         return next(x for x in codes if x)
-    sel = subprocess.run([str(tree / "OspreyFlow_Core/.venv/bin/python"), "-m", "tools.live_select", "--base", base],
+    sel = subprocess.run([str(tree / "OspreyFlow_Core/.venv/bin/python"), "-m", "tools.live_select", "--base", base,
+                          "--reached"],
                          cwd=str(tree / "OspreyFlow_Build"), capture_output=True, text=True, env=env)
     if sel.returncode != 0:
         log.open("a").write(sel.stdout + sel.stderr)
         return sel.returncode
-    if not sel.stdout.strip():
-        log.open("a").write("\nNo live test file is reached by this change.\n")
+    reached = sel.stdout.split()
+    if not reached:
+        log.open("a").write("\nNo live test file is reached by this change: the live step takes no stack.\n")
         return 0
+    try:
+        on, wait = live_step_setting()
+    except GateEnvError as e:
+        log.open("a").write(f"\nREFUSED: {e}\n")
+        return 3
+    if not on:
+        log.open("a").write(f"\nLIVE STEP OFF (live_step.yaml): {len(reached)} live test files this change reaches "
+                            "were not run:\n" + "".join(f"  {t}\n" for t in reached))
+        c.write_json(log.with_suffix(".live.json"), {"live_step": "off", "not_run": reached})
+        return 0
+    blocked = wait_for_queue(tree, wait, log)
+    if blocked:
+        log.open("a").write(f"\nREFUSED: the server's run queue did not clear in {wait} minutes: {blocked}\n")
+        return 4
     steps = [["acquire", GATE_LANE, "slice merge live gate"], ["up", GATE_LANE], ["live", GATE_LANE, "--base", base]]
     code = 0
     try:
@@ -196,7 +274,7 @@ def lock():
     return fh
 
 
-OWNERS_LOCAL = ("OspreyFlow_Core/osprey.yaml", f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml")
+OWNERS_LOCAL = ("OspreyFlow_Core/osprey.yaml", *OWNER_FILES)
 
 
 def main_ready(records: bool = False) -> str:
@@ -299,6 +377,9 @@ def merge(slice_id: str) -> dict:
         c.git(["merge", "--ff-only", merged], c.REPO)
         done = {"slice": slice_id, "build": frozen["build"], "merge": merged, "tip": tip, "base": base,
                 "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"), "at": c.now()}
+        live = c.read_json(log.with_suffix(".live.json"))
+        if live:
+            done["live_step"] = live  # off: the live files this change reaches, named, not run
         c.write_json(rec / "merged.json", done)
         c.set_state(slice_id, phase="merged", merge=merged)
         push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO,
@@ -324,7 +405,7 @@ def records(message: str, paths: list[str]) -> str:
             rel = os.path.relpath(os.path.abspath(p), c.REPO) if os.path.isabs(p) else p
             if not rel.startswith(c.V062_REL + "/") or ".." in rel:
                 raise Refused(f"records mode commits only {c.V062_REL}/: not {rel}.")
-            if rel in (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml"):
+            if rel in OWNER_FILES:
                 raise Refused(f"{rel} is the owner's file: records mode never commits it.")
         main_ready(records=True)
         working = c.load_slices(None) if (c.REPO / c.SLICES_REL).exists() else []

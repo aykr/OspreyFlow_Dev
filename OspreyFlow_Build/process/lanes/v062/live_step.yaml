@@ -1,0 +1,15 @@
+# The merge script's live step (merge_slice.py, the full gate's last part). The owner's file: agents cannot edit it
+# (the guard refuses), and no slice may change it (the merge script refuses).
+#
+# The live step runs the live test files a slice's change reaches (tools/live_select.py --reached) on the test
+# server through stack_lease.sh. A change that reaches none, such as a documentation-only slice, never takes a stack.
+#
+# live_step: false   the step does not run. A change that reaches live files still merges on the offline gates;
+#                    the merge log and the merge record name each live file that was not run.
+#                    Off from 18 November 2026 (the owner): on once the demo's images no longer share tags with test
+#                    builds.
+# live_step: true    the step runs, but only when the server's run queue (osprey-runs/QUEUE on each host in
+#                    scripts/lane_stack_hosts.tsv) is empty or has the merger first, and no make runs there. Until
+#                    then it waits, checking each minute, for queue_wait_minutes, then refuses the merge.
+live_step: false
+queue_wait_minutes: 60

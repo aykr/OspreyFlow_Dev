@@ -62,12 +62,15 @@ def world(tmp_path):
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
     gate.write_text(gate.read_text().replace("FULL_GATE = full_gate",
-                                             "FULL_GATE = lambda t, b, l: int(os.environ.get('TEST_GATE', '0'))"))
+                                             "FULL_GATE = lambda t, b, l: (os.environ.get('TEST_LIVE_NOTE') and "
+                                             "l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE']) and 0) "
+                                             "or int(os.environ.get('TEST_GATE', '0'))"))
     v062 = repo / "OspreyFlow_Build/process/lanes/v062"
     v062.mkdir(parents=True)
     real = SRC.parents[1] / "process/lanes/v062"
     shutil.copy(real / "dial.yaml", v062 / "dial.yaml")
     shutil.copy(real / "accounts.yaml", v062 / "accounts.yaml")
+    shutil.copy(real / "live_step.yaml", v062 / "live_step.yaml")
     (v062 / "slices.tsv").write_text(
         "id\tbuild\twhat\tafter\ttrack\tbranch\tenv\tacceptance_files\tacceptance\tchecks\n"
         "S1\tCO1\tA test slice\t-\t1\t-\tnone\taccept.sh\tsh accept.sh\ttrue\n"
@@ -242,7 +245,7 @@ def test_the_line_its_records_settings_and_owner_files_are_refused(world):
     w = world
     v062 = w["repo"] / "OspreyFlow_Build/process/lanes/v062"
     for path in (w["repo"] / ".claude/settings.json", w["lines"] / "guard.py", v062 / "dial.yaml", v062 / "accounts.yaml",
-                 w["data"] / "records/S1/verify-abc.json", w["data"] / "bin/guard.py",
+                 v062 / "live_step.yaml", w["data"] / "records/S1/verify-abc.json", w["data"] / "bin/guard.py",
                  w["repo"] / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/status.js"):
         assert refused(guard(w, "Write", {"file_path": str(path), "content": "x"})), path
     for cmd in (f"echo '{{}}' > {w['data']}/records/S1/verify-abc.json", "echo x > OspreyFlow_Build/process/lanes/v062/dial.yaml",
@@ -347,8 +350,8 @@ def built(w, accept="test -f feature.txt", feature=True, extra=None):
     return wt, sh("git rev-parse HEAD", wt).stdout.strip()
 
 
-def merge(w, gate="0"):
-    env = {**w["env"], "TEST_GATE": gate}
+def merge(w, gate="0", live_note=""):
+    env = {**w["env"], "TEST_GATE": gate, "TEST_LIVE_NOTE": live_note}
     p = sh([w["py"], str(w["lines"] / "merge_slice.py"), "merge", "S1"], w["repo"], env, check=False)
     return p
 
@@ -412,7 +415,8 @@ def test_the_merge_script_refuses_when_the_full_gate_is_red(world):
 
 @pytest.mark.parametrize("path", ["OspreyFlow_Core/Makefile", ".github/workflows/ci.yml", "OspreyFlow_Core/data/x.csv",
                                   ".claude/agents/x.md", "OspreyFlow_Build/scripts/slice_line/guard.py",
-                                  "OspreyFlow_Build/process/lanes/v062/dial.yaml"])
+                                  "OspreyFlow_Build/process/lanes/v062/dial.yaml",
+                                  "OspreyFlow_Build/process/lanes/v062/live_step.yaml"])
 def test_the_merge_script_refuses_a_branch_touching_a_protected_path(world, path):
     w = world
     wt, tip = built(w, extra={path: "changed\n"})
@@ -680,7 +684,19 @@ def gate(world):
     fake(bin_ / "uv", "uv", calls, f'[ "$1" = sync ] && {venv_py}\nexit 0')
     fake(bin_ / "uv.python", "python", calls,
          '[ "$1" = --version ] && { echo "Python ${FAKE_VENV_PYTHON:-3.12.9}"; exit 0; }\n'
-         'echo "$0" >> "' + str(t / "pythons.txt") + '"\nexit 0')
+         'echo "$0" >> "' + str(t / "pythons.txt") + '"\n'
+         'for f in ${FAKE_LIVE:-}; do echo "$f"; done\nexit 0')
+    # the server's run queue, as ssh reads it: FAKE_QUEUE lines, one per check (the last repeats), "first|makes"
+    fake(bin_ / "ssh", "ssh", calls,
+         'n=$(wc -l < "' + str(t / "ssh.count") + '" 2>/dev/null || echo 0); echo x >> "' + str(t / "ssh.count") + '"\n'
+         '[ -n "${FAKE_SSH_EXIT:-}" ] && exit "$FAKE_SSH_EXIT"\n'
+         'row=$(printf "%s\\n" ${FAKE_QUEUE:-"|"} | awk -v n="$n" \'{r[NR]=$0} END {print (n+1 <= NR) ? r[n+1] : r[NR]}\')\n'
+         'first=${row%%|*}; makes=${row#*|}\n'
+         '[ -n "$first" ] && echo "$first"; echo "<<end>>"; [ -n "$makes" ] && echo "$makes"; exit 0')
+    lease = w["repo"] / "OspreyFlow_Build/scripts/stack_lease.sh"
+    fake(lease, "lease", calls, "exit 0")
+    (w["repo"] / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv").write_text("# stack\thost\nb\ttestbox\nc\ttestbox\n")
+    shutil.copy(w["repo"] / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv", tree / "OspreyFlow_Build/scripts/")
     fake(bin_ / "make", "make", calls, 'case " $* " in *" $FAKE_MAKE_FAIL "*) exit 2;; esac\nexit 0')
     for major in ("22", "24"):
         nb = t / f"node{major}/bin"
@@ -694,7 +710,7 @@ def gate(world):
             "node22": t / "node22/bin", "node24": t / "node24/bin"}
 
 
-def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9"):
+def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9", live="", queue="|", ssh_exit=""):
     env = dict(g["env"])
     # the caller's shell as on this Mac: the main checkout's venv active and first on PATH
     env["VIRTUAL_ENV"] = str(g["main_venv"].parent)
@@ -703,9 +719,10 @@ def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9"):
     env["FAKE_MAKE_FAIL"] = fail
     env["FAKE_VENV_PYTHON"] = venv_python
     env["UV_PYTHON"] = "3.13"  # the caller's own choice, as on this Mac: never the gate's
+    env.update(FAKE_LIVE=live, FAKE_QUEUE=queue, FAKE_SSH_EXIT=ssh_exit)
     log = g["tmp"] / "gate.log"
     code = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import merge_slice as m; "
-            "sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
+            "m.QUEUE_POLL_SECONDS = 0.05; sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
     p = subprocess.run([g["py"], "-c", code, str(g["lines"]), str(g["tree"]), str(log)], env=env,
                        capture_output=True, text=True, check=False)
     rows = [ln.split("\t") for ln in g["calls"].read_text().splitlines()] if g["calls"].exists() else []
@@ -779,3 +796,91 @@ def test_the_full_gate_refuses_a_venv_on_another_python_than_cis(gate):
     rc, calls, out = run_gate(gate, venv_python="3.13.4")
     assert rc == 3 and "not CI's Python 3.12" in out
     assert not [c_ for c_ in calls if c_["name"] == "make"]
+
+
+# ------------------------------------------------------------------ the live step (live_step.yaml, the owner's)
+# The dry run's documentation-only slice ran test_route_rights.py on the test server (17 November 2026), through
+# live_select's floor alone: the gate now asks for the files the change itself reaches (--reached). The owner turned
+# the step off on 18 November 2026; on, it waits for the server's run queue and refuses if it does not clear.
+
+LIVE = "tests/services/api/test_route_rights.py tests/conformance/graph_port/test_suite.py"
+
+
+def live_step(g, on, wait=0):
+    f = g["repo"] / "OspreyFlow_Build/process/lanes/v062/live_step.yaml"
+    f.write_text(f"live_step: {'true' if on else 'false'}\nqueue_wait_minutes: {wait}\n")
+
+
+def lease_calls(calls):
+    return [c_["args"].split(" ")[0] for c_ in calls if c_["name"] == "lease"]
+
+
+def test_the_committed_live_step_is_off():
+    import yaml
+    data = yaml.safe_load((SRC.parents[1] / "process/lanes/v062/live_step.yaml").read_text())
+    assert data["live_step"] is False
+
+
+def test_a_change_that_reaches_no_live_file_takes_no_stack_and_reads_no_queue(gate):
+    live_step(gate, on=True)
+    rc, calls, out = run_gate(gate, live="")
+    assert rc == 0, out
+    asked = [c_["args"] for c_ in calls if c_["name"] == "python" and "live_select" in c_["args"]]
+    assert asked == ["-m tools.live_select --base base --reached"], asked  # never the floor's route_rights alone
+    assert not lease_calls(calls) and not [c_ for c_ in calls if c_["name"] == "ssh"]
+    assert "takes no stack" in out
+
+
+def test_the_live_step_off_runs_nothing_on_the_server_and_names_what_it_did_not_run(gate):
+    live_step(gate, on=False)
+    rc, calls, out = run_gate(gate, live=LIVE)
+    assert rc == 0, out
+    assert not lease_calls(calls) and not [c_ for c_ in calls if c_["name"] == "ssh"]
+    assert "LIVE STEP OFF" in out and all(f in out for f in LIVE.split())
+    note = json.loads((gate["tmp"] / "gate.live.json").read_text())
+    assert note == {"live_step": "off", "not_run": LIVE.split()}
+
+
+def test_the_live_step_on_waits_for_the_queue_then_runs_under_the_lease(gate):
+    live_step(gate, on=True, wait=1)
+    rc, calls, out = run_gate(gate, live=LIVE, queue="demo| |4242 merger|")
+    assert rc == 0, out
+    names = [c_["name"] for c_ in calls if c_["name"] in ("ssh", "lease")]
+    assert names[:3] == ["ssh", "ssh", "ssh"] and "lease" not in names[:3], names  # two waits, then clear
+    assert lease_calls(calls) == ["acquire", "up", "live", "down", "release"]
+    assert out.count("Waiting for the server's run queue") == 2
+
+
+@pytest.mark.parametrize(("queue", "ssh_exit", "said"), [
+    ("demo|", "", "has 'demo' first"),
+    ("|4242", "", "make is running there"),
+    ("|", "255", "could not be read"),
+])
+def test_the_live_step_on_refuses_when_the_queue_does_not_clear(gate, queue, ssh_exit, said):
+    live_step(gate, on=True, wait=0)
+    rc, calls, out = run_gate(gate, live=LIVE, queue=queue, ssh_exit=ssh_exit)
+    assert rc == 4 and said in out and "did not clear" in out, out
+    assert not lease_calls(calls)
+
+
+@pytest.mark.parametrize("body", ["", "live_step: maybe\n", "live_step: true\nqueue_wait_minutes: soon\n", None])
+def test_a_missing_or_unclear_live_step_setting_refuses(gate, body):
+    f = gate["repo"] / "OspreyFlow_Build/process/lanes/v062/live_step.yaml"
+    if body is None:
+        f.unlink()
+    else:
+        f.write_text(body)
+    rc, calls, out = run_gate(gate, live=LIVE)
+    assert rc == 3 and "live_step" in out, out
+    assert not lease_calls(calls) and not [c_ for c_ in calls if c_["name"] == "ssh"]
+
+
+def test_a_merge_with_the_live_step_off_records_the_live_files_it_did_not_run(world):
+    w = world
+    wt, tip = built(w)
+    verified(w, wt, tip)
+    note = {"live_step": "off", "not_run": ["tests/services/api/test_route_rights.py"]}
+    p = merge(w, live_note=json.dumps(note))
+    assert p.returncode == 0, p.stderr
+    rec = json.loads((w["data"] / "records/S1/merged.json").read_text())
+    assert rec["live_step"] == note

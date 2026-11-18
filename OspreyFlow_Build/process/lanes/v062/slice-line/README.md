@@ -39,12 +39,12 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (54 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (44 planted faults, 0 missed).
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (67 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (56 planted faults, 0 missed).
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
-| The owner's files | guard | Edit/Write of `OspreyFlow_Core/Makefile`, `.github/workflows/ci.yml`; shell writes naming them; `dial.yaml`, `accounts.yaml` |
+| The owner's files | guard | Edit/Write of `OspreyFlow_Core/Makefile`, `.github/workflows/ci.yml`; shell writes naming them; `dial.yaml`, `accounts.yaml`, `live_step.yaml` |
 | Never staged | guard | `git add`/`commit -a` that would take `OspreyFlow_Core/osprey.yaml` or `OspreyFlow_Core/data/` |
 | No push, remote or repository | guard, push_main.sh | every `git push`, remote change, `gh repo create/edit`, write `gh api`; the push script refuses all but a merge-written main to the recorded origin, fast-forward only |
 | A builder in its worktree | guard | edits, `cd`, `-C`, `GIT_DIR`, writes naming another checkout; branch switches |
@@ -53,7 +53,7 @@ site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows
 | GOV.UK demo, airbyte | guard | `govuk.ospreyflow.app`, `/opt/ospreyflow*`, `osprey-small`, `:8000`, airbyte/abctl; any hand change on the test server |
 | The line itself | guard, merge_slice.py | `.claude/`, `scripts/slice_line/`, the records, the status file, `OSPREY_*` overrides, nested `claude` |
 | Cannot stop on red | stop_check.py | the frozen checks and acceptance run at Stop; red (or uncommitted) sends back the failure lines only; after 6, stopped |
-| Merge | merge_slice.py | see the script's docstring: lock, frozen match, verifier pass for the tip, protected paths, red before, green after, **today's full gate**: `make -k ci` and `make test`, both run and both reported, in the merge tree's own environment built as CI's `test` job builds it (`uv sync --frozen` on the `UV_PYTHON` `ci.yml` sets, `npm ci` under the Node major `ci.yml` names, no `VIRTUAL_ENV` or other `.venv/bin`, closed ports, the merger's slot), never the main checkout's; then the live files reached, through the lease |
+| Merge | merge_slice.py | see the script's docstring: lock, frozen match, verifier pass for the tip, protected paths, red before, green after, **today's full gate**: `make -k ci` and `make test`, both run and both reported, in the merge tree's own environment built as CI's `test` job builds it (`uv sync --frozen` on the `UV_PYTHON` `ci.yml` sets, `npm ci` under the Node major `ci.yml` names, no `VIRTUAL_ENV` or other `.venv/bin`, closed ports, the merger's slot), never the main checkout's; then **the live step** (below) |
 | Status file | board.py | `done` only with a merge record, its test run and a verifier pass; unknown build ids reported, not written; a bad or incomplete record skipped and reported, the slice shown from its other records and every other slice carried on |
 
 **What a hook cannot do** (documented, not worked around): no hook can stop text the model has already shown (the
@@ -73,10 +73,27 @@ without a tool call; the line's own cap is 6 red stops.
 4. `merge_slice.py merge <ID>`: main fast-forwarded to the tested merge commit, then `push_main.sh`.
 5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
 
+## The live step
+
+The full gate's last part runs the live test files the slice's change itself reaches
+(`OspreyFlow_Build/tools/live_select.py --reached`) on the test server through `stack_lease.sh`. `--reached` leaves out
+the lanes' floor, which selects `test_route_rights.py` for every change: on 17 November 2026 the dry run's slice, two
+files under `process/` (which `OspreyFlow_Build/tools/live_map.tsv` maps to `none`), took test stack b on the server
+for that file alone. A change that reaches no live file now takes no stack and reads no queue; a file the change does
+reach, `test_route_rights.py` included, is still run.
+
+The owner's `OspreyFlow_Build/process/lanes/v062/live_step.yaml` turns the step on or off; it is off from
+18 November 2026, until the demo's images no longer share tags with test builds. Off, nothing reaches the server: a
+change that reaches live files merges on the offline gates, and the merge log and `merged.json` (`live_step`) name
+each live file not run. On, the step first reads the server's run queue (`osprey-runs/QUEUE` and `pgrep -x make` on
+each host in `scripts/lane_stack_hosts.tsv`): it goes when the queue is empty or has `merger` first and no make runs,
+waits a minute at a time for `queue_wait_minutes`, then refuses the merge. A queue that cannot be read is never taken
+as clear. A missing or unclear setting refuses the merge.
+
 ## Records mode
 
 `merge_slice.py records -m "<msg>" <paths>` commits only `OspreyFlow_Build/process/lanes/v062/`, never
-`dial.yaml` or `accounts.yaml`, and refuses a backlog change to a started slice's frozen commands.
+`dial.yaml`, `accounts.yaml` or `live_step.yaml`, and refuses a backlog change to a started slice's frozen commands.
 
 ## The dial and the accounts
 
@@ -95,7 +112,7 @@ never moved to the other account: the owner edits `accounts.yaml`. Usage per sli
 
 ## Files outside the repository
 
-`~/.ospreyflow/slice-line/`: `bin/` (the hooks), `node/v<major>/` (CI's Node, if PATH has none: the gate refuses another major), `settings.json`, `manifest.json`, `origin.url`,
+`~/.ospreyflow/slice-line/`: `bin/` (the hooks), `node/v<major>/` (CI's Node, found before PATH's: the gate refuses another major; Node 22.23.5 for darwin-arm64 is installed at `node/v22/`, from nodejs.org's tarball, its SHA-256 matching `SHASUMS256.txt`), `settings.json`, `manifest.json`, `origin.url`,
 `emails.sha256`, `records/<ID>/` (frozen, state, sessions, tests-, verify-, merged, logs), `accounts/`,
 `sessions/` (guard markers), `usage.tsv`, `push.log`, `push.pending`, `merge.lock`. The dashboard's
 `status.js` is in the git-ignored `Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/`.

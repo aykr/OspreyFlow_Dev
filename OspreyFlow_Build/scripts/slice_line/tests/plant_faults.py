@@ -1,7 +1,7 @@
 """Rule 15's red-then-green record for the slice line: one planted fault per gate, each shown turning its test red.
 
 Usage: plant_faults.py <scratch dir> <a checkout of this branch> <a python with pytest and PyYAML>
-The scratch dir must hold OspreyFlow_Build/process/lanes/v062 (dial.yaml, accounts.yaml). Expected: 0 not caught.
+The scratch dir must hold OspreyFlow_Build/process/lanes/v062 (dial.yaml, accounts.yaml, live_step.yaml). Expected: 0 not caught.
 """
 import shutil, subprocess, sys
 from pathlib import Path
@@ -50,6 +50,18 @@ M = [
  ("slice_start.py", '        near = c.near_limit(acct)\n', '        near = None\n', "near_its_limit"),
  ("slice_start.py", '        if not c.signed_in(acct):', '        if False:', "signed_out"),
  ("run_seat.py", 'if not p.is_file() or sha(p) != manifest.get(h):', 'if False:', "seat_refuses_to_start"),
+ ("merge_slice.py", '"--base", base,\n                          "--reached"],', '"--base", base],', "reaches_no_live_file"),
+ ("merge_slice.py", '    if not on:\n', '    if False:\n', "live_step_off_runs_nothing"),
+ ("merge_slice.py", 'done["live_step"] = live', 'pass', "live_step_off_records"),
+ ("merge_slice.py", 'if first not in ("", GATE_LANE):', 'if False:', "queue_does_not_clear"),
+ ("merge_slice.py", 'if makes.strip():', 'if False:', "queue_does_not_clear"),
+ ("merge_slice.py", 'if p.returncode != 0 or "<<end>>" not in p.stdout:', 'if False:', "queue_does_not_clear"),
+ ("merge_slice.py", 'blocked = wait_for_queue(tree, wait, log)', 'blocked = None', "queue_does_not_clear"),
+ ("merge_slice.py", '        time.sleep(QUEUE_POLL_SECONDS)', '        return None', "waits_for_the_queue"),
+ ("merge_slice.py", '    if not isinstance(on, bool) or not isinstance(wait, int) or isinstance(wait, bool) or wait < 0:', '    if False:', "unclear_live_step_setting"),
+ ("merge_slice.py", 'except (OSError, yaml.YAMLError) as e:', 'except ZeroDivisionError as e:', "unclear_live_step_setting"),
+ ("merge_slice.py", ', f"{c.V062_REL}/live_step.yaml")', ')', "protected_path"),
+ ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/live_step.yaml")', ')', "owner_files"),
  (".claude/agents/slice-verifier.md", 'tools: Read, Grep, Glob, Bash, StructuredOutput\n', 'tools: Read, Grep, Glob, Bash\n', "offered_structured_output"),
 ]
 bad = 0

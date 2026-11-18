@@ -60,6 +60,23 @@ def test_an_empty_change_still_selects_route_rights(repo) -> None:  # type: igno
     assert live_select.select([], repo(_ADAPTER, _LIVE)) == [ROUTE_RIGHTS]
 
 
+def test_reached_leaves_out_the_floor_for_a_change_that_reaches_no_live_file(repo) -> None:  # type: ignore[no-untyped-def]
+    """The slice line's merge gate: a documentation-only change takes no test stack (`--reached`)."""
+    r = repo(_ADAPTER, _LIVE, "OspreyFlow_Build/process/**\tnone\tthe build record\n")
+    assert live_select.select(["OspreyFlow_Build/process/lanes/x/HELLO.md"], r, floor=False) == []
+    assert live_select.select(["OspreyFlow_Build/process/lanes/x/HELLO.md"], r) == [ROUTE_RIGHTS]  # the lanes' floor
+
+
+def test_reached_still_selects_what_the_change_reaches_route_rights_included(repo) -> None:  # type: ignore[no-untyped-def]
+    files = {**_ADAPTER, "OspreyFlow_Core/packages/adapters/rights.py": "def r(): pass\n",
+             f"OspreyFlow_Build/{ROUTE_RIGHTS}": "from adapters.rights import r\n"}
+    r = repo(files, _LIVE)
+    assert live_select.select(["OspreyFlow_Core/packages/adapters/graph.py"], r, floor=False) == [
+        "tests/conformance/graph_port/test_suite.py"]
+    assert live_select.select(["OspreyFlow_Core/packages/adapters/rights.py"], r, floor=False) == [ROUTE_RIGHTS]
+    assert live_select.select(["OspreyFlow_Core/recipes/new.yaml"], r, floor=False) == r.live_set()  # no rule: all
+
+
 def test_a_path_no_rule_covers_selects_the_full_set(repo) -> None:  # type: ignore[no-untyped-def]
     r = repo(_ADAPTER, _LIVE)
     why: list[str] = []
@@ -99,6 +116,13 @@ def test_main_prints_the_selection_for_the_branch_s_change(tmp_path: Path, capsy
     out, err = capsys.readouterr()
     assert out.split() == sorted([ROUTE_RIGHTS, "tests/conformance/graph_port/test_suite.py"])
     assert "2 of 3 live test files" in err
+    (tmp_path / "OspreyFlow_Build/tools/live_map.tsv").write_text("OspreyFlow_Build/process/**\tnone\tthe record\n")
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run([*git, "commit", "-qm", "the map, and the graph change merged"], check=True)
+    (tmp_path / "OspreyFlow_Build/process").mkdir()
+    (tmp_path / "OspreyFlow_Build/process/HELLO.md").write_text("hello\n")
+    assert live_select.main(["--reached"], repo=live_select.Repo(tmp_path)) == 0
+    assert capsys.readouterr().out.split() == []  # a documentation-only change: nothing, not the floor
 
 
 def test_a_rule_names_none_all_or_tests(repo) -> None:  # type: ignore[no-untyped-def]
