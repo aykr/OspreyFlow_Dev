@@ -247,7 +247,7 @@ in the GOV.UK look, and a refresh that keeps you signed in and where you were.
 - **The Conduit and the workspace say when they are ready**, so the install's waits, `helm --wait` and a
   rolling update no longer send people to a service that is not yet listening.
 - **The managed PostgreSQL (RDS) is `db.t4g.large` with `max_connections` = 1000**, set in its parameter
-  group (MoJ's module: `db_parameter`, `pending-reboot`). Two Conduits side by side in an update, the
+  group (the UK public sector client's module: `db_parameter`, `pending-reboot`). Two Conduits side by side in an update, the
   worker, the gateway and, from v0.5.2, reporting fit with room to spare.
 - **Entra ID sign-in**: two app registrations (the workspace's and the API's) and the first
   administrators named by object id (administration guide §6a.11).
