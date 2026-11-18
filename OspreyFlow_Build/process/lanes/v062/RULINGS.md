@@ -3,6 +3,21 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 18 November 2026: three compressed files exempt from the client-name check (BL6)
+
+The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
+
+- The client-name check (`OspreyFlow_Build/tools/client_name_check.py`) exempts **exactly these three paths, and only
+  while each is not text**: `OspreyFlow_Build/marketing_site/OspreyFlow Intro Video.mp4`,
+  `OspreyFlow_Build/marketing_site/deploy/assets/ps-govuk-matrix.jpg`, and `OspreyFlow_Core/docs/pdf/user-guide.pdf`. Each
+  holds the client's abbreviation only as chance bytes in compressed data.
+- **Adding any other file to that list needs the owner's word each time.** The list's comment in the tool says so.
+- The check cannot read real text inside a PDF, an image or a video, so those files are not covered by it. That is a
+  backlog row (`BACKLOG.md`, "The client-name check cannot read inside a PDF, an image or a video").
+- As worded, the exemption is the whole client check for those paths while they are not text (the full name too, not only
+  the abbreviation). The verifier noted that this is wider than its reason; the conductor asked the owner whether to
+  narrow it to the abbreviation.
+
 ## 18 November 2026: the live step
 
 - Off, a change that reaches live tests merges on the offline gates; each live test not run is owed, the board shows
