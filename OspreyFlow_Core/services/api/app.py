@@ -3349,12 +3349,17 @@ async def _above_the_ceiling_handler(
     )
 
 
+def _deployment_ceiling(request: Request) -> DeploymentCeiling:
+    """The ceiling the Conduit started with; the rendered setting where a start has read none."""
+    held = getattr(request.app.state, "deployment_ceiling", None)
+    return held if held is not None else DeploymentCeiling.from_env()
+
+
 def refuse_above_the_deployment_ceiling(request: Request, classification: str) -> None:
     """An import that carries its own marking (a document, an entity's picture), judged before its
     body is read: refused when the marking is a classification of the scheme above the deployment's
     highest. One the scheme does not know is left to the route's own marking check."""
-    held = getattr(request.app.state, "deployment_ceiling", None)
-    ceiling = held if held is not None else DeploymentCeiling.from_env()
+    ceiling = _deployment_ceiling(request)
     if classification in ceiling.scheme.classification and ceiling.above(classification):
         raise AboveTheDeploymentCeiling(ceiling.marking, "import")
 
@@ -4881,6 +4886,7 @@ def get_boards(
         media=getattr(request.app.state, "media", None),
         cap_breach=_cap_breach,
         case_types=getattr(request.app.state, "link_types", None),
+        deployment_ceiling=_deployment_ceiling(request),
     )
 
 
