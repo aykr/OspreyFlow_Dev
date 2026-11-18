@@ -21,6 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
+import owed as owed_tests  # noqa: E402
 
 STATES = ("building", "verifying", "done", "stopped")
 
@@ -147,7 +148,14 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
                  "from": source, "track": kw["track"], "account": kw["account"]})
 
 
-def write_status(builds: dict, path: Path | None = None) -> Path:
+def owed_list(problems: list[str]) -> list[dict]:
+    """The live test files owed (owed.py): merged while the live step was off and not run since."""
+    owed, unreadable = owed_tests.outstanding(c.DATA)
+    problems.extend(f"live tests owed: {u}; what is owed may be more than shown" for u in unreadable)
+    return [{"test": t, **o} for t, o in sorted(owed.items())]
+
+
+def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
     try:
@@ -157,7 +165,7 @@ def write_status(builds: dict, path: Path | None = None) -> Path:
     for k, v in builds.items():
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
-    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds}
+    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or []}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -198,7 +206,8 @@ def main() -> int:
     except RuntimeError:
         slices = []
     rows, builds, problems = compute(slices)
-    path = write_status(builds)
+    owed = owed_list(problems)
+    path = write_status(builds, owed=owed)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
@@ -208,6 +217,10 @@ def main() -> int:
             near, stop = c.near_limit(acct), c.account_stop(acct)
             if near or stop:
                 print(f"account {acct}: " + (near or "") + (f"; stopped: {stop['error']} at {stop['at']}" if stop else ""))
+        if owed:
+            print(f"live tests owed: {len(owed)} (merged with the live step off; a release is refused until each has run)")
+            for o in owed:
+                print(f"  {o['test']}   slice {o['slice']}, merge {o['merge'][:10]}")
         pending = c.DATA / "push.pending"
         if pending.exists():
             print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")
