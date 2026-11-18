@@ -190,6 +190,14 @@ jobs:
       - run: uv sync
       - run: uv run pytest -c ../OspreyFlow_Build/pytest.ini ../OspreyFlow_Build/tests/test_doc_citations_check.py
 
+  slice-line-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync
+      - run: ../OspreyFlow_Build/scripts/slice_line/tests/run.sh
+
   test-file-coverage-check:
     runs-on: ubuntu-latest
     steps:
