@@ -12,8 +12,9 @@
 # It: (1) adds the pytest step for test_admin_sections.py to AD2's checks in slices.tsv and commits that one row with the
 # records trailer (the step was proved green on main in a scratch worktree before this script was written); (2) runs
 # refreeze.py AD2; (3) writes the gate's failure as a findings record, so the builder's prompt carries it (the builder
-# reads only the newest verify-*.json for findings); (4) brings main's RULINGS.md into the worktree and commits it there;
-# (5) sets AD2 back to building for round 2 of 2. The verifier's pass record for 993a434 stays; a new tip needs a new pass.
+# reads only the newest verify-*.json for findings); (4) sets AD2 back to building for round 2 of 2. The verifier's pass
+# record for 993a434 stays; a new tip needs a new pass. (It does NOT copy RULINGS.md into the worktree: a copy committed on a
+# slice's branch conflicts with main the next time main's RULINGS.md changes, which is what refused BL6's merge.)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 T=OspreyFlow_Build/process/lanes/v062/slices.tsv
@@ -66,9 +67,6 @@ rec = {"slice": "AD2", "commit": tip, "verdict": "findings", "passes": [], "find
        "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 json.dump(rec, open(f"{d}/verify-gate-{tip}.json", "w"), indent=1)
 PY
-cp "$RULINGS" "$W/$RULINGS"
-git -C "$W" add -- "$RULINGS"
-git -C "$W" diff --cached --quiet -- "$RULINGS" || git -C "$W" commit -q -m "docs(process): the owner's rulings as on main (RULINGS.md)" -- "$RULINGS"
 python3 - "$R/state.json" <<'PY'
 import json, sys
 p = sys.argv[1]

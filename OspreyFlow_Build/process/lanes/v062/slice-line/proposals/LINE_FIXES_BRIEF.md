@@ -48,10 +48,17 @@ whole and unchained; builders, verifiers and scouts still refused), actions:
   frozen columns) with the records trailer, and freezes the commands as `refreeze.py` does, keeping the history;
 - `add-round`: a slice stopped at its rounds limit gets one more round (round and limit each +1, phase `building`);
 - `clear-stop`: a slice stopped on red checks has `red_stop.json` and `red_stops` removed and goes back to `building`;
-- every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent per
-  worktree), and brings main's `RULINGS.md` as committed into the slice's worktree and commits it there (a worktree is a
-  snapshot; the builder and verifier must read the rulings given since). The owner has run exactly this by hand in
-  `diffs/allow-bl6-round-3.sh`, `resume-bl6.sh` and `resume-ad2.sh`: they are your specification.
+- every action takes the merge lock (no merge runs meanwhile) and refuses a worktree with uncommitted changes (one agent
+  per worktree). The owner has run exactly this by hand in `diffs/allow-bl6-round-3.sh`, `resume-bl6.sh` and
+  `resume-ad2.sh`: they are your specification, **except for one thing they got wrong: the rulings.** A worktree is a
+  snapshot, so the builder and verifier must read the rulings given since the slice started; but `allow-bl6-round-3.sh`
+  did it by committing a copy of main's `RULINGS.md` on the slice's branch, and main's `RULINGS.md` changed several times
+  after, so `merge_slice.py merge BL6` then refused ("does not merge cleanly"). Never commit main's records into a slice's
+  branch. Deliver the rulings another way (for example an untracked, excluded file in the worktree that the seat prompts
+  name; the verifier's checkout is made by `run_seat.py`, so the line adds it there too), and if a branch has fallen
+  behind main in the records folder, `resume.py` merges main into it (see `diffs/resume-bl6-merge-main.sh`, proved on a
+  scratch copy) and sends the slice for a fresh check. A merge conflict in the records folder alone is never a reason to
+  stop a slice.
 - **Authority is the owner's written word in a file only the owner can write:** a new `resume.tsv` in `lanes/v062/`
   (guard `OWNER_ONLY`, `merge_slice.OWNER_FILES`, README), one line `<slice> <action> <YYYY-MM-DD, UTC today>`; one line,
   one use, each use logged to `owner-changes.tsv` in the data folder (time, slice, action, detail). Do **not** use
