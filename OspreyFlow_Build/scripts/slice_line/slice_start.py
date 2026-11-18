@@ -12,6 +12,7 @@ for the whole slice (an account changes only between slices).
 """
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,23 @@ def running_builders() -> dict:
             if st.get("phase") in ("building", "verifying"):
                 out[d.name] = st
     return out
+
+
+def bring_client_hashes(wt: Path) -> str:
+    """F5: the client names' hashed list, from the main checkout into the worktree, only where git ignores it there
+    (as the merge gate's bring_client_hashes); never committed. What happened, in words."""
+    src = c.REPO / ms.CLIENT_HASHES_REL
+    if not src.is_file() or not src.read_text().strip():
+        return (f"The main checkout has no hashed client-name list ({ms.CLIENT_HASHES_REL}): the worktree has none, "
+                "so a client-name check there says it did not run. The owner makes it with "
+                "OspreyFlow_Build/marketing_site/client_hashes.py; the merge gate refuses without it.")
+    if subprocess.run(["git", "-C", str(wt), "check-ignore", "-q", ms.CLIENT_HASHES_REL]).returncode != 0:
+        return (f"The hashed client-name list was not copied: {ms.CLIENT_HASHES_REL} is not ignored by git in the "
+                "worktree, and the list is never committed.")
+    dest = wt / ms.CLIENT_HASHES_REL
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(src, dest)
+    return "The hashed client-name list was copied into the worktree (ignored by git)."
 
 
 def start(slice_id: str) -> dict:
@@ -83,6 +101,7 @@ def start(slice_id: str) -> dict:
             c.git(["branch", "-D", branch], c.REPO, check=False)
             raise SystemExit(f"NOT STARTED: {slice_id}'s environment (env: full) could not be built: {e}. "
                              f"The worktree was removed. See {log}")
+    hashes = bring_client_hashes(wt)
     rec = c.rec_dir(slice_id)
     frozen = {"slice": slice_id, "build": row["build"], "branch": branch, "worktree": str(wt), "base": base,
               **{k: row[k] for k in c.FROZEN_KEYS}, "frozen_at": c.now()}
@@ -91,7 +110,7 @@ def start(slice_id: str) -> dict:
     st = c.set_state(slice_id, phase="building", round=1, rounds_limit=conf["rounds"], setting=setting,
                      track=track, account=account, verifier_account=verifier_account, started=c.now(), slot=slot)
     subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"])
-    return {**frozen, **st}
+    return {**frozen, **st, "hashes": hashes}
 
 
 if __name__ == "__main__":
@@ -100,3 +119,4 @@ if __name__ == "__main__":
     s = start(sys.argv[1])
     print(f"Started {s['slice']} ({s['build']}) on {s['branch']} in {s['worktree']}: track {s['track']}, "
           f"account {s['account']}, dial {s['setting']}, rounds {s['rounds_limit']}, Playwright slot {s['slot']}.")
+    print(s["hashes"])

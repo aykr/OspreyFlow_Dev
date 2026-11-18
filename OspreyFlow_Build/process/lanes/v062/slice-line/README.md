@@ -157,7 +157,8 @@ as clear. A missing or unclear setting refuses the merge.
 copies it from the main checkout into the merge tree before `make -k ci`, after the merge commit is made and only
 where the tree's own ignore rules keep it out of git, so the sites' checks and BL6's client-name check run in the
 gate; a merge is refused when it is missing or empty there. GitHub's runners have no copy: there the check says in
-words that it did not run.
+words that it did not run. `slice_start.py` copies it the same way into a new slice's worktree (only where git ignores
+it there; never committed), so the builder's checks see it, and says in words when the main checkout has none.
 
 ## Records mode
 

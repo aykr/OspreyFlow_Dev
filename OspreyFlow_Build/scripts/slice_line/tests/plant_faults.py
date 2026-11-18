@@ -115,6 +115,9 @@ M = [
  ("merge_slice.py", '        if venv:\n            env["UV_PROJECT_ENVIRONMENT"] = str(venv)', '        if False:\n            env["UV_PROJECT_ENVIRONMENT"] = str(venv)', "ci_built_environment"),
  ("slice_start.py", '    if row["env"] == "full":', '    if False:', "env_full_builds"),
  ("merge_slice.py", '        if scans and run(scan_select.command(', '        if False and run(scan_select.command(', "scans_of_the_touched_files"),
+ ("slice_start.py", '    hashes = bring_client_hashes(wt)\n', '    hashes = "The hashed client-name list was copied"\n', "hashed_list_into_the_worktree"),
+ ("slice_start.py", '    if subprocess.run(["git", "-C", str(wt), "check-ignore", "-q", ms.CLIENT_HASHES_REL]).returncode != 0:', '    if False:', "where_git_would_take_it"),
+ ("slice_start.py", '    if not src.is_file() or not src.read_text().strip():\n        return (f"The main', '    if False:\n        return (f"The main', "no_hashed_list"),
 ]
 bad = 0
 for f, old, new, test in M:
