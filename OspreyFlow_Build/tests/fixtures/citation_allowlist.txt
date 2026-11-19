@@ -55,9 +55,7 @@ apps/pages/test/default/theme.spec.ts
 apps/pages/test/govuk/identity.spec.ts
 apps/pages/test/govuk/theme.spec.ts
 apps/pages/test/perf/graph.spec.ts
-apps/pages/test/server/csrf.test.ts
 apps/pages/test/server/refresh.test.ts
-apps/pages/test/server/session.test.ts
 packages/design/tokens.css
 scripts/no_react_check.mjs
 scripts/same_drawing_versions_check.mjs
