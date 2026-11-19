@@ -31905,6 +31905,15 @@ is the right default (fail closed), but nothing let a person say what such a tab
    approver's clearance is theirs neither to change nor to clear (either changes how rows they may not read are
    marked), refused in words naming the clearance needed. Otherwise clearing it is allowed: the table is then
    unmarked again. Refusals are answered in words and not audited, as a refused governance edit is not.
+   **4a. The governance edit judges its marking the same way** (SE2, C187, 19 November 2026). `PATCH
+   .../governance` judges the `classification` its handling carries by the three checks above, in one shared
+   function (`services/api/sources.py`: `marking_problems`), before anything is written: refused in words
+   (422 `governance_marking_refused`, the same `problems` list) when it is not one of the scheme's
+   classifications, is above the editor's clearance, is above the deployment's highest marking (naming it), or is
+   below the source's current marking (an edit never lowers a marking). Only a marking the request carries and
+   changes is judged: an edit that leaves the marking as it is, or carries none, is not newly refused, so a source
+   marked above a ceiling set later stays editable in its other declarations. The words differ from the default
+   route's only where they name the marking ("the marking", "the source's current marking").
 5. **Audited, a new version.** A request naming the default it already has writes nothing: no version, audit
    entry, flag or draft following; the answer is the source as it is. Each change records who, when, from and to
    (`set_dataset_source_default_marking`; *from* as the store's update replaced it, under the row's lock),

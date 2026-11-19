@@ -126,6 +126,64 @@ def default_marking_problems(
         ]
     if marking is None:
         return []
+    return marking_problems(
+        marking,
+        source.handling.get("classification"),
+        principal,
+        scheme,
+        ceiling,
+        subject="the default marking",
+        lowering="a default never lowers a marking",
+        own_name="own",
+    )
+
+
+def governance_marking_problems(
+    source: SourceTable,
+    handling: dict[str, Any],
+    principal: Principal,
+    scheme: HandlingScheme,
+    ceiling: DeploymentCeiling,
+) -> list[str]:
+    """Why a governance edit may not give `source` the marking its `handling` carries (SE2, C187;
+    ADR-140 Amendment 19's three checks, judged by `marking_problems`), in words; none when it may.
+    Only the marking the request carries is judged: one the edit leaves as it is, or does not
+    carry, is not newly refused (a source marked above a ceiling set later stays editable in its
+    other declarations)."""
+    marking = handling.get("classification")
+    if marking is None or marking == source.handling.get("classification"):
+        return []
+    if not isinstance(marking, str):
+        return [f"the marking must be one of the {scheme.name} handling scheme's classifications"]
+    return marking_problems(
+        marking,
+        source.handling.get("classification"),
+        principal,
+        scheme,
+        ceiling,
+        subject="the marking",
+        lowering="an edit never lowers a marking",
+        own_name="current",
+    )
+
+
+def marking_problems(
+    marking: str,
+    own: object,
+    principal: Principal,
+    scheme: HandlingScheme,
+    ceiling: DeploymentCeiling,
+    *,
+    subject: str,
+    lowering: str,
+    own_name: str,
+) -> list[str]:
+    """The three checks both routes share, in words (ADR-140 Amendment 19): `marking` is one of the
+    scheme's classifications; never above the person's own clearance (they would mark rows they
+    could not read) or the deployment's highest marking (ADR-148 decision 10); never below
+    `own`, the source's marking. `subject`, `lowering` and `own_name` word the sentences for the
+    route asking, so the default-marking route's are as they were."""
+    levels = list(scheme.classification)
     if marking not in levels:
         return [
             f"{marking!r} is not a classification of the {scheme.name} handling scheme: use one "
@@ -136,19 +194,13 @@ def default_marking_problems(
         principal.clearance
     ):
         problems.append(
-            "the default marking is above your clearance: a source's rows are never marked "
+            f"{subject} is above your clearance: a source's rows are never marked "
             "higher than the person declaring it may read"
         )
     if ceiling.above(marking):
-        problems.append(
-            f"the default marking is above this deployment's highest marking, {ceiling.marking}"
-        )
-    own = source.handling.get("classification")
+        problems.append(f"{subject} is above this deployment's highest marking, {ceiling.marking}")
     if isinstance(own, str) and own in levels and levels.index(marking) < levels.index(own):
-        problems.append(
-            f"the default marking is below the source's own marking, {own}: a default never "
-            "lowers a marking"
-        )
+        problems.append(f"{subject} is below the source's {own_name} marking, {own}: {lowering}")
     return problems
 
 

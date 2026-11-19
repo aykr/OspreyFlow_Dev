@@ -1044,6 +1044,7 @@ from .sources import (
     SourceStore,
     UnknownConnectionError,
     default_marking_problems,
+    governance_marking_problems,
 )
 from .strength_influencers import (
     InfluencerChangeRefused,
@@ -12647,12 +12648,27 @@ async def edit_dataset_source_governance(
     sources: SourcesDep,
     studio_recipes: StudioRecipesDep,
     audit: AuditDep,
+    handling_scheme: HandlingSchemeDep,
 ) -> GovernanceEdited:
     """Edits a source's marking, units, legal basis or refresh: a new version of the source,
     audited with the old and the new. Every deployed pipeline reading it then needs attention, its
     scheduled and watched runs blocked until it is deployed again under the new governance
-    (ADR-140 Amendment 4, the owner's ruling)."""
+    (ADR-140 Amendment 4, the owner's ruling). A marking it carries is judged as a default
+    marking is, before anything is written: refused in words (422 `governance_marking_refused`)
+    above the editor's clearance or the deployment's highest marking, or below the source's
+    current marking; a marking it leaves as it is is not judged."""
     before = await _source_of(sources, dataset_id, source_id)
+    problems = governance_marking_problems(
+        before,
+        body.handling,
+        principal,
+        handling_scheme,
+        DeploymentCeiling.from_env(handling_scheme),
+    )
+    if problems:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=422, content={"error": "governance_marking_refused", "problems": problems}
+        )
     if body.refresh is not None:
         await _refuse_a_keyless_refresh(studio_recipes, dataset_id, before.location, body.refresh)
     edited = await sources.edit_governance(dataset_id, source_id, body, principal)
