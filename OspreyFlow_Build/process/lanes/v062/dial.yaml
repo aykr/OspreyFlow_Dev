@@ -7,7 +7,7 @@
 # A setting takes effect at the next slice: a started slice keeps the setting it started with.
 current: auto
 day: balanced
-night: thrift
+night: balanced
 day_hours: [7, 22]
 
 settings:
@@ -20,8 +20,8 @@ settings:
       builder:   {model: sonnet, effort: medium}
       verifier:  {model: sonnet, effort: high, passes: [acceptance]}
   balanced:
-    builders: 2
-    rounds: 2
+    builders: 4
+    rounds: 4
     seats:
       conductor: {model: sonnet, effort: high}
       scout:     {model: haiku,  effort: medium}
