@@ -79,7 +79,7 @@ class _Recipes:
     async def follow_source(
         self, dataset_id: str, location: str, handling: dict[str, Any], legal_basis: str | None
     ) -> list[str]:
-        self.followed.append((dataset_id, location, handling["classification"]))
+        self.followed.append((dataset_id, location, handling.get("classification")))
         return ["Draft reading it"]
 
 
@@ -129,8 +129,9 @@ def _as(person: str) -> dict[str, str]:
 
 
 def _register(
-    world: SimpleNamespace, marking: str = "OFFICIAL", file: str = "cells.csv"
+    world: SimpleNamespace, marking: str | None = "OFFICIAL", file: str = "cells.csv"
 ) -> dict[str, Any]:
+    """Register a source; `marking` None registers it unmarked (no classification in its handling)."""
     (world.root / "uploaded" / "ds-a" / file).write_text("a\n1\n")
     response = world.client.post(
         "/v1/datasets/ds-a/sources",
@@ -138,7 +139,11 @@ def _register(
             "connection_id": "files",
             "name": "Cell stays",
             "location": str(world.root / "uploaded" / "ds-a" / file),
-            "handling": HANDLING | {"classification": marking},
+            "handling": (
+                {k: v for k, v in HANDLING.items() if k != "classification"}
+                if marking is None
+                else HANDLING | {"classification": marking}
+            ),
             "legal_basis": "Synthetic demonstration",
         },
         headers=_as("engineer"),
@@ -291,6 +296,44 @@ def test_an_edit_that_changes_no_marking_is_not_newly_refused(
     assert response.status_code == 200, response.text
     assert world.sources._sources[made["id"]].handling["handling_code"] == "C"
     assert world.sources._sources[made["id"]].handling["classification"] == "SECRET"
+
+
+@pytest.mark.parametrize("without", [None, "absent"], ids=["null", "left-out"])
+def test_an_edit_that_carries_no_marking_is_accepted_on_an_unmarked_source(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, without: str | None
+) -> None:
+    """An unmarked source (registering needs no classification) edited with no marking: the
+    marking is unchanged (none to none), so it is not a lowering and is not newly refused, by
+    anyone and under any ceiling. Without this, a swap of the two early returns in the check
+    would refuse every edit of an unmarked source as "below ... None"."""
+    monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+    made = _register(world, None)
+    assert world.sources._sources[made["id"]].handling.get("classification") is None
+    handling = {k: v for k, v in HANDLING.items() if k != "classification"} | {"handling_code": "C"}
+    if without is None:
+        handling["classification"] = None  # type: ignore[assignment]
+    for who in ("engineer", "junior"):
+        response = _edit(world, made["id"], handling, who=who)
+        assert response.status_code == 200, response.text
+    assert world.sources._sources[made["id"]].handling["handling_code"] == "C"
+    assert world.sources._sources[made["id"]].handling.get("classification") is None
+
+
+def test_an_unmarked_source_may_be_given_a_marking_within_the_clearance_and_ceiling(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other side of the same boundary: from no marking, a raise is judged as any raise is."""
+    monkeypatch.setenv(CEILING_ENV, "OFFICIAL")
+    made = _register(world, None)
+    over_ceiling = _edit(world, made["id"], HANDLING | {"classification": "SECRET"})
+    assert over_ceiling.status_code == 422, over_ceiling.text
+    assert "highest marking, OFFICIAL" in over_ceiling.text
+    above_editor = _edit(world, made["id"], HANDLING | {"classification": "OFFICIAL-SENSITIVE"}, who="junior")
+    assert above_editor.status_code == 422 and "above your clearance" in above_editor.text
+    assert world.sources._sources[made["id"]].version == 1
+    ok = _edit(world, made["id"], HANDLING | {"classification": "OFFICIAL"})
+    assert ok.status_code == 200, ok.text
+    assert world.sources._sources[made["id"]].handling["classification"] == "OFFICIAL"
 
 
 def test_with_no_ceiling_only_the_clearance_and_the_source_are_judged(
