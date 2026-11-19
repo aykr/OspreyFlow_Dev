@@ -200,6 +200,22 @@ is that each round finds one more thing the form reads before it offers a choice
 build one loader that waits for the whole list. GG1 no longer waits for AD2. AD2's merge also settles whether the invite
 test in the keyboard walk stays.
 
+### New build row (19 Nov, the owner's ruling): AD5, one loader that waits for everything the invite form reads
+
+The owner's ruling of 19 November: AD2 is merged as it is, on his word (his accept line), with its two faults in behaviour
+open. Those two faults become a new build, **AD5** (the id is the owner's; not started, to be started only on his word):
+(1) the invite form is drawn before the roles list has loaded, and when that load fails; (2) a handling scheme whose
+classification list is empty counts as loaded. The change: one loader that waits for everything the form reads, and the form
+drawn only when every read has arrived (the loading or error message otherwise, never a choice and never a statement of what
+the inviter can give), as the owner's general design rule for AD2 of 19 November says. **First a scout** (the read-only
+slice-scout) lists every read the form makes before it offers a choice: the inviter's details, the handling scheme and its
+classification list, the roles catalogue, and anything else it finds; the list goes into the brief, and the builder starts only
+from it. The two gaps in a test AD2 left are in scope: a late and a failed load of each read (the roles catalogue first), a
+classification list that is empty, and a test double that refuses what the real route's giver rule refuses (rule 15).
+**After:** AD2 (merged) and PL4 (the shared package move; the form's code moves with it). **PL4 does not wait for AD5**: AD5
+is queued behind PL4, never the other way. Until AD5 merges, AD2's form can be drawn before the roles list loads; the
+release notes should say so if v0.6.2 cuts before AD5.
+
 ### New row (19 Nov, from SE3's first verifier): the draft's PUT route confirms no version until the Glass sends one
 
 SE3 makes the model draft's creator check mandatory on every write (save, replace, discard) and confirms the version where
