@@ -18,6 +18,18 @@
  * not its subprotocols, not its query string (the forwarded URL is the path alone). The only header the
  * Conduit receives, beyond the ones the WebSocket handshake itself needs, is the person's bearer.
  *
+ * How the Conduit's closes reach the browser (the round-2 ruling on this slice). The real Conduit sends every
+ * refusal on the stream BEFORE it accepts the socket (a credential it will not serve, 1008; a principal store
+ * that is down, 1013; a principal without the stream's routes; a ticket no longer in standing; an
+ * investigation the person may not read). Under uvicorn a close before accept reaches a client as the
+ * handshake answered HTTP 403 with no body, no close code and no reason. So the proxy cannot tell a refused
+ * credential from a store outage, and closes the browser's socket 1008, "the Conduit refused the connection",
+ * for every 401 or 403: a store outage looks the same as a refusal. This is what the Glass gets through nginx
+ * today. A close AFTER accept (the stream running) carries its code and reason, and both are relayed as they
+ * are, 1008 and 1013 included. A Conduit that cannot be reached, or answers anything else, is 1013. Telling
+ * a refusal from an outage needs the Conduit to accept and then close (a backlog row for the owner); the
+ * Conduit is not changed here (ADR-152 X2).
+ *
  * Access control stays in the Conduit's adapters (rule 3): the proxy filters nothing and counts nothing;
  * the Conduit shows the person's own principal only what that person may read.
  *
@@ -214,15 +226,19 @@ export function attachStreamProxy(server: Server, deps: StreamDeps): StreamProxy
     upstream.on("ping", touch);
     upstream.on("pong", touch);
     upstream.on("close", (code, reason) => {
-      // What the Conduit said is what the browser is told. A close that is only a report of a state (the
-      // connection dropped: 1006, or no code: 1005) is a Conduit that went away, so "try again later".
+      // A close after accept (the stream running): what the Conduit said is what the browser is told. A close
+      // that is only a report of a state (the connection dropped: 1006, or no code: 1005) is a Conduit that
+      // went away, so "try again later".
       if (sendableCode(code)) finish(code, reason.toString("utf8"), undefined);
       else finish(1013, "try again later", undefined);
     });
     upstream.on("unexpected-response", (_request, response) => {
       response.resume();
-      // The Conduit refuses a connection it will not serve before it accepts (HTTP 401 or 403): the
-      // credential was refused. Anything else is the Conduit being unwell.
+      // The Conduit refuses a connection it will not serve before it accepts, and uvicorn sends that as HTTP
+      // 403 with no close code and no reason. A refused credential (1008) and a principal store that is down
+      // (1013) are therefore the same thing here, and both are told to the browser as 1008: this cannot be
+      // better without the Conduit accepting and then closing (see the header). Anything else is the Conduit
+      // being unwell.
       if (response.statusCode === 401 || response.statusCode === 403) finish(1008, "the Conduit refused the connection", undefined);
       else finish(1013, "try again later", undefined);
     });
