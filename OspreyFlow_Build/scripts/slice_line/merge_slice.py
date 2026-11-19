@@ -9,7 +9,9 @@
      latest completed GitHub run is green (a failed one, a cancelled one with nothing newer, or one gh cannot read
      refuses: F2);
   2. the slice was started (its frozen record exists) and main's backlog row still matches what was frozen;
-  3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it;
+  3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it; or,
+     in its place and for that exact tip only, the owner's acceptance (resume.py accept: accepted-<tip>.json, its
+     use logged in owner-changes.tsv) of that same verifier's findings record for the tip, unchanged;
   4. the branch touches no protected path (the owner's files, the never-staged files, the line itself);
   5. the acceptance test was red before the slice (the base, with the slice's acceptance files) ...
   6. ... and is green, with the slice's checks, on the merge result;
@@ -384,6 +386,11 @@ def verifier_pass(slice_id: str, tip: str) -> dict:
         raise Refused(f"no verifier record for {slice_id} at its tip {tip[:10]}: the verifier has not passed this commit.")
     if rec.get("commit") != tip or rec.get("verdict") != "pass":
         raise Refused(f"the verifier's record for {tip[:10]} is not a pass ({rec.get('verdict')}).")
+    return verifier_sessions(slice_id, tip, rec)
+
+
+def verifier_sessions(slice_id: str, tip: str, rec: dict) -> dict:
+    """The record names verifier sessions, none of which built the slice, each of whose transcripts names the tip."""
     builders = set((c.read_json(c.rec_dir(slice_id) / "sessions.json") or {}).get("builder", []))
     passes = rec.get("passes") or []
     if not passes:
@@ -396,6 +403,34 @@ def verifier_pass(slice_id: str, tip: str) -> dict:
         if not tp.is_file() or tip not in tp.read_text(errors="ignore"):
             raise Refused(f"the verifier session {sid[:8]}'s transcript is missing or never names {tip[:10]}.")
     return rec
+
+
+#: The owner's acceptance of a verifier's findings (resume.py accept), as owner-changes.tsv logs each use.
+ACCEPT_ACTIONS = ("accept", "standing-accept")
+
+
+def acceptance(slice_id: str, tip: str) -> dict | None:
+    """The owner's acceptance for exactly this tip, or None when there is no acceptance record for it. Refused when
+    one is there but does not stand: a record for another tip, no verifier findings record for the tip behind it, the
+    findings not those the verifier returned, or no logged use of the owner's word for that slice and tip."""
+    rec = c.rec_dir(slice_id)
+    acc = c.read_json(rec / f"accepted-{tip}.json")
+    if acc is None:
+        return None
+    if acc.get("tip") != tip or acc.get("slice") != slice_id:
+        raise Refused(f"the acceptance record for {tip[:10]} names another tip or slice: it is for one tip only.")
+    verify = c.read_json(rec / f"verify-{tip}.json")
+    if not verify or verify.get("commit") != tip or verify.get("verdict") != "findings":
+        raise Refused(f"the acceptance for {tip[:10]} has no verifier findings record for that tip behind it "
+                      f"({(verify or {}).get('verdict', 'none')}): the owner accepts only what a verifier saw.")
+    if verify.get("findings") != acc.get("findings") or not acc.get("findings"):
+        raise Refused(f"the acceptance for {tip[:10]} does not hold the verifier's findings for that tip verbatim.")
+    verifier_sessions(slice_id, tip, verify)
+    if not any(r["slice"] == slice_id and r["action"] in ACCEPT_ACTIONS and f"tip {tip}" in r["detail"]
+               for r in c.owner_changes()):
+        raise Refused(f"no use of an acceptance for {slice_id} at {tip[:10]} is logged in owner-changes.tsv: the "
+                      "record was not written by resume.py.")
+    return {**acc, "verifier": verify}
 
 
 #: A failing test in the gate's log, as pytest, vitest and Playwright print it, and the lines that say why.
@@ -478,7 +513,8 @@ def merge(slice_id: str) -> dict:
         tip = c.git(["rev-parse", branch], c.REPO)
         if subprocess.run(["git", "merge-base", "--is-ancestor", tip, base], cwd=c.REPO).returncode == 0:
             raise Refused(f"{branch} is already on main.")
-        verify = verifier_pass(slice_id, tip)
+        accepted = acceptance(slice_id, tip)
+        verify = accepted["verifier"] if accepted else verifier_pass(slice_id, tip)
         touched = c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).splitlines()
         bad = [p for p in touched if p.startswith(PROTECTED_PREFIXES)]
         if bad:
@@ -553,6 +589,12 @@ def merge(slice_id: str) -> dict:
         live = c.read_json(log.with_suffix(".live.json"))
         if live:
             done["live_step"] = live  # off: the live files this change reaches, named, not run
+        if accepted:  # merged narrower: what the verifier found and the owner accepted, for the conductor's report
+            done["accepted_findings"] = {
+                "count": len(accepted["findings"]), "findings": accepted["findings"],
+                "faults_in_behaviour": accepted.get("faults_in_behaviour", []),
+                "gaps_in_a_test": accepted.get("gaps_in_a_test", []), "no_kind": accepted.get("no_kind", []),
+                "record": f"accepted-{tip}.json", "line": accepted.get("line"), "by": accepted.get("by")}
         c.write_json(rec / "merged.json", done)
         c.set_state(slice_id, phase="merged", merge=merged)
         push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO,

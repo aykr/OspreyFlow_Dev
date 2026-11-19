@@ -93,12 +93,17 @@ without a tool call; the line's own cap is 6 red stops.
    (`verify-<tip>.json`) has a `kind`, `fault in behaviour` or `gap in a test` (a required field of the verdict's
    schema; any other value counts as no kind), and the record counts them (`kinds`). Findings go back to the builder
    until the rounds limit; then the slice stops and its note names the split and the one decision the owner must make.
-4. `merge_slice.py merge <ID>`: the acceptance (red before) and the checks and scans (green after) run in an
+4. `merge_slice.py merge <ID>`: a verifier's pass for the tip, or in its place, for that exact tip only, the owner's
+   acceptance (`accepted-<tip>.json`, behind it the verifier's unchanged findings record for the tip and its use logged
+   in `owner-changes.tsv`); a tip that moved after the acceptance has neither. Then the acceptance (red before) and the checks and scans (green after) run in an
    environment built as CI builds it, its venv outside the tree, with the slice's slot; `node_modules` is removed
    before the full gate, which builds its own. Then main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
    (or a merge refused for a conflict in the records folder alone) leaves the slice `refused`: the failing tests and
    their failing lines (not the whole log) are written as a findings record (`verify-gate-<tip>.json`), the board
    shows "refused by the gate: N tests", and `resume.py <ID> send-back` returns it to the builder with those findings.
+   A slice merged on an acceptance has `accepted_findings` (the count, the text, the split) in `merged.json`; the board
+   prints "merged, accepted narrower: N findings" and `status.js` keeps the findings (`accepted_findings`) for the
+   conductor's next report.
 5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
 
 ## The scans a slice's checks include
@@ -131,6 +136,7 @@ main's records, and sends the slice for a fresh check.
 | `clear-stop` | a slice stopped on red checks: `red_stop.json` and `red_stops` removed | a line in `resume.tsv` |
 | `send-back` | a slice the merge gate refused: back to the builder with the gate's findings, its round advanced | none within the rounds limit; past it, the owner's `add-round` line as well |
 | `correct-command` | a slice stopped **only** by the conductor's own malformed command (ruling 3) | none: the limits are in the code |
+| `accept` | a slice stopped at its rounds limit (or refused by the gate at it) whose tip has the Stop hook's green test record and a verifier's `findings` record for that same tip: writes `accepted-<tip>.json` (the owner's line, the date, every finding verbatim, split into faults in behaviour, gaps in a test and findings with no kind), phase `verified`, `accepted: true`; changes no finding and no verifier record. A last verdict of `pass` is refused (nothing to accept) | a line in `resume.tsv` |
 
 `resume.tsv` (`OspreyFlow_Build/process/lanes/v062/resume.tsv`) is the owner's: one line `<ID> <action> <YYYY-MM-DD>`
 (today, UTC), one use per line, each use logged in `owner-changes.tsv` in the data folder (time, slice, action,
@@ -201,6 +207,6 @@ says that cost is a list-price estimate, not a bill.
 ## Files outside the repository
 
 `~/.ospreyflow/slice-line/`: `bin/` (the hooks), `node/v<major>/` (CI's Node, found before PATH's: the gate refuses another major; Node 22.23.5 for darwin-arm64 is installed at `node/v22/`, from nodejs.org's tarball, its SHA-256 matching `SHASUMS256.txt`), `settings.json`, `manifest.json`, `origin.url`,
-`emails.sha256`, `records/<ID>/` (frozen, state, sessions, tests-, verify-, merged, logs), `accounts/`,
+`emails.sha256`, `records/<ID>/` (frozen, state, sessions, tests-, verify-, accepted-, merged, logs), `accounts/`,
 `sessions/` (guard markers), `usage.tsv`, `push.log`, `push.pending`, `merge.lock`. The dashboard's
 `status.js` is in the git-ignored `Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/`.

@@ -39,7 +39,7 @@ M = [
  ("merge_slice.py", 'fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)', 'pass', "one_merge_at_a_time"),
  ("merge_slice.py", 'if not rel.startswith(c.V062_REL + "/") or ".." in rel:', 'if False:', "records_mode"),
  ("push_main.sh", "if ! printf '%s' \"$trailers\" | grep -qE '^(Slice-Merge|Slice-Records):'; then", "if false; then", "push_script_refuses"),
- ("board.py", '        if not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):', '        if False:', "refuses_done_without"),
+ ("board.py", '        elif not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):', '        elif False:', "refuses_done_without"),
  ("board.py", '    if state == "done":\n', '    if False:\n', "forged_done"),
  ("board.py", '    if not isinstance(data, dict):\n', '    if False:\n', "bad_or_incomplete_record"),
  ("board.py", "test run {merged.get('acceptance_run', '')}", "test run {merged['acceptance_run']}", "bad_or_incomplete_record"),
@@ -153,6 +153,19 @@ M = [
  ("run_seat.py", '    if finding.get("kind") in KINDS:\n        return finding["kind"]\n    if legacy and "kind" not in finding:', '    if finding.get("kind") in KINDS:\n        return finding["kind"]\n    if legacy:', "finding_kind_is_read_from_the_old_prefix"),
  ("run_seat.py", "Give each finding its kind: '{FAULT}' (a fault", "Give each finding its kind: '' (a fault", "finding_kind_is_asked_for"),
  ("run_seat.py", '({kinds_said(record[\'kinds\'])}; first: "', '(first: "', "finding_kind_split_is_named"),
+ ("resume.py", '    if not (tests and tests.get("green") and tests.get("commit") == tip):', '    if False:', "accept_refuses_a_tip_the_verifier"),
+ ("resume.py", '    if not verify or verify.get("commit") != tip:\n        raise Refused(f"no verifier record for the tip', '    if False:\n        raise Refused(f"no verifier record for the tip', "accept_refuses_a_tip_the_verifier"),
+ ("resume.py", '    if verify.get("verdict") == "pass":\n', '    if False:\n', "last_verdict_is_pass"),
+ ("resume.py", '            if not at_limit:\n', '            if False:\n', "accept_refuses_a_slice_not_stopped"),
+ ("resume.py", '    findings = verify["findings"]\n', '    findings = verify["findings"][:1]\n', "changes_no_finding"),
+ ("resume.py", '    split = {"faults_in_behaviour": [f for f in findings if f.get("kind") == rs.FAULT],', '    split = {"faults_in_behaviour": [f for f in findings if f.get("kind") != rs.GAP],', "changes_no_finding"),
+ ("merge_slice.py", '    acc = c.read_json(rec / f"accepted-{tip}.json")\n    if acc is None:\n        return None\n    if acc.get("tip") != tip or acc.get("slice") != slice_id:', '    acc = next((c.read_json(q) for q in rec.glob("accepted-*.json")), None)\n    if acc is None:\n        return None\n    if False:', "tip_moved_after_the_acceptance"),
+ ("merge_slice.py", '    if not verify or verify.get("commit") != tip or verify.get("verdict") != "findings":', '    if not verify:', "without_the_verifiers_findings_record"),
+ ("merge_slice.py", '    if verify.get("findings") != acc.get("findings") or not acc.get("findings"):', '    if False:', "without_the_verifiers_findings_record"),
+ ("merge_slice.py", '    if not any(r["slice"] == slice_id and r["action"] in ACCEPT_ACTIONS and f"tip {tip}" in r["detail"]', '    if False and not any(r["slice"] == slice_id and r["action"] in ACCEPT_ACTIONS and f"tip {tip}" in r["detail"]', "no_logged_use"),
+ ("merge_slice.py", '        if accepted:  # merged narrower', '        if False:  # merged narrower', "names_the_accepted_findings"),
+ ("board.py", '    return bool(tip and (merged or {}).get("accepted_findings") and accepted', '    return bool(False and tip and (merged or {}).get("accepted_findings") and accepted', "names_the_accepted_findings"),
+ ("board.py", '    elif state == "done" and note:\n        shown = note', '    elif False:\n        shown = note', "names_the_accepted_findings"),
 ]
 bad = 0
 for f, old, new, test in M:

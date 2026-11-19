@@ -10,6 +10,9 @@
                    advanced (past its rounds limit it needs the owner's add-round line as well)        limit
   correct-command  the conductor's own malformed command, corrected and proved on main (ruling 3)      none: the code
                                                                                                         holds the limits
+  accept           a slice stopped at its rounds limit with a verifier's findings for its exact tip    owner's line
+                   is merged narrower: an acceptance record for that tip, phase verified (the merge
+                   script takes it in place of the verifier's pass, for that tip only)
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -34,9 +37,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import dry_run  # noqa: E402
 import merge_slice as ms  # noqa: E402
+import run_seat as rs  # noqa: E402
 
-ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command")
-OWNER_ACTIONS = ("refreeze", "add-round", "clear-stop")
+ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept")
+OWNER_ACTIONS = ("refreeze", "add-round", "clear-stop", "accept")
 #: What a corrected command may not add: anything that changes what a check tests rather than how it is run.
 LOOSENING = ("||", "; true", "exit 0", " -k ", "--deselect", "--ignore", "--grep", " -t ", "--passWithNoTests", "skip",
              "xfail", "set +e", "--last-failed", "--lf", "--testNamePattern", "--only")
@@ -246,6 +250,50 @@ def only_malformed(slice_id: str) -> str:
     return "; ".join(sorted(set(whys)))
 
 
+# ------------------------------------------------------------------ accept: what a verifier saw, at the exact tip
+
+
+def findings_at_tip(slice_id: str, frozen: dict) -> tuple[str, dict]:
+    """The branch's tip and the verifier's findings record for it, when the tip has the Stop hook's green test record
+    and a verifier session that did not build it returned findings for exactly that commit; refused otherwise."""
+    rec = c.rec_dir(slice_id)
+    tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    tests = c.read_json(rec / f"tests-{tip}.json")
+    if not (tests and tests.get("green") and tests.get("commit") == tip):
+        raise Refused(f"the tip {tip[:10]} has no green test record (the Stop hook's): nothing a verifier saw is there "
+                      "to accept. Nothing changed.")
+    verify = c.read_json(rec / f"verify-{tip}.json")
+    if not verify or verify.get("commit") != tip:
+        raise Refused(f"no verifier record for the tip {tip[:10]}: the owner accepts what a verifier saw, at the tip "
+                      "it saw, and the branch has moved since or was never verified. Nothing changed.")
+    if verify.get("verdict") == "pass":
+        raise Refused(f"the verifier passed {tip[:10]}: there is nothing to accept (merge_slice.py merge it). "
+                      "Nothing changed.")
+    if verify.get("verdict") != "findings" or not verify.get("findings"):
+        raise Refused(f"the verifier's record for {tip[:10]} holds no findings ({verify.get('verdict')}). Nothing changed.")
+    try:
+        ms.verifier_sessions(slice_id, tip, verify)
+    except ms.Refused as e:
+        raise Refused(f"{e} Nothing changed.")
+    return tip, verify
+
+
+def write_acceptance(slice_id: str, tip: str, verify: dict, line: str, by: str) -> dict:
+    """accepted-<tip>.json: the owner's line, the date, every finding verbatim, split by kind. Changes no finding."""
+    findings = verify["findings"]
+    split = {"faults_in_behaviour": [f for f in findings if f.get("kind") == rs.FAULT],
+             "gaps_in_a_test": [f for f in findings if f.get("kind") == rs.GAP],
+             "no_kind": [f for f in findings if f.get("kind") not in rs.KINDS]}
+    acc = {"slice": slice_id, "tip": tip, "line": line, "date": today(), "by": by,
+           "verifier_record": f"verify-{tip}.json", "findings": findings, **split, "at": c.now()}
+    c.write_json(c.rec_dir(slice_id) / f"accepted-{tip}.json", acc)
+    st = c.state(slice_id)
+    st.pop("note", None)
+    st.update(phase="verified", accepted=True, tip=tip, updated=c.now())
+    c.write_json(c.rec_dir(slice_id) / "state.json", st)
+    return acc
+
+
 # ------------------------------------------------------------------ the actions
 
 
@@ -331,6 +379,19 @@ def act(slice_id: str, action: str) -> list[str]:
             c.log_owner_change(slice_id, action, f"standing (ruling 3): {why}; proved on main; committed {sha[:10]}; "
                                                  f"command corrected: {shown}")
             return [f"{slice_id}: command corrected ({why}): {shown}. Building; tell the owner in the next report.", *said]
+        if action == "accept":
+            tip, verify = findings_at_tip(slice_id, frozen)
+            at_limit = rnd >= limit and (phase == "refused" or (phase == "stopped" and not (rec / "red_stop.json").exists()))
+            if not at_limit:
+                raise Refused(f"{slice_id} is not stopped at its rounds limit (phase {phase}, round {rnd} of {limit}): "
+                              "the owner accepts a slice narrower only once its rounds are spent. Nothing changed.")
+            tag = authority(slice_id, action)
+            acc = write_acceptance(slice_id, tip, verify, f"{slice_id} {action} {today()}", "owner (resume.tsv)")
+            n = len(acc["findings"])
+            c.log_owner_change(slice_id, action, f"{tag}: tip {tip}; {n} findings accepted "
+                                                 f"({rs.kinds_said(rs.kinds_of(acc['findings']))})")
+            return [f"{slice_id}: accepted narrower at {tip[:10]} with {n} findings, on the owner's word; verified. "
+                    f"The conductor runs merge_slice.py merge {slice_id}: every other gate still runs."]
         raise Refused(f"unknown action {action}")
     finally:
         fh.close()
