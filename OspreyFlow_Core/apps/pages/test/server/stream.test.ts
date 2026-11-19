@@ -20,9 +20,10 @@
  * slice cannot start. The pure half is here: the proxy carries the right person's token and nothing the
  * browser sent. The live proof is a backlog row, due once the page service is wired into a deployment.
  */
-import { createServer } from "node:http";
+import { createServer, request as httpRequest } from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, Server } from "node:http";
 import type { AddressInfo } from "node:net";
+import type { Duplex } from "node:stream";
 
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
@@ -46,6 +47,8 @@ const ORIGIN = "https://osprey.test";
 const STREAM_PATH = "/v1/investigations/inv-1/stream";
 /** How often the service looks at its open sockets, in a test: the clock is moved by hand, so this is short. */
 const CHECK_MS = 10;
+/** A credential planted in an address, made now: a refusal must name the setting and never repeat it. */
+const CREDENTIAL = generateSecret(16);
 
 // --- waiting ----------------------------------------------------------------------------------------------
 
@@ -221,6 +224,40 @@ function upgrade(port: number, options: UpgradeOptions = {}): Promise<Outcome> {
   });
 }
 
+const rawSockets: Duplex[] = [];
+
+/**
+ * An upgrade request written exactly as given, for a path a `ws` client would tidy before sending (a dot
+ * segment is resolved by the URL parser): the status of the refusal, or "upgraded".
+ */
+function rawUpgrade(port: number, path: string, cookie: string): Promise<number | "upgraded"> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      host: "127.0.0.1",
+      port,
+      path,
+      headers: {
+        Connection: "Upgrade",
+        Upgrade: "websocket",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": Buffer.from(generateSecret(16)).toString("base64"),
+        Origin: ORIGIN,
+        Cookie: cookie,
+      },
+    });
+    req.on("response", (res) => {
+      res.resume();
+      resolve(res.statusCode ?? 0);
+    });
+    req.on("upgrade", (_res, socket) => {
+      rawSockets.push(socket); // kept open until the test ends, as a browser's would be
+      resolve("upgraded");
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 function opened(outcome: Outcome): Browser {
   if (!("upgraded" in outcome)) throw new Error(`expected an upgrade, got ${JSON.stringify(outcome)}`);
   return outcome.upgraded;
@@ -256,6 +293,7 @@ const fakes: FakeConduit[] = [];
 const sockets: Browser[] = [];
 
 afterEach(async () => {
+  for (const raw of rawSockets.splice(0)) raw.destroy();
   for (const browser of sockets.splice(0)) browser.socket.terminate();
   while (everyone.length) await everyone.pop()?.stop();
   while (fakes.length) await fakes.pop()?.stop();
@@ -553,9 +591,9 @@ describe("test_the_stream_through_pages_carries_only_what_the_person_may_read", 
     const browser = opened(await upgrade(pages.port, { cookie: person.cookie }));
     sockets.push(browser);
     await connected(fake, 1);
-    browser.socket.close(1000, "done");
+    browser.socket.close(4002, "navigated away");
     await until("the close at the Conduit", () => fake.seen[0]?.closed !== undefined);
-    expect(fake.seen[0]?.closed).toEqual({ code: 1000, reason: "done" });
+    expect(fake.seen[0]?.closed).toEqual({ code: 4002, reason: "navigated away" });
   });
 
   it("two people's sessions reach their own tokens, never each other's", async () => {
@@ -739,6 +777,26 @@ describe("the path, and whether the proxy is there at all", () => {
     expect(fake.tcp).toBe(0);
   });
 
+  it.each(["/v1/investigations/./stream", "/v1/investigations/../stream", "/v1/investigations/.../stream", "/v1/investigations/%2e%2e/stream"])(
+    "a raw upgrade request for %s (a client that does not tidy the path): 404, nothing contacted",
+    async (path) => {
+      const fake = await conduit();
+      const pages = await startPages({ conduit: fake });
+      const person = await pages.signIn("a");
+      expect(await rawUpgrade(pages.port, path, person.cookie)).toBe(404);
+      expect(fake.tcp).toBe(0);
+    },
+  );
+
+  it("the same raw request for an ordinary identifier is upgraded (the control)", async () => {
+    const fake = await conduit();
+    const pages = await startPages({ conduit: fake });
+    const person = await pages.signIn("a");
+    expect(await rawUpgrade(pages.port, STREAM_PATH, person.cookie)).toBe("upgraded");
+    await connected(fake, 1);
+    expect(fake.seen[0]?.url).toBe(STREAM_PATH);
+  });
+
   it("a plain GET of the stream path (no upgrade) is not proxied", async () => {
     const fake = await conduit();
     const pages = await startPages({ conduit: fake });
@@ -865,7 +923,7 @@ describe("the service refuses to start, in words", () => {
     ["no scheme", "osprey.test"],
     ["a scheme that is not http or https", "ftp://osprey.test"],
     ["a query", "https://osprey.test?x=1"],
-    ["credentials", "https://user:pass@osprey.test"],
+    ["credentials", `https://user:${CREDENTIAL}@osprey.test`],
     ["an empty value", ""],
   ])("with a public origin that has %s", async (_name, origin) => {
     const said = await startRefused({ OSPREY_PAGES_CONDUIT_URL: "http://api:8000", OSPREY_PAGES_PUBLIC_ORIGIN: origin });
@@ -877,14 +935,14 @@ describe("the service refuses to start, in words", () => {
   it.each([
     ["not an address", "api"],
     ["not http or https", "ftp://api:8000"],
-    ["credentials", "http://user:pass@api:8000"],
+    ["credentials", `http://user:${CREDENTIAL}@api:8000`],
     ["a path", "http://api:8000/v1"],
   ])("with a Conduit address that is %s", async (_name, address) => {
     const said = await startRefused({ OSPREY_PAGES_CONDUIT_URL: address, OSPREY_PAGES_PUBLIC_ORIGIN: ORIGIN });
     expect(said.result).toBeUndefined();
     expect(said.exits).toEqual([1]);
     expect(said.errors.join("\n")).toContain("OSPREY_PAGES_CONDUIT_URL");
-    expect(said.errors.join("\n")).not.toContain("pass"); // never the credential it was given
+    expect(said.errors.join("\n")).not.toContain(CREDENTIAL); // never the credential it was given
   });
 
   it.each(["0", "-5", "abc", "1.5", "99999999"])("with an idle time of %s", async (seconds) => {
