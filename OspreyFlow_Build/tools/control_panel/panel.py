@@ -416,6 +416,13 @@ def _leaf(doc: object, path: tuple[str, ...]) -> object:
     return doc
 
 
+def reads_back(got: object, doc: dict, path: tuple[str, ...], value: object) -> bool:
+    """The edited file, as the scripts' loader reads it (`got`), is `doc` with `value` at `path` and nothing else different,
+    and `value` is still the type it was given (`True` is not `1`). The guard against a line edit that a file's shape
+    (a block scalar, a continuation line) makes read as something else."""
+    return got == _set_path(doc, path, value) and type(_leaf(got, path)) is type(value)
+
+
 def _file_and_path(cfg: Config, key: str) -> tuple[Path, str, tuple[str, ...]]:
     parts = key.split(".")
     if parts[0] == "dial":
@@ -466,7 +473,7 @@ def apply_change(cfg: Config, key: object, value: object) -> dict:
                 got = yaml.safe_load(new_text)
             except (ValueError, OSError, yaml.YAMLError) as e:
                 raise Refused(f"the panel cannot edit {target.name} safely: {e}", 500)
-            if got != _set_path(docs[which], path, value) or type(_leaf(got, path)) is not type(value):
+            if not reads_back(got, docs[which], path, value):
                 raise Refused(f"the panel could not write that to {target.name} so that it reads back the same", 500)
             new_bytes = new_text.encode()
         original = target.read_bytes() if target.exists() else None
