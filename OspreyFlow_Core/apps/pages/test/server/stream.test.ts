@@ -6,12 +6,25 @@
  * socket is only ever to the page service. Every case below is a real HTTP upgrade request through the
  * service's own server (a `ws` client with a Cookie header and an Origin), not a call to a helper, and
  * the Conduit is a fake WebSocket server that RECORDS what it receives and REFUSES what the real
- * Conduit refuses (rule 15; `services/api/app.py`, `_authenticate_websocket` and the `stream` route):
- *   - no Authorization header and no ticket: close 1008, "missing bearer token or ws-ticket";
- *   - a bearer it does not know: close 1008; a ticket it does not know: close 1008;
- *   - a `token` or `access_token` in the URL: ignored, so refused as missing;
- *   - the Conduit may also refuse before it accepts (Starlette answers HTTP 403 to a socket closed
- *     before `accept()`), which the fake does in its `reject-handshake` mode.
+ * Conduit refuses (rule 15; `services/api/app.py`, `_authenticate_websocket` and the `stream` route).
+ *
+ * HOW THE REAL CONDUIT REFUSES. Every refusal on the stream route is sent BEFORE `websocket.accept()`: a
+ * credential it will not serve (close 1008), a principal store that is down (close 1013, "try again
+ * later"), a principal admitted to named routes alone, a ticket or principal no longer in standing, and
+ * an investigation the person may not read. Under uvicorn a close before accept reaches the client as
+ * the handshake answered HTTP 403 with NO body, NO close code and NO reason. So the fake's default
+ * refusal is exactly that, for: no Authorization header and no ticket; a bearer it does not know; a
+ * ticket it does not know; a `token` or `access_token` in the URL (ignored, so refused as missing); and
+ * a store that is down (`storeDown`). The five cannot be told apart by the page service, and a store
+ * outage ("try again later", 1013) looks to it exactly like a refused credential (1008). The page
+ * service therefore closes the browser's socket 1008, "the Conduit refused the connection", for every
+ * HTTP 401 or 403 from the Conduit: the Glass gets the same today through nginx. Telling the two apart
+ * needs the Conduit to accept the socket and then close it, so the code survives the handshake: that is
+ * a backlog row for the owner (the Conduit is not changed by this slice, ADR-152 X2).
+ *
+ * A close AFTER accept (the stream running) carries a code and a reason, and the page service relays
+ * both unchanged to the browser, 1008 and 1013 included; `closeFrom` is the fake doing that, and the
+ * cases that use it say so.
  * The fake checks no Origin, as the real one does not (CORS does not gate a WebSocket).
  *
  * OWED, the live half of `test_the_stream_through_pages_carries_only_what_the_person_may_read`: that the
@@ -96,15 +109,17 @@ interface Seen {
   socket?: WebSocket;
 }
 
-type Mode = "close-after-accept" | "reject-handshake";
-
 class FakeConduit {
   /** TCP connections of any kind: a refusal by the page service must show here as none at all. */
   tcp = 0;
+  /** Connections the fake accepted (upgraded). */
   readonly seen: Seen[] = [];
+  /** Handshakes the fake refused with HTTP 403, before accepting: what each carried, never a frame. */
+  readonly refused: Seen[] = [];
   readonly tokens = new Set<string>();
   readonly tickets = new Set<string>();
-  mode: Mode = "close-after-accept";
+  /** The principal store is down: the real Conduit closes 1013 before accept, which is HTTP 403 on the wire. */
+  storeDown = false;
   private readonly http: Server;
   private readonly wss: WebSocketServer;
   port = 0;
@@ -114,14 +129,18 @@ class FakeConduit {
     this.http.on("connection", () => {
       this.tcp += 1;
     });
-    this.wss = new WebSocketServer({
-      server: this.http,
-      verifyClient: (info, done) => {
-        if (this.mode === "reject-handshake" && this.refusal(info.req) !== null) done(false, 403, "Forbidden");
-        else done(true);
-      },
-    });
+    this.wss = new WebSocketServer({ noServer: true });
     this.wss.on("connection", (socket, req) => this.onConnection(socket, req));
+    this.http.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+      if (this.refusal(req) !== null) {
+        // As uvicorn answers a close before accept: HTTP 403, empty body, no close code, no reason.
+        this.refused.push({ url: req.url ?? "", headers: req.headers, frames: [] });
+        socket.on("error", () => undefined);
+        socket.end("HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+        return;
+      }
+      this.wss.handleUpgrade(req, socket, head, (ws) => this.wss.emit("connection", ws, req));
+    });
   }
 
   static async start(): Promise<FakeConduit> {
@@ -135,8 +154,9 @@ class FakeConduit {
     return `http://127.0.0.1:${this.port}`;
   }
 
-  /** What the real Conduit says to a connection it will not serve, or null when it serves it. */
+  /** Why the real Conduit will not serve a connection (it never says so on the wire), or null when it serves it. */
   private refusal(req: IncomingMessage): string | null {
+    if (this.storeDown) return "the principal store is unavailable";
     const header = req.headers["authorization"] ?? "";
     if (header.toLowerCase().startsWith("bearer ")) {
       return this.tokens.has(header.slice("bearer ".length)) ? null : "invalid bearer token";
@@ -154,8 +174,6 @@ class FakeConduit {
     socket.on("close", (code, reason) => {
       seen.closed = { code, reason: reason.toString("utf8") };
     });
-    const refusal = this.refusal(req);
-    if (refusal !== null) socket.close(1008, refusal);
   }
 
   push(index: number, data: string | Buffer, binary = false): void {
@@ -168,7 +186,7 @@ class FakeConduit {
 
   /** The whole of what the fake received on one connection, as one string to search. */
   everythingSeen(): string {
-    return JSON.stringify(this.seen.map((s) => ({ url: s.url, headers: s.headers, frames: s.frames.map((f) => f.text) })));
+    return JSON.stringify([...this.seen, ...this.refused].map((s) => ({ url: s.url, headers: s.headers, frames: s.frames.map((f) => f.text) })));
   }
 
   async stop(): Promise<void> {
@@ -251,6 +269,35 @@ function rawUpgrade(port: number, path: string, cookie: string): Promise<number 
     });
     req.on("upgrade", (_res, socket) => {
       rawSockets.push(socket); // kept open until the test ends, as a browser's would be
+      resolve("upgraded");
+    });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+/** The bare answer to a handshake: its status line's code and its body, as bytes on the wire (no close code exists there). */
+function rawAnswer(port: number, path: string, headers: Record<string, string> = {}): Promise<{ status: number; body: string } | "upgraded"> {
+  return new Promise((resolve, reject) => {
+    const req = httpRequest({
+      host: "127.0.0.1",
+      port,
+      path,
+      headers: {
+        Connection: "Upgrade",
+        Upgrade: "websocket",
+        "Sec-WebSocket-Version": "13",
+        "Sec-WebSocket-Key": Buffer.from(generateSecret(16)).toString("base64"),
+        ...headers,
+      },
+    });
+    req.on("response", (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => resolve({ status: res.statusCode ?? 0, body: Buffer.concat(chunks).toString("utf8") }));
+    });
+    req.on("upgrade", (_res, socket) => {
+      rawSockets.push(socket);
       resolve("upgraded");
     });
     req.on("error", reject);
@@ -394,57 +441,57 @@ const WS_OWN_HEADERS = new Set([
 // ==================================================================================================================
 
 describe("the fake Conduit refuses what the real Conduit refuses (rule 15)", () => {
+  /** The real shape of a refusal: HTTP 403, an empty body, and the fake never accepted the socket. */
+  const refusedBeforeAccept = { status: 403, body: "" };
+
   async function direct(fake: FakeConduit, path: string, headers: Record<string, string> = {}) {
-    return upgrade(fake.port, { path, origin: null, headers });
+    return rawAnswer(fake.port, path, headers);
   }
 
-  it("no Authorization header and no ticket: closed 1008, 'missing bearer token or ws-ticket'", async () => {
+  it("no Authorization header and no ticket: HTTP 403 before accept, no body, no code, no reason", async () => {
     const fake = await conduit();
-    const socket = opened(await direct(fake, STREAM_PATH));
-    sockets.push(socket);
-    await until("the close", () => socket.closed !== undefined);
-    expect(socket.closed).toEqual({ code: 1008, reason: "missing bearer token or ws-ticket" });
+    expect(await direct(fake, STREAM_PATH)).toEqual(refusedBeforeAccept);
+    expect(fake.seen).toHaveLength(0);
+    expect(fake.refused).toHaveLength(1);
   });
 
-  it("a bearer in the URL is ignored, so refused as missing; an unknown bearer is refused", async () => {
+  it("a bearer in the URL is ignored, so refused as missing; an unknown bearer is refused the same way", async () => {
     const fake = await conduit();
     const good = mintToken();
     fake.tokens.add(good);
     for (const query of [`token=${good}`, `access_token=${good}`]) {
-      const socket = opened(await direct(fake, `${STREAM_PATH}?${query}`));
-      sockets.push(socket);
-      await until("the close", () => socket.closed !== undefined);
-      expect(socket.closed?.code).toBe(1008);
-      expect(socket.closed?.reason).toBe("missing bearer token or ws-ticket");
+      expect(await direct(fake, `${STREAM_PATH}?${query}`), query.split("=")[0]).toEqual(refusedBeforeAccept);
     }
-    const bad = opened(await direct(fake, STREAM_PATH, { Authorization: `Bearer ${mintToken()}` }));
-    sockets.push(bad);
-    await until("the close", () => bad.closed !== undefined);
-    expect(bad.closed?.code).toBe(1008);
+    expect(await direct(fake, STREAM_PATH, { Authorization: `Bearer ${mintToken()}` })).toEqual(refusedBeforeAccept);
+    expect(fake.seen).toHaveLength(0);
     // The control: the same token in the header is served and stays open.
-    const served = opened(await direct(fake, STREAM_PATH, { Authorization: `Bearer ${good}` }));
+    const served = opened(await upgrade(fake.port, { origin: null, headers: { Authorization: `Bearer ${good}` } }));
     sockets.push(served);
     await settle();
     expect(served.closed).toBeUndefined();
+    expect(fake.seen).toHaveLength(1);
   });
 
   it("a ticket it does not know is refused; one it knows is served", async () => {
     const fake = await conduit();
     fake.tickets.add("ticket-known");
-    const bad = opened(await direct(fake, `${STREAM_PATH}?ticket=ticket-unknown`));
-    sockets.push(bad);
-    await until("the close", () => bad.closed !== undefined);
-    expect(bad.closed?.code).toBe(1008);
-    const good = opened(await direct(fake, `${STREAM_PATH}?ticket=ticket-known`));
+    expect(await direct(fake, `${STREAM_PATH}?ticket=ticket-unknown`)).toEqual(refusedBeforeAccept);
+    const good = opened(await upgrade(fake.port, { path: `${STREAM_PATH}?ticket=ticket-known`, origin: null }));
     sockets.push(good);
     await settle();
     expect(good.closed).toBeUndefined();
   });
 
-  it("in reject-handshake mode it refuses with HTTP 403 before accepting", async () => {
+  it("a principal store that is down refuses the very same way: nothing on the wire tells it from a refused credential", async () => {
     const fake = await conduit();
-    fake.mode = "reject-handshake";
-    expect(await direct(fake, STREAM_PATH)).toEqual({ refused: 403 });
+    const good = mintToken();
+    fake.tokens.add(good);
+    fake.storeDown = true;
+    const outage = await direct(fake, STREAM_PATH, { Authorization: `Bearer ${good}` });
+    const unknownCredential = await direct(fake, STREAM_PATH, { Authorization: `Bearer ${mintToken()}` });
+    expect(outage).toEqual(refusedBeforeAccept);
+    expect(outage).toEqual(unknownCredential);
+    expect(fake.seen).toHaveLength(0);
   });
 });
 
@@ -530,12 +577,14 @@ describe("test_the_stream_through_pages_carries_only_what_the_person_may_read", 
     expect(fake.seen[0]?.frames.map((f) => f.text)).toEqual(["first", "second"]);
   });
 
+  // The RUNNING-stream case: the Conduit accepted the socket and then closes it, so the code and the
+  // reason survive, and the page service relays both unchanged (1008 and 1013 included).
   it.each([
-    [1008, "ws-ticket is missing, expired, or already redeemed"],
+    [1008, "no longer permitted"],
     [1013, "try again later"],
     [1000, "finished"],
     [4001, "an application's own code"],
-  ])("an upstream close %i reaches the browser with its code and reason", async (code, reason) => {
+  ])("a close from the running stream (after accept), %i: its code and reason reach the browser unchanged", async (code, reason) => {
     const fake = await conduit();
     const pages = await startPages({ conduit: fake });
     const person = await pages.signIn("a");
@@ -547,7 +596,11 @@ describe("test_the_stream_through_pages_carries_only_what_the_person_may_read", 
     expect(browser.closed).toEqual({ code, reason });
   });
 
-  it("a person's token the Conduit does not know: its 1008 and reason reach the browser", async () => {
+  // The REFUSED-handshake case, which is what the real Conduit does with every refusal (see the header):
+  // HTTP 403 before accept. The browser is closed 1008, "the Conduit refused the connection".
+  const REFUSED = { code: 1008, reason: "the Conduit refused the connection" };
+
+  it("a person's token the Conduit does not know: refused before accept (HTTP 403), the browser is closed 1008", async () => {
     const fake = await conduit();
     const pages = await startPages({ conduit: fake });
     const person = await pages.signIn("a");
@@ -555,21 +608,24 @@ describe("test_the_stream_through_pages_carries_only_what_the_person_may_read", 
     const browser = opened(await upgrade(pages.port, { cookie: person.cookie }));
     sockets.push(browser);
     await until("the close at the browser", () => browser.closed !== undefined);
-    expect(browser.closed?.code).toBe(1008);
-    expect(fake.seen).toHaveLength(1);
+    expect(browser.closed).toEqual(REFUSED);
+    expect(fake.seen).toHaveLength(0); // never accepted
+    expect(fake.refused).toHaveLength(1);
+    expect(fake.refused[0]?.headers["authorization"]).toBe(`Bearer ${person.accessToken}`);
   });
 
-  it("a Conduit that refuses the handshake itself (HTTP 403, as Starlette does before accept) closes the browser's socket 1008", async () => {
+  it("a Conduit whose principal store is down (the real one closes 1013 before accept, HTTP 403 on the wire): the browser is closed 1008, the same as a refused credential", async () => {
     const fake = await conduit();
-    fake.mode = "reject-handshake";
     const pages = await startPages({ conduit: fake });
     const person = await pages.signIn("a");
-    fake.tokens.clear();
+    fake.storeDown = true; // the person's token is a good one; the Conduit cannot look the person up
     const browser = opened(await upgrade(pages.port, { cookie: person.cookie }));
     sockets.push(browser);
     await until("the close at the browser", () => browser.closed !== undefined);
-    expect(browser.closed?.code).toBe(1008);
+    // A "try again later" cannot be told from a refusal when it arrives as a bare HTTP 403: see the header.
+    expect(browser.closed).toEqual(REFUSED);
     expect(fake.seen).toHaveLength(0);
+    expect(fake.refused).toHaveLength(1);
   });
 
   it("a Conduit that cannot be reached closes the browser's socket 1013", async () => {
