@@ -39,13 +39,12 @@ online revert: the owner settled ADR-143 open question 2 as (a), the operator co
 
 from __future__ import annotations
 
-import os
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
-from services.ingest.ceiling import CEILING_ENV, AboveTheDeploymentCeiling, DeploymentCeiling
+from services.ingest.ceiling import AboveTheDeploymentCeiling, DeploymentCeiling, configured_marking
 
 from conduit_common.identity import new_id
 from ports.graph import AmbiguousElementId, NotPromotable
@@ -89,7 +88,7 @@ CHECKS = ("marking", "types", "graded", "ends")
 def deployment_ceiling(scheme: Any) -> DeploymentCeiling:
     """The deployment's highest marking (ADR-148 decision 10), the rendered setting read as
     `run_recipe` reads it when no caller passes one, so no promotion or merge can leave it out."""
-    return DeploymentCeiling.of((os.environ.get(CEILING_ENV) or "").strip(), scheme)
+    return DeploymentCeiling.of(configured_marking(), scheme)
 
 
 class PromotionRefused(Exception):

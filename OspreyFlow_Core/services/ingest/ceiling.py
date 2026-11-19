@@ -3,6 +3,11 @@
 scheme's highest. A load marked above it is refused before anything is written, in words that say
 the deployment's limit and never the item's content.
 
+**Unset** means the profile's own ceiling where it has one (`PROFILE_CEILINGS`: the cloud-platform
+profile's is OFFICIAL-SENSITIVE, ADR-148 decision 10 and Amendment 5), read from `OSPREY_PROFILE`;
+only a profile with none, or no profile, takes the scheme's highest. A rendered deployment always
+has the ceiling rendered; this is for a Conduit or script that runs without it.
+
 The ingest engine reads it here (`engine.run_recipe` judges every load through it), and so does the
 Conduit: an unknown value stops the Conduit's start rather than guess a limit (as an unknown grading
 scheme does), since a guessed ceiling would let through what the deployment may not hold.
@@ -17,6 +22,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from ontology.handling import HandlingScheme, load_uk_le_scheme
+from schemas.deployment import PROFILE_CEILINGS, Profile
 
 from .recipe_rules import RecipeRuleError, handling_bindings, literal_handling, template_elements
 
@@ -32,6 +38,26 @@ class _Marked(Protocol):
 
 #: The rendered `deployment.env` line the Conduit and the ingest service read.
 CEILING_ENV = "OSPREY_HIGHEST_MARKING"
+
+
+#: The rendered `deployment.env` line that names the deployment's profile.
+PROFILE_ENV = "OSPREY_PROFILE"
+
+
+def profile_ceiling(profile: str | None) -> str:
+    """The ceiling a profile holds of its own (`PROFILE_CEILINGS`), or "" where it has none or is
+    not a profile this build knows."""
+    try:
+        return PROFILE_CEILINGS.get(Profile((profile or "").strip()), "")
+    except ValueError:
+        return ""
+
+
+def configured_marking(environ: Mapping[str, str] | None = None) -> str:
+    """The ceiling the environment names: `OSPREY_HIGHEST_MARKING` where it is set, else the
+    profile's own (`OSPREY_PROFILE`), else "" (the scheme's highest, `DeploymentCeiling.of`)."""
+    env = os.environ if environ is None else environ
+    return (env.get(CEILING_ENV) or "").strip() or profile_ceiling(env.get(PROFILE_ENV))
 
 
 class CeilingUnknown(ValueError):
@@ -85,13 +111,15 @@ class DeploymentCeiling:
     @classmethod
     def from_env(cls, scheme: HandlingScheme | None = None) -> DeploymentCeiling:
         """The rendered setting, in the scheme the Conduit loads (UK law enforcement,
-        `services/api/run_resources.py`). Nothing set is the scheme's highest: no ceiling."""
-        return cls.of((os.environ.get(CEILING_ENV) or "").strip(), scheme or load_uk_le_scheme())
+        `services/api/run_resources.py`). Nothing set is the profile's own ceiling, else the
+        scheme's highest: no ceiling (`configured_marking`)."""
+        return cls.of(configured_marking(), scheme or load_uk_le_scheme())
 
     @classmethod
     def of(cls, raw: str, scheme: HandlingScheme) -> DeploymentCeiling:
-        """The ceiling a rendered value names: none is the scheme's highest; an unknown one is
-        refused."""
+        """The ceiling a value names: none is the scheme's highest (a caller reading the
+        environment passes `configured_marking()`, which has applied the profile's own first); an
+        unknown one is refused."""
         if not raw:
             return cls(marking=scheme.classification[-1], scheme=scheme)
         if raw not in scheme.classification:
@@ -219,8 +247,9 @@ def refuse_writes_above_the_ceiling(writes: Iterable[_Marked]) -> None:
     """The backstop (L1.10, the orchestrator's (a)): node or link writes, judged by their own
     marking before the store is reached. The dataset-stamping graph asks it of every write, so a
     path the engine's own check never sees (a demo seed writing the graph directly) cannot write
-    above the ceiling either. The ceiling is the rendered setting, read once per value."""
-    ceiling = _ceiling_for((os.environ.get(CEILING_ENV) or "").strip())
+    above the ceiling either. The ceiling is the rendered setting, else the profile's own, read
+    once per value."""
+    ceiling = _ceiling_for(configured_marking())
     if ceiling.is_the_scheme_s_highest:
         return
     if any(ceiling.above(write.handling.classification) for write in writes):

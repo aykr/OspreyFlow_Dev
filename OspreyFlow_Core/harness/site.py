@@ -17,7 +17,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from schemas.deployment import EntraSignInConfig, OspreyConfig, Profile, self_contained_small
+from schemas.deployment import (
+    PROFILE_CEILINGS,
+    EntraSignInConfig,
+    OspreyConfig,
+    Profile,
+    self_contained_small,
+)
 
 #: Caddy 2.11.4 (Apache-2.0), released 3 June 2026.
 PROXY_IMAGE = "caddy:2.11.4-alpine"
@@ -350,12 +356,6 @@ def marking_floor(config: OspreyConfig) -> str:
             f"use one of {', '.join(known)}"
         )
     return chosen
-
-
-#: A profile's own ceiling where the deployment names none (ADR-148 decision 10; Amendment 5): the
-#: client's platform holds OFFICIAL-SENSITIVE at most. Every other profile takes the scheme's
-#: highest.
-PROFILE_CEILINGS: dict[Profile, str] = {Profile.CLOUD_PLATFORM: "OFFICIAL-SENSITIVE"}
 
 
 def highest_marking(config: OspreyConfig) -> str:
