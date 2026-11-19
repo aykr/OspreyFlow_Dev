@@ -425,3 +425,116 @@ def test_the_default_marking_routes_other_sentences_are_word_for_word_as_before(
             "lowers a marking"
         ],
     }
+
+
+# --- Two edits at once (round 4): the marking judged is the one the write replaces ---------------
+
+
+class _Racing(InMemorySourceStore):
+    """A source store in which another editor's edit lands between the route's read of the source
+    and its write (the real call site: the route reads, judges, then writes; the Postgres store's
+    UPDATE runs on a later connection). `races` is called with the source the route has just read,
+    and returns the source as the other editor leaves it, once per route read, for as many reads
+    as it answers; the route's own read is the one `get` makes on the route's behalf (the first
+    `get` of each attempt), since `edit_governance` reads again inside."""
+
+    def __init__(self, races: list[dict[str, Any]]) -> None:
+        super().__init__()
+        self.races = races
+        self.reads = 0
+        self.in_write = False
+
+    async def get(self, dataset_id: str, source_id: str) -> Any:
+        found = await super().get(dataset_id, source_id)
+        if not self.in_write and self.races:
+            self.reads += 1
+            self._sources[source_id] = found.model_copy(
+                update={"handling": self.races.pop(0), "version": found.version + 1}
+            )
+        return found
+
+    async def edit_governance(self, *args: Any, **kwargs: Any) -> Any:
+        self.in_write = True
+        try:
+            return await super().edit_governance(*args, **kwargs)
+        finally:
+            self.in_write = False
+
+
+def _racing(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch, races: list[dict[str, Any]]) -> _Racing:
+    racing = _Racing(races)
+    racing._connections = world.sources._connections
+    monkeypatch.setattr(app.state, "sources", racing, raising=False)
+    return racing
+
+
+def test_an_edit_never_lowers_the_marking_another_edit_raised_at_the_same_time(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The source is OFFICIAL. Editor B changes the handling code and leaves the marking (not
+    judged, by the check, against the OFFICIAL it read); editor A's raise to SECRET lands first.
+    B's write would put OFFICIAL back, below the marking of a moment earlier. It is judged against
+    the marking the write replaces: refused as a lowering, the source still SECRET."""
+    made = _register(world)
+    racing = _racing(world, monkeypatch, [HANDLING | {"classification": "SECRET"}])
+    # `_racing` made a new store: register the source in it, as the route will read it.
+    racing._sources[made["id"]] = world.sources._sources[made["id"]]
+    response = _edit(world, made["id"], HANDLING | {"handling_code": "C"})
+    assert racing.reads == 1
+    assert response.status_code == 422, response.text
+    assert response.json()["error"] == "governance_marking_refused"
+    assert response.json()["problems"] == [
+        "the marking is below the source's current marking, SECRET: an edit never lowers a marking"
+    ]
+    assert racing._sources[made["id"]].handling["classification"] == "SECRET"
+    assert racing._sources[made["id"]].handling["handling_code"] == "P"
+    _nothing_else_happened(world)
+
+
+def test_an_edit_judged_against_the_marking_it_replaces_is_audited_from_that_marking(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Control: another editor raised the marking and B raises it too, to the same level: judged
+    again against what is now stored it changes no marking, so it is accepted, and the trail's
+    `handling_before` is what the write replaced, not the marking B first read."""
+    made = _register(world)
+    racing = _racing(world, monkeypatch, [HANDLING | {"classification": "OFFICIAL-SENSITIVE"}])
+    racing._sources[made["id"]] = world.sources._sources[made["id"]]
+    response = _edit(world, made["id"], HANDLING | {"classification": "OFFICIAL-SENSITIVE", "handling_code": "C"})
+    assert response.status_code == 200, response.text
+    assert racing._sources[made["id"]].handling["classification"] == "OFFICIAL-SENSITIVE"
+    assert racing._sources[made["id"]].handling["handling_code"] == "C"
+    (entry,) = [e for e in world.audit.entries if e["action"] == "edit_dataset_source_governance"]
+    assert entry["resolved_query"]["handling_before"]["classification"] == "OFFICIAL-SENSITIVE"
+    assert entry["resolved_query"]["handling_after"]["classification"] == "OFFICIAL-SENSITIVE"
+
+
+def test_an_unrelated_change_at_the_same_time_does_not_stop_a_good_edit(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Control: another editor changed only the handling code. The marking is as read, so the
+    write goes through once, with no refusal."""
+    made = _register(world)
+    racing = _racing(world, monkeypatch, [HANDLING | {"handling_code": "C"}])
+    racing._sources[made["id"]] = world.sources._sources[made["id"]]
+    response = _edit(world, made["id"], HANDLING | {"classification": "SECRET"})
+    assert response.status_code == 200, response.text
+    assert racing._sources[made["id"]].handling["classification"] == "SECRET"
+
+
+def test_an_edit_that_keeps_losing_the_race_is_told_to_try_again_and_writes_nothing(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The marking moves under every attempt (two editors alternating): the edit is answered 409
+    `source_changed`, in words, and nothing of it is written."""
+    made = _register(world)
+    swing = [HANDLING | {"classification": c} for c in ("OFFICIAL-SENSITIVE", "OFFICIAL") * 3]
+    racing = _racing(world, monkeypatch, swing)
+    racing._sources[made["id"]] = world.sources._sources[made["id"]]
+    response = _edit(world, made["id"], HANDLING | {"classification": "SECRET"})
+    assert response.status_code == 409, response.text
+    assert response.json()["error"] == "source_changed"
+    assert "try again" in response.json()["message"]
+    assert racing._sources[made["id"]].handling["classification"] in {"OFFICIAL", "OFFICIAL-SENSITIVE"}
+    assert racing._sources[made["id"]].handling["handling_code"] == "P"
+    _nothing_else_happened(world)
