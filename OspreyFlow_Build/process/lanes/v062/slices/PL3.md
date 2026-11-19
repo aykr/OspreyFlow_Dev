@@ -127,13 +127,29 @@ else.
    `rolling`) and the eight-hour absolute lifetime, each key's TTL never longer than either; the in-memory store that refuses what
    Valkey refuses (a write with no TTL, a key without the prefix); no token in any response but the cookie. The cookie's value is now
    express-session's signed value, still opaque to the browser; the signing secret is a new setting, `OSPREY_PAGES_SESSION_SECRET`
-   (required, at least 32 characters, never logged, never in an image or a test fixture's real value: tests use a fixed dummy). The
-   tests change with the cookie's shape: they assert the cookie is signed and opaque, not that it is 43 characters.
+   (the owner's rules for it are acceptance items, item 4 below). The tests change with the cookie's shape: they assert the cookie
+   is signed and opaque, not that it is 43 characters.
 2. **Gap: the database number reaches the client.** Move the Valkey client's options out of main.ts into a pure function (for
    example `valkeyOptions(config)`) and test that it sets `db` from `OSPREY_PAGES_VALKEY_DB` (default 1, never the Conduit's 0
    unless set so), so that dropping `db` or fixing it to 0 fails a test.
 3. **Gap: /healthz touches neither the provider nor the store.** In page.test.ts the health test must be able to fail: build the
    app with a store wrapper that throws on every call (and a provider that throws), request /healthz with and without a cookie,
    and assert it answers 200 and the wrapper was never called.
+
+4. **The session secret's rules (the owner's word, 19 November; each is an acceptance item with a test that fails if it is
+   broken).** `OSPREY_PAGES_SESSION_SECRET`:
+   - **No value for it is committed anywhere**: not in the service's own files, an example or sample environment file, a Dockerfile
+     (no ENV or ARG with a value), a compose or Helm file, a README, or a test fixture. A test reads every file of the apps/pages
+     folder (and its Dockerfile) and fails if any assigns a value to the name; plant a file that does and show it red (rule 15).
+   - **Tests generate their own at run time** (random, at least 32 characters, created in the test, never written to disk or
+     committed). A fixed dummy string in a test is not allowed.
+   - **The service refuses to start, in words, when it is missing, empty, or shorter than 32 characters.** The words name the
+     setting and the rule (it is required, at least 32 characters) and **never include the value**, not even a short one's. Tests:
+     missing, empty, 31 characters (refused), 32 characters (starts), each through the startup path (the function main.ts calls), not
+     a helper; the refusal's message and the process's output are checked not to contain the value that was given.
+   - **It is never printed or sent**: a test gives the service a generated sentinel secret, drives every route (page, health,
+     sign-in, sign-out, a 404, a refused state-changing request) with and without a session, and fails if the sentinel appears in
+     any response body or header, any cookie (the signed cookie value must not contain it either), or anything the service wrote to
+     its logs, stdout or stderr. The configuration's own printed or JSON form shows it as redacted.
 
 Do not add the real sign-in, the render wiring or any other out-of-scope item. Run the acceptance command and the checks before you stop.
