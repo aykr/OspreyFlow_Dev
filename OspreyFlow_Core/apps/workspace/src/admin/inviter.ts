@@ -10,23 +10,26 @@ export interface Inviter {
   codes: string[];
 }
 
-/** `null` while unread or when `GET /v1/me` does not answer: the form then offers the whole vocabulary and the Conduit
- * refuses what it must. */
-export const InviterContext = createContext<Inviter | null>(null);
+/** What the Admin place knows of its inviter. The invite form is drawn only once the details have arrived (`ready`), so no
+ * choice is ever made before them and none is filtered, reset or hidden afterwards; `waiting` and `unavailable` each say
+ * so in words instead. */
+export type InviterRead = { state: "waiting" } | { state: "unavailable" } | { state: "ready"; inviter: Inviter };
 
-export function useInviter(): Inviter | null {
+/** Waiting by default: a screen outside the Admin place, which reads nothing, offers no invitation. */
+export const InviterContext = createContext<InviterRead>({ state: "waiting" });
+
+export function useInviter(): InviterRead {
   return useContext(InviterContext);
 }
 
 /** The classifications an inviter may give, lowest first as the scheme orders them: their own and those below it, as the
- * Conduit's `_within_your_reach` allows. A clearance outside the scheme can give none. Unread, every one is offered. */
-export function givableLevels(levels: string[], inviter: Inviter | null): string[] {
-  if (!inviter) return levels;
+ * Conduit's `_within_your_reach` allows. A clearance outside the scheme can give none. */
+export function givableLevels(levels: string[], inviter: Inviter): string[] {
   const own = levels.indexOf(inviter.clearance);
   return own < 0 ? [] : levels.slice(0, own + 1);
 }
 
-/** The handling codes an inviter may give: those they can receive themselves. Unread, every one is offered. */
-export function givableCodes(codes: string[], inviter: Inviter | null): string[] {
-  return inviter ? codes.filter((c) => inviter.codes.includes(c)) : codes;
+/** The handling codes an inviter may give: those they can receive themselves. */
+export function givableCodes(codes: string[], inviter: Inviter): string[] {
+  return codes.filter((c) => inviter.codes.includes(c));
 }

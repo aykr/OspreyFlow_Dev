@@ -12,7 +12,7 @@ import { fetchResolvedPrincipal } from "../auth/userManager";
 import { currentBrand } from "../brand/brand";
 import { whyNotByRole } from "../help/roles";
 import type { AdminApi } from "./api";
-import { InviterContext, type Inviter } from "./inviter";
+import { InviterContext, type InviterRead } from "./inviter";
 import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
 import { Audit } from "./sections/Audit";
@@ -161,12 +161,15 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
   }, [chosen]);
   const govuk = currentBrand() === "govuk";
   // What this person holds, for what an invitation may offer (AD2): read here and handed to People through a context, so
-  // the People screen calls no route beyond its section's. Unread, nothing is filtered and the Conduit refuses.
-  const [inviter, setInviter] = useState<Inviter | null>(null);
+  // the People screen calls no route beyond its section's. The invite form is drawn only once this has answered, so no
+  // choice is made before it; an answer that does not come is said there in words (a later failure keeps the earlier answer).
+  const [inviter, setInviter] = useState<InviterRead>({ state: "waiting" });
   useEffect(() => {
     let current = true;
     void fetchResolvedPrincipal(api.apiBaseUrl, api.bearerToken).then((me) => {
-      if (current) setInviter(me ? { clearance: me.clearance, codes: me.receivable_handling_codes } : null);
+      if (!current) return;
+      if (me) setInviter({ state: "ready", inviter: { clearance: me.clearance, codes: me.receivable_handling_codes } });
+      else setInviter((before) => (before.state === "ready" ? before : { state: "unavailable" }));
     });
     return () => {
       current = false;

@@ -3,12 +3,14 @@
 // and a refusal is said by the Invite button as an error summary, in words, with focus on it (`02_GLASS_FRONTEND.md`:
 // a refusal is said on the form; GOV.UK forms use an error summary). The Conduit stays the authority
 // (`_within_your_reach`, `app.py`): the Glass's filter is a convenience, so the fetch double below refuses the way the
-// real route does and the summary is proved from a refusal it cannot avoid by filtering (the inviter's own clearance
-// unread, so the form offers every choice and the route refuses). Synthetic names throughout (rule 9).
+// real route does and the summary is proved from a refusal it cannot avoid by filtering (`GET /v1/me` says the inviter
+// holds more than the route will let them give, as after a clearance lowered since sign-in). The form is drawn only once
+// the inviter's own details have arrived, so no choice is made before them. Synthetic names throughout (rule 9).
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace } from "../AdminPlace";
+import { givableCodes, givableLevels } from "../inviter";
 
 afterEach(() => {
   cleanup();
@@ -34,9 +36,14 @@ function reach(body: { clearance: string; receivable_handling_codes: string[] })
   return null;
 }
 
-/** `meRead`: whether `GET /v1/me` answers. Unread, the form cannot know what its inviter holds. `meGate`: when given,
- * `GET /v1/me` answers only once it resolves, so the form can be filled before the inviter's own arrive. */
-function serve(meRead: boolean, meGate?: Promise<void>) {
+/** What `GET /v1/me` answers: the inviter's real details (`own`); more than the route will let them give (`stale`, as after
+ * a clearance lowered since sign-in, so the Glass offers what the route refuses); a clearance outside the scheme
+ * (`outside`); or no answer (`down`). `meGate`: when given, `GET /v1/me` answers only once it resolves. */
+type Me = "own" | "stale" | "outside" | "down";
+const STALE = { ...INVITER, clearance: "OFFICIAL-SENSITIVE", receivable_handling_codes: ["P", "C", "R"] };
+const OUTSIDE = { ...INVITER, clearance: "TOP-SECRET", receivable_handling_codes: [] };
+
+function serve(me: Me, meGate?: Promise<void>) {
   const posted: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -44,7 +51,7 @@ function serve(meRead: boolean, meGate?: Promise<void>) {
       const path = new URL(url).pathname;
       if (path === "/v1/me") {
         await meGate;
-        return meRead ? json(200, INVITER) : json(503, {});
+        return me === "down" ? json(503, {}) : json(200, { own: INVITER, stale: STALE, outside: OUTSIDE }[me]);
       }
       if (path === "/v1/handling-scheme") return json(200, SCHEME);
       const admin = path.replace("/v1/admin/", "");
@@ -67,71 +74,97 @@ function serve(meRead: boolean, meGate?: Promise<void>) {
   return posted;
 }
 
-const open = async () => {
+const optionNames = (form: HTMLElement) =>
+  within(within(form).getByLabelText("Invite clearance")).queryAllByRole("option").map((o) => o.textContent);
+
+/** The form, once drawn (the inviter's details are in) and its choices are read; `offered` is what the select then holds. */
+const open = async (offered: string[] = ["PUBLIC", "OFFICIAL"]) => {
   render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
   const form = await screen.findByRole("form", { name: "Invite a person" });
-  // The vocabulary is read before anything is chosen.
-  await waitFor(() => expect(within(form).getByRole("option", { name: "PUBLIC" })).toBeTruthy());
+  await waitFor(() => expect(optionNames(form)).toEqual(offered));
   return form;
 };
 
-const optionNames = (form: HTMLElement) =>
-  within(within(form).getByLabelText("Invite clearance")).getAllByRole("option").map((o) => o.textContent);
-
 describe("Invite a person offers only what the inviter can give", () => {
   it("offers no clearance above the inviter's own, and no handling code outside their receivable set", async () => {
-    serve(true);
+    serve("own");
     const form = await open();
-    await waitFor(() => expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]));
     expect(within(form).queryByRole("option", { name: "OFFICIAL-SENSITIVE" })).toBeNull();
     expect(within(form).getByLabelText("Invite with handling code P")).toBeTruthy();
     expect(within(form).queryByLabelText("Invite with handling code C")).toBeNull();
     expect(within(form).queryByLabelText("Invite with handling code R")).toBeNull();
   });
 
-  it("offers every choice while the inviter's own are unread, and leaves the refusal to the Conduit (the control)", async () => {
-    serve(false);
-    const form = await open();
-    expect(optionNames(form)).toEqual(ORDER);
-    expect(within(form).getByLabelText("Invite with handling code C")).toBeTruthy();
+  it("offers no clearance to an inviter whose own is outside the scheme: Invite cannot be pressed, and it says why", async () => {
+    const posted = serve("outside");
+    const form = await open([]);
+    await waitFor(() => expect(form.textContent).toContain("which is not one of this deployment's classifications"));
+    expect((within(form).getByRole("button", { name: "Invite" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(form.textContent).toContain(
+      "You hold TOP-SECRET, which is not one of this deployment's classifications, so you cannot give any clearance and nobody can be invited by you.",
+    );
+    expect(form.textContent).not.toContain("you can give that clearance or lower");
+    expect(posted).toEqual([]);
+  });
+
+  it("gives no level to a clearance outside the scheme, and no handling code they do not hold (the filters themselves)", () => {
+    expect(givableLevels(ORDER, { clearance: "TOP-SECRET", codes: [] })).toEqual([]);
+    expect(givableLevels(ORDER, { clearance: "OFFICIAL", codes: [] })).toEqual(["PUBLIC", "OFFICIAL"]);
+    expect(givableCodes(["P", "C", "R"], { clearance: "OFFICIAL", codes: ["P", "X"] })).toEqual(["P"]);
   });
 });
 
-describe("a choice made before the inviter's own arrive is never changed without a word", () => {
-  /** Opens the form with `GET /v1/me` held back, fills it, and lets a caller choose before releasing it. */
-  const arrive = async (choose: (form: HTMLElement) => void) => {
-    let release: () => void = () => {};
-    const posted = serve(true, new Promise<void>((resolve) => (release = resolve)));
-    const form = await open();
-    expect(optionNames(form)).toEqual(ORDER); // not yet filtered
-    fireEvent.change(within(form).getByLabelText("Sign-in name"), { target: { value: "new.person" } });
-    fireEvent.change(within(form).getByLabelText("Invite unit"), { target: { value: "unit-1" } });
-    choose(form);
-    release();
-    await waitFor(() => expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"])); // now filtered
-    return { form, posted };
+describe("the form is drawn only once the inviter's own details have arrived", () => {
+  const mustNotBeUsable = () => {
+    expect(screen.queryByRole("form", { name: "Invite a person" })).toBeNull();
+    expect(screen.queryByLabelText("Invite clearance")).toBeNull();
+    expect(screen.queryByLabelText(/^Invite with handling code/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+    expect(screen.queryByLabelText("Sign-in name")).toBeNull();
   };
 
-  it("sends a ticked handling code the form then stops offering, and says the Conduit's refusal in the summary", async () => {
-    const { form, posted } = await arrive((f) => fireEvent.click(within(f).getByLabelText("Invite with handling code C")));
-    expect(within(form).queryByLabelText("Invite with handling code C")).toBeNull(); // no longer offered
-    fireEvent.click(within(form).getByRole("button", { name: "Invite" }));
-    const summary = await within(form).findByRole("alert");
-    expect(posted).toHaveLength(1);
-    expect((posted[0] as { receivable_handling_codes: string[] }).receivable_handling_codes).toEqual(["C"]); // asked, not dropped
-    expect(summary.textContent).toContain("You cannot give a handling code you do not hold yourself (C).");
-    expect(screen.queryByText("ABCD-EFGH-JKLM-NPQR")).toBeNull(); // not reported as sent
+  it("has no clearance select, handling-code box or Invite button while waiting, and says it is reading; then offers them", async () => {
+    let release: () => void = () => {};
+    serve("own", new Promise<void>((resolve) => (release = resolve)));
+    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+    const waiting = await screen.findByRole("status");
+    expect(waiting.textContent).toContain("Reading what you can give");
+    await waitFor(() => expect(screen.getByLabelText("Edit access for ana")).toBeTruthy()); // the section has loaded around it
+    mustNotBeUsable();
+    release();
+    const form = await screen.findByRole("form", { name: "Invite a person" });
+    await waitFor(() => expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]));
+    expect(screen.queryByText(/Reading what you can give/)).toBeNull();
   });
 
-  it("shows, and sends, the level it shows when the one chosen is no longer offered", async () => {
-    const { form, posted } = await arrive((f) =>
-      fireEvent.change(within(f).getByLabelText("Invite clearance"), { target: { value: "OFFICIAL-SENSITIVE" } }),
+  it("has none of them when GET /v1/me does not answer, and says in words that nobody can be invited from here", async () => {
+    const posted = serve("down");
+    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+    const words = await screen.findByRole("alert");
+    expect(words.textContent).toContain("Your own clearance and handling codes could not be read, so nobody can be invited from here now.");
+    expect(words.textContent).toContain("Reload the page to try again.");
+    await waitFor(() => expect(screen.getByLabelText("Edit access for ana")).toBeTruthy());
+    mustNotBeUsable();
+    expect(posted).toEqual([]);
+  });
+
+  it("has none of them when GET /v1/me answers something that is not an inviter", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const path = new URL(url).pathname.replace("/v1/admin/", "");
+        if (path === "/v1/me") return json(200, { unexpected: true });
+        if (path === "people") return json(200, [ANA]);
+        if (path === "/v1/handling-scheme") return json(200, SCHEME);
+        if (path === "people/rows") return json(200, { rows: [], without_author: [] });
+        if (path === "roles") return json(200, { built_in: [], custom: [] });
+        if (path === "sign-in") return json(200, { kind: "keycloak" });
+        return json(200, path === "organisation-arrivals" ? [] : {});
+      }),
     );
-    const select = within(form).getByLabelText("Invite clearance") as HTMLSelectElement;
-    expect(select.value).toBe("PUBLIC"); // the first offered, what the select shows
-    fireEvent.click(within(form).getByRole("button", { name: "Invite" }));
-    expect(await screen.findByText("ABCD-EFGH-JKLM-NPQR")).toBeTruthy();
-    expect((posted[0] as { clearance: string }).clearance).toBe(select.value);
+    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+    expect((await screen.findByRole("alert")).textContent).toContain("could not be read");
+    mustNotBeUsable();
   });
 });
 
@@ -149,8 +182,8 @@ describe("a refused invitation is said by the Invite button, as an error summary
      (form: HTMLElement) => fireEvent.click(within(form).getByLabelText("Invite with handling code C")),
      "You cannot give a handling code you do not hold yourself (C)."],
   ])("for %s: beside the button, in words, with focus on it", async (_what, choose, words) => {
-    const posted = serve(false);
-    const form = await open();
+    const posted = serve("stale");
+    const form = await open(ORDER);
     fill(form);
     choose(form);
     fireEvent.click(within(form).getByRole("button", { name: "Invite" }));
@@ -172,8 +205,8 @@ describe("a refused invitation is said by the Invite button, as an error summary
   });
 
   it("is gone when the invitation is sent again and accepted", async () => {
-    serve(false);
-    const form = await open();
+    serve("stale");
+    const form = await open(ORDER);
     fill(form);
     fireEvent.change(within(form).getByLabelText("Invite clearance"), { target: { value: "OFFICIAL-SENSITIVE" } });
     fireEvent.click(within(form).getByRole("button", { name: "Invite" }));

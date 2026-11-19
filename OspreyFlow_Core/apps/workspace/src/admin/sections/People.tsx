@@ -19,7 +19,7 @@ import { rightName } from "../../help/roles";
 import { PLACE_NAME, placesFor } from "../../shell/places";
 import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
-import { givableCodes, givableLevels, useInviter, type Inviter } from "../inviter";
+import { givableCodes, givableLevels, useInviter, type Inviter, type InviterRead } from "../inviter";
 import {
   disablePlan,
   enablePerson,
@@ -991,6 +991,35 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
   );
 }
 
+/** The invite form is drawn only once the inviter's own details have arrived (AD2), so no choice can be made before them
+ * and none is filtered, reset or hidden afterwards. Until then, and if they cannot be had, it says so in words. A change in
+ * the details (a new key) draws a fresh form, never a choice quietly altered. */
+function InviteGate({
+  read,
+  ...rest
+}: {
+  read: InviterRead;
+  api: AdminApi;
+  scheme: Scheme;
+  ctx: Context;
+  onInvited: (d: SignInDelivery) => void;
+}) {
+  if (read.state === "ready") return <InviteForm key={`${read.inviter.clearance}|${read.inviter.codes.join(",")}`} inviter={read.inviter} {...rest} />;
+  return (
+    <section aria-label="Invite a person" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}>
+      <h2 className="value" style={{ margin: 0 }}>Invite a person</h2>
+      {read.state === "waiting" ? (
+        <p role="status" className="label" style={{ margin: 0 }}>Reading what you can give. The form appears when that is known.</p>
+      ) : (
+        <p role="alert" className="label" style={{ margin: 0 }}>
+          Your own clearance and handling codes could not be read, so nobody can be invited from here now. Reload the page to
+          try again.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function InviteForm({
   api,
   scheme,
@@ -1000,7 +1029,7 @@ function InviteForm({
 }: {
   api: AdminApi;
   scheme: Scheme;
-  inviter: Inviter | null;
+  inviter: Inviter;
   ctx: Context;
   onInvited: (d: SignInDelivery) => void;
 }) {
@@ -1019,9 +1048,9 @@ function InviteForm({
   // Only what the inviter can give is offered (AD2); the Conduit still refuses what is beyond them.
   const levels = givableLevels(scheme.levels, inviter);
   const offeredCodes = givableCodes(scheme.codes, inviter);
-  // The level chosen if it is offered, else the first offered: worked out as the form is drawn, so what the select shows
-  // is what is sent, even in the moment after the inviter's own arrive (an effect would leave one render sending the other).
-  const level = levels.includes(clearance) ? clearance : (levels[0] ?? "");
+  // Nothing is chosen until the select is used, and it holds only what is offered, so the level is the one chosen, else the
+  // first offered (what the select shows is what is sent).
+  const level = clearance || (levels[0] ?? "");
   // A refusal is an error summary by the button, and focus goes to it (GOV.UK forms; `02_GLASS_FRONTEND.md`).
   const summary = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1042,8 +1071,6 @@ function InviteForm({
           email: email.trim() || null,
           clearance: level,
           org_unit: unit.trim(),
-          // What was ticked is what is asked: a code no longer offered (the inviter's own arrived after it was ticked) is
-          // still sent, and the Conduit's refusal is said in the summary, never dropped here without a word.
           receivable_handling_codes: [...codes],
           roles: ROLES.map((r) => r.id).filter((id) => roles.has(id)),
         })
@@ -1063,13 +1090,13 @@ function InviteForm({
         They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
         are shown a one-time code to give them in person. Nobody can be given more than you hold.
       </p>
-      {inviter && (
-        <p className="label" style={{ margin: 0 }}>
-          {`You hold ${inviter.clearance}, so you can give that clearance or lower, and ${
-            offeredCodes.length ? `the handling codes ${offeredCodes.join(", ")}` : "no handling code"
-          }.`}
-        </p>
-      )}
+      <p className="label" style={{ margin: 0 }}>
+        {scheme.levels.length > 0 && levels.length === 0
+          ? `You hold ${inviter.clearance}, which is not one of this deployment's classifications, so you cannot give any clearance and nobody can be invited by you.`
+          : `You hold ${inviter.clearance}, so you can give that clearance or lower, and ${
+              offeredCodes.length ? `the handling codes ${offeredCodes.join(", ")}` : "no handling code"
+            }.`}
+      </p>
       <label className="label" style={field}>
         Sign-in name
         <Input aria-label="Sign-in name" value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -1361,10 +1388,10 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
           <GuestsForm api={api} administratorSets={administratorSets} />
         </>
       ) : (
-        <InviteForm
+        <InviteGate
           api={api}
           scheme={scheme}
-          inviter={inviter}
+          read={inviter}
           ctx={ctx}
           onInvited={(delivery) => {
             setDelivered(delivery);
