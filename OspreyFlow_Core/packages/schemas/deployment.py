@@ -78,6 +78,14 @@ class Profile(StrEnum):
     CLOUD_PLATFORM = "cloud-platform"
 
 
+#: A profile's own marking ceiling where the deployment names none (ADR-148 decision 10;
+#: Amendment 5): the client's platform holds OFFICIAL-SENSITIVE at most. Every other profile takes
+#: the handling scheme's highest. Here, beside `Profile`, because the harness (which renders it) and
+#: the Conduit and its scripts (which read it when no ceiling was rendered) both need it, and
+#: services do not import from the harness.
+PROFILE_CEILINGS: dict[Profile, str] = {Profile.CLOUD_PLATFORM: "OFFICIAL-SENSITIVE"}
+
+
 class GraphStore(StrEnum):
     """`05_DEPLOYMENT.md` §1's own profile table. `janusgraph` is declarable here before its
     adapter exists — Phase 8a builds that (ADR-022's third addendum) — because a schema that

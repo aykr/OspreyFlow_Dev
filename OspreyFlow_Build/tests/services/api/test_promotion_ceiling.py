@@ -42,7 +42,7 @@ from typing import Any
 
 import pytest
 from services.api.promotions import Promotions
-from services.ingest.ceiling import CEILING_ENV
+from services.ingest.ceiling import CEILING_ENV, AboveTheDeploymentCeiling
 
 from .test_boards import K, _as, _board, _item
 from .test_drawn_merge import (  # noqa: F401
@@ -100,6 +100,30 @@ def test_an_item_above_the_deployments_ceiling_is_refused_at_the_sheet_and_at_th
     assert "above this deployment's highest marking, OFFICIAL" in answer.json()["detail"]
     assert not pw.store.records
     _nothing_promoted(pw)
+
+
+def test_an_unset_ceiling_on_the_cloud_platform_profile_is_the_profiles_own(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hand-started Conduit with the profile named and no ceiling: a promotion's write side
+    refuses SECRET at OFFICIAL-SENSITIVE, the profile's own (ADR-148 Amendment 5), not at the
+    scheme's highest. Asked of `Promotions.refuse_above_the_ceiling` itself, the call every
+    promotion, layer merge and drawn merge makes. Rule 15: no profile, the same write passes."""
+    from ontology.handling import load_uk_le_scheme
+
+    promotions = Promotions.__new__(Promotions)
+    promotions.boards = SimpleNamespace(scheme=load_uk_le_scheme())  # type: ignore[assignment]
+    monkeypatch.delenv(CEILING_ENV, raising=False)
+    monkeypatch.setenv("OSPREY_PROFILE", "cloud-platform")
+    with pytest.raises(AboveTheDeploymentCeiling) as raised:
+        promotions.refuse_above_the_ceiling(["OFFICIAL", "SECRET"])
+    assert "OFFICIAL-SENSITIVE" in str(raised.value.problems[0])
+    promotions.refuse_above_the_ceiling(["OFFICIAL-SENSITIVE"])
+    monkeypatch.setenv(CEILING_ENV, "SECRET")
+    promotions.refuse_above_the_ceiling(["SECRET"])
+    monkeypatch.delenv(CEILING_ENV)
+    monkeypatch.delenv("OSPREY_PROFILE")
+    promotions.refuse_above_the_ceiling(["SECRET"])
 
 
 def test_within_the_ceiling_an_item_is_promoted_as_ever(

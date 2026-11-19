@@ -35691,7 +35691,15 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
 17. **The ceiling has one source**, `harness.site.highest_marking`, which holds each profile's own
     default (`PROFILE_CEILINGS`, OFFICIAL-SENSITIVE for this profile) and refuses one the handling
     scheme does not hold. The render reads it for the deployment as it is. The change to
-    `harness/site.py`, studio-b's file, was made at the orchestrator's word.
+    `harness/site.py`, studio-b's file, was made at the orchestrator's word. **"Unset" means the
+    same wherever the ceiling is read** (SE4, C164): `OSPREY_HIGHEST_MARKING` unset or blank is the
+    profile's own ceiling (`PROFILE_CEILINGS`, read from `OSPREY_PROFILE`) and only then the scheme's
+    highest, so a Conduit or script run without the rendered ceiling on the cloud-platform profile is
+    held to OFFICIAL-SENSITIVE, not SECRET. The table sits in `packages/schemas/deployment.py`
+    beside `Profile`, which `harness.site` and `services.ingest.ceiling` both import, since services
+    do not import from the harness
+    (`test_the_cloud_platform_profile_with_no_ceiling_set_is_official_sensitive`, red first at
+    SECRET).
 18. **A render removes what its last render wrote and this one does not**, by the manifest it
     leaves (`.rendered`), and never a file it did not write, so a standard shape's
     `terraform/opensearch.tf` does not survive a poc render to be applied.

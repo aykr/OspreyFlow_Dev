@@ -245,19 +245,29 @@ def _refuse_a_pack_above_the_ceiling(
     rendered `OSPREY_HIGHEST_MARKING`) is refused before its seed starts, so a pack written in
     several transactions is never partly written. Its declared highest, or the scheme's highest
     where it declares none. The engine and the stamping graph refuse each write too."""
-    from services.ingest.ceiling import CeilingUnknown, DeploymentCeiling
+    from services.ingest.ceiling import (
+        CEILING_ENV,
+        PROFILE_ENV,
+        CeilingUnknown,
+        DeploymentCeiling,
+        profile_ceiling,
+    )
 
     from ontology.handling import load_uk_le_scheme
 
     scheme = load_uk_le_scheme()
     rendered = ""
+    profile = ""
     env = directory / "deployment.env"
     if env.is_file():
         for line in env.read_text(encoding="utf-8").splitlines():
-            if line.startswith("OSPREY_HIGHEST_MARKING="):
+            if line.startswith(f"{CEILING_ENV}="):
                 rendered = line.partition("=")[2].strip()
+            elif line.startswith(f"{PROFILE_ENV}="):
+                profile = line.partition("=")[2].strip()
     try:
-        ceiling = DeploymentCeiling.of(rendered, scheme)
+        # Unset is the rendered file's profile's own ceiling before the scheme's highest.
+        ceiling = DeploymentCeiling.of(rendered or profile_ceiling(profile), scheme)
     except CeilingUnknown as error:
         raise SeedRefused(f"{error}, so no pack is loaded") from error
     if spec.judged_when_staged and data_root is not None and spec.data_folder:

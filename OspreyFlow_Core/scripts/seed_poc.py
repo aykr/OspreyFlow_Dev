@@ -61,14 +61,12 @@ class _People(Protocol):
 def _ceiling_refusal() -> str | None:
     """ADR-148 decision 10: the seeds' data against the deployment's highest marking (its rendered
     `OSPREY_HIGHEST_MARKING`), judged before anything is written, so no seed is partly written."""
-    from services.ingest.ceiling import CeilingUnknown, DeploymentCeiling
+    from services.ingest.ceiling import CeilingUnknown, DeploymentCeiling, configured_marking
 
     from ontology.handling import load_uk_le_scheme
 
     try:
-        ceiling = DeploymentCeiling.of(
-            os.environ.get("OSPREY_HIGHEST_MARKING", "").strip(), load_uk_le_scheme()
-        )
+        ceiling = DeploymentCeiling.of(configured_marking(), load_uk_le_scheme())
     except CeilingUnknown as error:
         return f"{error}, so nothing was seeded"
     above = [
