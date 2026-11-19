@@ -12,6 +12,7 @@ export default [
       ".venv/**",
       "apps/workspace/dist/**",
       "apps/harness/dist/**",
+      "apps/pages/dist/**",
       "deploy/generated/**", // a deployment's rendered files, copies of what is linted at its source
       "process/prototypes/**", // the Build folder's, when linted from there (ADR-054)
     ],
@@ -26,6 +27,7 @@ export default [
       "tools/**/*.mjs", // the Build folder's checks, linted from there (ADR-054)
       "apps/workspace/compute-tier1/**/*.mjs",
       "apps/harness/scripts/**/*.mjs",
+      "apps/pages/scripts/**/*.mjs",
     ],
     languageOptions: {
       globals: { process: "readonly", console: "readonly" },

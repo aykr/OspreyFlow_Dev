@@ -32,6 +32,7 @@ node_modules/
 /apps/workspace/playwright-report/
 /apps/workspace/.env.local
 /apps/harness/dist/
+/apps/pages/dist/
 /apps/harness/test-results/
 /apps/harness/playwright-report/
 

@@ -5,7 +5,8 @@
   "type": "module",
   "workspaces": [
     "apps/workspace",
-    "apps/harness"
+    "apps/harness",
+    "apps/pages"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",

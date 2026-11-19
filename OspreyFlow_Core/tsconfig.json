@@ -33,6 +33,8 @@
     "apps/harness/src/**/*.ts",
     "apps/harness/src/**/*.tsx",
     "apps/harness/keyboard/**/*.ts",
-    "apps/harness/keyboard/**/*.tsx"
+    "apps/harness/keyboard/**/*.tsx",
+    "apps/pages/server/**/*.ts",
+    "apps/pages/test/**/*.ts"
   ]
 }

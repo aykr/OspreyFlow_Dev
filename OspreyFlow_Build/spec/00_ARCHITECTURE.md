@@ -1155,6 +1155,15 @@ code is MIT "unless stated otherwise". `appearance.brand: govuk` is defined to m
 gov.uk domain (ADR-132), which is the only use the font is put to. The files are self-hosted from the
 deployment's own origin (`/assets/govuk/`), never a CDN, and fetched only by a GOV.UK-brand page.
 
+**ADR-152 addition (19 November 2026; slice PL3, R1) — the `pages` service (`apps/pages`), one npm workspace.**
+Run time, in its image: `express` 5.3.0 (MIT), `nunjucks` 3.2.4 (BSD-2-Clause), `helmet` 8.3.0 (MIT),
+`cookie` 1.1.1 (MIT, which `express` also uses; read directly for the session cookie) and `ioredis` 6.0.0
+(MIT, already a development dependency of `apps/workspace`), each with the dependencies the lockfile
+resolves, all on the allowlist. Development only: `supertest` 7.3.2 (MIT) and the type packages
+`@types/express`, `@types/nunjucks`, `@types/supertest` (all MIT). `openid-client` is not added here: the
+real sign-in is a later slice, and its licence is read at install (ADR-152 decision 2). Nothing is
+fetched from another address by the service or its pages.
+
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the
 data (`packages/demo_fixtures/public_datasets/`); the administrator downloads the file and adds it to
