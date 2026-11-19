@@ -227,4 +227,31 @@ ADR-152, whose allowlist the owner committed at 06:30 UTC, after GG1 (and SE2, S
 fix main's state, and nothing in the line brings main into a started slice's branch unless the conflict is in the records
 folder alone. Fix for the line-fixes session: when the scans are red for a file the slice did not touch and main has moved,
 `resume.py` brings main into the branch (as it does for records) and counts the stops as not the builder's. Until then the
-builder is told in the brief to merge main first.
+builder is told in the brief to merge main first. (From the owner's word on 19 November the conductor brings main into a
+slice's branch itself, before the builder's last check, whenever main has moved; the line's code did not stop it. The row
+stays for the line to do it.)
+
+### New row (19 Nov, SE2, accepted on the standing line at round 4): the Postgres guard against two governance edits at once is run by no test
+
+SE2's round-3 verifier found that two governance edits of one source at once could put back a lower marking; the round-4
+builder made the Postgres store's update conditional on the classification the edit was judged against
+(`PostgresSourceStore.edit_governance`, `if_marking`, `SourceMarkingChangedError`; OspreyFlow_Core/services/api/sources.py
+about line 649; ADR-140 Amendment 19 decision 4a). Its two-edits tests subclass `InMemorySourceStore`, so only the in-memory
+check (about line 390) is run. The SQL (`COALESCE(handling -> 'classification', 'null'::jsonb) = $8::jsonb`, and the branch
+after no row comes back: not found versus changed) is exercised by nothing. Accepted on the standing line as a gap in a
+test (rule 12, rule 15). Row: a live test against Postgres in the dev stack that races two edits and asserts the lower one
+is refused, and the null-or-missing classification case; it is owed with the live step. The default-marking route reads then
+writes in the same way (the verifier says so); whether it needs the same condition is a decision for the owner.
+
+### New row (19 Nov, run 44473959795): a live proof is timing-sensitive on a loaded runner
+
+`OspreyFlow_Build/tests/test_worker_isolation_live.py::test_without_the_plugin_each_worker_sees_both_in_every_store_the_red`
+failed in CI's conformance job on a docs-only commit (d376a14): its inner run failed on a deadline ("the other worker never
+reached objects-removed", over by 0.04 s) and on an object-store path not found (`ospreyflow-staging/t1probe-…`), not on the
+red it expects. 1 failed, 3596 passed. The same job passed on dcb51ab. Not recorded as a known flake before this row. Row: the
+proof's deadlines should scale with the runner, or the test should wait on the other worker's mark rather than a clock.
+
+### New row (19 Nov): the board shows an accepted slice as "verifying"
+
+After `resume.py <ID> accept` (GG6, BL6) the board reads the slice from its test record and shows "verifying" until the merge.
+It should say "accepted, waiting to merge" (and, for a standing accept, the count of gaps in a test).
