@@ -28,6 +28,30 @@ slice, or allow another round?": the second half has a step and the first has no
    findings in status.js for the conductor's next report.
 5. **The scan map and the gate counts** stay complete; the README's "Resuming a slice" table gains the row.
 
+## The standing mode (the owner's ruling 5 of 19 November 2026): no line per slice
+
+The owner's standing word: from a slice's third round on, a gap in a test never blocks. A slice whose verifier finds no
+fault in behaviour merges, and each remaining test gap becomes a backlog row, without asking him. So the step needs a
+second authority besides a per-slice line, and the owner should have to give it once.
+
+- **The authority** is one line in a file only the owner can write (a new `standing.tsv` beside `resume.tsv`, protected from
+  agents by the guard as `resume.tsv` is), for example `accept-test-gaps  from-round 3  <date given>`, read by
+  `resume.py accept` and `merge_slice.py`. RULINGS.md is never the authority (the conductor writes it).
+- **When it applies** (all of them, else only a per-slice line accepts): the slice's round is at or past the line's number;
+  the verifier record for the tip has verdict "findings" and **every** finding is a test gap; there is a green test
+  record for the tip; no finding is a fault in behaviour. Anything else is refused in words naming the fault.
+- **The marker must be a field, not a prefix.** The verifier's answer schema gains `kind` ("fault" or "test_gap") on each
+  finding (the backlog row of 18 November); `run_seat.py` asks for it in the prompt and refuses a finding without it
+  (a record with a missing kind counts as a fault). The "FAULT IN BEHAVIOUR:" and "GAP IN A TEST:" prefixes asked for in
+  the briefs are read as `kind` for records written before the field existed, and nowhere else.
+- **Effect:** the same acceptance record as above, marked `by: standing`, with the findings and the rule's text; the
+  merge record carries `accepted_findings` so the conductor writes one backlog row per gap. The conductor tells the
+  owner afterwards; it does not ask.
+- **Also tests:** the standing line absent: refused; round below the line's number: refused; one fault among the
+  findings: refused; every finding a test gap at round 3: accepted; a verifier record whose findings carry no kind: refused.
+
+The two slices that are waiting for this today are GG6 (round 4 of 4, one test gap) and BL6 (round 5 of 5, one test gap).
+
 ## Tests that must fail if the step is wrong (rules 12 and 15)
 
 - no line in resume.tsv: refused, nothing written;

@@ -3,7 +3,7 @@
 - **Build id:** GG1
 - **Dial setting:** balanced
 - **Rounds limit:** 2
-- **After:** AD2 (same track, one at a time; both are in the workspace)
+- **After:** nothing (unhooked by the owner, 19 November 2026: it ran after AD2 only for ordering; both change the workspace, so a conflicting merge is refused by the merge script and is then the second slice's to redo)
 - **Status of this brief:** APPROVED by the owner, 18 November 2026.
 
 ## What

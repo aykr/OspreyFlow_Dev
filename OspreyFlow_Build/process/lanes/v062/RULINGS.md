@@ -3,6 +3,21 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 19 November 2026 (later): four standing rulings on rounds, tracks, builders and starting
+
+The owner's word, 19 November 2026 (about 06:00 UTC). Standing: they apply to every slice, without asking per slice.
+
+5. **From a slice's third round on, a gap in a test never blocks.** If the verifier finds no fault in behaviour, the
+   slice merges, and each remaining test gap becomes a backlog row, without asking the owner. A fault in behaviour still
+   sends the slice round again. (Findings are marked "FAULT IN BEHAVIOUR:" or "GAP IN A TEST:" by the verifier.)
+6. **A stopped slice frees its track.** When a slice stops for the owner, the next ready slice on that track starts at
+   once. Slices queued only for ordering are unhooked: GG1 does not wait for AD2, and BL7 does not wait for BL6.
+7. **Four builders.** The owner has set balanced to four builders and four rounds in the dial, by day and by night, and
+   tracks 3 and 4 are on sol in the accounts file. (The line counts only slices in the building or verifying phase against
+   the builder limit, so a stopped slice already frees its place.)
+8. **Start everything that is ready**, under the standing approval: SE2, SE3, SE4, BL7 and GG1, as the builder limit allows
+   and the account windows (under 90%) permit; the rest start as places free up.
+
 ## 19 November 2026: rounds, accepting a slice narrower, and the invite form's design rule (AD2, BL6, GG6, SE4)
 
 The owner's word, 19 November 2026 (early morning UTC):

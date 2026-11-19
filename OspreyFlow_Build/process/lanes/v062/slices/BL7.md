@@ -3,7 +3,7 @@
 - **Build id:** BL7
 - **Dial setting:** balanced
 - **Rounds limit:** 2
-- **After:** BL6
+- **After:** nothing (unhooked by the owner, 19 November 2026: it ran after BL6 only for ordering)
 - **Status of this brief:** APPROVED by the owner, 18 November 2026, with the split: a slice builds the panel under
   `tools/control_panel/`; balancing, the guard rule and the dashboard controls come to the owner as diffs.
 

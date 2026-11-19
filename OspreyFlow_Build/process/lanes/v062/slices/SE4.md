@@ -2,7 +2,7 @@
 
 - **Build id:** SE4
 - **Dial setting:** balanced
-- **Rounds limit:** 2
+- **Rounds limit:** 4
 - **After:** nothing (SE1 is merged)
 - **Status of this brief:** written by the conductor on 19 November 2026 under the owner's standing approval, from the
   owner's SE4 request ("Split it if it is too large for one slice"). This slice is the three items below that need no new
