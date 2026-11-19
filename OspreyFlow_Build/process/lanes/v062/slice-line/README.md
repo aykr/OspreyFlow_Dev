@@ -89,8 +89,10 @@ without a tool call; the line's own cap is 6 red stops.
    run, the builder's session and its Stop hook, and the merge script's acceptance and checks runs. `env: full`
    builds the worktree's own environment as CI builds it (`uv sync --frozen`, `npm ci` under CI's Node); the
    lanes' launcher is not used.
-3. `run_seat.py builder <ID>` until green, then `run_seat.py verifier <ID>`. Findings go back to the builder until
-   the rounds limit; then the slice stops and its note names the one decision the owner must make.
+3. `run_seat.py builder <ID>` until green, then `run_seat.py verifier <ID>`. Each finding in the verifier's record
+   (`verify-<tip>.json`) has a `kind`, `fault in behaviour` or `gap in a test` (a required field of the verdict's
+   schema; any other value counts as no kind), and the record counts them (`kinds`). Findings go back to the builder
+   until the rounds limit; then the slice stops and its note names the split and the one decision the owner must make.
 4. `merge_slice.py merge <ID>`: the acceptance (red before) and the checks and scans (green after) run in an
    environment built as CI builds it, its venv outside the tree, with the slice's slot; `node_modules` is removed
    before the full gate, which builds its own. Then main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate

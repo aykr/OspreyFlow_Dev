@@ -145,6 +145,14 @@ M = [
  ("install.sh", '    if cmd not in have:\n', '    if True:\n', "adds_the_guard_to_every_account_once"),
  ("install.sh", '        hooks.setdefault(event, []).append({**extra, "hooks": [{"type": "command", "command": cmd}]})', '        pass', "adds_the_guard_to_every_account_once"),
  ("install.sh", 'if [ "${1:-}" = "--register-everywhere" ]; then', 'if true; then', "not_done_by_a_plain_install"),
+ ("run_seat.py", 'required": ["what", "evidence", "kind"]', 'required": ["what", "evidence"]', "finding_kind_is_a_required"),
+ ("run_seat.py", '    record["kinds"] = kinds_of(record["findings"])\n', '', "finding_kind_is_kept_in_the_record"),
+ ("run_seat.py", '        out[k if k in KINDS else "no kind"] += 1', '        out[FAULT if k else "no kind"] += 1', "finding_kind_is_kept_in_the_record"),
+ ("run_seat.py", '    if legacy and "kind" not in finding:', '    if "kind" not in finding:', "finding_kind_is_read_from_the_old_prefix"),
+ ("run_seat.py", '    return "kinds" not in (record or {})', '    return True', "finding_kind_is_read_from_the_old_prefix"),
+ ("run_seat.py", '    if finding.get("kind") in KINDS:\n        return finding["kind"]\n    if legacy and "kind" not in finding:', '    if finding.get("kind") in KINDS:\n        return finding["kind"]\n    if legacy:', "finding_kind_is_read_from_the_old_prefix"),
+ ("run_seat.py", "Give each finding its kind: '{FAULT}' (a fault", "Give each finding its kind: '' (a fault", "finding_kind_is_asked_for"),
+ ("run_seat.py", '({kinds_said(record[\'kinds\'])}; first: "', '(first: "', "finding_kind_split_is_named"),
 ]
 bad = 0
 for f, old, new, test in M:
