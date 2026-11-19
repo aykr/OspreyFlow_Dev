@@ -186,3 +186,16 @@ path with the matching word replaced. The tests check that no name and no hash i
 the whole printed line (that only the matching word is replaced and the rest of the path is kept), so a change that blanked
 the rest of the path would pass. The fix is a test that pins the exact line for a path naming the client and for a
 published-site path naming Laurium, planted in the real call-site shape. Not yet assigned a slice.
+
+### New row (19 Nov, the owner's rule): AD2 is set aside at round 5 of 5, with four findings open
+
+AD2 (the invite form offers only what the inviter can give) stopped a fifth time, and the owner's rule of 19 November applies:
+set aside, tell him, free GG1. Its branch and records are kept. Open at the last verifier (tip 5eb3791): **two faults in
+behaviour.** (1) The form can be drawn before the roles catalogue has loaded, and when that load fails: the gate waits for
+the inviter's details and the handling scheme only, but the form also reads the roles to decide which role boxes it offers.
+(2) A handling scheme whose classification list is empty counts as loaded, and the form then says what the inviter can give
+on the strength of nothing. **Two gaps in a test:** no test makes the roles catalogue late or failed (and the test double
+refuses less than the real route's giver rule); no test gives an empty classification list. The pattern across five rounds
+is that each round finds one more thing the form reads before it offers a choice; a restart would list every read first and
+build one loader that waits for the whole list. GG1 no longer waits for AD2. AD2's merge also settles whether the invite
+test in the keyboard walk stays.
