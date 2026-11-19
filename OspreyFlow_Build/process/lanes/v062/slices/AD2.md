@@ -55,3 +55,15 @@ nothing is filtered, reset or hidden afterwards. Add a test that fails if the fo
 arrive (the clearance select, the handling-code boxes and the Invite button are not there or not usable until then).
 What the form shows while it waits, and what it says in words if the details cannot be had, is the builder's to settle;
 a test shows each. The test gap on a clearance outside the scheme is fixed in the same round. Nothing else changes.
+
+## Owner's general design rule for the last round (19 November 2026, replaces the design rule above)
+
+The invite form is drawn only when everything it depends on has loaded: the inviter's details (the answer to GET /v1/me),
+the handling scheme (the answer to GET /v1/handling-scheme), and anything else the form reads before it offers a choice.
+Until then it shows a loading message, or an error message if a load has failed, and never a choice and never a
+statement about what the inviter can give or hold. Add tests, for each thing the form depends on, for a late answer and
+for a failed answer: in both, no select, box or Invite button is usable and no sentence about what the inviter can give
+is shown; when a late answer arrives the form is drawn once, correctly; a later failure after the form is drawn does not
+replace it. The two earlier test gaps are fixed in the same round: the test for a clearance outside the scheme fills the
+name and the unit, and shows that nothing can be sent; and a token change keeps a drawn form, while a change in the
+details draws a fresh one. Nothing else changes.

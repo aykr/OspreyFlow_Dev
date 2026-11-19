@@ -175,5 +175,14 @@ slice's frozen acceptance command, once, at its merge. After the merge nothing i
 glass-keyboard target runs only the dev-server keyboard suite, and the CI workflow runs only the performance and keyboard
 suites. Deleting the setWorkerUrl call from the map view would pass every gate. **The owner's ruling:** wire the
 production-build test into the gate; the diff (a make target and a workflow step) comes to the owner, not to a slice. The
-conductor writes it once GG6 is on main. Until then the ADR-014 Amendment 2 "Still not checked" paragraph must say that this
-test sits outside every gate.
+conductor writes it once GG6 is on main. **Updated 19 Nov (the owner's word):** GG6 is accepted narrower and merges without
+the sentence; the ADR-014 Amendment 2 "Still not checked" sentence (this test sits outside every gate) is added later,
+together with the gate wiring it describes, in the same change.
+
+### New row (19 Nov, the owner's word, from BL6's last verifier): no test pins the printed line for a path that names the client
+
+BL6 is accepted narrower. The client-name check now reads a file's path as well as its contents, and a hit line shows the
+path with the matching word replaced. The tests check that no name and no hash is printed, and the counts, but none pins
+the whole printed line (that only the matching word is replaced and the rest of the path is kept), so a change that blanked
+the rest of the path would pass. The fix is a test that pins the exact line for a path naming the client and for a
+published-site path naming Laurium, planted in the real call-site shape. Not yet assigned a slice.

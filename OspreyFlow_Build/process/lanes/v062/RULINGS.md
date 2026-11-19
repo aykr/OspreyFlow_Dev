@@ -3,6 +3,27 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 19 November 2026: rounds, accepting a slice narrower, and the invite form's design rule (AD2, BL6, GG6, SE4)
+
+The owner's word, 19 November 2026 (early morning UTC):
+
+1. **AD2: a general design rule replaces the earlier one.** The invite form is drawn only when everything it depends on
+   has loaded. Until then it shows a loading or error message, never a choice and never a statement about what the
+   inviter can give. Tests cover a late and a failed load of each thing it depends on. One more round (round 5 of 5).
+   **If AD2 stops again it is set aside, the owner is told, and GG1 is freed to start without it.**
+2. **GG6 is accepted narrower, on the owner's word, and merged as it is.** The ADR-014 Amendment 2 sentence ("Still not
+   checked": the production-build tile test sits outside every gate) is added later, with the gate wiring it describes;
+   the backlog row stays. No round.
+3. **BL6 is accepted narrower, on the owner's word, and merged.** The test that pins the printed line with the client's
+   word replaced in a path becomes a backlog row. No round.
+4. **Verifier findings are reported split** as "fault in behaviour" and "gap in a test" (18 November, in the briefs of the
+   extra rounds).
+5. **SE4 is split.** SE4 holds C016, C164 and the board list cut at 100; `cases_pulled`, C170, C246 and L09 wait for their
+   own build ids and rulings.
+6. **Not yet possible:** the slice line has no step that merges a slice whose last verdict is findings (the merge
+   script requires a verifier pass at the tip; `resume.py` has no accept action). Items 2 and 3 wait for one, which only
+   the owner's hand can add to the line.
+
 ## 18 November 2026: MapLibre 6 now, Sigma 4 first in the GOV.UK modules (GG6, GG2, GG5)
 
 The owner's word, 18 November 2026 (about 14:15 UTC), on the evidence in `slices/GG6.md`:
