@@ -1117,6 +1117,13 @@ class EntraSignInConfig(BaseModel):
         "on: people sign in to Superset with it, and its delegated token reads the Conduit's "
         "GET /v1/me and /v1/me/rights alone (ADR-148 Amendment 9)",
     )
+    pages_client_id: str | None = Field(
+        default=None,
+        pattern=_ENTRA_ID,
+        description="The pages service's own app registration (application id), when the pages "
+        "service is on: people sign in to it with it, and its delegated token is the person on "
+        "every route their rights allow, as the Glass's (ADR-152 decision 11)",
+    )
     api_id_uri: str | None = Field(
         default=None,
         pattern=r"^api://\S+$",
@@ -1216,6 +1223,8 @@ class EntraSignInConfig(BaseModel):
             "groups_claim": self.groups_claim,
             # ADR-148 Amendment 9: Superset's registration, admitted for its two reads alone.
             **({"superset_client_id": self.superset_client_id} if self.superset_client_id else {}),
+            # ADR-152 decision 11: the pages service's registration, admitted as the Glass's.
+            **({"pages_client_id": self.pages_client_id} if self.pages_client_id else {}),
         }
 
 
