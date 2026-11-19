@@ -57,3 +57,12 @@ A hit the builder cannot reword without changing meaning: stop and ask, never de
 To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
 
 To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.
+
+## Owner's ruling for the next round (19 November 2026)
+
+The check reads a file's path as well as its contents, for the client's name and (in the published website files) for
+Laurium. A hit line never prints the name, so for a path that names it the line shows the path with the matching word
+replaced, never the word or its hash. A test plants a name in a path alone, and in a path whose contents also name it,
+and asserts that neither the name nor its hash appears in the output; the real tree stays at zero hits. The count
+assertion must be able to fail: a test pins the exact hit and file counts for a tree with several hits across several
+files. Nothing else changes.

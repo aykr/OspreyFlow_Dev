@@ -46,3 +46,12 @@ The server check; the model form (AD1); PL4's shared-package move (this slice is
 To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
 
 To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.
+
+## Owner's design rule for the next round (19 November 2026)
+
+The invite form is drawn only once the inviter's details (the answer to GET /v1/me) have arrived, so no choice can be
+made before them. This replaces any handling of a choice made before the details arrive: nothing is chosen early, so
+nothing is filtered, reset or hidden afterwards. Add a test that fails if the form can be used before the details
+arrive (the clearance select, the handling-code boxes and the Invite button are not there or not usable until then).
+What the form shows while it waits, and what it says in words if the details cannot be had, is the builder's to settle;
+a test shows each. The test gap on a clearance outside the scheme is fixed in the same round. Nothing else changes.
