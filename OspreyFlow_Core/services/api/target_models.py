@@ -89,6 +89,29 @@ def _refuse_a_second_draft(draft: TargetModel | None) -> None:
         )
 
 
+def refuse_a_write_to_a_draft(
+    draft: TargetModel, principal: Principal, *, expected_version: int | None = None
+) -> None:
+    """A save into, replace of or discard of `draft` is its creator's alone (C186), and is refused
+    before anything is changed otherwise, in words naming who holds it (as `held_draft_problem`
+    says it for an import) and never what is in it. Where a version is given (a store argument,
+    as an import confirms `replace_own_draft`), a draft that is no longer that version is refused
+    too, so a stale write is not made over a draft opened again since."""
+    opened = draft.created_at.strftime("%d %B %Y at %H:%M UTC")
+    if draft.created_by != principal.id:
+        raise TargetModelRefused(
+            f"the domain model has an in-progress draft (version {draft.version}) by "
+            f"{draft.created_by}, opened {opened}: only {draft.created_by} can save into, replace "
+            f"or discard it. Ask {draft.created_by} to make it live or discard it in Studio › "
+            "Model, then open your own"
+        )
+    if expected_version is not None and expected_version != draft.version:
+        raise TargetModelRefused(
+            f"you meant your draft's version {expected_version}, but your draft is now version "
+            f"{draft.version}, opened {opened}: read it again before changing it"
+        )
+
+
 def _refuse_a_stale_make_live(draft: TargetModel | None, version: int) -> None:
     if draft is None:
         raise TargetModelRefused("there is no draft to make live")
@@ -172,9 +195,16 @@ class TargetModelStore(Protocol):
     async def versions(self, dataset_id: str) -> list[TargetModel]: ...
     async def open_draft(self, dataset_id: str, principal: Principal) -> TargetModel: ...
     async def save_draft(
-        self, dataset_id: str, given: TargetModelDraftInput, principal: Principal
+        self,
+        dataset_id: str,
+        given: TargetModelDraftInput,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
     ) -> TargetModel: ...
-    async def discard_draft(self, dataset_id: str) -> None: ...
+    async def discard_draft(
+        self, dataset_id: str, principal: Principal, *, expected_version: int | None = None
+    ) -> None: ...
     async def make_live(
         self, dataset_id: str, version: int, principal: Principal
     ) -> tuple[TargetModel, TargetModel | None]: ...
@@ -243,21 +273,35 @@ class InMemoryTargetModelStore:
         return made
 
     async def save_draft(
-        self, dataset_id: str, given: TargetModelDraftInput, principal: Principal
+        self,
+        dataset_id: str,
+        given: TargetModelDraftInput,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
     ) -> TargetModel:
         draft = await self.draft(dataset_id)
         if draft is None:
             raise TargetModelRefused("there is no draft to save: open one first")
+        refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
+        return await self._written(dataset_id, draft, given)
+
+    async def _written(
+        self, dataset_id: str, draft: TargetModel, given: TargetModelDraftInput
+    ) -> TargetModel:
         _checked(await self.live(dataset_id), draft, given, self._core)
         saved = draft.model_copy(update=_fields_of(given))
         held = self._of(dataset_id)
         held[held.index(draft)] = saved
         return saved
 
-    async def discard_draft(self, dataset_id: str) -> None:
+    async def discard_draft(
+        self, dataset_id: str, principal: Principal, *, expected_version: int | None = None
+    ) -> None:
         draft = await self.draft(dataset_id)
         if draft is None:
             raise TargetModelRefused("there is no draft to discard")
+        refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
         self._of(dataset_id).remove(draft)
 
     async def make_live(
@@ -284,7 +328,9 @@ class InMemoryTargetModelStore:
         """One extension appended to the draft (opened if there is none), read and written in one
         step, so a concurrent acceptance is never lost (ADR-143 decision 9)."""
         draft = await self.draft(dataset_id) or await self.open_draft(dataset_id, principal)
-        return await self.save_draft(dataset_id, _added(draft, name, kind), principal)
+        # The shared, append-only write ADR-143 decision 9 designed (any data engineer's
+        # acceptance lands in the draft): not a save over its creator's work, so not `save_draft`.
+        return await self._written(dataset_id, draft, _added(draft, name, kind))
 
     async def revert(self, dataset_id: str, to_version: int, principal: Principal) -> TargetModel:
         _refuse_a_second_draft(await self.draft(dataset_id))
@@ -416,13 +462,19 @@ class PostgresTargetModelStore:
         return made
 
     async def save_draft(
-        self, dataset_id: str, given: TargetModelDraftInput, principal: Principal
+        self,
+        dataset_id: str,
+        given: TargetModelDraftInput,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
     ) -> TargetModel:
         async with self._pool.acquire() as conn, conn.transaction():
             await self._locked(conn, dataset_id)
             draft = await self._in(conn, dataset_id, "draft")
             if draft is None:
                 raise TargetModelRefused("there is no draft to save: open one first")
+            refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
             _checked(await self._in(conn, dataset_id, "live"), draft, given, self._core)
             await conn.execute(
                 "UPDATE target_models SET content = $3::jsonb "
@@ -457,16 +509,21 @@ class PostgresTargetModelStore:
             )
         return draft.model_copy(update=_fields_of(given))
 
-    async def discard_draft(self, dataset_id: str) -> None:
+    async def discard_draft(
+        self, dataset_id: str, principal: Principal, *, expected_version: int | None = None
+    ) -> None:
         async with self._pool.acquire() as conn, conn.transaction():
             await self._locked(conn, dataset_id)
-            gone = await conn.fetchval(
-                "DELETE FROM target_models WHERE dataset_id = $1 AND state = 'draft' "
-                "RETURNING version",
+            draft = await self._in(conn, dataset_id, "draft")
+            if draft is None:
+                raise TargetModelRefused("there is no draft to discard")
+            refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
+            await conn.execute(
+                "DELETE FROM target_models "
+                "WHERE dataset_id = $1 AND version = $2 AND state = 'draft'",
                 dataset_id,
+                draft.version,
             )
-        if gone is None:
-            raise TargetModelRefused("there is no draft to discard")
 
     async def make_live(
         self, dataset_id: str, version: int, principal: Principal
