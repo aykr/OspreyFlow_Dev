@@ -15,6 +15,10 @@ What a mistake would do, and the case that catches it:
 - the check living only in the route, not the store (the import path and the link-type acceptance
   call the store directly): `test_the_creator_check_holds_at_the_store`;
 - a stale save over one's own draft: `test_the_creators_own_save_is_confirmed_against_the_version`;
+- the two tests ADR-152 decision 11 (X5) names: `test_a_second_person_cannot_save_into_replace_or_delete_
+  another_persons_draft` and `test_a_stale_version_is_refused_in_words` (the latter plants a stale
+  discard, at the store and through the DELETE route; red with the version argument deleted from
+  either the store's discard or the route's call);
 - the refusal leaking the draft's content: `test_the_refusal_names_who_holds_it_and_none_of_its_content`.
 
 The second writer is planted as the code meets one: a different `principal.id` arriving through the
@@ -155,6 +159,86 @@ async def test_a_second_principals_discard_is_refused_and_the_draft_is_still_the
     assert answer.json()["error"] == "model_refused"
     assert await _held(world) == before and before is not None
     assert _actions(world) == ["open_model_draft", "save_model_draft"]
+
+
+async def test_a_second_person_cannot_save_into_replace_or_delete_another_persons_draft(
+    world: SimpleNamespace,
+) -> None:
+    """The first of the two tests ADR-152 decision 11 (X5) names, by its name. Through the route
+    (save into, delete) and at the store (save into, replace as the import confirms it, delete):
+    another person's attempt is refused 409 `model_refused`, and the draft is as it was."""
+    _alice_holds_a_draft(world)
+    before = await _held(world)
+    assert before is not None
+    # Through the route, a different principal.id arriving by the route's own token resolver.
+    for method, body in (("PUT", _content({"niem": 1})), ("DELETE", None)):
+        answer = _call(world, method, "bob", body)
+        assert answer.status_code == 409, (method, answer.text)
+        assert answer.json()["error"] == "model_refused"
+        assert await _held(world) == before
+    # At the store, as the import path and the link-type acceptance reach it: a save into the
+    # draft, a replace confirmed against the exact version, and a discard, all refused.
+    bob = PEOPLE["bob"]
+    attempts = (
+        world.models.save_draft(DATASET, TargetModelDraftInput(packs={"niem": 1}), bob),
+        world.models.save_draft(
+            DATASET, TargetModelDraftInput(packs={"niem": 1}), bob,
+            expected_version=before.version,
+        ),
+        world.models.discard_draft(DATASET, bob),
+        world.models.discard_draft(DATASET, bob, expected_version=before.version),
+    )  # fmt: skip
+    for attempt in attempts:
+        with pytest.raises(TargetModelRefused, match="alice-1"):
+            await attempt
+    assert await _held(world) == before
+
+
+async def test_a_stale_version_is_refused_in_words(world: SimpleNamespace) -> None:
+    """The second of the two X5 names. The creator's own save and discard, confirmed against a
+    version the draft no longer has, are refused in words (the version it is now, and to read it
+    again) and change nothing — at the store, and through the DELETE route, whose read of the
+    version can be stale by the time it discards."""
+    store = world.models
+    alice = PEOPLE["alice"]
+    first = _alice_holds_a_draft(world)
+    await store.make_live(DATASET, first.version, alice)
+    second = await store.open_draft(DATASET, alice)
+    assert second.version == first.version + 1
+    before = await _held(world)
+
+    with pytest.raises(TargetModelRefused, match=f"version {second.version}") as stale_save:
+        await store.save_draft(
+            DATASET, TargetModelDraftInput(packs={"niem": 1}), alice,
+            expected_version=first.version,
+        )  # fmt: skip
+    with pytest.raises(TargetModelRefused, match=f"version {second.version}") as stale_discard:
+        await store.discard_draft(DATASET, alice, expected_version=first.version)
+    for refused in (stale_save, stale_discard):
+        words = str(refused.value)
+        assert f"you meant your draft's version {first.version}" in words
+        assert "read it again" in words
+    assert await _held(world) == before  # neither changed anything
+
+    # Through the route: it reads the draft, then discards confirming what it read. Plant a read
+    # gone stale (the draft replaced between the route's read and its discard), as a race would.
+    real_draft = store.draft
+    calls = {"n": 0}
+
+    async def stale_read(dataset_id: str) -> TargetModel | None:
+        calls["n"] += 1
+        held = await real_draft(dataset_id)
+        if calls["n"] == 1 and held is not None:
+            return held.model_copy(update={"version": first.version})
+        return held
+
+    store.draft = stale_read  # type: ignore[method-assign]
+    answer = _call(world, "DELETE", "alice")
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["error"] == "model_refused"
+    assert f"you meant your draft's version {first.version}" in answer.json()["detail"]
+    assert await real_draft(DATASET) == before  # still there
+    assert "discard_model_draft" not in _actions(world)
 
 
 async def test_the_refusal_names_who_holds_it_and_none_of_its_content(
