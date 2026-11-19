@@ -288,3 +288,26 @@ is not one of these named, mechanical kinds is the builder's, in a round as now.
 real shape (two appended rows at the table's end) and a conflict that is not mechanical (two edits of one row), and show
 the second is not resolved by the line. Related: the board's "verifying" label for a slice that has a verified tip and a
 new tip with no test record.
+
+### Left stopped for the owner (night of 19 Nov): PL1, PL2 and BL2 each need a decision that is his
+
+From a read-only scout of 19 November. The owner's standing word for the night (RULINGS.md) puts them in the order CO3, BL7, PL2,
+PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped and listed. None was started.
+- **PL1, "Laptop demo sound"** (plan row, account Default). No ruling, backlog row or note says what it is; the decision record
+  places four demo and install faults under PL1 (N05, N06, N07, N11: OPEN_BACKLOG_PLACED.tsv), none about sound. Questions: what
+  does "laptop demo sound" mean, and is PL1 the four D35 rows or a sound fix? Sound cannot be proved by a pure test (it needs a
+  physical laptop and audio device). Recommendation: PL1 is the four D35 rows (pure-testable), and the sound item gets its own id.
+- **PL2, "Connection limits, Java licence notice"**. Connection limits: the owner's word "Connection limits from settings"
+  (15 Nov list) and L10 "partly built": Postgres max_connections is a computed constant (harness/profiles.py, harness/cloud_platform/
+  connections.py); nothing reads it from a setting. Java notice: C020, the runtime's NOTICE and GPL-2.0 source offer before any
+  image carrying it is published (ADR-147 Amendment 2), which the architecture text calls "a release step, not this register's
+  to perform". Questions: what does "from settings" mean (a deployment-config field with the computed value as its default and a
+  refusal below a floor?); does the Java notice go into the image in this slice or stay a release step? Recommendation: the
+  setting with the computed default, and the notice file in the image with a test on the Dockerfile and the NOTICE.
+- **BL2, "True backlog"**: not a code slice. The closures (153 rows) are on main; the placement is not: it lives only in the
+  git-ignored decision-record folder (180 rows placed, against the plan's 154 open). Questions: which count the record uses; whether
+  the placed table is committed into the backlog folder; the seven proposed ids N19-01 to N19-07 (the conductor renumbers them
+  once the owner says); question 23 on C023; and the 16 rows that need a run on a test stack. Recommendation: commit the
+  placed table verbatim with its counts note, say "180 placed, of which 154 were open on 18 November" only if the owner confirms it.
+- **CO3 is ready only when PL3 merges** (the plan row: after PL3, no Conduit change, three tests through the page service's
+  proxy). The conductor's earlier "nothing to build" reading was wrong; the id is kept from when it was thought a Conduit route.
