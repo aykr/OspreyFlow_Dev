@@ -1167,6 +1167,14 @@ its key-value store, which refuses a write with no TTL and a key outside its pre
 real sign-in is a later slice, and its licence is read at install (ADR-152 decision 2). Nothing is fetched from
 another address by the service or its pages.
 
+**ADR-152 addition (19 November 2026; slice CO3, X2) — live updates through the `pages` service.** Run time:
+`ws` 8.22.0 (MIT; no dependencies of its own at run time), which carries the delta WebSocket through the service
+(ADR-152 decision 5): the browser's socket ends at the service, and the service opens its own to the Conduit with
+the person's bearer. `ws` was already a development dependency of `apps/workspace` (its integration tests); it is
+now also a run-time dependency of `apps/pages`, so it is in the service's image. No proxy package
+(`http-proxy`, `express-http-proxy`) is added: the proxy is this service's own, in one file over `ws`.
+Development only: `@types/ws` 8.18.2 (MIT, already a development dependency of `apps/workspace`).
+
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the
 data (`packages/demo_fixtures/public_datasets/`); the administrator downloads the file and adds it to

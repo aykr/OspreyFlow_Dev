@@ -13,6 +13,7 @@ import { loadConfig } from "./config.js";
 import { unconfiguredProvider } from "./identity.js";
 import type { IdentityProvider } from "./identity.js";
 import { ValkeySessionStore } from "./sessionStore.js";
+import { attachStreamProxy } from "./stream.js";
 import type { SessionStore } from "./sessionStore.js";
 import { valkeyOptions } from "./valkey.js";
 
@@ -28,6 +29,10 @@ export interface StartDeps {
   store?: SessionStore;
   identityProvider?: IdentityProvider;
   host?: string;
+  /** Milliseconds since the epoch, for the session and the live-updates proxy. A test moves it by hand. */
+  clock?: () => number;
+  /** How often the live-updates proxy looks at its open sockets, in milliseconds. */
+  streamCheckMs?: number;
 }
 
 export interface Running {
@@ -73,10 +78,23 @@ export async function main(
     store,
     identityProvider: deps.identityProvider ?? unconfiguredProvider,
     sessionSecret: config.sessionSecret.reveal(),
+    ...(deps.clock ? { clock: deps.clock } : {}),
   });
   const server = await new Promise<Server>((resolve, reject) => {
     const listening = app.listen(config.port, deps.host ?? "0.0.0.0", () => resolve(listening));
     listening.once("error", reject);
+  });
+  // Every WebSocket upgrade is answered here, never by a page's route: with no Conduit address set the
+  // proxy is absent and each one is refused 404 (ADR-152 decision 5).
+  const stream = attachStreamProxy(server, {
+    settings: config.stream,
+    store,
+    sessionSecret: config.sessionSecret.reveal(),
+    ...(deps.clock ? { clock: deps.clock } : {}),
+    ...(deps.streamCheckMs === undefined ? {} : { checkMs: deps.streamCheckMs }),
+    log: (message) => {
+      io.error(message);
+    },
   });
   const port = (server.address() as AddressInfo).port;
   io.log(`pages: listening on ${port}`);
@@ -85,6 +103,7 @@ export async function main(
     port,
     stop: () =>
       new Promise<void>((resolve) => {
+        stream.close();
         server.close(() => {
           client?.disconnect();
           resolve();
