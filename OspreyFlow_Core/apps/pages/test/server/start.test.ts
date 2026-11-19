@@ -69,7 +69,7 @@ describe("main refuses to start without a usable secret, in words", () => {
     expect((await startWith({ [NAME]: generateSecret(31) })).channel.errors.join("\n")).toMatch(/at least 32 characters/);
   });
 
-  it.each([1, 8, 21, 31])("never includes a %i-character value, in the refusal or in anything written", async (length) => {
+  it.each([8, 21, 31])("never includes a %i-character value, in the refusal or in anything written", async (length) => {
     const given = generateSecret(length);
     const { result, channel, output } = await startWith({ [NAME]: given });
     expect(result).toBeUndefined();

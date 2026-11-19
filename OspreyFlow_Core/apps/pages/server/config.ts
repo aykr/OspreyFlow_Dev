@@ -4,6 +4,39 @@
  * number is the service's own (ADR-152 decision 4: "under its own database number and key prefix").
  */
 
+import { inspect } from "node:util";
+
+const REDACTED = "[redacted]";
+
+/**
+ * A value that must never be printed or sent. Its printed form (`String`, a template literal, `util.inspect`,
+ * `console.log`) and its JSON form are "[redacted]"; the value is held in a private field, so it is not an
+ * own property to enumerate or copy with a spread. Using it is a deliberate call to `reveal()`.
+ */
+export class Secret {
+  readonly #value: string;
+
+  constructor(value: string) {
+    this.#value = value;
+  }
+
+  reveal(): string {
+    return this.#value;
+  }
+
+  toString(): string {
+    return REDACTED;
+  }
+
+  toJSON(): string {
+    return REDACTED;
+  }
+
+  [inspect.custom](): string {
+    return REDACTED;
+  }
+}
+
 export interface ValkeySettings {
   host: string;
   port: number;
@@ -15,8 +48,8 @@ export interface ValkeySettings {
 
 export interface Config {
   port: number;
-  /** Signs the session cookie. Never logged, and never in an error message. */
-  sessionSecret: string;
+  /** Signs the session cookie. Never logged, and never in an error message; printed or turned into JSON it is "[redacted]". */
+  sessionSecret: Secret;
   valkey: ValkeySettings;
 }
 
@@ -33,16 +66,16 @@ function wholeNumber(name: string, raw: string, max: number): number {
 
 const MIN_SECRET_LENGTH = 32;
 
-function sessionSecret(env: NodeJS.ProcessEnv): string {
+function sessionSecret(env: NodeJS.ProcessEnv): Secret {
   const secret = env["OSPREY_PAGES_SESSION_SECRET"];
   if (secret === undefined || secret === "") {
     throw new Error("OSPREY_PAGES_SESSION_SECRET is required: it signs the session cookie");
   }
-  // The message names the length, never the value.
+  // The message names the setting and the rule, never the value (not even a short one's, nor its length).
   if (secret.length < MIN_SECRET_LENGTH) {
-    throw new Error(`OSPREY_PAGES_SESSION_SECRET must be at least ${MIN_SECRET_LENGTH} characters, not ${secret.length}`);
+    throw new Error(`OSPREY_PAGES_SESSION_SECRET must be at least ${MIN_SECRET_LENGTH} characters`);
   }
-  return secret;
+  return new Secret(secret);
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
