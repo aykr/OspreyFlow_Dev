@@ -569,7 +569,7 @@ the risk named rather than silently suppressed.
 the start of any later phase touching `apps/workspace`'s map dependencies, not only when
 `.trivyignore` is next edited by hand.
 
-### Amendment 2 — the revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree
+### ADR-014, Amendment 2 — the revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree
 
 **Status.** Accepted by the owner, 18 November 2026 (build id GG6). It replaces Amendment 1's accepted
 risk once GG6 has merged.

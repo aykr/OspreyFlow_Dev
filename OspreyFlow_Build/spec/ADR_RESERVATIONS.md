@@ -118,6 +118,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-148 Amendment 5 | The cloud-platform profile's proof-of-concept shape (`shape: poc`): one ArcadeDB and one ClickHouse with its Keeper inside the server, no PodDisruptionBudgets, a scratch volume for Ingest, a manual-install runbook and a decommission runbook (P7b) | platform | 2026-11-11 | written |
 | ADR-148 Amendment 6 | Sign-in claims from Entra ID as built (P10 part 1): clearance, unit and handling codes mapped by settings from a named claim or a group table, one construction path, the tenant and issuer pinned, a principal keyed by `oid` within its tenant | admin | 2026-11-11 | written |
 | ADR-140 Amendment 20 | L1.9 part 1 as built: the S3 and Athena connectors (read-only, by the namespace's IAM role; the named query's relations checked, failing closed). The host allowed only while the source is enabled is part 2's (ADR-148 decision 7) | studio-b | 2026-11-11 | written |
+| ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
 
 ## Baseline
 
