@@ -135,3 +135,13 @@ is not in the form the reservation check wants, "### ADR-n, Amendment m", so the
 went from the baseline of 15 to 16. The one fix: retitle that heading in that form and, if the check asks for it, add its
 reservation row (read OspreyFlow_Build/tests/test_adr_reservations.py for the form and the table). Change nothing else:
 no other line of the spec, no code, no test. Run test_adr_reservations.py and the slice's checks before you stop.
+
+## Owner's ruling for round 6 (19 November 2026; it replaces the section above)
+
+Round 5 is done and verified (496d7b92ce). The merge then refused the branch: "lane/slice-GG6 does not merge cleanly onto
+main: the builder rebases it." The one conflict is in OspreyFlow_Build/spec/ADR_RESERVATIONS.md: your ADR-014 Amendment 2
+row and the rows main has added both sit at the end of the table. One task only: merge main into your branch (git merge
+main in your worktree), keep both sides' rows in the reservations table (yours and every row main has), and change nothing
+else: no other line of the spec, no code, no test, no other file. Do not rewrite or rebase history. Then run
+test_adr_reservations.py and the slice's checks, and stop. Check that git merge-tree of main and your branch reports no
+conflict before you stop.

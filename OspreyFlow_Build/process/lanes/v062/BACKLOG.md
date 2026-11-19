@@ -255,3 +255,20 @@ proof's deadlines should scale with the runner, or the test should wait on the o
 
 After `resume.py <ID> accept` (GG6, BL6) the board reads the slice from its test record and shows "verifying" until the merge.
 It should say "accepted, waiting to merge" (and, for a standing accept, the count of gaps in a test).
+
+### New row (19 Nov, GG6; for the owner's next line-fix batch): a mechanical conflict with main costs a round and needs the owner's line
+
+GG6 passed its verifier (496d7b92ce) and was then refused by the merge because its branch no longer merged cleanly onto
+main: "lane/slice-GG6 does not merge cleanly onto main: the builder rebases it." The only conflict was in
+OspreyFlow_Build/spec/ADR_RESERVATIONS.md, where GG6 and main each appended a row at the end of the table; the answer was
+to keep both rows. Because GG6 was at its rounds limit, taking main in cost a sixth round and the owner's `add-round` line
+(a builder, a fresh verifier pass, a second merge: about an hour of the owner's wait, for a change that is not the slice's
+work). The owner's ruling of 19 November: a slice that only needs main merged in to resolve a mechanical conflict should not
+cost a round or need his line. Fix for the line-fixes session: the merge (or `resume.py`, a new action) brings main into the
+branch itself when the conflict is only in files a slice has no logic in (the records folder, which `resume.py` already
+does, and append-only tables such as ADR_RESERVATIONS.md, resolved by keeping both sides' rows); the new tip gets its
+verifier pass as before (the verifier's own cost, not a round, and not counted against the rounds limit); any conflict that
+is not one of these named, mechanical kinds is the builder's, in a round as now. Rule 15: the tests plant a conflict in the
+real shape (two appended rows at the table's end) and a conflict that is not mechanical (two edits of one row), and show
+the second is not resolved by the line. Related: the board's "verifying" label for a slice that has a verified tip and a
+new tip with no test record.
