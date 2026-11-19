@@ -35,6 +35,13 @@ match the fix (it stays in the checks, which run every drawn-merge keyboard spec
 `src/ingest/runs` vitest; `keyboard/drawn-merge.spec.ts`; `keyboard/promotions` specs that share the sheet
 (`promotions.test.tsx:162, :178`).
 
+## First step, from the conductor (19 November 2026)
+
+Your branch was cut from main before the owner's commit c7fda31, which allows the 25 paths ADR-152 names. Until your branch
+has it, the citations scan (test_the_repository_itself_is_clean) is red for files you did not touch, and no change of yours
+can fix that. Before anything else, merge main into your branch (git merge main in your worktree), then run the checks. Do
+not change any citation, allowlist or spec file.
+
 ## Out of scope
 
 Any other focus move in the audit's record; PL4. No server, schema or generated-type change.
