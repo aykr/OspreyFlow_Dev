@@ -7,7 +7,8 @@ and Laurium"; slice BL6).
 **The client.** The client's name (full and abbreviated) stays only in the four files in `KEEP_FILES`; everywhere else
 it is "UK public sector client", and where text credits Laurium, "the library's publisher". The names are never
 written down: the check holds them as the owner's hashes (`marketing_site/client_hashes.py`, a gitignored list
-on the machine that publishes) and prints a file, a line and a count, never a name, a hash or the line's text.
+on the machine that publishes) and prints a file, a line and a count, never a name, a hash or the line's text. A file's path is read as its contents are:
+a path that names the client prints with the matching word replaced.
 
 **Scope.** Every git-tracked file (`git ls-files`); a file that is not UTF-8 is read for its runs of printable
 characters, as `identifier_check._read` does: runs of four printable characters or more, as `strings` reads them, so a
@@ -143,6 +144,44 @@ def laurium_lines(text: str) -> Iterator[int]:
             yield number
 
 
+#: A word of a path, as a name is written in one: letters and digits, with the invisible characters `normalise` drops.
+_PATH_WORD = re.compile("(?:[^\\W_]|[\u00ad\u200b-\u200d\u2060\ufeff])+")
+#: How many words of a path one name may span (`client_hashes.LONGEST` words, and an abbreviation's letters each a word).
+_PATH_SPAN = 2 * client_hashes.LONGEST
+REPLACED = "[client]"
+REPLACED_LAURIUM = "[publisher]"
+
+
+def path_names(path: str, held: frozenset[str] | set[str]) -> list[tuple[int, int]]:
+    """The spans of `path` that are a name in `held`, merged. A path is read as a line is: its words are the runs of
+    letters and digits, a name may be several words, and the span's text is normalised as a name is, so "E.S.C.-notes"
+    and "Example_Shire_Constabulary" are found as the list's other readers find them."""
+    words = [(m.start(), m.end()) for m in _PATH_WORD.finditer(path)]
+    spans: list[tuple[int, int]] = []
+    for first in range(len(words)):
+        for last in range(first, min(first + _PATH_SPAN, len(words))):
+            start, end = words[first][0], words[last][1]
+            run = client_hashes.normalise(path[start:end])
+            if run and len(run.split()) <= client_hashes.LONGEST and hashlib.sha256(run.encode("utf-8")).hexdigest() in held:
+                spans.append((start, end))
+    merged: list[tuple[int, int]] = []
+    for start, end in sorted(spans):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def shown(path: str, held: frozenset[str] | set[str]) -> str:
+    """The path as a hit line prints it: every word that is a name replaced, so neither the name nor its hash is ever
+    printed. Laurium's name is replaced too in a published file's path, which becomes a public address."""
+    out = path
+    for start, end in reversed(path_names(path, held)):
+        out = out[:start] + REPLACED + out[end:]
+    return LAURIUM.sub(REPLACED_LAURIUM, out) if published(path) else out
+
+
 _HELD: frozenset[str] = frozenset()
 _ROOT = ROOT
 
@@ -153,29 +192,41 @@ def _start(root: Path, held: frozenset[str]) -> None:
 
 
 def scan_file(path: str) -> list[str]:
-    """One tracked file's hits, as `path:line: why`; the file is read once."""
+    """One tracked file's hits, as `path:line: why` (the path with any name in it replaced); the file is read once. A
+    name in the path itself is a hit on its own, as `path: why`, whatever the contents say."""
+    hits: list[str] = []
+    name = shown(path, _HELD)
+    if path not in KEEP_FILES and path not in CHANCE_IN_COMPRESSED and path_names(path, _HELD):
+        hits.append(f"{name}: the client's name, in its path")
+    if published(path) and LAURIUM.search(path):
+        hits.append(f"{name}: Laurium in a published file's path")
     file = _ROOT / path
     if not file.is_file():  # a tracked file deleted from the working tree, or a link to nothing
-        return []
+        return hits
     text, is_text = identifier_check._read(file)
-    hits: list[str] = []
     if path not in KEEP_FILES and not (path in CHANCE_IN_COMPRESSED and not is_text):
-        hits += [f"{path}:{n}: the client's name" for n in client_lines(text, path, _HELD, is_text)]
+        hits += [f"{name}:{n}: the client's name" for n in client_lines(text, path, _HELD, is_text)]
     if published(path):
-        hits += [f"{path}:{n}: Laurium in a published file" for n in laurium_lines(text)]
+        hits += [f"{name}:{n}: Laurium in a published file" for n in laurium_lines(text)]
     return hits
 
 
-def scan(root: Path, held: set[str]) -> list[str]:
-    """Every hit, in path order. The tree is 5,000 files and 30 million words, each word the start of up to six hashed
-    runs, so a large tree is shared across the machine's cores; a small one (a test's) is read in this process."""
+def scan_by_file(root: Path, held: set[str]) -> list[list[str]]:
+    """Each tracked file's hits, in path order. The tree is 5,000 files and 30 million words, each word the start of up
+    to six hashed runs, so a large tree is shared across the machine's cores; a small one (a test's) is read in this
+    process."""
     files = tracked(root)
     frozen = frozenset(held)
     if len(files) < PARALLEL_FROM:
         _start(root, frozen)
-        return [hit for path in files for hit in scan_file(path)]
+        return [scan_file(path) for path in files]
     with ProcessPoolExecutor(initializer=_start, initargs=(root, frozen)) as pool:
-        return [hit for hits in pool.map(scan_file, files, chunksize=16) for hit in hits]
+        return list(pool.map(scan_file, files, chunksize=16))
+
+
+def scan(root: Path, held: set[str]) -> list[str]:
+    """Every hit, in path order."""
+    return [hit for hits in scan_by_file(root, held) for hit in hits]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -190,10 +241,12 @@ def main(argv: list[str] | None = None) -> int:
     if not held:
         print(EMPTY)
         return 1
-    hits = scan(args.root, held)
+    by_file = scan_by_file(args.root, held)
+    hits = [hit for file_hits in by_file for hit in file_hits]
     for hit in hits:
         print(hit)
-    files = len({h.split(":")[0] for h in hits})
+    # A file is counted by itself, not by the path it prints: two files may print alike once a name is replaced.
+    files = sum(1 for file_hits in by_file if file_hits)
     print(f"client-name-check: {len(hits)} hit(s) in {files} file(s)")
     return 1 if hits else 0
 

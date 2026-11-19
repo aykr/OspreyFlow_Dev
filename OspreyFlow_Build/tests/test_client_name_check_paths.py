@@ -112,7 +112,8 @@ def test_laurium_in_a_published_path_is_flagged_and_not_printed(
     code, out = _run(root, _list(tmp_path), capsys)
     assert code == 1, out
     assert out.splitlines()[-1] == "client-name-check: 1 hit(s) in 1 file(s)", out
-    assert "laurium" not in out.lower(), out
+    printed_path = out.splitlines()[0].split(": ")[0]  # the message after it says "Laurium"; the path must not
+    assert "laurium" not in printed_path.lower(), out
     assert out.splitlines()[0].startswith("OspreyFlow_Build/marketing_site/"), out
 
 
