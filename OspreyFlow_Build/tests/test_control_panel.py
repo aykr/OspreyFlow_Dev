@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from tests.port_guard import outside_reserved
 from tools.control_panel import panel
 
 BUILD = Path(__file__).resolve().parents[1]
@@ -56,7 +57,8 @@ def w(tmp_path):
     token = panel.ensure_token(token_file)
     cfg = panel.Config(dial_file=lane / "dial.yaml", accounts_file=lane / "accounts.yaml",
                        live_step_file=lane / "live_step.yaml", data_dir=data, token_file=token_file)
-    server = panel.make_server(cfg, port=0)
+    # a port the port guard does not keep for a test stack (it refuses a connection to one, whatever listens there)
+    server = outside_reserved(lambda: panel.make_server(cfg, port=0))
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
