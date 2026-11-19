@@ -153,3 +153,12 @@ else.
      its logs, stdout or stderr. The configuration's own printed or JSON form shows it as redacted.
 
 Do not add the real sign-in, the render wiring or any other out-of-scope item. Run the acceptance command and the checks before you stop.
+
+## Round 4, the last (19 November 2026): the merge gate's one finding
+
+The round-3 verifier found only two gaps in a test (accepted on the owner's standing line), and the merge then refused the slice on
+the full gate: `make -k ci` runs `ruff check .` in OspreyFlow_Core and it reports **E501, line too long (over 100)** on three lines
+of the page service's entry in OspreyFlow_Core/harness/service_inventory.py (about lines 198-200, the `note=` text). The one fix:
+re-wrap that text so no line exceeds 100 characters, keeping its words. Change nothing else: no other file, no test, no code. Then
+run, from OspreyFlow_Core, `ruff check .` (through `uv run`, as the checks do) and the acceptance command, and stop. (The line's
+checks command does not run ruff; run it yourself.)
