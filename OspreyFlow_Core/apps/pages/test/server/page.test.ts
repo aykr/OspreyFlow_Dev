@@ -4,7 +4,9 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { COOKIE_NAME } from "../../server/sessions.js";
+import type { IdentityProvider } from "../../server/identity.js";
+import { COOKIE_NAME } from "../../server/sessionPolicy.js";
+import type { SessionStore } from "../../server/sessionStore.js";
 import { build } from "../support/build.js";
 import { SENTINEL_SUBJECT, SENTINEL_TOKENS } from "../support/fakeProvider.js";
 import { request, signIn } from "../support/http.js";
@@ -81,14 +83,55 @@ describe("the sign-in route", () => {
 });
 
 describe("GET /healthz", () => {
-  it("answers with no session, no secret and no call to the identity provider or the store", async () => {
-    // A provider that fails and a store that refuses everything: health must not touch either.
-    const { app, store } = build({ provider: { unavailable: true } });
-    const res = await request(app).get("/healthz");
-    expect(res.status).toBe(200);
-    expect(res.headers["set-cookie"]).toBeUndefined();
-    expect(JSON.parse(res.text)).toEqual({ status: "ok" });
-    expect(store.keys()).toEqual([]);
+  /** A store that records, then throws on, every call; and a provider that does the same. */
+  function breaking() {
+    const calls: string[] = [];
+    const boom = (name: string) => (): never => {
+      calls.push(name);
+      throw new Error(`${name} was called`);
+    };
+    const store: SessionStore = {
+      get: boom("store.get"),
+      set: boom("store.set"),
+      expire: boom("store.expire"),
+      del: boom("store.del"),
+    };
+    const identityProvider: IdentityProvider = { signIn: boom("provider.signIn") };
+    return { calls, store, identityProvider };
+  }
+
+  it("answers with no session, no secret, and no call to the store or the identity provider, with and without a cookie", async () => {
+    // A cookie that is genuinely a session's, from an ordinary app with the same secret.
+    const { app: ordinary } = build();
+    const { cookie } = await signIn(ordinary);
+
+    const { calls, store, identityProvider } = breaking();
+    const { app } = build({ wrapStore: () => store, identityProvider });
+    expect(calls).toEqual([]); // building the app touches neither
+
+    for (const headers of [{}, { Cookie: cookie }, { Cookie: `${COOKIE_NAME}=garbage` }]) {
+      const res = await request(app).get("/healthz").set(headers);
+      expect(res.status).toBe(200);
+      expect(res.headers["set-cookie"]).toBeUndefined();
+      expect(JSON.parse(res.text)).toEqual({ status: "ok" });
+      const head = await request(app).head("/healthz").set(headers);
+      expect(head.status).toBe(200);
+    }
+    expect(calls).toEqual([]);
+  });
+
+  it("the same breaking store and provider are called by the page and the sign-in (the control: the test can fail)", async () => {
+    const { app: ordinary } = build();
+    const { cookie } = await signIn(ordinary);
+
+    const { calls, store, identityProvider } = breaking();
+    const { app } = build({ wrapStore: () => store, identityProvider });
+    const page = await request(app).get("/").set("Cookie", cookie);
+    expect(page.status).toBe(500);
+    expect(calls).toContain("store.get");
+    const signInRes = await request(app).get("/session/sign-in");
+    expect(signInRes.status).toBe(500);
+    expect(calls).toContain("provider.signIn");
   });
 
   it("answers even with a session cookie it has no use for, and does not slide it", async () => {

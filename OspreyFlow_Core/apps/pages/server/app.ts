@@ -13,8 +13,8 @@ import { csrfProtection } from "./csrf.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderUnavailable } from "./identity.js";
 import type { IdentityProvider } from "./identity.js";
-import { COOKIE_NAME, SessionService, isSessionId } from "./sessions.js";
-import type { ActiveSession } from "./sessions.js";
+import { COOKIE_NAME, SessionService, isSessionId } from "./sessionPolicy.js";
+import type { ActiveSession } from "./sessionPolicy.js";
 import type { SessionStore } from "./sessionStore.js";
 
 declare global {

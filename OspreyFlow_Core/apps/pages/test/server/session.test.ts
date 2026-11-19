@@ -10,17 +10,23 @@
 import express from "express";
 import { describe, expect, it } from "vitest";
 
-import { ABSOLUTE_SECONDS, COOKIE_NAME, IDLE_SECONDS } from "../../server/sessions.js";
+import { ABSOLUTE_SECONDS, COOKIE_NAME, IDLE_SECONDS } from "../../server/sessionPolicy.js";
 import { MemorySessionStore, SESSION_KEY_PREFIX } from "../../server/sessionStore.js";
 import { build } from "../support/build.js";
 import { SENTINEL_TOKENS } from "../support/fakeProvider.js";
 import {
+  TEST_SESSION_SECRET,
   assertNoTokenLeak,
+  cookieFrom,
+  cookieValueFrom,
   csrfFromPage,
   idFrom,
   request,
   setCookies,
   signIn,
+  signatureFor,
+  signedCookie,
+  unsigned,
 } from "../support/http.js";
 
 describe("the session is stored with a time limit on every key", () => {
@@ -91,36 +97,92 @@ describe("the cookie", () => {
     expect(attributes.some((a) => a.startsWith("domain"))).toBe(false);
   });
 
-  it("holds 32 random bytes as base64url, a new one at each sign-in", async () => {
+  it("holds express-session's signed identifier, a new one at each sign-in, and nothing of the session", async () => {
     const { app } = build();
-    const a = idFrom(await request(app).get("/session/sign-in"));
-    const b = idFrom(await request(app).get("/session/sign-in"));
-    expect(a).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(b).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(a).not.toBe(b);
+    const first = await request(app).get("/session/sign-in");
+    const second = await request(app).get("/session/sign-in");
+    const a = unsigned(cookieValueFrom(first));
+    const b = unsigned(cookieValueFrom(second));
+    // 32 random bytes, base64url, signed with the service's secret (HMAC-SHA256, as cookie-signature does).
+    expect(a.id).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(a.id).not.toBe(b.id);
+    expect(a.signature).toBe(signatureFor(a.id));
+    expect(a.signature).not.toBe(signatureFor(a.id, "another-secret-of-at-least-32-characters!"));
+    // Opaque: the value says nothing of the person or the tokens, however it is decoded.
+    const value = cookieValueFrom(first);
+    expect(value).not.toContain("Alex");
+    expect(value).not.toContain("SENTINEL");
+    expect(decodeURIComponent(value)).not.toMatch(/\{|eyJ/);
+  });
+
+  it("is signed with the secret from the setting: another secret's cookie is no session", async () => {
+    const { app } = build();
+    const real = await request(app).get("/session/sign-in");
+    const { id } = unsigned(cookieValueFrom(real));
+    const forged = signedCookie(id, "another-secret-of-at-least-32-characters!");
+    const res = await request(app).get("/").set("Cookie", forged);
+    expect(res.status).toBe(302);
+    expect(res.headers["location"]).toBe("/session/sign-in");
+    // And the secret that was used is accepted for the same identifier (the control).
+    const ok = await request(app).get("/").set("Cookie", signedCookie(id, TEST_SESSION_SECRET));
+    expect(ok.status).toBe(200);
+  });
+
+  it("does not accept the bare identifier: a cookie that is not signed is no session", async () => {
+    const { app } = build();
+    const real = await request(app).get("/session/sign-in");
+    const { id } = unsigned(cookieValueFrom(real));
+    const res = await request(app).get("/").set("Cookie", `${COOKIE_NAME}=${id}`);
+    expect(res.status).toBe(302);
+    expect(res.headers["location"]).toBe("/session/sign-in");
+  });
+
+  it("does not accept a signature with one character changed", async () => {
+    const { app, store } = build();
+    const { cookie } = await signIn(app);
+    const value = decodeURIComponent(cookie.slice(COOKIE_NAME.length + 1));
+    const last = value.slice(-1) === "A" ? "B" : "A";
+    const tampered = `${COOKIE_NAME}=${encodeURIComponent(value.slice(0, -1) + last)}`;
+    const res = await request(app).get("/").set("Cookie", tampered);
+    expect(res.status).toBe(302);
+    // A forged cookie neither reads nor ends the real session.
+    expect(store.keys()).toHaveLength(1);
   });
 
   it("is never one the browser chose: a planted identifier is not adopted at sign-in", async () => {
     const { app, store } = build();
     const planted = "A".repeat(43);
-    const res = await request(app).get("/session/sign-in").set("Cookie", `${COOKIE_NAME}=${planted}`);
+    // Signed correctly, which only someone with the secret could do: the session is still new at sign-in.
+    const plantedCookie = signedCookie(planted);
+    const res = await request(app).get("/session/sign-in").set("Cookie", plantedCookie);
     expect(idFrom(res)).not.toBe(planted);
     expect(store.keys()).not.toContain(`${SESSION_KEY_PREFIX}${planted}`);
-    const page = await request(app).get("/").set("Cookie", `${COOKIE_NAME}=${planted}`);
+    const page = await request(app).get("/").set("Cookie", plantedCookie);
     expect(page.status).toBe(302);
   });
 
+  it("starts a new identifier when a person signs in again while holding one, and the old one is gone", async () => {
+    const { app, store } = build();
+    const held = await signIn(app);
+    const again = await request(app).get("/session/sign-in").set("Cookie", held.cookie);
+    expect(idFrom(again)).not.toBe(held.id);
+    expect(store.keys()).toEqual([`${SESSION_KEY_PREFIX}${idFrom(again)}`]);
+    expect((await request(app).get("/").set("Cookie", held.cookie)).status).toBe(302);
+  });
+
   it.each([
-    ["an unknown identifier", `${COOKIE_NAME}=${"B".repeat(43)}`],
+    ["an unknown identifier, correctly signed", signedCookie("B".repeat(43))],
     ["an empty value", `${COOKIE_NAME}=`],
     ["a value with a wildcard in it", `${COOKIE_NAME}=*`],
     ["a value that is far too long", `${COOKIE_NAME}=${"C".repeat(5000)}`],
     ["a cookie that is malformed", `${COOKIE_NAME}`],
+    ["a signed prefix with no identifier", `${COOKIE_NAME}=s%3A.`],
   ])("treats %s as no session, in words and without an error", async (_name, header) => {
     const { app } = build();
     const res = await request(app).get("/").set("Cookie", header);
     expect(res.status).toBe(302);
     expect(res.headers["location"]).toBe("/session/sign-in");
+    expect(setCookies(res)).toEqual([]);
   });
 });
 
@@ -136,7 +198,7 @@ describe("no token leaves the server", () => {
     expect(stored).toContain(SENTINEL_TOKENS.accessToken);
     expect(stored).toContain(SENTINEL_TOKENS.refreshToken);
 
-    const cookie = `${COOKIE_NAME}=${idFrom(first)}`;
+    const cookie = cookieFrom(first);
     const home = await request(app).get("/").set("Cookie", cookie);
     assertNoTokenLeak(home, "GET /");
     const csrf = csrfFromPage(home.text);

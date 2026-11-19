@@ -11,7 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import { tokensMatch } from "../../server/csrf.js";
-import { COOKIE_NAME } from "../../server/sessions.js";
+import { COOKIE_NAME } from "../../server/sessionPolicy.js";
 import { build } from "../support/build.js";
 import { request, setCookies, signIn } from "../support/http.js";
 
