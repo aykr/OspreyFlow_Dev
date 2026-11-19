@@ -54,10 +54,11 @@ def repo(tmp_path: Path) -> Path:
     return core
 
 
-def _render(repo: Path, ceiling: str | None) -> None:
+def _render(repo: Path, ceiling: str | None, profile: str | None = None) -> None:
     env = repo / "deploy" / "generated" / "local-lite" / "deployment.env"
     line = f"OSPREY_HIGHEST_MARKING={ceiling}\n" if ceiling is not None else ""
-    env.write_text("OSPREY_KEYCLOAK_PORT=8081\n" + line, encoding="utf-8")
+    named = f"OSPREY_PROFILE={profile}\n" if profile is not None else ""
+    env.write_text("OSPREY_KEYCLOAK_PORT=8081\n" + named + line, encoding="utf-8")
 
 
 def _seed(repo: Path, dataset: str, runner: Runner, **more: Any) -> list[str]:
@@ -88,6 +89,32 @@ def test_a_pack_within_the_ceiling_is_seeded(repo: Path) -> None:
 
 def test_with_no_ceiling_rendered_every_pack_is_seeded_as_before(repo: Path) -> None:
     _render(repo, None)
+    runner = Runner()
+    _seed(repo, "fixture-corp", runner)
+    assert any("scripts.seed_fixture_corp" in call for call in runner.calls)
+
+
+def test_an_unset_ceiling_on_a_cloud_platform_deployment_env_is_the_profiles_own(
+    repo: Path,
+) -> None:
+    """The script run directly (ADR-148 decision 10, Amendment 5): the rendered file names the
+    profile and no ceiling, so the profile's OFFICIAL-SENSITIVE applies, not the scheme's highest.
+    Rule 15: the same file with no profile line seeds the same pack, so the refusal is the
+    profile's and nothing else's."""
+    _render(repo, None, profile="cloud-platform")
+    runner = Runner()
+    with pytest.raises(SeedRefused) as raised:
+        _seed(repo, "fixture-corp", runner)
+    assert "OFFICIAL-SENSITIVE" in str(raised.value)
+    assert "holds data marked up to SECRET" in str(raised.value)
+    assert runner.calls == [], "something ran before the refusal"
+    _render(repo, None, profile="local-lite")
+    _seed(repo, "fixture-corp", runner)
+    assert any("scripts.seed_fixture_corp" in call for call in runner.calls)
+
+
+def test_a_rendered_ceiling_wins_over_the_profile_in_the_deployment_env(repo: Path) -> None:
+    _render(repo, "SECRET", profile="cloud-platform")
     runner = Runner()
     _seed(repo, "fixture-corp", runner)
     assert any("scripts.seed_fixture_corp" in call for call in runner.calls)
