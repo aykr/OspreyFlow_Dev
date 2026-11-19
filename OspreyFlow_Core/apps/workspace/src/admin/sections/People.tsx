@@ -3,7 +3,7 @@
 // the places they open, their case levels (R3), access and state; the cases with no Author and
 // *Name an Author* (R1); *Disable…* with a transfer for everything they own (A4); inviting a person,
 // and refused organisation sign-ins. Behind `manage_people` (`admin/sections.json`).
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 
 import type {
   AdminPeopleRows,
@@ -19,6 +19,7 @@ import { rightName } from "../../help/roles";
 import { PLACE_NAME, placesFor } from "../../shell/places";
 import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
 import { Button, Input, Select } from "../../design/primitives";
+import { givableCodes, givableLevels, useInviter, type Inviter, type InviterRead } from "../inviter";
 import {
   disablePlan,
   enablePerson,
@@ -147,17 +148,32 @@ interface Scheme {
   codes: string[];
 }
 
-function useScheme(api: AdminApi): Scheme {
-  const [scheme, setScheme] = useState<Scheme>({ levels: [], codes: [] });
+/** What is known of the scheme. The invite form is drawn only once it is `ready` (AD2); the rows read the scheme as before
+ * and see none of it until then. A later failure keeps the earlier answer. */
+type SchemeRead = { state: "waiting" } | { state: "unavailable" } | { state: "ready"; scheme: Scheme };
+
+const NO_SCHEME: Scheme = { levels: [], codes: [] };
+
+function useSchemeRead(api: AdminApi): SchemeRead {
+  const [read, setRead] = useState<SchemeRead>({ state: "waiting" });
   useEffect(() => {
+    let current = true;
+    const failed = () => {
+      if (current) setRead((before) => (before.state === "ready" ? before : { state: "unavailable" }));
+    };
     fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((body: { classification?: string[]; handling_codes?: Record<string, unknown> }) =>
-        setScheme({ levels: body.classification ?? [], codes: Object.keys(body.handling_codes ?? {}) }),
-      )
-      .catch(() => setScheme({ levels: [], codes: [] }));
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { classification?: unknown; handling_codes?: Record<string, unknown> } | null) => {
+        // An answer that names no classifications is not a scheme: nothing could be offered from it.
+        if (!body || !Array.isArray(body.classification)) return failed();
+        if (current) setRead({ state: "ready", scheme: { levels: body.classification.map(String), codes: Object.keys(body.handling_codes ?? {}) } });
+      })
+      .catch(failed);
+    return () => {
+      current = false;
+    };
   }, [api.apiBaseUrl, api.bearerToken]);
-  return scheme;
+  return read;
 }
 
 /** How the person signs in next (ADR-114 Amendment 5): the identity provider's emailed link, or a
@@ -990,14 +1006,52 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
   );
 }
 
+/** The invite form is drawn only when everything it depends on has loaded (AD2): the inviter's own details and the handling
+ * scheme. Until then it says it is reading; if either could not be had it says so in words; it never shows a choice, nor a
+ * statement of what the inviter can give. A change in what it was drawn from (a new key) draws a fresh form, never a choice
+ * quietly altered; the same answers read again (a new token) keep the form, and a later failure does not replace it. */
+function InviteGate({
+  read,
+  schemeRead,
+  ...rest
+}: {
+  read: InviterRead;
+  schemeRead: SchemeRead;
+  api: AdminApi;
+  ctx: Context;
+  onInvited: (d: SignInDelivery) => void;
+}) {
+  if (read.state === "ready" && schemeRead.state === "ready") {
+    const { inviter } = read;
+    const { scheme } = schemeRead;
+    const key = [inviter.clearance, inviter.codes.join(","), scheme.levels.join(","), scheme.codes.join(",")].join("|");
+    return <InviteForm key={key} inviter={inviter} scheme={scheme} {...rest} />;
+  }
+  const unavailable = read.state === "unavailable" ? "Your own clearance and handling codes" : schemeRead.state === "unavailable" ? "This deployment's classifications and handling codes" : null;
+  return (
+    <section aria-label="Invite a person" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}>
+      <h2 className="value" style={{ margin: 0 }}>Invite a person</h2>
+      {unavailable === null ? (
+        <p role="status" className="label" style={{ margin: 0 }}>Reading what you can give. The form appears when that is known.</p>
+      ) : (
+        <p role="alert" className="label" style={{ margin: 0 }}>
+          {unavailable} could not be read, so nobody can be invited from here now. Reload the page to try again.
+        </p>
+      )}
+    </section>
+  );
+}
+
 function InviteForm({
   api,
   scheme,
+  inviter,
   ctx,
   onInvited,
 }: {
   api: AdminApi;
   scheme: Scheme;
+  inviter: Inviter;
   ctx: Context;
   onInvited: (d: SignInDelivery) => void;
 }) {
@@ -1013,9 +1067,18 @@ function InviteForm({
   const inviteWithheld = (role: string) =>
     roles.has(role) ? [] : withheldRights([...roles, role], [], ctx).filter((r) => !withheldRights(roles, [], ctx).includes(r));
   const [problem, setProblem] = useState<string | null>(null);
+  // Only what the inviter can give is offered (AD2); the Conduit still refuses what is beyond them.
+  const levels = givableLevels(scheme.levels, inviter);
+  const offeredCodes = givableCodes(scheme.codes, inviter);
+  // Nothing is chosen until the select is used, and it holds only what is offered, so the level is the one chosen, else the
+  // first offered (what the select shows is what is sent).
+  const level = clearance || (levels[0] ?? "");
+  // A refusal is an error summary by the button, and focus goes to it (GOV.UK forms; `02_GLASS_FRONTEND.md`).
+  const summary = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!clearance && scheme.levels[0]) setClearance(scheme.levels[0]);
-  }, [scheme.levels, clearance]);
+    if (problem) summary.current?.focus();
+  }, [problem]);
+  const govuk = currentBrand() === "govuk";
   const field = { display: "grid", gap: "var(--sp-4)" } as const;
   return (
     <form
@@ -1028,7 +1091,7 @@ function InviteForm({
           first_name: first.trim(),
           last_name: last.trim(),
           email: email.trim() || null,
-          clearance,
+          clearance: level,
           org_unit: unit.trim(),
           receivable_handling_codes: [...codes],
           roles: ROLES.map((r) => r.id).filter((id) => roles.has(id)),
@@ -1049,7 +1112,13 @@ function InviteForm({
         They are signed in by an emailed link when this deployment has a mail server and you give an address; otherwise you
         are shown a one-time code to give them in person. Nobody can be given more than you hold.
       </p>
-      {problem && <p role="alert" style={{ margin: 0 }}>{problem}</p>}
+      <p className="label" style={{ margin: 0 }}>
+        {scheme.levels.length > 0 && levels.length === 0
+          ? `You hold ${inviter.clearance}, which is not one of this deployment's classifications, so you cannot give any clearance and nobody can be invited by you.`
+          : `You hold ${inviter.clearance}, so you can give that clearance or lower, and ${
+              offeredCodes.length ? `the handling codes ${offeredCodes.join(", ")}` : "no handling code"
+            }.`}
+      </p>
       <label className="label" style={field}>
         Sign-in name
         <Input aria-label="Sign-in name" value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -1071,8 +1140,8 @@ function InviteForm({
       <div style={{ display: "flex", gap: "var(--sp-8)" }}>
         <label className="label" style={{ ...field, flex: 1 }}>
           Clearance
-          <Select aria-label="Invite clearance" value={clearance} onChange={(e) => setClearance(e.target.value)}>
-            {scheme.levels.map((l) => (
+          <Select aria-label="Invite clearance" value={level} onChange={(e) => setClearance(e.target.value)}>
+            {levels.map((l) => (
               <option key={l} value={l}>{l}</option>
             ))}
           </Select>
@@ -1084,7 +1153,7 @@ function InviteForm({
       </div>
       <div className="label" style={field}>
         Handling codes they may receive
-        <CodeChoices codes={scheme.codes} chosen={codes} onChange={setCodes} label={(c) => `Invite with handling code ${c}`} />
+        <CodeChoices codes={offeredCodes} chosen={codes} onChange={setCodes} label={(c) => `Invite with handling code ${c}`} />
       </div>
       <div className="label" style={field}>
         Roles
@@ -1119,7 +1188,23 @@ function InviteForm({
           ))}
         </span>
       </div>
-      <Button type="submit" variant="primary" disabled={!username.trim() || !clearance || !unit.trim()}>
+      {problem && (
+        // The refusal, said by the button it is about: a focusable error summary (the pattern of the board editor's).
+        <div
+          ref={summary}
+          role="alert"
+          tabIndex={-1}
+          aria-labelledby="people-invite-problem-title"
+          className={govuk ? "govuk-error-summary" : undefined}
+          style={govuk ? undefined : { border: "2px solid var(--error)", padding: "var(--sp-8)", display: "grid", gap: "var(--sp-4)" }}
+        >
+          <h3 id="people-invite-problem-title" className={govuk ? "govuk-error-summary__title" : "value"} style={govuk ? undefined : { margin: 0 }}>
+            There is a problem
+          </h3>
+          <p className={govuk ? "govuk-error-summary__body" : undefined} style={{ margin: 0 }}>{problem}</p>
+        </div>
+      )}
+      <Button type="submit" variant="primary" disabled={!username.trim() || !level || !unit.trim()}>
         Invite
       </Button>
     </form>
@@ -1204,7 +1289,9 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   // invite refused on Entra is the Conduit's refusal, in its words).
   const [entra, setEntra] = useState(false);
   const [administratorSets, setAdministratorSets] = useState<AccessField[]>([]);
-  const scheme = useScheme(api);
+  const schemeRead = useSchemeRead(api);
+  const scheme = schemeRead.state === "ready" ? schemeRead.scheme : NO_SCHEME;
+  const inviter = useInviter();
   // The roles and the case levels are the row's context; either failing leaves the rest working.
   const readContext = () => {
     listRoles(api)
@@ -1324,9 +1411,10 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
           <GuestsForm api={api} administratorSets={administratorSets} />
         </>
       ) : (
-        <InviteForm
+        <InviteGate
           api={api}
-          scheme={scheme}
+          schemeRead={schemeRead}
+          read={inviter}
           ctx={ctx}
           onInvited={(delivery) => {
             setDelivered(delivery);

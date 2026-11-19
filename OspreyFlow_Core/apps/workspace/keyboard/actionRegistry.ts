@@ -999,6 +999,8 @@ export const ADMIN_ACTIONS = defineActionRegistry("ADMIN_ACTIONS", [
   "ask-the-system-again-by-keyboard",
   // ADR-114 Amendment 5 (B4c): people.
   "invite-a-person-by-keyboard",
+  // AD2: a refused invitation's error summary, beside the Invite button, reached with focus.
+  "reach-an-invitation-refusal-summary-by-keyboard",
   // ADR-148 Amendment 8: on Entra ID sign-in, a person added by object id.
   "add-a-person-by-object-id-by-keyboard",
   // ADR-148 Amendment 17 (audit 4b): guest accounts admitted, or no longer, in People on Entra ID.
