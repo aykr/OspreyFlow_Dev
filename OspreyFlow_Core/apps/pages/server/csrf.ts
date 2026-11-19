@@ -32,8 +32,8 @@ export function csrfProtection(): RequestHandler {
       next();
       return;
     }
-    const session = req.pagesSession;
-    if (session && tokensMatch(suppliedToken(req), session.record.csrfToken)) {
+    const auth = req.session?.auth;
+    if (auth && tokensMatch(suppliedToken(req), auth.csrfToken)) {
       next();
       return;
     }

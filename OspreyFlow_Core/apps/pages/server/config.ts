@@ -15,6 +15,8 @@ export interface ValkeySettings {
 
 export interface Config {
   port: number;
+  /** Signs the session cookie. Never logged, and never in an error message. */
+  sessionSecret: string;
   valkey: ValkeySettings;
 }
 
@@ -29,7 +31,22 @@ function wholeNumber(name: string, raw: string, max: number): number {
   return value;
 }
 
+const MIN_SECRET_LENGTH = 32;
+
+function sessionSecret(env: NodeJS.ProcessEnv): string {
+  const secret = env["OSPREY_PAGES_SESSION_SECRET"];
+  if (secret === undefined || secret === "") {
+    throw new Error("OSPREY_PAGES_SESSION_SECRET is required: it signs the session cookie");
+  }
+  // The message names the length, never the value.
+  if (secret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`OSPREY_PAGES_SESSION_SECRET must be at least ${MIN_SECRET_LENGTH} characters, not ${secret.length}`);
+  }
+  return secret;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const secret = sessionSecret(env);
   const rawDb = env["OSPREY_PAGES_VALKEY_DB"];
   const db = rawDb === undefined ? DEFAULT_PAGES_DB : wholeNumber("OSPREY_PAGES_VALKEY_DB", rawDb, MAX_DB);
   const conduitDb = Number(env["VALKEY_DB"] ?? "0") || 0;
@@ -40,6 +57,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     );
   }
   return {
+    sessionSecret: secret,
     port: wholeNumber("OSPREY_PAGES_PORT", env["OSPREY_PAGES_PORT"] ?? "8090", 65535),
     valkey: {
       host: env["VALKEY_HOST"] ?? "localhost",

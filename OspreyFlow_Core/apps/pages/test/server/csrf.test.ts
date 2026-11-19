@@ -112,13 +112,14 @@ describe("a forged cross-site request", () => {
     expect(res.status).toBe(403);
   });
 
-  it("does not echo a token it refused, and sets no cookie", async () => {
+  it("does not echo a token it refused, and starts no other session", async () => {
     const { app } = build();
     const { cookie } = await signIn(app);
     const res = await request(app).post("/_test/echo").set("Cookie", cookie).type("form").send("_csrf=REFUSED-TOKEN-VALUE");
     expect(res.status).toBe(403);
     expect(res.text).not.toContain("REFUSED-TOKEN-VALUE");
-    expect(setCookies(res)).toEqual([]);
+    // The sliding session may renew its own cookie (same signed identifier); nothing else is set.
+    expect(setCookies(res).map((c) => c.split(";")[0])).toEqual([cookie]);
   });
 });
 

@@ -3,33 +3,25 @@
  * one page that says who is signed in. Built by a factory so that a test drives the real thing with an
  * in-memory store and a fake identity provider; `main.ts` builds it with Valkey.
  */
-import { parse as parseCookies } from "cookie";
 import express from "express";
-import type { ErrorRequestHandler, Express, Request, RequestHandler, Router } from "express";
+import type { ErrorRequestHandler, Express, Request, Router } from "express";
+import session from "express-session";
 import nunjucks from "nunjucks";
 import { fileURLToPath } from "node:url";
 
 import { csrfProtection } from "./csrf.js";
+import { PagesSessionStore } from "./expressStore.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderUnavailable } from "./identity.js";
 import type { IdentityProvider } from "./identity.js";
-import { COOKIE_NAME, SessionService, isSessionId } from "./sessionPolicy.js";
-import type { ActiveSession } from "./sessionPolicy.js";
+import { COOKIE_NAME, IDLE_SECONDS, MIN_SECRET_LENGTH, newRecord, randomToken } from "./sessionPolicy.js";
 import type { SessionStore } from "./sessionStore.js";
-
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      /** The live session for the request's cookie, or null. Set by the session middleware, after `/healthz`. */
-      pagesSession?: ActiveSession | null;
-    }
-  }
-}
 
 export interface AppDeps {
   store: SessionStore;
   identityProvider: IdentityProvider;
+  /** Signs the session cookie (`OSPREY_PAGES_SESSION_SECRET`). At least 32 characters; never logged. */
+  sessionSecret: string;
   /** Milliseconds since the epoch. A test moves it by hand. */
   clock?: () => number;
   /** Routes a later slice adds, after the core routes and behind the same session, headers and anti-forgery. */
@@ -38,57 +30,72 @@ export interface AppDeps {
 
 const VIEWS = fileURLToPath(new URL("./views", import.meta.url));
 
-/** `Secure` and `HttpOnly` always, `SameSite=Lax`, no `Domain`: the cookie holds one opaque identifier. */
+/** `Secure` and `HttpOnly` always, `SameSite=Lax`, no `Domain`: the cookie holds one signed, opaque identifier. */
 const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax", path: "/" } as const;
 
-function readSessionId(req: Request): string | null {
-  const header = req.headers.cookie;
-  if (!header) return null;
-  const value = parseCookies(header)[COOKIE_NAME];
-  return isSessionId(value) ? value : null;
+/** Wraps a callback-style `express-session` method as a promise. */
+function callback(run: (done: (error?: unknown) => void) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    run((error) => {
+      if (error) reject(error instanceof Error ? error : new Error(String(error)));
+      else resolve();
+    });
+  });
 }
 
 export function createApp(deps: AppDeps): Express {
+  if (typeof deps.sessionSecret !== "string" || deps.sessionSecret.length < MIN_SECRET_LENGTH) {
+    throw new Error(`the session secret must be at least ${MIN_SECRET_LENGTH} characters`);
+  }
   const clock = deps.clock ?? Date.now;
-  const sessions = new SessionService(deps.store, clock);
   const app = express();
 
   app.disable("x-powered-by");
   app.disable("etag");
+  // The front proxy terminates TLS and says so in `X-Forwarded-Proto`; `express-session` sends a `Secure`
+  // cookie only on a request it believes arrived over TLS. Only a hop on a private address is believed.
+  app.set("trust proxy", "loopback, linklocal, uniquelocal");
   nunjucks.configure(VIEWS, { autoescape: true, express: app, noCache: false });
   app.set("view engine", "njk");
 
   app.use(securityHeaders());
 
   // No session, no secret and no call to the store or the identity provider: a probe must answer
-  // when either is down.
+  // when either is down. It is mounted before the session middleware so that nothing reads the store.
   app.get("/healthz", (_req, res) => {
     res.json({ status: "ok" });
   });
 
-  const loadSession: RequestHandler = async (req, _res, next) => {
-    const id = readSessionId(req);
-    req.pagesSession = id ? await sessions.load(id) : null;
-    next();
-  };
-  app.use(loadSession);
+  app.use(
+    session({
+      name: COOKIE_NAME,
+      secret: deps.sessionSecret,
+      store: new PagesSessionStore(deps.store, clock),
+      genid: randomToken,
+      resave: false,
+      saveUninitialized: false,
+      // Sliding: each response renews the cookie and, through the store's `touch`, the key's TTL.
+      rolling: true,
+      cookie: { ...COOKIE_OPTIONS, maxAge: IDLE_SECONDS * 1000 },
+    }),
+  );
   app.use(express.urlencoded({ extended: false, limit: "16kb" }));
   app.use(csrfProtection());
 
   app.get("/", (req, res) => {
-    const session = req.pagesSession;
-    if (!session) {
+    const auth = req.session.auth;
+    if (!auth) {
       res.redirect(302, "/session/sign-in");
       return;
     }
     // The person's name and the anti-forgery token for the sign-out form: nothing else of the session.
-    res.render("home", { displayName: session.record.displayName, csrfToken: session.record.csrfToken });
+    res.render("home", { displayName: auth.displayName, csrfToken: auth.csrfToken });
   });
 
-  app.get("/session/sign-in", async (req, res) => {
-    let provided;
+  app.get("/session/sign-in", async (req: Request, res) => {
+    let record;
     try {
-      provided = await deps.identityProvider.signIn({ query: req.query });
+      record = newRecord(await deps.identityProvider.signIn({ query: req.query }), clock());
     } catch (error) {
       if (error instanceof IdentityProviderUnavailable) {
         res.status(503).render("error", {
@@ -101,15 +108,21 @@ export function createApp(deps: AppDeps): Express {
       throw error;
     }
     // A new identifier at every sign-in, never one the browser brought; the one it had is ended.
-    if (req.pagesSession) await sessions.destroy(req.pagesSession.id);
-    const created = await sessions.create(provided);
-    res.cookie(COOKIE_NAME, created.id, COOKIE_OPTIONS);
+    await callback((done) => {
+      req.session.regenerate(done);
+    });
+    req.session.auth = record;
+    await callback((done) => {
+      req.session.save(done);
+    });
     res.redirect(302, "/");
   });
 
   app.post("/session/sign-out", async (req, res) => {
     // The anti-forgery check has already run, so there is a session here.
-    if (req.pagesSession) await sessions.destroy(req.pagesSession.id);
+    await callback((done) => {
+      req.session.destroy(done);
+    });
     res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
     res.redirect(303, "/");
   });

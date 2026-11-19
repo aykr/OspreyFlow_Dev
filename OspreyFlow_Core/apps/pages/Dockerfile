@@ -1,13 +1,16 @@
 # apps/pages — the Glass's server-rendered pages: a Node service (ADR-152 decision 1).
 #
 # Unlike apps/workspace this does run a long-lived Node process of its own: it holds the person's
-# session on the server and renders each page complete before sending it. Express, Nunjucks and helmet;
-# no React, and nothing fetched from another address (ADR-152 decision 3).
+# session on the server and renders each page complete before sending it. Express, express-session,
+# Nunjucks and helmet; no React, and nothing fetched from another address (ADR-152 decision 3).
 #
 # Three stages, on the Node version the workspace image's builder pins: one compiles the TypeScript, one
 # installs only what the service needs at run time, and the last carries the compiled service and that
 # and nothing else. The build context is `OspreyFlow_Core` (`-f apps/pages/Dockerfile .`), as for the
 # workspace.
+#
+# The session cookie's signing secret (`OSPREY_PAGES_SESSION_SECRET`, at least 32 characters) is a
+# run-time setting, never an `ENV` or a build argument here: the service refuses to start without it.
 #
 # Not yet in the renderer's images list or the compose output (a later slice wires it behind the front
 # proxy), so nothing builds this image in CI yet.

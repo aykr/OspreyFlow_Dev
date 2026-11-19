@@ -13,7 +13,11 @@ client.on("error", (error: Error) => {
   console.error("pages: valkey:", error.message);
 });
 
-const app = createApp({ store: new ValkeySessionStore(client), identityProvider: unconfiguredProvider });
+const app = createApp({
+  store: new ValkeySessionStore(client),
+  identityProvider: unconfiguredProvider,
+  sessionSecret: config.sessionSecret,
+});
 const server = app.listen(config.port, "0.0.0.0", () => {
   console.log(`pages: listening on ${config.port}`);
 });
