@@ -311,3 +311,29 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   placed table verbatim with its counts note, say "180 placed, of which 154 were open on 18 November" only if the owner confirms it.
 - **CO3 is ready only when PL3 merges** (the plan row: after PL3, no Conduit change, three tests through the page service's
   proxy). The conductor's earlier "nothing to build" reading was wrong; the id is kept from when it was thought a Conduit route.
+
+### New rows (night of 19 Nov): gaps accepted on the standing line, and what the night's merges showed
+
+- **PL3 (merged 9745a9f; two gaps in a test, accepted at round 3):** (1) the secret scan in OspreyFlow_Core/apps/pages/test/support/
+  secretScan.ts matches only a line holding the setting's name directly followed by `=`, `ENV` or `:`; it misses `{ [NAME]: "…" }`,
+  `sessionSecret: "…"`, `process.env["…"] = "…"` and `vi.stubEnv("…", "…")`, which are the shapes the tests use. Also
+  secretFiles.test.ts (about line 46) commits a fixed 32-character secret-shaped string as a plant, which the owner's rule ("no value
+  committed anywhere, including test fixtures") forbids: use the generator. (2) No test covers the one place the real Valkey client is
+  built from `valkeyOptions` (start.ts about lines 64-70); `main` is always called with an injected store. Needs a client factory a test
+  can inspect.
+- **BL7 (merged 6318956; one gap in a test, accepted at round 3):** no test writes `dial.current = "auto"` back after another value; if
+  `auto` were dropped from what the panel accepts, no test would fail (tools/control_panel/panel.py about line 321; one VALID case that
+  changes `current` away and back).
+- **CO3 (for the owner's decision, from the first verifier):** the Conduit refuses the stream before it accepts the socket, so uvicorn
+  answers HTTP 403 with no close code or reason, and a client cannot tell a refused credential (1008) from a principal store that is
+  down (1013, retry). The page service therefore maps a pre-accept refusal to 1008 (the same as the Glass gets through nginx today).
+  Row: change the stream route to accept and then close with the code and reason, so both survive the handshake. That is a Conduit
+  change, which ADR-152 X2 says is not made (an amendment to X2 if wanted), and it also changes what the Glass sees.
+- **Line gap (found on PL3's merge):** the slice's checks command runs no linter, so a lint failure (ruff E501 on a PL3 inventory
+  line) passed the builder and the verifier and was found only by the merge gate's `make -k ci`. The checks should include
+  `ruff check` on the changed Python files and the linter for changed TypeScript.
+- **Line gap (found on BL7's verifier):** a test that reads the owner's live yaml files goes red when the owner changes a setting;
+  the same class of fault as the dial-dependent test of 18 November. The verifier caught it this time, the builders' briefs should say
+  it, and the line's scan could flag a test that reads dial.yaml, accounts.yaml or live_step.yaml from the repository.
+- **Line gap (night of 19 Nov):** a seat started with a plain shell `&` has its output discarded and no notification when it ends;
+  the conductor now waits on its process. Not a line fault, a practice note: start seats only as background tasks.

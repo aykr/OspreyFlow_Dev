@@ -76,6 +76,28 @@ Pure only. The **checks command** runs the existing page-service Vitest files (t
 **acceptance command** runs the new file alone (the rest of the folder is green on main, so it could not be red there). The line adds every mapped pure test that
 scans a folder the slice changes.
 
+## Round 2 (19 November 2026): what the first verifier found, and the conductor's ruling
+
+The round-1 verifier found one fault in behaviour and one gap in a test at tip 3cdad3f5fc. Fix those and nothing else.
+
+**The ruling: choice 5 above is amended.** The real Conduit sends every refusal on the stream **before** it accepts the socket
+(OspreyFlow_Core/services/api/app.py about lines 21563-21598, the close before `websocket.accept()`), and under uvicorn that reaches
+a client as HTTP 403 with **no close code and no reason**. So a refused credential (1008) and an unavailable principal store
+(1013, "try again later") cannot be told apart by the page service, and the brief's "relay 1013 as it is" cannot hold for them.
+The Conduit is not changed (ADR-152 X2: no Conduit change). The rule is now:
+1. An upstream handshake answered 401 or 403 (a refusal before accept): the browser's socket closes **1008**, reason "the
+   Conduit refused the connection". This is what the Glass gets today through nginx. Record in the code and in the test header that a
+   store outage looks the same, and why.
+2. A close **after** accept (the stream running): its code and reason are relayed as they are, 1008 and 1013 included.
+3. An upstream that cannot be reached or times out: 1013 to the browser, as before.
+4. The Conduit accepting then closing (so the code survives the handshake) is a backlog row for the owner, not this slice's.
+
+**The gap: the fake Conduit must refuse as the real one does** (rule 15). Its default refusal is the real shape: the handshake
+answered HTTP 403 with no body, no code and no reason, for a missing or bad credential and for a store that is down, and the
+tests assert the browser receives 1008 with the reason above in both. Keep one case where the fake accepts and then closes with a
+code and reason (1008, 1013), asserting they are relayed unchanged, labelled as the running-stream case. Delete any test or comment
+that claims a Conduit refusal arrives as a close code with a reason.
+
 ## Out of scope
 
 The /v1 HTTP forwarding of the page service and its anti-forgery handling (no slice yet); the real sign-in; the render, compose,
