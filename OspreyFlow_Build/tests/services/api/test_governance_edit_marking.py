@@ -166,14 +166,18 @@ def _nothing_else_happened(world: SimpleNamespace) -> None:
     [
         (
             "junior", "OFFICIAL", "SECRET", None,
-            "above your clearance: a source's rows are never marked higher than the person "
-            "declaring it may read",
+            "the marking is above your clearance: a source's rows are never marked higher than "
+            "the person declaring it may read",
         ),
         (
             "engineer", "OFFICIAL", "SECRET", "OFFICIAL",
-            "above this deployment's highest marking, OFFICIAL",
+            "the marking is above this deployment's highest marking, OFFICIAL",
         ),
-        ("engineer", "SECRET", "OFFICIAL", None, "below the source's current marking, SECRET"),
+        (
+            "engineer", "SECRET", "OFFICIAL", None,
+            "the marking is below the source's current marking, SECRET: an edit never lowers a "
+            "marking",
+        ),
     ],
     ids=["above-the-editor", "above-the-ceiling", "below-the-source"],
 )  # fmt: skip
@@ -194,11 +198,37 @@ def test_a_marking_the_governance_edit_may_not_set_is_refused_in_words_and_nothi
     assert response.status_code == 422, response.text
     assert response.json()["error"] == "governance_marking_refused"
     problems = response.json()["problems"]
-    assert len(problems) == 1 and words in problems[0], problems
+    # The whole sentence, so the wording the brief names ("never lowers") is pinned, not a part of it.
+    assert problems == [words], problems
     assert world.sources._sources[made["id"]] == before
     _nothing_else_happened(world)
     # The words name no data: not the source, its location or the marking asked for beyond the scheme.
     assert made["location"] not in response.text and "Cell stays" not in response.text
+
+
+@pytest.mark.parametrize(
+    "without", [None, "absent"], ids=["null", "left-out"]
+)
+def test_an_edit_that_carries_no_marking_does_not_erase_the_sources(
+    world: SimpleNamespace, without: str | None
+) -> None:
+    """The handling an edit sends replaces the source's whole handling, so one with no
+    classification would leave a SECRET source unmarked: a lowering, refused as one."""
+    made = _register(world, "SECRET")
+    before = world.sources._sources[made["id"]]
+    handling = {k: v for k, v in HANDLING.items() if k != "classification"}
+    if without is None:
+        handling["classification"] = None  # type: ignore[assignment]
+    response = _edit(world, made["id"], handling)
+    assert response.status_code == 422, response.text
+    assert response.json()["error"] == "governance_marking_refused"
+    assert response.json()["problems"] == [
+        "the marking is left out, which is below the source's current marking, SECRET: an edit "
+        "never lowers a marking"
+    ]
+    assert world.sources._sources[made["id"]] == before
+    assert world.sources._sources[made["id"]].handling["classification"] == "SECRET"
+    _nothing_else_happened(world)
 
 
 def test_every_problem_is_told_at_once(world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -305,3 +335,50 @@ def test_the_default_marking_route_refuses_and_accepts_as_before(
     }
     assert put("OFFICIAL").status_code == 200
     assert world.sources._sources[made["id"]].default_marking == "OFFICIAL"
+
+
+def test_the_default_marking_routes_other_sentences_are_word_for_word_as_before(
+    world: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The shared check builds the default route's clearance and "never lowers" sentences from
+    parameters; they are pinned whole, as the ceiling's is above, so a change to either shows."""
+    monkeypatch.setitem(
+        PEOPLE, "junior-approver",
+        Principal(id="jap-1", clearance="OFFICIAL", org_unit="unit-1",
+                  roles=["data_engineer", "source_approver"]),
+    )  # fmt: skip
+    monkeypatch.setitem(
+        PEOPLE, "approver",
+        Principal(id="apr-1", clearance="SECRET", org_unit="unit-1",
+                  roles=["data_engineer", "source_approver"]),
+    )  # fmt: skip
+    monkeypatch.setitem(CASES, "jap-1", {"case-a": ["ds-a"]})
+    monkeypatch.setitem(CASES, "apr-1", {"case-a": ["ds-a"]})
+    official = _register(world)
+    secret = _register(world, "SECRET", file="more.csv")
+
+    def put(source: dict[str, Any], marking: str, who: str) -> Any:
+        return world.client.put(
+            f"/v1/datasets/ds-a/sources/{source['id']}/default-marking",
+            json={"default_marking": marking},
+            headers=_as(who),
+        )
+
+    above = put(official, "SECRET", "junior-approver")
+    assert above.status_code == 422, above.text
+    assert above.json() == {
+        "error": "default_marking_refused",
+        "problems": [
+            "the default marking is above your clearance: a source's rows are never marked "
+            "higher than the person declaring it may read"
+        ],
+    }
+    below = put(secret, "OFFICIAL", "approver")
+    assert below.status_code == 422, below.text
+    assert below.json() == {
+        "error": "default_marking_refused",
+        "problems": [
+            "the default marking is below the source's own marking, SECRET: a default never "
+            "lowers a marking"
+        ],
+    }
