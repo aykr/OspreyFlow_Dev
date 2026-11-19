@@ -3,6 +3,22 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 19 November 2026 (night): the owner is away until morning; the standing word for the night
+
+The owner's word, 19 November 2026 (evening). Standing until he says otherwise; he is away until the morning.
+
+1. **Start anything that becomes ready, without asking, up to four builders.** In this order when there is a choice: CO3 as soon
+   as PL3 merges, then BL7, PL2, PL1, BL2.
+2. **Verify and merge whatever passes, one at a time. Push when GitHub is green** (the 18 November ruling on GitHub failures
+   still applies).
+3. **Do not start** PL4 (needs the owner's word, and AD1), AD1 (needs the key-handling review) or AD5 (needs PL4). **Do not touch**
+   CO2, GG6 or BL6: they wait for the line fixes (the third line-fixes session).
+4. **Stop starting new work, and finish only what is running, if any of these happens:** either account passes 70% of its
+   weekly allowance; a call to `sol` is refused again; a merge runs longer than 60 minutes; two slices stop for the same
+   environment cause.
+5. **Anything that needs a decision that is the owner's: leave it stopped and list it.** Do not wait on him for anything else.
+6. **In the morning, one table:** what merged, what is running, what stopped and why, and usage per account.
+
 ## 19 November 2026 (later): four standing rulings on rounds, tracks, builders and starting
 
 The owner's word, 19 November 2026 (about 06:00 UTC). Standing: they apply to every slice, without asking per slice.
