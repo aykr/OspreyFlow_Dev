@@ -109,3 +109,31 @@ there: the Python module through `uv run` and the two Node steps, from OspreyFlo
 - Any page beyond the one above; the GOV.UK and default trees; the shared package (PL4). Do not touch the Glass, the Conduit,
   the Makefile or the CI workflow.
 - **If npm cannot reach its registry** in the builder's environment, stop and say: do not vendor a package by hand.
+
+## Round 2 (19 November 2026): what the first verifier found, and the conductor's ruling on it
+
+The round-1 verifier found one fault in behaviour and two gaps in a test, all at tip 1f6560c9dc. Fix those three and nothing
+else.
+
+1. **The fault: use `express-session`, as ADR-152 decision 2 names it** ("`openid-client` for sign-in, `helmet` for headers,
+   `express-session` with a Valkey store", about line 40785). The round-1 slice built its own session layer (sessions.ts,
+   sessionStore.ts, and the cookie and session middleware in app.ts) because this brief settled a bare 43-character cookie value,
+   and `express-session` signs its cookie as `s:<id>.<signature>`. That conflict was the brief's, not the builder's: **the brief's
+   bare-identifier choice is withdrawn.** The ADR decides. Replace the hand-built session layer with `express-session` and a store
+   for Valkey that implements its Store interface (a package for it is allowed if it passes the licence check and is entered in
+   OspreyFlow_Build/spec/00_ARCHITECTURE.md section 7; otherwise write the Store in this slice). Keep everything else the brief
+   settled: the cookie's name `osprey_pages`; HttpOnly, Secure, SameSite=Lax and no Domain; the key prefix `pages-session:`; the
+   database number from `OSPREY_PAGES_VALKEY_DB` (default 1); a TTL on every key; the one-hour sliding idle lifetime (express-session's
+   `rolling`) and the eight-hour absolute lifetime, each key's TTL never longer than either; the in-memory store that refuses what
+   Valkey refuses (a write with no TTL, a key without the prefix); no token in any response but the cookie. The cookie's value is now
+   express-session's signed value, still opaque to the browser; the signing secret is a new setting, `OSPREY_PAGES_SESSION_SECRET`
+   (required, at least 32 characters, never logged, never in an image or a test fixture's real value: tests use a fixed dummy). The
+   tests change with the cookie's shape: they assert the cookie is signed and opaque, not that it is 43 characters.
+2. **Gap: the database number reaches the client.** Move the Valkey client's options out of main.ts into a pure function (for
+   example `valkeyOptions(config)`) and test that it sets `db` from `OSPREY_PAGES_VALKEY_DB` (default 1, never the Conduit's 0
+   unless set so), so that dropping `db` or fixing it to 0 fails a test.
+3. **Gap: /healthz touches neither the provider nor the store.** In page.test.ts the health test must be able to fail: build the
+   app with a store wrapper that throws on every call (and a provider that throws), request /healthz with and without a cookie,
+   and assert it answers 200 and the wrapper was never called.
+
+Do not add the real sign-in, the render wiring or any other out-of-scope item. Run the acceptance command and the checks before you stop.
