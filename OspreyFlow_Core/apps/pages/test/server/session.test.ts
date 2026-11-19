@@ -147,7 +147,6 @@ describe("no token leaves the server", () => {
       () => request(app).options("/").set("Cookie", cookie),
       () => request(app).get("/healthz").set("Cookie", cookie),
       () => request(app).get("/healthz"),
-      () => request(app).get("/session/sign-in").set("Cookie", cookie),
       () => request(app).get("/no-such-page").set("Cookie", cookie),
       () => request(app).get("/").set("Cookie", `${COOKIE_NAME}=${"Z".repeat(43)}`),
       () => request(app).post("/session/sign-out").set("Cookie", cookie), // refused: no token
@@ -163,6 +162,12 @@ describe("no token leaves the server", () => {
     const out = await request(app).post("/session/sign-out").set("Cookie", cookie).type("form").send(`_csrf=${csrf}`);
     expect(out.status).toBe(303);
     assertNoTokenLeak(out, "POST /session/sign-out");
+
+    // Signing in again while holding a session ends that one and starts another: nothing leaks there either.
+    const held = await signIn(app);
+    const again = await request(app).get("/session/sign-in").set("Cookie", held.cookie);
+    assertNoTokenLeak(again, "GET /session/sign-in with a cookie");
+    expect(store.keys()).toHaveLength(1);
   });
 
   it("is caught by the scan when one is put in the cookie, a header or the body (the scan itself)", async () => {
