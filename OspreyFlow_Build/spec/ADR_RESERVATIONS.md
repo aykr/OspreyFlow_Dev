@@ -118,6 +118,15 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-148 Amendment 5 | The cloud-platform profile's proof-of-concept shape (`shape: poc`): one ArcadeDB and one ClickHouse with its Keeper inside the server, no PodDisruptionBudgets, a scratch volume for Ingest, a manual-install runbook and a decommission runbook (P7b) | platform | 2026-11-11 | written |
 | ADR-148 Amendment 6 | Sign-in claims from Entra ID as built (P10 part 1): clearance, unit and handling codes mapped by settings from a named claim or a group table, one construction path, the tenant and issuer pinned, a principal keyed by `oid` within its tenant | admin | 2026-11-11 | written |
 | ADR-140 Amendment 20 | L1.9 part 1 as built: the S3 and Athena connectors (read-only, by the namespace's IAM role; the named query's relations checked, failing closed). The host allowed only while the source is enabled is part 2's (ADR-148 decision 7) | studio-b | 2026-11-11 | written |
+| ADR-152 | The Glass in two trees: server-rendered pages from a Node service (`pages`) beside the React workspace; the Ingest Studio as pages in both themes; the GOV.UK theme with no React and no Superset; one Sigma and MapLibre version in both front ends; the GOV.UK identity switch, off by default; supersedes ADR-132 (the owner's F1-F7, A1, A6, D41-D47, 17-18 Nov, and his answers of 19 Nov) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-132 Amendment 9 | Superseded by ADR-152; the crown, logotype and GDS Transport follow the GOV.UK identity switch | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-002 Amendment 1 | One renderer, one version in both front ends, after a short window that no release ships (Sigma 4 in both once R4 meets the budget, Sigma 3 in both if not) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-050 Amendment 4 | The `pages` service signs in on the server as a confidential client; tokens in a Valkey session with a time limit | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-070 Amendment 1 | Light and dark on server-rendered pages: the cookie read on the server; the GOV.UK tree light only | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-111 Amendment 9 | On the GOV.UK theme the dashboards are the product's own pages, and there is no Superset (D41-D43) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-140 Amendment 22 | The Studio as server-rendered pages; one view, not two modes; S1-S21 (16 and 18 Nov) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-141 Amendment 2 | The whole-dataset load: the dataset the unit an outside tool starts; a failure stops only what depends on it; one neutral job file, no generated Airflow job (D7-D9, D16, 19 Nov answer 18) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-148 Amendment 23 | The `pages` service on cloud-platform, no Superset under the GOV.UK theme, and the identity switch | orchestrator (draft, decision record) | 2026-11-19 | reserved |
 
 ## Baseline
 

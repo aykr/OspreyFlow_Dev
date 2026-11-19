@@ -19,7 +19,7 @@ someone will improvise one.
 | `cluster` | Kubernetes — EKS or AKS (ADR-114 decision 9, §3b) | ArcadeDB, three Raft replicas | ClickHouse, a replicated pair with Keeper | Ollama in the cluster for now — decision 11's vLLM on a GPU pool is not built; a client's provider through LiteLLM | Kubernetes, from the Helm chart |
 | `cloud-platform` | One namespace on a shared Kubernetes platform someone else runs, first the UK public sector client's Cloud Platform (ADR-148, §3c) | ArcadeDB, three replicas (one in development) | ClickHouse, a replicated pair with Keeper (one each in development) | None until ADR-135 Amendment 4's route (P11) | The Helm chart into the platform's namespace; the managed stores by the namespace's Terraform |
 
-The same container images run in all of them (the Conduit's built without Java on `cloud-platform`, ADR-148 decision 12). Only configuration differs. That is the
+The same container images run in all of them (the Conduit's built without Java on `cloud-platform`, ADR-148 decision 12), and every one of them runs the `pages` service, a Node image serving the server-rendered pages (ADR-152; the owner's A1: the Ingest Studio is built once, as pages, in both themes). Only configuration differs. That is the
 transportability requirement, and it is verifiable: the acceptance scenarios in
 `08_ACCEPTANCE_SCENARIOS.md` must pass unchanged on `local-lite` and on `cluster`.
 
@@ -464,6 +464,13 @@ CORS policy to get wrong; and the Glass's boot stays synchronous, where fetching
 before first render would have made it asynchronous and changed `App.tsx`'s top-level constants and
 the tests around them.
 
+**The `pages` service is reached on the same origin (ADR-152 decisions 5 and 7).** The front proxy sends
+the Studio's paths (`/studio/…`), `pages`' own (`/session/…`, `/assets/pages/…`) and, on the GOV.UK
+theme, each function its tree has built, to `pages`; everything else still reaches the workspace. `pages`
+forwards `/v1` and the delta WebSocket's upgrade to `api:8000` itself, adding the person's bearer token on
+the server, so the browser on those pages holds a session cookie and no token. The Conduit's CORS list
+does not change.
+
 **The API's OpenAPI document rides the same path** (the owner's answer of 1 November 2026): it is
 `GET /v1/openapi.json`, so the deployment's address serves it through the workspace's proxy, behind
 sign-in like every other `/v1` route, with the release as its version (`03_CONDUIT_MIDDLEWARE.md`
@@ -490,7 +497,9 @@ test. Until it is built, the dev-token path is fenced so that no rendered deploy
 
 ### 2.7 The reporting components — `report-sync` and Superset (ADR-111 Amendment 2)
 
-Both are **off by default** and switched on in `osprey.yaml`:
+Both are **off by default** and switched on in `osprey.yaml`. **Under `appearance.brand: govuk` Superset is
+never rendered** (ADR-111 Amendment 9, ADR-152 decision 10): `reporting.superset: true` with the GOV.UK
+brand is refused in words, and the GOV.UK theme's dashboard is the product's own page.
 
 ```yaml
 reporting:
@@ -940,7 +949,7 @@ no managed one (decision 9).
 
 | Workload | Kind | Replicas | Notes |
 | --- | --- | --- | --- |
-| `workspace`, `api`, `report-sync`, `superset` | Deployment | 2 | Stateless; the Conduit's state is in Valkey and the stores |
+| `workspace`, `pages`, `api`, `report-sync`, `superset` | Deployment | 2 | Stateless; the Conduit's state is in Valkey and the stores; `pages`' sessions are in Valkey with a time limit (ADR-050 Amendment 4); `superset` not under the GOV.UK brand |
 | `worker` | Deployment | 3 | The job worker; each replica its own consumer name (its pod name) |
 | `proxy` | Deployment + LoadBalancer Service | 2 | Caddy, the same routes; its certificates on a shared volume |
 | `keycloak` | StatefulSet + headless Service | 2 | Clustered: caches over JGroups, found through the headless Service |
@@ -1240,8 +1249,9 @@ build stands against the table above:
 
 ## 7. Security posture
 
-- Every service on an internal network. Only the workspace and the Conduit are exposed, behind a
-  reverse proxy terminating TLS. **Since 25 September 2026 the workspace's own image *is* that
+- Every service on an internal network. Only the workspace, the `pages` service (ADR-152) and the Conduit
+  are exposed, behind a reverse proxy terminating TLS. Every page `pages` sends carries the strict security
+  policy of ADR-152 decision 8, with no exception for a frame. **Since 25 September 2026 the workspace's own image *is* that
   reverse proxy for the Conduit** (§2.6 item 1): its nginx proxies `/v1` and the delta WebSocket to
   `api:8000` on the internal network, so a normal deployment publishes **one** port and the Conduit
   is reachable without being exposed. `network.expose_conduit: true` in `osprey.yaml` publishes it

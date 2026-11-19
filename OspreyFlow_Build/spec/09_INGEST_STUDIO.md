@@ -17,6 +17,13 @@ design reference is the brief, `spec/ingest_studio_redesign/INGEST_STUDIO_REDESI
 the clickable prototype `spec/ingest_studio_redesign/ingest_studio_prototype.html` and the wireframes
 beside it; where the brief and ADR-140 differ, the ADR governs.
 
+**Where it is built (ADR-152, ADR-140 Amendment 22).** The Studio is rebuilt as server-rendered pages
+from the `pages` service, in both themes, with the dataset map and the pipeline canvas as plain
+TypeScript modules. There is one view, not a guided and an expert mode: what a person may do depends on
+their rights. The staging container is dropped. A dataset can be loaded as a whole, in the order set on
+its map (ADR-141 Amendment 2). Today's React Studio (`apps/workspace/src/ingest/`) stays until the owner
+says it goes. Sections below that describe a screen describe today's React screen.
+
 **How to read this document meanwhile.** §9 already states the rules as ADR-140 changed them. Every
 other section describes the Studio **as built** and is rewritten in slices as each redesign phase
 lands, as ADR-108's sections were. Where a section below conflicts with ADR-140 — the Studio working

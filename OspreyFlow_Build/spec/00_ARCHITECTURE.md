@@ -5,7 +5,7 @@
 ```
                           THE GLASS  (stateless, horizontally scaled)
    ┌──────────────────────────────────────────────────────────────────────────┐   ┌────────────────────┐
-   │  React + TypeScript workspace                                            │   │ IDENTITY PROVIDER  │
+   │  React workspace (default theme) · `pages` service: server-rendered      │   │ IDENTITY PROVIDER  │
    │  Views: Graph (Sigma) · Map (MapLibre) · Timeline · Reports               │   │ Keycloak realm     │
    │  Places: Cases · Watches · Alerts · Ownership · History · Explore ·       │◄─►│ people, roles,     │
    │          Questions · Ingest Studio · Admin area                           │   │ dashboard          │
@@ -874,7 +874,9 @@ test suites beside it rather than inside it, and local data outside version cont
 
 ```
 OspreyFlow_Core/
-├── apps/workspace/             # The Glass. React + TS + Vite; src/ holds, among others:
+├── apps/pages/                 # The Glass's server-rendered pages (ADR-152): server/, modules/, tree-default/,
+│                               #   tree-govuk/, test/. Node, Express, Nunjucks, esbuild; no React
+├── apps/workspace/             # The Glass's React workspace, default theme (ADR-152). React + TS + Vite; src/ holds, among others:
 │   ├── canvas/ timeline/ map/  #   the five views' renderers and the working set (workingset/)
 │   ├── inspector/ metrics/     #   the right-hand panels (patterns/ is the Query builder)
 │   ├── alerts/ ownership/      #   the Alerts and Ownership places (ADR-109)

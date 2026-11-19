@@ -4,9 +4,10 @@
 
 | Concern | Choice | Licence | Why |
 | --- | --- | --- | --- |
-| Framework | React 19 + TypeScript, Vite (React 18 until the owner's dependency upgrade of 19 October 2026) | MIT | Largest pool of maintainers; the requirement is a long-lived platform, not a clever one |
+| Framework | React 19 + TypeScript, Vite (React 18 until the owner's dependency upgrade of 19 October 2026), for the React workspace: the default theme's analysis, service and Admin (ADR-152 decision 1) | MIT | Largest pool of maintainers; the requirement is a long-lived platform, not a clever one |
+| Server-rendered pages | The `pages` service (`apps/pages`): Node, Express, Nunjucks, esbuild bundles of plain TypeScript modules, no React; GOV.UK Frontend in the GOV.UK tree only (ADR-152 decisions 1, 2, 6) | MIT, BSD-2-Clause (licences verified at install, `00_ARCHITECTURE.md` §7) | The Ingest Studio in both themes, and every function in the GOV.UK theme; the form a department's developers already work in |
 | Graph data model | graphology | MIT | Typed graph structure, and its algorithm packages give the browser compute tier for free |
-| Graph rendering | **Sigma.js v3** (WebGL) | MIT | See ADR-002. Scale ceiling is the binding constraint |
+| Graph rendering | **Sigma.js v3** (WebGL) today; **one version in both front ends** under ADR-152: Sigma 4 in the `pages` modules and the React workspace once R4's first step meets the budget, Sigma 3 in both if it does not; no release ships two (ADR-002 Amendment 1, ADR-152 decision 9) | MIT | See ADR-002. Scale ceiling is the binding constraint |
 | Map | **MapLibre GL JS** | BSD-3 | Vector tiles, offline tile support, and `@sigma/layer-maplibre` projects the graph onto it |
 | Charts | Apache ECharts | Apache-2.0 | Histograms and timeline density; canvas-rendered, handles the row counts |
 | Tables | TanStack Table (headless) | MIT | Virtualised; styling stays ours |
@@ -16,6 +17,14 @@
 
 No component library. The design system in `design/tokens.css` is specific enough that a generic
 kit would be fought rather than used. Build the twenty primitives listed in §8.
+
+**Two trees (ADR-152).** The Glass is built two ways. The React workspace (`apps/workspace`) serves the
+default theme's analysis, service and Admin. The `pages` service (`apps/pages`) serves server-rendered
+pages: the Ingest Studio in both themes (`tree-default`, `tree-govuk`) and every function in the GOV.UK
+theme (`tree-govuk`). Logic shared by all of them is plain TypeScript in `packages/glass-shared`, which
+imports no React, no `sigma`, no `@sigma/*` and no `maplibre-gl`. Which tree a deployment serves is
+`appearance.brand`. Everything in this document about the workspace holds for the React workspace; a
+rule about what a screen does holds for both trees (ADR-152 I6, I8).
 
 ### Why Sigma.js rather than Cytoscape.js
 
@@ -2052,7 +2061,10 @@ the owner to accept, amend or reject as real spec.
 ## 4. Design system binding
 
 `design/tokens.css` is authoritative and is extracted verbatim from the brand foundations. Do not
-introduce a colour that is not a token. A deployment brand (ADR-132, `appearance.brand`) is one more
+introduce a colour that is not a token. Under ADR-152 it moves to `packages/design/tokens.css`, read by the
+React workspace and the `pages` default tree alike; the GOV.UK tree takes its colours from GOV.UK Frontend
+and never from a `[data-brand]` block. Under either GOV.UK frame the crown, the GOV.UK logotype and GDS
+Transport show only when `appearance.govuk_identity` is on (off by default; ADR-152 decision 14). A deployment brand (ADR-132, `appearance.brand`) is one more
 block in the same file, `[data-brand="<name>"]`, declared in `DESIGN.md` §11: it re-themes the
 chrome and never redefines a data token (`--ch-*`, `--chart-*`, `--seq-*`, `--div-*`), so everything
 below holds under every brand. Three rules carry most of the weight:
@@ -2233,6 +2245,11 @@ loaded server. Moving a timed case to the budget run never changes its limit.
 `src/testing/budgetRun.test.ts` fails for a timed case left in an ordinary test file under any
 folder the parallel run reads.
 
+**The `pages` modules meet the same budget (ADR-152 I12).** A module that replaces a React view is
+measured at the same sizes against the same thresholds, by `apps/pages/test/perf/`. Sigma 4 has no
+`canvas.sigma-nodes`, so its readiness signal is its own, shown red on a selector that never matches
+before any figure from it is believed (rule 15).
+
 ## 6. Accessibility floor
 
 Not negotiable and cheaper to build in than to retrofit.
@@ -2312,7 +2329,10 @@ The interface's words are part of the design.
 
 ## 8. Component inventory
 
-Twenty primitives, built once, in `src/design/`:
+Twenty primitives, built once, in `src/design/` for the React workspace; in the `pages` default tree the
+same components are Nunjucks macros on the same `primitives.css` (ADR-152, the owner's A6), and the GOV.UK
+tree uses GOV.UK Frontend's own components with product components only where it has none (drawer,
+combobox, popover, tooltip, context menu, radial menu, slider, toggle, toast):
 
 `Button` · `IconButton` · `Input` · `Select` · `Combobox` · `Slider` · `RangeSlider` ·
 `Checkbox` · `RadioGroup` · `Toggle` · `Tabs` · `Panel` · `Drawer` · `Popover` · `Tooltip` ·
