@@ -31,20 +31,35 @@ class BadEntry(Exception):
 
 
 def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
-          account: str = "", merged: dict | None = None, verify: dict | None = None) -> dict:
+          account: str = "", merged: dict | None = None, verify: dict | None = None,
+          accepted: dict | None = None) -> dict:
     """One build's entry for status.js. Refuses an entry the dashboard must not show."""
     if state not in STATES:
         raise BadEntry(f"unknown state {state!r}")
     if state == "done":
         if not (merged and merged.get("merge") and merged.get("acceptance_run")):
             raise BadEntry("done needs the acceptance test green on main: no merge record with its test run")
-        if not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):
-            raise BadEntry("done needs a verifier's pass record for the merged commit")
+        if accepted_narrower(merged, verify, accepted):
+            pass  # the owner's acceptance of the verifier's findings for that tip stands in for the pass
+        elif not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):
+            raise BadEntry("done needs a verifier's pass record for the merged commit, or the owner's acceptance of "
+                           "its findings")
         if not evidence or merged["merge"][:7] not in evidence or merged["acceptance_run"] not in evidence:
             raise BadEntry("done needs evidence naming the commit and the test run")
     if state == "stopped" and not note:
         raise BadEntry("stopped needs, in note, the one decision the owner must make")
-    return {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
+    out = {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
+    if state == "done" and accepted_narrower(merged, verify, accepted):
+        out["accepted_findings"] = merged["accepted_findings"]["findings"]
+    return out
+
+
+def accepted_narrower(merged: dict | None, verify: dict | None, accepted: dict | None) -> bool:
+    """Merged on the owner's acceptance: the merge record names its findings, and the acceptance and the verifier's
+    findings record are both for the merged tip."""
+    tip = (merged or {}).get("tip")
+    return bool(tip and (merged or {}).get("accepted_findings") and accepted and accepted.get("tip") == tip
+                and verify and verify.get("verdict") == "findings" and verify.get("commit") == tip)
 
 
 def branch_exists(b: str) -> bool:
@@ -104,15 +119,23 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     builds_entry = None
     if merged:
         verify_m = record(rec / f"verify-{merged.get('tip', '')}.json", problems, sid) if merged.get("tip") else None
+        accepted_m = record(rec / f"accepted-{merged.get('tip', '')}.json", problems, sid) if merged.get("tip") else None
         state = "done"
         evidence = f"commit {str(merged.get('merge', ''))[:7]} on main; test run {merged.get('acceptance_run', '')}"
         source = "merge record + verifier pass"
+        if accepted_narrower(merged, verify_m, accepted_m):
+            af = merged["accepted_findings"]
+            note = f"merged, accepted narrower: {af.get('count', 0)} findings"
+            if af.get("standing"):
+                note += f" (standing accept: {len(af.get('backlog_rows') or [])} gaps in a test for the backlog)"
+            source = "merge record + owner's acceptance"
         try:
-            builds_entry = entry("done", evidence=evidence, merged=merged, verify=verify_m, **kw)
+            builds_entry = entry("done", note=note, evidence=evidence, merged=merged, verify=verify_m,
+                                 accepted=accepted_m, **kw)
         except BadEntry as e:
             # skipped and reported; the slice is shown from its other records, as if there were no merge record
             problems.append(f"{sid}: merge record skipped, not shown as done: {e}")
-            state, evidence, source, builds_entry = None, "", "", None
+            state, note, evidence, source, builds_entry = None, "", "", "", None
     if state == "done":
         pass  # the merge record and the verifier's pass speak for it
     elif st.get("phase") == "stopped":
@@ -143,6 +166,8 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         shown = note.split(";")[0][:60]
     elif state == "stopped":
         shown = f"stopped: {note[:60]}"
+    elif state == "done" and note:
+        shown = note
     elif state:
         shown = state
     else:

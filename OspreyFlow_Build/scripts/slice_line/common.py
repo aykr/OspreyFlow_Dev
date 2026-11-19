@@ -239,6 +239,38 @@ RESUME_FILE = REPO / V062_REL / "resume.tsv"
 OWNER_CHANGES = DATA / "owner-changes.tsv"
 
 
+#: The owner's standing accept (ACCEPT_STEP_BRIEF.md, "The standing mode"; RULINGS.md, 19 November 2026, ruling 5): one
+#: line in standing.tsv, beside resume.tsv and like it the owner's alone (the guard's OWNER_ONLY), never committed.
+STANDING_FILE = REPO / V062_REL / "standing.tsv"
+STANDING_RULE = "accept-test-gaps"
+#: The floor the owner's ruling names ("from a slice's third round on"): a line naming a lower round is not taken.
+STANDING_FLOOR = 3
+
+
+def standing_rule() -> tuple[dict | None, str]:
+    """The owner's standing line, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N at least 3), or None with why
+    not. Missing, unreadable, more than one line, or anything else: no standing accept, never guessed."""
+    try:
+        text = STANDING_FILE.read_text()
+    except OSError:
+        return None, f"{STANDING_FILE.name} is not there (the standing accept is off)"
+    lines = [ln.split() for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    want = f"one line '{STANDING_RULE} from-round <{STANDING_FLOOR} or more> <YYYY-MM-DD>'"
+    if len(lines) != 1:
+        return None, f"{STANDING_FILE.name} holds {len(lines)} lines, not {want}"
+    parts = lines[0]
+    ok = (len(parts) == 4 and parts[0] == STANDING_RULE and parts[1] == "from-round" and parts[2].isdigit()
+          and int(parts[2]) >= STANDING_FLOOR and re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[3]))
+    if ok:
+        try:
+            datetime.strptime(parts[3], "%Y-%m-%d")
+        except ValueError:
+            ok = False
+    if not ok:
+        return None, f"{STANDING_FILE.name} says {' '.join(parts)!r}, not {want}"
+    return {"from_round": int(parts[2]), "given": parts[3], "line": " ".join(parts)}, "on"
+
+
 def log_owner_change(slice_id: str, action: str, detail: str) -> None:
     OWNER_CHANGES.parent.mkdir(parents=True, exist_ok=True)
     if not OWNER_CHANGES.exists():

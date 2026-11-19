@@ -8,9 +8,12 @@ test_admin_sections.py failing for the People section, reproduced in a scratch c
 from __future__ import annotations
 
 import json
+import re
 import sys
 import time
 from pathlib import Path
+
+import pytest
 
 from test_gates import built, merge, sh, verified, world  # noqa: F401  (world is a fixture)
 
@@ -75,11 +78,17 @@ def test_the_builders_prompt_carries_the_gates_findings(world):
     assert all(t in p.stdout for t in AD2_TESTS), p.stdout
 
 
-def test_send_back_within_the_rounds_limit_needs_no_owner_line_and_advances_the_round(world):
+@pytest.mark.parametrize("setting", ["thrift", "balanced"])
+def test_send_back_within_the_rounds_limit_needs_no_owner_line_and_advances_the_round(world, setting):
+    """Under a one-round and a four-round dial (the dial is auto, so which one the slice started on depends on the
+    hour: GitHub run 44464391430 failed this case at 05:21 UTC on thrift's one round). The case is about a round below
+    the limit, so it pins one, whatever the dial gave."""
     w = world
+    dial = w["repo"] / V062 / "dial.yaml"
+    dial.write_text(re.sub(r"(?m)^current: \w+", f"current: {setting}", dial.read_text()))
     refused_by_the_gate(w)
+    set_state(w, round=1, rounds_limit=max(2, state(w)["rounds_limit"]))
     st0 = state(w)
-    assert st0["round"] < st0["rounds_limit"]
     p = resume(w, "send-back")
     assert p.returncode == 0, p.stdout + p.stderr
     st = state(w)
