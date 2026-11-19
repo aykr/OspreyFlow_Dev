@@ -11765,7 +11765,10 @@ async def save_dataset_model_draft(
     audit: AuditDep,
 ) -> TargetModel:
     """Saves the draft as given; an extension removed rather than retired, or a POLE core type
-    named as one, is refused (409). Nothing that runs changes."""
+    named as one, is refused (409), and so is a save by anyone but the draft's creator (409
+    `model_refused`, naming who holds it, before anything is changed; C186). Nothing that runs
+    changes. The body carries no version, so this route confirms none: the creator check is the
+    store's, and a stale save is refused where a version is passed (the import's)."""
     draft = await models.save_draft(dataset_id, body, principal)
     await _audit_model(audit, principal, "save_model_draft", dataset_id, draft.version)
     return draft
@@ -11779,8 +11782,12 @@ async def save_dataset_model_draft(
 async def discard_dataset_model_draft(
     dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep, audit: AuditDep
 ) -> None:
+    """Discards the draft: its creator's alone (409 `model_refused` for anyone else, naming who
+    holds it, with the draft still there; C186)."""
     draft = await models.draft(dataset_id)
-    await models.discard_draft(dataset_id)
+    await models.discard_draft(
+        dataset_id, principal, expected_version=draft.version if draft is not None else None
+    )
     version = draft.version if draft is not None else 0
     await _audit_model(audit, principal, "discard_model_draft", dataset_id, version)
 

@@ -191,11 +191,11 @@ async def test_a_discarded_draft_leaves_live_as_it_was() -> None:
     store = _store()
     await _live_with_a_vessel(store)
     await store.open_draft(DATASET, ENGINEER)
-    await store.discard_draft(DATASET)
+    await store.discard_draft(DATASET, ENGINEER)
     assert await store.draft(DATASET) is None
     assert [m.version for m in await store.versions(DATASET)] == [1]
     with pytest.raises(TargetModelRefused, match="no draft"):
-        await store.discard_draft(DATASET)
+        await store.discard_draft(DATASET, ENGINEER)
 
 
 # --- each rule red with it alone removed --------------------------------------------------------

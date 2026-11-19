@@ -537,7 +537,7 @@ async def test_an_accepted_type_lost_from_the_draft_is_said_and_may_be_added_aga
     service, _, models, _ = await _service()
     p = await _propose(service)
     await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="Useful")
-    await models.discard_draft("ds-1")
+    await models.discard_draft("ds-1", _engineer())
     lost = await _refusal(service, "inv-1")
     assert lost is not None and "adds it again" in lost
     views = await service.dataset_proposal_views("ds-1")
@@ -559,7 +559,7 @@ async def test_the_open_count_is_the_model_tabs_to_decide_and_a_number_alone() -
     assert await service.open_proposal_count("ds-1") == 1
     await service.accept("ds-1", p.id, _engineer(), basis="probabilistic", reason="Useful")
     assert await service.open_proposal_count("ds-1") == 0
-    await models.discard_draft("ds-1")
+    await models.discard_draft("ds-1", _engineer())
     assert await service.open_proposal_count("ds-1") == 1
     assert await service.open_proposal_count("ds-other") == 0
 

@@ -511,17 +511,20 @@ async def apply_import(
     """Writes the plan's drafts; returns the new pipeline drafts' ids, and whether the importer's
     own open draft was replaced (as the write found it, for the audit). Never called for a dry run
     or a plan with a refusal. The draft is read again first: one another person opened since the
-    plan raises `DraftHeld` before anything is written. The store's own save does not check the
-    draft's owner under its lock, so a draft opened in the instant between this read and the save
-    is not caught here (carried to the case lane: `save_draft` given the expected owner and
-    version)."""
+    plan raises `DraftHeld` before anything is written. A draft opened or replaced in the instant
+    between this read and the save is refused by the store's own save, which checks the draft's
+    creator under its lock and the version this import planned (C186), before anything of the
+    model is written."""
     assert not planned.plan.dry_run and not planned.plan.refused
     open_model = await models.draft(dataset_id)
     held = held_draft_problem(open_model, principal, replace_own_draft=replace_own_draft)
     if held is not None:
         raise held
-    if open_model is None:
-        await models.open_draft(dataset_id, principal)
+    planned_version = (
+        open_model.version
+        if open_model is not None
+        else (await models.open_draft(dataset_id, principal)).version
+    )
     await models.save_draft(
         dataset_id,
         TargetModelDraftInput(
@@ -530,6 +533,7 @@ async def apply_import(
             reference_lists=bundle.model.reference_lists,
         ),
         principal,
+        expected_version=planned_version,
     )
     made: list[str] = []
     for released in planned.pipelines:
