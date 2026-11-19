@@ -215,8 +215,13 @@ def test_the_running_server_is_on_127_0_0_1(w):
         server.server_close()
 
 
-def test_the_command_line_has_no_way_to_name_another_address(capsys):
-    assert panel.main(["--host", "0.0.0.0", "--port", "0"]) != 0
+def test_the_command_line_has_no_way_to_name_another_address_and_touches_nothing_first(tmp_path, monkeypatch):
+    """The refusal comes before anything is made: no token, no folder. (The defaults are pointed at a scratch folder, so a
+    broken check here cannot make a real token in the owner's home.)"""
+    monkeypatch.setattr(panel, "DEFAULT_TOKEN_FILE", tmp_path / "home" / "token")
+    monkeypatch.setattr(panel, "DEFAULT_DATA_DIR", tmp_path / "home" / "data")
+    assert panel.main(["--host", "0.0.0.0", "--port", "0"]) == 2
+    assert not (tmp_path / "home").exists()
 
 
 # ---------------------------------------------------------------------------------------------- the Host is checked
