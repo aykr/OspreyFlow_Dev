@@ -147,12 +147,19 @@ def governance_marking_problems(
 ) -> list[str]:
     """Why a governance edit may not give `source` the marking its `handling` carries (SE2, C187;
     ADR-140 Amendment 19's three checks, judged by `marking_problems`), in words; none when it may.
-    Only the marking the request carries is judged: one the edit leaves as it is, or does not
-    carry, is not newly refused (a source marked above a ceiling set later stays editable in its
-    other declarations)."""
+    Only a marking the edit changes is judged: one it leaves as it is is not newly refused (a
+    source marked above a ceiling set later stays editable in its other declarations). The edit's
+    handling replaces the source's whole handling, so one that carries no marking (left out, or
+    null) on a marked source erases it: a lowering, refused as one."""
+    current = source.handling.get("classification")
     marking = handling.get("classification")
-    if marking is None or marking == source.handling.get("classification"):
+    if marking == current:
         return []
+    if marking is None:
+        return [
+            f"the marking is left out, which is below the source's current marking, {current}: "
+            "an edit never lowers a marking"
+        ]
     if not isinstance(marking, str):
         return [f"the marking must be one of the {scheme.name} handling scheme's classifications"]
     return marking_problems(

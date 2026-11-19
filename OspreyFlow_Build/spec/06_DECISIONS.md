@@ -31910,9 +31910,11 @@ is the right default (fail closed), but nothing let a person say what such a tab
    function (`services/api/sources.py`: `marking_problems`), before anything is written: refused in words
    (422 `governance_marking_refused`, the same `problems` list) when it is not one of the scheme's
    classifications, is above the editor's clearance, is above the deployment's highest marking (naming it), or is
-   below the source's current marking (an edit never lowers a marking). Only a marking the request carries and
-   changes is judged: an edit that leaves the marking as it is, or carries none, is not newly refused, so a source
-   marked above a ceiling set later stays editable in its other declarations. The words differ from the default
+   below the source's current marking (an edit never lowers a marking). Only a marking the request
+   changes is judged: an edit that leaves the marking as it is is not newly refused, so a source marked above a
+   ceiling set later stays editable in its other declarations. An edit's handling replaces the source's whole
+   handling, so one that carries no `classification` (left out, or null) on a marked source erases its marking: it is
+   refused as a lowering ("the marking is left out, which is below the source's current marking, ..."). The words differ from the default
    route's only where they name the marking ("the marking", "the source's current marking").
 5. **Audited, a new version.** A request naming the default it already has writes nothing: no version, audit
    entry, flag or draft following; the answer is the source as it is. Each change records who, when, from and to
