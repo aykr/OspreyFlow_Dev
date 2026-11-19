@@ -16,7 +16,6 @@ import http.client
 import importlib
 import json
 import re
-import shutil
 import stat
 import sys
 import threading
@@ -30,7 +29,6 @@ from tests.port_guard import outside_reserved
 from tools.control_panel import panel
 
 BUILD = Path(__file__).resolve().parents[1]
-V062 = BUILD / "process" / "lanes" / "v062"
 LINE = BUILD / "scripts" / "slice_line"
 DEFAULT = object()
 
@@ -44,13 +42,76 @@ class World:
     port: int
 
 
+# The three files as this test writes them: the scripts' schema (common.py, merge_slice.py), comments and all, with fixed
+# values the tests below rely on. They are NOT read from the owner's live files, so the owner changing a setting (the very
+# thing the panel is for) cannot turn this file red. Current auto; conductor/scout default, verifier sol; tracks 1 default,
+# 2-4 sol; live_step false.
+DIAL_YAML = """\
+# A synthetic dial for the panel's tests, in the schema the scripts read.
+#
+# current: auto = `day` from day_hours[0]:00 to day_hours[1]:00, `night` otherwise. Or name a setting.
+current: auto
+day: balanced
+night: balanced
+day_hours: [7, 22]
+
+settings:
+  thrift:
+    builders: 1
+    rounds: 1
+    seats:
+      conductor: {model: sonnet, effort: medium}
+      scout:     {model: haiku,  effort: low}
+      builder:   {model: sonnet, effort: medium}
+      verifier:  {model: sonnet, effort: high, passes: [acceptance]}
+  balanced:
+    builders: 4
+    rounds: 4
+    seats:
+      conductor: {model: sonnet, effort: high}
+      scout:     {model: haiku,  effort: medium}
+      builder:   {model: sonnet, effort: high}
+      verifier:  {model: opus,   effort: high, passes: [acceptance]}
+  sprint:
+    builders: 4
+    rounds: 2
+    seats:
+      conductor: {model: opus,   effort: high}
+      scout:     {model: sonnet, effort: medium}
+      builder:   {model: opus,   effort: high}
+      verifier:  {model: opus,   effort: high, passes: [acceptance, security, accessibility]}
+"""
+
+ACCOUNTS_YAML = """\
+# A synthetic accounts file for the panel's tests. Account names only: never a token, a key or an address.
+seats:
+  conductor: default
+  scout: default        # scouts share the conductor's account
+  verifier: sol
+tracks:
+  "1": default
+  "2": sol
+  "3": sol          # Sprint only
+  "4": sol              # Sprint only
+"""
+
+LIVE_STEP_YAML = """\
+# A synthetic live-step file for the panel's tests.
+#
+# live_step: false   the step does not run.
+# live_step: true    the step runs.
+live_step: false
+queue_wait_minutes: 60
+"""
+
+
 @pytest.fixture
 def w(tmp_path):
-    """The three real yaml files (comments and all), copied; a data folder; a token; a server on an ephemeral port."""
+    """Three synthetic yaml files (comments and all); a data folder; a token; a server on an ephemeral port."""
     lane = tmp_path / "lane"
     lane.mkdir()
-    for name in ("dial.yaml", "accounts.yaml", "live_step.yaml"):
-        shutil.copy(V062 / name, lane / name)
+    for name, text in (("dial.yaml", DIAL_YAML), ("accounts.yaml", ACCOUNTS_YAML), ("live_step.yaml", LIVE_STEP_YAML)):
+        (lane / name).write_text(text)
     data = tmp_path / "data"
     data.mkdir()
     token_file = tmp_path / "secret" / "token"
@@ -163,8 +224,8 @@ def differing_lines(before: bytes, after: bytes) -> list[int]:
     return [i for i, (x, y) in enumerate(zip(a, b)) if x != y]
 
 
-# What the real files hold today: current auto; conductor/scout default, verifier sol; tracks 1 default, 2-4 sol;
-# live_step false. Each pair below differs from that, so each is a real change.
+# What the fixture's files hold (DIAL_YAML, ACCOUNTS_YAML, LIVE_STEP_YAML above): current auto; conductor/scout default,
+# verifier sol; tracks 1 default, 2-4 sol; live_step false. Each pair below differs from that, so each is a real change.
 VALID = [
     ("dial.current", "sprint"), ("dial.current", "thrift"), ("dial.current", "balanced"),
     ("dial.day", "thrift"), ("dial.night", "sprint"),
