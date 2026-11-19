@@ -199,3 +199,13 @@ refuses less than the real route's giver rule); no test gives an empty classific
 is that each round finds one more thing the form reads before it offers a choice; a restart would list every read first and
 build one loader that waits for the whole list. GG1 no longer waits for AD2. AD2's merge also settles whether the invite
 test in the keyboard walk stays.
+
+### New row (19 Nov, from SE3's first verifier): the draft's PUT route confirms no version until the Glass sends one
+
+SE3 makes the model draft's creator check mandatory on every write (save, replace, discard) and confirms the version where
+a version is passed (replace and discard, by the store; the import path passes the one it planned). The PUT draft route's body
+carries no version, so that route confirms none: adding one means a schema change (the draft input type, which regenerates
+the TypeScript types) and a Glass change, neither in SE3. ADR-152 decision 11, X5, says "save, replace and delete check the
+draft's creator and an expected version", so this half of X5 is **owed**: the Glass sends the version it opened, the PUT route
+requires it, and a stale save is refused in words. Owed with the Studio's Model step (IS2), which waits for SE3. Not yet
+assigned.

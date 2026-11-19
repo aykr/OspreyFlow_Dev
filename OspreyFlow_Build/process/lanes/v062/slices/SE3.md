@@ -68,3 +68,12 @@ left out. The line adds every mapped pure test that scans a folder the slice cha
 
 The Glass; the TypeScript types; a change to `TargetModelDraftInput`; the Studio's Model step (IS2), which waits for this
 slice; the live Postgres run. Do not touch the Makefile or the CI workflow.
+
+## Round 2 note from the conductor (19 November 2026)
+
+The PUT route's missing version check is **accepted as owed** and recorded in the backlog (the row "the draft's PUT route
+confirms no version until the Glass sends one"): do not change the route's body or the Glass. Fix the verifier's findings and
+nothing else: name the cases after the two tests the accepted ADR-152 decision 11, X5, names (a second person cannot save
+into, replace or delete another person's draft; a stale version is refused in words), by renaming the cases you wrote or
+adding them; and add a pure case that plants a stale discard, in the route test and in the in-memory store, shown red by
+deleting the version argument from the discard.
