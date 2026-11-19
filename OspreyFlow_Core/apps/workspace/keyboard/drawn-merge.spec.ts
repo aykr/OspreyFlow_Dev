@@ -85,10 +85,10 @@ test("a drawn type is mapped onto another of the target's types, its properties 
   await expect(vessel).toBeFocused();
   await vessel.selectOption("Organisation");
   await expect(vessel).toHaveValue("Organisation");
-  // Each "goes in as" or "goes into" choice reads Match again, and once it is answered the sheet moves
-  // focus onto its heading (drawnMerge.tsx, after the answer is drawn). Acting on another control before
-  // that move lands loses the focus to it, as promotions.spec's Close did on CI, so wait for it.
-  await expect(page.getByRole("heading", { name: "Merge Night visits into Prison intel" })).toBeFocused();
+  // Each "goes in as" or "goes into" choice reads Match again, and the sheet leaves focus where it is
+  // (GG1, WCAG 3.2.2: it moves focus onto its heading only when drawn and when sent), so the person
+  // carries on from the select they changed. drawn-merge-focus.spec.ts proves that after the answer lands.
+  await expect(vessel).toBeFocused();
   await expect(page.getByText(/Each goes in as a new Organisation, a new item beside its drawn one/)).toBeVisible();
   // `name` goes into the Organisation's name; `flag`, not carried until placed, into its country.
   await expect(page.getByLabel("name goes into")).toHaveValue("name");
@@ -97,7 +97,7 @@ test("a drawn type is mapped onto another of the target's types, its properties 
   await expect(flag).toBeFocused();
   await flag.selectOption("country");
   await expect(flag).toHaveValue("country");
-  await expect(page.getByRole("heading", { name: "Merge Night visits into Prison intel" })).toBeFocused();
+  await expect(flag).toBeFocused();
   await press(page, "Dry run");
   await expect(page.getByRole("status")).toContainText("It would add 3 items and 0 links to Prison intel, 1 of them as new items of another type");
   await press(page, "4. Merge");
