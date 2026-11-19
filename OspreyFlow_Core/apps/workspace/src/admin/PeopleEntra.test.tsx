@@ -28,6 +28,8 @@ function serve(kind: "entra" | "keycloak", handler: (path: string, init?: Reques
       sent.push({ path: `${init?.method ?? "GET"} ${path}`, body: init?.body ? JSON.parse(String(init.body)) : null });
       const answered = handler(path, init);
       if (answered) return answered;
+      // ...and the handling scheme (AD2): the route answers the classifications, never a bare object.
+      if (path === "/v1/handling-scheme") return json(200, { classification: ["PUBLIC", "OFFICIAL"], handling_codes: {} });
       if (path === "/v1/me") return json(200, { id: "adm-1", clearance: "OFFICIAL", org_unit: "verify", roles: ["osprey-admin"], receivable_handling_codes: [] });
       if (path === "sign-in") return json(200, { kind });
       if (path === "people") return json(200, [ANA]);

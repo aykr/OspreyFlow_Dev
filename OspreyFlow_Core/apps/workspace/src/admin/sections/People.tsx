@@ -148,17 +148,32 @@ interface Scheme {
   codes: string[];
 }
 
-function useScheme(api: AdminApi): Scheme {
-  const [scheme, setScheme] = useState<Scheme>({ levels: [], codes: [] });
+/** What is known of the scheme. The invite form is drawn only once it is `ready` (AD2); the rows read the scheme as before
+ * and see none of it until then. A later failure keeps the earlier answer. */
+type SchemeRead = { state: "waiting" } | { state: "unavailable" } | { state: "ready"; scheme: Scheme };
+
+const NO_SCHEME: Scheme = { levels: [], codes: [] };
+
+function useSchemeRead(api: AdminApi): SchemeRead {
+  const [read, setRead] = useState<SchemeRead>({ state: "waiting" });
   useEffect(() => {
+    let current = true;
+    const failed = () => {
+      if (current) setRead((before) => (before.state === "ready" ? before : { state: "unavailable" }));
+    };
     fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((body: { classification?: string[]; handling_codes?: Record<string, unknown> }) =>
-        setScheme({ levels: body.classification ?? [], codes: Object.keys(body.handling_codes ?? {}) }),
-      )
-      .catch(() => setScheme({ levels: [], codes: [] }));
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { classification?: unknown; handling_codes?: Record<string, unknown> } | null) => {
+        // An answer that names no classifications is not a scheme: nothing could be offered from it.
+        if (!body || !Array.isArray(body.classification)) return failed();
+        if (current) setRead({ state: "ready", scheme: { levels: body.classification.map(String), codes: Object.keys(body.handling_codes ?? {}) } });
+      })
+      .catch(failed);
+    return () => {
+      current = false;
+    };
   }, [api.apiBaseUrl, api.bearerToken]);
-  return scheme;
+  return read;
 }
 
 /** How the person signs in next (ADR-114 Amendment 5): the identity provider's emailed link, or a
@@ -991,29 +1006,36 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
   );
 }
 
-/** The invite form is drawn only once the inviter's own details have arrived (AD2), so no choice can be made before them
- * and none is filtered, reset or hidden afterwards. Until then, and if they cannot be had, it says so in words. A change in
- * the details (a new key) draws a fresh form, never a choice quietly altered. */
+/** The invite form is drawn only when everything it depends on has loaded (AD2): the inviter's own details and the handling
+ * scheme. Until then it says it is reading; if either could not be had it says so in words; it never shows a choice, nor a
+ * statement of what the inviter can give. A change in what it was drawn from (a new key) draws a fresh form, never a choice
+ * quietly altered; the same answers read again (a new token) keep the form, and a later failure does not replace it. */
 function InviteGate({
   read,
+  schemeRead,
   ...rest
 }: {
   read: InviterRead;
+  schemeRead: SchemeRead;
   api: AdminApi;
-  scheme: Scheme;
   ctx: Context;
   onInvited: (d: SignInDelivery) => void;
 }) {
-  if (read.state === "ready") return <InviteForm key={`${read.inviter.clearance}|${read.inviter.codes.join(",")}`} inviter={read.inviter} {...rest} />;
+  if (read.state === "ready" && schemeRead.state === "ready") {
+    const { inviter } = read;
+    const { scheme } = schemeRead;
+    const key = [inviter.clearance, inviter.codes.join(","), scheme.levels.join(","), scheme.codes.join(",")].join("|");
+    return <InviteForm key={key} inviter={inviter} scheme={scheme} {...rest} />;
+  }
+  const unavailable = read.state === "unavailable" ? "Your own clearance and handling codes" : schemeRead.state === "unavailable" ? "This deployment's classifications and handling codes" : null;
   return (
     <section aria-label="Invite a person" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}>
       <h2 className="value" style={{ margin: 0 }}>Invite a person</h2>
-      {read.state === "waiting" ? (
+      {unavailable === null ? (
         <p role="status" className="label" style={{ margin: 0 }}>Reading what you can give. The form appears when that is known.</p>
       ) : (
         <p role="alert" className="label" style={{ margin: 0 }}>
-          Your own clearance and handling codes could not be read, so nobody can be invited from here now. Reload the page to
-          try again.
+          {unavailable} could not be read, so nobody can be invited from here now. Reload the page to try again.
         </p>
       )}
     </section>
@@ -1267,7 +1289,8 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   // invite refused on Entra is the Conduit's refusal, in its words).
   const [entra, setEntra] = useState(false);
   const [administratorSets, setAdministratorSets] = useState<AccessField[]>([]);
-  const scheme = useScheme(api);
+  const schemeRead = useSchemeRead(api);
+  const scheme = schemeRead.state === "ready" ? schemeRead.scheme : NO_SCHEME;
   const inviter = useInviter();
   // The roles and the case levels are the row's context; either failing leaves the rest working.
   const readContext = () => {
@@ -1390,7 +1413,7 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
       ) : (
         <InviteGate
           api={api}
-          scheme={scheme}
+          schemeRead={schemeRead}
           read={inviter}
           ctx={ctx}
           onInvited={(delivery) => {
