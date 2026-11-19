@@ -166,3 +166,14 @@ The owner asked on 18 November to see that split in the conductor's reports. The
 runner) has what, evidence, file and line only. For AD2, BL6 and GG6 in their extra rounds the split is asked for through
 each brief, as a prefix on "what". The fix is a kind field (fault or test gap) in the schema and the record, and the
 board's note counting each.
+
+### New row (19 Nov, the owner's word, from GG6's last verifier): the production-build tile test is in no gate
+
+GG6's production-bundle run (the map-build folder's own Playwright configuration, which builds the workspace as the deployed
+image does and asserts that the MapLibre worker is emitted as a hashed .js file and served as JavaScript) is run only by the
+slice's frozen acceptance command, once, at its merge. After the merge nothing in the make gate or GitHub's CI runs it: the
+glass-keyboard target runs only the dev-server keyboard suite, and the CI workflow runs only the performance and keyboard
+suites. Deleting the setWorkerUrl call from the map view would pass every gate. **The owner's ruling:** wire the
+production-build test into the gate; the diff (a make target and a workflow step) comes to the owner, not to a slice. The
+conductor writes it once GG6 is on main. Until then the ADR-014 Amendment 2 "Still not checked" paragraph must say that this
+test sits outside every gate.
