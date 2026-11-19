@@ -24,6 +24,8 @@ export interface BuildOptions {
   storeClock?: () => number;
   /** Wraps the in-memory store before the app sees it: a test that watches, or breaks, every call the app makes to it. */
   wrapStore?: (inner: MemorySessionStore) => SessionStore;
+  /** The cookie-signing secret, when a test wants its own (a sentinel it then looks for). */
+  sessionSecret?: string;
   /** Replaces the fake identity provider altogether. */
   identityProvider?: IdentityProvider;
 }
@@ -36,7 +38,7 @@ export function build(options: BuildOptions = {}): Built {
     store: options.wrapStore ? options.wrapStore(store) : store,
     identityProvider: options.identityProvider ?? fakeProvider({ now: clock, ...options.provider }),
     clock,
-    sessionSecret: TEST_SESSION_SECRET,
+    sessionSecret: options.sessionSecret ?? TEST_SESSION_SECRET,
     extraRoutes: (router) => {
       router.all("/_test/echo", (_req, res) => {
         res.status(200).type("text/plain").send("accepted");

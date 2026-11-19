@@ -14,6 +14,7 @@ import { ABSOLUTE_SECONDS, COOKIE_NAME, IDLE_SECONDS } from "../../server/sessio
 import { MemorySessionStore, SESSION_KEY_PREFIX } from "../../server/sessionStore.js";
 import { build } from "../support/build.js";
 import { SENTINEL_TOKENS } from "../support/fakeProvider.js";
+import { generateSecret } from "../support/secret.js";
 import {
   TEST_SESSION_SECRET,
   assertNoTokenLeak,
@@ -28,6 +29,9 @@ import {
   signedCookie,
   unsigned,
 } from "../support/http.js";
+
+/** Another secret, made at run time like the first. */
+const OTHER_SECRET = generateSecret();
 
 describe("the session is stored with a time limit on every key", () => {
   it("writes the session under the service's own prefix, with a TTL no longer than the idle hour", async () => {
@@ -107,7 +111,7 @@ describe("the cookie", () => {
     expect(a.id).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(a.id).not.toBe(b.id);
     expect(a.signature).toBe(signatureFor(a.id));
-    expect(a.signature).not.toBe(signatureFor(a.id, "another-secret-of-at-least-32-characters!"));
+    expect(a.signature).not.toBe(signatureFor(a.id, OTHER_SECRET));
     // Opaque: the value says nothing of the person or the tokens, however it is decoded.
     const value = cookieValueFrom(first);
     expect(value).not.toContain("Alex");
@@ -119,7 +123,7 @@ describe("the cookie", () => {
     const { app } = build();
     const real = await request(app).get("/session/sign-in");
     const { id } = unsigned(cookieValueFrom(real));
-    const forged = signedCookie(id, "another-secret-of-at-least-32-characters!");
+    const forged = signedCookie(id, OTHER_SECRET);
     const res = await request(app).get("/").set("Cookie", forged);
     expect(res.status).toBe(302);
     expect(res.headers["location"]).toBe("/session/sign-in");

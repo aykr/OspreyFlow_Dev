@@ -6,9 +6,10 @@ import type { Response, Test } from "supertest";
 
 import { COOKIE_NAME } from "../../server/sessionPolicy.js";
 import { SENTINEL_SUBJECT, SENTINEL_TOKENS } from "./fakeProvider.js";
+import { generateSecret } from "./secret.js";
 
-/** A fixed dummy, never a real secret: the signing secret every test app is built with. */
-export const TEST_SESSION_SECRET = "dummy-session-secret-for-tests-only-0123456789abcdef";
+/** Made at run time, random, held in memory and written nowhere: the signing secret every test app is built with. */
+export const TEST_SESSION_SECRET = generateSecret();
 
 type Method = "get" | "post" | "put" | "patch" | "delete" | "head" | "options";
 
