@@ -38,22 +38,34 @@ function reach(body: { clearance: string; receivable_handling_codes: string[] })
 
 /** What `GET /v1/me` answers: the inviter's real details (`own`); more than the route will let them give (`stale`, as after
  * a clearance lowered since sign-in, so the Glass offers what the route refuses); a clearance outside the scheme
- * (`outside`); or no answer (`down`). `meGate`: when given, `GET /v1/me` answers only once it resolves. */
-type Me = "own" | "stale" | "outside" | "down";
+ * (`outside`); a 503 (`down`); or a network failure (`broken`). `live` is what the double answers *now*, so a test can change it between reads:
+ * `me`; `scheme` ("ok", "down" for a 503, "broken" for a network failure, "bare" for an answer with no classifications);
+ * `inviter` (details that replace the named ones). `meGate` / `schemeGate`: when given, that route answers only once the
+ * promise resolves. `calls` counts the reads of each route. */
+type Me = "own" | "stale" | "outside" | "down" | "broken";
+type Live = { me: Me; scheme: "ok" | "down" | "broken" | "bare"; inviter?: object; calls: Record<string, number> };
 const STALE = { ...INVITER, clearance: "OFFICIAL-SENSITIVE", receivable_handling_codes: ["P", "C", "R"] };
 const OUTSIDE = { ...INVITER, clearance: "TOP-SECRET", receivable_handling_codes: [] };
+let live: Live = { me: "own", scheme: "ok", calls: {} };
 
-function serve(me: Me, meGate?: Promise<void>) {
+function serve(me: Me, gates: { meGate?: Promise<void>; schemeGate?: Promise<void>; scheme?: Live["scheme"] } = {}) {
   const posted: unknown[] = [];
+  live = { me, scheme: gates.scheme ?? "ok", calls: {} };
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(url).pathname;
+      live.calls[path] = (live.calls[path] ?? 0) + 1;
       if (path === "/v1/me") {
-        await meGate;
-        return me === "down" ? json(503, {}) : json(200, { own: INVITER, stale: STALE, outside: OUTSIDE }[me]);
+        await gates.meGate;
+        if (live.me === "broken") throw new TypeError("network down");
+        return live.me === "down" ? json(503, {}) : json(200, live.inviter ?? { own: INVITER, stale: STALE, outside: OUTSIDE }[live.me]);
       }
-      if (path === "/v1/handling-scheme") return json(200, SCHEME);
+      if (path === "/v1/handling-scheme") {
+        await gates.schemeGate;
+        if (live.scheme === "broken") throw new TypeError("network down");
+        return live.scheme === "down" ? json(503, {}) : json(200, live.scheme === "bare" ? {} : SCHEME);
+      }
       const admin = path.replace("/v1/admin/", "");
       if (admin === "people" && init?.method === "POST") {
         const body = JSON.parse(String(init.body)) as { clearance: string; receivable_handling_codes: string[] };
@@ -95,15 +107,23 @@ describe("Invite a person offers only what the inviter can give", () => {
     expect(within(form).queryByLabelText("Invite with handling code R")).toBeNull();
   });
 
-  it("offers no clearance to an inviter whose own is outside the scheme: Invite cannot be pressed, and it says why", async () => {
+  it("offers no clearance to an inviter whose own is outside the scheme: with the name and unit filled, nothing can be sent, and it says why", async () => {
     const posted = serve("outside");
     const form = await open([]);
     await waitFor(() => expect(form.textContent).toContain("which is not one of this deployment's classifications"));
-    expect((within(form).getByRole("button", { name: "Invite" }) as HTMLButtonElement).disabled).toBe(true);
     expect(form.textContent).toContain(
       "You hold TOP-SECRET, which is not one of this deployment's classifications, so you cannot give any clearance and nobody can be invited by you.",
     );
     expect(form.textContent).not.toContain("you can give that clearance or lower");
+    // The name and the unit are filled, so the only thing left to stop Invite is that there is no clearance to give.
+    fireEvent.change(within(form).getByLabelText("Sign-in name"), { target: { value: "new.person" } });
+    fireEvent.change(within(form).getByLabelText("Invite unit"), { target: { value: "unit-1" } });
+    const invite = within(form).getByRole("button", { name: "Invite" }) as HTMLButtonElement;
+    expect((within(form).getByLabelText("Sign-in name") as HTMLInputElement).value).toBe("new.person");
+    expect((within(form).getByLabelText("Invite unit") as HTMLInputElement).value).toBe("unit-1");
+    expect(invite.disabled).toBe(true);
+    fireEvent.click(invite);
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(posted).toEqual([]);
   });
 
@@ -114,38 +134,82 @@ describe("Invite a person offers only what the inviter can give", () => {
   });
 });
 
-describe("the form is drawn only once the inviter's own details have arrived", () => {
+describe("the form is drawn only when everything it depends on has loaded", () => {
+  const SAYS_WHAT_THEY_CAN_GIVE = /You hold|that clearance or lower|no handling code|the handling codes/;
   const mustNotBeUsable = () => {
     expect(screen.queryByRole("form", { name: "Invite a person" })).toBeNull();
     expect(screen.queryByLabelText("Invite clearance")).toBeNull();
     expect(screen.queryByLabelText(/^Invite with handling code/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
     expect(screen.queryByLabelText("Sign-in name")).toBeNull();
+    expect(screen.queryByLabelText("Invite unit")).toBeNull();
+    expect(document.body.textContent).not.toMatch(SAYS_WHAT_THEY_CAN_GIVE);
   };
+  const place = () => render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+  const sectionLoaded = () => waitFor(() => expect(screen.getByLabelText("Edit access for ana")).toBeTruthy()); // the section has loaded around it
+  const later = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  it("has no clearance select, handling-code box or Invite button while waiting, and says it is reading; then offers them", async () => {
-    let release: () => void = () => {};
-    serve("own", new Promise<void>((resolve) => (release = resolve)));
-    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
-    const waiting = await screen.findByRole("status");
-    expect(waiting.textContent).toContain("Reading what you can give");
-    await waitFor(() => expect(screen.getByLabelText("Edit access for ana")).toBeTruthy()); // the section has loaded around it
-    mustNotBeUsable();
-    release();
-    const form = await screen.findByRole("form", { name: "Invite a person" });
-    await waitFor(() => expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]));
-    expect(screen.queryByText(/Reading what you can give/)).toBeNull();
-  });
+  /** Each thing the form reads before it offers a choice: how to hold its answer back, and how to make it fail. */
+  const DEPENDENCIES = [
+    {
+      name: "the inviter's details (GET /v1/me)",
+      late: (hold: Promise<void>) => serve("own", { meGate: hold }),
+      fails: [
+        ["with a 503", () => serve("down")],
+        ["with a network failure", () => serve("broken")],
+      ] as const,
+      failure: "Your own clearance and handling codes could not be read, so nobody can be invited from here now.",
+    },
+    {
+      name: "the handling scheme (GET /v1/handling-scheme)",
+      late: (hold: Promise<void>) => serve("own", { schemeGate: hold }),
+      fails: [
+        ["with a 503", () => serve("own", { scheme: "down" })],
+        ["with a network failure", () => serve("own", { scheme: "broken" })],
+        ["with an answer that names no classifications", () => serve("own", { scheme: "bare" })],
+      ] as const,
+      failure: "This deployment's classifications and handling codes could not be read, so nobody can be invited from here now.",
+    },
+  ];
 
-  it("has none of them when GET /v1/me does not answer, and says in words that nobody can be invited from here", async () => {
-    const posted = serve("down");
-    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
-    const words = await screen.findByRole("alert");
-    expect(words.textContent).toContain("Your own clearance and handling codes could not be read, so nobody can be invited from here now.");
-    expect(words.textContent).toContain("Reload the page to try again.");
-    await waitFor(() => expect(screen.getByLabelText("Edit access for ana")).toBeTruthy());
-    mustNotBeUsable();
-    expect(posted).toEqual([]);
+  describe.each(DEPENDENCIES)("$name", ({ late, fails, failure }) => {
+    it("when late: says it is reading and has no select, box, field or Invite button; then draws the form once, correctly", async () => {
+      let release: () => void = () => {};
+      late(new Promise<void>((resolve) => (release = resolve)));
+      place();
+      const waiting = await screen.findByRole("status");
+      expect(waiting.textContent).toContain("Reading what you can give");
+      await sectionLoaded();
+      await later();
+      mustNotBeUsable();
+      expect(screen.getByRole("status").textContent).toContain("Reading what you can give");
+      release();
+      const form = await screen.findByRole("form", { name: "Invite a person" });
+      // Correct at its first draw, not after a second one.
+      expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]);
+      expect(form.textContent).toContain("You hold OFFICIAL, so you can give that clearance or lower, and the handling codes P.");
+      expect(within(form).getByLabelText("Invite with handling code P")).toBeTruthy();
+      expect(within(form).queryByLabelText("Invite with handling code C")).toBeNull();
+      expect(screen.queryByText(/Reading what you can give/)).toBeNull();
+      // Drawn once: what is typed into it is still there, and it is the same form, a moment later.
+      fireEvent.change(within(form).getByLabelText("Sign-in name"), { target: { value: "new.person" } });
+      await later();
+      expect(screen.getByRole("form", { name: "Invite a person" })).toBe(form);
+      expect((within(form).getByLabelText("Sign-in name") as HTMLInputElement).value).toBe("new.person");
+    });
+
+    it.each(fails)("when it fails %s: says so in words and has no select, box, field or Invite button", async (_how, fail) => {
+      const posted = fail();
+      place();
+      const words = await screen.findByRole("alert");
+      expect(words.textContent).toContain(failure);
+      expect(words.textContent).toContain("Reload the page to try again.");
+      await sectionLoaded();
+      await later();
+      mustNotBeUsable();
+      expect(screen.queryByText(/Reading what you can give/)).toBeNull();
+      expect(posted).toEqual([]);
+    });
   });
 
   it("has none of them when GET /v1/me answers something that is not an inviter", async () => {
@@ -162,9 +226,90 @@ describe("the form is drawn only once the inviter's own details have arrived", (
         return json(200, path === "organisation-arrivals" ? [] : {});
       }),
     );
-    render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+    place();
     expect((await screen.findByRole("alert")).textContent).toContain("could not be read");
     mustNotBeUsable();
+  });
+
+  it("says a failure of one read even while the other is still late, and never offers a choice", async () => {
+    serve("down", { schemeGate: new Promise<void>(() => {}) });
+    place();
+    expect((await screen.findByRole("alert")).textContent).toContain("could not be read");
+    await sectionLoaded();
+    mustNotBeUsable();
+  });
+
+  describe("after the form is drawn, the token changes and the reads run again", () => {
+    const drawn = async () => {
+      const view = render(<AdminPlace apiBaseUrl="http://x" bearerToken="t" rights={new Set(["manage_people"])} />);
+      const form = await screen.findByRole("form", { name: "Invite a person" });
+      await waitFor(() => expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]));
+      fireEvent.change(within(form).getByLabelText("Sign-in name"), { target: { value: "new.person" } });
+      fireEvent.change(within(form).getByLabelText("Invite unit"), { target: { value: "unit-1" } });
+      return { view, form };
+    };
+    const newToken = (view: ReturnType<typeof render>) =>
+      view.rerender(<AdminPlace apiBaseUrl="http://x" bearerToken="t2" rights={new Set(["manage_people"])} />);
+    const readAgain = async () => {
+      await waitFor(() => {
+        expect(live.calls["/v1/me"]).toBe(2);
+        expect(live.calls["/v1/handling-scheme"]).toBe(2);
+      });
+      await later();
+    };
+    const same = (form: HTMLElement) => {
+      expect(screen.getByRole("form", { name: "Invite a person" })).toBe(form);
+      expect((within(form).getByLabelText("Sign-in name") as HTMLInputElement).value).toBe("new.person");
+      expect((within(form).getByLabelText("Invite unit") as HTMLInputElement).value).toBe("unit-1");
+    };
+
+    it("keeps the drawn form, and what is typed in it, when the same details come back", async () => {
+      serve("own");
+      const { view, form } = await drawn();
+      newToken(view);
+      await readAgain();
+      same(form);
+      expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]);
+    });
+
+    it.each([
+      ["GET /v1/me fails", () => (live.me = "down")],
+      ["GET /v1/handling-scheme fails", () => (live.scheme = "down")],
+      ["both fail", () => ((live.me = "down"), (live.scheme = "broken"))],
+    ])("keeps the drawn form, and what is typed in it, when %s: no could-not-be-read alert replaces it", async (_what, fail) => {
+      serve("own");
+      const { view, form } = await drawn();
+      fail();
+      newToken(view);
+      await readAgain();
+      same(form);
+      expect(optionNames(form)).toEqual(["PUBLIC", "OFFICIAL"]);
+      expect(screen.queryByText(/could not be read, so nobody can be invited/)).toBeNull();
+    });
+
+    it.each([
+      ["a lower clearance", { ...INVITER, clearance: "PUBLIC" }, ["PUBLIC"], true],
+      ["other handling codes", { ...INVITER, receivable_handling_codes: [] }, ["PUBLIC", "OFFICIAL"], false],
+    ])("draws a fresh form when the details change to %s, so a choice already made is never quietly altered", async (_what, changed, offered, offersP) => {
+      const posted = serve("own");
+      const { view, form } = await drawn();
+      fireEvent.change(within(form).getByLabelText("Invite clearance"), { target: { value: "OFFICIAL" } });
+      fireEvent.click(within(form).getByLabelText("Invite with handling code P"));
+      live.inviter = changed;
+      newToken(view);
+      await readAgain();
+      const fresh = screen.getByRole("form", { name: "Invite a person" });
+      expect(fresh).not.toBe(form);
+      expect((within(fresh).getByLabelText("Sign-in name") as HTMLInputElement).value).toBe("");
+      expect(optionNames(fresh)).toEqual(offered);
+      // What it shows is what is sent: the clearance is the one now offered, and no code is ticked.
+      fireEvent.change(within(fresh).getByLabelText("Sign-in name"), { target: { value: "new.person" } });
+      fireEvent.change(within(fresh).getByLabelText("Invite unit"), { target: { value: "unit-1" } });
+      fireEvent.click(within(fresh).getByRole("button", { name: "Invite" }));
+      await waitFor(() => expect(posted).toHaveLength(1));
+      expect(posted[0]).toMatchObject({ clearance: "PUBLIC", receivable_handling_codes: [] });
+      expect(Boolean(within(fresh).queryByLabelText("Invite with handling code P"))).toBe(offersP);
+    });
   });
 });
 
