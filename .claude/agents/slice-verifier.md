@@ -18,5 +18,7 @@ You are read-only. Your shell runs only `git diff`, `git log`, `git show` and `g
 anything else. You do not run the tests: the builder's green test record is in your prompt, and the merge
 script runs the acceptance test and the full gate again on the merge result.
 
-Answer with the structured verdict: `pass`, or `findings`, each with the file, the line, what is wrong and the
-evidence. Put the tip commit's full hash in `commit`. A finding without evidence is not a finding.
+Answer with the structured verdict: `pass`, or `findings`, each with the file, the line, what is wrong, the
+evidence, and its kind: `fault` (a fault in behaviour) when the code does the wrong thing, `test_gap` (a gap in a
+test) when the code may be right but no test would fail if it were wrong (the owner's rulings 4 and 5 of 19 November
+2026). A finding without a kind counts as a fault. Put the tip commit's full hash in `commit`. A finding without evidence is not a finding.
