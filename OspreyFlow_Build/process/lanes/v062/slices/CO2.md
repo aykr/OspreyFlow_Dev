@@ -80,7 +80,9 @@ Plant the violation in the shape the code meets at its real call site: a signed 
 Pure only (ports 9), the acceptance files and the neighbours that set `superset_client_id` or read the claim mapping:
 OspreyFlow_Build/tests/services/api/test_auth_entra_superset.py, test_auth_entra_claims.py, test_entra_guests.py;
 OspreyFlow_Build/tests/harness/test_cloud_platform_entra.py, test_cloud_platform_entra_count.py, test_superset_entra_sign_in.py,
-test_realm.py; then `make schemas-check` from OspreyFlow_Build. The line adds every mapped pure test that scans a folder the
+test_realm.py; then the schemas check, run as the checks command runs it: from OspreyFlow_Core,
+`python -m tools.schemas_check` with PYTHONPATH=../OspreyFlow_Build, through `uv run` (a worktree has no Core .venv, so
+`make schemas-check` does not run there). The line adds every mapped pure test that scans a folder the
 slice changes. Run the type check on the regenerated TypeScript too (a change to packages/schemas).
 
 ## The four choices the ADR leaves open, settled by the conductor (the owner is told afterwards)
