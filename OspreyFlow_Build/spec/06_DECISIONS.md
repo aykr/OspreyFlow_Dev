@@ -31905,6 +31905,24 @@ is the right default (fail closed), but nothing let a person say what such a tab
    approver's clearance is theirs neither to change nor to clear (either changes how rows they may not read are
    marked), refused in words naming the clearance needed. Otherwise clearing it is allowed: the table is then
    unmarked again. Refusals are answered in words and not audited, as a refused governance edit is not.
+   **4a. The governance edit judges its marking the same way** (SE2, C187, 19 November 2026). `PATCH
+   .../governance` judges the `classification` its handling carries by the three checks above, in one shared
+   function (`services/api/sources.py`: `marking_problems`), before anything is written: refused in words
+   (422 `governance_marking_refused`, the same `problems` list) when it is not one of the scheme's
+   classifications, is above the editor's clearance, is above the deployment's highest marking (naming it), or is
+   below the source's current marking (an edit never lowers a marking). Only a marking the request
+   changes is judged: an edit that leaves the marking as it is is not newly refused, so a source marked above a
+   ceiling set later stays editable in its other declarations. An edit's handling replaces the source's whole
+   handling, so one that carries no `classification` (left out, or null) on a marked source erases its marking: it is
+   refused as a lowering ("the marking is left out, which is below the source's current marking, ..."). The words differ from the default
+   route's only where they name the marking ("the marking", "the source's current marking").
+   **Two edits at once.** "The source's current marking" is the one the write replaces, not the one read a moment
+   earlier: the store's update carries the classification the edit was judged against as a condition of the same
+   `UPDATE` (`edit_governance`'s `if_marking`), so it writes nothing if another edit has moved it. The route then reads
+   and judges again against what is stored (a raise that is now no raise is accepted; a marking another editor
+   raised is not put back lower, refused as a lowering), up to three times, then answers 409 `source_changed` ("try
+   again"), nothing written. The audit's `handling_before` is the handling of the attempt that wrote. The default-marking
+   route's own read-then-write is not changed by this slice.
 5. **Audited, a new version.** A request naming the default it already has writes nothing: no version, audit
    entry, flag or draft following; the answer is the source as it is. Each change records who, when, from and to
    (`set_dataset_source_default_marking`; *from* as the store's update replaced it, under the row's lock),
