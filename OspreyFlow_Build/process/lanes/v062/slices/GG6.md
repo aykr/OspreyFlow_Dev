@@ -125,3 +125,13 @@ sentence only: the ADR-014 Amendment 2 "Still not checked" paragraph says that t
 folder's own Playwright configuration) sits outside every gate, so deleting the setWorkerUrl call from the map view would
 pass make ci and GitHub's CI, and that it is run only by this slice's acceptance command at its merge. Do not edit the
 Makefile or the CI workflow: the owner takes that diff himself (a backlog row records it). Change nothing else.
+
+## Owner's ruling for round 5, the last (19 November 2026; it replaces the section above)
+
+The owner accepted this slice without the "Still not checked" sentence: do not add it now (it goes in later, with the
+gate's wiring). The merge gate refused the slice on six tests in OspreyFlow_Build/tests/test_adr_reservations.py: your
+ADR-014 amendment's heading, "### Amendment 2 — the revisit trigger is met: ..." in OspreyFlow_Build/spec/06_DECISIONS.md,
+is not in the form the reservation check wants, "### ADR-n, Amendment m", so the count of off-form amendment headings
+went from the baseline of 15 to 16. The one fix: retitle that heading in that form and, if the check asks for it, add its
+reservation row (read OspreyFlow_Build/tests/test_adr_reservations.py for the form and the table). Change nothing else:
+no other line of the spec, no code, no test. Run test_adr_reservations.py and the slice's checks before you stop.
