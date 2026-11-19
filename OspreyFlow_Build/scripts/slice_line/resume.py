@@ -10,6 +10,13 @@
                    advanced (past its rounds limit it needs the owner's add-round line as well)        limit
   correct-command  the conductor's own malformed command, corrected and proved on main (ruling 3)      none: the code
                                                                                                         holds the limits
+  accept           a slice stopped at its rounds limit with a verifier's findings for its exact tip    owner's line
+                   is merged narrower: an acceptance record for that tip, phase verified (the merge
+                   script takes it in place of the verifier's pass, for that tip only). Without a
+                   line, the owner's standing line (standing.tsv: accept-test-gaps from-round N         or the owner's
+                   <date>) accepts a slice at round N or later whose newest findings record is the     standing line
+                   verifier's for its tip and holds only gaps in a test; run_seat.py tries it after
+                   each verifier record with findings
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -34,9 +41,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import dry_run  # noqa: E402
 import merge_slice as ms  # noqa: E402
+import run_seat as rs  # noqa: E402
 
-ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command")
-OWNER_ACTIONS = ("refreeze", "add-round", "clear-stop")
+ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept")
+OWNER_ACTIONS = ("refreeze", "add-round", "clear-stop", "accept")
 #: What a corrected command may not add: anything that changes what a check tests rather than how it is run.
 LOOSENING = ("||", "; true", "exit 0", " -k ", "--deselect", "--ignore", "--grep", " -t ", "--passWithNoTests", "skip",
              "xfail", "set +e", "--last-failed", "--lf", "--testNamePattern", "--only")
@@ -246,10 +254,102 @@ def only_malformed(slice_id: str) -> str:
     return "; ".join(sorted(set(whys)))
 
 
+# ------------------------------------------------------------------ accept: what a verifier saw, at the exact tip
+
+
+def findings_at_tip(slice_id: str, frozen: dict) -> tuple[str, dict]:
+    """The branch's tip and the verifier's findings record for it, when the tip has the Stop hook's green test record
+    and a verifier session that did not build it returned findings for exactly that commit; refused otherwise."""
+    rec = c.rec_dir(slice_id)
+    tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    tests = c.read_json(rec / f"tests-{tip}.json")
+    if not (tests and tests.get("green") and tests.get("commit") == tip):
+        raise Refused(f"the tip {tip[:10]} has no green test record (the Stop hook's): nothing a verifier saw is there "
+                      "to accept. Nothing changed.")
+    verify = c.read_json(rec / f"verify-{tip}.json")
+    if not verify or verify.get("commit") != tip:
+        raise Refused(f"no verifier record for the tip {tip[:10]}: the owner accepts what a verifier saw, at the tip "
+                      "it saw, and the branch has moved since or was never verified. Nothing changed.")
+    if verify.get("verdict") == "pass":
+        raise Refused(f"the verifier passed {tip[:10]}: there is nothing to accept (merge_slice.py merge it). "
+                      "Nothing changed.")
+    if verify.get("verdict") != "findings" or not verify.get("findings"):
+        raise Refused(f"the verifier's record for {tip[:10]} holds no findings ({verify.get('verdict')}). Nothing changed.")
+    try:
+        ms.verifier_sessions(slice_id, tip, verify)
+    except ms.Refused as e:
+        raise Refused(f"{e} Nothing changed.")
+    return tip, verify
+
+
+def newest_record_is(slice_id: str, tip: str) -> None:
+    """The verifier's record for the tip is the newest findings record of the slice (no merge gate's or resume.py's
+    record written after it); refused otherwise."""
+    recs = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
+    if not recs or recs[-1].name != f"verify-{tip}.json":
+        raise Refused(f"the newest findings record is {recs[-1].name if recs else 'none'}, not the verifier's for "
+                      f"{tip[:10]}: the standing accept reads only the newest verifier record. Nothing changed.")
+
+
+def only_gaps(findings: list[dict], legacy: bool) -> None:
+    faults = [f for f in findings if rs.kind_of(f, legacy) == rs.FAULT]
+    other = [f for f in findings if rs.kind_of(f, legacy) not in rs.KINDS]
+    if faults or other:
+        raise Refused(f"the verifier's findings are not only gaps in a test "
+                      f"({rs.kinds_said(rs.kinds_of(findings, legacy))}): "
+                      "a fault in behaviour, or a finding with no kind, is never accepted on the standing word. "
+                      "It needs the owner's resume.tsv line (accept). Nothing changed.")
+
+
+def write_acceptance(slice_id: str, tip: str, verify: dict, line: str, by: str, extra: dict | None = None) -> dict:
+    """accepted-<tip>.json: the owner's line, the date, every finding verbatim, split by kind. Changes no finding."""
+    findings = verify["findings"]
+    legacy = rs.is_legacy(verify)
+    split = {"faults_in_behaviour": [f for f in findings if rs.kind_of(f, legacy) == rs.FAULT],
+             "gaps_in_a_test": [f for f in findings if rs.kind_of(f, legacy) == rs.GAP],
+             "no_kind": [f for f in findings if rs.kind_of(f, legacy) is None]}
+    acc = {"slice": slice_id, "tip": tip, "line": line, "date": today(), "by": by,
+           "verifier_record": f"verify-{tip}.json", "findings": findings, **split,
+           "kinds_read_from": "prefixes (a record written before the kind field)" if legacy else "the kind field",
+           **(extra or {}), "at": c.now()}
+    c.write_json(c.rec_dir(slice_id) / f"accepted-{tip}.json", acc)
+    st = c.state(slice_id)
+    st.pop("note", None)
+    st.update(phase="verified", accepted=True, tip=tip, updated=c.now())
+    c.write_json(c.rec_dir(slice_id) / "state.json", st)
+    return acc
+
+
 # ------------------------------------------------------------------ the actions
 
 
-def act(slice_id: str, action: str) -> list[str]:
+def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[str]:
+    """accept on the owner's standing line (standing.tsv), with no line per slice: refused in words unless it holds."""
+    rule, why = c.standing_rule()
+    if not rule:
+        raise Refused(f"no line '{slice_id}\taccept\t{today()}' in {c.RESUME_FILE} (the owner's word, today, UTC), and "
+                      f"no standing accept: {why}. Nothing changed.")
+    phase, rnd = st.get("phase"), st.get("round", 1)
+    if rnd < rule["from_round"]:
+        raise Refused(f"{slice_id} is in round {rnd}: the owner's standing line ({rule['line']}) starts at round "
+                      f"{rule['from_round']}. Nothing changed.")
+    if not (phase == "verifying" or (phase == "stopped" and not (rec / "red_stop.json").exists())):
+        raise Refused(f"{slice_id} is not waiting on its verifier's findings (phase {phase}). Nothing changed.")
+    tip, verify = findings_at_tip(slice_id, frozen)
+    newest_record_is(slice_id, tip)
+    legacy = rs.is_legacy(verify)
+    only_gaps(verify["findings"], legacy)
+    acc = write_acceptance(slice_id, tip, verify, rule["line"], "standing",
+                           {"rule": f"standing.tsv: {rule['line']} (RULINGS.md, 19 November 2026, ruling 5: from a "
+                                    "slice's third round on, a gap in a test never blocks)", "round": rnd})
+    n = len(acc["findings"])
+    c.log_owner_change(slice_id, "accept", f"standing (standing.tsv: {rule['line']}): tip {tip}; round {rnd}; {n} "
+                                           "gaps in a test accepted, each for a backlog row")
+    return [f"{slice_id}: accepted narrower at {tip[:10]} on the owner's standing line: {n} gaps in a test, each to "
+            f"become a backlog row; verified. The conductor runs merge_slice.py merge {slice_id} and tells the owner."]
+
+
+def act(slice_id: str, action: str, standing_only: bool = False) -> list[str]:
     fh = ms.lock()
     try:
         frozen = frozen_of(slice_id)
@@ -331,6 +431,21 @@ def act(slice_id: str, action: str) -> list[str]:
             c.log_owner_change(slice_id, action, f"standing (ruling 3): {why}; proved on main; committed {sha[:10]}; "
                                                  f"command corrected: {shown}")
             return [f"{slice_id}: command corrected ({why}): {shown}. Building; tell the owner in the next report.", *said]
+        if action == "accept" and (standing_only or not owner_lines(slice_id, action)):
+            return standing_accept(slice_id, frozen, st, rec)
+        if action == "accept":
+            tip, verify = findings_at_tip(slice_id, frozen)
+            at_limit = rnd >= limit and (phase == "refused" or (phase == "stopped" and not (rec / "red_stop.json").exists()))
+            if not at_limit:
+                raise Refused(f"{slice_id} is not stopped at its rounds limit (phase {phase}, round {rnd} of {limit}): "
+                              "the owner accepts a slice narrower only once its rounds are spent. Nothing changed.")
+            tag = authority(slice_id, action)
+            acc = write_acceptance(slice_id, tip, verify, f"{slice_id} {action} {today()}", "owner (resume.tsv)")
+            n = len(acc["findings"])
+            c.log_owner_change(slice_id, action, f"{tag}: tip {tip}; {n} findings accepted "
+                                                 f"({rs.kinds_said(rs.kinds_of(acc['findings'], rs.is_legacy(verify)))})")
+            return [f"{slice_id}: accepted narrower at {tip[:10]} with {n} findings, on the owner's word; verified. "
+                    f"The conductor runs merge_slice.py merge {slice_id}: every other gate still runs."]
         raise Refused(f"unknown action {action}")
     finally:
         fh.close()

@@ -32,7 +32,8 @@ DATA = Path(os.environ.get("OSPREY_SLICE_HOME") or str(BIN))
 # Paths are repository-relative (from the root of whichever checkout the path is in).
 PROTECTED = ("OspreyFlow_Core/Makefile", ".github/workflows/ci.yml")
 OWNER_ONLY = ("OspreyFlow_Build/process/lanes/v062/dial.yaml", "OspreyFlow_Build/process/lanes/v062/accounts.yaml",
-              "OspreyFlow_Build/process/lanes/v062/live_step.yaml", "OspreyFlow_Build/process/lanes/v062/resume.tsv")
+              "OspreyFlow_Build/process/lanes/v062/live_step.yaml", "OspreyFlow_Build/process/lanes/v062/resume.tsv",
+              "OspreyFlow_Build/process/lanes/v062/standing.tsv")
 LINE_PREFIXES = (".claude/", "OspreyFlow_Build/scripts/slice_line/")
 NEVER_STAGED = ("OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/")
 RECORDS_ROOT = "OspreyFlow_Build/process/lanes/v062/"

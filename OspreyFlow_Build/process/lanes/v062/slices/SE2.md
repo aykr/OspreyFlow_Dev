@@ -67,6 +67,13 @@ needs Postgres and is not a pure check: it is left out). The
 line adds every mapped pure test that scans a folder the slice changes. The live store test that touches
 `edit_governance` (test_studio_recipes_store.py) needs the dev stack and is not run here: it is owed.
 
+## First step, from the conductor (19 November 2026)
+
+Your branch was cut from main before the owner's commit c7fda31, which allows the 25 paths ADR-152 names. Until your branch
+has it, the citations scan (test_the_repository_itself_is_clean) is red for files you did not touch, and no change of yours
+can fix that. Before anything else, merge main into your branch (git merge main in your worktree), then run the checks. Do
+not change any citation, allowlist or spec file other than the spec text this slice is about.
+
 ## Out of scope
 
 The Glass (no change to what the governance editor shows: if it needs to show the new refusal, stop and say); the

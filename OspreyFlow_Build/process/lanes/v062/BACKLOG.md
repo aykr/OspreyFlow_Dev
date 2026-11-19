@@ -186,3 +186,45 @@ path with the matching word replaced. The tests check that no name and no hash i
 the whole printed line (that only the matching word is replaced and the rest of the path is kept), so a change that blanked
 the rest of the path would pass. The fix is a test that pins the exact line for a path naming the client and for a
 published-site path naming Laurium, planted in the real call-site shape. Not yet assigned a slice.
+
+### New row (19 Nov, the owner's rule): AD2 is set aside at round 5 of 5, with four findings open
+
+AD2 (the invite form offers only what the inviter can give) stopped a fifth time, and the owner's rule of 19 November applies:
+set aside, tell him, free GG1. Its branch and records are kept. Open at the last verifier (tip 5eb3791): **two faults in
+behaviour.** (1) The form can be drawn before the roles catalogue has loaded, and when that load fails: the gate waits for
+the inviter's details and the handling scheme only, but the form also reads the roles to decide which role boxes it offers.
+(2) A handling scheme whose classification list is empty counts as loaded, and the form then says what the inviter can give
+on the strength of nothing. **Two gaps in a test:** no test makes the roles catalogue late or failed (and the test double
+refuses less than the real route's giver rule); no test gives an empty classification list. The pattern across five rounds
+is that each round finds one more thing the form reads before it offers a choice; a restart would list every read first and
+build one loader that waits for the whole list. GG1 no longer waits for AD2. AD2's merge also settles whether the invite
+test in the keyboard walk stays.
+
+### New row (19 Nov, from SE3's first verifier): the draft's PUT route confirms no version until the Glass sends one
+
+SE3 makes the model draft's creator check mandatory on every write (save, replace, discard) and confirms the version where
+a version is passed (replace and discard, by the store; the import path passes the one it planned). The PUT draft route's body
+carries no version, so that route confirms none: adding one means a schema change (the draft input type, which regenerates
+the TypeScript types) and a Glass change, neither in SE3. ADR-152 decision 11, X5, says "save, replace and delete check the
+draft's creator and an expected version", so this half of X5 is **owed**: the Glass sends the version it opened, the PUT route
+requires it, and a stale save is refused in words. Owed with the Studio's Model step (IS2), which waits for SE3. Not yet
+assigned.
+
+### New row (19 Nov, GitHub run 44464391430 on 4ec3ea7): a line test depends on the dial's time of day
+
+The slice line's own suite (the slice-line-check job) failed on GitHub at 05:21 UTC, our code, no network fault: the test
+test_send_back_within_the_rounds_limit_needs_no_owner_line_and_advances_the_round asserts round < rounds_limit (got 1 < 1),
+because its world reads the committed dial, and at night (before 07:00) the dial then said thrift, one round. It passes by
+day on the Mac and fails at night on GitHub. The owner's dial commit (balanced four rounds by day and night) hides it; the
+test should build its own dial in its world and plant one-round and four-round dials (rule 15). For the line-fixes
+session. A second line fault the same run showed: after a red run on main, `records` still pushed (push_main defers for a
+run in progress, not for a red one), so d376a14 went out right after the red run ended, against the owner's rule 3.
+
+### New row (19 Nov, GG1's six red stops): a slice started before a main commit cannot pass its scans, and has no way to take it
+
+GG1's six red stops on 19 November were all the citations scan (test_the_repository_itself_is_clean) naming the 35 paths of
+ADR-152, whose allowlist the owner committed at 06:30 UTC, after GG1 (and SE2, SE4) had been cut from main. The builder cannot
+fix main's state, and nothing in the line brings main into a started slice's branch unless the conflict is in the records
+folder alone. Fix for the line-fixes session: when the scans are red for a file the slice did not touch and main has moved,
+`resume.py` brings main into the branch (as it does for records) and counts the stops as not the builder's. Until then the
+builder is told in the brief to merge main first.

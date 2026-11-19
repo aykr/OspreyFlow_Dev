@@ -75,6 +75,13 @@ OspreyFlow_Build/tests/services/api/, and OspreyFlow_Build/tests/test_seed_inter
 every mapped pure test that scans a folder the slice changes. No packages/ schema change is expected, so no TypeScript to
 regenerate; if one is needed, stop and say.
 
+## First step, from the conductor (19 November 2026)
+
+Your branch was cut from main before the owner's commit c7fda31, which allows the 25 paths ADR-152 names. Until your branch
+has it, the citations scan (test_the_repository_itself_is_clean) is red for files you did not touch, and no change of yours
+can fix that. Before anything else, merge main into your branch (git merge main in your worktree), then run the checks. Do
+not change any citation or allowlist file.
+
 ## Out of scope
 
 Four items from the owner's SE4 request are not here; each needs a decision first, and two need a new build id:
