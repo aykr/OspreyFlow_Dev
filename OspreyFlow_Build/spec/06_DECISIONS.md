@@ -31916,6 +31916,13 @@ is the right default (fail closed), but nothing let a person say what such a tab
    handling, so one that carries no `classification` (left out, or null) on a marked source erases its marking: it is
    refused as a lowering ("the marking is left out, which is below the source's current marking, ..."). The words differ from the default
    route's only where they name the marking ("the marking", "the source's current marking").
+   **Two edits at once.** "The source's current marking" is the one the write replaces, not the one read a moment
+   earlier: the store's update carries the classification the edit was judged against as a condition of the same
+   `UPDATE` (`edit_governance`'s `if_marking`), so it writes nothing if another edit has moved it. The route then reads
+   and judges again against what is stored (a raise that is now no raise is accepted; a marking another editor
+   raised is not put back lower, refused as a lowering), up to three times, then answers 409 `source_changed` ("try
+   again"), nothing written. The audit's `handling_before` is the handling of the attempt that wrote. The default-marking
+   route's own read-then-write is not changed by this slice.
 5. **Audited, a new version.** A request naming the default it already has writes nothing: no version, audit
    entry, flag or draft following; the answer is the source as it is. Each change records who, when, from and to
    (`set_dataset_source_default_marking`; *from* as the store's update replaced it, under the row's lock),

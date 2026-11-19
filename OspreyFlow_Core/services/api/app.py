@@ -1040,6 +1040,7 @@ from .sources import (
     InMemorySourceStore,
     SecretInUseError,
     SourceAlreadyRegisteredError,
+    SourceMarkingChangedError,
     SourceNotFoundError,
     SourceStore,
     UnknownConnectionError,
@@ -12630,6 +12631,9 @@ async def get_dataset_source_lineage(
     ]
 
 
+_GOVERNANCE_EDIT_ATTEMPTS = 3  # reads and judgements of a source one edit makes before it gives up
+
+
 @app.patch(
     "/v1/datasets/{dataset_id}/sources/{source_id}/governance",
     dependencies=[
@@ -12656,22 +12660,46 @@ async def edit_dataset_source_governance(
     (ADR-140 Amendment 4, the owner's ruling). A marking it carries is judged as a default
     marking is, before anything is written: refused in words (422 `governance_marking_refused`)
     above the editor's clearance or the deployment's highest marking, or below the source's
-    current marking; a marking it leaves as it is is not judged."""
-    before = await _source_of(sources, dataset_id, source_id)
-    problems = governance_marking_problems(
-        before,
-        body.handling,
-        principal,
-        handling_scheme,
-        DeploymentCeiling.from_env(handling_scheme),
-    )
-    if problems:
-        return JSONResponse(  # type: ignore[return-value]
-            status_code=422, content={"error": "governance_marking_refused", "problems": problems}
+    current marking; a marking it leaves as it is is not judged. The marking is judged against
+    the one the write replaces: written only if it is still the one judged against, else judged
+    again, and after three tries answered 409 `source_changed` with nothing written."""
+    ceiling = DeploymentCeiling.from_env(handling_scheme)
+    for _attempt in range(_GOVERNANCE_EDIT_ATTEMPTS):
+        before = await _source_of(sources, dataset_id, source_id)
+        problems = governance_marking_problems(
+            before, body.handling, principal, handling_scheme, ceiling
         )
-    if body.refresh is not None:
-        await _refuse_a_keyless_refresh(studio_recipes, dataset_id, before.location, body.refresh)
-    edited = await sources.edit_governance(dataset_id, source_id, body, principal)
+        if problems:
+            return JSONResponse(  # type: ignore[return-value]
+                status_code=422,
+                content={"error": "governance_marking_refused", "problems": problems},
+            )
+        if body.refresh is not None:
+            await _refuse_a_keyless_refresh(
+                studio_recipes, dataset_id, before.location, body.refresh
+            )
+        try:
+            # Written only if the marking is still the one just judged against, decided by the
+            # write itself; if another edit moved it, judged again against what is stored now.
+            edited = await sources.edit_governance(
+                dataset_id,
+                source_id,
+                body,
+                principal,
+                if_marking=before.handling.get("classification"),
+            )
+            break
+        except SourceMarkingChangedError:
+            continue
+    else:
+        return JSONResponse(  # type: ignore[return-value]
+            status_code=409,
+            content={
+                "error": "source_changed",
+                "message": "the source was edited by someone else while this edit was being "
+                "checked, so nothing was written: try again",
+            },
+        )
     flagged = await studio_recipes.flag_for_source(
         dataset_id, edited.location, SOURCE_GOVERNANCE_CHANGED
     )
