@@ -117,3 +117,11 @@ Stop and ask rather than answer:
 To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
 
 To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.
+
+## Owner's ruling for the next round (19 November 2026)
+
+The one open finding is that the production-bundle test runs in no gate once this merges. The fix in this slice is the
+sentence only: the ADR-014 Amendment 2 "Still not checked" paragraph says that the production-build run (the map-build
+folder's own Playwright configuration) sits outside every gate, so deleting the setWorkerUrl call from the map view would
+pass make ci and GitHub's CI, and that it is run only by this slice's acceptance command at its merge. Do not edit the
+Makefile or the CI workflow: the owner takes that diff himself (a backlog row records it). Change nothing else.
