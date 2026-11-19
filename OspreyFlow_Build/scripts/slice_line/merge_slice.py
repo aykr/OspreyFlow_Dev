@@ -46,7 +46,7 @@ import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
 OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
-               f"{c.V062_REL}/resume.tsv")
+               f"{c.V062_REL}/resume.tsv", f"{c.V062_REL}/standing.tsv")
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
     "OspreyFlow_Build/scripts/slice_line/", *OWNER_FILES,
@@ -406,7 +406,7 @@ def verifier_sessions(slice_id: str, tip: str, rec: dict) -> dict:
 
 
 #: The owner's acceptance of a verifier's findings (resume.py accept), as owner-changes.tsv logs each use.
-ACCEPT_ACTIONS = ("accept", "standing-accept")
+ACCEPT_ACTIONS = ("accept",)
 
 
 def acceptance(slice_id: str, tip: str) -> dict | None:
@@ -426,6 +426,16 @@ def acceptance(slice_id: str, tip: str) -> dict | None:
     if verify.get("findings") != acc.get("findings") or not acc.get("findings"):
         raise Refused(f"the acceptance for {tip[:10]} does not hold the verifier's findings for that tip verbatim.")
     verifier_sessions(slice_id, tip, verify)
+    if acc.get("by") == "standing":  # the owner's standing line is read again: still there, and still met
+        import run_seat as rs
+        rule, why = c.standing_rule()
+        if not rule:
+            raise Refused(f"the acceptance for {tip[:10]} was on the owner's standing word, which no longer holds: {why}.")
+        legacy = rs.is_legacy(verify)
+        if int(acc.get("round") or 0) < rule["from_round"] or \
+                any(rs.kind_of(f, legacy) != rs.GAP for f in verify["findings"]):
+            raise Refused(f"the standing acceptance for {tip[:10]} does not meet the owner's line ({rule['line']}): "
+                          "round below it, or a finding that is not a gap in a test.")
     if not any(r["slice"] == slice_id and r["action"] in ACCEPT_ACTIONS and f"tip {tip}" in r["detail"]
                for r in c.owner_changes()):
         raise Refused(f"no use of an acceptance for {slice_id} at {tip[:10]} is logged in owner-changes.tsv: the "
@@ -594,7 +604,10 @@ def merge(slice_id: str) -> dict:
                 "count": len(accepted["findings"]), "findings": accepted["findings"],
                 "faults_in_behaviour": accepted.get("faults_in_behaviour", []),
                 "gaps_in_a_test": accepted.get("gaps_in_a_test", []), "no_kind": accepted.get("no_kind", []),
-                "record": f"accepted-{tip}.json", "line": accepted.get("line"), "by": accepted.get("by")}
+                "record": f"accepted-{tip}.json", "line": accepted.get("line"), "by": accepted.get("by"),
+                "standing": accepted.get("by") == "standing", "rule": accepted.get("rule"),
+                # each gap in a test, for the conductor to turn into a backlog row (the owner's order, 19 November)
+                "backlog_rows": accepted.get("gaps_in_a_test", [])}
         c.write_json(rec / "merged.json", done)
         c.set_state(slice_id, phase="merged", merge=merged)
         push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO,

@@ -245,3 +245,24 @@ def test_accepted_merge_still_needs_red_before(world):
     sh(f"git commit -qam 'docs: S1' --trailer 'Slice-Records: yes'", w["repo"], w["env"])
     p = merge(w)
     assert p.returncode == 1 and "never red" in p.stderr, p.stderr
+
+
+def test_accept_splits_a_record_written_before_the_kind_field_by_its_findings_prefixes(world):
+    """GG6 and BL6: their verifier records came before the field; each finding's text begins with its kind."""
+    w = world
+    wt, tip = stopped_with_findings(w)
+    vf = rec(w) / f"verify-{tip}.json"
+    v = json.loads(vf.read_text())
+    v.pop("kinds")
+    v["findings"] = [{"what": "GAP IN A TEST: the printed line is pinned by no test", "evidence": "e", "file": "a.py"},
+                     {"what": "FAULT IN BEHAVIOUR: the word is replaced in a path", "evidence": "e", "file": "b.py"}]
+    for p in v["passes"]:
+        p["findings"] = v["findings"]
+    vf.write_text(json.dumps(v))
+    owner_line(w, f"S1\taccept\t{TODAY}")
+    p = resume(w)
+    assert p.returncode == 0, p.stdout + p.stderr
+    a = json.loads((rec(w) / f"accepted-{tip}.json").read_text())
+    assert a["findings"] == v["findings"]                                   # verbatim
+    assert a["gaps_in_a_test"] == [v["findings"][0]] and a["faults_in_behaviour"] == [v["findings"][1]]
+    assert a["no_kind"] == [] and a["kinds_read_from"] == "prefixes (a record written before the kind field)"

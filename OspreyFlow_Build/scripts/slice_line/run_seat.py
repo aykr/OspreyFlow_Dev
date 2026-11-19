@@ -371,6 +371,8 @@ def verifier(slice_id: str) -> int:
         board()
         print(f"{slice_id}: the verifier passed {tip[:10]}. The conductor runs merge_slice.py merge {slice_id}.")
         return 0
+    if standing_accept(slice_id):
+        return 0
     if st["round"] >= st["rounds_limit"]:
         first = record["findings"][0]["what"] if record["findings"] else "no verdict"
         stop_slice(slice_id, f"findings after {st['round']} round(s) ({kinds_said(record['kinds'])}; first: "
@@ -380,6 +382,20 @@ def verifier(slice_id: str) -> int:
     board()
     print(f"{slice_id}: findings; back to the builder for round {st['round'] + 1}.")
     return 1
+
+
+def standing_accept(slice_id: str) -> bool:
+    """The owner's standing accept (standing.tsv; resume.py accept), tried after a verifier record with findings; it
+    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit)."""
+    import resume  # here, not at the top: resume.py imports this module
+    try:
+        said = resume.act(slice_id, "accept", standing_only=True)
+    except (resume.Refused, resume.ms.Refused) as e:
+        print(f"{slice_id}: not accepted on the standing word: {e}")
+        return False
+    board()
+    print("\n".join(said))
+    return True
 
 
 def conductor_usage(session: str, account: str) -> None:

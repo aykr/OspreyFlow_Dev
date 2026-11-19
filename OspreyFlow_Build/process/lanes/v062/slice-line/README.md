@@ -55,7 +55,7 @@ site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
-| The owner's files | guard | Edit/Write of `OspreyFlow_Core/Makefile`, `.github/workflows/ci.yml`; shell writes naming them; `dial.yaml`, `accounts.yaml`, `live_step.yaml`, `resume.tsv` |
+| The owner's files | guard | Edit/Write of `OspreyFlow_Core/Makefile`, `.github/workflows/ci.yml`; shell writes naming them; `dial.yaml`, `accounts.yaml`, `live_step.yaml`, `resume.tsv`, `standing.tsv` |
 | Never staged | guard | `git add`/`commit -a` that would take `OspreyFlow_Core/osprey.yaml` or `OspreyFlow_Core/data/` |
 | No push, remote or repository | guard, push_main.sh | every `git push`, remote change, `gh repo create/edit`, write `gh api`; the push script refuses all but a merge-written main to the recorded origin, fast-forward only |
 | A builder in its worktree | guard | edits, `cd`, `-C`, `GIT_DIR`, writes naming another checkout; branch switches |
@@ -90,8 +90,9 @@ without a tool call; the line's own cap is 6 red stops.
    builds the worktree's own environment as CI builds it (`uv sync --frozen`, `npm ci` under CI's Node); the
    lanes' launcher is not used.
 3. `run_seat.py builder <ID>` until green, then `run_seat.py verifier <ID>`. Each finding in the verifier's record
-   (`verify-<tip>.json`) has a `kind`, `fault in behaviour` or `gap in a test` (a required field of the verdict's
-   schema; any other value counts as no kind), and the record counts them (`kinds`). Findings go back to the builder
+   (`verify-<tip>.json`) has a `kind`, `fault` (in behaviour) or `test_gap` (a gap in a test), a required field of the
+   verdict's schema; any other value, or none, is no kind, which counts as a fault (a record written before the field is
+   read by its findings' prefixes "FAULT IN BEHAVIOUR:" and "GAP IN A TEST:", and only such a record), and the record counts them (`kinds`). Findings go back to the builder
    until the rounds limit; then the slice stops and its note names the split and the one decision the owner must make.
 4. `merge_slice.py merge <ID>`: a verifier's pass for the tip, or in its place, for that exact tip only, the owner's
    acceptance (`accepted-<tip>.json`, behind it the verifier's unchanged findings record for the tip and its use logged
@@ -137,10 +138,12 @@ main's records, and sends the slice for a fresh check.
 | `send-back` | a slice the merge gate refused: back to the builder with the gate's findings, its round advanced | none within the rounds limit; past it, the owner's `add-round` line as well |
 | `correct-command` | a slice stopped **only** by the conductor's own malformed command (ruling 3) | none: the limits are in the code |
 | `accept` | a slice stopped at its rounds limit (or refused by the gate at it) whose tip has the Stop hook's green test record and a verifier's `findings` record for that same tip: writes `accepted-<tip>.json` (the owner's line, the date, every finding verbatim, split into faults in behaviour, gaps in a test and findings with no kind), phase `verified`, `accepted: true`; changes no finding and no verifier record. A last verdict of `pass` is refused (nothing to accept) | a line in `resume.tsv` |
+| `accept`, standing | with no `resume.tsv` line for the slice: the owner's one standing line in `standing.tsv`, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N 3 or more: ruling 5, "from a slice's third round on"), accepts a slice at round N or later whose newest findings record is the verifier's for its exact tip, every finding in it a gap in a test (`kind: test_gap`; in a record written before the field, the text's prefix "GAP IN A TEST:"). One fault in behaviour, or one finding with no kind, and it is refused in words; the slice goes round again or stops as before. The record is marked `by: standing`, with the rule's text; `run_seat.py verifier` tries it after each record with findings, and the conductor may run `resume.py <ID> accept` for a slice already stopped. The merge reads the line again (gone or no longer met: refused); its record lists each gap (`accepted_findings.backlog_rows`) for the conductor's backlog row, and the board adds "(standing accept: N gaps in a test for the backlog)". The conductor tells the owner afterwards | none per slice: the owner's line in `standing.tsv` (no file, or anything else in it: off) |
 
 `resume.tsv` (`OspreyFlow_Build/process/lanes/v062/resume.tsv`) is the owner's: one line `<ID> <action> <YYYY-MM-DD>`
 (today, UTC), one use per line, each use logged in `owner-changes.tsv` in the data folder (time, slice, action,
-detail). `RULINGS.md` is never the authority: the conductor writes it.
+detail). `RULINGS.md` is never the authority: the conductor writes it. `standing.tsv` (beside it, never committed) is the owner's
+standing line for the accept; without it the standing accept is off.
 
 `correct-command`'s limits (`resume.py`, `dry_run.py`): the slice's last red output matches a malformed-command
 signature (`make: *** <dir>: No such file or directory`; `OSPREY_PORTS_SLOT is not set`) and nothing a failing test
@@ -183,7 +186,7 @@ it there; never committed), so the builder's checks see it, and says in words wh
 ## Records mode
 
 `merge_slice.py records -m "<msg>" <paths>` commits only `OspreyFlow_Build/process/lanes/v062/`, never
-`dial.yaml`, `accounts.yaml` or `live_step.yaml`, and refuses a backlog change to a started slice's frozen commands.
+`dial.yaml`, `accounts.yaml`, `live_step.yaml`, `resume.tsv` or `standing.tsv`, and refuses a backlog change to a started slice's frozen commands.
 
 ## The dial and the accounts
 

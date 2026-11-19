@@ -124,7 +124,10 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         evidence = f"commit {str(merged.get('merge', ''))[:7]} on main; test run {merged.get('acceptance_run', '')}"
         source = "merge record + verifier pass"
         if accepted_narrower(merged, verify_m, accepted_m):
-            note = f"merged, accepted narrower: {merged['accepted_findings'].get('count', 0)} findings"
+            af = merged["accepted_findings"]
+            note = f"merged, accepted narrower: {af.get('count', 0)} findings"
+            if af.get("standing"):
+                note += f" (standing accept: {len(af.get('backlog_rows') or [])} gaps in a test for the backlog)"
             source = "merge record + owner's acceptance"
         try:
             builds_entry = entry("done", note=note, evidence=evidence, merged=merged, verify=verify_m,
