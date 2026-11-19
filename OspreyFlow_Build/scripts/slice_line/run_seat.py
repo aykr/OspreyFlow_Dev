@@ -33,14 +33,43 @@ TOOLS = {
     "builder": "Read,Grep,Glob,Edit,Write,Bash",
     "verifier": "Read,Grep,Glob,Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status *)",
 }
+#: A finding's kind (the owner's rulings 4 and 5 of 19 November 2026; ACCEPT_STEP_BRIEF.md, "The standing mode"): a
+#: fault in the code's behaviour, or a gap in a test (the behaviour may be right, but no test would fail if it were
+#: wrong). Kept verbatim in the verifier's record; a finding without one of these two exact values has no kind, which
+#: counts as a fault: nothing accepts it on the standing word.
+FAULT, GAP = "fault", "test_gap"
+KINDS = (FAULT, GAP)
+#: Before the field existed, the extra rounds' briefs asked the verifier to begin each finding's text with one of these
+#: (RULINGS.md, 19 November, ruling 5). Read as the kind only in a record written before the field (no `kinds` in it),
+#: and nowhere else.
+LEGACY_PREFIXES = (("FAULT IN BEHAVIOUR:", FAULT), ("GAP IN A TEST:", GAP))
+
+
+def kind_of(finding: dict, legacy: bool = False) -> str | None:
+    """A finding's kind: its field, or, in a record written before the field existed, its text's prefix; else None."""
+    if not isinstance(finding, dict):
+        return None
+    if finding.get("kind") in KINDS:
+        return finding["kind"]
+    if legacy and "kind" not in finding:
+        text = str(finding.get("what") or "").lstrip()
+        for prefix, kind in LEGACY_PREFIXES:
+            if text.startswith(prefix):
+                return kind
+    return None
+
+
+def is_legacy(record: dict) -> bool:
+    """A verifier record written before the kind field: it has no `kinds` count."""
+    return "kinds" not in (record or {})
 VERDICT_SCHEMA = {
     "type": "object",
     "properties": {
         "verdict": {"enum": ["pass", "findings"]},
         "commit": {"type": "string"},
         "findings": {"type": "array", "items": {"type": "object", "properties": {
-            "what": {"type": "string"}, "evidence": {"type": "string"},
-            "file": {"type": "string"}, "line": {"type": "integer"}}, "required": ["what", "evidence"]}},
+            "what": {"type": "string"}, "evidence": {"type": "string"}, "kind": {"enum": list(KINDS)},
+            "file": {"type": "string"}, "line": {"type": "integer"}}, "required": ["what", "evidence", "kind"]}},
     },
     "required": ["verdict", "commit", "findings"],
 }
@@ -52,6 +81,21 @@ PASS_FOCUS = {
     "accessibility": "Check the slice for accessibility faults only: keyboard reach (rule 13), labels, focus, "
                      "contrast from tokens.css, and screen-reader words.",
 }
+
+
+def kinds_of(findings: list[dict], legacy: bool = False) -> dict:
+    """How many findings are of each kind; any other value, or none, is counted as "no kind"."""
+    out = {FAULT: 0, GAP: 0, "no kind": 0}
+    for f in findings or []:
+        k = kind_of(f, legacy)
+        out[k if k in KINDS else "no kind"] += 1
+    return out
+
+
+def kinds_said(kinds: dict) -> str:
+    n_f, n_g, n_n = kinds.get(FAULT, 0), kinds.get(GAP, 0), kinds.get("no kind", 0)
+    return (f"{n_f} {'fault' if n_f == 1 else 'faults'} in behaviour, {n_g} {'gap' if n_g == 1 else 'gaps'} in a test"
+            + (f", {n_n} with no kind" if n_n else ""))
 
 
 class NotLoaded(SystemExit):
@@ -293,7 +337,10 @@ def verifier(slice_id: str) -> int:
                   f"{frozen['acceptance_files']}\nAcceptance: {frozen['acceptance']}\nChecks: {frozen['checks']}\n"
                   f"The builder's test record (green):\n{json.dumps(tests, indent=1)}\n\nWhat changed:\n{diffstat}\n\n"
                   f"Use git diff {base}...{tip} and Read. Return verdict 'pass', or 'findings' with evidence (file, "
-                  f"line, what is wrong and how you know). Put the commit {tip} in your answer.{rulings}")
+                  f"line, what is wrong and how you know). Give each finding its kind: '{FAULT}' (a fault in behaviour) "
+                  f"when the code does the wrong thing, '{GAP}' (a gap in a test) when the code may be right but no "
+                  f"test would fail if it were wrong; a finding without a kind counts as a fault. Put "
+                  f"the commit {tip} in your answer.{rulings}")
         log = c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl"
         res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
                      {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,
@@ -317,21 +364,38 @@ def verifier(slice_id: str) -> int:
     ok = all(p["verdict"] == "pass" and p["commit"] == tip for p in passes)
     record = {"slice": slice_id, "commit": tip, "verdict": "pass" if ok else "findings", "passes": passes,
               "findings": [f for p in passes for f in p["findings"]], "builder_sessions": sess["builder"], "at": c.now()}
+    record["kinds"] = kinds_of(record["findings"])
     c.write_json(c.rec_dir(slice_id) / f"verify-{tip}.json", record)
     if ok:
         c.set_state(slice_id, phase="verified", tip=tip)
         board()
         print(f"{slice_id}: the verifier passed {tip[:10]}. The conductor runs merge_slice.py merge {slice_id}.")
         return 0
+    if standing_accept(slice_id):
+        return 0
     if st["round"] >= st["rounds_limit"]:
         first = record["findings"][0]["what"] if record["findings"] else "no verdict"
-        stop_slice(slice_id, f"findings after {st['round']} round(s) (first: {first[:90]}): accept a narrower slice, "
-                             "or allow another round?")
+        stop_slice(slice_id, f"findings after {st['round']} round(s) ({kinds_said(record['kinds'])}; first: "
+                             f"{first[:90]}): accept a narrower slice, or allow another round?")
         return 1
     c.set_state(slice_id, phase="building", round=st["round"] + 1)
     board()
     print(f"{slice_id}: findings; back to the builder for round {st['round'] + 1}.")
     return 1
+
+
+def standing_accept(slice_id: str) -> bool:
+    """The owner's standing accept (standing.tsv; resume.py accept), tried after a verifier record with findings; it
+    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit)."""
+    import resume  # here, not at the top: resume.py imports this module
+    try:
+        said = resume.act(slice_id, "accept", standing_only=True)
+    except (resume.Refused, resume.ms.Refused) as e:
+        print(f"{slice_id}: not accepted on the standing word: {e}")
+        return False
+    board()
+    print("\n".join(said))
+    return True
 
 
 def conductor_usage(session: str, account: str) -> None:
