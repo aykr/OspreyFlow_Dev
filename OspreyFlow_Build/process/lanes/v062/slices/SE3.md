@@ -61,8 +61,8 @@ that file needs the dev stack and is not run in this slice: it is owed.
 ## Checks
 
 Pure only (ports 9): the acceptance file and the existing tests of the touched modules under
-OspreyFlow_Build/tests/services/api/: test_target_models.py, test_dataset_model_routes.py, test_studio_release_routes.py,
-test_route_rights.py. The line adds every mapped pure test that scans a folder the slice changes.
+OspreyFlow_Build/tests/services/api/: test_target_models.py, test_dataset_model_routes.py, test_studio_release_routes.py. The route-rights test (test_route_rights.py) needs Postgres and is not a pure check: it is
+left out. The line adds every mapped pure test that scans a folder the slice changes.
 
 ## Out of scope
 

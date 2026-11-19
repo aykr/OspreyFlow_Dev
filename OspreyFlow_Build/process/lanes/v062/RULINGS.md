@@ -10,8 +10,10 @@ The owner's word, 19 November 2026 (about 06:00 UTC). Standing: they apply to ev
 5. **From a slice's third round on, a gap in a test never blocks.** If the verifier finds no fault in behaviour, the
    slice merges, and each remaining test gap becomes a backlog row, without asking the owner. A fault in behaviour still
    sends the slice round again. (Findings are marked "FAULT IN BEHAVIOUR:" or "GAP IN A TEST:" by the verifier.)
+   **This takes effect once the accept-step session's work (the owner started it on 19 November) is in the line**;
+   until then GG6 and BL6 wait for it, with no more rounds (the owner, 19 November, answer (a)).
 6. **A stopped slice frees its track.** When a slice stops for the owner, the next ready slice on that track starts at
-   once. Slices queued only for ordering are unhooked: GG1 does not wait for AD2, and BL7 does not wait for BL6.
+   once. GG1 does not wait for AD2, and BL7 does not wait for BL6.
 7. **Four builders.** The owner has set balanced to four builders and four rounds in the dial, by day and by night, and
    tracks 3 and 4 are on sol in the accounts file. (The line counts only slices in the building or verifying phase against
    the builder limit, so a stopped slice already frees its place.)

@@ -62,7 +62,8 @@ Plant the violation in the shape the code meets at its real call site: the reque
 
 Pure only (ports 9): the acceptance file and the existing tests of the touched modules under OspreyFlow_Build/tests/:
 services/api/test_dataset_sources.py, ingest/test_staged_pipeline_run.py (it calls `edit_governance` on the in-memory
-store), services/api/test_route_rights.py, services/api/test_audit_kinds.py, services/api/test_deployment_ceiling.py. The
+store), services/api/test_audit_kinds.py, services/api/test_deployment_ceiling.py (the route-rights test, test_route_rights.py,
+needs Postgres and is not a pure check: it is left out). The
 line adds every mapped pure test that scans a folder the slice changes. The live store test that touches
 `edit_governance` (test_studio_recipes_store.py) needs the dev stack and is not run here: it is owed.
 
