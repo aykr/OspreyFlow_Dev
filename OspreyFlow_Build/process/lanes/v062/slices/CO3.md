@@ -73,7 +73,7 @@ client with a Cookie header and an Origin), not a call to a helper.
 
 Pure only. The **checks command** runs the existing page-service Vitest files (the new file excluded), the neighbours
 (OspreyFlow_Build/tests/harness/test_dockerfiles_numeric_user.py, test_service_inventory.py) and the licence check. The
-**acceptance command** runs the whole OspreyFlow_Core/apps/pages/test/server folder. The line adds every mapped pure test that
+**acceptance command** runs the new file alone (the rest of the folder is green on main, so it could not be red there). The line adds every mapped pure test that
 scans a folder the slice changes.
 
 ## Out of scope
