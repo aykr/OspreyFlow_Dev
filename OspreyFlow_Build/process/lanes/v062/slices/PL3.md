@@ -86,9 +86,12 @@ real app factory and an HTTP client (supertest or Node's own), not through a hel
 
 ## Checks
 
-Pure only (no store, no network): the acceptance files above, run from OspreyFlow_Core/apps/pages; and the neighbours a new
-service touches (ports 9): OspreyFlow_Build/tests/harness/test_dockerfiles_numeric_user.py, test_service_inventory.py,
-test_helm_chart.py and OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py. The line adds every mapped pure test that
+Pure only (no store, no network). The **checks command** runs the neighbours a new service touches (ports 9):
+OspreyFlow_Build/tests/harness/test_dockerfiles_numeric_user.py, test_helm_chart.py and
+OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py, and the licence check. The **acceptance command** runs the four
+vitest files from OspreyFlow_Core/apps/pages **and** OspreyFlow_Build/tests/harness/test_service_inventory.py (the inventory test
+is in the acceptance command, not the checks, because on main the new folder alone turns it red; it goes green only when the
+inventory row is written). Run the acceptance command yourself before you stop. The line adds every mapped pure test that
 scans a folder the slice changes. Also the licence check, run as the checks command runs it (a worktree has no Core .venv, so `make licence-check` does not run
 there: the Python module through `uv run` and the two Node steps, from OspreyFlow_Core), and the citation check.
 
