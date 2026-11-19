@@ -195,10 +195,11 @@ INVENTORY: tuple[ServiceEntry, ...] = (
         imported_by=(),
         created_in="ADR-152 R1 (slice PL3)",
         note=(
-            "The Glass's server-rendered pages: a Node service (Express, express-session, Nunjucks, helmet) that holds "
-            "the person's session on the server, in Valkey, and renders each page complete. Its image "
-            "exists; the renderer's images list, the compose service and the front proxy's routes do "
-            "not yet name it (ADR-152 decision 7, a later slice)."
+            "The Glass's server-rendered pages: a Node service (Express, express-session, "
+            "Nunjucks, helmet) that holds the person's session on the server, in Valkey, and "
+            "renders each page complete. Its image exists; the renderer's images list, the "
+            "compose service and the front proxy's routes do not yet name it (ADR-152 "
+            "decision 7, a later slice)."
         ),
     ),
     ServiceEntry(
