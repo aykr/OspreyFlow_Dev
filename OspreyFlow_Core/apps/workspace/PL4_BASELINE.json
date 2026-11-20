@@ -1,0 +1,48 @@
+{
+  "what": "The build of apps/workspace before PL4 moved anything (ADR-152 R2, I11): what every later PL4 slice is compared against.",
+  "normaliser_version": 1,
+  "normalised_hash": "0e7f416d82da72e9b028f0d19dd9e928cfe9ae0aa8df900a8758c5f2cf89343d",
+  "files": {
+    "total": 60,
+    "hashed": 44,
+    "by_kind": {
+      "bytes": 51,
+      "css": 2,
+      "html": 3,
+      "js": 4
+    }
+  },
+  "unit_tests": [
+    {
+      "run": "main",
+      "files": {
+        "total": 405,
+        "passed": 405,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "total": 3734,
+        "passed": 3734,
+        "failed": 0,
+        "skipped": 0
+      }
+    },
+    {
+      "run": "budget",
+      "files": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      },
+      "tests": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0,
+        "skipped": 0
+      }
+    }
+  ],
+  "not_recorded": "Performance budget figures: they are measured on the owner's Mac with nothing else running (slice E)."
+}
