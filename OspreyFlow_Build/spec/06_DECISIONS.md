@@ -37280,7 +37280,8 @@ Conduit's pools are not changed.**
    after it where the server is sized, Amendment 33 decision 6): in the store's own definition, never in
    `deployment.env`. A `-c` on the command line wins over `ALTER SYSTEM` and `postgresql.conf`, so an operator who
    raised `max_connections` by hand finds it set to 660 after `apply`; there is no `osprey.yaml` setting for it yet
-   (as `resources.postgres_shared_buffers_gib` is for the buffers), which is the way to change it if 660 is wrong.
+   (as `resources.postgres_shared_buffers_gib` is for the buffers), which is the way to change it if 660 is wrong
+   (*superseded by Amendment 49, which is that setting*).
 3. **Why the pools are left as they are.** Bounding their minimum (`min_size=0`) moves only what one Conduit holds at
    rest (about 50); what two Conduits may grow to is unchanged by it, and that is what the server must allow. It was
    not measured how often the pools reach their maximum, nor what `min_size=0` would cost (a connection's set-up on the
@@ -37406,6 +37407,75 @@ the tag HEAD sits on). So a copy of newer code named itself v0.5.0. The source t
 `dev-<commit>`; changed code is VERSION's `-dev`; on a `-dev` checkout untracked files leave the commit believed;
 no `.git` is VERSION; no VERSION is `.git`'s answer; a malformed VERSION is never shown.
 `tests/test_version_file.py`: a malformed VERSION is flagged; the repository's own is well formed.
+
+### ADR-114, Amendment 49 (20 November 2026) — `resources.postgres_max_connections`: a deployment's own PostgreSQL allows what `osprey.yaml` says, above a floor
+
+**Supersedes** Amendment 43 decision 2's sentence "there is no `osprey.yaml` setting for it yet … which is the way to
+change it if 660 is wrong". This is that setting. Nothing else in Amendment 43 changes: the number, its parts and the
+pools stay as they are.
+
+**The finding** (the scout of 20 November 2026; the owner's word of the same day, "the setting with the computed
+default and a refusal below a floor"; the backlog's L10): an operator whose server cannot hold 660 server processes, or
+whose deployment needs more, had no way to say so: a `-c max_connections` on the command line wins over
+`postgresql.conf` and `ALTER SYSTEM`, and `apply` and `update` put 660 back over a hand edit. The owner gave no floor, no
+profile scope and no word on the pools; the choices below are the conductor's, derived from numbers already in the code,
+and the owner is told afterwards. Changing the floor later is one constant.
+
+**Decisions.**
+
+1. **The field**: `resources.postgres_max_connections`, an optional whole number in `ResourcesConfig`
+   (`packages/schemas/deployment.py`), beside `resources.postgres_shared_buffers_gib`, whose shape it copies. **Unset
+   (`null`, the default), the computed value exactly as today: 660.** No deployment that does not set it changes by a
+   byte (a test on every profile's whole output, with the field absent and named `null`, and on the rendered command).
+   It sizes no memory, so it is not one of `ResourcesConfig.any`'s settings: Lite takes it, and it does not turn the
+   stores' sizing on.
+2. **The floor: 420** (`harness/profiles.py`, `POSTGRES_MAX_CONNECTIONS_FLOOR`), derived and not new: the same sum as
+   Amendment 43's number with **one** Conduit instead of `CONDUITS_ALLOWED`:
+   1 × (220 + 20) + 100 + 10 + 50 + 20, that is one Conduit at its pool ceiling and its running loads (240), Keycloak's
+   pool (100), the gateway's (10), Superset and the report sync (50) and the operator reserve (20). It is computed from
+   the same named constants, so a change to a pool changes the floor, and the schema reads the constant at the moment of
+   the check (never a copy of 420). A value below it is refused in words that give the value, the floor, what it is
+   made of and the computed default (660), and say how to fix it: set it to the floor or more, or remove it. A value
+   that is not a whole number (a fraction, `900.0`, a string, `true`), or is zero or negative, is refused in words too.
+   **The ceiling: 262121** (`POSTGRES_MAX_CONNECTIONS_CEILING`), what the real PostgreSQL refuses above (found by the
+   verifier's round-1 finding, rule 15: the real dependency's refusals, not only its grants). PostgreSQL 16 counts
+   `max_connections` plus its other server processes (autovacuum workers 3 and their launcher 1, `max_worker_processes` 8,
+   `max_wal_senders` 10: 22, at the defaults the rendered command leaves alone) against `MAX_BACKENDS`, 0x3FFFF (262143),
+   and stops at start-up past it ("too many server processes configured"; `max_connections` alone outside 1..262143 is
+   refused the same way). So 262143 − 22 = 262121, a named constant computed from `POSTGRES_MAX_BACKENDS` and
+   `POSTGRES_OTHER_SERVER_PROCESSES`, and a value above it is refused in words that give the value, the ceiling, what it
+   is made of and the computed default. It is the server's range, not a promise that a host's memory holds a number near
+   it, and no set value is proved against a real server by a pure test (`test_postgres_connections_live.py` runs the
+   computed number).
+3. **Scope: the deployment's own PostgreSQL, rendered in compose**: Lite, and Small with every store in a container.
+   Under `cluster` (whose database is the operator's, `external.postgres`) and `cloud-platform` (whose RDS is set at
+   creation to the owner's 1000, `harness/cloud_platform/connections.py`, Amendment 46) the field is **refused in
+   words** ("this profile's database is not rendered by OspreyFlow: set max_connections where the database is run"),
+   never silently ignored; a Small on a managed database (`external.postgres`) has none of its own and is refused the
+   same way. The cloud-platform's Terraform, manifest and runbooks do not change (a test pins the 1000).
+4. **The pools are not settings**: Keycloak's, the gateway's and the Conduit's `create_pool` figures stay constants, and
+   so the sum's inputs do. (Amendment 45, reserved, is the Conduit's pools from settings; it is not this.)
+5. **It reaches the file**: `postgres_command` takes the setting, so `apply` renders it (sized or not, the memory
+   settings after it as before). `postgres_connections_up_to_date` and `scripts/refresh.py`'s `_postgres_connections_named`
+   take it too, read from the deployment's own `osprey.yaml` beside the compose file, so `update` and `start --build` on
+   an existing deployment apply a changed value, and do not correct a set value back to 660; with the setting taken away,
+   the computed number comes back, as a hand-set value did before. The readers of the old number are `harness/render.py`
+   and `scripts/refresh.py` alone (a test scans the product for another, and for a caller of either function that does
+   not read the setting).
+
+**Not changed**: the cloud-platform's RDS, Terraform and runbooks; the installer page and the `ospreyflow` CLI's answers;
+the lane stacks' 400 (`stack_lease.sh`); the live proof that PostgreSQL accepts the number
+(`test_postgres_connections_live.py` stays as Amendment 43 left it: it runs the computed number).
+
+**Tests**, red first, `tests/harness/test_postgres_connections_setting.py` (pure: nothing started): unset is 660 exactly
+as before on every profile; 900 reaches the rendered command (Lite, Small, Small sized) and a refresh of a file holding
+660 brings it to 900 and leaves it, while a file holding 900 is current; 420 accepted, 419 refused in words that name 420
+and 660; zero, negative, a fraction, a float, a string, `true` refused in words; 262122 and above refused in words that name
+262121 and 262143, 262121 accepted; the field refused under `cluster`,
+`cloud-platform` and on a managed Small; the floor follows a raised `KEYCLOAK_POOL_MAX` in the test's own copy of
+`profiles.py`, and the schema follows the constant, not a literal; both guides' Appendix A and the generated TypeScript
+carry the field. `tests/harness/test_postgres_connections.py`, `test_render_memory.py` and `test_cloud_platform_poc.py`
+stay as they were.
 
 ### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
 

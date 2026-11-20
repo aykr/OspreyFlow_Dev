@@ -1188,10 +1188,13 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                     "OPENSEARCH_JAVA_OPTS": sized.search_java_opts,
                 }
             else:
-                service["command"] = postgres_command(sized)
+                service["command"] = postgres_command(
+                    sized, config.resources.postgres_max_connections
+                )
         elif entry.service == "postgres":
-            # ADR-114 Amendment 43: the connections the product's services may hold, every profile.
-            service["command"] = postgres_command()
+            # ADR-114 Amendment 43: the connections the product's services may hold, every profile;
+            # Amendment 49: the number `resources.postgres_max_connections` sets, when it does.
+            service["command"] = postgres_command(None, config.resources.postgres_max_connections)
         if entry.service == "keycloak":
             # ADR-114 Amendment 4 decision 4: one issuer, whichever door a token came through —
             # the browser's, by name through the proxy, or the services' inside the network.
