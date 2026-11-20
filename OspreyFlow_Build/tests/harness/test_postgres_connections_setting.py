@@ -191,7 +191,7 @@ def _deployment(tmp_path: Path, raw: dict[str, Any], holding: int) -> tuple[Path
     repo = tmp_path / "repo"
     out = repo / "deploy" / "generated" / "local-lite"
     out.mkdir(parents=True)
-    tokens = repo / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    tokens = repo / "packages" / "design" / "tokens.css"
     tokens.parent.mkdir(parents=True)
     tokens.write_text(":root { --brass: #c08a34; }\n", encoding="utf-8")
     write_login_theme(out, tokens_css=tokens.read_text(encoding="utf-8"))
