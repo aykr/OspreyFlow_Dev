@@ -1,9 +1,9 @@
-# Slice NET1 · NET1 · A start needs no network once installed (model weights pulled only when absent, the download step offline, a test that starts with every pull refused)
+# Slice NW1 · NW1 · A start needs no network once installed (model weights pulled only when absent, the download step offline, a test that starts with every pull refused)
 
-- **Build id:** NET1 (in the plan: "A start needs no network once installed: model weights are pulled only when absent, the download step runs offline, and a test starts the product with every pull refused").
+- **Build id:** NW1 (in the plan: "A start needs no network once installed: model weights are pulled only when absent, the download step runs offline, and a test starts the product with every pull refused").
 - **Dial setting:** balanced
 - **Rounds limit:** 4
-- **After:** nothing. It touches no file under apps/workspace. **The owner's order (20 November): cut as a new build, small, beside SE6a; the failing test first (a start with every pull refused); fixed before DOC1's wording, with SE6a and SE7 — DOC1b and DOC1c need SE6a, SE7 and NET1 merged.**
+- **After:** nothing. It touches no file under apps/workspace. **The owner's order (20 November): cut as a new build, small, beside SE6a; the failing test first (a start with every pull refused); fixed before DC1's wording, with SE6a and SE7 — DC1b and DC1c need SE6a, SE7 and NW1 merged.**
 - **Status of this brief:** written by the conductor on 20 November 2026 from a read-only scout of the same day. The scout's line numbers are unchecked: the builder re-reads. Not measured by anyone: nothing was run.
 
 ## What the scout found (read, not measured)
@@ -19,7 +19,7 @@ On a start with no network, the stack would fail at the weights step, even with 
 
 1. **The failing test first, at the real call site (rule 15):** a pure test that renders the compose for the local-lite profile, takes the two jobs' scripts exactly as rendered, and **runs them under `sh` with a PATH of stubs** in which every pull and download command **refuses** (exits non-zero, writes its call to a log, and does what the real ones do on no network: the stubs model the real tools' refusals; where the real tool's offline behaviour is not known, read its documentation or source in the pinned image and say what you found). Case A: the model volumes already hold the models (a temp directory laid out as the real volume): the job exits 0 and makes **no** pull or download call. Case B: a model is absent and the pull is refused: the job exits non-zero **and says so in words** (what is missing, that the network is needed once, what to do). Red on main for the right reason (case A fails: the job exits non-zero or calls the registry).
 2. **The fix:** each job pulls or downloads only what is absent, checks before it pulls (with a check that needs no network), sets the offline flag on the download when the file is present, and still fails loudly, in words, when something it needs is absent and the network is refused. A start with everything present and every pull refused succeeds. Keep the digest check after a pull that does happen.
-3. **Read and report** (no change unless a fault): whether a plain start fetches anything else (the https Small certificate, `build --pull`, an update check, image pulls when the images are present), with the file and line, so DOC1's wording is true.
+3. **Read and report** (no change unless a fault): whether a plain start fetches anything else (the https Small certificate, `build --pull`, an update check, image pulls when the images are present), with the file and line, so DC1's wording is true.
 4. **Spec and guide:** if the specification or the administration guide says a start needs the network, correct it; the administration guide's document-control row follows its rule (a new numbered row; the PDF is made by the conductor at merge, so if `test_docs_pdf` goes red on the changed guide say so and do not edit PDFs).
 5. **Not in this slice:** a complete first-install bundle (weights, packages, map tiles): a separate row; the update path.
 

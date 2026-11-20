@@ -4,10 +4,10 @@
 - **Dial setting:** balanced
 - **Rounds limit:** 4
 - **After:** nothing in the plan, but **the owner's order (20 November): it does not start ahead of PL4, PL9 or PL10 work.** It touches no file under apps/workspace.
-- **Status of this brief: HELD, written by the conductor on 20 November 2026 from DOC1a's constraint-4 scout (`slices/DOC1A_REPORT.md`); it is not started.** The scout's line numbers are unchecked: the builder re-reads. The owner's words: the words "every access, export and model call must be attributable"
+- **Status of this brief: HELD, written by the conductor on 20 November 2026 from DC1a's constraint-4 scout (`slices/DOC1A_REPORT.md`); it is not started.** The scout's line numbers are unchecked: the builder re-reads. The owner's words: the words "every access, export and model call must be attributable"
   stay in the paragraph and the gap is closed by this build; the guides state what "access" covers (every read and write of case data, with the reference reads that carry none, the type list and the map tiles, named as outside it) and say "coming" until this merges.
 
-## What DOC1a found (read, not measured)
+## What DC1a found (read, not measured)
 
 - The audit is the Postgres table audit_log (services/api/audit.py: recorded_at, principal_id, action, investigation_id, resolved_query, result_cardinality, justification, org_unit); about 300 audit call sites across 429 routes.
 - **Sign-in:** neither the pages service nor the Conduit records a sign-in or session event; only admin actions on sign-in are audited (set_guest_sign_in, reset_person_sign_in). The identity provider holds the events.

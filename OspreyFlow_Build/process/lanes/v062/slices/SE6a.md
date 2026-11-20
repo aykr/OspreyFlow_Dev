@@ -2,11 +2,11 @@
 
 - **Build id:** SE6 (in the plan: "Privacy: Superset's own usage tracking switched off and no outside address in its content policy, with a standing browser test that no page a signed-in person can reach requests anything outside the deployment unless an administrator enabled it").
   **Cut in two** by the conductor on 20 November 2026 (the owner to confirm): **SE6a** (this: the switch-off, the policy, and the pure tests that stand in `make ci`) and **SE6b** (the browser spec that signs in and records every request, which lives under `apps/workspace/live` and so waits for PL4's slice E).
-  DOC1b and DOC1c need both merged (the owner, 20 November).
+  DC1b and DC1c need both merged (the owner, 20 November).
 - **Dial setting:** balanced
 - **Rounds limit:** 4
 - **After:** nothing. It touches no file under apps/workspace. The owner's order of 20 November: fix first, before any wording; cut and start under the queue rule.
-- **Status of this brief:** written by the conductor on 20 November 2026 from a read-only scout of the same day and DOC1a's report (`slices/DOC1A_REPORT.md`). **The owner confirmed the cut into SE6a and SE6b and all five points as written (20 November, later), with one addition: the administration guide says, in a sentence, that a chart needing Mapbox tiles will not load, and why** (no outside address is allowed in the content policy, and no map key is set; the guide's document-control row follows its rule, and if `test_docs_pdf` goes red on the changed guide say so and do not edit PDFs: the conductor makes them at merge). The owner's order: SE6a, SE7 and NET1 are fixed before DOC1's wording. The scout's line numbers are unchecked: the builder re-reads. **The scout recalled, and did not verify,
+- **Status of this brief:** written by the conductor on 20 November 2026 from a read-only scout of the same day and DC1a's report (`slices/DOC1A_REPORT.md`). **The owner confirmed the cut into SE6a and SE6b and all five points as written (20 November, later), with one addition: the administration guide says, in a sentence, that a chart needing Mapbox tiles will not load, and why** (no outside address is allowed in the content policy, and no map key is set; the guide's document-control row follows its rule, and if `test_docs_pdf` goes red on the changed guide say so and do not edit PDFs: the conductor makes them at merge). The owner's order: SE6a, SE7 and NW1 are fixed before DC1's wording. The scout's line numbers are unchecked: the builder re-reads. **The scout recalled, and did not verify,
   how the pinned Superset behaves: you verify it against the pinned image before relying on it** (see item 1).
 
 ## What the scout found (read, not measured)

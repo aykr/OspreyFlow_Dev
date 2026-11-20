@@ -3,7 +3,7 @@
 - **Build id:** SE7 (in the plan: "Security: a shared view's count never includes items the reader may not see (C045)").
 - **Dial setting:** balanced
 - **Rounds limit:** 4
-- **After:** nothing. It touches no file under apps/workspace (the Glass name issue below is separate and waits for PL4). The owner's order of 20 November: fix first, before any wording; started under the queue rule; DOC1b and DOC1c need it merged.
+- **After:** nothing. It touches no file under apps/workspace (the Glass name issue below is separate and waits for PL4). The owner's order of 20 November: fix first, before any wording; started under the queue rule; DC1b and DC1c need it merged.
 - **Status of this brief:** written by the conductor on 20 November 2026 from a read-only scout of the same day. **The owner confirmed all three points as written (20 November, later): yes to each. For the third, the backlog row says plainly whether the default view name can reveal a count to someone who may not see every item; it can, so it is a security row and goes first in the workspace queue after PL4's slice E.** The scout's line numbers are unchecked: the builder re-reads them. The owner's rule: **a failing access-control test comes first.**
 
 ## What the scout found (read, not run)

@@ -1,0 +1,1 @@
+tests/test_no_token_minted_at_import.py	OspreyFlow_Build/tests/	walks every .py file under OspreyFlow_Build/tests (test modules, conftest files and helpers) to find a token signed or an expiry taken from the clock at import; it walks no other folder (the pages service's Node tests are read by hand)
