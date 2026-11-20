@@ -41382,3 +41382,131 @@ fake identity provider refusing what Keycloak refuses (rule 15, as decision 10's
 Tests that would fail: ADR-152 X1's four tests; `tests/harness/test_govuk_renders_no_superset.py` for the
 cloud-platform and poc shapes; the poc manifest held to the render both ways (Amendment 12's test) with the
 `pages` workload added.
+
+### ADR-152, Amendment 1 (20 November 2026) — a clean GOV.UK install: the React workspace leaves a GOV.UK deployment by itself once every function has its page, and the `pages` image is scanned for React — Accepted by the owner, 20 November 2026
+
+Status: **Accepted by the owner, 20 November 2026**, as redrafted the same day under his rulings 1 to 7 of 20
+November, with his answers to the three questions the redraft left open (each option A). **Not built.** Drafted read-only from `main` at `d64ad0e` for the owner's question: a UK
+public-sector client will want its installed GOV.UK tree to contain no React at all. The evidence, each line
+with its file and line or marked "read, not measured", is in
+`Claude outputs/ospreyflow_clean_govuk_install_2026-11-20/REPORT.md`. This amendment adds to ADR-152 and changes
+none of its decisions. I24 and I25 are recorded as held: accepted as named, not to be built until the owner
+releases them.
+
+**Context.** I1 holds React out of the *source* of `apps/pages` and `packages/glass-shared`, and I18 holds the
+served tree to the brand. Neither says what a GOV.UK deployment *installs*. Read on `main` at `d64ad0e`:
+
+- Every shape renders the React workspace whatever the brand. `service_images` names it unconditionally
+  (`harness/render.py`, line 617), and compose, the cluster's values and the cloud-platform values are all made
+  from that list. The front proxy sends the deployment's own name to `workspace:8080` (`harness/site.py`,
+  line 69). Under `govuk` it also sends the sign-in name's `/assets/govuk/*` there (lines 103 to 109; the same
+  Ingress path at `harness/cloud_platform/__init__.py`, lines 944 to 947), because the sign-in page's GOV.UK
+  stylesheet is the workspace's file (`harness/keycloak_theme.py`, line 59). Decision 7 sends every path to
+  `pages` once the GOV.UK tree is complete. Nothing then takes the workspace out of the render.
+- The `pages` image installs its run-time packages with `npm ci --omit=dev --workspace apps/pages`
+  (`apps/pages/Dockerfile`, line 40). This was measured in `node:22-slim` (npm 10.9.9) on a copy of `main`'s
+  manifests and lockfile: 86 packages, with no `react`, `react-dom` or `scheduler`. The same command without
+  `--workspace` installs all three. Nothing scans the built image: no `trivy image` target names `pages`, and no
+  image has an SBOM.
+
+**Decision.**
+
+1. **The GOV.UK tree's state is derived, never written.** The tree is *complete* when every row of
+   `apps/pages/FUNCTIONS.yaml` has its GOV.UK page, less the owner-agreed lines of
+   `apps/pages/PARITY_EXCEPTIONS.yaml`. Until then it is *partial*.
+   - `FUNCTIONS.yaml` is the React workspace's function list, written by PL4 from `FRONT_END_ANSWERS.md`
+     part B. It has one row per function, plus one row for the sign-in page's GOV.UK assets.
+   - A row has its page when its route is in `tree-govuk`'s route list (I6's list). A route enters that list
+     only with its slice's D10 scenario passing on the GOV.UK tree (I8).
+   - One function decides the state: `govuk_tree_state` in `scripts/tree_parity.py`, the code that
+     `tests/glass_trees/test_tree_parity.py` drives. The parity test is the state's only authority, and the
+     renderer calls that same function. No file, setting or flag records "complete", and nobody writes it.
+   - While the tree is partial, decision 7's mixed serving is unchanged: each function's path goes to `pages`
+     once the tree has it, and to the workspace until then.
+2. **A complete GOV.UK deployment renders no workspace (I22). The cutover is automatic.** Under
+   `appearance.brand: govuk`, from the first render whose derived state is complete, no shape renders any of
+   these:
+   - the `workspace` service, workload or image, or its row in the images list, the signatures, the profile's
+     `ours` or the poc manifest;
+   - an upstream, door or Ingress path to it;
+   - its `glass.json` mount.
+
+   Every path goes to `pages`, the sign-in name's `/assets/govuk/*` included. The renderer then reads nothing
+   from `apps/workspace` for a GOV.UK render:
+   - the Ingress timeouts come from `pages`' own setting, not `WORKSPACE_NGINX`
+     (`harness/cloud_platform/__init__.py`, lines 122 and 935);
+   - the runbook finds the Glass's name by its site (`harness/cloud_platform/runbooks.py`, line 274);
+   - the sign-in theme's tokens come from `packages/design/tokens.css` (`harness/keycloak_theme.py`, line 63,
+     moved by PL4);
+   - the map's glyphs are served by `pages` (`harness/render.py`, lines 1036 to 1045).
+
+   The default brand is unchanged. No code is removed from `apps/workspace` (F7).
+
+   The Glass's realm client and Entra registration stay rendered (the owner's answer 6). Removing them would
+   touch `ClaimMapping`, below the Glass and outside F1's exceptions.
+   - **The release says so.** The release whose commit first derives `complete`, where the previous release
+     derived `partial`, says in its section of `CHANGELOG.md` that a GOV.UK deployment updating to it stops
+     running the React workspace. A test fails if it does not.
+   - **The render follows the state.** A test fails if the derived state and the rendered services disagree, in
+     either direction, in any shape.
+3. **The `pages` image carries no React (I23).** The scan runs on the built image, in CI (slice PL6) and, once
+   `pages` is released (slice PL7), in the release workflow before a push. It checks two things:
+   - the image's CycloneDX SBOM (`trivy image --format cyclonedx`) and its exported file system hold no package
+     named `react`, `react-dom` or `scheduler`;
+   - no file under `/app` holds `react/jsx-runtime`, `react/jsx-dev-runtime` or React's element marker
+     (`Symbol.for("react.element")`, `Symbol.for("react.transitional.element")`).
+
+   The scan must also find `express` and `nunjucks` in the same SBOM, or it fails, so an SBOM that is empty or
+   was never read is not a pass (rule 15). There is **one `pages` image** for both trees (the owner's answer 3);
+   I23 runs on it. The React workspace's image is outside the scan, and so is the guided install page (point 5).
+4. **What a department's adapter consumes** (the owner's answer 4): the signed `pages` image. The source is
+   there for a department's architecture board to read, not to build from. How a department supplies its own
+   template is a later amendment of its own and is not decided here.
+   - **A department's everyday changes are settings, never uploaded templates.** Its name, logo, header and
+     footer links, standard wording and statement links are settings in *Admin › Themes* (build AD4), held to
+     decision 14's rules. A setting is data that the GOV.UK tree draws through its own tested, policy-checked
+     macros, whereas an uploaded template is code that would run on every page outside the product's tests and
+     security policy.
+   - **AD4 builds the wider Themes list** (the owner's answer of 20 November). The header and footer links,
+     the standard wording and the statement links join decision 14's list of Themes settings. X8's key-list
+     test (`test_the_public_appearance_read_carries_only_the_presentational_settings`) is written with the new
+     keys.
+5. **A GOV.UK install is done from the command line** (the owner's answer 5): `ospreyflow install`, headless.
+   - The guided page (`ospreyflow install --gui`) is the `apps/harness` React application. It is served only on
+     the installing computer while an install runs, is never rendered into a deployment, and is outside I23.
+   - Both guides say this: the Installation and Administration Guide, `docs/administration-guide.md` (section
+     4.1, the guided page, and section 6a, `cloud-platform`), and the repository's front page, `README.md`
+     ("Installing and running it"). There is no separate install guide on `main`, and these two files are where
+     installing is told. Slice PL7 writes the two passages.
+6. **Held (recorded, not built):**
+   - **I24, one image per tree** (the owner's answer 3: one image, I24 held);
+   - **I25, a GOV.UK source export** (answer 4: held). Today it could not be made: `apps/pages/Dockerfile`
+     copies `apps/workspace/package.json` (lines 25 and 37), and the renderer and the harness image read
+     workspace files.
+
+**Invariants added to ADR-152's table** (each shown red with a planted fault in the shape the code really emits
+before it is wired into `make ci`, rule 15; `make ci` and `ci.yml` are protected, so the wiring is a diff for
+the owner):
+
+| # | Invariant | Test that fails | Planted fault that shows it red |
+|---|---|---|---|
+| I22 | A GOV.UK deployment whose derived tree state is complete renders no workspace service and no route to it, in any shape; a partial one still renders it; the render always follows the derived state; and the release that first carries the cutover says so in its notes | `tests/harness/test_complete_govuk_renders_no_workspace.py` covers local-lite, small, cluster, cloud-platform and the poc manifest under `govuk`, with fixture trees that derive complete and partial. Its case `test_the_rendered_services_follow_the_derived_state` compares `govuk_tree_state` with the rendered services both ways. `tests/glass_trees/test_tree_parity.py` gains `test_a_function_without_its_govuk_route_keeps_the_tree_partial`. `tests/glass_trees/test_cutover_is_in_the_release_notes.py` reads the release's `CHANGELOG.md` section when the derived state differs from the previous tag's | the sign-in name's `/assets/govuk/*` handler left on `workspace:8080` while everything else is removed (today's shape, `harness/site.py`, lines 103 to 109); a renderer that decides from a setting of its own rather than `govuk_tree_state`; one `FUNCTIONS.yaml` row with no route; a release section with no cutover line on a commit that flips the state |
+| I23 | The built `pages` image holds no `react`, `react-dom`, `scheduler` or JSX runtime, in its SBOM or its file system | `tests/glass_trees/test_pages_image_carries_no_react.py`, driving `scripts/pages_image_react_scan.py` over the built image | the run-time stage's `npm ci --omit=dev` without `--workspace apps/pages` (measured: it installs `react`, `react-dom` and `scheduler`); a served bundle holding `react/jsx-runtime`; an empty SBOM (red by the positive control, not by a pass) |
+| I24 (held) | A GOV.UK `pages` image holds one tree | not written while held | not written while held |
+| I25 (held) | A GOV.UK source export holds no `apps/workspace` and no `apps/harness`, and builds | not written while held | not written while held |
+
+**Consequences.**
+- A GOV.UK deployment changes shape by itself at the first update whose release derives `complete`. That is why
+  the release notes must say it.
+- A complete GOV.UK deployment runs one fewer owned container. The workspace's 2 replicas on cluster and 1 on
+  cloud-platform go (`harness/cluster.py`, line 46).
+- What can be said to the client (the owner's answer 7), until I22 and I23 are built and green: "The GOV.UK
+  pages are built with no React (checked on the source). Once the GOV.UK tree is complete, the deployment will
+  run no React, and the image that serves it will be scanned for React on every build." After they are green,
+  the "will" goes. It is not "no React in the repository": the product repository keeps `apps/workspace` for the
+  default brand. The only claim made about the standard is "designed to meet the GDS Service Standard".
+- Plan: the image scan is slice **PL6**. The slice that renders `pages` in every deployment shape, with I22 and
+  the two guide passages, is **PL7**. GG2 needs PL7.
+
+**Spec amendments that follow from this one, made with slice PL7:** `05_DEPLOYMENT.md` §1 (a GOV.UK
+deployment's services follow the derived tree state); `02_GLASS_FRONTEND.md` §1 (the same, in a sentence).
