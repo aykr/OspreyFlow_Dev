@@ -55,10 +55,13 @@ esac
 
 #: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
-#: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules).
+#: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
+#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them.
 STAND_IN_GATE = """def _stand_in_gate(t, b, l):
     if os.environ.get('TEST_GATE_LOG'):
         l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())
+    if os.environ.get('TEST_GATE_RETRIES'):
+        l.with_suffix('.retries.json').write_text(os.environ['TEST_GATE_RETRIES'])
     if os.environ.get('TEST_LIVE_NOTE'):
         l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE'])
     if os.environ.get('TEST_GATE_SEES'):

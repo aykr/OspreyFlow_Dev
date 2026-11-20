@@ -129,7 +129,64 @@ def lane_slot(tree: Path, lane: str) -> str:
     raise GateEnvError(f"lane_ports.tsv gives the {lane} lane no Playwright slot.")
 
 
-def ci_env(tree: Path, log: Path) -> dict:
+class NetworkError(GateEnvError):
+    pass
+
+
+#: A step that failed only because a registry or a download could not be reached (1d: SE3's opentofu-check,
+#: registry.opentofu.org, TLS handshake timeout, 19 November 2026): OpenTofu's provider registry, Docker's pulls, npm's
+#: and uv's downloads, as each prints it.
+NETWORK = 5
+NETWORK_SIGNS = re.compile(
+    r"Failed to resolve provider packages|Failed to query available provider packages|could not connect to registry"
+    r"|TLS handshake timeout|net/http: request canceled|i/o timeout|toomanyrequests|error pulling image"
+    r"|failed to resolve reference|Error response from daemon: (?:Get|Head) \"https://|ETIMEDOUT|ECONNRESET|EAI_AGAIN"
+    r"|ENOTFOUND|socket hang up|error sending request for url|Failed to download|Connection reset by peer"
+    r"|Could not resolve host|Temporary failure in name resolution")
+#: The make targets of `make -k ci` whose own work reaches a registry or pulls an image (OspreyFlow_Build/Makefile:
+#: opentofu-check runs tofu init in a pulled image; chart-check pulls helm's). A failed target outside these is ours.
+NETWORK_STEPS = ("opentofu-check", "chart-check")
+MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[(?:[^\]]*?:\s*)?([\w./-]+)\] Error \d+")
+
+
+def network_only(text: str, tests: bool = True) -> str | None:
+    """The network line, when a step's own output says it failed only on a network step: a network signature, no
+    failed test of ours (for a step that runs tests), and no failed make target but the network steps. Else None."""
+    lines = gate_part(text)
+    if tests and any(FAILED_TEST.match(ln) for ln in lines):
+        return None
+    if {m.group(1) for ln in lines if (m := MAKE_ERROR.match(ln))} - set(NETWORK_STEPS):
+        return None
+    hits = [ln.strip(" │") for ln in lines if NETWORK_SIGNS.search(ln)]
+    return " | ".join(hits[:3]) or None
+
+
+def run_step(name: str, cmd: list[str], cwd: Path, log: Path, env: dict, retries: list, tests: bool = True) -> int:
+    """One step of the full gate, run once more (once) when it failed only on a network step; NETWORK when the retry
+    failed so too. Never retried on a failed test. Each retry is said in the log and kept in `retries`."""
+    def since(start: int) -> str:
+        with log.open("rb") as fh:
+            fh.seek(start)
+            return fh.read().decode(errors="replace")
+    start = log.stat().st_size if log.exists() else 0
+    code = run(cmd, cwd, log, env=env)
+    why = network_only(since(start), tests) if code != 0 else None
+    if not why:
+        return code
+    log.open("a").write(f"\nRETRY: {name} failed only on a network step ({why}): it runs once more.\n")
+    start = log.stat().st_size
+    code = run(cmd, cwd, log, env=env)
+    retries.append({"step": name, "why": why, "retry_exit": code})
+    if code == 0:
+        return 0
+    again = network_only(since(start), tests)
+    if again:
+        log.open("a").write(f"\nNETWORK: {name} failed twice on a network step ({again}): not the slice's fault.\n")
+        return NETWORK
+    return code
+
+
+def ci_env(tree: Path, log: Path, retries: list | None = None) -> dict:
     """The merge tree's own environment, built as GitHub's `test` job builds it, never the main checkout's.
 
     A fresh venv from the lock on CI's Python (`UV_PYTHON` from ci.yml; `uv sync --frozen`, no extras: the Mac's usual --all-extras venv carries spaCy,
@@ -149,7 +206,11 @@ def ci_env(tree: Path, log: Path) -> dict:
     if not uv:
         raise GateEnvError("uv is not installed (CI's setup-uv): the gate cannot build its venv.")
     for cmd in ([uv, "sync", "--frozen"], [str(nd / "npm"), "ci", "--no-audit", "--no-fund"]):
-        if run(cmd, core, log, env=env) != 0:
+        code = run_step(f"{Path(cmd[0]).name} {' '.join(cmd[1:])}", cmd, core, log, env,
+                        retries if retries is not None else [], tests=False)
+        if code == NETWORK:
+            raise NetworkError(f"building the gate's environment could not download, twice, at: {' '.join(cmd[1:3])}")
+        if code != 0:
             raise GateEnvError(f"building the gate's environment failed at: {' '.join(cmd[1:3])}")
     venv_py = core / ".venv/bin/python"
     if not venv_py.is_file():
@@ -283,17 +344,30 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
     live step: the live files the change itself reaches, on the test server through the lease, as they need stores
     (live_step.yaml: off, or on after the server's run queue clears)."""
     lease = c.REPO / LEASE
+    retries: list = []
+
+    def said_retries() -> None:
+        if retries:
+            c.write_json(log.with_suffix(".retries.json"), retries)  # merge() names them in merged.json
     try:
         bring_client_hashes(tree)
-        env = ci_env(tree, log)
+        env = ci_env(tree, log, retries)
+    except NetworkError as e:
+        log.open("a").write(f"\nNETWORK: the gate's environment: {e}\n")
+        said_retries()
+        return NETWORK
     except GateEnvError as e:
         log.open("a").write(f"\nREFUSED: the gate's environment: {e}\n")
         return 3
     codes = []
     for target in FULL_GATE_TARGETS:
         started = time.monotonic()
-        codes.append(run(list(target), tree / "OspreyFlow_Build", log, env=env))
+        codes.append(run_step(" ".join(target), list(target), tree / "OspreyFlow_Build", log, env, retries))
         log.open("a").write(f"\n{' '.join(target)}: exit {codes[-1]} in {time.monotonic() - started:.0f} s\n")
+        if codes[-1] == NETWORK:
+            said_retries()
+            return NETWORK
+    said_retries()
     if any(codes):
         return next(x for x in codes if x)
     sel = subprocess.run([str(tree / "OspreyFlow_Core/.venv/bin/python"), "-m", "tools.live_select", "--base", base,
@@ -691,7 +765,16 @@ def merge(slice_id: str) -> dict:
         drop_env(after)  # the full gate builds its own, fresh
 
         # 7. today's full gate on the merge result
-        if FULL_GATE(after, base, log) != 0:
+        code = FULL_GATE(after, base, log)
+        retried = c.read_json(log.with_suffix(".retries.json"))
+        if code == NETWORK:  # 1d: a registry or download unreachable twice: the slice's fault in nothing
+            c.write_json(rec / f"refusal-network-{uuid.uuid4().hex[:8]}.json",
+                         {"kind": "network", "slice": slice_id, "tip": tip, "merge_log": log.name, "retried": retried,
+                          "note": "not a fault of the slice: no round, no finding", "at": c.now()})
+            raise Refused("today's full gate could not reach a registry or a download, twice (network): not the slice's "
+                          "fault, so no round and no finding to the builder. The conductor tells the owner and runs the "
+                          f"merge again. See {log}")
+        if code != 0:
             names, findings = gate_findings(log.read_text(errors="replace") if log.exists() else "")
             refuse_to_builder(slice_id, tip, "today's full gate was red on the merge result", findings, len(names), "gate")
             raise Refused(f"today's full gate is red on the merge result. See {log}")
@@ -701,6 +784,8 @@ def merge(slice_id: str) -> dict:
         c.git(["merge", "--ff-only", merged], c.REPO)
         done = {"slice": slice_id, "build": frozen["build"], "merge": merged, "tip": tip, "base": base,
                 "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"), "at": c.now()}
+        if retried:
+            done["retried"] = retried  # 1d: steps run once more after a network failure, and green the second time
         if scan_rows:
             done["scan_rows"] = scan_rows  # applied to scan_map.tsv in the merge commit, from SCAN_ROWS_REL
         live = c.read_json(log.with_suffix(".live.json"))
