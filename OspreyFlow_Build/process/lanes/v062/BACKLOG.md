@@ -337,3 +337,44 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   it, and the line's scan could flag a test that reads dial.yaml, accounts.yaml or live_step.yaml from the repository.
 - **Line gap (night of 19 Nov):** a seat started with a plain shell `&` has its output discarded and no notification when it ends;
   the conductor now waits on its process. Not a line fault, a practice note: start seats only as background tasks.
+
+### 20 November 2026: the owner's rulings on the three held slices, and what the scouts found
+
+- **PL1 is the four demo and install faults (N05, N06, N07, N11); "sound" meant "in working order"** (the owner). **Not started:** a
+  scout found that each of the four rests on a reading of the specification that the owner has not ruled, and process/CLAUDE.md says
+  an accepted decision believed wrong is raised, not implemented. Findings, for his rulings:
+  - **N05** (the CLI follows the recorded home over the current folder): the code does what ADR-114 Amendment 3 decision 3,
+    `10_ADMINISTRATION_GUIDE.md` line 305 and ADR-132 Amendment 1 decision 4 say (env, then the recorded home, then the folder).
+    Reading (a): the folder beats the recorded home (an amendment to three accepted texts); reading (b): the recorded home goes stale
+    after a repoint or reinstall and is never re-recorded (fix at recording, `install.sh`/`install.ps1`, or a warning).
+  - **N06** (a git archive cannot seed demo packs): the refusal is at `scripts/seed_internal.py` 620-626, for every dataset, synthetic
+    packs included; the row's line 611 is stale. ADR-114 Amendment 2 decision 2 groups the attested checkout with the real-data
+    checks. Reading (a): synthetic packs are exempt, real and internal ones keep the check (the existing test at
+    `test_seed_internal.py` 790-793 flips); reading (b): the install must carry `.git`. `seed_paysim.py` 86-87 has the same fault
+    in another shape.
+  - **N07** (the places stage attaches the gazetteer to no case): by design under ADR-147 Amendments 1 and 2 (copies go in when a
+    case's Author adds a gazetteer). Reading (a): a missing demo step (nothing adds the gazetteer to the demo case; depends on
+    N06); reading (b): the build attaches to the demo case, which needs an ADR-147 amendment.
+  - **N11** (apply does not remake an engine's entry in the gateway's database): `harness/apply.py` never calls the model admin; the
+    entries are made again in the Conduit's start (`model_admin.py` 865-975), which returns early with no models file (911-915).
+    Reading (a): apply triggers a reconcile; (b): the Conduit's start reconciles after a gateway database change. A wiped database
+    probably drops the credential too (inference, not measured), so a remake needs the key again. The stand-in has no
+    empty-database shape yet.
+  - Cut if the rulings come in two goes: N05+N06 first, N07+N11 after.
+- **PL2 is two slices: PL2a (the Java notice in the image, C020) and PL2b (connection limits from settings, L10).** The owner gave no
+  floor, no profile scope and no word on the pools; the conductor settled them in the brief from numbers already in the code: the
+  floor is 420 (the same sum with one Conduit instead of two), the setting is `resources.postgres_max_connections` on the owned
+  Postgres only (a `cluster` or `cloud-platform` profile refuses it in words), the pools stay constants. New amendments: ADR-147
+  Amendment 6 (PL2a), ADR-114 Amendment 49 (PL2b). The scout also found a stale "at least 750" sentence in the administration guide
+  (corrected inside PL2b). The Java source offer's contact and URL are not in the repository: the notice carries the tag and the
+  `jlink` line, and the owner supplies the rest.
+- **BL2 (done):** the placed table, its counts note and a note giving both counts are committed under `backlog/`
+  (`OPEN_BACKLOG_PLACED_NOTE.md`). 180 placed; 154 open on 18 November (138 open + 16 partly built); the difference of 26 is the 19
+  "cannot tell — needs a run" rows plus the 7 proposed rows N19-01 to N19-07. N19 ids stay as proposed.
+- **PL3's fixed secret-shaped string** (`secretFiles.test.ts` about line 46): the owner's word is to fix it in the next slice that
+  touches `apps/pages`, with the generator, and tests generate one at run time. That slice's brief must carry it.
+- **Line gap (BL6's first merge attempt, 20 Nov):** `tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines`
+  failed once in `make test` (its `show` output cut off before the "NEEDS YOU" section while 16 copies ran at once under xdist),
+  with `make -k ci` green; the retry with nothing else running is recorded in the merge records. A timing race in the test, like
+  `test_stack_lease.py::…extra_arguments` on 19 November: worker-isolation timing, same batch row.
+- **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
