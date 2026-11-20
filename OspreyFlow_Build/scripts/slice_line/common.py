@@ -378,6 +378,26 @@ def _gh_runs(*args: str) -> list[dict]:
     return runs
 
 
+#: A test of ours failing twice on GitHub (1c): the stop that holds every merge until the owner clears it
+#: (clear_github_stop.py), each run's failing tests as watch-github read them, and the owner's clears, for audit
+#: (owner-changes.tsv's sibling). All in the data folder, which the guard keeps every agent from writing.
+GITHUB_STOP = DATA / "github.stopped.json"
+GITHUB_RECORDS = RECORDS / "github"
+GITHUB_CLEARS = DATA / "github-stop-clears.tsv"
+
+
+def github_stop_words(stop: dict | None) -> str:
+    """The stop, in the words a refused merge and the board give: the test, the job, the commit, both runs."""
+    if not stop:
+        return (f"{GITHUB_STOP} is there but cannot be read: merging stays stopped until the owner looks at it and "
+                "clears it (clear_github_stop.py).")
+    runs = " and ".join(f"run {r.get('run')} attempt {r.get('attempt')}" for r in stop.get("runs", []))
+    more = f" (and {len(stop['tests']) - 1} more)" if len(stop.get("tests") or []) > 1 else ""
+    return (f"a test of ours failed twice on GitHub on one commit: {stop.get('test')}{more}, in job {stop.get('job')}, "
+            f"at commit {str(stop.get('commit'))[:10]} ({runs}). Merging is stopped until the owner clears it "
+            "(clear_github_stop.py) once it is dealt with.")
+
+
 def main_runs_going() -> str:
     """'in progress' or 'queued' when a run on main is, as the push script asks gh (`gh run list --branch main --status
     in_progress|queued --json databaseId`); '' when none is. gh that cannot be read is no run going, as for the push

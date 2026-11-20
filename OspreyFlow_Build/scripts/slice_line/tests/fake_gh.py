@@ -8,11 +8,18 @@ The runs on GitHub, newest first, come from the environment:
   FAKE_GH_COMPLETED  (older tests) the latest completed run, as a JSON list; FAKE_GH_LATEST: the newest run of any
                      status, when it is not that one. Text that is not JSON is answered as it is, as a broken gh would.
   FAKE_GH_EXIT       gh fails (signed out, offline) with that exit code.
+  FAKE_GH_VIEW_EXIT  `gh run view` alone fails (GitHub's 502 for a log), with that exit code.
   FAKE_GH_CALLS      a file each call is appended to, one line each.
+
+  FAKE_GH_LOGS       a JSON object, "<run>/<attempt>" -> a file holding `gh run view <run> --attempt <attempt>
+                     --log-failed`'s text as GitHub prints it (job, step, then the timestamped line, tab-separated);
+                     an attempt with no file prints nothing, as the real gh does for an attempt that passed.
 
 `run list`: --branch/-b, --status/-s, --commit/-c, --workflow/-w, --limit/-L (default 20), --json, -q/--jq (only
 `length`, the one the push script uses). The real gh refuses an unknown flag, an unknown --json field, a --jq
-without --json and a --status that is not one of its own; so does this. A call to rerun or cancel a run is refused
+without --json and a --status that is not one of its own; so does this. `run view <run> [--attempt N] --log-failed`: a run not on the list or an attempt it never had is
+HTTP 404, as the real gh says; the run's current attempt while it is not completed is "still in progress". A call to
+rerun or cancel a run is refused
 and logged: the line never changes anything on GitHub.
 """
 from __future__ import annotations
@@ -125,6 +132,33 @@ def run_list(args: list[str]) -> None:
     print(json.dumps(shaped))
 
 
+def run_view(args: list[str]) -> None:
+    o, rest = options(args, {"--attempt": "attempt", "-a": "attempt", "--job": "job", "-j": "job", "--json": "json",
+                             "-q": "jq", "--jq": "jq"}, {"--log-failed", "--log", "--verbose", "-v", "--exit-status"})
+    if len(rest) != 1 or not rest[0].isdigit():
+        fail("this stand-in answers only `gh run view <run id> [--attempt N] --log-failed`")
+    if not o.get("log-failed"):
+        fail("this stand-in answers only --log-failed")
+    run = int(rest[0])
+    if os.environ.get("FAKE_GH_VIEW_EXIT"):
+        fail("HTTP 502: Bad Gateway (https://api.github.com/repos/o/r/actions/runs/%d/logs)" % run,
+             int(os.environ["FAKE_GH_VIEW_EXIT"]))
+    have, _ = runs()
+    found = next((norm(r) for r in (have or []) if r.get("databaseId") == run), None)
+    if not found:
+        fail(f"HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs/{run})")
+    latest = int(found["attempt"])
+    attempt = int(o.get("attempt", latest))
+    if attempt < 1 or attempt > latest:
+        fail(f"HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs/{run}/attempts/{attempt})")
+    if attempt == latest and found.get("status") != "completed":
+        fail(f"run {run} is still in progress; logs will be available when it is complete")
+    logs = json.loads(os.environ.get("FAKE_GH_LOGS") or "{}")
+    path = logs.get(f"{run}/{attempt}")
+    if path:
+        sys.stdout.write(open(path).read())
+
+
 def main(argv: list[str]) -> None:
     if os.environ.get("FAKE_GH_CALLS"):
         with open(os.environ["FAKE_GH_CALLS"], "a") as fh:
@@ -133,6 +167,8 @@ def main(argv: list[str]) -> None:
         fail("error connecting to api.github.com", int(os.environ["FAKE_GH_EXIT"]))
     if argv[:2] == ["run", "list"]:
         return run_list(argv[2:])
+    if argv[:2] == ["run", "view"]:
+        return run_view(argv[2:])
     if argv[:2] in (["run", "rerun"], ["run", "cancel"], ["run", "delete"], ["workflow", "run"]):
         fail("the line never changes anything on GitHub: this stand-in refuses " + " ".join(argv[:2]))
     fail(f'unknown command "{" ".join(argv[:2])}" for gh')

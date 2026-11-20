@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (329 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (257 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (344 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (274 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -65,6 +65,7 @@ site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows
 | The line itself | guard, merge_slice.py | `.claude/`, `scripts/slice_line/`, the records, the status file, `OSPREY_*` overrides, nested `claude` |
 | Cannot stop on red | stop_check.py | the frozen checks and acceptance run at Stop; red (or uncommitted) sends back the failure lines only; after 6, stopped |
 | GitHub's run on main | merge_slice.py, board.py | nothing: a second opinion, not a gate (the owner, 20 November 2026). Each merge records the latest completed run on main (`github_at_merge` in `merged.json`) and goes on, red, cancelled or unreadable; the board prints "main is red: run N" as a note and `status.js` carries it (`main_ci`) |
+| A test of ours red twice on GitHub | merge_slice.py, board.py, clear_github_stop.py | every merge while `github.stopped.json` is there (below), in words naming the test, the job and the commit; the board prints "merging stopped: ..."; only the owner's `clear_github_stop.py` (refused to every agent) removes it |
 | Merge | merge_slice.py | see the script's docstring: lock, frozen match, verifier pass for the tip, protected paths, red before, green after, **today's full gate**: `make -k ci` and `make test`, both run and both reported, in the merge tree's own environment built as CI's `test` job builds it (`uv sync --frozen` on the `UV_PYTHON` `ci.yml` sets, `npm ci` under the Node major `ci.yml` names, no `VIRTUAL_ENV` or other `.venv/bin`, closed ports, the merger's slot), never the main checkout's; then **the live step** (below) |
 | Status file | board.py | `done` only with a merge record, its test run and a verifier pass; unknown build ids reported, not written; a bad or incomplete record skipped and reported, the slice shown from its other records and every other slice carried on |
 
@@ -135,6 +136,8 @@ row naming a test or a prefix that is not there. `install.sh` installs the map a
 **A merge reads GitHub, never waits for it** (1a). `merge_slice.py merge` reads GitHub's latest completed run on main (`common.main_ci()`: `gh run list --branch main --status completed`) and records it in `merged.json` as `github_at_merge` (`state` green, red or unknown, `run`, `url`, `why`, `at`), saying it in one line after its result ("GitHub's last run on main: red (run N), not a gate; merging"). A record, never a decision: the Mac's full gate alone decides, and a run gh cannot read is no reason to hold a merge the gate passed. Every other refusal stands.
 
 **Every merge is pushed** (1b), so GitHub always tests the newest main. `push_main.sh` defers only while a run on main is in progress or queued (a new push would cancel it), never for a completed red run, and writes the commit to `push.pending`. A deferred push is never forgotten: the board prints "push pending (<commit>)", and the conductor runs `merge_slice.py push-pending` when the run ends (a conductor command, like `merge` and `records`): under the merge lock, once nothing is in progress or queued, it runs `push_main.sh` with every rule it keeps (main's tip written by the merge script, the recorded origin, a fast-forward) and gives its words back. The guard still refuses `push_main.sh` to every agent.
+
+**A test of ours red twice stops merging** (1c). `merge_slice.py watch-github` (the conductor's, after a run ends; `merge` runs it before it starts, and `push-pending` too) reads the latest completed run on main; when it is red, it reads the failing tests from `gh run view <run> --attempt <n> --log-failed` (pytest's `FAILED <path>::<test> - <why>` lines, after GitHub's job, step and timestamp) and records them in `records/github/<run>.json`. The same test failing in that attempt and in the one before it on the same commit (the run's previous attempt, or the previous run on that head) writes `github.stopped.json` (the test, the job, the commit, both runs); while it is there every merge is refused, naming them, and the conductor tells the owner. A first red, a red that passes on its rerun, a different test failing on the rerun, a job that failed with no `FAILED` line (a download, the network, a runner) and gh unreadable write no stop and hold no merge. The owner clears it with `OspreyFlow_Build/scripts/slice_line/clear_github_stop.py` (no arguments; refused when there is no stop): the file goes and a line is appended to `github-stop-clears.tsv` beside `owner-changes.tsv`, which `watch-github` reads, so the same pair of runs never stops merging again. The line never asks GitHub to rerun or cancel anything: the conductor reruns a red run once, by hand.
 
 ## Resuming a slice
 
@@ -227,5 +230,5 @@ says that cost is a list-price estimate, not a bill.
 
 `~/.ospreyflow/slice-line/`: `bin/` (the hooks), `node/v<major>/` (CI's Node, found before PATH's: the gate refuses another major; Node 22.23.5 for darwin-arm64 is installed at `node/v22/`, from nodejs.org's tarball, its SHA-256 matching `SHASUMS256.txt`), `settings.json`, `manifest.json`, `origin.url`,
 `emails.sha256`, `records/<ID>/` (frozen, state, sessions, tests-, verify-, accepted-, merged, logs), `accounts/`,
-`sessions/` (guard markers), `usage.tsv`, `push.log`, `push.pending`, `merge.lock`. The dashboard's
+`sessions/` (guard markers), `usage.tsv`, `push.log`, `push.pending`, `merge.lock`, `records/github/` (each red run's failing tests), `github.stopped.json`, `github-stop-clears.tsv` (the owner's clears). The dashboard's
 `status.js` is in the git-ignored `Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/`.

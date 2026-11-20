@@ -282,6 +282,8 @@ def main() -> int:
                   "rerun once; a test of ours red twice stops them)")
         elif ci["state"] != "green":
             print(f"main's GitHub run cannot be read ({ci['why']}): not a gate; merges go on")
+        if c.GITHUB_STOP.exists():
+            print("merging stopped: " + c.github_stop_words(c.read_json(c.GITHUB_STOP)))
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
