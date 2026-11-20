@@ -357,6 +357,13 @@ finishes, or after 30 idle minutes. On a release, the page is the release's own 
 with its signature checked against the release; in a developer's checkout it is built with
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
 
+**A GOV.UK install is done from the command line, headless:** `ospreyflow install`, with its answers
+given as flags or in an answers file (`--config install.yaml --yes`, section 7), as section 1a shows for
+a GOV.UK starter. The guided page described here is the `apps/harness` React application. It is served only on the
+computer you are installing from, while an install runs, and is never rendered into a deployment: the
+deployment you install holds none of it, and the rule that the `pages` service carries no React (ADR-152) does
+not apply to it.
+
 ## 5. Installing Small
 
 From your own computer:
@@ -804,7 +811,9 @@ cluster; it gets a **namespace**, created and changed only by pull request to th
 environments repository, and its AWS resources (RDS, ElastiCache, OpenSearch, S3, ECR and IAM
 roles for its service accounts) are asked for the same way. The `cloud-platform` profile writes what
 those pull requests need. It creates no cluster, no VPC and no namespace, and **it installs
-nothing**: the set-up console does not offer it, and `ospreyflow install` does not run it. The
+nothing**: `ospreyflow install` takes `lite`, `small` or `enterprise` and has no `cloud-platform` mode, so
+neither the command nor the guided page runs it. A GOV.UK install, on the modes that command has, is done from
+the command line, headless (section 4.1); the guided page is never rendered into a deployment. The
 decisions are ADR-148's.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the

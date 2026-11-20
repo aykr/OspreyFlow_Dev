@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.29** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.30** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.30 | 2026-11-20 | §4.1 and §6a (and the README's *Installing and running it*): a GOV.UK install is done from the command line, headless, with `ospreyflow install`; the guided page is the `apps/harness` React application, served only on the installing computer while an install runs and never rendered into a deployment (ADR-152 Amendment 1, decision 5; slice PL7a1). §6a: it said `ospreyflow install` does not run `cloud-platform`; it now says why, which is that the command has the modes `lite`, `small` and `enterprise` and no other. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
 | 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
 | 2.27 | 2026-11-20 | Appendix A: `cloud_platform.claims.pages_client_id`, the `pages` service's own app registration, whose delegated token the Conduit admits as the person on every route their rights allow, as the Glass's (ADR-152 decision 11, X1); the Conduit half only, the `pages` service and its render's refusal come later. Version set at merge. |
@@ -577,6 +578,13 @@ finishes, or after 30 idle minutes. On a release, the page is the release's own 
 with its signature checked against the release; in a developer's checkout it is built with
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
 
+**A GOV.UK install is done from the command line, headless:** `ospreyflow install`, with its answers
+given as flags or in an answers file (`--config install.yaml --yes`, section 7), as section 1a shows for
+a GOV.UK starter. The guided page described here is the `apps/harness` React application. It is served only on the
+computer you are installing from, while an install runs, and is never rendered into a deployment: the
+deployment you install holds none of it, and the rule that the `pages` service carries no React (ADR-152) does
+not apply to it.
+
 ## 5. Installing Small
 
 From your own computer:
@@ -1024,7 +1032,9 @@ cluster; it gets a **namespace**, created and changed only by pull request to th
 environments repository, and its AWS resources (RDS, ElastiCache, OpenSearch, S3, ECR and IAM
 roles for its service accounts) are asked for the same way. The `cloud-platform` profile writes what
 those pull requests need. It creates no cluster, no VPC and no namespace, and **it installs
-nothing**: the set-up console does not offer it, and `ospreyflow install` does not run it. The
+nothing**: `ospreyflow install` takes `lite`, `small` or `enterprise` and has no `cloud-platform` mode, so
+neither the command nor the guided page runs it. A GOV.UK install, on the modes that command has, is done from
+the command line, headless (section 4.1); the guided page is never rendered into a deployment. The
 decisions are ADR-148's.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the

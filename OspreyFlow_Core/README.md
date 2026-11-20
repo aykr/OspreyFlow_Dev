@@ -113,6 +113,11 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 Every operator task is an `ospreyflow`
 verb; `make` targets are for developers working on OspreyFlow itself.
 
+**A GOV.UK install is done from the command line, headless:** `ospreyflow install` with its answers as flags or
+in a file, as above. `--gui` opens the guided page, which is a separate React application served only on the
+computer you are installing from, while an install runs; it is never rendered into a deployment. The
+administration guide's sections 4.1 and 6a say the same.
+
 **Demo packs** load into cases of their own: three synthetic ones generated here, and two you
 download — PaySim (simulated) and the **Enron email corpus, which is real people's data**: you fetch
 it from Carnegie Mellon University yourself, and `ospreyflow demo add enron --file <file>` checks it,
