@@ -41674,3 +41674,49 @@ final stage, or reaching the final stage by a folder copy through the builder; t
 runtime name, source tag or `jlink` line differing from the Dockerfile's; a library of §7's table missing from it
 or given another library's licence; a client named; each planted in the real files, rule 15), and
 `tests/test_conduit_image_java_licence.py` (no Java in the final stage).
+
+### ADR-152, Amendment 2 (20 November 2026) — the fonts are listed once in `packages/design/fonts.json`, and a test fails if either front end loads a font the list does not name — Accepted by the owner, 20 November 2026
+
+Status: **Accepted by the owner, 20 November 2026**, in his ruling on "the rest of the design folder" (item 3). Built in slice PL4b3. This
+amendment adds to decision 6, whose "tokens.css, primitives.css, fonts; read by the React workspace and tree-default alike" is met for
+`tokens.css` by slice PL4b and for `primitives.css`, `scale.css` and `panelType.css` by slice PL4b2; this is the fonts.
+
+1. **One list.** Which families and weights are used is stated once, in `OspreyFlow_Core/packages/design/fonts.json`: one entry per family, with
+   its CSS name, its role (`ui`, `mono` or `govuk`), its source (`@fontsource/<package>`, or `govuk-frontend`), its weights and its licence.
+   The list states what the code ships; no weight, subset or file changed with it. Atkinson Hyperlegible Next (400, 600, 700) and IBM Plex Mono
+   (400, 600) are SIL OFL 1.1. There is no `subsets` field: narrowing the imports would change the built bytes.
+2. **Both front ends load from it, each its own way.** `apps/workspace/src/design/fonts.ts` stays where it is, because it imports the
+   `@fontsource` stylesheets for the Vite bundle; `fonts.test.ts` derives its list from `fonts.json` rather than restating it. The `pages`
+   service loads no font today; the page build that first loads one (PL7) adds `@fontsource` to its `package.json` and loads only a listed
+   face, and may not change the lockfile before then.
+3. **GDS Transport is listed with its two conditions, written as fields a test reads.** `only_when: appearance.govuk_identity` and
+   `only_on: gov.uk`. The two fields record the rule the list holds the face to: shown only when the GOV.UK identity switch is on (the
+   switch ADR-152 decision 14 decides), and only on a gov.uk address. The gov.uk condition comes from the face's licence, which restricts it
+   to services on GOV.UK domains (`spec/00_ARCHITECTURE.md`, the GDS Transport paragraph of the ADR-132 addition), and from the owner's
+   ruling of 20 November 2026 that the list carry it; it does not come from ADR-132 Amendment 7, which limits only the crown, the copyright
+   line and the Open Government Licence line to gov.uk. **The code enforces neither condition yet.** The switch is not built: nothing but
+   `fonts.json` names `appearance.govuk_identity`. The face follows the brand, not the switch or the host: `tokens.css` sets `--ui` to GDS
+   Transport inside the GOV.UK brand block, which follows `data-brand` on `<html>` on any host (`brand.ts`), and `isGovUkHost` gates only
+   the crown and the footer. The build that adds the default tree's assets (PL7) owns the proof pieces ADR-152 names for I9
+   (`test_default_tree_carries_no_govuk_assets.py`, `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case), and
+   those are the tests that will enforce the two conditions as behaviour; until they land nothing fails if GDS Transport is drawn with the
+   switch off or off a gov.uk address. The entry's source is `govuk-frontend`, self-hosted under `/assets/govuk/` (so the weights, 400
+   and 700, match the generated stylesheet's `@font-face` rules), and its licence is that restriction, not OFL. No other entry carries
+   either condition. A family on the list is not thereby on every page: the `pages` tree loads no font today, and this amendment's test
+   fails if it comes to carry GDS Transport (I9, its font half).
+4. **A test fails if either loads a font the list does not name.** It reads `apps/workspace`, `apps/harness`, `packages/design` and
+   `apps/pages`, and looks for an `@fontsource` import or package, an `@font-face`, a font file, and a font URL, and requires each family
+   and weight to be on the list (a font file's weight and style are read from its name, `<package>-<subset>-<weight>-<style>`; a file at a
+   weight the list does not name, or in italic, fails as an unlisted `@font-face` weight does); every listed `@fontsource` weight must be imported, and its package declared. For `apps/pages` it also fails
+   on GDS Transport, or on a path under `/assets/govuk/`, anywhere. The invariants I9 names as proof pieces (the default tree's assets test,
+   `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case) are not built here; this amendment holds only the font half.
+5. **The weights text.** `spec/design/DESIGN.md` §2 says Atkinson 200 to 800 and Plex 400, 500 and 600; the code ships 400, 600 and 700 and
+   400 and 600. The owner applies a diff to the text; the code does not change.
+
+Tests that would fail (rule 12; each shown red against a planted fault in the shape the code writes it, rule 15):
+`tests/glass_trees/test_fonts_list.py` (the list's shape, and GDS Transport's two conditions checked as written in the list, not as
+behaviour of the product, which PL7's I9 tests will check; an unlisted `@fontsource` import in `fonts.ts`, at an
+unlisted weight, bare, from the variable scope or in a package.json; a listed weight nothing imports; an unlisted `@font-face` or font file in the
+workspace, the generated GOV.UK stylesheet or its fonts folder, a pages view or the pages' built output; GDS Transport in a pages stylesheet,
+as a listed `@font-face`, or by its assets path); `apps/workspace/src/design/fonts.test.ts` (the imports against the list, the families against
+`tokens.css`, and the package's own face and weight against the list).
