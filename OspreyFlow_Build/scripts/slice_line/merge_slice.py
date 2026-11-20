@@ -133,6 +133,21 @@ class NetworkError(GateEnvError):
     pass
 
 
+def own_pytest_base(env: dict, base: Path, log: Path) -> None:
+    """pytest's temp base for this run of the merge alone (PYTEST_DEBUG_TEMPROOT), so another pytest on the Mac,
+    which keeps only its newest few pytest-N folders under the shared base, cannot remove the merge's (1e: SE3, GG1,
+    19 November 2026). The merge removes it with its trees."""
+    base.mkdir(parents=True, exist_ok=True)
+    env["PYTEST_DEBUG_TEMPROOT"] = str(base)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    log.open("a").write(f"\npytest's temp base: {base}\n")
+
+
+def gate_pytest_base(tree: Path) -> Path:
+    """The full gate's own pytest base: beside the merge tree (never inside it, where a scanner would walk it)."""
+    return Path(str(tree).rstrip("/") + "-pytest")
+
+
 #: A step that failed only because a registry or a download could not be reached (1d: SE3's opentofu-check,
 #: registry.opentofu.org, TLS handshake timeout, 19 November 2026): OpenTofu's provider registry, Docker's pulls, npm's
 #: and uv's downloads, as each prints it.
@@ -202,6 +217,7 @@ def ci_env(tree: Path, log: Path, retries: list | None = None) -> dict:
     env["PATH"] = os.pathsep.join([str(nd), *keep, str(Path.home() / ".local/bin")])
     py = ci_python(tree)
     env.update(OFFLINE_PORTS, OSPREY_PORTS_SLOT=lane_slot(tree, GATE_LANE), UV_PYTHON=py)
+    own_pytest_base(env, gate_pytest_base(tree), log)
     uv = shutil.which("uv", path=env["PATH"])
     if not uv:
         raise GateEnvError("uv is not installed (CI's setup-uv): the gate cannot build its venv.")
@@ -222,16 +238,20 @@ def ci_env(tree: Path, log: Path, retries: list | None = None) -> dict:
     return env
 
 
-def slice_env(tree: Path, log: Path, slot: int | str | None = None, venv: Path | None = None) -> dict:
+def slice_env(tree: Path, log: Path, slot: int | str | None = None, venv: Path | None = None,
+              pytest_base: Path | None = None) -> dict:
     """The environment a slice's frozen commands run in, built as CI's `test` job builds it (F4, F6), so a command
     need not carry its own `uv run` or `npm ci`: a venv from the lock on CI's Python (`uv sync --frozen`; into `venv`,
     outside the tree, when given, else the tree's own OspreyFlow_Core/.venv), first on PATH; `npm ci` under CI's Node
     in the tree; closed ports; and the slice's Playwright slot (F8). A tree with no Python project or no Node lock
-    gets none of that part. A command's own `export OSPREY_PORTS_SLOT=` or UV_PROJECT_ENVIRONMENT= still wins."""
+    gets none of that part. A command's own `export OSPREY_PORTS_SLOT=` or UV_PROJECT_ENVIRONMENT= still wins.
+    `pytest_base`: pytest's temp base of the merge's own (1e), outside the tree, removed by the merge."""
     core = tree / "OspreyFlow_Core"
     env = {k: v for k, v in os.environ.items() if k not in SCRUBBED and not k.startswith("npm_config_")}
     path = [p for p in env.get("PATH", "").split(os.pathsep) if p and not p.rstrip("/").endswith("/.venv/bin")]
     env.update(OFFLINE_PORTS)
+    if pytest_base is not None:
+        own_pytest_base(env, pytest_base, log)
     if slot not in (None, ""):
         env["OSPREY_PORTS_SLOT"] = str(slot)
     if (core / "pyproject.toml").is_file():
@@ -706,7 +726,7 @@ def merge(slice_id: str) -> dict:
         envs = Path(tempfile.mkdtemp(prefix=f"slice-{slice_id}-envs-"))
         trees.append(envs)
         try:
-            env_before = slice_env(before, log, slot, envs / "before")
+            env_before = slice_env(before, log, slot, envs / "before", pytest_base=envs / "pytest-before")
         except GateEnvError as e:
             raise Refused(f"the acceptance run's environment could not be built: {e}. See {log}")
         if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:
@@ -746,7 +766,7 @@ def merge(slice_id: str) -> dict:
         scan_rows = apply_scan_rows(slice_id, after, base, tip)  # 1b: in the merge commit itself
         merged = c.git(["rev-parse", "HEAD"], after)
         try:
-            env_after = slice_env(after, log, slot, envs / "after")
+            env_after = slice_env(after, log, slot, envs / "after", pytest_base=envs / "pytest-after")
         except GateEnvError as e:
             raise Refused(f"the merge result's environment could not be built: {e}. See {log}")
         for name in ("acceptance", "checks"):
@@ -814,6 +834,7 @@ def merge(slice_id: str) -> dict:
         for t in trees:
             drop_tree(t)
             shutil.rmtree(t, ignore_errors=True)
+            shutil.rmtree(gate_pytest_base(t), ignore_errors=True)  # the full gate's pytest base (1e)
         fh.close()
 
 

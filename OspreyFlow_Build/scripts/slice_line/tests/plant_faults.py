@@ -183,6 +183,13 @@ M = [
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
  ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ # 1e: the merge gate's pytest runs use a temp base of their own, removed with the merge's trees
+ ("merge_slice.py", '    env["PYTEST_DEBUG_TEMPROOT"] = str(base)\n', '', "not_removed_by_other_pytest_runs"),
+ ("merge_slice.py", '    env["PYTEST_DEBUG_TEMPROOT"] = str(base)\n', '', "full_gate_runs_make_under_a_base"),
+ ("merge_slice.py", '    own_pytest_base(env, gate_pytest_base(tree), log)\n', '', "full_gate_runs_make_under_a_base"),
+ ("merge_slice.py", '    if pytest_base is not None:\n        own_pytest_base(env, pytest_base, log)\n', '', "not_removed_by_other_pytest_runs"),
+ ("merge_slice.py", '            shutil.rmtree(gate_pytest_base(t), ignore_errors=True)', '            pass', "removes_its_bases_with_its_trees"),
+ ("merge_slice.py", ', pytest_base=envs / "pytest-after")', ', pytest_base=Path(tempfile.mkdtemp()))', "removes_its_bases_with_its_trees"),
  # 1d: a gate red only for a registry or a download is retried once; twice is kind network, never the slice's fault
  ("merge_slice.py", '    why = network_only(since(start), tests) if code != 0 else None\n', '    why = None\n', "registry_timeout_is_retried_once"),
  ("merge_slice.py", '    why = network_only(since(start), tests) if code != 0 else None\n', '    why = None\n', "download_that_fails_while_the_gate_builds"),

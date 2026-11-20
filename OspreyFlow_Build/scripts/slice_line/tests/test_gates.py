@@ -58,6 +58,8 @@ esac
 #: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
 #: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them.
 STAND_IN_GATE = """def _stand_in_gate(t, b, l):
+    Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
+    l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
     if os.environ.get('TEST_GATE_LOG'):
         l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())
     if os.environ.get('TEST_GATE_RETRIES'):
