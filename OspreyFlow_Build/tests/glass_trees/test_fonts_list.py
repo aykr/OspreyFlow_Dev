@@ -17,6 +17,9 @@ Which test fails if the invariant is broken (rule 12):
 * the workspace (`apps/workspace`) or the keyboard and set-up harnesses (`apps/harness`) load a family or a weight the
   list does not name, or a listed `@fontsource` weight is imported by nothing, or a listed package is not declared:
   `test_the_workspace_and_the_harness_load_only_what_the_list_names`;
+* any of those loads a font from outside the repository (a `<link>` to Google Fonts, as the design handoff files write
+  it, an `@import`, a stylesheet from any other host, an external font file), or an `@font-face` of a listed name points
+  `src` at a file the list does not own or at a URL: the same test (fonts are self-hosted; spec 00 section 6);
 * the generated GOV.UK stylesheet, or a file in `public/assets/govuk/fonts/`, names a family the list does not (when the
   generated files exist; and always for the stylesheet the installed `govuk-frontend` ships, which the generator copies):
   `test_the_workspace_and_the_harness_load_only_what_the_list_names` and
@@ -202,6 +205,27 @@ def walk_files(core: Path, folders: tuple[str, ...], skipped: tuple[str, ...] = 
 FONTSOURCE_SPEC = re.compile(r"""["'`](@fontsource(?:-variable)?/[^"'`\s]+)["'`]""")
 FONT_FACE = re.compile(r"@font-face\s*\{(.*?)\}", re.S)
 FONT_REF = re.compile(r"[\w@./\-]+\.(?:woff2?|ttf|otf|eot)\b")
+#: A URL that leaves the repository: with a scheme anywhere, or protocol-relative straight after a quote, a bracket or `=`
+#: (a bare `//` is a comment in the languages scanned).
+EXTERNAL_URL = re.compile(r"""https?://[^\s"'()<>\\]+|(?<=["'(=])//[^\s"'()<>\\/][^\s"'()<>\\]*""", re.I)
+#: The hosts that serve fonts or font stylesheets: a `<link>` to one is how the design handoff's own files load a face.
+FONT_HOSTS = re.compile(r"(?:fonts\.googleapis\.com|fonts\.gstatic\.com|use\.typekit\.net|fonts\.bunny\.net|fast\.fonts\.net|fonts\.adobe\.com|cloud\.typography\.com|use\.fontawesome\.com|kit\.fontawesome\.com)", re.I)
+LINK_TAG = re.compile(r"<link\b[^>]*>", re.I | re.S)
+IMPORT_URL = re.compile(r"""@import\s+(?:url\(\s*)?["']?([^\s"')]+)""", re.I)
+FACE_URL = re.compile(r"""url\(\s*["']?([^"')]+?)["']?\s*\)""", re.I)
+
+
+def _is_external(ref: str) -> bool:
+    return bool(re.match(r"(?:https?:)?//", ref.strip(), re.I))
+
+
+def _stylesheet_urls(text: str) -> set[str]:
+    """What the text pulls in as a stylesheet: a `<link rel=stylesheet href=...>`, or an `@import`."""
+    found = {m.group(1) for m in IMPORT_URL.finditer(text)}
+    for tag in LINK_TAG.findall(text):
+        if re.search(r"""\brel\s*=\s*["']?[^"'>]*\bstylesheet\b""", tag, re.I):
+            found.update(re.findall(r"""\bhref\s*=\s*["']?([^\s"'>]+)""", tag, re.I))
+    return found
 
 
 def is_test_file(path: Path) -> bool:
@@ -291,10 +315,32 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
             for weight in _face_weights(weight_m.group(1)) if weight_m else []:
                 if weight not in entry["weights"]:
                     result.violations.append(f"{rel}: an @font-face for {entry['family']} at weight {weight}, which the list does not name")
-        # A font file named outside an `@font-face` (a preload, a `url(...)`).
-        for ref in FONT_REF.findall(FONT_FACE.sub("", text)):
-            if not _font_file_listed(ref, data):
+        # The files an `@font-face` points at are held to the list too: a listed name over an unlisted file loads an
+        # unlisted font, and one over a URL outside the repository is not self-hosted.
+        for block in FONT_FACE.findall(text):
+            family_m = re.search(r"font-family\s*:\s*([^;}]+)", block)
+            if (family_m.group(1).strip().strip("'\"").strip().lower() if family_m else "") not in families:
+                continue  # an unlisted family is reported above, once, for the family
+            for ref in FACE_URL.findall(block):
+                if _is_external(ref):
+                    result.violations.append(f"{rel}: an @font-face loads {ref}, from outside the repository: fonts are self-hosted")
+                elif not _font_file_listed(ref, data):
+                    result.violations.append(f"{rel}: an @font-face loads {ref}, which no listed family owns")
+        rest = FONT_FACE.sub("", text)
+        # A font file named outside an `@font-face` (a preload, a `url(...)`); an external one is reported below.
+        for ref in FONT_REF.findall(rest):
+            if not ref.startswith("//") and not _font_file_listed(ref, data):
                 result.violations.append(f"{rel}: names the font file {ref}, which no listed family owns")
+        # What leaves the repository: a font host, an external font file, or an external stylesheet (a `<link>` or an
+        # `@import`, which can load any family at any weight). Each URL is reported once, however it was found.
+        sheets = _stylesheet_urls(rest)
+        for url in dict.fromkeys(EXTERNAL_URL.findall(rest) + [u for u in sheets if _is_external(u)]):
+            if FONT_HOSTS.search(url):
+                result.violations.append(f"{rel}: loads {url}, from a font host: fonts are self-hosted from the list")
+            elif re.search(r"\.(?:woff2?|ttf|otf|eot)(?:[?#]|$)", url, re.I):
+                result.violations.append(f"{rel}: names the font file {url}, from outside the repository")
+            elif url in sheets:
+                result.violations.append(f"{rel}: pulls in the stylesheet {url} from outside the repository, which can load a font the list does not name")
         # The records beside the service (`FUNCTIONS.yaml` names `/assets/govuk/*` in prose) are not served.
         if no_gds and path.suffix not in {".yaml", ".yml"} and any(pattern.search(text) for pattern in gds):
             result.violations.append(f"{rel}: names GDS Transport (or its self-hosted assets), which the default tree does not serve (ADR-152 I9)")
@@ -429,6 +475,8 @@ def build_tree(root: Path) -> Path:
         FONTS_TS_REL: _real(FONTS_TS_REL),
         "apps/workspace/package.json": _real("apps/workspace/package.json"),
         "apps/harness/src/main.tsx": _real("apps/harness/src/main.tsx"),
+        "apps/workspace/index.html": _real("apps/workspace/index.html"),
+        "apps/harness/index.html": _real("apps/harness/index.html"),
         "apps/pages/server/views/layout.njk": _real("apps/pages/server/views/layout.njk"),
         "apps/pages/package.json": _real("apps/pages/package.json"),
         "apps/workspace/public/assets/govuk/govuk-frontend.css": "/* GENERATED */\n" + REAL_GDS_FACES,
@@ -470,6 +518,14 @@ def _after(anchor: str, line: str) -> Callable[[str], str]:
     return change
 
 
+def _before(anchor: str, line: str) -> Callable[[str], str]:
+    def change(text: str) -> str:
+        assert anchor in text, f"the real file no longer holds {anchor!r}: the plant's shape is stale"
+        return text.replace(anchor, line + anchor, 1)
+
+    return change
+
+
 def _without(line: str) -> Callable[[str], str]:
     def change(text: str) -> str:
         assert line in text, f"the real file no longer holds {line!r}: the plant's shape is stale"
@@ -505,6 +561,22 @@ FRONT_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     ("GDS Transport at an unlisted weight", "apps/workspace/public/assets/govuk/govuk-frontend.css", _append(REAL_GDS_FACES.splitlines()[0].replace("font-weight:400", "font-weight:600")), "an @font-face for GDS Transport at weight 600"),
     # A file in the generated fonts folder that is not one of GDS Transport's.
     ("an unlisted file in the generated fonts folder", "apps/workspace/public/assets/govuk/fonts/comic-neue-1a2b3c-v2.woff2", _append("x"), "a font file that no listed family owns"),
+    # A hosted font stylesheet, as the repository's own design handoff files load their faces (a `<link>` in the head),
+    # with the weight (500) and the span (200..800) the list does not name: in the workspace's page, and in a harness's.
+    ("a hosted Google Fonts stylesheet linked from the workspace page", "apps/workspace/index.html", _before("</head>", '<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@200..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">'), "loads https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next"),
+    ("a hosted Google Fonts stylesheet linked from a harness page", "apps/harness/index.html", _before("</head>", '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap">'), "loads https://fonts.googleapis.com/css2?family=IBM+Plex+Mono"),
+    # The same stylesheet pulled in from a workspace stylesheet, and a protocol-relative one.
+    ("a hosted font stylesheet imported by a workspace stylesheet", "apps/workspace/src/design/extra.css", _append('@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400&display=swap");'), "loads https://fonts.googleapis.com/css2?family=Roboto"),
+    ("a protocol-relative hosted font stylesheet", "apps/workspace/index.html", _before("</head>", '<link rel="stylesheet" href="//fonts.bunny.net/css?family=roboto:400">'), "loads //fonts.bunny.net/css?family=roboto:400"),
+    # A stylesheet from any other host: it can load any family, so the list cannot name what it loads.
+    ("an external stylesheet that is not a font host", "apps/workspace/index.html", _before("</head>", '<link rel="stylesheet" href="https://cdn.example.test/site.css">'), "pulls in the stylesheet https://cdn.example.test/site.css from outside the repository"),
+    ("an external stylesheet imported by a harness stylesheet", "apps/harness/src/extra.css", _append('@import "https://cdn.example.test/site.css";'), "pulls in the stylesheet https://cdn.example.test/site.css"),
+    # A font file on another host, named outside an `@font-face`.
+    ("an external font file named in a stylesheet", "apps/workspace/src/design/extra.css", _append("a{background:url(https://fonts.example.test/roboto-400.woff2)}"), "names the font file https://fonts.example.test/roboto-400.woff2, from outside the repository"),
+    # A listed name over a file the list does not name: the `src` of the rule is held to the list, not only its family.
+    ("a listed family whose @font-face points at a hosted file", "apps/workspace/src/design/extra.css", _append("@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(https://fonts.gstatic.com/s/roboto/v30/x.woff2)}"), "an @font-face loads https://fonts.gstatic.com/s/roboto/v30/x.woff2, from outside the repository"),
+    ("a listed family whose @font-face points at an unlisted local file", "apps/workspace/src/design/extra.css", _append(REAL_FONTSOURCE_FACE.replace("atkinson-hyperlegible-next-latin-400-normal.woff2", "roboto-latin-400-normal.woff2")), "an @font-face loads ./files/roboto-latin-400-normal.woff2, which no listed family owns"),
+    ("a listed family whose @font-face points at a file with no font extension", "apps/workspace/src/design/extra.css", _append("@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(https://fonts.gstatic.com/l/font?kit=abc)}"), "an @font-face loads https://fonts.gstatic.com/l/font?kit=abc, from outside the repository"),
 ]
 
 
@@ -534,6 +606,8 @@ PAGES_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     ("GDS Transport in a pages stylesheet", "apps/pages/server/static/app.css", _append('body{font-family:"GDS Transport",arial,sans-serif}'), "names GDS Transport"),
     # GDS Transport as a listed `@font-face` (the list passes it; only the GDS rule can catch it), as the generator writes it.
     ("a GDS Transport @font-face in the built output", "apps/pages/dist/server/static/govuk.css", _append(REAL_GDS_FACES.splitlines()[0]), "names GDS Transport"),
+    # A hosted font stylesheet linked from the layout's head (the pages' CSP and page.test.ts also refuse it; this names the font).
+    ("a hosted Google Fonts stylesheet linked from a pages view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">' + LAYOUT_HEAD, 1), "loads https://fonts.googleapis.com/css2?family=IBM+Plex+Mono"),
     # The font folder of the GOV.UK assets named from a view.
     ("the GOV.UK fonts folder named from a view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="stylesheet" href="/assets/govuk/govuk-frontend.css">' + LAYOUT_HEAD, 1), "names GDS Transport"),
 ]
