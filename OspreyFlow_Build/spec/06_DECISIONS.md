@@ -41619,11 +41619,21 @@ amendment adds to decision 6, whose "tokens.css, primitives.css, fonts; read by 
    `@fontsource` stylesheets for the Vite bundle; `fonts.test.ts` derives its list from `fonts.json` rather than restating it. The `pages`
    service loads no font today; the page build that first loads one (PL7) adds `@fontsource` to its `package.json` and loads only a listed
    face, and may not change the lockfile before then.
-3. **GDS Transport is listed with its two conditions, as fields a test reads.** `only_when: appearance.govuk_identity` and `only_on: gov.uk`:
-   it is shown only when the GOV.UK identity switch is on (ADR-152 decision 14), and only on a gov.uk address (ADR-132, Amendment 7); its
-   source is `govuk-frontend`, self-hosted under `/assets/govuk/`, and its licence is the restriction to services on GOV.UK domains
-   (`spec/00_ARCHITECTURE.md`), not OFL. No other entry carries either condition. A family on the list is not thereby on every page: the
-   default tree serves no GDS Transport at all (I9, its font half).
+3. **GDS Transport is listed with its two conditions, written as fields a test reads.** `only_when: appearance.govuk_identity` and
+   `only_on: gov.uk`. The two fields record the rule the list holds the face to: shown only when the GOV.UK identity switch is on (the
+   switch ADR-152 decision 14 decides), and only on a gov.uk address. The gov.uk condition comes from the face's licence, which restricts it
+   to services on GOV.UK domains (`spec/00_ARCHITECTURE.md`, the GDS Transport paragraph of the ADR-132 addition), and from the owner's
+   ruling of 20 November 2026 that the list carry it; it does not come from ADR-132 Amendment 7, which limits only the crown, the copyright
+   line and the Open Government Licence line to gov.uk. **The code enforces neither condition yet.** The switch is not built: nothing but
+   `fonts.json` names `appearance.govuk_identity`. The face follows the brand, not the switch or the host: `tokens.css` sets `--ui` to GDS
+   Transport inside the GOV.UK brand block, which follows `data-brand` on `<html>` on any host (`brand.ts`), and `isGovUkHost` gates only
+   the crown and the footer. The build that adds the default tree's assets (PL7) owns the proof pieces ADR-152 names for I9
+   (`test_default_tree_carries_no_govuk_assets.py`, `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case), and
+   those are the tests that will enforce the two conditions as behaviour; until they land nothing fails if GDS Transport is drawn with the
+   switch off or off a gov.uk address. The entry's source is `govuk-frontend`, self-hosted under `/assets/govuk/` (so the weights, 400
+   and 700, match the generated stylesheet's `@font-face` rules), and its licence is that restriction, not OFL. No other entry carries
+   either condition. A family on the list is not thereby on every page: the `pages` tree loads no font today, and this amendment's test
+   fails if it comes to carry GDS Transport (I9, its font half).
 4. **A test fails if either loads a font the list does not name.** It reads `apps/workspace`, `apps/harness`, `packages/design` and
    `apps/pages`, and looks for an `@fontsource` import or package, an `@font-face`, a font file, and a font URL, and requires each family
    and weight to be on the list (a font file's weight and style are read from its name, `<package>-<subset>-<weight>-<style>`; a file at a
@@ -41634,7 +41644,8 @@ amendment adds to decision 6, whose "tokens.css, primitives.css, fonts; read by 
    400 and 600. The owner applies a diff to the text; the code does not change.
 
 Tests that would fail (rule 12; each shown red against a planted fault in the shape the code writes it, rule 15):
-`tests/glass_trees/test_fonts_list.py` (the list's shape and GDS Transport's two conditions; an unlisted `@fontsource` import in `fonts.ts`, at an
+`tests/glass_trees/test_fonts_list.py` (the list's shape, and GDS Transport's two conditions checked as written in the list, not as
+behaviour of the product, which PL7's I9 tests will check; an unlisted `@fontsource` import in `fonts.ts`, at an
 unlisted weight, bare, from the variable scope or in a package.json; a listed weight nothing imports; an unlisted `@font-face` or font file in the
 workspace, the generated GOV.UK stylesheet or its fonts folder, a pages view or the pages' built output; GDS Transport in a pages stylesheet,
 as a listed `@font-face`, or by its assets path); `apps/workspace/src/design/fonts.test.ts` (the imports against the list, the families against
