@@ -212,7 +212,9 @@ slice-scout) lists every read the form makes before it offers a choice: the invi
 classification list, the roles catalogue, and anything else it finds; the list goes into the brief, and the builder starts only
 from it. The two gaps in a test AD2 left are in scope: a late and a failed load of each read (the roles catalogue first), a
 classification list that is empty, and a test double that refuses what the real route's giver rule refuses (rule 15).
-**After:** AD2 (merged) and PL4 (the shared package move; the form's code moves with it). **PL4 does not wait for AD5**: AD5
+**After:** AD2 (merged) and PL4 (the shared package move; **only the form's plain parts**, `givableCodes`, `givableLevels` and the
+like, move to `packages/glass-shared`: `People.tsx`, the loader AD5 builds and every other React component stay in the workspace,
+as I1 requires; the owner, 20 November). **PL4 does not wait for AD5**: AD5
 is queued behind PL4, never the other way. Until AD5 merges, AD2's form can be drawn before the roles list loads; the
 release notes should say so if v0.6.2 cuts before AD5.
 

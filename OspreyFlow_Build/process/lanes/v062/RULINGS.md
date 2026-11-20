@@ -172,3 +172,32 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   `sites/README.md`: the wording rule "Laurium is not named (the owner's decision, 12 November 2026)".
 - **Laurium beside the client.** Where a record credits Laurium to its publisher, the publisher becomes "the library's
   publisher"; Laurium's own name stays.
+
+## 20 November 2026: PL1, PL2, BL2, AD1, PL4 and PL6 (the owner's words of the day)
+
+- **PL1 is the four demo and install faults (N05, N06, N07, N11)**; "sound" meant "in working order". PL1a (N05 and N06) is agreed on
+  the readings: N05 keeps the resolution order and warns when the recorded home wins over a different product in the current
+  folder; N06 exempts synthetic packs only from the checkout refusal. PL1b (N07 and N11) follows PL1a.
+- **PL2** is the connection setting with the computed default and a refusal below a floor, and the Java notice in the image with a test.
+  Cut as PL2a (Java notice) and PL2b (connection limits); the floor (420), the ceiling and the scope are the conductor's, told to the owner.
+- **BL2:** the placed table is committed as it is, with a note giving both counts (180 placed; 154 open on 18 November; the 26 are
+  the 19 "cannot tell" rows and the 7 proposed N19 rows).
+- **PL3's fixed secret-shaped string** in a test plant is fixed in the next slice that touches `apps/pages`; tests generate one at run time.
+- **AD1** is cut in three: AD1a (the server half, no workspace file), AD1b (the screen) and AD1c (the key review's open items). AD1a
+  builds beside PL4 and is held unmerged; AD1b follows PL4 with its two imports adjusted (`keyboard/models-harness.tsx`,
+  `keyboard/admin-models.spec.ts`); AD1a and AD1b merge back to back, with no release between; AD1c after them. The owner's rules for
+  keys bind every AD1 slice: write-only, replace and remove and never reveal, audited without the key, only a holder of the right,
+  the server command stays as a second route, synthetic keys only.
+- **PL4 goes ahead of AD1**, released as five slices A to E to start after ADR-152 Amendment 1 is committed by the owner. The owner's
+  ruling on ADR-152 decision 6: R2 may land as five changes, each leaving main green and changing no behaviour. `glass-shared` is an
+  npm workspace dependency. Only the invite form's plain parts (`givableCodes`, `givableLevels` and the like) move; `People.tsx` and
+  every React component stay in the workspace (I1). Conditions on "nothing changed": (a) slice A's comparison script tolerates
+  differences that come only from a file's new path (chunk names, module order, source maps) and fails on a real change, shown red on a
+  planted change of behaviour and green on a planted move before any later slice relies on it; (b) the budget, accessibility and
+  keyboard runs are proved on GitHub after each merge, the next PL4 slice does not start until that run is green, and if it is red
+  because of the slice the conductor stops and tells the owner; (c) slice E's budget comparison against A's baseline is on the Mac,
+  with nothing else running. `PARITY_EXCEPTIONS.yaml` decides when a GOV.UK deployment drops React: each line is the owner's. While
+  PL4 runs nothing else touches `apps/workspace`.
+- **PL6** (the `pages` image scan): the scan script and its test with three planted faults; no edit to the Makefile or `ci.yml`
+  (those are the owner's diffs).
+- **Six builders** under balanced, tracks 5 and 6 on the default account (committed by the owner, 50ba572).
