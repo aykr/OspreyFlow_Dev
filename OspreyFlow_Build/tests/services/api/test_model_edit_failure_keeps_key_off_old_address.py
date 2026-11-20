@@ -19,6 +19,14 @@ by the edit's lock, so
 `test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made` makes a call
 at that very point (by wrapping `_reconcile`) and says where the gateway sent each key.
 
+**Round 4: the same rule holds when the gateway's answer to the new key is lost.** A read timeout
+or a dropped connection after the gateway stored the credential is read as "not stored", yet the
+key is held and the edit then puts the engine back at the old address.
+`test_a_new_key_whose_answer_is_lost_is_never_left_at_the_old_address` makes exactly that call (the
+real store, then the words `_call` gives a transport failure). And a moved edit takes only its own
+engine's entries away while it is made, not those of an engine whose name it begins:
+`test_a_moved_edit_leaves_the_entries_of_an_engine_it_prefixes_in_place`.
+
 Keys are made at run time (the owner's rules for keys): none is written in this file.
 """
 
@@ -152,3 +160,85 @@ def test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_i
     entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
     assert entry and world.gateway.stored_params(entry)["api_base"] == NEW
     assert world.gateway.credential("osprey-gemini") == world.second
+
+
+def test_a_new_key_whose_answer_is_lost_is_never_left_at_the_old_address(
+    client: TestClient, world: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gateway stores the new key and the answer is lost (the words `_call` gives any transport
+    failure). The edit cannot tell whether the key is held, so it takes the safe answer: the
+    credential is removed and the engine's key is lost, never kept for the old address."""
+    _add_at_the_old_address(client, world)
+    world.gateway.providers = {"gemini": StandInProvider(world.second, MODELS)}
+    gateway = world.admin._gateway
+    real = gateway._call
+
+    async def lost_answer(method: str, path: str, body: object | None = None) -> Any:
+        answer = await real(method, path, body)
+        if method == "POST" and path == "/credentials" and ".check" not in str(body):
+            raise ModelAdminRefused(
+                "The model gateway could not be reached; the change was not saved.", status=502
+            )
+        return answer
+
+    monkeypatch.setattr(gateway, "_call", lost_answer)
+    moved = {**ENGINE, "api_base": NEW}
+    refused = client.put(ENGINES + "/gemini", json={"provider": moved, "key": world.second})
+    assert refused.status_code in (500, 502), refused.text
+    assert world.second not in refused.text
+    assert world.gateway.credential("osprey-gemini") != world.second, "the new key is held"
+    assert world.gateway.credential("osprey-gemini") is None, "no key at all, not a stale one"
+    entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
+    assert entry and world.gateway.stored_params(entry)["api_base"] == OLD, "put back at the old"
+    monkeypatch.undo()
+    view = client.get("/v1/admin/models").json()
+    assert view["engines"][0]["key_state"] != "set", "not offered with no key behind it"
+
+
+def test_a_moved_edit_leaves_the_entries_of_an_engine_it_prefixes_in_place(
+    client: TestClient, world: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`gemini_pro` begins with `gemini`. While `gemini`'s entries are rebuilt, the neighbour's must
+    stay in the gateway: `_reconcile` makes any missing one again afterwards, so a final-state check
+    cannot tell, and this one looks at the very moment of the rebuild. It fails if the withdrawal
+    matches `osprey-gemini` and not `osprey-gemini-`."""
+    _add_at_the_old_address(client, world)
+    world.gateway.providers["gemini_pro"] = StandInProvider(world.first, MODELS)
+    pro = {"name": "gemini_pro", "label": "Gemini Pro", "roles": {"extraction": "gemini-2.5-flash"}}
+    check = client.post(
+        CHECKS, json={"provider": {**pro, "api_base": OLD}, "key": world.first}
+    ).json()
+    assert check["ok"], check
+    assert client.post(f"{CHECKS}/{check['check']}/add").status_code == 200
+    neighbour = {i for i in world.gateway.stored_ids() if i.startswith("osprey-gemini_pro-")}
+    assert neighbour, "the neighbour has entries to lose"
+    world.gateway.providers["gemini"] = StandInProvider(world.second, MODELS)
+    real = world.admin._reconcile
+    seen: list[set[str]] = []
+
+    async def look_first(*args: Any, **kwargs: Any) -> None:
+        if not seen:
+            seen.append(set(world.gateway.stored_ids()))
+        await real(*args, **kwargs)
+
+    monkeypatch.setattr(world.admin, "_reconcile", look_first)
+    moved = {**ENGINE, "api_base": NEW}
+    done = client.put(ENGINES + "/gemini", json={"provider": moved, "key": world.second})
+    assert done.status_code == 200, done.text
+    assert seen, "the rebuild was reached"
+    assert neighbour <= seen[0], "the neighbour's entries were taken away during the edit"
+    assert not any(i.startswith("osprey-gemini-") for i in seen[0]), "gemini's own were kept"
+
+
+def test_an_engine_name_with_a_hyphen_is_refused_so_the_withdrawal_prefix_is_exact(
+    client: TestClient, world: Any
+) -> None:
+    """`_withdraw_entries` takes the entries named `osprey-<name>-`. That is one engine's own only
+    while no engine's name can contain a hyphen (`gemini` and `gemini-pro` would share a prefix), so
+    the name rule is what the prefix rests on: relaxing it must fail here first."""
+    refused = client.post(
+        CHECKS,
+        json={"provider": {**ENGINE, "name": "gemini-pro", "api_base": OLD}, "key": world.first},
+    )
+    assert refused.status_code in (400, 422), refused.text
+    assert "provider.name" in refused.text
