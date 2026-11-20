@@ -41,3 +41,29 @@ findings, the key put before the old entries are withdrawn, appears fixed at thi
 | 28 | **The SE5 case (main's fault): a failed or interrupted address change, the undo also failing or the process dying, then a later key set** | See SE5 (`slices/SE5.md`); on this branch rows 15 to 17 are its forms | Entries at an address the record does not hold; a later set stores the key under the engine's credential | **Yes** (reasoned on main; the branch's rewritten edit path may cure some forms) | No | SE5's acceptance test; for the branch, none yet |
 
 Not settled by reading: the ADR wording (point 9, quoted); the test bodies of TC 172, 197, 321 and 337; the builder's worktree (not read).
+
+## Rows 29 onward: what SE5 leaves open (added on the owner's word of 20 November 2026, items 2 and 5)
+
+SE5 was **merged on the owner's accept** after six rounds: on its branch **no key reaches a wrong address on any traced path** (the fault it was built for), and main is worse on every open row today. Its own table (`slices/SE5_UNDO_STATES_TABLE.md`, 24 rows, read at the round-5 tip; the round-6 verifier found the rows below still open at the final tip `e3ef1b8`) is the source. **These rows are not dropped: they are AD1a's, because AD1 replaces this code.** The owner's ruling: a fault that can expose a key, show it back, log it or send it to an address it was not given for is never accepted; a fault that leaves an engine unavailable or the words wrong is fixed in AD1a and named in the release notes meanwhile. **Each open row below is an acceptance test with a planted fault at the real call site, red first, green after** (the shape of the SE5 test file `OspreyFlow_Build/tests/services/api/test_model_address_change_failure.py` is the model for the stand-in gateway and the planted failures). Rows 1 to 8, 13, 14, 17, 18, 20 and 22 to 24 of SE5's table are closed on main after SE5 and must stay closed (the verifier re-checks them). The SE5 line numbers are SE5's `model_admin.py`; AD1a's rewrite of the edit path has its own lines.
+
+| # | SE5 row | Path and ending | State left | Offered / works | Words and audit |
+|---|---|---|---|---|---|
+| 29 | 10 | edit that moves the address: the credential deleted (Wc), the first record save (without the key) raises OSError, the undo runs | file OLD, key record "set"; **no credential**; entries name a deleted credential | **yes / no** | "not saved": the record says set |
+| 30 | 11 | the same, cancelled or an unnamed exception before the first save | as 29 | **yes / no** | cancel and unnamed say "put back": **false** |
+| 31 | 9, 12 | edit that moves the address: the first save removed the key record; the proposal then refused (9) or the second save fails (12) | file OLD, **no key record**; entries OLD | no | **"not saved": the removal was saved and unsaid; no key_removed audit** |
+| 32 | 15 | key rotation: the credential deleted, the new key refused, then the "lost" record save raises OSError | record "set"; **no credential** | **yes / no** | "not saved": the record says set |
+| 33 | 16 | key rotation: the credential deleted, then the store call raises a non-transport exception or is cancelled | record "set"; no credential; entries restored | **yes / no** | "put back": **false** |
+| 34 | 19 | remove key: the credential deleted, then the save raises OSError or the task is cancelled before the save | file "set"; no credential | **yes / no** | OSError "not saved"; cancel "put back": **false** |
+| 35 | 21 | remove engine: the credential deleted, then the save of the proposal raises OSError | file: engine "set"; no credential; entries restored | **yes / no** | "not saved" |
+| 36 | start-up | the process killed after the credential was deleted and before the save (rows 29, 32, 34, 35) | on restart the entries are present, so the engine is not marked lost: **offered as "set" with no credential**; nothing reads credentials | **yes / no** | none |
+| 37 | start-up | the unpriced rebuild: a delete then an add refused | `_start_once` returns False; only wrong-address engines were marked; **the engine is offered during the retry window with entries missing**; the only trace is a log line | **yes / no** | log line only |
+| 38 | start-up | **any successful reconcile clears every unavailable mark**, including an engine whose credential is gone (rule 6) | marks lost for engines not made whole | offered | none |
+
+**The one design the owner rules for rows 29 to 38 (design rules 3 to 8 of the SE5 table, restated):**
+1. **A record of intent is written before a credential is deleted and cleared on success** (or the engine is marked before the next await): so that if the record save that should follow fails, is cancelled or the process dies, the record is never left saying "set" over no credential with the engine offered.
+2. **One decision for the words and the mark across a refusal, an error, a cancellation and any other exception.**
+3. **"Put back" is said, in the answer and the audit, only when the undo restored the entries and the credential.**
+4. **Start-up marks every engine whose reconcile did not finish, and every engine whose record says a key is set and has none** (it reads the credential, not only the entries).
+5. **A reconcile clears only the engines it actually made whole.**
+6. **A "not saved" answer says when the key's removal was saved, with a key_removed audit.**
+7. The key rules bind every row: never shown back, never logged, audited without the key, never sent to an address it was not given for; synthetic keys generated at run time.

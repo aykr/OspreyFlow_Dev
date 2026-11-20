@@ -64,6 +64,17 @@ Five rounds each closed one variant of the same flaw in the undo's state logic. 
 5. Keep what is closed: the address check, the withdrawal before a key is stored, the start-up comparison, the words for a failed undo that wrote after the entries were made. Do not widen the slice (no new route, field, right or setting). If a rule needs a new field in the record or a new route, say so and stop for the conductor.
 6. **Cheap checks before your final report** (ruff on every changed file, the scan-map check; the new test file adds none if it walks no folder).
 
+## Round 7: the fix round on the same table (the conductor, 20 November, after the round-6 verifier)
+
+Round 6 changed **only `_change`** (its undo decision, lines about 1196 to 1256) and left the credential rules untouched: the round-6 verifier found **table rows 10, 11, 15, 16, 19 and 21 still open, with design rules 3, 4, 6, 7 and 8 not built** (five faults in behaviour and one gap in a test; the record is `verify-e3ef1b80...`). This is the last round given. **The owner's rule: if a row is open after it, SE5 stops and comes to the owner with the table.** What round 7 must do (the verifier's own reading of the tip):
+
+1. **Rule 3, the credential (rows 10, 15, 19, 21):** a change that deletes the engine's credential (`edit_engine` about 1308, `put_credential`'s first step about 466, `remove_key` about 1443, `remove_engine` about 1357) **marks the engine unavailable before the next await** (or writes an intent first and clears it on success), so that when the record save that should follow fails, the record is not left saying "set" over no credential with the engine offered. The mark clears only when the record and the credential agree again.
+2. **Rule 4, the words (rows 11, 16):** a cancellation or an unnamed exception after the credential was deleted never says "put back" in the audit or the answer: say it only when the undo restored the entries **and** the credential. One shared decision for the words and the mark (rule 5).
+3. **Rule 8, the first save (rows 9, 12):** when an address move fails after the first save (about 1314) removed the key record, the answer says the key's removal was saved, and a `key_removed` audit is written.
+4. **Rule 6 (the start-up row, `_reconcile` about 1081 and `_start_once` about 969):** a successful reconcile clears only the engines it actually made whole, not every mark.
+5. **Rule 7 (start-up):** start marks every engine whose reconcile did not finish and every engine whose credential is gone while the record says "set".
+6. **Tests:** each of these rows is a test with a planted fault at the real call site (the credential deleted, then the save refused, cancelled or an unnamed exception), red first. In your report, a line per row of the table: closed (with the test) or open (and why). **Do not leave a row unreported.** Keep the closed rows closed.
+
 ## Out of scope
 
 AD1a's rewrite of the edit path (it merges main in after this and keeps the stronger of the two); new routes, fields or rights; the live measured run against the real gateway (owed, the live step is off); the screen.
