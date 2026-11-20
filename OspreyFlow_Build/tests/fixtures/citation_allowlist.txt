@@ -49,7 +49,6 @@ tests/test_site_identifiers.py
 # shared package (R1 to R8, WS4, the Conduit and Ingest items): each is a gate, a test or a file that slice writes. They are
 # absent on purpose until then. Each slice removes its own lines from this list in the change that writes the file, so the
 # list shrinks to nothing; a path left here after its slice has merged is a defect.
-apps/pages/PARITY_EXCEPTIONS.yaml
 apps/pages/VERSION_WINDOW.yaml
 apps/pages/test/default/theme.spec.ts
 apps/pages/test/govuk/identity.spec.ts
@@ -57,12 +56,9 @@ apps/pages/test/govuk/theme.spec.ts
 apps/pages/test/perf/graph.spec.ts
 apps/pages/test/server/refresh.test.ts
 packages/design/tokens.css
-scripts/no_react_check.mjs
 scripts/same_drawing_versions_check.mjs
-scripts/version_isolation_check.mjs
 tests/glass_trees/test_default_tree_carries_no_govuk_assets.py
 tests/glass_trees/test_import_boundaries.py
-tests/glass_trees/test_no_react_check.py
 tests/glass_trees/test_no_sigma_page_merges_in_the_window.py
 tests/glass_trees/test_same_drawing_versions.py
 tests/glass_trees/test_session_keys_expire.py
@@ -78,7 +74,6 @@ tests/ingest/test_job_file_schema.py
 # slice that writes each: PL4 for `FUNCTIONS.yaml`; PL7 for the tree state, the render test and the release notes
 # test; PL6 for the image scan and its test. Each slice removes its own line in the change that writes the file, so
 # the list shrinks to nothing; a path left here after its slice has merged is a defect.
-apps/pages/FUNCTIONS.yaml
 scripts/pages_image_react_scan.py
 scripts/tree_parity.py
 tests/glass_trees/test_cutover_is_in_the_release_notes.py
