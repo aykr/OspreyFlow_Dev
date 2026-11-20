@@ -185,15 +185,16 @@ def _bob_opens_alices_shared_view() -> Any:
 
 def test_a_view_shows_the_rest_and_counts_the_missing(world: _World) -> None:
     """Bob (OFFICIAL) opens Alice's shared view of five chosen ids: he sees the two he may read and
-    the link between them, and a count of three he cannot, never which: the SECRET node, the node in
-    a dataset the case does not read, and an id nobody holds read alike."""
+    the link between them, and is told of two, not of five (C045: `chosen` is what he may see), and
+    of no number he cannot: the SECRET node, the node in a dataset the case does not read, and an id
+    nobody holds read alike; `missing` is the creator's alone (`test_case_view_counts.py`)."""
     response = _bob_opens_alices_shared_view()
     assert response.status_code == 200, response.json()
     opened = response.json()
     assert sorted(n["id"] for n in opened["nodes"]) == ["near", "open"]
     assert [e["id"] for e in opened["edges"]] == ["e-open-near"]
-    assert opened["missing"] == 3
-    assert opened["view"]["chosen"] == 5
+    assert opened["missing"] == 0
+    assert opened["view"]["chosen"] == 2
     # Nowhere in the answer: not as an item, not in the view's own fields, not in its layout.
     for hidden in ("secret", "elsewhere", "never-held"):
         assert hidden not in response.text
@@ -222,7 +223,9 @@ def test_the_view_reads_as_its_reader_not_its_creator(world: _World) -> None:
     view_id = _saved()
     opened = _as("alice").get(f"{VIEWS}/{view_id}").json()
     assert sorted(n["id"] for n in opened["nodes"]) == ["near", "open", "secret"]
-    assert opened["missing"] == 2
+    # Not told how many of the five she cannot read: that counts `elsewhere` (a dataset the case
+    # does not read, never hers to see) with `never-held` (C045; `test_case_view_counts.py`).
+    assert opened["missing"] == 0
 
 
 def test_the_missing_check_fails_with_the_stored_selection_returned(
@@ -230,7 +233,7 @@ def test_the_missing_check_fails_with_the_stored_selection_returned(
 ) -> None:
     """Rule 15, at the real call site's shape: `open_view` reading the selection through
     `_read_selection` with the principal it is given. Planted to hand back what the view stored,
-    read without the reader's scope, the hidden nodes reach Bob and nothing is missing."""
+    read without the reader's scope, the hidden nodes reach Bob."""
 
     async def stored(graph: Any, node_ids: Any, principal: Principal) -> Any:
         unscoped = principal.model_copy(update={"datasets": None, "clearance": "SECRET"})
@@ -240,7 +243,6 @@ def test_the_missing_check_fails_with_the_stored_selection_returned(
     monkeypatch.setattr(case_views_module, "_read_selection", stored)
     opened = _bob_opens_alices_shared_view().json()
     assert "secret" in {n["id"] for n in opened["nodes"]}
-    assert opened["missing"] != 3
 
 
 def test_a_filtered_view_reads_the_readers_own_projection(world: _World) -> None:
@@ -395,7 +397,7 @@ def test_a_private_view_is_invisible_to_another_member(world: _World) -> None:
 
     assert _as("alice").post(f"{VIEWS}/{view_id}/share").status_code == 200
     assert [v["id"] for v in bob.get(VIEWS).json()] == [view_id]
-    assert bob.get(f"{VIEWS}/{view_id}").json()["missing"] == 3
+    assert bob.get(f"{VIEWS}/{view_id}").json()["missing"] == 0
 
 
 def test_the_privacy_check_fails_with_the_visibility_planted_out(
@@ -929,7 +931,11 @@ def test_a_hidden_first_item_is_never_named_and_the_next_the_reader_may_see_is(w
     assert alices["first_item"] == "Vance, Callum"
     for hidden in ("Vance", "Callum", "amber"):
         assert hidden not in bob_answer.text
-    assert {k: v for k, v in bobs.items() if k != "first_item"} == {k: v for k, v in alices.items() if k != "first_item"}
+    # The same shape, each told what they may see: Bob one, Alice two (C045: never the stored two).
+    assert (bobs["chosen"], alices["chosen"]) == (1, 2)
+    assert {k: v for k, v in bobs.items() if k not in ("first_item", "chosen")} == {
+        k: v for k, v in alices.items() if k not in ("first_item", "chosen")
+    }
     assert bob_reads == alice_reads == [["amber", "bea"]]  # the same one read, whatever each may see
 
 
@@ -937,7 +943,7 @@ def test_a_view_whose_chosen_nodes_are_all_hidden_has_no_first_item(world: _Worl
     _with_people(world)
     _saved(shared=True, node_ids=["amber", "secret", "elsewhere", "never-held"], name="Selection of 4 nodes")
     (bobs,) = _listed("bob")
-    assert bobs["first_item"] is None and bobs["chosen"] == 4
+    assert bobs["first_item"] is None and bobs["chosen"] == 0  # not 4: the hidden are not counted
     assert "first_item" in bobs  # the field is there, null: the shape does not change
 
 

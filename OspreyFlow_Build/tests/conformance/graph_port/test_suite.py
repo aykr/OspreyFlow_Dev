@@ -4424,6 +4424,94 @@ async def test_get_nodes_past_one_chunk_returns_exactly_the_readable_ones(
         assert [n.id for n in nodes] == sorted(readable)
 
 
+# `count_visible` (C045) is `get_nodes`' count, made in the store: a case view's `chosen` is how many
+# of its chosen nodes the reader may see, and a node they may not is in no number they are told. Each
+# reason is its own case, as for `get_nodes`, so a plant that lifts one step of the access filter from
+# the count's query fails the case for that step by name; and each case checks that the count and
+# `len(get_nodes(...))` agree, so the count can never be the filtered read's other half.
+
+
+@pytest.mark.parametrize("reason", _NODE_REASONS)
+async def test_count_visible_leaves_out_an_unreadable_id_whatever_the_reason(
+    factory: GraphAdapterFactory, reason: str
+) -> None:
+    async with factory.context() as adapter:
+        (readable,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        unreadable = await _unreadable_node(adapter, reason)
+
+        assert await adapter.count_visible([unreadable, readable], READER) == 1
+        assert await adapter.count_visible([unreadable], READER) == 0
+        assert await adapter.count_visible([unreadable, readable], READER) == len(
+            await adapter.get_nodes([unreadable, readable], READER)
+        )
+        # What the reason hides is real: a principal for whom it is open counts it.
+        if reason in ("clearance", "dataset"):
+            opener = CLEARED if reason == "clearance" else READER_BOTH
+            assert await adapter.count_visible([unreadable, readable], opener) == 2
+        if reason == "handling_code":
+            assert await adapter.count_visible([unreadable], RESTRICTED_READER) == 1
+
+
+async def test_count_visible_of_a_mixed_list_is_exactly_the_readable_subset(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        readable, _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(3)],
+            [],
+        )
+        unreadable = [await _unreadable_node(adapter, reason) for reason in _NODE_REASONS]
+        asked = [*unreadable, *readable]
+        assert await adapter.count_visible(asked, READER) == 3
+        # The same as the list without the unreadable ids: nothing in the number says they exist.
+        assert await adapter.count_visible(asked, READER) == await adapter.count_visible(
+            readable, READER
+        )
+
+
+async def test_count_visible_counts_a_duplicated_id_once_and_no_ids_as_none(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter,
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"],
+            [],
+        )
+        assert await adapter.count_visible([b, a, b, a, a], READER) == 2
+        assert await adapter.count_visible([], READER) == 0
+
+
+async def test_count_visible_past_one_chunk_counts_exactly_the_readable_ones(
+    factory: GraphAdapterFactory,
+) -> None:
+    """As `get_nodes` past one chunk: 1,050 readable, 50 hidden and 50 absent, mixed across the
+    chunks, count 1,050 whatever the chunk boundaries do."""
+    async with factory.context() as adapter:
+        tx = await adapter.begin_transaction()
+        readable = await adapter.upsert_nodes(
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(1050)],
+            tx,
+        )
+        hidden = await adapter.upsert_nodes(
+            [_node("Person", classification="SECRET", datasets=["enron"]) for _ in range(50)], tx
+        )
+        await adapter.commit_transaction(tx)
+        absent = [new_node_id() for _ in range(50)]
+        asked: list[str] = []
+        for i, node_id in enumerate(readable):
+            asked.append(node_id)
+            if i % 21 == 0 and absent:
+                asked.append(absent.pop())
+            if i % 21 == 10 and hidden:
+                asked.append(hidden.pop())
+        assert len(asked) > 1000
+        assert await adapter.count_visible(asked, READER) == 1050
+
+
 @dataclass(frozen=True)
 class _Unreadable:
     """A link `READER` cannot read. `opener` is a principal who differs from `READER` in just the
