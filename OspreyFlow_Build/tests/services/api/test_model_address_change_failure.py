@@ -533,6 +533,57 @@ async def test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_au
     assert scene.addresses_reached_by(scene.second) == {OLD}
 
 
+def test_a_change_refused_before_it_wrote_anything_is_not_called_unaltered_by_a_failing_undo(
+    scene: Scene, routed: TestClient
+) -> None:
+    """The undo's own writes are not the change's: a key with a space is refused before any call to
+    the gateway, and the gateway is refusing its key updates, so the undo fails. Nothing had been
+    altered, so the answer is the refusal alone, the engine is not marked and is offered still."""
+    asyncio.run(scene.set_up())
+    scene.faults.refuse.append(on("/key/update"))
+    bad = "sk-" + secrets.token_hex(8) + " " + secrets.token_hex(8)
+    answer = routed.put(f"{ENGINES}/gemini/key", json={"key": bad})
+    assert answer.status_code in (400, 422), answer.text
+    words = answer.json()["detail"]["detail"].lower()
+    assert "no spaces" in words and "nothing was changed" in words
+    assert "unavailable" not in words and "could not be put back" not in words
+    assert "gemini" not in scene.admin._unavailable
+    assert scene.admin.key_state("gemini") == "set"
+    assert scene.admin.routes().engines["gemini"].key_present is True, "still offered to analysts"
+    last = scene.audit.entries[-1].outcome.lower()
+    assert last.startswith("refused") and "unavailable" not in last, last
+    assert scene.first not in answer.text and bad not in answer.text
+
+
+async def test_an_interruption_before_the_change_wrote_anything_leaves_the_engine_available(
+    scene: Scene, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The same, for an interruption: it stops the change before any call to the gateway, and the
+    undo's own writes fail. The audit says nothing was altered; the engine is not marked."""
+    await scene.set_up()
+    reached = asyncio.Event()
+
+    async def hangs(*_args: Any, **_kwargs: Any) -> None:
+        reached.set()  # before the gateway is touched
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(scene.admin, "_withdraw_disagreeing", hangs)
+    scene.faults.refuse.append(on("/key/update"))
+    task = asyncio.ensure_future(
+        scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
+    )
+    await asyncio.wait_for(reached.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    monkeypatch.undo()
+
+    last = scene.audit.entries[-1].outcome.lower()
+    assert last.startswith("interrupted") and "unavailable" not in last, last
+    assert "gemini" not in scene.admin._unavailable
+    assert scene.admin.routes().engines["gemini"].key_present is True
+
+
 @pytest.mark.parametrize("moved", [True, False], ids=["the address moved", "the address kept"])
 async def test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable(
     scene: Scene, moved: bool
