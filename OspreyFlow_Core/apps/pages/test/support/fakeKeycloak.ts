@@ -103,6 +103,12 @@ export interface FakeKeycloak {
   omitIdToken: boolean;
   /** Answer the token address with this status, whatever was asked. */
   tokenStatus: number | undefined;
+  /** Answer the key-set address (`certs`) with this status, whatever was asked: the realm failing after the code was spent. */
+  certsStatus: number | undefined;
+  /** Answer the key-set address with a 200 whose body is this text, which need not be a key set. */
+  certsBody: string | undefined;
+  /** Times the key-set address was asked. */
+  certsCalls: number;
   /** Seconds the answer's `refresh_expires_in` says; `undefined` leaves the field out. */
   refreshExpiresIn: number | undefined;
   tokenCalls: number;
@@ -164,6 +170,9 @@ export async function startFakeKeycloak(options: FakeKeycloakOptions): Promise<F
     signWithOtherKey: false,
     omitIdToken: false,
     tokenStatus: undefined,
+    certsStatus: undefined,
+    certsBody: undefined,
+    certsCalls: 0,
     refreshExpiresIn: 1800,
     tokenCalls: 0,
     issued: [],
@@ -320,7 +329,12 @@ export async function startFakeKeycloak(options: FakeKeycloakOptions): Promise<F
           authorization_response_iss_parameter_supported: true,
         });
       } else if (request.method === "GET" && path === `${base}/protocol/openid-connect/certs`) {
-        send(response, 200, { keys: [jwk] });
+        fake.certsCalls += 1;
+        if (fake.certsStatus !== undefined) send(response, fake.certsStatus, { error: "server_error" });
+        else if (fake.certsBody !== undefined) {
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end(fake.certsBody);
+        } else send(response, 200, { keys: [jwk] });
       } else if (request.method === "POST" && path === `${base}/protocol/openid-connect/token`) {
         await token(request, response);
       } else {
