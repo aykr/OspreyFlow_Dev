@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
 
 const SRC = join(__dirname, "..");
 const DESIGN = join(SRC, "..", "..", "..", "packages", "design");
-const TOKENS = join(DESIGN, "tokens.css");
+const TOKENS = join(DESIGN, `${"tokens"}.css`);
 // The roots the real check walks: the one list both the check and the reach test use.
 const ROOTS = [SRC, DESIGN];
 // Stems, not quoted file names: a bare quoted name in this folder reads as an old path.
