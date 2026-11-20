@@ -32,7 +32,7 @@ import {
   promotionDetails,
   removedCases,
 } from "./promotionsApi";
-import { currentBrand } from "../../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 
 const TAG: Record<Promotion["status"], string> = {
   awaiting_review: "govuk-tag--yellow",

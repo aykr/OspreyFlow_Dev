@@ -17,6 +17,10 @@ export const SOURCES = [
   "apps/workspace/src/design",
   "packages/design",
   "apps/workspace/src/theme",
+  // The theme, the brand and the product's statement the install page imports by `@ospreyflow/glass-shared` (PL4
+  // slice D1): they were under `apps/workspace/src/theme` and `brand` and `welcome`, and a change to one must still
+  // make a page built before it stale.
+  "packages/glass-shared/src",
 ];
 
 const skipped = (name) => name.startsWith(".") || name === "node_modules" || name === "Icon\r";

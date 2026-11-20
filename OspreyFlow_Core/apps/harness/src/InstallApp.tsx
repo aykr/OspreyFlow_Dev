@@ -4,7 +4,7 @@
 // through `PUT /api/install/answers`; `harness/install_page.py` serves both.
 import { useEffect, useState } from "react";
 
-import { PRODUCT_STATEMENT } from "../../workspace/src/welcome/statement";
+import { PRODUCT_STATEMENT } from "@ospreyflow/glass-shared";
 
 import { errorMessage, getConfig, getInstallState, putConfig, putInstallAnswers } from "./api/client";
 import type { InstallAnswers, InstallMode, InstallState, OspreyConfig, Profile } from "./api/types";

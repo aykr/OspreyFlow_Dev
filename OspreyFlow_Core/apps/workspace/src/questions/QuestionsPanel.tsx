@@ -9,7 +9,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
 import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { AnswerActions, type AnswerIds } from "./AnswerActions";
 import { sourceAsFact, splitAnswer, type AnswerPart, type GraphCitation, type SearchCitation } from "./graphFacts";
 import {

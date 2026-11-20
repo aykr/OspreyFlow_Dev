@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import type { Node, SearchPageResponse, SearchResult } from "../../../../packages/schemas/generated";
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import "./searchResults.css";
 

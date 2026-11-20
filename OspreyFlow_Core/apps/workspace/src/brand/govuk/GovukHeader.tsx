@@ -8,7 +8,7 @@
 // link only), so the header is a small local extension of it: one slot, after the logo, that
 // `shell/PlaceSwitcher.tsx` draws the places into. Its styling is `shell/places.css`, on the header's
 // own colours.
-import { currentBrand, isGovUkHost } from "../brand";
+import { currentBrand, isGovUkHost } from "@ospreyflow/glass-shared";
 
 /** The local extension's slot (see above). */
 export const GOVUK_HEADER_PLACES_ID = "govuk-header-places";

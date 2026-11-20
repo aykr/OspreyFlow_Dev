@@ -10,6 +10,16 @@
 //   map/contrast              the WCAG contrast ratio of two colours
 //   map/conduitRequest        which of MapLibre's tile reads carry the bearer token (a request transform: it
 //                             imports nothing from the map library)
+//   theme/theme, brand/brand  light and dark, and the deployment's brand (ADR-070, ADR-132): the choice, its cookie,
+//                             what a canvas asks to draw again (PL4 slice D1; the toggle button stays in the workspace)
+//   color/palette, tokens, oklab, nodeGlyphs
+//                             the canvas's colours by theme, the token mirrors, the OKLab arithmetic, the node glyphs
+//   welcome/statement         what the product is, worded once (ADR-034 Amendment 1)
+//   layout/layoutSizes, panelOrder, sidePanelState
+//                             the sizes, the panel order and the side panel's mode, kept in this browser: the plain
+//                             halves (the React hooks over them stay in the workspace's files of the same names)
+//   admin/inviter             what an inviter may give: the types and `givableLevels`, `givableCodes` (the context and
+//                             `useInviter` stay in the workspace)
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -26,3 +36,14 @@ export * from "./workingset/models";
 export * from "./color/textContrast";
 export * from "./map/contrast";
 export * from "./map/conduitRequest";
+export * from "./theme/theme";
+export * from "./brand/brand";
+export * from "./welcome/statement";
+export * from "./color/tokens";
+export * from "./color/palette";
+export * from "./color/oklab";
+export * from "./color/nodeGlyphs";
+export * from "./layout/panelOrder";
+export * from "./layout/layoutSizes";
+export * from "./layout/sidePanelState";
+export * from "./admin/inviter";

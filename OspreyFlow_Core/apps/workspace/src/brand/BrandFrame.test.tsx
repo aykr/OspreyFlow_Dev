@@ -5,7 +5,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyBrand, PLAIN_APPEARANCE, type Appearance } from "./brand";
+import { applyBrand, PLAIN_APPEARANCE, type Appearance } from "@ospreyflow/glass-shared";
 import { BrandFrame, MAIN_CONTENT_ID, useFullFooter } from "./BrandFrame";
 
 const GOVUK: Appearance = { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" };

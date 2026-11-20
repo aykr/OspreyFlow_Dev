@@ -10,7 +10,7 @@ import {
   moveSidePanelTo,
   normaliseSidePanelOrder,
   onSidePanelOrderChange,
-} from "./panelOrder";
+} from "@ospreyflow/glass-shared";
 
 // ADR-085. The order of the right-hand column's panels is a way of looking, so it is kept in this
 // browser only (as the theme, labels and icons are), never sent to the server and not part of the case.

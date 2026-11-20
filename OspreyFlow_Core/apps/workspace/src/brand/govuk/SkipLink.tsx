@@ -3,7 +3,7 @@
 // element that a bare fragment jump does not always focus. Enter on a link fires click.
 import type { MouseEvent } from "react";
 
-import { currentBrand } from "../brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 
 export function SkipLink({ target = "main-content" }: { target?: string }) {
   const govuk = currentBrand() === "govuk";

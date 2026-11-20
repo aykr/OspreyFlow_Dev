@@ -1,9 +1,8 @@
 // The welcome page's About (ADR-115 decision 8; Amendment 4): what the product is for, with screens of
 // synthetic demonstration cases. Switched off by `welcome.about: false`.
-import { currentBrand } from "../brand/brand";
+import { currentBrand, PRODUCT_STATEMENT } from "@ospreyflow/glass-shared";
 import { PLACE_WORDS } from "../help/roles";
 import { MeshMark } from "../shell/BrandMark";
-import { PRODUCT_STATEMENT } from "./statement";
 import amlDecision from "./assets/screen-aml-decision.jpg";
 import amlOwnership from "./assets/screen-aml-ownership.jpg";
 import amlQueue from "./assets/screen-aml-queue.jpg";

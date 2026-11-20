@@ -7,7 +7,7 @@
 import { useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { GOVUK_HEADER_PLACES_ID } from "../brand/govuk/GovukHeader";
 import { PLACE_NAME, type PlaceId } from "./places";

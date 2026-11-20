@@ -6,7 +6,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { readStoredTheme, THEME_COOKIE_NAME } from "../../workspace/src/theme/theme";
+import { readStoredTheme, THEME_COOKIE_NAME } from "@ospreyflow/glass-shared";
 import { SummaryRail } from "./SummaryRail";
 
 beforeEach(() => {

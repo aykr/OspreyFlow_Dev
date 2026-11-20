@@ -2,7 +2,7 @@
 // markers, links and labels, and a sighting trail. One place, read by `MapView.tsx` and by the
 // three themes' contrast check (`map-verify/contrast.spec.ts`), so the check measures the colours
 // the map really uses rather than a copy of them.
-import type { Palette } from "../color/palette";
+import type { Palette } from "@ospreyflow/glass-shared";
 
 export interface OverlayColours {
   /** A plotted node: brass, the accent (sigma's own grey was unreadable on the light basemap). */

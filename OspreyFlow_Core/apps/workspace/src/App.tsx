@@ -135,10 +135,15 @@ import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
-import { createWorkingSet, type HistoryStepSummary, type LimitExceeded, type WorkingSetDelta } from "@ospreyflow/glass-shared";
+import {
+  DEFAULT_TIMELINE_HEIGHT,
+  createWorkingSet,
+  type HistoryStepSummary,
+  type LimitExceeded,
+  type WorkingSetDelta,
+} from "@ospreyflow/glass-shared";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
-import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
 import { useOnReturn } from "./strength/useOnReturn";
 import { TimelineStrip } from "./timeline/TimelineStrip";
 import { lastChangeText } from "./history/lastChange";

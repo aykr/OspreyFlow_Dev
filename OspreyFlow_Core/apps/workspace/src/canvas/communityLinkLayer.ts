@@ -5,7 +5,7 @@
 // community's centre is worked out again only when a node has moved or the communities changed.
 import type Sigma from "sigma";
 
-import { activePalette } from "../color/palette";
+import { activePalette } from "@ospreyflow/glass-shared";
 import { communityLinkWidth, type CommunityLink } from "./communityLinks";
 
 const LAYER = "communityLinks";

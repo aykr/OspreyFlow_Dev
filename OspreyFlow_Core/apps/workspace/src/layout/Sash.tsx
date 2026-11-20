@@ -4,7 +4,7 @@
 // take and the owner stores and applies it.
 import { useRef, type KeyboardEvent, type PointerEvent } from "react";
 
-import { clamp } from "./layoutSizes";
+import { clamp } from "@ospreyflow/glass-shared";
 
 export const SASH_STEP = 16;
 export const SASH_LARGE_STEP = 64;

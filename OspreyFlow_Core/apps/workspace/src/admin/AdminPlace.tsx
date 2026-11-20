@@ -9,10 +9,10 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { fetchResolvedPrincipal } from "../auth/userManager";
-import { currentBrand } from "../brand/brand";
+import { currentBrand, type InviterRead } from "@ospreyflow/glass-shared";
 import { whyNotByRole } from "../help/roles";
 import type { AdminApi } from "./api";
-import { InviterContext, type InviterRead } from "./inviter";
+import { InviterContext } from "./inviter";
 import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
 import { Audit } from "./sections/Audit";

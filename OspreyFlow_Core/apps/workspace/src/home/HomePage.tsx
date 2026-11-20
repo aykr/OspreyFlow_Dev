@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ROLES } from "../admin/AdminPlace";
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { MeshMark } from "../shell/BrandMark";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { PLACE_KEY, PLACE_NAME } from "../shell/places";

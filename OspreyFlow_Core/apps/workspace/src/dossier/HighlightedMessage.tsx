@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 
-import { CHANNEL_HEX, FALLBACK_CHANNEL_HEX } from "../color/tokens";
+import { CHANNEL_HEX, FALLBACK_CHANNEL_HEX } from "@ospreyflow/glass-shared";
 import type { OntologyRegistry } from "../ontology/schema";
 import type { DocumentView, MessageSpan } from "./models";
 

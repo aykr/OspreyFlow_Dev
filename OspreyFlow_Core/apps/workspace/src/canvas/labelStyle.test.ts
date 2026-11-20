@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { paletteFor } from "../color/palette";
+import { paletteFor } from "@ospreyflow/glass-shared";
 import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
 
 // Sigma paints a label in black unless it is told otherwise, which is invisible on the dark canvas.

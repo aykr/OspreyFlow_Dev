@@ -10,7 +10,7 @@ import Graph from "graphology";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { paletteFor } from "../../color/palette";
+import { paletteFor } from "@ospreyflow/glass-shared";
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
 import { MapEditor } from "./MapEditor";
 import { STRIP } from "./mapEditorTestSupport";

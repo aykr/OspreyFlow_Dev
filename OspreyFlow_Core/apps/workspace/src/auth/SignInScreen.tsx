@@ -9,8 +9,14 @@
 // deployment says (decision 8); the strip is the deployment's marking (decision 2).
 import { useEffect, useState } from "react";
 
-import { currentBrand } from "../brand/brand";
-import { applyTheme, currentTheme, onThemeChange, storeTheme, type Theme } from "../theme/theme";
+import {
+  currentBrand,
+  applyTheme,
+  currentTheme,
+  onThemeChange,
+  storeTheme,
+  type Theme,
+} from "@ospreyflow/glass-shared";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { MeshMark, SolidMark } from "../shell/BrandMark";
 import { WelcomeAbout } from "../welcome/WelcomeAbout";

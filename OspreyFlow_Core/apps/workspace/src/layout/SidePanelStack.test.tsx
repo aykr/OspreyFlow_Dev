@@ -3,8 +3,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SidePanelStack } from "./SidePanelStack";
-import { forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
-import { forgetSidePanelOrderForTest, getSidePanelOrder, moveSidePanel } from "./panelOrder";
+import {
+  forgetLayoutSizesForTest,
+  getLayoutSizes,
+  forgetSidePanelOrderForTest,
+  getSidePanelOrder,
+  moveSidePanel,
+} from "@ospreyflow/glass-shared";
 
 // ADR-085. The three panels of the right-hand column, each in a slot with a grip row: a drag handle
 // and Move up / Move down buttons, which are the keyboard route (rule 13).

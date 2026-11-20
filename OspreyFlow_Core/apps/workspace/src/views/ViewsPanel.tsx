@@ -11,7 +11,7 @@
 // server never sends it; the panel draws what it is given.
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import "./views.css";
 import { type CaseView, deleteView, listViews, shareView } from "./viewsApi";
 
