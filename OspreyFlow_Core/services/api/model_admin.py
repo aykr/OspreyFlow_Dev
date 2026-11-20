@@ -1208,8 +1208,9 @@ class ModelAdmin:
             try:
                 result = await work(current)
             except asyncio.CancelledError:
-                restored = await self._undone(current, rebuilt)
+                # Read before the undo: the undo's own writes are not the change's.
                 touched = self._gateway.writes != began
+                restored = await self._undone(current, rebuilt)
                 if touched and not restored:
                     self._mark_unavailable(engine)
                 await self._audited(
@@ -1235,8 +1236,9 @@ class ModelAdmin:
                 unnamed_failure = True
             else:
                 return result
+            touched = self._gateway.writes != began  # read before the undo's own writes
             restored = await self._undone(current, rebuilt)
-            if not restored and self._gateway.writes != began:
+            if not restored and touched:
                 self._mark_unavailable(engine)
                 failed = ModelAdminRefused(_not_put_back(failed.words), status=failed.status)
             elif unnamed_failure:

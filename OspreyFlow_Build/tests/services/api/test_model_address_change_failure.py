@@ -34,6 +34,11 @@ at run time (the owner's rules for keys): none is written in this file.
   `test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_audited`; and the
   engine's connection test says it is unavailable, not that its key is lost:
   `test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable`;
+- a change refused, or interrupted, before it wrote anything to the gateway is not called "unaltered
+  and not put back" because the undo's own writes failed (the counter is read before the undo; the
+  engine is neither marked nor withdrawn from analysts):
+  `test_a_change_refused_before_it_wrote_anything_is_not_called_unaltered_by_a_failing_undo` and
+  `test_an_interruption_before_the_change_wrote_anything_leaves_the_engine_available`;
 - an engine that signs in by the gateway's role (no key) is offered to no analyst while it is marked
   unavailable, though its key state is "iam_role" either way (so only the route's own condition
   withholds it): `test_a_keyless_engine_marked_unavailable_is_offered_to_no_analyst`;
