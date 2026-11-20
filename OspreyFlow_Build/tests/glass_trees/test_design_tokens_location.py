@@ -66,6 +66,7 @@ _TEXT_FORM = re.compile(r"(?<!spec/)(?<!packages/)design/tokens\.css")
 #: (the gap may be a line break inside the brackets).
 _SEGMENT_FORM = re.compile(r"""["']design["']\s*[,/]\s*["']tokens\.css["']""")
 _PACKAGES_SEGMENT = re.compile(r"""["']packages["']\)?\s*[,/]\s*$""")
+_DESIGN_SEGMENT = re.compile(r"""["']design["']\s*[,/]\s*$""")
 #: Inside the old folder itself, the file was named bare: `join(__dirname, "tokens.css")`, `"./tokens.css"`.
 _BARE_FORM = re.compile(r"""["'](?:\./)?tokens\.css["']""")
 _OLD_FOLDER = "OspreyFlow_Core/apps/workspace/src/design/"
@@ -86,6 +87,8 @@ def old_path_mentions(root: Path, rels: Iterable[str]) -> list[tuple[str, int, s
             for hit in form.finditer(text):
                 if form is _SEGMENT_FORM and _PACKAGES_SEGMENT.search(text[: hit.start()]):
                     continue  # `"packages", "design", "tokens.css"` is the new place written apart
+                if form is _BARE_FORM and _DESIGN_SEGMENT.search(text[: hit.start()]):
+                    continue  # `"design", "tokens.css"` is a path written apart, not the bare name
                 line = text.count("\n", 0, hit.start()) + 1
                 found.append((rel, line, text.splitlines()[line - 1].strip()))
     return sorted(set(found))
