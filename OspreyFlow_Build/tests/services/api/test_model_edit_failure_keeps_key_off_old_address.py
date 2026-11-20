@@ -107,10 +107,18 @@ def _break(world: Any, how: str, monkeypatch: pytest.MonkeyPatch) -> None:
 
         monkeypatch.setattr(world.admin, "_reconcile", refuse)
     else:
-        def full(*_args: Any, **_kwargs: Any) -> None:
-            raise OSError("no space left on device")
+        # The edit writes the file twice: first the engine's key recorded lost (before any key is
+        # held), then the finished edit. The disk fills between them, so the second fails.
+        real_save = world.admin._file.save
+        saved: list[bool] = []
 
-        monkeypatch.setattr(world.admin._file, "save", full)
+        def full_after_the_first(*args: Any, **kwargs: Any) -> None:
+            if saved:
+                raise OSError("no space left on device")
+            saved.append(True)
+            real_save(*args, **kwargs)
+
+        monkeypatch.setattr(world.admin._file, "save", full_after_the_first)
 
 
 @pytest.mark.parametrize("how", ["gateway refuses the entries", "models file cannot be written"])
@@ -132,6 +140,29 @@ def test_a_failed_moved_edit_never_leaves_the_new_key_at_the_old_address(
     view = client.get("/v1/admin/models").json()
     assert view["engines"][0]["key_state"] != "set", "not offered with no key behind it"
     assert not any(c for c in world.gateway._creds if ".check" in c), "no check credential left"
+
+
+def test_a_moved_edit_whose_file_cannot_be_written_at_all_stores_no_key(
+    client: TestClient, world: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The recorded-lost mark is written before the new key is stored. A file that cannot be
+    written then fails the edit with no key sent and the engine as it was."""
+    _add_at_the_old_address(client, world)
+    world.gateway.providers = {"gemini": StandInProvider(world.second, MODELS)}
+
+    def full(*_args: Any, **_kwargs: Any) -> None:
+        raise OSError("no space left on device")
+
+    monkeypatch.setattr(world.admin._file, "save", full)
+    moved = {**ENGINE, "api_base": NEW}
+    refused = client.put(ENGINES + "/gemini", json={"provider": moved, "key": world.second})
+    assert refused.status_code in (500, 502), refused.text
+    assert world.second not in refused.text
+    assert world.gateway.credential("osprey-gemini") == world.first, "the old key is untouched"
+    entry = world.gateway.entry_for("gemini/gemini-2.5-flash")
+    assert entry and world.gateway.stored_params(entry)["api_base"] == OLD, "put back at the old"
+    monkeypatch.undo()
+    assert client.get("/v1/admin/models").json()["engines"][0]["key_state"] == "set"
 
 
 def test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made(
@@ -235,7 +266,7 @@ def test_a_new_key_the_gateway_will_not_remove_is_never_put_behind_the_old_addre
     refused = client.put(ENGINES + "/gemini", json={"provider": moved, "key": world.second})
     assert refused.status_code in (500, 502), refused.text
     assert world.second not in refused.text
-    assert "may still be held" in refused.json()["detail"], "the person is told, in words"
+    assert "may still be held" in refused.text, "the person is told, in words"
     assert world.gateway.credential("osprey-gemini") == world.second, "the stand-in refused"
     assert not any(i.startswith("osprey-gemini-") for i in world.gateway.stored_ids()), (
         "an entry was rebuilt at the old address on a credential that may hold the new key"

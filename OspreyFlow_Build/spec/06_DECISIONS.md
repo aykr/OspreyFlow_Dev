@@ -41378,7 +41378,10 @@ the guide's lines that were not updated then.
    call takes no part in the edit's lock, so a moved edit deletes the engine's entries at the old address before
    the new key becomes the credential, and makes them again at the new one; the engine is briefly unavailable,
    never served by the wrong key. If the edit fails once its key is held, the credential is removed and the key
-   recorded lost. A key
+   recorded lost, the record written before the key is stored so that no process or replica reads "set" while it is
+   held. If the gateway refuses that removal, the key may still be held: the edit says so in words and the audit
+   record says so without the key, the engine is left without entries and offered to no analyst, and no check
+   without a key is run for it, so nothing is made at the old address on a credential that may hold the new key. A key
    given with an edit is checked against every model. A label or an agreement changed alone asks nothing. The
    check runs under a probe name beside the live engine: the new key as the probe's own credential
    (`probe_name`: `<engine>.check`, which no engine can be named, an engine's name having no dot), the entries

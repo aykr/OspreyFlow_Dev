@@ -101,6 +101,17 @@ class KeyRemovedNotReplaced(ModelAdminRefused):
     now, and is recorded so (`ModelAdmin.set_key`)."""
 
 
+class KeyMayStillBeHeld(ModelAdminRefused):
+    """A change failed once a key typed for a new address was in the gateway, and the gateway then
+    refused to remove it (ADR-135 Amendment 14 point 9). The credential may still hold that key, so
+    nothing may be made at the old address on it: `_change` leaves the engine's entries out of the
+    undo. The words, which the person and the audit both get, say so and carry no key."""
+
+    def __init__(self, words: str, *, engine: str, status: int = 502) -> None:
+        super().__init__(words, status=status)
+        self.engine = engine
+
+
 # --- the models file ---------------------------------------------------------------------------
 
 
@@ -1273,7 +1284,12 @@ class ModelAdmin:
             try:
                 result = await work(current)
             except ModelAdminRefused as refused:
-                await self._put_back(current, rebuilt)
+                # A credential that may hold a key typed for another address is never named by an
+                # entry the undo makes: that engine stays withdrawn, as the file (marked lost) says.
+                undo = current
+                if isinstance(refused, KeyMayStillBeHeld):
+                    undo = _without(current, refused.engine)
+                await self._put_back(undo, rebuilt)
                 raise await self._refusing(by, action, engine, refused) from None
             except OSError:
                 await self._put_back(current, rebuilt)
@@ -1338,6 +1354,11 @@ class ModelAdmin:
                 record = current.keys.get(name)
                 rotated.append("key_rotated" if record and not record.lost else "key_set")
                 if moved:
+                    # The key is recorded lost before it can be held, so a process that dies or a
+                    # replica that reads the file while it is held never sees "set"; the success
+                    # below writes the new record over it. A file that cannot be written fails the
+                    # edit here, before any key is stored.
+                    self._save(self._with_key_lost(current, name, by))
                     # An entry names its engine's credential, and an analyst's call does not take
                     # the edit's lock: with the old address's entries still live, the new key would
                     # be sent to the old address from the moment it is the credential. They go
@@ -1355,13 +1376,14 @@ class ModelAdmin:
                     proposed = proposed.model_copy(update={"keys": keys}, deep=True)
                 await self._reconcile(proposed, rebuilt=frozenset({name}))
                 self._save(proposed)
-            except (ModelAdminRefused, OSError):
+            except (ModelAdminRefused, OSError) as failed:
                 if moved and key is not None:
                     # The key was typed for the new address; `_change` now puts the engine back at
                     # the old one, and the key must not go with it (the ruling quoted above). The
-                    # old key was replaced and cannot be restored, so the engine's key is lost,
-                    # said so in the file where it can be written, and entered again.
-                    await self._drop_the_moved_key(current, name)
+                    # old key was replaced and cannot be restored, so the engine's key is lost (the
+                    # file already says so) and entered again. A removal the gateway refuses is
+                    # said, never only logged.
+                    await self._drop_the_moved_key(name, failed)
                 raise
             return before
 
@@ -1384,27 +1406,31 @@ class ModelAdmin:
             if model_id.startswith(f"osprey-{name}-"):
                 await self._gateway.delete_entry(model_id)
 
-    async def _drop_the_moved_key(self, current: ModelSettings, name: str) -> None:
+    @staticmethod
+    def _with_key_lost(current: ModelSettings, name: str, by: str) -> ModelSettings:
+        record = current.keys.get(name) or KeyRecord(set_at=datetime.now(UTC), set_by=by)
+        keys = {**current.keys, name: record.model_copy(update={"lost": True})}
+        return current.model_copy(update={"keys": keys}, deep=True)
+
+    async def _drop_the_moved_key(self, name: str, failed: ModelAdminRefused | OSError) -> None:
         """After a moved edit failed once its key was in the gateway: the credential removed, so
-        the old address is never sent a key typed for the new one, and the engine's key recorded
-        as lost. Best effort, each step on its own: what cannot be written is found at the next
-        start, as a key the gateway no longer holds."""
+        the old address is never sent a key typed for the new one. If the gateway refuses the
+        removal the key may still be held, and that is raised in words (`KeyMayStillBeHeld`, which
+        `_change` audits and answers, and which keeps the undo off that credential), never logged
+        alone."""
         try:
             await self._gateway.delete_credential(name)
-        except ModelAdminRefused as refused:
-            log.warning("a key typed for a new address not removed for %s: %s", name, refused.words)
-        record = current.keys.get(name)
-        if record is not None and not record.lost:
-            keys = {**current.keys, name: record.model_copy(update={"lost": True})}
-            lost = current.model_copy(update={"keys": keys}, deep=True)
-            try:
-                self._save(lost)
-            except OSError:
-                # The file cannot be written, so only this process knows: the engine is withdrawn
-                # from the routing now, and the gateway holds no key for it either way.
-                log.warning("the key of %s could not be recorded as lost in the file", name)
-                self._settings = lost
-                self._on_change(self.routes())
+        except ModelAdminRefused:
+            first = "The models file could not be written; the change was not saved."
+            if isinstance(failed, ModelAdminRefused):
+                first = failed.words
+            raise KeyMayStillBeHeld(
+                f"{first} The key entered for {name}'s new address could not be removed from the "
+                f"model gateway either, so it may still be held there. {name} is offered to no "
+                "analyst and is left without entries until its key is entered again; run "
+                "ospreyflow doctor.",
+                engine=name,
+            ) from None
 
     async def remove_engine(self, by: str, name: str) -> None:
         async def work(current: ModelSettings) -> None:
@@ -1641,6 +1667,14 @@ class ModelAdmin:
             raise ModelAdminRefused(
                 "This deployment is local only: no engine outside it is asked anything, so the "
                 "change cannot be checked. Nothing was changed."
+            )
+        if key is None and not provider.keyless and self.key_state(provider.name) != "set":
+            # A check without a key uses the engine's own credential, and an engine whose key is
+            # lost may have a credential that holds a key typed for another address (a removal the
+            # gateway refused): it is never sent anywhere. Enter the key again with the change.
+            raise ModelAdminRefused(
+                f"{provider.label or provider.name} has no key to check with; enter its key "
+                f"with the change. Nothing was changed: it keeps {kept}."
             )
         probe = probe_name(provider.name)
         own = key is not None and not provider.keyless
@@ -1880,6 +1914,12 @@ def _no_key_shown(provider: ModelProviderConfig, then: str) -> None:
                 f"The {field_name} looks like a key. It is shown to analysts, so give it in words, "
                 f"and the key in the key field; {then}."
             )
+
+
+def _without(settings: ModelSettings, name: str) -> ModelSettings:
+    return settings.model_copy(
+        update={"providers": [p for p in settings.providers if p.name != name]}
+    )
 
 
 def _plain_key(key: SecretStr) -> None:
