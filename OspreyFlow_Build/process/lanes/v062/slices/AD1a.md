@@ -105,3 +105,19 @@ not in the places record or the sections list, and the old add route still is. *
    from main's state with the same command, never merged by hand** (if the merge conflicts on it, take main's copy first, then regenerate), and the
    three tests above are rerun and reported.
 5. Everything else stands, including the screen files (take main's version of them).
+
+## Restart (the owner's ruling of 20 November 2026, after round 4): the whole key-path table is the brief
+
+Four rounds closed one of five fault rows. The owner restarts the rounds with **`slices/AD1a_KEY_PATHS_TABLE.md` (28 rows) as the brief. Read it first, every row.** **One design, not four patches:**
+
+1. **Once a key is stored, the clean-up runs on every way out of the edit:** any exception (not only `ModelAdminRefused` and `OSError`), cancellation of the task, a refused credential delete, a connection dropped after the gateway wrote. Not a catch list, a structure: the stored key's
+   clean-up is entered with the key (a `try`/`finally`, or a guard object whose exit does it, shielded from cancellation), so no way out skips it. A clean-up step that itself fails (the credential delete refused) is **loud, never a log line alone**: the engine is marked unavailable, the person is
+   told in words, an audit record without the key says what happened, and **the undo does not rebuild old-address entries on a credential that may still hold the new key.**
+2. **Start-up puts right whatever a killed process left,** including SE5's case: it compares every entry's address with the record and withdraws or refuses what disagrees, and it covers a process killed after the key was stored and before the record was saved (row 15). **Take main in first**
+   (SE5 merges before you start): SE5's start-up check and its tests are on main; keep the stronger of the two behaviours where the branch's edit path and main's differ, and say in your report which you kept and why. The owner's rule on keys binds you (write-only, never shown back, audited without
+   the key, synthetic keys generated at run time and no fixed key-shaped string anywhere).
+3. **Acceptance: rows 3, 15, 16, 17 and 28 are each a test with a planted fault at the real call site, red first, green after:** row 3 (the key-storing call's answer is lost after the gateway stored it); row 15 (the process dies after the key is stored and before the record is saved, then a restart and a
+   later key set); row 16 (the clean-up's credential delete is refused); row 17 (a cancellation, a JSON error and another transport error, each after the key is stored); row 28 (the SE5 case on this branch's edit path). The gateway stand-in models the real gateway's refusals (rule 15). Each test names, in its header, the row it holds.
+4. **Everything else in the table** (rows 1, 2, 4 to 14, 18 to 27) **is re-checked by the verifier, row by row**; if a change of yours alters a row, say so in your report. Rows whose state left is "a key held for a while" (probe credentials, a cancelled check) must still be removed by the sweep or start-up; do not weaken them.
+5. **Cheap checks before your final report:** ruff and eslint on every file you changed, the scan-map check for any test you add, and the three place tests of the earlier ruling (`test_admin_sections` and the two in `test_place_routes`); `placesByRole.json` regenerated again from main's state after the merge, never merged by hand.
+6. **A key-handling fault is never accepted:** no standing accept, no narrower accept. If a row cannot be closed, say which and why in your report.
