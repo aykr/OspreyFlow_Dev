@@ -513,11 +513,11 @@ def test_the_bare_name_is_only_an_old_path_inside_the_old_folder(tmp_path: Path)
     assert old_path_mentions(tmp_path, [elsewhere]) == []
 
 
-def test_the_tokens_files_are_not_these_moves_to_chase(tmp_path: Path) -> None:
+def test_the_primitives_folder_is_not_this_moves_to_chase(tmp_path: Path) -> None:
     rels = _tree(
         tmp_path,
         {
-            "OspreyFlow_Core/x.ts": "// `design/tokens.css` and `design/primitives/Button.tsx` stay put\n"
+            "OspreyFlow_Core/x.ts": "// `design/primitives/Button.tsx` and `design/fonts.ts` stay put\n"
         },
     )
     assert old_path_mentions(tmp_path, rels) == []
