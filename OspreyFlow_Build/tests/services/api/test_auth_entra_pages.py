@@ -17,6 +17,8 @@ is then accepted and the control fails.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from pydantic import ValidationError
 from services.api.auth import PrincipalResolutionError, PrincipalResolver
@@ -58,20 +60,25 @@ def _as(jwks_url: str, keypair, claims: dict[str, object], mapping: ClaimMapping
 
 
 @pytest.mark.parametrize(
-    "claims",
+    "overrides",
     [
-        default_claims(aud="account", azp="osprey-pages"),
-        default_claims(azp="osprey-pages"),
+        {"aud": "account", "azp": "osprey-pages"},
+        {"azp": "osprey-pages"},
     ],
     ids=["the-realm-default-audience", "no-audience-at-all"],
 )
 def test_a_token_from_a_realm_client_without_the_audience_mapper_is_refused(
-    claims: dict[str, object], keypair, jwks_url
+    overrides: dict[str, object], keypair, jwks_url
 ) -> None:
     """A realm client with no audience mapper (a token whose `aud` is the realm's default, or absent)
     is refused: the Conduit's audience check is what stops a token another client obtained. Sets
     `oidc_audience` itself, or the test would be vacuous (`verify_aud` is off when it is unset); the
-    same token with the audience mapper resolves, so the refusal is the audience's."""
+    same token with the audience mapper resolves, so the refusal is the audience's.
+
+    The token is minted here, when the test runs, from the case's overrides: a `default_claims(...)` in
+    the `parametrize` list was called at collection, and its 300-second life had ended by the time a slow
+    suite (GitHub's, 40 to 49 minutes) reached the test (CO2b)."""
+    claims = default_claims(**overrides)
     resolver = PrincipalResolver(_config(jwks_url, oidc_audience="osprey-conduit"))
     with pytest.raises(PrincipalResolutionError):
         resolver.resolve(sign_token(_key(keypair), claims))
@@ -108,24 +115,25 @@ def test_the_glass_s_token_is_unchanged_and_superset_s_still_reaches_its_two_rou
 
 
 @pytest.mark.parametrize(
-    ("claims", "why"),
+    ("make_claims", "why"),
     [
-        (entra_claims(**_GOOD, azp=PAGES, appid=GLASS), "Glass's client"),
-        (entra_claims(**_GOOD, azp=PAGES, appid=SUPERSET), "Glass's client"),
-        (entra_claims(**_GOOD, azp=PAGES, tid=OTHER_TENANT), "tenant"),
-        (entra_claims(**_GOOD, azp=PAGES, scp="User.Read"), "scope"),
-        (entra_claims(**_GOOD, azp=PAGES, scp=None, idtyp="app"), "app-only"),
-        (entra_claims(**_GOOD, azp=PAGES, acct=1), "guest"),
-        (entra_claims(**_GOOD, azp=PAGES, aud=OTHER_APP), "token rejected"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, appid=GLASS), "Glass's client"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, appid=SUPERSET), "Glass's client"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, tid=OTHER_TENANT), "tenant"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, scp="User.Read"), "scope"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, scp=None, idtyp="app"), "app-only"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, acct=1), "guest"),
+        (lambda: entra_claims(**_GOOD, azp=PAGES, aud=OTHER_APP), "token rejected"),
     ],
     ids=["two-clients", "pages-and-superset", "another-tenant", "not-this-api-s-scope", "app-only", "guest",
          "another-audience"],
 )  # fmt: skip
 def test_the_pages_client_s_token_is_held_to_every_check_a_glass_token_is(
-    claims: dict[str, object], why: str, keypair, jwks_url
+    make_claims: Callable[[], dict[str, object]], why: str, keypair, jwks_url
 ) -> None:
+    """The case is a factory, so the token is minted when the test runs, not at collection (CO2b)."""
     with pytest.raises(PrincipalResolutionError, match=why):
-        _as(jwks_url, keypair, claims)
+        _as(jwks_url, keypair, make_claims())
 
 
 def test_without_the_pages_client_named_its_token_is_refused(keypair, jwks_url) -> None:

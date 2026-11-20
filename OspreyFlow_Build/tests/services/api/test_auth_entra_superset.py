@@ -14,6 +14,8 @@ before.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 from pydantic import ValidationError
 from services.api.auth import PrincipalResolutionError
@@ -58,22 +60,23 @@ def test_the_glass_s_token_is_still_every_route_its_rights_allow(keypair, jwks_u
 
 
 @pytest.mark.parametrize(
-    ("claims", "why"),
+    ("make_claims", "why"),
     [
-        (entra_claims(**_GOOD, azp=OTHER_APP), "Glass's client"),
-        (entra_claims(**_GOOD, azp=SUPERSET, appid=GLASS), "Glass's client"),
-        (entra_claims(**_GOOD, azp=SUPERSET, tid=OTHER_TENANT), "tenant"),
-        (entra_claims(**_GOOD, azp=SUPERSET, scp="User.Read"), "scope"),
-        (entra_claims(**_GOOD, azp=SUPERSET, scp=None, idtyp="app"), "app-only"),
-        (entra_claims(**_GOOD, azp=SUPERSET, acct=1), "guest"),
+        (lambda: entra_claims(**_GOOD, azp=OTHER_APP), "Glass's client"),
+        (lambda: entra_claims(**_GOOD, azp=SUPERSET, appid=GLASS), "Glass's client"),
+        (lambda: entra_claims(**_GOOD, azp=SUPERSET, tid=OTHER_TENANT), "tenant"),
+        (lambda: entra_claims(**_GOOD, azp=SUPERSET, scp="User.Read"), "scope"),
+        (lambda: entra_claims(**_GOOD, azp=SUPERSET, scp=None, idtyp="app"), "app-only"),
+        (lambda: entra_claims(**_GOOD, azp=SUPERSET, acct=1), "guest"),
     ],
     ids=["another-client", "two-clients", "another-tenant", "not-this-api-s-scope", "app-only", "guest"],
 )  # fmt: skip
 def test_superset_s_token_is_held_to_every_check_a_glass_token_is(
-    claims: dict[str, object], why: str, keypair, jwks_url
+    make_claims: Callable[[], dict[str, object]], why: str, keypair, jwks_url
 ) -> None:
+    """The case is a factory, so the token is minted when the test runs, not at collection (CO2b)."""
     with pytest.raises(PrincipalResolutionError, match=why):
-        _as(jwks_url, keypair, claims)
+        _as(jwks_url, keypair, make_claims())
 
 
 def test_without_superset_s_registration_named_its_token_is_another_client_s(keypair, jwks_url) -> None:

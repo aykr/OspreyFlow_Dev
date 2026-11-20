@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable
 
 import pytest
 from services.api.auth import PrincipalResolutionError, PrincipalResolver
@@ -98,28 +99,29 @@ def test_a_registered_dashboard_s_token_is_its_narrow_principal(keypair, jwks_ur
 
 
 @pytest.mark.parametrize(
-    ("claims", "why"),
+    ("make_claims", "why"),
     [
-        (app_only_claims(roles=None), "Dashboard.Read"),
-        (app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
-        (app_only_claims(UNREGISTERED), "registered"),
-        (app_only_claims(tid=OTHER_TENANT), "tenant"),
-        (app_only_claims(GLASS), "client"),
-        (app_only_claims(CLIENT_ID), "client"),
-        (app_only_claims("not-a-guid"), "client"),
-        (app_only_claims(appid=UNREGISTERED), "client"),
+        (lambda: app_only_claims(roles=None), "Dashboard.Read"),
+        (lambda: app_only_claims(roles=["Something.Else"]), "Dashboard.Read"),
+        (lambda: app_only_claims(UNREGISTERED), "registered"),
+        (lambda: app_only_claims(tid=OTHER_TENANT), "tenant"),
+        (lambda: app_only_claims(GLASS), "client"),
+        (lambda: app_only_claims(CLIENT_ID), "client"),
+        (lambda: app_only_claims("not-a-guid"), "client"),
+        (lambda: app_only_claims(appid=UNREGISTERED), "client"),
     ],
     ids=["no-role", "another-role", "unregistered", "another-tenant", "the-glass",
          "this-api-itself", "not-an-application-id", "two-clients"],
 )  # fmt: skip
 def test_an_app_only_token_that_is_no_registered_dashboard_is_refused(
-    claims: dict[str, object], why: str, keypair, jwks_url
+    make_claims: Callable[[], dict[str, object]], why: str, keypair, jwks_url
 ) -> None:
+    """The case is a factory, so the token is minted when the test runs, not at collection (CO2b)."""
     dashboards = FakeDashboards()
     for own in (GLASS, CLIENT_ID):  # even if registered
         dashboards.rows[(TENANT, own)] = StoredDashboard(own, "OFFICIAL", "unit-1", ())
     with pytest.raises(PrincipalResolutionError, match=why):
-        _resolve(_resolver(jwks_url, dashboards), claims, keypair)
+        _resolve(_resolver(jwks_url, dashboards), make_claims(), keypair)
 
 
 def test_the_api_s_own_application_is_refused_where_the_audience_is_its_uri(
