@@ -19,6 +19,7 @@
   "dependencies": {
     "@fontsource/atkinson-hyperlegible-next": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",
+    "@ospreyflow/glass-shared": "*",
     "@sigma/export-image": "^3.0.0",
     "@sigma/node-border": "^3.0.0",
     "@sigma/node-image": "^3.0.0",
