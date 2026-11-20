@@ -1,1 +1,0 @@
-tests/harness/test_realm_pages_client.py	-	its one rglob is over the staging folder the case writes under its own tmp_path (to show no secret is written anywhere but deployment.env); it reads no repository folder

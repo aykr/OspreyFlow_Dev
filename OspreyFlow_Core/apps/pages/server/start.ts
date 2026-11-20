@@ -12,7 +12,8 @@ import { Redis } from "ioredis";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { unconfiguredProvider } from "./identity.js";
-import type { IdentityProvider } from "./identity.js";
+import type { CodeFlowProvider, IdentityProvider } from "./identity.js";
+import { createOidcFlow } from "./oidc.js";
 import { ValkeySessionStore } from "./sessionStore.js";
 import { attachStreamProxy } from "./stream.js";
 import type { SessionStore } from "./sessionStore.js";
@@ -29,6 +30,8 @@ export interface StartDeps {
   /** A store to use in place of Valkey (a test's in-memory one). With none, Valkey is connected to. */
   store?: SessionStore;
   identityProvider?: IdentityProvider;
+  /** The sign-in flow to use in place of the real one (`OSPREY_PAGES_OIDC_ISSUER` and the rest). */
+  codeFlow?: CodeFlowProvider;
   host?: string;
   /** Milliseconds since the epoch, for the session and the live-updates proxy. A test moves it by hand. */
   clock?: () => number;
@@ -83,9 +86,12 @@ export async function main(
     store = new ValkeySessionStore(client);
   }
 
+  // With none of the sign-in settings set there is no flow, and sign-in answers 503 as it did before it was built.
+  const codeFlow = deps.codeFlow ?? (config.oidc ? createOidcFlow(config.oidc, deps.clock ? { now: deps.clock } : {}) : undefined);
   const app = createApp({
     store,
     identityProvider: deps.identityProvider ?? unconfiguredProvider,
+    ...(codeFlow ? { codeFlow } : {}),
     sessionSecret: config.sessionSecret.reveal(),
     ...(deps.clock ? { clock: deps.clock } : {}),
     ...(config.forward ? { forward: config.forward } : {}),

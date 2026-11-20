@@ -1176,6 +1176,14 @@ now also a run-time dependency of `apps/pages`, so it is in the service's image.
 (`http-proxy`, `express-http-proxy`) is added: the proxy is this service's own, in one file over `ws`.
 Development only: `@types/ws` 8.18.2 (MIT, already a development dependency of `apps/workspace`).
 
+**ADR-152 addition (20 November 2026; slice PL9a) — the `pages` service signs people in.** Run time: `openid-client`
+6.9.0 (MIT; ADR-152 decision 2 names it), which runs the authorisation-code flow with PKCE, `state` and `nonce`
+against the realm; its two dependencies, `oauth4webapi` 3.8.8 (MIT) and `jose` 6.2.18 (MIT), are read at install and
+are on the allowlist. `jose` is also a direct dependency of `apps/pages`: the library does not check an ID token's
+signature (it relies on the token having come straight from the token endpoint), and the service checks it against
+the realm's key set, which is `jose`'s own `createRemoteJWKSet` and `jwtVerify`. No flow is hand-written. The service
+calls no address but the identity provider's own (`OSPREY_PAGES_OIDC_ISSUER`).
+
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the
 data (`packages/demo_fixtures/public_datasets/`); the administrator downloads the file and adds it to
