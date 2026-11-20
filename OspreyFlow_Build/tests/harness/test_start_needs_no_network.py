@@ -68,20 +68,31 @@ esac
 
 _HF_STUB = r"""#!/bin/sh
 [ "$1" = download ] || { echo "stub: unmodelled huggingface-cli $*" >&2; exit 2; }
-snapshots="$NW_HF_CACHE/hub/models--$(echo "$2" | sed 's,/,--,')/snapshots"
-held() { [ -d "$snapshots" ] && [ -n "$(ls -A "$snapshots")" ]; }
+repo="$NW_HF_CACHE/hub/models--$(echo "$2" | sed 's,/,--,')"
+snapshots="$repo/snapshots"
+# Measured: the tool never checks that the snapshot's files are there. A ref that names a snapshot
+# folder that exists is a cache hit, whether the folder is full, partly filled or empty.
+held() { [ -f "$repo/refs/main" ] && [ -d "$snapshots/$(cat "$repo/refs/main")" ]; }
 if [ "$HF_HUB_OFFLINE" = 1 ]; then
   echo "local huggingface-cli download $2 (HF_HUB_OFFLINE=1)" >> "$NW_LOG"
-  if held; then echo "$snapshots/$(ls "$snapshots" | head -n 1)"; exit 0; fi
+  if held; then echo "$snapshots/$(cat "$repo/refs/main")"; exit 0; fi
   echo "huggingface_hub.errors.LocalEntryNotFoundError: Cannot find an appropriate cached snapshot folder for the specified revision on the local disk and outgoing traffic has been disabled." >&2
   exit 1
 fi
 echo "NETWORK huggingface-cli download $2" >> "$NW_LOG"
-if held; then echo "$snapshots/$(ls "$snapshots" | head -n 1)"; exit 0; fi
 if [ "$NW_HF_REACHABLE" = 1 ]; then
-  mkdir -p "$snapshots/0123abc" && : > "$snapshots/0123abc/model.bin"
+  # Online, it fetches whatever the snapshot lacks, and clears a blob left half-written.
+  mkdir -p "$repo/refs" "$repo/blobs" "$snapshots/0123abc"
+  echo 0123abc > "$repo/refs/main"
+  rm -f "$repo/blobs/"*.incomplete
+  for f in config.json model.bin tokenizer.json vocabulary.txt; do
+    [ -s "$snapshots/0123abc/$f" ] || echo "$f" > "$snapshots/0123abc/$f"
+  done
   echo "$snapshots/0123abc"; exit 0
 fi
+# Measured: with the hub unreachable it falls back to the cache, whatever the cache holds, and
+# exits 0; only with nothing cached does it fail.
+if held; then echo "$snapshots/$(cat "$repo/refs/main")"; exit 0; fi
 echo "huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the files on the Hub and we cannot find the appropriate snapshot folder for the specified revision on the local disk. Please check your internet connection and try again." >&2
 exit 1
 """
@@ -96,6 +107,9 @@ echo "chown $*" >> "$NW_LOG"
 """
 
 _HF_CACHE_IN_THE_JOB = "/home/ubuntu/.cache/huggingface"
+#: What the speech library requires of a model's snapshot (`faster_whisper.utils.download_model`'s
+#: `allow_patterns`, read in the pinned image; `vocabulary.*` is `vocabulary.txt` for the repo used).
+SPEECH_FILES = ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt")
 
 
 def _local_lite_jobs() -> tuple[str, str, str]:
@@ -155,10 +169,37 @@ class _Machine:
         for model, model_id in MODELS:
             self.hold_ollama_model(model, model_id)
 
-    def hold_speech_model(self) -> None:
-        snapshot = self.hf_cache / "hub" / f"models--{SPEECH_MODEL.replace('/', '--')}"
-        (snapshot / "snapshots/0123abc").mkdir(parents=True)
-        (snapshot / "snapshots/0123abc/model.bin").write_bytes(b"")
+    def hold_speech_model(
+        self,
+        *,
+        without: tuple[str, ...] = (),
+        empty: tuple[str, ...] = (),
+        incomplete: bool = False,
+    ) -> None:
+        """The cache as the real tool lays it out: a ref, a snapshot folder with the model's files
+        (`faster_whisper.utils` requires these), and the blobs. `without` leaves files out, `empty`
+        leaves them as zero-length files, `incomplete` leaves a half-written blob, as a download
+        cut short does."""
+        repo = self.hf_cache / "hub" / f"models--{SPEECH_MODEL.replace('/', '--')}"
+        snapshot = repo / "snapshots/0123abc"
+        snapshot.mkdir(parents=True)
+        (repo / "blobs").mkdir()
+        (repo / "refs").mkdir()
+        (repo / "refs/main").write_text("0123abc", encoding="utf-8")
+        for name in SPEECH_FILES:
+            if name not in without:
+                (snapshot / name).write_bytes(b"" if name in empty else b"x")
+        if incomplete:
+            (repo / "blobs/9f8e7d.incomplete").write_bytes(b"x")
+
+    def speech_model_is_complete(self) -> bool:
+        repo = self.hf_cache / "hub" / f"models--{SPEECH_MODEL.replace('/', '--')}"
+        snapshot = repo / "snapshots/0123abc"
+        files_held = all(
+            (snapshot / name).is_file() and (snapshot / name).stat().st_size
+            for name in SPEECH_FILES
+        )
+        return files_held and not list((repo / "blobs").glob("*.incomplete"))
 
     def registry_serves(self, model: str, model_id: str) -> None:
         with self.registry.open("a", encoding="utf-8") as handle:
@@ -273,6 +314,66 @@ def test_a_model_held_at_another_digest_is_pulled_and_a_refused_pull_says_so_in_
 
 
 def test_a_missing_speech_model_with_the_hub_refused_fails_in_words(machine: _Machine) -> None:
+    result = machine.run(WHISPER_JOB)
+    assert result.returncode != 0
+    assert not any(line.startswith("chown") for line in machine.calls())
+    _says_what_to_do(result, SPEECH_MODEL)
+
+
+# --- A speech model cut short: the folder is there, the weights are not -----------------------
+
+#: Each way a first download leaves the cache when it is interrupted: the snapshot's folder and
+#: ref are written before the weights arrive, so the tool's own offline check still says "held".
+INTERRUPTED = {
+    "no weights": {"without": ("model.bin",)},
+    "no vocabulary": {"without": ("vocabulary.txt",)},
+    "no tokenizer": {"without": ("tokenizer.json",)},
+    "weights of zero length": {"empty": ("model.bin",)},
+    "a blob left half-written": {"incomplete": True},
+}
+
+
+@pytest.mark.parametrize("how", INTERRUPTED)
+def test_the_stub_calls_a_cut_short_cache_a_hit_as_the_real_tool_does(
+    machine: _Machine, how: str
+) -> None:
+    """Rule 15's second worked example: if the stub refused a partial cache, the cases below would
+    show nothing. Measured in the pinned image: the offline tool exits 0 on a ref and a snapshot
+    folder with no files, and the online tool with the hub unreachable does too."""
+    machine.hold_speech_model(**INTERRUPTED[how])
+    assert not machine.speech_model_is_complete()
+    env = {"PATH": f"{machine.stubs}:/usr/bin:/bin", "NW_LOG": str(machine.log)}
+    env |= {"NW_HF_CACHE": str(machine.hf_cache), "NW_HF_REACHABLE": "0"}
+    for extra in ({"HF_HUB_OFFLINE": "1"}, {}):
+        found = subprocess.run(
+            ["huggingface-cli", "download", SPEECH_MODEL],
+            env=env | extra,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert found.returncode == 0, found.stderr
+
+
+@pytest.mark.parametrize("how", INTERRUPTED)
+def test_a_speech_model_cut_short_is_fetched_when_the_hub_is_reachable(
+    machine: _Machine, how: str
+) -> None:
+    machine.hold_speech_model(**INTERRUPTED[how])
+    machine.hf_reachable = True
+    result = machine.run(WHISPER_JOB)
+    assert result.returncode == 0, result.stderr
+    assert f"NETWORK huggingface-cli download {SPEECH_MODEL}" in machine.network_calls()
+    assert machine.speech_model_is_complete()
+    assert any(line.startswith("chown -R 1000:1000") for line in machine.calls())
+
+
+@pytest.mark.parametrize("how", INTERRUPTED)
+def test_a_speech_model_cut_short_with_the_hub_refused_fails_in_words(
+    machine: _Machine, how: str
+) -> None:
+    """Not a start that reports success and leaves `whisper` unable to load its model."""
+    machine.hold_speech_model(**INTERRUPTED[how])
     result = machine.run(WHISPER_JOB)
     assert result.returncode != 0
     assert not any(line.startswith("chown") for line in machine.calls())
