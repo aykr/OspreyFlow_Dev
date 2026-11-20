@@ -40,8 +40,13 @@ is not needed on main: the check reports 431 routes, none allowlisted, no new dr
    pure cases pass, among them `test_every_route_names_the_right_the_table_gives_it` for the three check routes).
 3. A live LiteLLM run under a lease (check, Add, edit with a moved address, a new key, the one-minute cooldown, a duplicate
    credential name).
-4. **AD1b** (the screen): the two `.diff` files here (`ACTION_REGISTRY.diff`, `EVERY_HARNESS.diff`), `placesByRole.json`, the screen
-   files, and P8's browser run (`plants_p8_run.txt`). Main's screen still calls the removed `POST /v1/admin/models/engines`: it
+4. **AD1b** (the screen): the two `.diff` files here (`ACTION_REGISTRY.diff`, `EVERY_HARNESS.diff`), the screen
+   files, **the removal of the `models/checks` entry in `NOT_A_SECTION_S` (`test_admin_sections.py`)** (AD1a added it for the three
+   check routes because no screen calls them yet; once `Models.tsx` does, the test's last loop goes red until the entry is removed), and P8's browser run (`plants_p8_run.txt`). Main's screen still calls the removed `POST /v1/admin/models/engines`: it
    compiles against the new generated types and its tests pass, but its Add fails at run time until AD1b lands, so AD1a and AD1b
    merge back to back.
 5. **AD1c:** Fix D, the defaults and limits routes' words, `redacted()`, P1 for Edit and P9 for a query string.
+
+**Round 2 (20 November 2026):** `placesByRole.json` was generated on AD1a's branch by `OSPREY_WRITE_PLACES_BY_ROLE=1` on
+`test_place_routes.py::test_the_record_of_places_by_role_is_the_routes`, never by hand; it is regenerated from main's state, never merged,
+when main is brought in. AD1b does not regenerate it unless its screen changes a route.

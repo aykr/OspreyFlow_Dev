@@ -71,6 +71,15 @@ NOT_A_SECTION_S = {
     r"^/v1/admin/link-types(/\{proposal_id\}/(promote|reject)|/retire)?$": (
         "the proposals naming no dataset, decided by the API alone since L2.7"
     ),
+    # ADR-135 Amendment 14: the add form's check before Add, which replaced the unchecked add. The
+    # screen that calls them (Models.tsx) is slice AD1b's; until it lands, no section does. **AD1b
+    # removes this entry in its own change**: once Models.tsx calls the routes they are a section's,
+    # and the loop in `test_every_admin_route_is_some_section_s` then fails on this rule, which is
+    # what reminds it. Their right (`manage_models`) is held by `test_route_rights.py` and
+    # `test_model_engine_checks.py` meanwhile.
+    r"^/v1/admin/models/checks(/\{check_id\}(/add)?)?$": (
+        "the model add form's check routes, called by the screen of slice AD1b"
+    ),
 }
 
 
