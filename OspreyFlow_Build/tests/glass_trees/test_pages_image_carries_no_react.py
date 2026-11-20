@@ -297,6 +297,64 @@ def test_a_marker_in_a_dependency_or_a_binary_file_is_refused(tmp_path: Path) ->
     ]
 
 
+SCHEDULER_FILE = 'module.exports = require("./cjs/scheduler.production.js");\n'  # no React marker in it
+
+
+@pytest.mark.parametrize("package", scan.REACT_PACKAGES)
+def test_a_react_package_folder_in_the_tree_is_refused_without_any_marker(
+    tmp_path: Path, package: str
+) -> None:
+    # I23 reads the file system for a package by name, not only for strings: `scheduler`'s files hold none
+    tree = make_tree(
+        tmp_path / "fs",
+        {
+            f"app/node_modules/{package}/package.json": f'{{"name": "{package}", "version": "1.0.0"}}\n',
+            f"app/node_modules/{package}/index.js": SCHEDULER_FILE,
+        },
+    )
+    findings = scan.tree_findings(tree)
+    assert kinds(findings) == {"react-package"}
+    assert {f.where.rsplit("/", 1)[-1] for f in findings} <= {package, "package.json"}
+    assert any(package in f.where for f in findings)
+    # and the whole scan, with an SBOM that does not list it, still fails on the tree alone
+    assert scan.scan(make_sbom(*CLEAN), tree) != []
+
+
+def test_a_react_package_nested_or_named_only_in_its_package_json_is_refused(
+    tmp_path: Path,
+) -> None:
+    tree = make_tree(
+        tmp_path / "fs",
+        {
+            # nested under another package's own node_modules
+            "app/node_modules/express/node_modules/scheduler/package.json": '{"name": "scheduler"}\n',
+            # the folder renamed, the package.json still says what it is
+            "app/vendor/renamed/package.json": '{"name": "React-DOM", "version": "19.1.0"}\n',
+        },
+    )
+    assert {f.where for f in scan.tree_findings(tree)} >= {
+        "app/node_modules/express/node_modules/scheduler",
+        "app/vendor/renamed/package.json",
+    }
+    assert kinds(scan.tree_findings(tree)) == {"react-package"}
+
+
+def test_package_names_in_the_tree_are_matched_not_substrings(tmp_path: Path) -> None:
+    tree = make_tree(
+        tmp_path / "fs",
+        {
+            "app/node_modules/react-dom-like/package.json": '{"name": "react-dom-like"}\n',
+            "app/node_modules/scheduler-lite/package.json": '{"name": "scheduler-lite"}\n',
+            "app/node_modules/preact/package.json": '{"name": "preact"}\n',
+            # the scoped type package is not React; `--omit=dev` would not carry it
+            "app/node_modules/@types/react/package.json": '{"name": "@types/react"}\n',
+            "app/apps/pages/react/notes.txt": "a folder called react that is not a package\n",
+            "app/apps/pages/broken/package.json": "{not json",
+        },
+    )
+    assert scan.tree_findings(tree) == []
+
+
 def test_the_scan_stays_under_app_and_does_not_follow_links(tmp_path: Path) -> None:
     tree = make_tree(
         tmp_path / "fs", {"usr/lib/node_modules/react/index.js": 'Symbol.for("react.element")'}
