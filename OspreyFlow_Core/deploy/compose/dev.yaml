@@ -243,11 +243,17 @@ services:
         until ollama list >/dev/null 2>&1; do sleep 1; done
         pull_and_verify() {
           model="$$1"; expected="$$2"
-          ollama pull "$$model"
           actual="$$(ollama list | awk -v m="$$model" '$$1 == m {print $$2}')"
           if [ "$$actual" != "$$expected" ]; then
-            echo "FATAL: $$model resolved to manifest $$actual, expected $$expected (spec/06_DECISIONS.md ADR-020) — the tag moved upstream; update the ADR deliberately, do not proceed silently." >&2
-            exit 1
+            ollama pull "$$model" || {
+              echo "FATAL: $$model is not on this machine at the recorded version, and it could not be fetched. A first start needs the network once, to fetch the model weights: connect this machine to the network, then start again. The weights are kept, so later starts need no network." >&2
+              exit 1
+            }
+            actual="$$(ollama list | awk -v m="$$model" '$$1 == m {print $$2}')"
+            if [ "$$actual" != "$$expected" ]; then
+              echo "FATAL: $$model resolved to manifest $$actual, expected $$expected (spec/06_DECISIONS.md ADR-020) — the tag moved upstream; update the ADR deliberately, do not proceed silently." >&2
+              exit 1
+            fi
           fi
         }
         pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701
