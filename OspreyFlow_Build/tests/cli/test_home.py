@@ -13,7 +13,12 @@ What a mistake would do, and the case that catches it:
 - an unrelated folder treated as a product — `test_nothing_found_is_refused_in_words`;
 - the heavy work run outside the checkout's own environment —
   `test_python_for_prefers_the_checkouts_venv_and_falls_back_to_uv_run`;
-- a deployment looked for under the wrong profile — `test_the_deployment_dir_follows_the_profile`.
+- a deployment looked for under the wrong profile — `test_the_deployment_dir_follows_the_profile`;
+- the current folder read before the recorded one wins, so a shell left in a deleted folder (the
+  reinstall-or-repoint case) gets a traceback instead of the recorded deployment (Amendment 50
+  decision 1, "nothing else about the command changes") —
+  `test_a_deleted_current_folder_does_not_stop_the_recorded_home_serving` and
+  `test_a_deleted_current_folder_with_no_recorded_home_is_refused_in_words`.
 """
 
 from __future__ import annotations
@@ -101,3 +106,32 @@ def test_the_deployment_dir_follows_the_profile(tmp_path: Path) -> None:
     assert deployment_dir(default) == default / "deploy" / "generated" / "local-lite"
     small = _make_product(tmp_path / "b", profile="small")
     assert deployment_dir(small) == small / "deploy" / "generated" / "small"
+
+
+def _stand_in_a_deleted_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The shell's current folder removed under it, as after deleting an old checkout."""
+    gone = tmp_path / "gone"
+    gone.mkdir()
+    monkeypatch.chdir(gone)
+    gone.rmdir()
+    with pytest.raises(OSError):  # the premise: the real `Path.cwd()` fails here
+        Path.cwd()
+
+
+def test_a_deleted_current_folder_does_not_stop_the_recorded_home_serving(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    recorded = _make_product(tmp_path / "recorded")
+    _stand_in_a_deleted_folder(tmp_path, monkeypatch)
+    said: list[str] = []
+    # start=None is the real call site: the current folder is read from the process.
+    assert find_product(None, {}, recorded=lambda: recorded, notice=said.append) == recorded
+    assert said == []  # no current folder, so nothing to choose between
+
+
+def test_a_deleted_current_folder_with_no_recorded_home_is_refused_in_words(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _stand_in_a_deleted_folder(tmp_path, monkeypatch)
+    with pytest.raises(CommandRefused, match="No OspreyFlow checkout found"):
+        find_product(None, {}, recorded=_none)
