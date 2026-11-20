@@ -229,29 +229,52 @@ FEATURE_FLAGS = {"DASHBOARD_RBAC": True, "EMBEDDED_SUPERSET": True}
 
 # --- Embedded in the Glass (ADR-111 Amendment 3). The Conduit asks for guest tokens as the local
 # service user `osprey-embedder` (made by osprey_setup.py); a guest reads only the mart, and its
-# token carries a row-level rule naming one dashboard identity. Superset's own content security
-# policy is kept as shipped — only the Glass's origin is added as a permitted framer. ---
+# token carries a row-level rule naming one dashboard identity. ---
 GUEST_ROLE_NAME = "OspreyEmbedded"
 GUEST_TOKEN_JWT_SECRET = os.environ["SUPERSET_GUEST_TOKEN_SECRET"]
 GUEST_TOKEN_JWT_EXP_SECONDS = 300
 _glass = os.environ.get("SUPERSET_GLASS_ORIGIN", "http://ospreyflow.localhost")
+# --- The content-security policy: the deployment's own address and nothing else (SE6, the owner's
+# order of 20 November 2026). The policy below REPLACES Superset's shipped one, it is not merged
+# into it: this file is read by `from superset_config import *`, which rebinds the name, and
+# Superset 6.1.0 reads `TALISMAN_CONFIG` whole (`superset/initialization/__init__.py`, which takes
+# `TALISMAN_DEV_CONFIG` instead when Flask's debug or `DEBUG` is on). What the shipped policy of
+# this version names, and this one does not: Scarf (`apachesuperset.gateway.scarf.sh`,
+# `static.scarf.sh`: the usage-tracking pixel the navigation bar draws), Mapbox, Terrestris,
+# Document360, OpenStreetMap, Carto and the theme font domains. Nothing is added for a map: a
+# chart that needs a Mapbox key or a tile server will not load its tiles, and a map key with its
+# address is an administrator feature to be added later by a setting of its own, never a default.
+# The only name that is not 'self' is the Glass's origin, as a permitted framer. The pinned image
+# has no setting that switches the tracking off (no `SCARF_ANALYTICS` is read anywhere in 6.1.0):
+# the browser refusing the pixel by `img-src` is what stops it.
+# `test_superset_no_outside_address.py` holds this policy to that, in both dictionaries. ---
+_POLICY_SHARED = {
+    "base-uri": ["'self'"],
+    "default-src": ["'self'"],
+    "img-src": ["'self'", "blob:", "data:"],
+    "worker-src": ["'self'", "blob:"],
+    "connect-src": ["'self'"],
+    "object-src": "'none'",
+    "style-src": ["'self'", "'unsafe-inline'"],
+    "frame-ancestors": ["'self'", _glass],
+}
 TALISMAN_CONFIG = {
+    "content_security_policy": {**_POLICY_SHARED, "script-src": ["'self'", "'strict-dynamic'"]},
+    "content_security_policy_nonce_in": ["script-src"],
+    "force_https": False,
+    "session_cookie_secure": False,
+}
+# Debug mode takes this one instead (React needs `eval` there): the same hosts, so a debug run
+# does not bring the shipped development policy's outside addresses back.
+TALISMAN_DEV_CONFIG = {
     "content_security_policy": {
-        "base-uri": ["'self'"],
-        "default-src": ["'self'"],
-        "img-src": ["'self'", "blob:", "data:", "https://apachesuperset.gateway.scarf.sh",
-                    "https://static.scarf.sh/"],
-        "worker-src": ["'self'", "blob:"],
-        "connect-src": ["'self'", "https://api.mapbox.com", "https://events.mapbox.com"],
-        "object-src": "'none'",
-        "style-src": ["'self'", "'unsafe-inline'"],
-        "script-src": ["'self'", "'strict-dynamic'"],
-        "frame-ancestors": ["'self'", _glass],
+        **_POLICY_SHARED,
+        "script-src": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
     },
     "content_security_policy_nonce_in": ["script-src"],
     "force_https": False,
     "session_cookie_secure": False,
-}  # fmt: skip
+}
 # Superset's own content security policy stays on (its default); rate limits are counted in the
 # deployment's Valkey, so every worker and replica counts together.
 # Reached only through the deployment's front proxy (ADR-114 Amendment 4), which is the only thing

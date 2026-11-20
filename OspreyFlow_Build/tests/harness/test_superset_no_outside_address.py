@@ -1,4 +1,4 @@
-"""No address outside the deployment in what the deployment serves (build id SE6, slice a: the pure half).
+"""No address outside the deployment in what the deployment serves (build id SE6, slice a, pure).
 
 What is proved here, and what is not (rule 12; the owner's order of 20 November 2026, after DOC1a):
 
@@ -69,7 +69,14 @@ WORKSPACE = CORE / "apps" / "workspace"
 
 #: Words a policy source may be, none of which is an address.
 KEYWORDS = frozenset(
-    {"'self'", "'none'", "'unsafe-inline'", "'unsafe-eval'", "'strict-dynamic'", "'wasm-unsafe-eval'"}
+    {
+        "'self'",
+        "'none'",
+        "'unsafe-inline'",
+        "'unsafe-eval'",
+        "'strict-dynamic'",
+        "'wasm-unsafe-eval'",
+    }  # fmt: skip
 )
 #: Schemes that carry no address: the page's own memory.
 LOCAL_SCHEMES = frozenset({"blob:", "data:"})
@@ -90,7 +97,7 @@ def sources_outside(
     policy: Mapping[str, Any], own_hosts: Iterable[str] = ()
 ) -> list[tuple[str, str]]:
     """Each (directive, source) that names anything but `'self'`, a keyword, a nonce, an in-memory
-    scheme or one of the deployment's own hosts. `*`, `https:` and `*.host` name outside addresses."""
+    scheme or one of the deployment's own hosts. `*`, `https:` and `*.host` are outside."""
     own = {host.lower() for host in own_hosts}
     found: list[tuple[str, str]] = []
     for directive, value in policy.items():
@@ -111,8 +118,10 @@ def sources_outside(
 def rendered() -> list[str]:
     """What the render writes for a deployment with the reporting components on."""
     config = OspreyConfig.model_validate(
-        {"network": {"public_origin": "http://localhost:8080"},
-         "reporting": {"sync": True, "superset": True}}  # fmt: skip
+        {
+            "network": {"public_origin": "http://localhost:8080"},
+            "reporting": {"sync": True, "superset": True},
+        }  # fmt: skip
     )
     return reporting_env(config)
 
@@ -153,9 +162,9 @@ def test_the_loaded_policy_names_no_host_outside_the_deployment(
     policy = _policies(config)[name]
     assert sources_outside(policy, own) == []
     # Not vacuous: the policy is the one that frames Superset in the Glass, and names that origin.
-    assert any(
-        _host_of(source) in own for source in policy["frame-ancestors"]
-    ), "the Glass's own origin is the one outside-looking name the policy keeps"
+    assert any(_host_of(source) in own for source in policy["frame-ancestors"]), (
+        "the Glass's own origin is the one outside-looking name the policy keeps"
+    )
     assert "'self'" in policy["img-src"] and "'self'" in policy["connect-src"]
 
 
@@ -192,7 +201,9 @@ def test_each_address_the_file_used_to_carry_is_red_when_put_back(
     ["ows.terrestris.de", "https://cdn.document360.io", "https://*.example.test", "*", "https:",
      "http://example.test:8443", "wss://example.test"],
 )  # fmt: skip
-def test_the_detector_finds_every_shape_a_source_can_take(config: Any, own: set[str], source: str) -> None:
+def test_the_detector_finds_every_shape_a_source_can_take(
+    config: Any, own: set[str], source: str
+) -> None:
     """The shapes the pinned Superset ships (a bare host, a full address) and the wide ones."""
     policy = copy.deepcopy(config.TALISMAN_CONFIG["content_security_policy"])
     policy["connect-src"] = [*policy["connect-src"], source]
@@ -292,9 +303,8 @@ def test_no_served_source_file_names_an_outside_host() -> None:
     found: dict[str, Any] = {}
     for name, path in _served_files().items():
         text = path.read_text(encoding="utf-8")
-        hits: Any = (
-            addresses_in_headers(text) if name.endswith("headers.ts") else addresses_in_markup(name, text)
-        )
+        is_headers = name.endswith("headers.ts")
+        hits: Any = addresses_in_headers(text) if is_headers else addresses_in_markup(name, text)
         if hits:
             found[name] = hits
     assert found == {}
