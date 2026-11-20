@@ -42,6 +42,13 @@ row 28 `..._row_28`, rows 29 and 30 `..._rows_29_and_30`, row 31 `..._row_31`, r
 `..._rows_32_and_33`, row 34 `..._row_34`, row 35 `..._row_35`, row 36 `..._row_36`,
 row 37 `..._row_37`, row 38 `..._row_38`, row 40 `..._row_40`, row 41 `..._row_41`, row 21
 `..._row_21`, and the put-back words (rows 30, 33, 34) `..._put_back_words`.
+
+Round 8: the note cleared only by the final save, for a rotation and an edit that keeps its address
+as for a moved one (`..._says_what_became_of_the_key_round_8`, with its completing end
+`..._clears_its_note_and_audits_the_key_round_8` and the first check's
+`..._leaves_nothing_round_8`); a lapsed check's credential under a note (`..._round_8_n1`); the
+words for an engine whose key was already lost (`..._round_8_n2`); rows 29 and 30 planted at the real
+call sites (N5); the probe with no models file needs no note (`..._row_21`, start removes it).
 """
 
 from __future__ import annotations
@@ -50,13 +57,14 @@ import asyncio
 import json
 import re
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 from pydantic import SecretStr
-from services.api.model_admin import ModelAdminRefused
+from services.api.model_admin import ModelAdmin, ModelAdminRefused
 
 from adapters.model_litellm.stand_in import _seal
 from tests.services.api.test_model_address_change_failure import (
@@ -82,6 +90,7 @@ class Plants(Faults):
         self.garble: list[Callable[[httpx.Request], bool]] = []
         self.raw: list[tuple[Callable[[httpx.Request], bool], BaseException]] = []
         self.hang_after: list[Callable[[httpx.Request], bool]] = []
+        self.hang_before: list[Callable[[httpx.Request], bool]] = []
         self.die_after: list[Callable[[httpx.Request], bool]] = []
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -91,6 +100,10 @@ class Plants(Faults):
         for rule, error in self.raw:
             if rule(request):
                 raise error
+        for rule in list(self.hang_before):
+            if rule(request):
+                self.hang_before.remove(rule)  # once: before the gateway is asked anything
+                await asyncio.sleep(3600)
         if any(rule(request) for rule in self.garble):
             return httpx.Response(200, content=b"<html>not json</html>")
         answer = await super().handle_async_request(request)
@@ -406,33 +419,52 @@ async def test_an_entry_at_the_new_address_that_survives_a_refused_put_back_row_
 
 
 @pytest.mark.parametrize(
-    "how", ["the record cannot be saved", "an exception nobody named", "a cancellation"]
+    "how",
+    [
+        "the record cannot be saved",
+        "an exception nobody named",
+        "a cancellation",
+        "the gateway refuses the removal",
+    ],
 )
 async def test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30(
     world: Scene, how: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Rows 29 and 30. The note of intent is written before the credential is touched, so a first
-    save that fails (29) leaves the key set and held, and an exception nobody named or a
-    cancellation just after it (30) gives the record back: the engine is offered still with its key,
-    and the words say nothing was changed, never that anything was "put back"."""
+    """Rows 29 and 30. The moved edit's first steps are planted at the real call sites, none of them
+    a stub: the first record save fails (29); the gateway's list of entries, the first thing
+    the withdrawal asks, raises something nobody named or is waited on until the task is cancelled
+    (30, before any write is sent); the gateway **refuses the first removal** with its HTTP 500 on
+    `/model/delete` (N5: round 7's case stubbed the withdrawal with a call that sent no write, so
+    it covered nothing of this). None of them leaves a note of intent that deletes the working old
+    key: the engine is offered still with its key, and the words never say anything was "put back"."""
     await world.set_up()
     before = world.at()
     reached = asyncio.Event()
+    stop = faults(world)
     if how == "the record cannot be saved":
 
         def full(*_a: Any, **_k: Any) -> None:
             raise OSError(28, "No space left on device")
 
         monkeypatch.setattr(world.admin._file, "save", full)
+    elif how == "the gateway refuses the removal":
+        asked: list[bool] = []
+
+        def first_removal(r: httpx.Request) -> bool:
+            if live("/model/delete")(r) and not asked:
+                asked.append(True)
+                return True
+            return False
+
+        stop.refuse.append(first_removal)  # once: the undo's own removals are answered
+    elif how == "an exception nobody named":
+        stop.raw.append(
+            (lambda r: r.url.path == "/v2/model/info", RuntimeError("a garbled answer"))
+        )
     else:
-
-        async def stops(*_a: Any, **_k: Any) -> None:
-            if how == "a cancellation":
-                reached.set()
-                await asyncio.sleep(3600)
-            raise RuntimeError("a garbled answer")
-
-        monkeypatch.setattr(world.admin, "_withdraw_entries", stops)
+        stop.hang_before.append(
+            lambda r: r.url.path == "/v2/model/info" and not reached.is_set() and not reached.set()
+        )
     if how == "a cancellation":
         task = asyncio.ensure_future(moved(world))
         await asyncio.wait_for(reached.wait(), 5)
@@ -446,8 +478,10 @@ async def test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_r
         said = raised.value.words.lower()
         assert audited(world, "engine_edited")[-1].lower().startswith("refused")
     monkeypatch.undo()
-    assert "put back" not in said or "was not put back" in said, said
-    if how != "the record cannot be saved":
+    stop.refuse.clear()
+    stop.raw.clear()
+    assert not says_put_back(said), said
+    if how in ("an exception nobody named", "a cancellation"):
         assert "nothing had been changed" in said, said
     assert world.gateway.credential("osprey-gemini") == world.first, "the old key is untouched"
     assert world.at() == before
@@ -1139,4 +1173,270 @@ async def test_a_probe_key_whose_store_was_lost_is_removed_row_5(world: Scene) -
     faults(world).lose_answer.clear()
     assert world.gateway.credential("osprey-gemini.check") is None, "the probe still holds a key"
     assert world.gateway.credential("osprey-gemini") == world.first
+    assert world.second not in recorded(world)
+
+
+# --- round 8, item 1: a rotation (or an edit that keeps its address) stored the key and cleared its
+# --- note inside `_put_key`, so a failure after the store said "not saved" / "put back" ------------
+
+
+async def rotate(scene: Scene, how: str) -> None:
+    """A rotation as the two callers make it: `set_key`, and an edit that keeps its address and
+    carries a key."""
+    if how == "set_key":
+        await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
+    else:
+        await scene.admin.edit_engine(
+            "admin-1", "gemini", provider(OLD), SecretStr(scene.second)
+        )
+
+
+def failure_rows(scene: Scene, how: str) -> list[str]:
+    """What the audit says of the failed rotation: the change's own row, by its action."""
+    return audited(scene, "key_rotated" if how == "set_key" else "engine_edited")
+
+
+@pytest.mark.parametrize("caller", ["set_key", "an edit that keeps its address"])
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "the engine's key update is refused",
+        "the key list is garbled",
+        "a cancellation after the store",
+        "the key update is refused and so is the undo's",
+    ],
+)
+async def test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8(
+    world: Scene, caller: str, fault: str
+) -> None:
+    """Round 8, item 1 (the verifier's fault; the early clear the scout called N3). A rotation
+    deletes the old key, stores the new one and used to **save "set" and clear its note of intent
+    inside `_put_key`**; a failure after (the engine's key update refused, the key list garbled, a
+    cancellation) then said "the change was not saved" and, for a cancellation or an exception nobody
+    named, "put back as the saved settings say", though the old key was gone and the new key was the
+    credential, and no audit said the key changed. The note is cleared only by the change's final
+    save, so the undo removes the credential, the record says lost, and the answer and the audit say
+    so in the one function for the words: the key was removed and is to be entered again, never
+    "put back" (the entries are, the credential was removed and not restored). Record, gateway,
+    answer and audit agree, and no key is in any of them."""
+    await world.set_up()
+    stop = faults(world)
+    how = "set_key" if caller == "set_key" else "edit"
+    if fault == "the engine's key update is refused":
+        once: list[bool] = []
+
+        def first_update(r: httpx.Request) -> bool:
+            if live("/key/update")(r) and not once:
+                once.append(True)
+                return True
+            return False
+
+        stop.refuse.append(first_update)
+    elif fault == "the key update is refused and so is the undo's":
+        stop.refuse.append(live("/key/update"))
+    elif fault == "the key list is garbled":
+        seen: list[bool] = []
+
+        def first_list(r: httpx.Request) -> bool:
+            if r.url.path == "/key/list" and not seen:
+                seen.append(True)
+                return True
+            return False
+
+        stop.garble.append(first_list)
+    if fault == "a cancellation after the store":
+        reached = asyncio.Event()
+        stop.hang_after.append(
+            lambda r: live("/key/update")(r) and not reached.is_set() and not reached.set()
+        )
+        task = asyncio.ensure_future(rotate(world, how))
+        await asyncio.wait_for(reached.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        answer = ""
+        assert any("interrupted" in o for o in failure_rows(world, how)), failure_rows(world, how)
+    else:
+        with pytest.raises(ModelAdminRefused) as raised:
+            await rotate(world, how)
+        answer = raised.value.words
+        assert failure_rows(world, how)[-1].startswith("refused"), failure_rows(world, how)
+    stop.refuse.clear()
+    stop.garble.clear()
+    stop.hang_after.clear()
+
+    said = everything_said(world, answer).lower()
+    row = failure_rows(world, how)[-1].lower()
+    # the record, the gateway's credential and the routing agree: no key, to be entered again
+    assert world.gateway.credential("osprey-gemini") is None, "the new key is still the credential"
+    assert world.admin.settings.keys["gemini"].lost is True, "the record says set over no key"
+    assert not world.admin.settings.intents, "the undo settled the note"
+    assert world.admin.key_state("gemini") == "lost"
+    assert world.admin.routes().engines["gemini"].key_present is False
+    # the words and the audit say it: the key was removed and is to be entered again
+    assert "key was removed" in row and "enter it again" in row, row
+    if answer:
+        assert "key was removed" in answer.lower() and "enter it again" in answer.lower(), answer
+    assert audited(world, "key_removed"), "the removal of the key is audited"
+    assert not says_put_back(said), said  # the credential was removed, never restored
+    assert world.first not in recorded(world) and world.second not in recorded(world)
+    assert world.first not in answer and world.second not in answer
+    await no_key_goes_to_the_old_address(world, world.second)
+
+
+@pytest.mark.parametrize("how", ["set_key", "an edit that keeps its address"])
+async def test_a_rotation_that_completes_clears_its_note_and_audits_the_key_round_8(
+    world: Scene, how: str
+) -> None:
+    """Round 8, item 1, the other end: nothing is lost by moving the clear to the final save. A
+    rotation that completes leaves no note, the record says set with the new key, the old key is
+    gone and `key_rotated` is audited."""
+    await world.set_up()
+    await rotate(world, "set_key" if how == "set_key" else "edit")
+    assert not world.admin.settings.intents
+    assert world.gateway.credential("osprey-gemini") == world.second
+    assert world.admin.key_state("gemini") == "set"
+    assert world.admin.routes().engines["gemini"].key_present is True
+    assert audited(world, "key_rotated")
+    await world.call()
+    assert world.addresses_reached_by(world.second) == {OLD}
+
+
+async def test_a_check_cut_short_after_its_key_was_stored_leaves_nothing_round_8(
+    world: Scene,
+) -> None:
+    """Round 8, item 1: the first check (a new engine's key held under its name). The task is
+    cancelled once the gateway wrote the key: the key and the unfinished check are removed, no note is
+    left, the audit says the check was interrupted, and no key set is said. (Held so a later change
+    to the check's ordering cannot move its clear before the end.)"""
+    await world.set_up()
+    key = a_key()
+    world.gateway.providers = {
+        **world.gateway.providers,
+        "openai": type(world.gateway.providers["gemini"])(key, frozenset({"gpt-4.1-mini"})),
+    }
+    engine = provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"})
+    sets_before = len(audited(world, "key_set"))
+    reached = asyncio.Event()
+    faults(world).hang_after.append(
+        lambda r: credential_of("POST", "openai")(r) and not reached.is_set() and not reached.set()
+    )
+    task = asyncio.ensure_future(world.admin.check("admin-1", engine, SecretStr(key)))
+    await asyncio.wait_for(reached.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert world.gateway.credential("osprey-openai") is None, "the key outlived its check"
+    assert not world.admin.settings.checks and not world.admin.settings.intents
+    assert any("interrupted" in o for o in audited(world, "engine_checked"))
+    assert len(audited(world, "key_set")) == sets_before, "a key set is said that never was"
+    assert key not in recorded(world)
+
+
+# --- round 8, N1: a passed check's credential deleted when it lapses, with no note ----------------
+
+
+@pytest.mark.parametrize(
+    "how",
+    [
+        "the gateway refuses the removal",
+        "the answer to the removal is lost",
+        "the process is killed after the removal",
+    ],
+)
+async def test_a_lapsed_check_s_credential_is_removed_under_a_note_round_8_n1(
+    world: Scene, how: str
+) -> None:
+    """Round 8, N1. `_expired` (the sweep, a check, **Add**) deleted a lapsed check's credential with
+    no note, so a removal that landed and whose record save did not left the check `passed` with
+    no key behind it. It joins the one mechanism: the note is saved before the delete and cleared
+    with the record that drops the check. A removal the gateway *answers* with a refusal changed
+    nothing, so the check and its key stay and the next sweep removes both; one that landed (the answer
+    lost, or the process killed) leaves the note, which the next change or start settles by removing
+    the check with its credential."""
+    await world.set_up()
+    key = a_key()
+    world.gateway.providers = {
+        **world.gateway.providers,
+        "openai": type(world.gateway.providers["gemini"])(key, frozenset({"gpt-4.1-mini"})),
+    }
+    engine = provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"})
+    checked = await world.admin.check("admin-1", engine, SecretStr(key))
+    assert checked.ok and checked.check
+    assert world.gateway.credential("osprey-openai") == key
+    later = datetime.now(UTC) + timedelta(minutes=16)
+    world.admin._now = lambda: later  # type: ignore[method-assign]
+    stop = faults(world)
+    removal = credential_of("DELETE", "openai")
+    if how == "the gateway refuses the removal":
+        stop.refuse.append(removal)
+    elif how == "the answer to the removal is lost":
+        stop.lose_answer.append(removal)
+    else:
+        stop.die_after.append(removal)
+
+    expected = Died if how == "the process is killed after the removal" else ModelAdminRefused
+    with pytest.raises(expected):
+        await world.admin.sweep_checks()
+    stop.refuse.clear()
+    stop.lose_answer.clear()
+    stop.dead = False
+
+    if how == "the gateway refuses the removal":
+        assert world.gateway.credential("osprey-openai") == key, "the plant: it stays held"
+        assert checked.check in world.admin.settings.checks, "the check stays while its key does"
+        assert not world.admin.settings.intents, "a refused removal changed nothing: no note"
+        await world.admin.sweep_checks()
+        assert not world.admin.settings.checks
+        assert world.gateway.credential("osprey-openai") is None
+    else:
+        assert world.gateway.credential("osprey-openai") is None, "the plant: the removal landed"
+        assert set(world.admin.settings.intents) == {"openai"}, "the note was saved before it"
+        again = world.process(faulty=False, retry_seconds=3600)
+        again._now = lambda: later  # type: ignore[method-assign]
+        await again.start()
+        await again.close()
+        assert not again.settings.checks, "a passed check stood with no key behind it"
+        assert not again.settings.intents
+    assert key not in recorded(world)
+
+
+# --- round 8, N2: the words for an engine whose key was already lost ------------------------------
+
+
+@pytest.mark.parametrize("before", ["key lost", "no key"])
+async def test_a_cancelled_moved_edit_of_an_engine_with_no_key_does_not_say_put_back_round_8_n2(
+    world: Scene, before: str
+) -> None:
+    """Round 8, N2. `_key_taken` is false for an engine whose key was already lost (or never held),
+    so a cancellation after the moved edit stored its key said "put back" though the undo removed a
+    credential. The credential the undo removed is never "put back", whatever the record said
+    before: the words say the key typed in this change was removed and is to be entered again."""
+    await world.set_up()
+    if before == "key lost":
+        lost = ModelAdmin._with_key_lost(world.admin.settings, "gemini", "admin-1")
+        await world.admin._gateway.delete_credential("gemini")
+        world.admin._save(lost)
+        assert world.admin.settings.keys["gemini"].lost is True
+    else:
+        await world.admin.remove_key("admin-1", "gemini")
+        assert world.admin.key_state("gemini") == "none"
+    assert world.gateway.credential("osprey-gemini") is None
+    reached = asyncio.Event()
+    faults(world).hang_after.append(
+        lambda r: live("/key/update")(r) and not reached.is_set() and not reached.set()
+    )
+    task = asyncio.ensure_future(moved(world))
+    await asyncio.wait_for(reached.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    faults(world).hang_after.clear()
+    said = audited(world, "engine_edited")[-1].lower()
+    assert "interrupted" in said
+    assert not says_put_back(said), said
+    assert "enter it again" in said, said
+    assert world.gateway.credential("osprey-gemini") is None, "the typed key was left held"
+    assert world.admin.key_state("gemini") in ("lost", "none")
+    assert world.admin.routes().engines["gemini"].key_present is False
     assert world.second not in recorded(world)
