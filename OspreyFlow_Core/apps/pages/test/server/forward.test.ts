@@ -941,12 +941,13 @@ describe("anti-forgery on /v1", () => {
     // The control: with the right token as the first part, the call goes on and waits for the file's bytes.
     const good = multipart([{ name: "_csrf", value: person.csrf }, file]);
     const waiting = open(pages.port, { method: "POST", path: RAW_ROUTES[3].path, headers: pages.browser(person, { "Content-Type": good.contentType }) });
-    await waiting.write(headOf(good));
+    await waiting.write(good.body.subarray(0, headOf(good).length + 200));
     await until("the call to be begun at the Conduit", () => fake.seen.length === 1);
     waiting.req.destroy();
 
-    for (const first of [{ name: "_csrf", value: generateSecret(43) }, { name: "classification", value: "OFFICIAL" }]) {
-      const form = multipart([first, file]);
+    // A wrong token first, another field first, and the file itself first (no token at all).
+    for (const lead of [[{ name: "_csrf", value: generateSecret(43) }], [{ name: "classification", value: "OFFICIAL" }], []]) {
+      const form = multipart([...lead, file]);
       const c = open(pages.port, { method: "POST", path: RAW_ROUTES[3].path, headers: pages.browser(person, { "Content-Type": form.contentType }) });
       // Everything up to the file's first byte is sent; the file's bytes and the end of the form never are.
       await c.write(headOf(form));
@@ -1094,10 +1095,12 @@ describe("path hygiene: the path is decoded once, made canonical, checked, and f
     ];
     for (const [sent, expected] of cases) {
       const res = await call(pages.port, { path: sent, headers: pages.browser(person) });
-      expect(res.status, sent).toBe(200);
+      // The fake answers its own 404 for a route it has not got: what matters is that the call reached it, as checked.
+      expect([200, 404], sent).toContain(res.status);
       expect(fake.last.path, sent).toBe(expected);
+      expect(fake.seen.length, sent).toBe(cases.findIndex(([s]) => s === sent) + 1);
     }
-    // The control for the refusals above: only the encoded spelling of a deny-listed name was refused, not the name's neighbours.
+    // The neighbours of the deny-listed names are carried: only the names themselves were refused.
     expect(fake.seen).toHaveLength(cases.length);
   });
 

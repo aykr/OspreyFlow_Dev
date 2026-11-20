@@ -58,7 +58,10 @@ export interface StreamSettings {
 
 /**
  * The `/v1` forwarder's settings (ADR-152 decision 5; slice PL10). Present exactly when `OSPREY_PAGES_CONDUIT_URL` is
- * set. It does not use the deployment's public origin: that is the stream's alone (an upgrade's `Origin` check).
+ * set. The forwarder does not use the deployment's public origin itself: that is the stream's alone (an upgrade's
+ * `Origin` check; HTTP has none, anti-forgery is its guard). `loadConfig` still refuses to start with the address set and
+ * no origin, because CO3's start refusal (`streamSettings`) ties the two: the owner's ruling of 20 November 2026 keeps it
+ * for now, and decoupling them is a small slice after PL10 merges (a backlog row). Do not read this as "HTTP needs no origin".
  */
 export interface ForwardSettings {
   /** The Conduit's address as `OSPREY_PAGES_CONDUIT_URL` gives it: scheme, host and port, no path. */

@@ -18,7 +18,7 @@ const MAX_NAME_CHARS = 200;
 
 export class MultipartRefusal extends Error {
   constructor(
-    readonly status: 413 | 422,
+    readonly status: 403 | 413 | 422,
     readonly detail: string,
   ) {
     super(detail);
