@@ -1,0 +1,1 @@
+tests/harness/test_cloud_platform_pages_client_id.py	-	renders the named development.yaml fixture and signs tokens in memory; the helpers it imports from test_cloud_platform_entra and test_cloud_platform_render (row-mapped, also `-`) walk nothing real; no folder of the repository is walked
