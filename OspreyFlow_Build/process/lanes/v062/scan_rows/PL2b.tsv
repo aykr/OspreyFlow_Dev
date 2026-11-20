@@ -1,0 +1,1 @@
+tests/harness/test_postgres_connections_setting.py	OspreyFlow_Core/	walks every .py file under OspreyFlow_Core (CORE.rglob("*.py"), skipping node_modules, .venv and cloud_platform) to find who reads POSTGRES_MAX_CONNECTIONS; its other cases render fixtures under their own tmp_path

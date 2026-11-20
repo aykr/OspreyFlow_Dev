@@ -194,6 +194,27 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   `keyboard/admin-models.spec.ts`); AD1a and AD1b merge back to back, with no release between; AD1c after them. The owner's rules for
   keys bind every AD1 slice: write-only, replace and remove and never reveal, audited without the key, only a holder of the right,
   the server command stays as a second route, synthetic keys only.
+- **How the line is arranged from now** (the owner, 20 November, after the fourth line fixes). Standing.
+  1. **Pull from the merge queue.** No new build starts while two verified slices wait to merge. Six builders is the ceiling, not the target.
+     A build that is ready but held by this rule is reported as "ready, held for the merge queue", not as a problem.
+  2. **Merge order is by what unblocks most**, not first finished. After CO2: PL4a, then PL10, then PL2a and PL2b. PL9a ahead of the PL2 pair
+     once it is verified.
+  3. **Builders by area**, so slices seldom collide: Platform (PL4, PL7, PL8, PL9, PL10, CO2); Studio (IS2 to IS6, CO1); Graph (GG2 onward, WS4);
+     Admin, reports and rules (AD1, AD3 to AD5, GR2 to GR4, RM1). No two builders in one area's folders at once unless their briefs name
+     different files.
+  4. **Verifiers start the moment a build is green.** They never wait for a merge.
+  5. **One or two scouts always run one or two builds ahead** of the builders, so each brief and its questions are ready early.
+  6. **The owner's decisions come twice a day, about 09:00 and 16:00 UTC**, as one table with the recommendation first. Carry on with everything
+     that does not depend on them. The owner is interrupted between batches only for a fault in security behaviour, a GitHub stop, or a line of
+     his that frees work with nothing else to do.
+  7. **Line faults go to the backlog.** Fixes are applied at most once a day, in a quiet window the conductor offers.
+  8. **Each report starts with three numbers:** merged since the last report, verified and waiting to merge, builds held by rule 1.
+  9. **No slice joins the merge queue until the cheap checks have passed on its tip:** the lint and format checks for every file it touches
+     (ruff, eslint, the line-length rule), and the scan-map check for any test it adds, with its scan row already committed if it needs one. These
+     go in every brief's checks from now on, and the conductor runs them on every slice before its merge starts (a merge attempt costs 25
+     minutes; the checks cost seconds). The conductor's helper for this is kept in the conductor's scratchpad, not in the product.
+  10. **Backlog rows for the line:** (a) the builder's Stop check always runs lint and the scan-map check, whatever the brief says; (b) a slice
+      whose only open finding is a test gap is offered to the standing accept before it is sent to another round (PL9a missed it).
 - **AD1a: one workspace file allowed** (the owner, 20 November, option 2 with conditions). AD1a's three red scan tests
   (`test_admin_sections`; in `test_place_routes`: the record of places by role, and the hidden-place refusal for `right:manage_models`) need
   `apps/workspace/src/shell/placesByRole.json`. AD1a may change **that one file** on its own branch, produced by its generator
