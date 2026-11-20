@@ -15,18 +15,22 @@ the other three, each by a plant at the shape the gate really sees:
 * `tools/no_branches_check.py` (CSS is among its suffixes):
   `test_the_no_branches_check_reads_packages_design`.
 
-Each plant is a file written into the real `packages/design` folder for the length of the test and
-removed after it, so the gate runs over the real roots it is configured with, not over roots the
-test chose. `test_each_gate_s_roots_hold_the_three_files` shows the three files are inside the roots
-of all three, by name.
+Each plant is a file written into a temporary copy of `packages/design`, and the gate's roots are
+pointed at the copy for the length of the test. Nothing is ever written into the real folder: `make
+test` runs the tests on several workers, and a plant in the real folder was seen by every reader of
+it on another worker (the no-branches and ui-words tests, the colour-drift count) for as long as it
+lived. The roots the gates are really configured with are not lost by that:
+`test_each_gate_s_roots_hold_the_three_files` shows the three files are inside the real roots of all
+three, by name, and the plants are written in the real files' own folder layout.
 
 This file walks no part of the repository by `git ls-files`: it reads
-`OspreyFlow_Core/packages/design/` only.
+`OspreyFlow_Core/packages/design/` only (copied, never written).
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -39,14 +43,14 @@ PLANT = "zz_planted_gate_reach.css"
 
 
 @pytest.fixture
-def planted() -> Iterator[Path]:
-    """The path in the real `packages/design` a test writes its plant to; gone after the test."""
-    path = DESIGN / PLANT
-    assert not path.exists()
-    try:
-        yield path
-    finally:
-        path.unlink(missing_ok=True)
+def planted(tmp_path: Path) -> Path:
+    """The path of a plant in a temporary copy of `packages/design`; the real folder is not written.
+
+    The copy sits at `<tmp>/packages/design`, the layout the gates print their paths from.
+    """
+    copy = tmp_path / "packages" / "design"
+    shutil.copytree(DESIGN, copy, ignore=shutil.ignore_patterns("node_modules"))
+    return copy / PLANT
 
 
 def _under(path: Path, roots: list[Path]) -> bool:
@@ -65,7 +69,9 @@ def test_each_gate_s_roots_hold_the_three_files() -> None:
             assert _under(DESIGN / name, roots), f"{gate} does not read packages/design/{name}"
 
 
-def test_the_design_detector_reads_packages_design(planted: Path) -> None:
+def test_the_design_detector_reads_packages_design(
+    planted: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # The shape the old toast had: a side stripe on a card-like rule, which the detector reports.
     planted.write_text(
         ".planted {\n  background: var(--surface-raised); box-shadow: var(--overlay-shadow);\n"
@@ -73,6 +79,8 @@ def test_the_design_detector_reads_packages_design(planted: Path) -> None:
         ".planted--error { border-left: 3px solid var(--error); }\n",
         encoding="utf-8",
     )
+    # The gate's own SCANNED, its package root pointed at the copy: the call is `detect(SCANNED)`.
+    monkeypatch.setattr(design_check, "SCANNED", [planted.parent])
     found = design_check.unexcused(design_check.detect(design_check.SCANNED))
     assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [(PLANT, "side-tab")]
 
@@ -84,16 +92,24 @@ def test_the_design_detector_still_excuses_the_canvas_grid_in_primitives_css() -
 
 
 def test_the_ui_words_check_reads_packages_design(
-    planted: Path, capsys: pytest.CaptureFixture[str]
+    planted: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    monkeypatch.setattr(ui_words_check, "DESIGN_PACKAGE", planted.parent)
+    monkeypatch.setattr(ui_words_check, "GLASS_SRC", planted.parent.parent / "no-src")
     planted.write_text('.planted::after {\n  content: "Target model";\n}\n', encoding="utf-8")
     assert ui_words_check.main() == 1
     assert f"packages/design/{PLANT}:2:" in capsys.readouterr().out
 
 
 def test_the_no_branches_check_reads_packages_design(
-    planted: Path, capsys: pytest.CaptureFixture[str]
+    planted: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    # `tree_files` binds its defaults at definition: the gate's walk is replaced, not a constant.
+    walk: Callable[..., dict[str, str]] = no_branches_check.tree_files
+    tmp_core = planted.parent.parent.parent
+    monkeypatch.setattr(
+        no_branches_check, "tree_files", lambda: walk(tmp_core, ("packages/design",))
+    )
     planted.write_text('.planted::after {\n  content: "Branch to a case";\n}\n', encoding="utf-8")
     assert no_branches_check.main() == 1
     assert f"packages/design/{PLANT}:2:" in capsys.readouterr().out
