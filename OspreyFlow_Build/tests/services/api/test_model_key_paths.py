@@ -4,21 +4,31 @@ rule, 20 November 2026: a fault that can send a key to an address it was not giv
 back, log it or audit it is never accepted; one that leaves an engine unavailable or the words wrong
 is fixed here).
 
-**One design, held by these cases.**
+**One design, held by these cases (the owner's ruling on the round-6 table, 20 November 2026).**
 
-1. *A record of intent is written before a credential is deleted* (an engine whose key was set is
-   saved lost first), so no way out of a change, a cancellation, a process that stops, a record
-   save that fails or an answer that is lost, leaves "set" over a credential nobody can account for.
-2. *The lost record is a property of the state.* **Every** reconcile (start, the retry, a key, a
-   new engine, another engine's edit, the undo) removes the credential of an engine recorded lost
-   before it makes any entry for it, and an engine whose credential the gateway will not remove is
-   given no entry until it does (`ModelAdmin._reconcile`'s *withheld*). No caller can forget it.
+1. *A note of intent is saved before any credential is deleted or stored and cleared when the change
+   is complete* (`ModelSettings.intents`, in the models file, so every replica and every restart
+   sees it). Places: an edit moved or not, a rotation, remove key, remove engine, cancel a check,
+   a check's own credential, a check's probe. No way out of a change (a cancellation, a process
+   that stops, a record save that fails, an answer that is lost) leaves "set" over a credential
+   nobody can account for.
+2. *A note outstanding is a property of the state.* Every reconcile, and the undo, first settles
+   it (the credential removed, the key recorded lost, the note cleared); an engine whose credential
+   the gateway will not remove is given no entry until it does (`ModelAdmin._reconcile`'s
+   *withheld*). No caller can forget it.
 3. *One decision for the words and the mark* across a refusal, an error, a cancellation and any
-   other exception: "put back" only when it was (entries and credential); the key's removal said,
-   with a `key_removed` audit, when it was saved; a key the gateway would not remove said held.
-4. *Start-up* puts right what a stopped process left. It reads no credential (`GET /credentials`
-   answers with two characters at each end of a key, so the Conduit never asks): the record of
-   intent is what start reads.
+   other exception: "put back" only when the entries **and** the credential were (a rotation's or a
+   removal's undo removes the credential and never restores it, so it never says so); the key's
+   removal said, with a `key_removed` audit, when it was saved; a key the gateway would not remove
+   said held.
+4. *Start-up* marks unavailable every engine with a note outstanding and settles it. **It reads no
+   credential** (`GET /credentials` answers with two characters at each end of a key, so the
+   Conduit never asks: `credential_reads` stays 0): the note is what start reads. It removes a
+   check's probe credential whether or not there is a models file.
+5. *A key is stored only where no entry disagrees with the record*: `set_key`, an edit that carries
+   a key and a check for a new engine each withdraw such entries first, and a refused withdrawal
+   refuses the key. A moved edit withdraws the engine's old entries **before** anything is
+   recorded or removed, so a refused withdrawal leaves the old key working (row 40).
 
 **Each case plants its fault at the real call site** (the stand-in gateway, refusing as the pinned
 one was measured to, with a transport over it that refuses, lets an answer be lost, garbles one,
@@ -30,13 +40,15 @@ raises raw, hangs, or stops the process where a test says), was red on the code 
 row 3 `..._row_3`, row 15 `..._row_15`, row 16 and 39 `..._row_16_and_39`, row 17 `..._row_17`,
 row 28 `..._row_28`, rows 29 and 30 `..._rows_29_and_30`, row 31 `..._row_31`, rows 32 and 33
 `..._rows_32_and_33`, row 34 `..._row_34`, row 35 `..._row_35`, row 36 `..._row_36`,
-row 37 `..._row_37`, row 38 `..._row_38`.
+row 37 `..._row_37`, row 38 `..._row_38`, row 40 `..._row_40`, row 41 `..._row_41`, row 21
+`..._row_21`, and the put-back words (rows 30, 33, 34) `..._put_back_words`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -149,6 +161,16 @@ def recorded(scene: Scene) -> str:
 
 def audited(scene: Scene, action: str) -> list[str]:
     return [e.outcome for e in scene.audit.entries if e.action == action]
+
+
+def says_put_back(words: str) -> bool:
+    """Whether `words` say the gateway **was** put back (a "was not"/"could not be" is no claim)."""
+    return "put back" in re.sub(r"not (be )?put back", "", words.lower())
+
+
+def everything_said(scene: Scene, answer: str = "") -> str:
+    """The answer and every audit outcome: what a person and the record were told."""
+    return answer + " " + " ".join(e.outcome for e in scene.audit.entries)
 
 
 # --- row 3: the key-storing call's answer is lost after the gateway stored it --------------------
@@ -326,6 +348,8 @@ async def test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17
     assert world.gateway.credential("osprey-gemini") is None, "the new key was left held"
     assert world.admin.key_state("gemini") == "lost"
     assert world.admin.routes().engines["gemini"].key_present is False
+    # the undo removed the key and restored nothing of it: it never says the gateway was put back
+    assert not says_put_back(everything_said(world)), everything_said(world)
     await no_key_goes_to_the_old_address(world, world.second)
     assert world.second not in recorded(world)
 
@@ -521,8 +545,7 @@ async def test_a_rotation_stopped_after_the_old_key_was_removed_says_it_rows_32_
     assert world.admin.key_state("gemini") == "lost", "the record is not 'set' over no credential"
     assert world.admin.routes().engines["gemini"].key_present is False
     assert world.gateway.credential("osprey-gemini") is None
-    if "put back" in said:
-        assert "was not put back" not in said
+    assert not says_put_back(everything_said(world, said)), everything_said(world, said)
     assert world.first not in recorded(world) and world.second not in recorded(world)
 
 
@@ -567,6 +590,7 @@ async def test_a_removed_key_whose_record_is_not_saved_is_lost_not_set_row_34(
     assert world.admin.key_state("gemini") == "lost", "never 'set' over no credential"
     assert world.admin.routes().engines["gemini"].key_present is False
     assert audited(world, "key_removed")
+    assert not says_put_back(everything_said(world)), everything_said(world)
 
 
 async def test_a_removal_the_gateway_refuses_leaves_the_key_set_and_offered_row_34(
@@ -706,3 +730,269 @@ async def test_another_engines_change_does_not_offer_an_engine_with_no_key_row_3
     world.gateway.sent.clear()
     await world.call()
     assert {k for _, k in world.gateway.sent} <= {None}
+
+
+# --- row 28 again, on the edit path: a key typed for the old address, an entry at the new ----------
+
+
+async def test_an_edit_that_keeps_the_address_and_carries_a_key_withdraws_entries_first_row_28(
+    world: Scene,
+) -> None:
+    """Row 28, on `edit_engine` and not only on `set_key`. A moved edit fails after entries are made
+    at the NEW address and every removal is refused afterwards, so an entry at NEW survives and the
+    record says OLD. An edit that **keeps OLD and carries a key** stored that key under the engine's
+    credential with no withdrawal first (`set_key` does it), so the surviving entry sent a key typed
+    for OLD to NEW, and the record was settled to "set" before the reconcile that failed. The key is
+    now refused while the entry stands; `(NEW, the key)` is never sent, and once the gateway removes
+    the entry the key reaches OLD alone."""
+    await world.set_up()
+    armed: list[bool] = []
+
+    def refuse_the_update_then_every_removal(r: httpx.Request) -> bool:
+        if r.url.path == "/key/update":
+            armed.append(True)
+        return bool(armed) and live("/model/delete")(r)
+
+    faults(world).refuse.append(refuse_the_update_then_every_removal)
+    faults(world).refuse.append(
+        lambda r: r.url.path == "/key/update" and b".check" not in r.content
+    )
+    with pytest.raises(ModelAdminRefused):
+        await moved(world)
+    assert NEW in world.at().values(), "the plant: an entry survives at the new address"
+    faults(world).refuse.pop()  # the engine's key update works again; the removals do not
+
+    third = a_key()
+    world.gateway.providers["gemini"] = type(world.gateway.providers["gemini"])(
+        third, frozenset({MODEL})
+    )
+    with pytest.raises(ModelAdminRefused):
+        await world.admin.edit_engine("admin-1", "gemini", provider(OLD), SecretStr(third))
+    assert world.gateway.credential("osprey-gemini") != third, "the key was taken beside the entry"
+    world.gateway.sent.clear()
+    await world.call()
+    assert (NEW, third) not in world.gateway.sent
+    assert third not in {k for _, k in world.gateway.sent}, "the key was sent somewhere"
+    # another replica reads the file: it must not offer the engine on the strength of a key
+    other = world.process(faulty=False, retry_seconds=3600)
+    assert other.routes().engines["gemini"].key_present is False
+
+    faults(world).refuse.clear()
+    await world.admin.edit_engine("admin-1", "gemini", provider(OLD), SecretStr(third))
+    await world.call()
+    assert world.addresses_reached_by(third) == {OLD}
+    assert set(world.at().values()) == {OLD}
+
+
+async def test_a_check_for_a_new_engine_withdraws_a_stray_entry_before_its_key_row_28(
+    world: Scene,
+) -> None:
+    """Row 28, the other caller that stores a key. An entry for an engine the record does not hold
+    (left by an interrupted removal) names the credential a new engine of that name will have, and
+    sends whatever is stored there to its own address. A check for such an engine withdraws it
+    first, and a removal the gateway refuses refuses the key: nothing is stored beside it."""
+    await world.set_up()
+    stray = provider(NEW, name="openai", roles={"extraction": "gpt-4.1-mini"})
+    await world.admin._gateway.add_entry(stray, "gpt-4.1-mini")
+    assert "osprey-openai-gpt-4.1-mini" in world.gateway.stored_ids(), "the plant: a stray entry"
+    key = a_key()
+    world.gateway.providers = {
+        **world.gateway.providers,
+        "openai": type(world.gateway.providers["gemini"])(key, frozenset({"gpt-4.1-mini"})),
+    }
+    engine = provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"})
+
+    faults(world).refuse.append(live("/model/delete"))
+    with pytest.raises(ModelAdminRefused):
+        await world.admin.check("admin-1", engine, SecretStr(key))
+    assert world.gateway.credential("osprey-openai") is None, "the key was stored beside the stray"
+    faults(world).refuse.clear()
+
+    checked = await world.admin.check("admin-1", engine, SecretStr(key))
+    assert checked.ok
+    assert "osprey-openai-gpt-4.1-mini" not in world.gateway.stored_ids(), "withdrawn first"
+
+
+# --- row 40: a refused withdrawal must leave the old key working -----------------------------------
+
+
+@pytest.mark.parametrize("how", ["the gateway refuses it", "the answer is lost after it landed"])
+async def test_a_moved_edit_whose_withdrawal_fails_leaves_the_old_key_working_row_40(
+    world: Scene, how: str
+) -> None:
+    """Row 40. A moved edit saved its intent (key lost) before it withdrew the old entries, and every
+    reconcile removes a lost engine's credential first: so a withdrawal the gateway refused, before
+    any new key was sent, made the undo delete the engine's **working old key**. The old entries are
+    withdrawn first, with nothing recorded and nothing removed; a failed withdrawal leaves the old
+    key held and set. (The rows 29 and 30 case stubs the withdrawal with a call that sends no write,
+    so it covers nothing of this.)"""
+    await world.set_up()
+    if how == "the gateway refuses it":
+        faults(world).refuse.append(live("/model/delete"))
+    else:
+        faults(world).lose_answer.append(live("/model/delete"))
+    with pytest.raises(ModelAdminRefused) as raised:
+        await moved(world)
+    faults(world).refuse.clear()
+    faults(world).lose_answer.clear()
+    assert world.gateway.credential("osprey-gemini") == world.first, "the old key was deleted"
+    assert world.admin.settings.keys["gemini"].lost is False
+    assert world.admin.key_state("gemini") in ("set", "lost")
+    assert "was removed by this change" not in raised.value.words, raised.value.words
+    assert not audited(world, "key_removed")
+    assert world.second not in recorded(world) and world.first not in recorded(world)
+
+    healed = world.process(faulty=False, retry_seconds=3600)
+    await healed.start()
+    await healed.close()
+    assert world.gateway.credential("osprey-gemini") == world.first
+    assert healed.key_state("gemini") == "set"
+    assert healed.routes().engines["gemini"].key_present is True
+    world.gateway.sent.clear()
+    await world.call()
+    assert world.addresses_reached_by(world.first) == {OLD}
+
+
+# --- row 36: the note of intent is what start reads; it never reads a credential -------------------
+
+
+async def test_start_marks_an_engine_with_a_note_outstanding_and_reads_no_credential_row_36(
+    world: Scene,
+) -> None:
+    """Row 36, the owner's ruling (20 November 2026): a note of intent is saved before a credential
+    is deleted and cleared when the change is complete; start-up marks unavailable every engine
+    with a note outstanding. It lists no credential, because the listing returns part of each key.
+    The process stops after the credential was deleted and before the record was saved; the
+    restart, with the gateway refusing every credential removal, still does not offer the engine,
+    and once the gateway lets it, settles the note."""
+    await world.set_up()
+    faults(world).die_after.append(credential_of("DELETE"))
+    with pytest.raises(Died):
+        await world.admin.remove_key("admin-1", "gemini")
+    faults(world).dead = False
+    assert world.gateway.credential("osprey-gemini") is None, "the plant: the credential is gone"
+    assert set(world.admin.settings.intents) == {"gemini"}, "the note was saved before the delete"
+
+    refusing = Plants(world.gateway.transport())
+    refusing.refuse.append(lambda r: r.method == "DELETE" and r.url.path.startswith("/credentials/"))
+    world.faults = refusing
+    restarted = world.process(retry_seconds=3600)
+    await restarted.start()
+    assert "gemini" in restarted._unavailable, "start marked it before it settled anything"
+    assert restarted.key_state("gemini") == "lost"
+    assert restarted.routes().engines["gemini"].key_present is False
+    assert await restarted._start_once() is False, "the note is outstanding: retry"
+
+    refusing.refuse.clear()
+    assert await restarted._start_once() is True
+    await restarted.close()
+    assert not restarted.settings.intents, "settled, so cleared"
+    assert restarted.key_state("gemini") == "lost"
+    assert restarted.routes().engines["gemini"].key_present is False
+    assert world.gateway.credential_reads == 0, "a credential was listed"
+
+
+# --- row 41: cancel a check ----------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("how", ["the record cannot be saved", "the process is killed"])
+async def test_a_cancelled_check_whose_removal_is_not_saved_cannot_be_added_row_41(
+    world: Scene, how: str
+) -> None:
+    """Row 41. `cancel_check` deleted the check's credential before it saved the record that removes
+    the check, with no note of intent first. A save that failed, or a process killed between, left
+    the check `passed` and its key gone: **Add** then recorded a key as set and offered an engine
+    with no credential behind it. The note is saved first, so the next change or start settles it:
+    the check goes with its key, and Add is refused."""
+    await world.set_up()
+    key = a_key()
+    world.gateway.providers = {
+        **world.gateway.providers,
+        "openai": type(world.gateway.providers["gemini"])(key, frozenset({"gpt-4.1-mini"})),
+    }
+    engine = provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"})
+    checked = await world.admin.check("admin-1", engine, SecretStr(key))
+    assert checked.ok and checked.check
+    check_id = checked.check
+    real = world.admin._file.save
+    if how == "the record cannot be saved":
+
+        def full_for_the_removal(settings: Any) -> None:
+            if check_id not in settings.checks:  # the record that takes the check away
+                raise OSError(28, "No space left on device")
+            real(settings)
+
+        world.admin._file.save = full_for_the_removal  # type: ignore[method-assign]
+        with pytest.raises(ModelAdminRefused):
+            await world.admin.cancel_check("admin-1", check_id)
+        world.admin._file.save = real  # type: ignore[method-assign]
+        again = world.admin
+    else:
+        faults(world).die_after.append(credential_of("DELETE", "openai"))
+        with pytest.raises(Died):
+            await world.admin.cancel_check("admin-1", check_id)
+        faults(world).dead = False
+        again = world.process(faulty=False, retry_seconds=3600)
+        await again.start()
+        await again.close()
+    assert world.gateway.credential("osprey-openai") is None, "the plant: its key is gone"
+    with pytest.raises(ModelAdminRefused):
+        await again.add_checked("admin-1", check_id)
+    assert "openai" not in again.routes().engines, "an engine was offered with no key behind it"
+    assert all(p.name != "openai" for p in again.settings.providers)
+    assert not again.settings.intents
+
+
+# --- row 21: a probe credential left before any models file exists --------------------------------
+
+
+async def test_a_probe_credential_left_before_any_models_file_is_removed_at_start_row_21(
+    tmp_path: Path,
+) -> None:
+    """Row 21. An edit made before any models file exists runs its check, which puts the typed key
+    into `osprey-<engine>.check` (no note can be written without taking `osprey.yaml`'s place); a
+    process stopped there left the credential, and every later start returned before the probe
+    sweep, so the key stayed until someone edited that engine again. Start removes every probe
+    credential, models file or none."""
+    scene = Scene(tmp_path)
+    scene.faults = Plants(scene.gateway.transport())
+    declared = [provider(OLD)]
+    scene.admin = scene.process(declared=declared)
+    probe = "osprey-gemini.check"
+    faults(scene).die_after.append(
+        lambda r: r.method == "POST"
+        and r.url.path == "/credentials"
+        and json.loads(r.content)["credential_name"] == probe
+    )
+    with pytest.raises(Died):
+        await scene.admin.edit_engine("admin-1", "gemini", provider(NEW), SecretStr(scene.second))
+    faults(scene).dead = False
+    assert scene.gateway.credential(probe) == scene.second, "the plant: the probe holds the key"
+    assert not (scene.folder / "models.yaml").exists(), "the plant: no models file"
+
+    restarted = scene.process(faulty=False, declared=declared, retry_seconds=3600)
+    await restarted.start()
+    await restarted.close()
+    assert scene.gateway.credential(probe) is None, "the probe credential was left holding a key"
+    assert scene.gateway.credential_reads == 0
+
+
+async def test_a_probe_credential_the_gateway_would_not_remove_is_noted_row_21(world: Scene) -> None:
+    """Row 21, with a models file. The check's own credential cannot be removed when the check ends
+    (the gateway refuses): the note saved before it was stored stays, so the next start settles it
+    and a restart retries until the gateway lets it go."""
+    await world.set_up()
+    faults(world).refuse.append(
+        lambda r: r.method == "DELETE" and r.url.path == "/credentials/osprey-gemini.check"
+    )
+    with pytest.raises(ModelAdminRefused):
+        await moved(world)
+    assert "gemini.check" in world.admin.settings.intents
+    assert world.gateway.credential("osprey-gemini.check") == world.second, "the plant"
+    faults(world).refuse.clear()
+    restarted = world.process(faulty=False, retry_seconds=3600)
+    await restarted.start()
+    await restarted.close()
+    assert world.gateway.credential("osprey-gemini.check") is None
+    assert not restarted.settings.intents
+    assert world.gateway.credential("osprey-gemini") == world.first, "the engine's own key stands"
