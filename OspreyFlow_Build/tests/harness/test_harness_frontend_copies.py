@@ -15,7 +15,7 @@ the harness file that imports the package. A `COPY packages/glass-shared/src` re
 fails here.)
 
 It has happened twice: on 9 October 2026, when the admin console first imported the Glass's theme
-module, and on 31 October 2026, when that module began importing `src/brand/brand.ts` (ADR-132).
+module, and on 31 October 2026, when that module began importing the brand module (ADR-132).
 This case follows the imports, so the third time fails here rather than in the image build.
 """
 
@@ -34,6 +34,12 @@ SHARED = CORE / "packages" / "glass-shared" / "src"
 HARNESS_KEYBOARD = CORE / "apps" / "harness" / "keyboard"
 PACKAGE_NAME = "@ospreyflow/glass-shared"
 
+#: The three modules the install page imports that moved to the package (PL4 slice D1).
+MOVED_TO_THE_PACKAGE = (
+    "packages/glass-shared/src/theme/theme.ts",
+    "packages/glass-shared/src/brand/brand.ts",
+    "packages/glass-shared/src/welcome/statement.ts",
+)
 _IMPORT = re.compile(
     r"""^\s*(?:import|export)\b[^'"]*?from\s+['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]""",
     re.M,
@@ -150,9 +156,15 @@ def test_the_stage_without_its_copy_of_packages_design_is_found() -> None:
 
 
 def test_the_walk_reaches_the_theme_module_the_admin_console_shares() -> None:
-    """The case above is only as good as its walk: it must reach what the harness really imports."""
+    """The case above is only as good as its walk: it must reach what the harness really imports.
+    The theme module, the brand and the product's statement are in the shared package since PL4
+    slice D1, so the walk reaches them there; the toggle button that uses the theme stays in the
+    workspace's `theme` folder."""
     reached = {str(p.relative_to(CORE.resolve())) for p in _reached_workspace_files()}
-    assert "apps/workspace/src/theme/theme.ts" in reached
+    for name in MOVED_TO_THE_PACKAGE:
+        assert name in reached, f"the walk does not reach {name}"
+        old = name.replace("packages/glass-shared/src/", "apps/workspace/src/")
+        assert old not in reached, f"{old} is reached at its old place"
     assert "apps/workspace/src/theme/ThemeToggle.tsx" in reached
 
 
@@ -180,3 +192,24 @@ def test_the_stage_without_its_copy_of_the_shared_package_s_source_is_found() ->
     missing = _missing(_copied_paths(real.replace(line, "", 1)), reached)
     assert missing and all(path.startswith("packages/glass-shared/src/") for path in missing)
     assert "packages/glass-shared/src/index.ts" in missing
+
+
+def test_the_package_copy_removed_misses_the_theme_the_brand_and_the_statement() -> None:
+    """Red for the line a moved file now needs (PL4 slice D1, rule 15): the real stage with only
+    the package's `COPY` taken out, as the Dockerfile writes it, is missing the three modules the
+    install page imports (the theme, the brand the theme reads, the statement), and nothing of
+    the workspace's. With the `theme` folder's own line taken out instead, only the toggle is
+    missing."""
+    real = DOCKERFILE.read_text(encoding="utf-8")
+    reached = _reached_workspace_files()
+    line = "COPY packages/glass-shared/src ./packages/glass-shared/src\n"
+    assert line in real
+    missing = _missing(_copied_paths(real.replace(line, "", 1)), reached)
+    for name in MOVED_TO_THE_PACKAGE:
+        assert name in missing, f"{name} is not found missing"
+    assert not [m for m in missing if m.startswith("apps/workspace/")]
+    theme = "COPY apps/workspace/src/theme ./apps/workspace/src/theme\n"
+    assert theme in real
+    assert _missing(_copied_paths(real.replace(theme, "", 1)), reached) == [
+        "apps/workspace/src/theme/ThemeToggle.tsx"
+    ]

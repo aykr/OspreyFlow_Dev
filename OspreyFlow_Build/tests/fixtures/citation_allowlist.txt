@@ -94,3 +94,11 @@ apps/workspace/src/design/panelType.css
 # decision-log entries that name the old places are history and stay as written; only these two are named in full there.
 apps/workspace/keyboard/actionRegistry.ts
 apps/workspace/src/workingset/store.ts
+
+# Moved by PL4 slice D1 to `packages/glass-shared/src/`: the theme (`theme/theme.ts`), the brand (`brand/brand.ts`), the product
+# statement (`welcome/statement.ts`) and the colour files `color/palette.ts`, `color/tokens.ts`, `color/oklab.ts` and
+# `color/nodeGlyphs.ts`. The build record and the decision-log entries that name the old places are history and stay as written;
+# only these three are named in full there.
+apps/workspace/src/welcome/statement.ts
+apps/workspace/src/brand/brand.ts
+apps/workspace/src/color/tokens.ts

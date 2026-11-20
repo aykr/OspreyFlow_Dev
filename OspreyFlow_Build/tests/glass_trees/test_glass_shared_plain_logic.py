@@ -129,8 +129,7 @@ SPLIT = {
             "isWide",
             "setSidePanelMode",
             "toggleSidePanel",
-            "subscribeSidePanelMode",
-            "currentSidePanelMode",
+            "forgetSidePanelForTest",
         },
     ),
     "admin/inviter.ts": (
@@ -141,17 +140,13 @@ SPLIT = {
 _SPLIT_STEMS = {WORKSPACE_SRC + rel.removesuffix(".ts"): hooks for rel, (hooks, _) in SPLIT.items()}
 
 #: The code lines (comments, blank lines, import statements and lines of only brackets are not code lines here) a split
-#: adds and loses, and nothing else: the wiring of `useSidePanelMode`, whose subscribe and snapshot used the module's
-#: private `listeners` and `current`, so the package now exports one function for each and the hook passes them.
+#: adds and loses, and nothing else: `useSidePanelMode` subscribes to the module's private `listeners` and reads its
+#: private `current`, so the package exports those two under names that say what they are, and the hook is the code it
+#: was over them (imported under its old names). No line is lost.
 ALLOWED = {
     "layout/sidePanelState.ts": {
-        "added": [
-            "export function subscribeSidePanelMode(listener: () => void): () => void {",
-            "export function currentSidePanelMode(initial: SidePanelMode): SidePanelMode {",
-            "return current(initial);",
-            "return useSyncExternalStore(subscribeSidePanelMode, () => currentSidePanelMode(initial));",
-        ],
-        "lost": ["return useSyncExternalStore(", "(listener) => {", "() => current(initial),"],
+        "added": ["export { listeners as sidePanelListeners, current as currentSidePanelMode };"],
+        "lost": [],
     },
 }
 
@@ -161,6 +156,13 @@ HISTORY = ("OspreyFlow_Build/spec/06_DECISIONS.md", "OspreyFlow_Build/process/")
 #: One file and one reason each. A name is removed from here when its reason is gone
 #: (`test_every_named_exception_still_has_its_reason`).
 NAMED = {
+    # The citation check's allowlist: the decision log and the records name three old paths, and the allowlist says why
+    # that is not a dead citation. It must name them to do so.
+    "OspreyFlow_Build/tests/fixtures/citation_allowlist.txt": "the allowlist for the records that name the old paths",
+    # The colour check's two mirror names, by name relative to the folder it scans (`packages/glass-shared/src`), and
+    # the check's own unit test, which builds trees of its own with the same relative names.
+    "OspreyFlow_Build/tools/colour_drift_check.py": "mirror names relative to the scanned root",
+    "OspreyFlow_Build/tests/test_colour_drift_check.py": "synthetic trees with names relative to a root of their own",
     # This file: it spells out the old paths to look for them.
     "OspreyFlow_Build/tests/glass_trees/test_glass_shared_plain_logic.py": "this test",
 }
@@ -173,7 +175,10 @@ _NAME_FORMS = (
     r"color/(?:palette|tokens|oklab|nodeGlyphs)",
     r"welcome/statement",
 )
-_TEXT_FORM = re.compile(rf"(?<!glass-shared/src/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.css)")
+#: Not `color/tokens.test.ts`, `theme/theme.test.ts`: the tests stayed in the workspace, beside where the files were.
+_TEXT_FORM = re.compile(
+    rf"(?<!glass-shared/src/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.(?:css|test\.|spec\.))"
+)
 #: The segments of one written apart: `join(HERE, "..", "src", "theme", "theme")`, Python's `/ "theme" / "theme.ts"`.
 _SEGMENT_FORM = re.compile(
     r"""["'](?:theme["']\s*[,/]\s*["']theme|brand["']\s*[,/]\s*["']brand|color["']\s*[,/]\s*["'](?:palette|tokens|oklab|nodeGlyphs)"""
@@ -443,23 +448,50 @@ def _exported_names(text: str) -> set[str]:
     )
 
 
+def split_problems(stays: str, moved: str, hooks: set[str], plain: set[str]) -> list[str]:
+    """What is wrong with one split file: the workspace's half (`stays`) must export just the hooks, import React and take
+    what it wraps from the package; the package's half (`moved`) must export the plain names and no hook."""
+    problems = []
+    if _exported_names(stays) != hooks:
+        problems.append(
+            f"the workspace half exports {sorted(_exported_names(stays))}, not just {sorted(hooks)}"
+        )
+    if not re.search(r"""\bfrom\s*["']react["']""", stays):
+        problems.append("the workspace half no longer imports react")
+    if not _PACKAGE_IMPORT.search(stays):
+        problems.append(f"the workspace half does not take what it wraps from {PACKAGE_NAME}")
+    if not plain <= _exported_names(moved):
+        problems.append(
+            f"the package half does not export {sorted(plain - _exported_names(moved))}"
+        )
+    if hooks & _exported_names(moved):
+        problems.append("the package half holds a hook")
+    return problems
+
+
 def test_each_split_file_keeps_only_its_hooks_in_the_workspace() -> None:
     for rel, (hooks, plain) in SPLIT.items():
         stays = (ROOT / (WORKSPACE_SRC + rel)).read_text(encoding="utf-8")
         moved = (ROOT / (SHARED + rel)).read_text(encoding="utf-8")
-        assert _exported_names(stays) == hooks, (
-            f"the workspace's {rel} exports {sorted(_exported_names(stays))}, not just {sorted(hooks)}"
-        )
-        assert re.search(r"""\bfrom\s*["']react["']""", stays), (
-            f"the workspace's {rel} no longer imports react"
-        )
-        assert _PACKAGE_IMPORT.search(stays), (
-            f"the workspace's {rel} does not take what it wraps from {PACKAGE_NAME}"
-        )
-        assert plain <= _exported_names(moved), (
-            f"the package's {rel} does not export {sorted(plain - _exported_names(moved))}"
-        )
-        assert not hooks & _exported_names(moved), f"the package's {rel} holds a hook"
+        assert split_problems(stays, moved, hooks, plain) == [], rel
+
+
+def test_a_split_file_with_a_plain_function_left_behind_or_a_hook_moved_is_found() -> None:
+    """Red for the check above (rule 15): the real halves of `layout/layoutSizes.ts` are clean, and each fault is planted in
+    the shape the file would have: a plain function left in the workspace's half, a hook moved into the package's, the
+    package's half missing a function, and the workspace's half without its import of the package."""
+    hooks, plain = SPLIT["layout/layoutSizes.ts"]
+    stays = (ROOT / (WORKSPACE_SRC + "layout/layoutSizes.ts")).read_text(encoding="utf-8")
+    moved = (ROOT / (SHARED + "layout/layoutSizes.ts")).read_text(encoding="utf-8")
+    assert split_problems(stays, moved, hooks, plain) == []
+    clamp = "export function clamp(value: number, min: number, max: number): number {\n  return Math.max(min, Math.min(max, value));\n}\n"
+    assert split_problems(stays + clamp, moved, hooks, plain)
+    hook = stays[stays.index("export function useLayoutSizes") :]
+    assert split_problems(stays, moved + hook, hooks, plain)
+    assert split_problems(
+        stays, moved.replace("export function clamp(", "function clamp("), hooks, plain
+    )
+    assert split_problems(stays.replace(PACKAGE_NAME, "./elsewhere"), moved, hooks, plain)
 
 
 def test_the_package_s_copies_import_no_react() -> None:
@@ -648,6 +680,16 @@ _PLANTED_IMPORTS = {
         WORKSPACE_SRC + "admin/sections/People.tsx",
         'import { givableCodes, givableLevels, useInviter } from "../inviter";',
         f'import {{ givableCodes, givableLevels }} from "{PACKAGE_NAME}";\nimport {{ useInviter }} from "../inviter";',
+    ),
+    "an old path in a guide": (
+        "OspreyFlow_Core/README.md",
+        "The theme module is `apps/workspace/src/theme/theme.ts`; it reads and writes the one cookie.",
+        "The theme module is `packages/glass-shared/src/theme/theme.ts`; it reads and writes the one cookie.",
+    ),
+    "an old path in a comment of a harness script": (
+        "OspreyFlow_Core/harness/govuk_chrome.js",
+        "(`brandTitle` in `apps/workspace/src/brand/brand.ts`, whose fallbacks this follows).",
+        "(`brandTitle` in `packages/glass-shared/src/brand/brand.ts`, whose fallbacks this follows).",
     ),
     "a deep import into the package": (
         WORKSPACE_SRC + "App.tsx",

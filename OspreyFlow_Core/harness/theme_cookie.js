@@ -1,11 +1,11 @@
 /* The light and dark choice for OspreyFlow's pages that are not React (ADR-072): the launcher's
    welcome page and Keycloak's sign-in page. The Glass and the setup harness use
-   apps/workspace/src/theme/theme.ts, which reads and writes the same cookie.
+   packages/glass-shared/src/theme/theme.ts, which reads and writes the same cookie.
 
    The pages are on different names of one deployment (ADR-114 Amendment 4: the Glass at the base
    name, this sign-in page at id., the dashboards at bi.), so the choice is a cookie kept for the
-   base name, which reaches all of them; apps/workspace/src/theme/theme.ts holds the same rule. It holds only "light" or "dark" and no server reads
-   it. Dark is the default. Written in plain ES5 with no dependency, since it is put in a page
+   base name, which reaches all of them; packages/glass-shared/src/theme/theme.ts holds the same
+   rule. It holds only "light" or "dark" and no server reads it. Dark is the default. Written in plain ES5 with no dependency, since it is put in a page
    as it is. Colours come only from the design tokens (var(--...)), which every one of these pages
    already has. */
 (function () {
