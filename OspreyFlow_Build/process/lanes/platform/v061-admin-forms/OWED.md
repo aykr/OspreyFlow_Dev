@@ -103,8 +103,18 @@ Held by `tests/services/api/test_model_key_paths.py`, red first on `c66961a` (`p
 - A credential that vanishes for a reason **no code of the Conduit wrote** (the gateway's own database lost it) leaves no note, so start
   does not find it while the entries stand (the owner's ruling: no credential is listed, because the listing returns part of each key).
   The next key set, or an entry made again, repairs it.
-- The sweep's removal of a lapsed check (`_expired`) has no note: the record it leaves is itself lapsed, so it can never be added and
-  nothing is offered on a missing credential; the next sweep removes both again.
+- ~~The sweep's removal of a lapsed check (`_expired`) has no note~~ (closed in round 8, N1).
 - With **no models file** a check's probe credential has no note (writing one would take `osprey.yaml`'s place); start removes every
   probe credential, file or none (row 21).
 - The live, measured run on the real gateway (the key review's question 2) is still **owed**: the live step is off.
+
+**Round 8 (20 November 2026): the last round on the 41-row table.** The note of intent is cleared **only by the change's final save**, for a
+rotation (`set_key`) and an edit that keeps its address as for a moved one (the early clear inside `_put_key`, the scout's N3, is gone): a failure
+after the new key is stored (the engine's key update refused, the key list garbled, a cancellation, any other exception) leaves the note, the undo
+removes the credential and the record says lost, and `_why_it_stopped` says so in the one function for the words: the key was removed and is to be
+entered again, never "not saved" alone and never "put back". A rotation that fails is audited as `key_rotated` (it was audited as `key_set`), with
+the words and a `key_removed` audit. N1: a lapsed check's credential (`_expired`) is deleted under a note. N2: a credential the undo removed is never
+"put back", whatever the record said before (a key already lost, or none). N5: the rows 29 and 30 case is planted at the real call sites (the
+gateway's list of entries raising or waited on, the first removal refused with HTTP 500). The probe with **no models file** has no note (a note
+cannot be written without taking `osprey.yaml`'s place; start removes every probe credential, file or none, and `..._row_21` shows it). Held by
+`test_model_key_paths.py`, red first on `4b9147a` (`plants_key_paths_run.txt`, "Round 8").

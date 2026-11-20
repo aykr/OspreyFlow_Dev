@@ -41495,7 +41495,12 @@ the guide's lines that were not updated then.
    same day, the design he gave on SE5's merge). **A note of intent is saved before any credential is deleted or
    stored, and cleared when the change is complete** (`ModelSettings.intents` in the models file, so every
    replica and every restart sees it; it holds no key): for an edit moved or not, a rotation, *Remove key*,
-   *Remove engine*, a cancelled check, a check's own credential and a check's probe. A process that stops, a
+   *Remove engine*, a cancelled check, a check's own credential, a check's probe and a lapsed check's
+   credential removed by the sweep. **The note is cleared by the change's final save and by nothing earlier**,
+   for a rotation and an edit that keeps its address as for a moved one (round 8: the first build cleared it as
+   soon as the new key was stored, so a failure after that said "not saved" and "put back" over a key that
+   was already replaced): the undo then removes the credential, the record says the key is lost, and the answer
+   and the audit say the key was removed and is to be entered again. A process that stops, a
    task cancelled, a record save that fails or an answer that is lost after the gateway wrote therefore never
    leaves "set" over a credential nobody can account for. **Start-up marks unavailable every engine with a note
    outstanding** and settles it, and so does every later change and the undo of a failed one: the credential is
