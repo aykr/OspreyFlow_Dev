@@ -201,3 +201,18 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
 - **PL6** (the `pages` image scan): the scan script and its test with three planted faults; no edit to the Makefile or `ci.yml`
   (those are the owner's diffs).
 - **Six builders** under balanced, tracks 5 and 6 on the default account (committed by the owner, 50ba572).
+- **Panel frames are not a parity exception.** All ten panel actions are rebuilt for the pages in plain TypeScript as the new build
+  **PL8** (needs PL3 and PL4; GG3 needs PL8). Row 517 of the front-end inventory goes in `FUNCTIONS.yaml` with an empty route. **Only
+  the light/dark switch is a parity exception**; the other lines of the owner's list stand (478, 496, 520; 482 is a function with an
+  empty route, planned as IS3; 515 and 516 as the owner decides line by line).
+- **Standing design rule for the GOV.UK pages.** They keep the Default theme's behaviour wherever it can be rebuilt in plain
+  TypeScript. An exception is only for something impossible or meaningless on a server-rendered page, and each is agreed by the
+  owner. A scout for every GOV.UK page lists what the React screen does and flags anything the page would leave out, **before a
+  builder starts**.
+- **GitHub is a second opinion, not a gate** (the owner, 20 November). Once the fourth line-fixes session
+  (`slice-line/proposals/LINE_FIXES_4_BRIEF.md`) is applied: merges go on the Mac's full gate alone, whatever GitHub's last run says;
+  every merge is pushed, waiting only while a run is in progress; a red run is rerun once without asking; only a test of ours failing
+  twice stops merging and comes to the owner with the job, the test and the commit; a release still needs GitHub green on the commit
+  released. This replaces items 2 to 4 of the 18 November ruling on GitHub failures and the sentence in ADR-142 Amendment 9 ("while
+  main is red, every merge is refused"; the owner applies `ADR142_AM9_COST_SENTENCE.diff`). **Until the fixes are applied** the line
+  carries on as before: the conductor reruns the red run and merges when main is green, and says so.
