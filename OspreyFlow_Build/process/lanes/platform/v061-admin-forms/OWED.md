@@ -88,3 +88,23 @@ record says a key is set and whose credential is gone for a reason **no code of 
 lost it) is still found only when its entries are also gone (the old start-up rule); every removal the Conduit makes now writes
 its intent first, so the states the Conduit itself can leave are all "lost". An unpriced rebuild killed by a process stop is marked
 lost at the next start (the key to be entered again), not held "rebuilding": a record of that intent is not kept.
+
+**Round 7 (20 November 2026): the owner's ruling on the round-6 table.** One mechanism replaces the "lost mark as intent" of round 6: **a
+note of intent** (`ModelSettings.intents`, in the models file) is saved before any credential is deleted or stored and cleared when the
+change is complete; start-up marks unavailable every engine with a note outstanding, and every change and every undo settles it first
+(`ModelAdmin._resolve`: the credential removed, the key recorded lost, a check made for a credential that is gone removed, the note
+cleared; a removal the gateway refuses leaves the note and the engine withheld). Places: an edit moved or not, a rotation, *Remove key*,
+*Remove engine*, a cancelled check, a check's own credential and a check's probe. A moved edit withdraws the engine's old entries
+**before** it records or removes anything (row 40); an edit that carries a key, a key set and a check for a new engine each withdraw every
+disagreeing entry before a key is stored (row 28 on the edit path and on the check). "Put back" is said only when the entries and the
+credential were. Specification corrected: ADR-135 Amendment 14 point 9 now gives the owner's ruling and why no credential is listed.
+Held by `tests/services/api/test_model_key_paths.py`, red first on `c66961a` (`plants_key_paths_run.txt`, "Round 7").
+**Owed from this round:**
+- A credential that vanishes for a reason **no code of the Conduit wrote** (the gateway's own database lost it) leaves no note, so start
+  does not find it while the entries stand (the owner's ruling: no credential is listed, because the listing returns part of each key).
+  The next key set, or an entry made again, repairs it.
+- The sweep's removal of a lapsed check (`_expired`) has no note: the record it leaves is itself lapsed, so it can never be added and
+  nothing is offered on a missing credential; the next sweep removes both again.
+- With **no models file** a check's probe credential has no note (writing one would take `osprey.yaml`'s place); start removes every
+  probe credential, file or none (row 21).
+- The live, measured run on the real gateway (the key review's question 2) is still **owed**: the live step is off.

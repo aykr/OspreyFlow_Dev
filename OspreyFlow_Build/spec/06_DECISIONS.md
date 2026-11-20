@@ -41491,17 +41491,34 @@ the guide's lines that were not updated then.
    record says so without the key, the engine is left without entries and offered to no analyst, and no check
    without a key is run for it, so nothing is made at the old address on a credential that may hold the new key.
    **That is a property of the record, not of the undo** (the owner's rule on keys, 20 November 2026, AD1a's
-   restart; the key-path table's rows 15 to 17 and 39): an engine whose key the record says is lost has its
-   credential removed by **every** reconcile before any entry is made for it (the next start, the background retry,
-   a key, a new engine, another engine's edit, the undo), and one whose credential the gateway will not remove is
-   given no entry by any of them until it does. A credential is deleted only after a **record of intent** (the
-   key marked lost) is saved, so a process that stops, a task cancelled, a record save that fails or an answer
-   that is lost after the gateway wrote never leaves "set" over a credential nobody can account for (rotation,
-   *Remove key*, *Remove engine* and a moved edit alike); start reads the record, never a credential
-   (`GET /credentials` answers with part of the key). Whatever stops a change takes one road out, the same words
-   and audit for a refusal, an error, a cancellation or any other exception: "put back" is said only when the
-   entries **and** the credentials were, a removal saved is said with a `key_removed` audit, and an engine whose
-   rebuild did not finish is marked at start and not offered. A key
+   restart; the key-path table's rows 15 to 17, 36, 39 and 41, and the owner's ruling on the round-6 table the
+   same day, the design he gave on SE5's merge). **A note of intent is saved before any credential is deleted or
+   stored, and cleared when the change is complete** (`ModelSettings.intents` in the models file, so every
+   replica and every restart sees it; it holds no key): for an edit moved or not, a rotation, *Remove key*,
+   *Remove engine*, a cancelled check, a check's own credential and a check's probe. A process that stops, a
+   task cancelled, a record save that fails or an answer that is lost after the gateway wrote therefore never
+   leaves "set" over a credential nobody can account for. **Start-up marks unavailable every engine with a note
+   outstanding** and settles it, and so does every later change and the undo of a failed one: the credential is
+   removed (404: none was held), the engine's key is recorded lost, a check made for a credential that is gone
+   is removed, the note is cleared; and an engine whose credential the gateway will not remove is given no entry
+   by any reconcile (the next start, the background retry, a key, a new engine, another engine's edit, the
+   undo) until it does. A moved edit withdraws the engine's old entries **before** anything is recorded or
+   removed, so a refused withdrawal leaves the old key held and set; an edit that carries a key, a key set and a
+   check for a new engine each withdraw every entry that disagrees with the record before a key is stored, and
+   a refused withdrawal refuses the key (the SE5 case, on every path that stores one). **Start-up never lists or
+   reads the gateway's credentials**, and nothing in the Conduit does: the listing (`GET /credentials`) answers
+   with part of each key (the first and last two characters), and a key is never shown back, to a person or to
+   the product. An earlier text of this point read "start reads the record, never a credential" as a decision
+   the builder took; it is the owner's ruling, given on 20 November 2026, and the note of intent is its
+   design. (It leaves one case it does not claim: a credential that vanishes for a reason no code of the
+   Conduit wrote, with no note, is not found by start; the next key set or an entry made again repairs it.)
+   A check's probe credential is removed at every start, with a models file or none (with none there is
+   nowhere to write a note without taking `osprey.yaml`'s place). Whatever stops a change takes one road out, the
+   same words and audit for a refusal, an error, a cancellation or any other exception: "put back" is said only
+   when the entries **and** the credentials were (a rotation's, *Remove key*'s or a moved edit's undo removes
+   the credential and never restores it, so it says the key was removed and is saved, with a `key_removed`
+   audit, and does not say it was put back), and an engine whose rebuild did not finish is marked at start and
+   not offered. A key
    given with an edit is checked against every model. A label or an agreement changed alone asks nothing. The
    check runs under a probe name beside the live engine: the new key as the probe's own credential
    (`probe_name`: `<engine>.check`, which no engine can be named, an engine's name having no dot), the entries

@@ -104,15 +104,14 @@ def _break(world: Any, how: str, monkeypatch: pytest.MonkeyPatch) -> None:
 
         monkeypatch.setattr(world.admin, "_reconcile", refuse)
     else:
-        # The edit writes the file twice: first the engine's key recorded lost (before any key is
-        # held), then the finished edit. The disk fills between them, so the second fails.
+        # The edit writes the file several times: its notes of intent (before the check's key and
+        # before the engine's own are held), then the finished edit. The disk fills for the last,
+        # the record that gives the engine its new address.
         real_save = world.admin._file.save
-        saved: list[bool] = []
 
         def full_after_the_first(*args: Any, **kwargs: Any) -> None:
-            if saved:
+            if args[0].providers[0].api_base == NEW:
                 raise OSError("no space left on device")
-            saved.append(True)
             real_save(*args, **kwargs)
 
         monkeypatch.setattr(world.admin._file, "save", full_after_the_first)

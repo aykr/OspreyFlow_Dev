@@ -325,14 +325,14 @@ async def test_a_failed_move_never_lets_a_later_key_reach_an_address_the_record_
         real = scene.admin._file.save
 
         def full(settings: Any) -> None:
-            saves.append(1)
-            if len(saves) == 2:  # the first save drops the key; the second is the new record
+            if settings.providers[0].api_base == NEW:  # the record that gives the engine its move
+                saves.append(1)
                 raise OSError(28, "No space left on device")
             real(settings)
 
         monkeypatch.setattr(scene.admin._file, "save", full)
         # From the moment the save fails the gateway's database refuses every removal.
-        scene.faults.refuse.append(lambda r: len(saves) > 1 and r.url.path == "/model/delete")
+        scene.faults.refuse.append(lambda r: bool(saves) and r.url.path == "/model/delete")
         with pytest.raises(ModelAdminRefused):
             await scene.admin.edit_engine("admin-1", "gemini", moved, SecretStr(scene.second))
         monkeypatch.undo()
@@ -429,12 +429,10 @@ async def test_a_failed_move_withdraws_the_new_address_entries_whatever_the_fail
 
         scene.faults.lose_answer.append(lost_once)
     else:
-        saves: list[int] = []
         saved = scene.admin._file.save
 
         def full(settings: Any) -> None:
-            saves.append(1)
-            if len(saves) == 2:
+            if settings.providers[0].api_base == NEW:  # the record that gives the engine its move
                 raise OSError(28, "No space left on device")
             saved(settings)
 
@@ -513,7 +511,9 @@ def test_an_exception_nobody_named_says_one_thing_about_the_gateway(
     scene: Scene, routed: TestClient, monkeypatch: pytest.MonkeyPatch, undone: bool
 ) -> None:
     """The answer and the audit never say both that the gateway was put back and that it was not:
-    "put back" is said only once the undo has succeeded. Planted at the call site the route uses:
+    "put back" is said only once the undo has succeeded **and** restored the credential too (a
+    moved edit's undo removes the new key and cannot bring the old one back, so it says the entries
+    are as the record says and the key is removed). Planted at the call site the route uses:
     the engine's key update raises something nobody named, after the new entries were made, and
     (where the undo fails) the gateway's database then refuses every removal."""
     asyncio.run(scene.set_up())
@@ -539,7 +539,11 @@ def test_an_exception_nobody_named_says_one_thing_about_the_gateway(
     for said in (words, audited):
         assert "was not saved" in said
         if undone:
-            assert "was put back as the saved settings say" in said
+            # The undo made the entries what the record says but removed the replaced key and
+            # could not restore it (the owner's ruling, round 7): "put back" is not said.
+            assert "entries are as the saved settings say" in said
+            assert "key was removed by this change" in said and "enter it again" in said
+            assert "was put back" not in said
             assert "unavailable" not in said
         else:
             assert "unavailable" in said and "restart" in said
@@ -668,8 +672,12 @@ async def test_an_edit_that_wrote_nothing_is_not_undone_so_an_undo_cannot_break_
     else:
         reached = asyncio.Event()
 
-        async def hangs(*_args: Any, **_kwargs: Any) -> None:
-            reached.set()  # the move has begun, but the gateway has not been written to
+        real_delete = scene.admin._gateway.delete_credential
+
+        async def hangs(name: str) -> None:
+            if reached.is_set():  # the check's own clean-up, once the cancellation has come
+                return await real_delete(name)
+            reached.set()  # the move has begun (the check's probe), the engine not written to
             await asyncio.sleep(3600)
 
         monkeypatch.setattr(scene.admin._gateway, "delete_credential", hangs)
