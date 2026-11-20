@@ -47,9 +47,12 @@ import scan_select  # noqa: E402
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
 OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
                f"{c.V062_REL}/resume.tsv", f"{c.V062_REL}/standing.tsv")
+#: A slice's scan rows, waiting on main for its merge (1b): the conductor's records, never a slice's branch.
+SCAN_ROWS_REL = f"{c.V062_REL}/scan_rows"
+LINE_MAP_REL = "OspreyFlow_Build/scripts/slice_line/scan_map.tsv"
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
-    "OspreyFlow_Build/scripts/slice_line/", *OWNER_FILES,
+    "OspreyFlow_Build/scripts/slice_line/", *OWNER_FILES, SCAN_ROWS_REL + "/",
 )
 LEASE = "OspreyFlow_Build/scripts/stack_lease.sh"
 GATE_LANE = "merger"
@@ -504,6 +507,64 @@ def records_only_conflict(base: str, tip: str) -> list[str]:
     return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []
 
 
+def apply_scan_rows(slice_id: str, tree: Path, base: str, tip: str) -> list[str]:
+    """The slice's scan rows, applied in the merge commit, and the map checked for what the branch changes (1b).
+
+    The rows wait on main in SCAN_ROWS_REL/<slice>.tsv (the conductor's records mode, from rows the verifier or the
+    owner proposed; nothing in main's suite reads them, so main stays green while they wait). Each must only add: name a
+    test file the branch adds, one with no row yet, with its prefixes or `-` and a why. They are appended to
+    scan_map.tsv and the rows file removed, by amending the merge commit, so the map never names a test main lacks and
+    the slice's tip is unchanged. Then, on the merge result: no test the branch adds or changes walks a folder with no
+    row (scan_select.unmapped), and no row names a test the branch removes or a prefix that is not there (stale).
+    Refused in words, not as the slice's fault; the full gate's own run of the line's suite checks the whole map."""
+    build = tree / "OspreyFlow_Build"
+    map_file = tree / LINE_MAP_REL
+    table = scan_select.load(map_file.read_text())
+    named = {t for t, _, _ in table}
+    status = [ln.split("\t", 1) for ln in c.git(["diff", "--name-status", "--no-renames", f"{base}...{tip}"],
+                                                  c.REPO).splitlines() if "\t" in ln]
+    tests = {p[len("OspreyFlow_Build/"):]: s for s, p in status if p.startswith("OspreyFlow_Build/tests/")}
+    rows_file = tree / SCAN_ROWS_REL / f"{slice_id}.tsv"
+    shown = f"{SCAN_ROWS_REL}/{slice_id}.tsv"
+    applied: list[str] = []
+    if rows_file.is_file():
+        lines = [ln for ln in rows_file.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
+        try:
+            rows = scan_select.load("\n".join(lines))
+        except ValueError as e:
+            raise Refused(f"{shown} cannot be read: {e}. Nothing changed.")
+        for (t, _prefixes, why), ln in zip(rows, lines):
+            if t in named:
+                raise Refused(f"{shown} names {t}, which already has a row in scan_map.tsv: a recorded row only adds, "
+                              "never edits or replaces one. Nothing changed.")
+            if tests.get(t) != "A":
+                raise Refused(f"{shown} names {t}, a test file the branch does not add: a row is only ever added with "
+                              "the test it names, in the same merge. Nothing changed.")
+            if not why.strip():
+                raise Refused(f"{shown}: the row for {t} gives no why (its prefixes, or - and why it walks no folder "
+                              "of the repository). Nothing changed.")
+            applied.append(ln)
+            named.add(t)
+        table += rows
+        text = map_file.read_text()
+        map_file.write_text(text + ("" if text.endswith("\n") else "\n") + "".join(f"{ln}\n" for ln in applied))
+        c.git(["add", "--", LINE_MAP_REL], tree)
+        c.git(["rm", "-q", "--", f"{SCAN_ROWS_REL}/{slice_id}.tsv"], tree)
+        c.git(["commit", "-q", "--amend", "--no-edit"], tree)
+    scope = set(tests) | {t for t, _, _ in table if t in tests}
+    missing = scan_select.unmapped(build, table, only={t for t, s in tests.items() if s != "D"})
+    if missing:
+        raise Refused("the merge result has pure tests that walk a folder with no row in scan_map.tsv: "
+                      + ", ".join(missing) + f". The conductor records a row for each in {shown} (records mode; rows "
+                      "the verifier or the owner proposed: the test, its prefixes or -, and why), and the merge applies "
+                      "them. Nothing changed.")
+    stale = [s for s in scan_select.stale(build, table) if s.split(":")[0] in scope]
+    if stale:
+        raise Refused("on the merge result, scan_map.tsv would name what is not there: " + "; ".join(stale)
+                      + ". Nothing changed.")
+    return applied
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
     trees: list[Path] = []
@@ -587,6 +648,7 @@ def merge(slice_id: str) -> dict:
             raise Refused(f"{branch} does not merge cleanly onto main, and git merge-tree names no conflicting file: not "
                           "recorded as the slice's fault, and the slice is left where it was; the conductor looks at the "
                           f"merge (a hook, a lock, the tree). See {log}")
+        scan_rows = apply_scan_rows(slice_id, after, base, tip)  # 1b: in the merge commit itself
         merged = c.git(["rev-parse", "HEAD"], after)
         try:
             env_after = slice_env(after, log, slot, envs / "after")
@@ -596,7 +658,7 @@ def merge(slice_id: str) -> dict:
             if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:
                 raise Refused(f"the slice's {name} is red on the merge result. See {log}")
         # the pure tests that scan what the slice touched (scan_map.tsv), on the merge result
-        scans = scan_select.not_named(scan_select.select(touched, scan_select.entries()),
+        scans = scan_select.not_named(scan_select.select(touched, scan_select.load((after / LINE_MAP_REL).read_text())),
                                       frozen.get("checks") or "", frozen.get("acceptance") or "")
         if scans and run(scan_select.command(after, scans, python=(
                 str(Path(env_after["VIRTUAL_ENV"]) / "bin/python") if env_after.get("VIRTUAL_ENV") else "")), after, log, shell=True, env=env_after) != 0:
@@ -618,6 +680,8 @@ def merge(slice_id: str) -> dict:
         c.git(["merge", "--ff-only", merged], c.REPO)
         done = {"slice": slice_id, "build": frozen["build"], "merge": merged, "tip": tip, "base": base,
                 "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"), "at": c.now()}
+        if scan_rows:
+            done["scan_rows"] = scan_rows  # applied to scan_map.tsv in the merge commit, from SCAN_ROWS_REL
         live = c.read_json(log.with_suffix(".live.json"))
         if live:
             done["live_step"] = live  # off: the live files this change reaches, named, not run

@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (295 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (218 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (302 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (228 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -120,6 +120,8 @@ and the test record names the scans it ran, so the verifier sees them. A scan ma
 `scan_select.unmapped()` proves the map complete: a pure test (not in `make test`'s `--ignore` list) whose source, or
 a `tools/` module or test helper it imports or runs, walks a folder, with no row, fails the line's suite; so does a
 row naming a test or a prefix that is not there. `install.sh` installs the map and `scan_select.py` beside the hooks.
+
+**A slice that adds a pure walker** (19 November 2026, for BL6): its rows wait on main in `OspreyFlow_Build/process/lanes/v062/scan_rows/<ID>.tsv`, committed by the conductor in records mode from rows the verifier or the owner proposed (never from the slice's branch: that folder is a protected path), in the map's own columns. Nothing in main's suite reads them, so main stays green while they wait. The merge applies them to `scan_map.tsv` in the merge commit itself and removes the file, only as added rows, each naming a test file the branch adds, with no row yet, and a why; then it checks on the merge result that no test the branch adds or changes walks a folder without a row, and that no row names a test the branch removes. A refusal is in words, not the slice's fault. The slice's tip is unchanged, so a verifier's pass or the owner's acceptance for it still holds; `merged.json` names the rows (`scan_rows`). The Stop hook reads the installed copy of the map, which `install.sh` refreshes.
 
 ## Resuming a slice
 

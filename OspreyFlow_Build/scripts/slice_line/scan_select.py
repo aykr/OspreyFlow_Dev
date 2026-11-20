@@ -24,7 +24,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 MAP = Path(__file__).resolve().parent / "scan_map.tsv"
 WALK = re.compile(r"\.rglob\(|os\.walk\(|\.glob\(\s*f?[\"'][^\"']*\*\*|\biglob\(|ls-files")
@@ -111,15 +111,15 @@ def walks(build: Path, path: Path, seen: Dict[Path, bool], depth: int = 0) -> bo
     return hit
 
 
-def unmapped(build: Path, table: List[Entry]) -> List[str]:
-    """Pure tests that walk a folder and have no row in the map."""
+def unmapped(build: Path, table: List[Entry], only: Optional[Set[str]] = None) -> List[str]:
+    """Pure tests that walk a folder and have no row in the map (of `only`, when given: the merge's own check)."""
     named = {t for t, _, _ in table}
     live = live_set(build)
     seen: Dict[Path, bool] = {}
     out = []
     for f in sorted((build / "tests").rglob("test_*.py")):
         rel = f.relative_to(build).as_posix()
-        if is_live(rel, live) or rel in named:
+        if is_live(rel, live) or rel in named or (only is not None and rel not in only):
             continue
         if walks(build, f, seen):
             out.append(rel)

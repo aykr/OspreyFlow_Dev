@@ -183,6 +183,17 @@ M = [
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
  ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ # 1b: a slice's scan rows wait on main and the merge applies them; main is never red in between
+ ("merge_slice.py", '    if missing:\n', '    if False:\n', "pure_walker_with_no_row_is_refused"),
+ ("scan_select.py", ' or (only is not None and rel not in only):', ' or only is not None:', "pure_walker_with_no_row_is_refused"),
+ ("merge_slice.py", '        scan_rows = apply_scan_rows(slice_id, after, base, tip)  # 1b', '        scan_rows = []  # 1b', "recorded_on_main_merge_with_the_tip_unchanged"),
+ ("merge_slice.py", '        c.git(["rm", "-q", "--", f"{SCAN_ROWS_REL}/{slice_id}.tsv"], tree)\n', '', "recorded_on_main_merge_with_the_tip_unchanged"),
+ ("merge_slice.py", '        c.git(["commit", "-q", "--amend", "--no-edit"], tree)\n', '        c.git(["commit", "-q", "-m", "scan rows"], tree)\n', "recorded_on_main_merge_with_the_tip_unchanged"),
+ ("merge_slice.py", '            if tests.get(t) != "A":', '            if False:', "naming_a_test_the_branch_does_not_add"),
+ ("merge_slice.py", '            if t in named:\n                raise', '            if False:\n                raise', "edits_one_already_in_the_map"),
+ ("merge_slice.py", '            if not why.strip():', '            if False:', "row_with_no_reason"),
+ ("merge_slice.py", '    if stale:\n        raise Refused("on the merge result', '    if False:\n        raise Refused("on the merge result', "removing_a_mapped_test"),
+ ("merge_slice.py", ' *OWNER_FILES, SCAN_ROWS_REL + "/",', ' *OWNER_FILES,', "scan_rows_on_a_slices_branch_are_a_protected_path"),
  # 1a: any merge conflict is recorded, and its send-back is free
  ("merge_slice.py", '            if files:  # any other conflict: recorded', '            if False:  # any other conflict: recorded', "conflict_outside_the_records_folder_is_recorded"),
  ("merge_slice.py", '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []', '    return ["x"] if p.returncode == 1 else []', "conflict_outside_the_records_folder_is_recorded"),
