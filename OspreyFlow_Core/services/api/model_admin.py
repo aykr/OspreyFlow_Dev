@@ -1337,6 +1337,12 @@ class ModelAdmin:
             if key is not None:
                 record = current.keys.get(name)
                 rotated.append("key_rotated" if record and not record.lost else "key_set")
+                if moved:
+                    # An entry names its engine's credential, and an analyst's call does not take
+                    # the edit's lock: with the old address's entries still live, the new key would
+                    # be sent to the old address from the moment it is the credential. They go
+                    # first, so the engine is briefly unavailable and never served by the wrong key.
+                    await self._withdraw_entries(current, name)
                 await self._put_key(current, name, key)
                 keys = {**proposed.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
                 proposed = proposed.model_copy(update={"keys": keys}, deep=True)
@@ -1362,6 +1368,20 @@ class ModelAdmin:
         await self._audited(by, "engine_edited", name, changes)
         if rotated:
             await self._audited(by, rotated[0], name)
+
+    async def _withdraw_entries(self, current: ModelSettings, name: str) -> None:
+        """Every entry the gateway holds for engine `name` deleted, those of the engines beside it
+        left alone (an engine's name may begin another's: `gemini`, `gemini-pro`). `_change` puts
+        them back as the file says if the edit then fails."""
+        beside = {
+            entry_id(p.name, m)
+            for p in current.providers
+            if p.name != name
+            for m in p.roles.values()
+        }
+        for model_id in sorted(await self._gateway.stored_entries()):
+            if model_id.startswith(f"osprey-{name}-") and model_id not in beside:
+                await self._gateway.delete_entry(model_id)
 
     async def _drop_the_moved_key(self, current: ModelSettings, name: str) -> None:
         """After a moved edit failed once its key was in the gateway: the credential removed, so

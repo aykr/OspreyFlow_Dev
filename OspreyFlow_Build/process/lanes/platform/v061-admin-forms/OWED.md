@@ -67,3 +67,11 @@ records the engine's key lost (`_drop_the_moved_key`), so the old address is nev
 was replaced and cannot be restored (write-only). Red first, both failure ways, in
 `test_model_edit_failure_keeps_key_off_old_address.py`. (2) the `kind` description, the generated types, both administration guides' reference rows and
 the `ospreyflow models` row say what Amendment 14 decided.
+
+**Round 3, second pass (20 November 2026):** (3) a *successful* moved edit no longer sends the new key to the old address
+for the moment between the key becoming the credential and the entries being rebuilt: the engine's entries are deleted
+first (`_withdraw_entries`), so the engine is briefly unavailable, never served by the wrong key. Red first in
+`test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made` (a call made between the key and the
+rebuild, by wrapping `_reconcile`). ADR-135 Amendment 14 point 9 says so. (4) `test_admin_models_extraction_engine.py`'s
+body scan now reads FastAPI's typed body parameters too, so a write route with `body: SomeInput` and no `request` is read,
+never passed over; shown red on planted scratch routes (the typed one, one wrapping a model, one reading by hand).

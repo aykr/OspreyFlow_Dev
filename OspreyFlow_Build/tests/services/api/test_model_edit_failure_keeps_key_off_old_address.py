@@ -8,14 +8,16 @@ says, at the **old** address, and the engine's credential must not be the key ty
 the next analyst call would send it to the old address. The old key was replaced and cannot be
 restored (a key is write-only), so the engine's key is recorded lost and entered again.
 
-The case that catches it (rule 12): `test_a_failed_moved_edit_never_leaves_the_new_key_at_the_old_address`,
-once for each way the change can fail after the key is held.
+The case that catches it (rule 12):
+`test_a_failed_moved_edit_never_leaves_the_new_key_at_the_old_address`, once for each way the
+change can fail after the key is held.
 
-**Round 3: the same rule holds while the edit succeeds.** The new key becomes the engine's credential
-before the entries are rebuilt, and an entry names its credential, so for that moment the old address's
-entries would carry the new key to the old address. An analyst call is not held by the edit's lock, so
-`test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made` makes a call at
-that very point (by wrapping `_reconcile`) and says where the gateway sent each key.
+**Round 3: the same rule holds while the edit succeeds.** The new key becomes the engine's
+credential before the entries are rebuilt, and an entry names its credential, so for that moment
+the old address's entries would carry the new key to the old address. An analyst call is not held
+by the edit's lock, so
+`test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made` makes a call
+at that very point (by wrapping `_reconcile`) and says where the gateway sent each key.
 
 Keys are made at run time (the owner's rules for keys): none is written in this file.
 """
@@ -39,6 +41,7 @@ ENGINES = "/v1/admin/models/engines"
 ENGINE = {"name": "gemini", "label": "Google Gemini", "roles": {"extraction": "gemini-2.5-flash"}}
 OLD = "https://old-gateway.example.org/v1"
 NEW = "https://proxy.example.org/v1"
+MODELS = frozenset({"gemini-2.5-flash"})
 
 
 def _a_key() -> str:
@@ -50,7 +53,7 @@ def world(tmp_path: Path) -> Any:
     w = World(tmp_path)
     w.first = _a_key()
     w.second = _a_key()
-    w.gateway.providers = {"gemini": StandInProvider(w.first, frozenset({"gemini-2.5-flash"}))}
+    w.gateway.providers = {"gemini": StandInProvider(w.first, MODELS)}
     w.admin = w.make_admin()
     app.state.model_admin = w.admin
     app.dependency_overrides[get_principal] = lambda: ADMIN
@@ -99,7 +102,7 @@ def test_a_failed_moved_edit_never_leaves_the_new_key_at_the_old_address(
     client: TestClient, world: Any, monkeypatch: pytest.MonkeyPatch, how: str
 ) -> None:
     _add_at_the_old_address(client, world)
-    world.gateway.providers = {"gemini": StandInProvider(world.second, frozenset({"gemini-2.5-flash"}))}
+    world.gateway.providers = {"gemini": StandInProvider(world.second, MODELS)}
     _break(world, how, monkeypatch)
     moved = {**ENGINE, "api_base": NEW}
     refused = client.put(ENGINES + "/gemini", json={"provider": moved, "key": world.second})
@@ -122,7 +125,7 @@ def test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_i
     rebuilt (the edit holds a lock the call does not take). Whatever answers it, the gateway must
     not have sent the new key to the old address; the engine may be briefly unavailable instead."""
     _add_at_the_old_address(client, world)
-    world.gateway.providers = {"gemini": StandInProvider(world.second, frozenset({"gemini-2.5-flash"}))}
+    world.gateway.providers = {"gemini": StandInProvider(world.second, MODELS)}
     real = world.admin._reconcile
     called: list[int] = []
 
@@ -131,7 +134,10 @@ def test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_i
             http = world.admin._gateway.http
             answer = await http.post(
                 "/chat/completions",
-                json={"model": "gemini/gemini-2.5-flash", "messages": [{"role": "user", "content": "x"}]},
+                json={
+                    "model": "gemini/gemini-2.5-flash",
+                    "messages": [{"role": "user", "content": "x"}],
+                },
             )
             called.append(answer.status_code)
         await real(*args, **kwargs)

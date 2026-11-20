@@ -14,13 +14,14 @@ make).
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 from services.api.app import app, get_principal
 from services.api.model_admin import Installed
 
@@ -92,19 +93,31 @@ def _fields(annotation: object) -> set[str]:
     return names
 
 
-def test_no_write_routes_body_takes_the_extraction_engine() -> None:
-    """The lane-reviewer's item 16: not only no route by name, but no write route under
-    `/v1/admin/models` whose body model (or any model inside it) has an `extraction_engine` field.
-    These routes read their bodies themselves (`_model_admin_body(request, <Input>)`, or
-    `<Input>.model_validate_json`), so the input
-    model is read from each route's own code; a route reading none is named, never passed over."""
+class Smuggled(BaseModel):
+    extraction_engine: str
+
+
+class Wrapped(BaseModel):
+    inner: Smuggled
+
+
+class Plain(BaseModel):
+    label: str
+
+
+def _bodies(routes: Iterable[object]) -> tuple[list[tuple[list[str], str, str]], list[str]]:
+    """Each write route under `/v1/admin/models` read for the models its body is: the ones FastAPI
+    parses as typed parameters (`body: LimitsInput`), and the ones a route reads itself
+    (`_model_admin_body(request, <Input>)`, or `<Input>.model_validate_json`). Returns the routes
+    whose body has an `extraction_engine` field, and the routes whose body could not be read."""
     import inspect
     import re
 
     import schemas.model_admin as inputs
 
-    taking, unread = [], []
-    for r in app.routes:
+    taking: list[tuple[list[str], str, str]] = []
+    unread: list[str] = []
+    for r in routes:
         if not (isinstance(r, APIRoute) and r.path.startswith("/v1/admin/models")):
             continue
         if not set(r.methods) - {"GET", "HEAD"}:
@@ -112,12 +125,56 @@ def test_no_write_routes_body_takes_the_extraction_engine() -> None:
         source = inspect.getsource(r.endpoint)
         names = re.findall(r"_model_admin_body\(request, (\w+)\)", source)
         names += re.findall(r"(\w+)\.model_validate_json\(", source)
-        # A route with no `request` reads no body at all (a delete, the test, **Add** a check).
+        models = [getattr(inputs, n) for n in names]
+        # A typed body parameter is a body however the route's own code reads (or does not read) it.
+        models += [p.field_info.annotation for p in r.dependant.body_params]
+        # A route with no `request` and no typed body reads no body at all (a delete, the test,
+        # **Add** a check).
         takes_a_body = "request" in inspect.signature(r.endpoint).parameters
-        if not names and takes_a_body:
+        if not models and takes_a_body:
             unread.append(r.path)
-        for name in names:
-            if "extraction_engine" in _fields(getattr(inputs, name)):
-                taking.append((sorted(r.methods), r.path, name))
+        for model in models:
+            if "extraction_engine" in _fields(model):
+                taking.append((sorted(r.methods), r.path, getattr(model, "__name__", str(model))))
+    return taking, unread
+
+
+def test_no_write_routes_body_takes_the_extraction_engine() -> None:
+    """The lane-reviewer's item 16: not only no route by name, but no write route under
+    `/v1/admin/models` whose body model (or any model inside it) has an `extraction_engine` field.
+    A body is read from the route's typed parameters, and from its own code where it reads the
+    request itself; a route that reads one it cannot be shown to read is named, never passed
+    over."""
+    taking, unread = _bodies(app.routes)
     assert taking == []
     assert unread == [], f"a write route whose body this test cannot read: {unread}"
+
+
+def test_the_body_scan_sees_a_typed_body_and_a_body_read_by_hand() -> None:
+    """Rule 15: the scan above shown red on planted routes, a scratch `FastAPI()` each. A typed
+    body parameter with no `request` was once passed over; so was a route reading its own body."""
+    from fastapi import FastAPI, Request
+
+    scratch = FastAPI()
+
+    @scratch.put("/v1/admin/models/typed")
+    async def typed(body: Smuggled) -> None: ...
+
+    @scratch.put("/v1/admin/models/wrapped")
+    async def wrapped(body: Wrapped) -> None: ...
+
+    @scratch.put("/v1/admin/models/harmless")
+    async def harmless(body: Plain) -> None: ...
+
+    @scratch.post("/v1/admin/models/by-hand")
+    async def by_hand(request: Request) -> None: ...
+
+    @scratch.delete("/v1/admin/models/nothing")
+    async def nothing() -> None: ...
+
+    taking, unread = _bodies(scratch.routes)
+    assert sorted(path for _, path, _ in taking) == [
+        "/v1/admin/models/typed",
+        "/v1/admin/models/wrapped",
+    ]
+    assert unread == ["/v1/admin/models/by-hand"]

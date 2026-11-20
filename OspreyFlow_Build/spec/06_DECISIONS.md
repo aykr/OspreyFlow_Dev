@@ -41373,7 +41373,12 @@ the guide's lines that were not updated then.
    as the check's body is): a changed model name is checked by the check's one call to each new model; a
    **changed address takes its key with it**, refused without one, and every model is checked at the new
    address with that key, since a key entered for one address is never sent to another (this replaces
-   Amendment 2's "a changed address removes the key, enter it again", which left an engine with no key); a key
+   Amendment 2's "a changed address removes the key, enter it again", which left an engine with no key). **The
+   rule holds while the edit is made, not only after it:** an entry names its engine's credential and an analyst's
+   call takes no part in the edit's lock, so a moved edit deletes the engine's entries at the old address before
+   the new key becomes the credential, and makes them again at the new one; the engine is briefly unavailable,
+   never served by the wrong key. If the edit fails once its key is held, the credential is removed and the key
+   recorded lost. A key
    given with an edit is checked against every model. A label or an agreement changed alone asks nothing. The
    check runs under a probe name beside the live engine: the new key as the probe's own credential
    (`probe_name`: `<engine>.check`, which no engine can be named, an engine's name having no dot), the entries
