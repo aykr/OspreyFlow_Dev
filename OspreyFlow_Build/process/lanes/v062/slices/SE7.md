@@ -1,0 +1,28 @@
+# Slice SE7 · SE7 · A shared view's count never includes items the reader may not see (C045)
+
+- **Build id:** SE7 (in the plan: "Security: a shared view's count never includes items the reader may not see (C045)").
+- **Dial setting:** balanced
+- **Rounds limit:** 4
+- **After:** nothing. It touches no file under apps/workspace (the Glass name issue below is separate and waits for PL4). The owner's order of 20 November: fix first, before any wording; started under the queue rule; DOC1b and DOC1c need it merged.
+- **Status of this brief:** written by the conductor on 20 November 2026 from a read-only scout of the same day. **Three points are marked "owner to confirm" and the builder starts when the owner has confirmed them or changed them.** The scout's line numbers are unchecked: the builder re-reads them. The owner's rule: **a failing access-control test comes first.**
+
+## What the scout found (read, not run)
+
+`OspreyFlow_Core/services/api/case_views.py` lines 71 to 80: `wire()` sets `chosen` to the stored count of the view's nodes less the merged-added ones, and takes no reader, so it is the unfiltered count. It is returned by the list route (about app.py 4705 to 4708, from `visible_in` at case_views.py 388), the save route
+(about app.py 4732), the share route (about app.py 4829) and the open route (case_views.py 599 to 601). **A reader therefore learns how many nodes a shared view holds, including ones above their clearance.** A second leak: case_views.py line 583 computes `missing` as the chosen nodes the reader cannot see, which tells them how many are
+hidden (the API text at about app.py 4791 says it "names none"). The visible subset is already computed when a view is opened (`_read_selection`, about lines 529 to 536, through the adapter's access step), so a visible count on open costs no extra read. The list route does not read every id (the bound `first_item` keeps, about lines 505 to 522): a visible
+count there needs a **count-visible method on the graph port** (rule 3: access is applied in the adapter, never after retrieval). The boards code already holds the stricter rule (services/api/boards.py about lines 412 to 415: a missing count only for items lost after placement; anything hidden by a marking is counted nowhere).
+
+## What (with the three points to confirm)
+
+1. **The failing test first, at the real call site:** a new pure test file `OspreyFlow_Build/tests/services/api/test_case_view_counts.py`, in the style of `test_case_views.py` (its PEOPLE, LEVELS, world and `_saved` fixtures: a creator with SECRET clearance, a reader with OFFICIAL who sees 2 of 5 chosen nodes): the reader lists and opens the shared view and the count they receive is the **visible** count (2), in the list, in the open answer, and in the save and share answers to the creator (who sees all of theirs). Planted faults at the real call site, each shown red: the unfiltered length put back in the list route; the open route's count taken from the stored ids; `missing` returning the hidden number. The existing case `test_a_view_shows_the_rest_and_counts_the_missing` (`test_case_views.py`, about lines 186 to 200) asserts the leak (`chosen == 5`, `missing == 3`): the builder changes it with the ruling below and says so.
+2. **Owner to confirm (1): `missing` follows the boards' rule:** for a reader, the number is only of items lost after the view was placed (deleted or removed), and anything hidden by a marking is counted nowhere. (Recommended: the boards' precedent, and the API text already says it "names none".)
+3. **Owner to confirm (2): the list's visible count comes from a new count-visible method on the graph port** (`count_visible(ids, principal)`, the access filter applied inside the store's query, both adapters and the conformance suite, with a conformance case that a node above the reader's clearance is not counted). (Recommended; the alternative is to drop the count from the list entirely, which changes what the Glass shows and so waits for PL4.)
+4. **Owner to confirm (3): the Glass's default view name "Selection of N nodes"** (apps/workspace/src/views/ViewsPanel.tsx, about line 42) is written by the Glass from the creator's selection, so a shared view's name carries the unfiltered count to a reader. It is in apps/workspace and **waits for PL4's slice E**; this slice does not touch it. (Recommended: a backlog row now; after PL4, the Glass stops writing counts into default names; until then the server may rewrite a default-pattern name for a reader. Do not rewrite the server's names in this slice unless the owner rules.)
+5. **Other places the same unfiltered count may appear:** audit rows for views (result_cardinality is 1: no leak found), the case summary, exports: read each, and add a test only where one would fail if the path were wrong (rule 12); say in the report what you read.
+
+Binding: process/CLAUDE.md rules 3, 4, 7, 11, 12, 15; the owner's rule that a hidden record leaves no trace in a count, a path or a chart; British English. No file under apps/workspace. You do not edit the Core Makefile, `ci.yml` or any CLAUDE.md.
+
+## Checks
+
+Pure only, `ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9` in every command: `test_case_view_counts.py`, `test_case_views.py`, the graph port's conformance suite for the new method (the live case is owed: the live step is off), the neighbours that name views, then ruff on the files changed and the scan-map check for the new tests (a row if one walks a folder: say so). **Before your final report run by hand the cheap checks the conductor will run again before the merge** (ruff on every changed file in OspreyFlow_Core, the scan-map check): a lint error or a missing row found at merge is your round.
