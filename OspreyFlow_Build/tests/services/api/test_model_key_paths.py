@@ -54,7 +54,9 @@ call sites (N5); the probe with no models file needs no note (`..._row_21`, star
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import logging
 import re
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
@@ -1190,8 +1192,14 @@ async def rotate(scene: Scene, how: str) -> None:
 
 
 def failure_rows(scene: Scene, how: str) -> list[str]:
-    """What the audit says of the failed rotation: the change's own row, by its action."""
-    return audited(scene, "key_rotated" if how == "set_key" else "engine_edited")
+    """What the audit says of the failed rotation: the **key action's** row, whichever caller made
+    it (round 9, row 42: this read `engine_edited` for the edit, which could not see that the edit's
+    failure wrote no `key_rotated` row at all). The edit's own row is read by `edit_rows`."""
+    return audited(scene, "key_rotated")
+
+
+def edit_rows(scene: Scene) -> list[str]:
+    return audited(scene, "engine_edited")
 
 
 @pytest.mark.parametrize("caller", ["set_key", "an edit that keeps its address"])
@@ -1276,6 +1284,8 @@ async def test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_becam
     if answer:
         assert "key was removed" in answer.lower() and "enter it again" in answer.lower(), answer
     assert audited(world, "key_removed"), "the removal of the key is audited"
+    if how == "edit":
+        assert edit_rows(world), "the edit's own row is written beside the key action's"
     assert not says_put_back(said), said  # the credential was removed, never restored
     assert world.first not in recorded(world) and world.second not in recorded(world)
     assert world.first not in answer and world.second not in answer
@@ -1438,3 +1448,159 @@ async def test_a_cancelled_moved_edit_of_an_engine_with_no_key_does_not_say_put_
     assert world.admin.key_state("gemini") in ("lost", "none")
     assert world.admin.routes().engines["gemini"].key_present is False
     assert world.second not in recorded(world)
+
+
+# --- round 9, row 42: an edit that keeps its address and fails after the new key is stored ---------
+
+
+@pytest.mark.parametrize("fault", ["the key update is refused", "a cancellation after the store"])
+async def test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42(
+    world: Scene, fault: str
+) -> None:
+    """Row 42. An edit that keeps its address and carries a key, failing after the new key is
+    stored, was audited only as `engine_edited` (refused or interrupted) and `key_removed`: the
+    `rotated` list was audited on success alone. **The failure writes a `key_rotated` row too**
+    (outcome refused or interrupted), naming the key action and saying the key was removed. It
+    never carries a key. Fails if the audit names the wrong thing: no `key_rotated` row, a
+    `key_set` row (it replaced a held key), a `done` outcome, or a key's text in any row."""
+    await world.set_up()
+    stop = faults(world)
+    rotations_before = len(audited(world, "key_rotated"))
+    if fault == "the key update is refused":
+        stop.refuse.append(live("/key/update"))
+        with pytest.raises(ModelAdminRefused):
+            await rotate(world, "edit")
+        expect = "refused"
+    else:
+        reached = asyncio.Event()
+        stop.hang_after.append(
+            lambda r: live("/key/update")(r) and not reached.is_set() and not reached.set()
+        )
+        task = asyncio.ensure_future(rotate(world, "edit"))
+        await asyncio.wait_for(reached.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        expect = "interrupted"
+    stop.refuse.clear()
+    stop.hang_after.clear()
+
+    rows = audited(world, "key_rotated")[rotations_before:]
+    assert len(rows) == 1, f"one key_rotated row for the one failed change: {rows}"
+    assert rows[0].startswith(expect), rows
+    assert "key was removed" in rows[0].lower() and "enter it again" in rows[0].lower(), rows
+    assert not says_put_back(rows[0]), rows
+    assert not any(e.action == "key_set" and "gemini" == e.engine for e in world.audit.entries[-4:])
+    assert edit_rows(world)[-1].startswith(expect), "the edit's own row is still written"
+    assert audited(world, "key_removed"), "the removal of the key is audited"
+    assert world.first not in recorded(world) and world.second not in recorded(world)
+
+
+# --- round 9, row 43: `set_key` on an engine this process marked unavailable ----------------------
+
+
+async def an_engine_marked_unavailable_whose_record_says_set(world: Scene) -> None:
+    """A label-only edit whose reconcile fails part-way **and so does its undo** (the gateway
+    refusing every entry it is asked to make): the engine is marked unavailable and its record
+    still says a key is set. The faults are then lifted."""
+    stop = faults(world)
+    stop.refuse.append(lambda r: r.url.path == "/model/new")
+    with pytest.raises(ModelAdminRefused):
+        await world.admin.edit_engine(
+            "admin-1", "gemini", provider(OLD).model_copy(update={"label": "Another label"})
+        )
+    stop.refuse.clear()
+    assert "gemini" in world.admin._unavailable, "the plant: this process marked it unavailable"
+    assert world.admin._recorded_key_state("gemini") == "set", "the plant: the record says set"
+    assert world.admin.key_state("gemini") == "lost", "the plant: and it is offered to no one"
+
+
+@pytest.mark.parametrize("ends", ["fails", "succeeds"])
+async def test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43(
+    world: Scene, ends: str
+) -> None:
+    """Row 43. The failure's audit name was chosen from `key_state`, which says "lost" for an
+    engine the record says is set but this process marked unavailable, so a rotation that replaced
+    a held key and failed was audited as `key_set` and, succeeding, as `key_rotated`. Both ends read
+    the saved record (`_recorded_key_state`), so the change is `key_rotated` however it ends.
+    Fails if either end names it `key_set`."""
+    await world.set_up()
+    await an_engine_marked_unavailable_whose_record_says_set(world)
+    sets_before = len(audited(world, "key_set"))
+    if ends == "fails":
+        faults(world).refuse.append(live("/key/update"))
+        with pytest.raises(ModelAdminRefused):
+            await rotate(world, "set_key")
+        faults(world).refuse.clear()
+        failed = audited(world, "key_rotated")
+        assert failed and failed[-1].startswith("refused"), failed
+        assert "key was removed" in failed[-1].lower(), failed
+    else:
+        await rotate(world, "set_key")
+        done = audited(world, "key_rotated")
+        assert done and done[-1] == "done", done
+    assert len(audited(world, "key_set")) == sets_before, "named as a first key: it replaced one"
+    assert world.first not in recorded(world) and world.second not in recorded(world)
+
+
+# --- round 9, N4: start-up reads the gateway's virtual-key listing and shows none of it -----------
+
+
+async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4(
+    world: Scene, caplog: pytest.LogCaptureFixture
+) -> None:
+    """N4 (the owner, 20 November 2026): start-up may keep `GET /key/list` of the gateway's own
+    virtual keys, which holds SHA-256 tokens and no key material; **nothing from it reaches a log,
+    an answer or the audit**. A stale virtual key (tagged for an engine this master key does not
+    derive), whose token is made at run time, is listed and revoked by a start; the token appears
+    in no log record, in the settings, the routing, the audit, or the words of the refusal when
+    the revocation is refused. Plant: the token added to the log line at the real call site
+    (`revoke_stale_engine_keys`) goes red. (The credential listing, `GET /credentials`, stays
+    unused: `credential_reads` is 0.)"""
+    await world.set_up()
+    stale = a_key()
+    token = hashlib.sha256(stale.encode()).hexdigest()
+    async with httpx.AsyncClient(
+        base_url="http://litellm:4000",
+        transport=world.gateway.transport(),
+        headers={"Authorization": f"Bearer {world.gateway.master_key}"},
+    ) as master:
+        made = await master.post(
+            "/key/generate", json={"key": stale, "metadata": {"osprey_engine": "gone"}}
+        )
+        assert made.status_code == 200, made.text
+    listed = world.gateway.transport()
+    assert stale in set(world.gateway.virtual_keys()), "the plant: the stale key is held"
+
+    caplog.set_level(logging.DEBUG)
+    # refused first: the words of the refusal, then the revocation that lands
+    refusing = Plants(world.gateway.transport())
+    refusing.refuse.append(lambda r: r.url.path == "/key/delete")
+    world.faults = refusing
+    refused_start = world.process(retry_seconds=3600)
+    words = ""
+    try:
+        await refused_start.start()
+        await refused_start._reconcile(refused_start.settings)
+    except ModelAdminRefused as refused:
+        words = refused.words
+    await refused_start.close()
+    refusing.refuse.clear()
+    started = world.process(faulty=False, retry_seconds=3600)
+    await started.start()
+    await started.close()
+    assert stale not in set(world.gateway.virtual_keys()), "the plant: start revoked it"
+    assert world.gateway.credential_reads == 0
+    assert listed is not None
+
+    what_was_shown = " ".join(
+        [
+            caplog.text,
+            words,
+            recorded(world),
+            started.settings.model_dump_json(),
+            repr(started.routes()),
+        ]
+    )
+    for secret in (token, stale):
+        assert secret not in what_was_shown, "the virtual-key listing reached what a person reads"
