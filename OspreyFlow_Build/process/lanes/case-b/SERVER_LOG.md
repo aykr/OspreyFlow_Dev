@@ -70,7 +70,7 @@ extraction engine, as its own Python 3.13 service (ADR-142 Amendment 8; `platfor
    Conduit's build context, so no other image carries even its source.
 10. **spaCy:** allowed in the Conduit's lock (ADR-108's optional `extraction` extra, which no image installs),
     refused in every image built without Laurium.
-11. **The Ministry of Justice's notices**: a short entry in the product NOTICE, the full notices in the image's
+11. **The library publisher's notices**: a short entry in the product NOTICE, the full notices in the image's
     own `services/laurium/NOTICE`.
 12. **"Proven on local-lite"**: *corrected (review item 1).* What was actually run is narrower than the
     brief's words. Laurium's service code was imported in-process in a Python 3.13 virtual environment on this

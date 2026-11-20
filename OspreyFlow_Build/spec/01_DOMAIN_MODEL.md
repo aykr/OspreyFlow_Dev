@@ -1250,7 +1250,7 @@ dangerous; always show what changed.
 
 ### Splink configuration
 
-Splink (MIT, UK Ministry of Justice) runs on DuckDB in the laptop profile and on Spark in the
+Splink (MIT, UK public sector client) runs on DuckDB in the laptop profile and on Spark in the
 cluster profile — the same model definition, the same comparison library, a different backend.
 That maps exactly onto the transportability requirement, and it is the reason Splink is the
 right choice over Dedupe or Zingg here.

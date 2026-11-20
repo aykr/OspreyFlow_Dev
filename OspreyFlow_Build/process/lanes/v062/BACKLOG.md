@@ -212,7 +212,9 @@ slice-scout) lists every read the form makes before it offers a choice: the invi
 classification list, the roles catalogue, and anything else it finds; the list goes into the brief, and the builder starts only
 from it. The two gaps in a test AD2 left are in scope: a late and a failed load of each read (the roles catalogue first), a
 classification list that is empty, and a test double that refuses what the real route's giver rule refuses (rule 15).
-**After:** AD2 (merged) and PL4 (the shared package move; the form's code moves with it). **PL4 does not wait for AD5**: AD5
+**After:** AD2 (merged) and PL4 (the shared package move; **only the form's plain parts**, `givableCodes`, `givableLevels` and the
+like, move to `packages/glass-shared`: `People.tsx`, the loader AD5 builds and every other React component stay in the workspace,
+as I1 requires; the owner, 20 November). **PL4 does not wait for AD5**: AD5
 is queued behind PL4, never the other way. Until AD5 merges, AD2's form can be drawn before the roles list loads; the
 release notes should say so if v0.6.2 cuts before AD5.
 
@@ -377,4 +379,22 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   failed once in `make test` (its `show` output cut off before the "NEEDS YOU" section while 16 copies ran at once under xdist),
   with `make -k ci` green; the retry with nothing else running is recorded in the merge records. A timing race in the test, like
   `test_stack_lease.py::…extra_arguments` on 19 November: worker-isolation timing, same batch row.
+- **Line gap (20 Nov, the second day running): a builder that stops red only on a check that passes once main is merged in should
+  be recovered by the line itself, with no line from the owner.** PL6's builder red-stopped (six tries) on one check,
+  `test_doc_citations_check`, which failed on a citation in a brief the conductor had committed to main after the slice was cut and
+  fixed the next minute; the check was green as soon as main was merged into the branch. It cost the owner a `clear-stop` line.
+  (The day before: GG1, SE2 and SE4, the same kind of stop, three lines.) Row: when a slice reaches its red limit, the line
+  merges main into the branch itself (the same merge the builder is told to do; a conflict stops it as today), reruns the checks,
+  and if they are all green clears the stop and records it (the red stop, the main commit merged, the rerun's result); if any check is
+  still red, or the merge conflicts, the stop stands for the owner as now. Never counts a round. Tests, red first: a stop whose only
+  red is a check fixed on main (cleared, recorded), one still red after the merge (stands), one whose merge conflicts (stands). Related:
+  the earlier row on a slice that only needs main merged in to resolve a mechanical conflict.
+- **Rows from the stage 4 scouts (20 Nov):** (1) add the "who can" tip to the React Connect screen and the rights check to the React drawn-merge screen (the
+  pages carry both; the React screens have neither, the owner's ruling); (2) PL10 leaves the Conduit's one multipart route, `POST /v1/investigations/{id}/sites`, to
+  a later slice: recommendation, pass the multipart bytes through unchanged (a Conduit change to raw is ruled out by ADR-152 F1), the owner rules; (3) PL9a leaves
+  `kc_idp_hint` (organisation sign-in, which the Glass takes) to a later slice; (4) the nginx default body size (the template sets no `client_max_body_size`) may
+  refuse uploads above 1 MB through the Glass today, unverified: a live check; (5) `oidc-client-ts` has no named entry in `00_ARCHITECTURE.md` section 7 although
+  the Glass's `userManager.ts` says section 7 is its allowlist; (6) the stale fixed text "move-between-the-four-places" in the Studio keyboard registry (five
+  tabs); (7) keyboard specs are missing for the Releases tab, Connect, Profile, Deduplicate, the source page and the Runs grid (rule 13); (8) CO2 is still not on
+  main, and the Entra half of PL9b waits for it.
 - **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.

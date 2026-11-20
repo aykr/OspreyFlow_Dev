@@ -153,3 +153,7 @@ tests/test_user_guide_navigation.py	-	reads named guides only
 tests/test_user_guide_saved_views.py	-	reads named guides only
 tests/test_worker_isolation.py	OspreyFlow_Build/tests/	live_select Repo().live_set() rglobs test_*.py from the Makefile's list
 tests/test_write_store_marks.py	OspreyFlow_Build/tests/	live_select Repo().live_set() rglobs live test files
+tests/test_client_name_check.py	OspreyFlow_Core/,OspreyFlow_Build/,OspreyFlow_Data/,.claude/,.github/,CLAUDE.md	every other case plants in a git repository of its own under tmp_path, but test_the_real_tree_names_no_client runs the check over the real repository's git ls-files with the owner's real list (it says it did not run where the list is absent), so a slice that changes any tracked file can make it red; also reads the Makefile by name
+tests/test_client_name_check_compressed.py	-	walks only the git repository each case builds under its own tmp_path; reads the module's CHANCE_IN_COMPRESSED constant, no repository folder
+tests/test_client_name_check_parallel.py	-	walks only the git repository each case builds under its own tmp_path (a pool of worker processes reads those files); no repository folder
+tests/test_client_name_check_paths.py	-	walks only the git repository each case builds under its own tmp_path; no repository folder
