@@ -44,9 +44,9 @@ from adapters.model_litellm.client import LiteLLMClient, LiteLLMConfig
 from adapters.model_litellm.errors import ModelLimitReached
 from adapters.model_litellm.stand_in import StandInGateway, StandInProvider
 from adapters.model_litellm.usage import engine_key
-from schemas.deployment import ModelProviderConfig
 from schemas.domain import Handling, Principal
 from schemas.model import ExtractionRequest
+from tests.services.api.test_model_admin_routes import add, added
 
 MASTER = "sk-stand-in-master-M4ST"
 GOOD = "sk-good-provider-key-PLANT-K3Y9"
@@ -105,7 +105,9 @@ class World:
         )
         client = LiteLLMClient(LiteLLMConfig(api_key=MASTER), transport=self.gateway.transport())
         self.model = RoutedModel(
-            ModelLiteLLMAdapter(client, embed_model="none"), routes=self.admin.routes(), egress=OPEN
+            ModelLiteLLMAdapter(client, embed_model="none"),
+            routes=self.admin.routes(),
+            egress=OPEN,
         )
         self.model.follow(self.admin.routes)
 
@@ -116,7 +118,10 @@ class World:
             json_schema={"type": "object"},
             model="qwen2.5:7b-instruct",
             handling=Handling(
-                classification="OFFICIAL", handling_code="O", owning_unit="u", originator="u"
+                classification="OFFICIAL",
+                handling_code="O",
+                owning_unit="u",
+                originator="u",
             ),  # fmt: skip
             engine="gemini",
             datasets=["open"],
@@ -137,8 +142,13 @@ def world(tmp_path: Path) -> Iterator[World]:
 @pytest.fixture
 def client(world: World) -> TestClient:
     c = TestClient(app)
-    assert c.post("/v1/admin/models/engines", json={"provider": GEMINI}).status_code == 200
-    assert c.put("/v1/admin/models/engines/gemini/key", json={"key": GOOD}).status_code == 200
+    assert add(c, GEMINI, GOOD).status_code == 200
+    # The check before Add asked the engine once (tagged as its `test` job): each case counts only
+    # its own calls, so the gateway's records start empty after it.
+    g = world.gateway
+    g._daily.clear()  # noqa: SLF001
+    for heard in (g.seen, g.received, g.asked, g.sent):
+        heard.clear()
     return c
 
 
@@ -403,7 +413,7 @@ async def test_a_gateway_unreachable_at_start_is_tried_again_until_the_engine_s_
     """At start the Conduit makes each engine's own key; a gateway not yet answering is tried again
     in the background, so hosted calls do not stay refused until the next restart."""
     first = World(tmp_path)
-    await first.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await added(first.admin, GEMINI, GOOD)
     # A second Conduit starting on the same models file, against a gateway that has lost
     # everything (its keys too) and is not answering yet.
     fresh = World(tmp_path)
@@ -521,7 +531,7 @@ async def test_a_retry_that_meets_an_unexpected_answer_keeps_trying_and_shutdown
     tmp_path: Path,
 ) -> None:
     first = World(tmp_path)
-    await first.admin.add_engine("admin-1", ModelProviderConfig.model_validate(GEMINI))
+    await added(first.admin, GEMINI, GOOD)
     fresh = World(tmp_path)
     state = {"answers": ["down", "garbled"]}
     real = fresh.gateway.transport()

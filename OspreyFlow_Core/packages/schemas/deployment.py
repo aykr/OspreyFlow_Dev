@@ -488,10 +488,12 @@ class ModelProviderConfig(BaseModel):
 
 
 def engine_kinds_offered(profile: str) -> list[EngineKind]:
-    """The kinds of engine *Admin › Models* offers on `profile` (ADR-135 Amendment 7 decision 1)."""
+    """The kinds of engine *Admin › Models* offers on `profile` (ADR-135 Amendment 7 decision 1, as
+    Amendment 14 changes it: the client's own gateway on every profile, the owner's ruling of 15
+    November 2026). Bedrock stays the cloud platform's."""
     if profile in MODEL_ROUTE_PROFILES:
         return ["provider", "gateway", "bedrock"]
-    return ["provider"]
+    return ["provider", "gateway"]
 
 
 def _address_refusal(address: str) -> str | None:
@@ -515,6 +517,20 @@ def _address_refusal(address: str) -> str | None:
             "the address alone, and the key or token with Enter key"
         )
     return None
+
+
+def label_looks_like_a_key(text: str) -> bool:
+    """`_label_looks_like_a_key`, for *Admin › Models*' check before Add, which refuses a key-shaped
+    label or reference on every profile (ADR-135 Amendment 14)."""
+    return _label_looks_like_a_key(text)
+
+
+def model_looks_like_a_key(model: str) -> bool:
+    """A typed model name shaped like a key (ADR-135 Amendment 14): the model fields sit beside the
+    key field, and a model name is sent to the gateway, answered back and audited, so a key pasted
+    there is refused before anything is kept. Judged as a path segment is, since a deployment's
+    own name (`my-deployment-2024-08-06`) is a model name here."""
+    return _a_key_in_the_path(model)
 
 
 def _label_looks_like_a_key(text: str) -> bool:
@@ -555,18 +571,27 @@ def engine_refusal(provider: ModelProviderConfig, profile: str) -> str | None:
     profile: `OspreyConfig` (`osprey.yaml`), the Conduit's start (`Installed.from_env`), the models
     file (`ModelSettingsFile.load`) and each change in *Admin › Models* (`ModelAdmin._validated`).
 
-    **Off `cloud-platform`**, an engine is a provider by its key, as before Amendment 4: an engine
-    named `bedrock` is LiteLLM's Bedrock provider by its key there, as it always was (ADR-135
-    decision 1). **On `cloud-platform`**, Amendment 4's rules: Bedrock by the gateway's own IAM role
-    in London, by a model's own id; the client's gateway at its address alone, by a token; no
-    engine named `bedrock` but Bedrock; no label shaped like a key."""
+    **Off `cloud-platform`**, an engine is a provider by its key, as before Amendment 4 (an engine
+    named `bedrock` is LiteLLM's Bedrock provider by its key there, as it always was, ADR-135
+    decision 1), or, by Amendment 14 (the owner's ruling of 15 November 2026), the client's own
+    gateway at its address alone and by a token. **On `cloud-platform`**, Amendment 4's rules:
+    Bedrock by the gateway's own IAM role in London, by a model's own id; the client's gateway at
+    its address alone, by a token; no engine named `bedrock` but Bedrock; no label shaped like a
+    key."""
     if profile not in MODEL_ROUTE_PROFILES:
         if provider.plain:
             return None
+        # ADR-135 Amendment 14 (the owner's ruling of 15 November 2026): the client's own gateway,
+        # at its address alone and by a token, on every profile.
+        if provider.kind == "gateway" and provider.auth == "key" and provider.region is None:
+            if provider.api_base is None:
+                return "your organisation's AI gateway needs its address (https://…)"
+            return _address_refusal(provider.api_base)
         return (
-            "your organisation's AI gateway, Amazon Bedrock in London and signing in by the "
-            f"gateway's own IAM role are for profile: {MODEL_ROUTE_PROFILE} (ADR-135 Amendment 4); "
-            "on this deployment an engine is a provider, reached by its name and its key"
+            "Amazon Bedrock in London and signing in by the gateway's own IAM role are for "
+            f"profile: {MODEL_ROUTE_PROFILE} (ADR-135 Amendment 4); on this deployment an engine "
+            "is a provider, reached by its name and its key, or your organisation's AI gateway, "
+            "at its address and by its token"
         )
     if provider.contract_reference and _label_looks_like_a_key(provider.contract_reference):
         # Word by word on this profile alone (the orchestrator's ruling on P11 part 2, round 1):

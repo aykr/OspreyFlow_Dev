@@ -100,14 +100,17 @@ def test_models_lists_engines_defaults_and_states_and_never_a_key(
     assert rig.runner.calls == []
 
 
-def test_before_the_keys_move_presence_is_read_from_deployment_env(
+def test_without_the_conduit_s_answer_presence_is_unknown_never_read_from_deployment_env(
     rig: Rig, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    """The owner's ruling 24: a key's presence is the gateway's, asked through the Conduit; when it
+    does not answer, presence is unknown, and `deployment.env` is not read for it."""
     _installed(rig, env=f"OSPREY_MODEL_KEY_OPENAI={OPENAI_KEY}\n")
     rig.responses["status"] = [(1, "no such service")]
     assert rig("models") == 0
     text = capsys.readouterr().out
-    assert "openai (OpenAI): key present: yes" in text and OPENAI_KEY not in text
+    assert "openai (OpenAI): key present: unknown" in text and OPENAI_KEY not in text
+    assert "gemini (Gemini): key present: unknown" in text
 
 
 def test_models_shows_each_providers_privacy_contract_mark_and_its_reference(
@@ -152,6 +155,26 @@ def test_models_key_hands_the_key_over_by_name_and_restarts_nothing(
     out = capsys.readouterr()
     assert GEMINI_KEY not in out.out + out.err
     assert "The key for Gemini is set" in out.out
+
+
+def test_a_refused_key_is_in_no_output_nor_any_argv(
+    rig: Rig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """P7 (the owner's key review): the Conduit refuses the key (its check, ruling 19), and the key
+    is in no output, no exit message and no argument handed to `docker compose exec`, from the
+    terminal's variable and from the hidden prompt alike."""
+    _installed(rig)
+    rig.runner.fail["set"] = 1
+    rig.env["OSPREY_MODEL_KEY_GEMINI"] = GEMINI_KEY
+    assert rig("models", "key", "gemini") != 0
+    del rig.env["OSPREY_MODEL_KEY_GEMINI"]
+    rig.secret_replies.append(GEMINI_KEY)
+    assert rig("models", "key", "gemini") != 0
+    out = capsys.readouterr()
+    assert GEMINI_KEY not in out.out + out.err
+    assert GEMINI_KEY not in _every_argv_word(rig)
+    assert all(dict(c.env or {}).get("OSPREY_MODEL_KEY_GIVEN") == GEMINI_KEY
+               for c in rig.runner.with_word("set"))  # fmt: skip
 
 
 def test_with_no_key_in_the_terminal_it_is_asked_for_hidden(rig: Rig) -> None:

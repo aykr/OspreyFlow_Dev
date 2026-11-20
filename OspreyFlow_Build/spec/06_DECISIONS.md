@@ -41277,3 +41277,201 @@ fake identity provider refusing what Keycloak refuses (rule 15, as decision 10's
 Tests that would fail: ADR-152 X1's four tests; `tests/harness/test_govuk_renders_no_superset.py` for the
 cloud-platform and poc shapes; the poc manifest held to the render both ways (Amendment 12's test) with the
 `pages` workload added.
+
+### ADR-135, Amendment 14 (15 November 2026) — Add a model engine from the screen alone, first slice: a provider chosen from a list, a typed model name proven with the key by one call in the gateway before the engine exists, the analysts' preview; your own gateway on every profile; the guide's "never in the Admin area" brought to Amendment 2
+
+Status: written 15 November 2026 by the platform lane under the reservation (`spec/ADR_RESERVATIONS.md`), from the
+owner's prompt and rulings of 15 November 2026 (`process/lanes/admin-forms/OWNER_PROMPT_2026-11-15.md`,
+`OWNER_RULINGS_2026-11-15.md`, rulings 7, 12 to 28; the owner's key review,
+`KEY_REVIEW_2026-11-15.md`) and `PREBUILD_FINDINGS.md` §5.3's draft, **cut to the
+owner's first slice** (the owner, 15 November 2026; ruling 12): the provider list, the label, the address shown and changeable, only the provider's jobs,
+a typed model name with a current example, the preview, the existing write-only key field, and the key and each
+typed name proved by one call before **Add**. **Not in it:** listing the models a key may use (the draft's wildcard
+route and `check_provider_endpoint`), Bedrock's listing grant (ruling 9), and the map form (ADR-147's amendment). It
+amends decisions 2 and 5 as Amendment 2 left them, and **changes Amendment 7 decision 1**. It reverses nothing
+further: ruling 2's "never in the Admin area" was reversed by Amendment 2 on 8 November; this amendment corrects
+the guide's lines that were not updated then.
+
+1. **A provider is chosen from a list** (`services/api/model_catalogue.py`), in the owner's order: Google Gemini,
+   OpenAI, Anthropic, Azure OpenAI, Amazon Bedrock, and *Another provider or your own gateway*. Each brings its
+   label, its own address or that it asks one, whether it signs in by a key, its jobs alone (Anthropic and Bedrock
+   take no transcription, `PREBUILD_FINDINGS.md` §3.1), a current model as the example beside the typed name, and
+   LiteLLM's prefix, which is the form's business: the form takes it off a name typed with it. `GET
+   /v1/admin/models` carries the profile's list as `providers` (`CatalogueEntry`); the hosts a check calls stay in
+   the Conduit. The label is filled from the provider and can be edited. The provider's own address is shown, with
+   **Change** for a gateway in front of it; Azure and *another* ask for theirs. Bedrock shows neither key nor
+   address, says it uses the deployment's own role in London, and is listed on `cloud-platform` alone. The
+   examples were checked against each provider's own list on 15 November 2026: `gemini-3.8-flash` (never the
+   deprecated `gemini-2.5-flash`), `gpt-6.1-sol`, `claude-sonnet-5-5`, and on Bedrock `amazon.nova-pro-v1:0`, since
+   no current Anthropic model is served in-Region in London (only through `eu.`/`global.` profiles, which
+   Amendment 7 decision 2 refuses); the owner kept it (ruling 17: Bedrock stays London-only in v0.6.0).
+2. **Your organisation's own gateway on every profile** (the owner's ruling 15, 15 November 2026,
+   `process/lanes/admin-forms/OWNER_RULINGS_2026-11-15.md`). This changes
+   Amendment 7 decision 1: `engine_kinds_offered` gives `provider` and `gateway` on every profile, and `bedrock`
+   on `cloud-platform` alone. Off the cloud platform a gateway engine is reached at its address alone and by a
+   token; Bedrock and the gateway's own IAM role stay the cloud platform's.
+3. **The key and each typed model are checked before the engine exists, in the gateway** (the owner's ruling 7).
+   `POST /v1/admin/models/checks` takes the engine and its key once (`SecretStr`; the body read by hand, so a
+   refused body is never echoed). The Conduit hands the key straight to the gateway as the engine's own credential
+   and keeps nothing; for each typed model it makes an entry no route offers, asks today's one call of at most one
+   token (decision 5's fixed words), and removes the entry. A refusal keeps nothing, credential included. A pass
+   is held in the models file (`checks`) for 15 minutes and shown in Admin under **Being checked** (`HeldCheck`:
+   who, when, when it lapses, **Cancel the check**), never as an engine and never offered to analysts. **Add**
+   (`POST …/checks/{id}/add`) makes the engine from the check and never takes the key again; a check that did not
+   pass gives nothing to add. **Cancel** (`DELETE …/checks/{id}`) removes the credential at once; a check past its
+   15 minutes is removed, credential and all, by a sweep the Conduit runs from its start every minute
+   (`ModelAdmin.sweep_checks`), so with no later request at all, and also before any check or **Add**. Its key
+   is held unadded for at most 15 minutes and one sweep; a check whose record cannot be saved removes its key
+   with the refusal, since nothing would ever remove it unrecorded. **Each check's entries are named for that
+   check alone** (`probe_entries`: `<engine>.check-<random>`), never the engine's own name: the gateway cools a
+   refused entry down for about a minute, its name with it even once deleted (measured on 8 November; the
+   stand-in does the same), so a key corrected and checked again at once was held back, and a refused check
+   would have cooled the very name the engine is then added under (found building ruling 19). A label, agreement reference or model name that
+   looks like a key is refused on every profile before anything is kept (a model name as a path segment is
+   judged, `model_looks_like_a_key`). The key's record is who typed it at the check, and when (the owner's key
+   rule 3), not who pressed **Add**. This takes
+   the draft's way (b) in substance (the key crosses once) but holds the check, not a held engine row.
+4. **The preview** says "Analysts will see: <the analysts' engine list's own text>", that is `engineOptionText`'s
+   "<label> (no contract)" or "<label> (under contract)", and that it is offered only for cases whose data may
+   leave. **Correction to the draft:** the draft's "(under contract: <reference>)" is not what analysts see; the
+   reference is shown in Admin alone, so the preview does not show it to them.
+5. **On the screen** (`apps/workspace/src/admin/sections/Models.tsx`): **Check** is the add form's one way
+   forward. The key field is `type="password"` with `autocomplete="new-password"` (browsers ignore `off` on a
+   password field) and the password managers' own opt-outs (1Password, LastPass, Bitwarden); it is never filled
+   from anything, emptied once sent whatever the answer, and emptied when the provider is changed, so a key is
+   never sent to a provider or address it was not typed for. What this guarantees: the page never stores the key,
+   and asks the browser not to; a browser's own password manager may still offer to save it, and the guide says to
+   decline. Each refusal is tied to its field (`aria-invalid`, `aria-describedby`): a key refused at the key, a
+   model not offered or not enabled at its job, a value the engine's rules refuse at the field the Conduit names
+   (`fields`: `provider.api_base`, `provider.roles.<job>`, `provider.label`, `provider.contract_reference`), and
+   the Conduit's own refusal of a key-shaped label, reference or model name at that field. The label sent is the
+   label the preview shows (the provider's own when the field is emptied). The prefix is taken off a typed name,
+   except for your own gateway, whose prefix is only LiteLLM's way to it. **Cancel** is not offered while a check
+   is out. Once a check passes the fields are locked; **Add the engine** or **Cancel** follows. The read-only
+   extraction-engine line shows on the cloud platform alone (the profile offering Bedrock), as before this
+   amendment let the gateway onto every profile. A provider can be added once from the screen, since the engine's
+   name is the provider's id (a second Azure resource or gateway is refused as already added): the owner accepted
+   that for now (ruling 20; a second instance of a provider comes in a later slice).
+6. **Audited**: `engine_checked` (passed or refused, with each model's outcome), `engine_added`,
+   `engine_check_cancelled`, `engine_check_expired`, and the key's own actions as before; an edit or a new key
+   refused by its check is audited as that edit or key change, refused, in the check's words. Who and when, never
+   the key.
+7. **What weakens how a key is held today**, brought to the owner: the key reaches the gateway before an
+   administrator commits to the engine, for at most 15 minutes and one sweep (a minute) if it is not added, in the
+   gateway's sealed store as every key is. An edit's or a new key's check holds the new key as its own credential
+   for that one request alone, removed whatever the answer (and at the Conduit's start, should a request have been
+   cut short). Nothing else changes: the Conduit's transit is Amendment 2's, already accepted.
+8. **The guide** (`10_ADMINISTRATION_GUIDE.md` and `OspreyFlow_Core/docs/administration-guide.md`): §8's `models
+   key` row says the key goes to the gateway's own store and nothing is restarted (it said `deployment.env` and a
+   restart, against `cli/ospreyflow/models.py`); §10's key paragraph says a key is managed in *Admin › Models*,
+   write-only, never shown back, in place of "never shown in the Admin area"; §10.1 describes adding an engine,
+   and editing one and changing its key as point 9 has them.
+9. **No engine is added unchecked by any route, and an edit is checked too** (the owner's rulings 18 and 19,
+   15 November 2026). P1's `POST /v1/admin/models/engines` and `ModelAdmin.add_engine` are removed: **Add**
+   from a passed check, under 15 minutes old, is the only way an engine is added, from the screen or by a direct
+   call. `PUT /v1/admin/models/engines/{name}` takes `{"provider": …, "key"?: "…"}` (`EngineInput`, read by hand
+   as the check's body is): a changed model name is checked by the check's one call to each new model; a
+   **changed address takes its key with it**, refused without one, and every model is checked at the new
+   address with that key, since a key entered for one address is never sent to another (this replaces
+   Amendment 2's "a changed address removes the key, enter it again", which left an engine with no key); a key
+   given with an edit is checked against every model. A label or an agreement changed alone asks nothing. The
+   check runs under a probe name beside the live engine: the new key as the probe's own credential
+   (`probe_name`: `<engine>.check`, which no engine can be named, an engine's name having no dot), the entries
+   under `probe_entries`, so the live engine is untouched until everything has answered, and a refusal changes
+   nothing, said in the check's words with what the engine keeps. **A new key** (`PUT …/key`, and the command
+   line's `ospreyflow models key`, the same `set_key`) is checked the same way against each of the engine's
+   models before it replaces the one held: a key the provider refuses, or the gateway will not store, changes
+   nothing (before, the old key was removed first, and a refused new one left the engine with none). A key-shaped
+   label, reference or model name is refused on an edit as at the check. **The one exception:** a key moved out of
+   `deployment.env` at install (`key_moved`, `services/api/model_keys.move_keys`) is the installer's own key,
+   moved, not changed, so nothing is asked of the provider at install; it is still write-only and audited
+   (the owner kept it so: ruling 21).
+10. **The owner's independent key review** (15 November 2026, `process/lanes/admin-forms/KEY_REVIEW_2026-11-15.md`;
+   rulings 22 to 28), with synthetic keys only:
+   - **A typed model name is never echoed** (ruling 22): `ModelCheck` carries the jobs, its outcome and
+     fixed words that name the job ("Extraction and Ask: …"), never the typed name; the screen shows those
+     words, and `engine_checked`'s audit records each job and its outcome. An edit's or a new key's
+     refusal says the job too.
+   - **A model name is taken only if it looks like one** (ruling 23, generously): letters, digits and
+     `. _ - : / @`, up to 128 characters (`services/api/model_admin.model_name_refusal`), on the check and on
+     an edit. It is not a key detector: an Azure deployment's or a client gateway's model is named freely,
+     so a lower-case hyphenated key has a model's shape; what protects such a key is that a refused name is
+     never echoed, and one the provider answers for is a model. A UUID, and a name whose part between `:`,
+     `/` or `@` looks like a key, are refused as a key's shape; each part is judged alone, so a model's own
+     tag (`moondream:1.8b-v2-q4_K_M`) is taken. Shown against every catalogue example and the real names
+     this build meets.
+   - **Fixed words per field** (the review's Fixes B and C): the check's and the edit's refusals name
+     fields from a fixed list (`FIELD_WORDS`, `refused_field`) with that field's fixed words; a field
+     name that was sent (an extra field, a key under `roles`) is never named back, and a validator's own
+     words are never sent, since one quotes with `repr`, which escapes a quote that an exact-match
+     redaction cannot find. An extra field, a body that is not JSON, or a field off the list is answered in
+     the route's fixed words.
+   - **No key in the address** (the review's P9): the three routes that take a key refuse any query
+     string in fixed words, whatever the body holds; a key sent as a number, a list or an object is refused
+     in fixed words, never echoed.
+   - **Nothing reports local variables** (Fix D): no error reporter, rich traceback or `show_locals`
+     anywhere in the Conduit, the CLI, the harness or the packages; an unexpected transport error during
+     the hand-over or the proving call leaves no credential and no key in any answer, log record (formatted
+     whole, traceback included) or output.
+   - **A Conduit stopped mid-check leaves nothing behind** (ruling 25): the check's record
+     (`PendingCheck.passed = False`) is written before the key goes to the gateway and marked passed
+     once every model has answered; a record not passed is never offered for **Add**, and the sweep removes
+     it after `CHECK_LIFE` with its credential, by name. No credential is ever read back to find one
+     (`credential_reads` stays 0).
+   - **`deployment.env`** (ruling 24): on Compose the key's line is removed right after a successful move
+     (`harness/apply.py`, `move_model_keys_into_gateway`, lines 236 to 245, held by
+     `tests/harness/test_apply_changed_settings.py`'s `_moved_into_the_gateway`); `ospreyflow models` asks the
+     gateway, through the Conduit, for presence, and says *unknown* when it does not answer, never reading
+     `deployment.env`. **On the cloud-platform profile the key stays in the namespace's Kubernetes Secret**,
+     given to the gateway alone (ruling 28, the cluster's own secret store, ruling 5); the guide says so.
+   - **The guide** (ruling 26) prefers the hidden prompt and says `export NAME=key` lands in the shell's
+     history.
+   - **Owed after v0.6.0's package test** (ruling 27): one measured run against the real LiteLLM at the
+     demo's log level with a synthetic key, its logs and its database row searched; if a credential body
+     reaches the logs, that logger is lowered in the rendered gateway settings, held by a test reading the
+     rendered config.
+   Held by `tests/services/api/test_model_key_review.py` (each item above, P1 to P5 and P9),
+   `test_model_keys_commands.py` (P6: `python -m services.api.model_keys` run as a command against a
+   stand-in gateway served on localhost), `tests/cli/test_models_verb.py` (P7, and presence *unknown*),
+   the widened `test_model_engine_checks.py` key tests (P4 and P5), and `keyboard/admin-models.spec.ts`'s
+   P8 (no key in either browser storage, the address bar or any address asked); each shown red first, the
+   review's plants 17 of 17 (`plants_review_run.txt`) and P8's three at the browser slot
+   (`plants_p8_run.txt`).
+
+Held by: `tests/services/api/test_model_catalogue.py` (the list, its order, jobs, addresses, examples, prefixes, the
+profiles); `test_model_engine_kinds.py` (decision 1 as changed); `test_model_engine_checks.py` (**Add** refused
+without a passed check; a refused key or model leaves nothing in the gateway; nothing offered until **Add**; the
+15 minutes; **Cancel**; the view's `providers` and `checks`; and `test_the_key_appears_nowhere_it_must_not`, the
+owner's key test, across check, refusal, cancel, expiry and **Add**: responses, headers, URLs, logs, audit, the
+models file and the gateway's rows, against the stand-in gateway; the sweep with no request and from start; a
+key-shaped model name; the key recorded as the checker's; each refused field named, never echoed; a corrected
+key checked again at once; and, for point 9, `test_no_route_adds_an_engine_without_a_passed_check`,
+`test_an_edited_model_name_is_checked_before_it_is_saved`,
+`test_a_label_or_contract_changed_alone_is_saved_with_no_call`,
+`test_a_changed_address_takes_its_key_with_it_and_is_checked_there`,
+`test_a_new_key_is_checked_before_it_replaces_the_one_held` (the screen's route and the command line's),
+`test_a_key_moved_from_deployment_env_is_moved_unchecked` (the exception), and
+`test_the_key_appears_nowhere_through_an_edit_or_a_new_key`, the key test extended to edit and a new key; in
+`test_model_admin_routes.py`, a check's key removed when its record cannot be saved, a new key the gateway will
+not store replacing nothing, and a checked key the gateway then refuses recorded as lost; in
+`test_model_engine_kinds.py`, the cloud-platform refusal before the key reaches the gateway, and a refused
+address change leaving the address and key as they were; and `tests/services/api/test_route_rights.py`'s table,
+which had missed the three check routes). **Not yet shown (rule 15):** the stand-in does not refuse a second credential of the same
+name (it overwrites; its own docstring records that as not measured), nor model `/v1/models` with discovery off,
+and the check's sequence (credential, entry, one call, entry removed, credential kept for **Add**) has not run
+against the pinned LiteLLM: that live run, under a lease, is owed before the slice is relied on. The Glass's
+`Models.test.tsx` (an edit's changed address asking its key, the edit checked and the key sent once, a model name
+checked with no key asked, a label alone saved as before, an edit's refusal shown, a new key said to be checked;
+the list, the jobs, the addresses, Bedrock's absence and its form, the preview equal to
+`engineOptionText`, the check before **Add** sending the key once and **Add** never, each refusal at its field,
+**Cancel** and none while a check is out, **Being checked**, the key emptied on a change of provider, each named
+field's refusal at its field, the label sent equal to the preview's, your own gateway's names kept whole, and the key
+test's browser half: no `localStorage`, `sessionStorage`, cookie, URL
+or page text holds it, the field asks no autofill; one live region at a time while the form is busy); and
+`keyboard/admin-models.spec.ts` (rule 13: add, cancel from the form, cancel from **Being checked**, change the
+address, a refusal, Bedrock and your own gateway, an engine's address changed with its key, a new key refused, by
+keyboard). The Conduit's and the Glass's cases were shown red first and their plants red, 21 of 21
+(`process/lanes/platform/v061-admin-forms/red-first.txt`, `plants_run.txt`). The keyboard walkthrough and the axe
+scan of each new state ran in the orchestrator's slot 9 on 15 November 2026, with the registry's and the every-harness
+list's diffs applied to the working tree: their first run found two live regions at once while **Add** was out
+(fixed), then 19 of 19 and 60 of 60.

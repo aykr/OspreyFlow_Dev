@@ -98,19 +98,6 @@ def _defaults(models: Mapping[str, Any]) -> dict[str, str]:
     return {}
 
 
-def _env_lines(env_file: Path) -> list[str]:
-    return env_file.read_text(encoding="utf-8").splitlines() if env_file.is_file() else []
-
-
-def _held(env_file: Path) -> dict[str, str]:
-    held: dict[str, str] = {}
-    for line in _env_lines(env_file):
-        name, sep, value = line.partition("=")
-        if sep and not line.startswith("#"):
-            held[name] = value
-    return held
-
-
 def _running_config(product: Path, deployment: Path) -> dict[str, Any]:
     """The deployment's own copy of `osprey.yaml` (what is running), else the product's."""
     for candidate in (deployment / "osprey.yaml", product / "osprey.yaml"):
@@ -157,15 +144,13 @@ def _contract(provider: Mapping[str, Any]) -> str:
 
 def list_engines(
     models: Mapping[str, Any],
-    env_file: Path,
     states: Mapping[str, str] | None = None,
     defaults: Mapping[str, str] | None = None,
 ) -> list[str]:
     """What `ospreyflow models` says: each engine, whether each key is present (yes, no, or lost
     after a restore — never the key), whether it is under a privacy contract (ADR-136), and each
-    role's default. `states` is the Conduit's answer (ADR-135 Amendment 2); without it, before the
-    keys have moved into the gateway, presence is read from `deployment.env`."""
-    held = _held(env_file)
+    role's default. `states` is the Conduit's answer (ADR-135 Amendment 2), the gateway's own;
+    without it presence is unknown, never read from `deployment.env` (the owner's ruling 24)."""
     lines = ["Engines:", f"  {LOCAL}: this deployment's own models (no key)"]
     for provider in _providers(models):
         name = str(provider.get("name"))
@@ -174,7 +159,7 @@ def list_engines(
         if states is not None:
             present = _STATE_WORDS[states[name]]
         else:
-            present = "yes" if held.get(key_variable(models, name)) else "no"
+            present = "unknown (the Conduit did not answer; is the deployment started?)"
         roles = ", ".join(f"{r} {m}" for r, m in (provider.get("roles") or {}).items())
         lines.append(
             f"  {name} ({_label(provider)}): key present: {present}; "
