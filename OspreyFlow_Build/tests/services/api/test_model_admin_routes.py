@@ -629,13 +629,15 @@ def test_two_changes_at_once_from_two_processes_both_land(tmp_path: Path) -> Non
     w = World(tmp_path)
     other = w.make_admin()
     for admin in (w.admin, other):  # a slow gateway, so the two changes overlap
-        listed = admin._gateway.stored_entries  # noqa: SLF001
+        # The listing every change reads between reading the file and saving it (`_reconcile`
+        # reads it with `held_entries`; `stored_entries` is a wrapper nothing in a change calls).
+        listed = admin._gateway.held_entries  # noqa: SLF001
 
-        async def slow(listed: Any = listed) -> set[str]:
+        async def slow(listed: Any = listed) -> Any:
             await asyncio.sleep(0.05)
-            return await listed()  # type: ignore[no-any-return]
+            return await listed()
 
-        admin._gateway.stored_entries = slow  # type: ignore[method-assign]  # noqa: SLF001
+        admin._gateway.held_entries = slow  # type: ignore[method-assign]  # noqa: SLF001
 
     async def both() -> None:
         await asyncio.gather(

@@ -1,6 +1,6 @@
 // Report export — Phase 8 Stage 4h, `02_GLASS_FRONTEND.md` §10.1 ("Report — a self-contained
 // HTML document... assembles the investigation's judgement/gap/assumption content with their own
-// cited evidence inline, styled against `design/tokens.css`'s light theme — chosen over a PDF
+// cited evidence inline, styled against `packages/design/tokens.css`'s light theme — chosen over a PDF
 // pipeline deliberately so this build does not need to own a PDF-rendering dependency, printable
 // to PDF by the recipient at their own discretion") and §10.3 (the mark carried both visibly, as
 // a header/footer stamp, and as an embedded structured field).

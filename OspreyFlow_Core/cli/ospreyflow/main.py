@@ -1689,6 +1689,10 @@ def _dispatch(args: argparse.Namespace, ctx: _Context) -> int:
     raise AssertionError(verb)  # pragma: no cover - argparse refuses any other verb
 
 
+def _say_on_stderr(line: str) -> None:
+    print(f"ospreyflow: {line}", file=sys.stderr)
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -1730,7 +1734,7 @@ def main(
 
     try:
         try:
-            product = find_product(start, env, recorded=recorded_home)
+            product = find_product(start, env, recorded=recorded_home, notice=_say_on_stderr)
         except CommandRefused:
             if args.verb != "doctor":
                 raise

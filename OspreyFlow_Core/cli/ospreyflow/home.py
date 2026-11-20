@@ -2,7 +2,8 @@
 (`06_DECISIONS.md` ADR-114 Amendment 3 decision 3).
 
 The command knows its checkout from `OSPREYFLOW_HOME`, else the folder the bootstrap recorded, else
-the checkout it is run inside. A "product folder" is the one holding `harness/__init__.py` and
+the checkout it is run inside; it says so when the recorded one wins over a different one it is run
+inside (ADR-114 Amendment 50). A "product folder" is the one holding `harness/__init__.py` and
 `osprey.yaml`: the repository root in the user's repository, or `OspreyFlow_Core` inside the
 developer repository.
 """
@@ -47,15 +48,41 @@ def _is_product(folder: Path) -> bool:
     return (folder / "harness" / "__init__.py").is_file() and (folder / "osprey.yaml").is_file()
 
 
+def _walk_up(start: Path | None) -> Path | None:
+    """The product folder from `start` (the current folder when None) upwards, or None.
+
+    A folder that is the developer repository stands for its `OspreyFlow_Core`. A folder the person
+    cannot search holds no product they can use, so it is passed over, not allowed to end the
+    command in a traceback (the recorded home may well be serving it)."""
+    try:
+        here = (start or Path.cwd()).resolve()
+    except OSError:  # the current folder was deleted under the shell: nothing to look upwards from
+        return None
+    for folder in (here, *here.parents):
+        for candidate in (folder, folder / "OspreyFlow_Core"):
+            try:
+                if _is_product(candidate):
+                    return candidate
+            except OSError:  # refused (EACCES, EPERM) or otherwise unreadable: not a product here
+                continue
+    return None
+
+
 def find_product(
     start: Path | None,
     env: Mapping[str, str],
     *,
     recorded: Callable[[], Path | None] = read_recorded_home,
+    notice: Callable[[str], object] | None = None,
 ) -> Path:
     """The product folder, from `OSPREYFLOW_HOME`, else the recorded folder, else by walking up from
     `start` (the current folder when None). A folder that is the developer repository stands for its
-    `OspreyFlow_Core`."""
+    `OspreyFlow_Core`.
+
+    The order is ADR-114 Amendment 3 decision 3, and saying so does not change it (Amendment 50):
+    when the recorded folder wins and the walk up from `start` finds a different product, `notice`
+    is given one line in words, before anything is done. Nothing is said when `OSPREYFLOW_HOME`
+    chose, when the two are the same folder, or when the current folder holds no product."""
     chosen = env.get("OSPREYFLOW_HOME")
     if chosen:
         folder = Path(chosen).expanduser()
@@ -66,14 +93,16 @@ def find_product(
             )
         return folder
     remembered = recorded()
+    found = _walk_up(start)
     if remembered is not None and _is_product(remembered):
+        if notice is not None and found is not None and found.resolve() != remembered.resolve():
+            notice(
+                f"using the recorded folder {remembered}, not the checkout you are in ({found}). "
+                f"To use this one, set OSPREYFLOW_HOME={found}."
+            )
         return remembered
-    here = (start or Path.cwd()).resolve()
-    for folder in (here, *here.parents):
-        if _is_product(folder):
-            return folder
-        if _is_product(folder / "OspreyFlow_Core"):
-            return folder / "OspreyFlow_Core"
+    if found is not None:
+        return found
     raise CommandRefused(
         "No OspreyFlow checkout found here. Run the bootstrap (install.sh or install.ps1) once, "
         "run this from inside the checkout, or set OSPREYFLOW_HOME to it."

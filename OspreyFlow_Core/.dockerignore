@@ -50,8 +50,9 @@ node_modules
 #
 # **Round 14a (Trigger A): `docs/` dissolved into `spec/` (product) and `process/` (build-process,
 # private).** `spec/` is not excluded — it is the product's own specification, and
-# `spec/design/tokens.css` moved out of it into `apps/workspace/src/design/tokens.css` at the same
-# time (ADR-034 §B8's own "when the restructure moves tokens.css into the product tree, this COPY
+# `spec/design/tokens.css` moved out of it into the product tree at the same time (it is
+# in `packages/design` since ADR-152, and `packages/` is not excluded) (ADR-034 §B8's own
+# "when the restructure moves tokens.css into the product tree, this COPY
 # and that negation go together" — done here), so the re-include exception that line predicted is
 # gone rather than left matching nothing. `CLAUDE.md` at the root is now a one-line stub; the real
 # file and everything else build-process (`.claude/`, `.graphifyignore`) are listed by name.

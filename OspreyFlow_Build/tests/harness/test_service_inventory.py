@@ -99,26 +99,24 @@ def test_the_rule_8_debt_names_a_directory_that_is_deployable_and_was_created_be
 
 
 def test_the_glass_dockerfile_can_reach_tokens_css() -> None:
-    """`tokens.css` moved into the product tree at Trigger A (round 14a, ADR-034 §B8):
-    `apps/workspace/src/design/tokens.css`, reached by `apps/workspace/Dockerfile`'s own
-    `COPY apps/workspace ./apps/workspace` line — no separate `COPY` and no `.dockerignore`
-    negation any more, both of which existed only because the file used to live under the private
-    `docs/` tree this image otherwise excludes wholesale. Asserts the file is present, not
-    excluded from the build context, and that the Dockerfile's own blanket copy actually reaches
-    it (not a narrower `COPY apps/workspace/dist` or similar that would silently miss it)."""
+    """`tokens.css` is in `packages/design` (ADR-152 decision 6; it was in `apps/workspace` until then, and
+    under the private `docs/` tree before round 14a, ADR-034 §B8), reached by `apps/workspace/Dockerfile`'s own
+    `COPY packages/design ./packages/design` line — no `.dockerignore` negation. Asserts the file is present,
+    not excluded from the build context, and that the Dockerfile's own copy actually reaches it (not a
+    narrower `COPY packages/design/other` or similar that would silently miss it)."""
     pathspec = pytest.importorskip("pathspec")
     spec = pathspec.PathSpec.from_lines(
         "gitignore", (REPO_ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
     )
 
-    token_path = REPO_ROOT / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    token_path = REPO_ROOT / "packages" / "design" / "tokens.css"
     assert token_path.is_file()
-    assert not spec.match_file("apps/workspace/src/design/tokens.css"), (
+    assert not spec.match_file("packages/design/tokens.css"), (
         "tokens.css is excluded from the build context, so the Glass image cannot build"
     )
     dockerfile = (REPO_ROOT / "apps" / "workspace" / "Dockerfile").read_text(encoding="utf-8")
-    assert "COPY apps/workspace ./apps/workspace" in dockerfile, (
-        "no COPY line reaches apps/workspace/src/design/tokens.css any more"
+    assert "COPY packages/design ./packages/design" in dockerfile, (
+        "no COPY line reaches packages/design/tokens.css any more"
     )
 
 

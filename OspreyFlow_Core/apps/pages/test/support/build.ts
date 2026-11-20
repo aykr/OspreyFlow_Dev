@@ -1,7 +1,7 @@
 import type { Express, Router } from "express";
 
 import { createApp } from "../../server/app.js";
-import type { IdentityProvider } from "../../server/identity.js";
+import type { CodeFlowProvider, IdentityProvider } from "../../server/identity.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import type { SessionStore } from "../../server/sessionStore.js";
 import { testClock } from "./clock.js";
@@ -28,15 +28,20 @@ export interface BuildOptions {
   sessionSecret?: string;
   /** Replaces the fake identity provider altogether. */
   identityProvider?: IdentityProvider;
+  /** The real code flow, against a fake Keycloak: with it, `/session/sign-in` is the start of the round trip. */
+  codeFlow?: CodeFlowProvider;
+  /** The app's clock, when the code flow must read the same one. */
+  clock?: TestClock;
 }
 
 /** The real app factory, with the in-memory store that refuses what Valkey refuses and a fake provider. */
 export function build(options: BuildOptions = {}): Built {
-  const clock = testClock();
+  const clock = options.clock ?? testClock();
   const store = new MemorySessionStore({ clock: options.storeClock ?? clock });
   const app = createApp({
     store: options.wrapStore ? options.wrapStore(store) : store,
     identityProvider: options.identityProvider ?? fakeProvider({ now: clock, ...options.provider }),
+    ...(options.codeFlow ? { codeFlow: options.codeFlow } : {}),
     clock,
     sessionSecret: options.sessionSecret ?? TEST_SESSION_SECRET,
     extraRoutes: (router) => {

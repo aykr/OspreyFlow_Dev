@@ -35,7 +35,9 @@ def _product(tmp_path: Path) -> Path:
         "apps/harness/src/Icon\r": "",
         "apps/harness/index.html": "<div id=root></div>",
         "apps/harness/package.json": json.dumps({"name": "x"}),
-        "apps/workspace/src/design/tokens.css": ":root{}",
+        "packages/design/tokens.css": ":root{}",
+        "packages/design/primitives.css": ".btn{}",
+        "apps/workspace/src/design/primitives/Button.tsx": "export const Button = 1;\n",
         "apps/workspace/src/theme/theme.ts": "export const t = 1;\n",
         "apps/workspace/src/other/not-a-source.ts": "x",
     }.items():
@@ -82,7 +84,7 @@ def test_a_page_built_from_these_sources_is_current(tmp_path: Path) -> None:
 def test_a_changed_source_makes_the_page_stale(tmp_path: Path) -> None:
     root = _product(tmp_path)
     _built(root)
-    (root / "apps/workspace/src/design/tokens.css").write_text(":root{--x:1}", encoding="utf-8")
+    (root / "packages/design/tokens.css").write_text(":root{--x:1}", encoding="utf-8")
     assert not page.is_current(root)
 
 

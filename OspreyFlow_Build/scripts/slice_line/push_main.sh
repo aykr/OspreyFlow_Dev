@@ -6,8 +6,10 @@
 # Refuses unless: this is the main checkout, on main, with HEAD written by the merge script (a Slice-Merge or
 # Slice-Records trailer); origin is the URL recorded at install (~/.ospreyflow/slice-line/origin.url); and the
 # push is a plain fast-forward of main:main. Never another remote, never another branch or a tag, never --force.
-# A CI run on main still in progress is not cancelled by a new push (a push cancels the running run): the push
-# waits, recorded as pending, and the next merge's push carries it; the owner can also run this script.
+# Every merge is pushed (the owner, 20 November 2026), whatever GitHub's last completed run said, red included: GitHub
+# always tests the newest main. Only a run on main in progress or queued holds a push back, since a new push would
+# cancel it: the push waits, recorded in push.pending; the board shows it, and the conductor runs
+# `merge_slice.py push-pending` when the run ends (the next merge's push also carries it); the owner can run this too.
 set -euo pipefail
 
 DATA="${OSPREY_SLICE_HOME:-$HOME/.ospreyflow/slice-line}"
@@ -34,7 +36,7 @@ if [ -z "${OSPREY_PUSH_NO_CI_CHECK:-}" ] && command -v gh >/dev/null 2>&1; then
   queued="$(gh run list --branch main --status queued --json databaseId -q 'length' 2>/dev/null || echo 0)"
   if [ "${busy:-0}" != "0" ] || [ "${queued:-0}" != "0" ]; then
     git rev-parse HEAD > "$DATA/push.pending"
-    say "Deferred: a CI run on main is in progress; $(git rev-parse --short HEAD) waits (push.pending)."
+    say "Deferred: a CI run on main is in progress or queued; $(git rev-parse --short HEAD) waits (push.pending): merge_slice.py push-pending pushes it when the run ends."
     exit 3
   fi
 fi

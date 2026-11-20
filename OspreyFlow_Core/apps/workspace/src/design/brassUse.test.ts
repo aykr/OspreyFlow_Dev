@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(join(__dirname, "primitives.css"), "utf-8");
+const CSS = readFileSync(join(__dirname, "../../../../packages/design/primitives.css"), "utf-8");
 
 /** Rules allowed to use brass: the primary button tier and focus. */
 const ALLOWED = [/^\.btn--primary(:hover|:active)?$/, /:focus-visible/, /:focus\b/];

@@ -7,8 +7,8 @@
 // the pipeline Studio harness. The data is synthetic (rule 9): invented names.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { PipelineStudio } from "../src/ingest/dag/PipelineStudio";
 

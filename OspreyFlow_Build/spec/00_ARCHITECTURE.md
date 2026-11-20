@@ -123,7 +123,7 @@ result is a fully working map and geocoder with no account, no key, no network a
 procurement conversation. That matters beyond convenience: the demo, the acceptance scenarios and
 CI all run on tier 1, so the platform's tests never depend on someone's entitlement.
 
-Two MapLibre styles ship with it, dark and light, built against `design/tokens.css` rather than
+Two MapLibre styles ship with it, dark and light, built against `packages/design/tokens.css` rather than
 against a vendor's default palette. A basemap that fights the data palette is worse than no
 basemap — the nine entity channels have to stay the most saturated thing on screen, so the
 shipped styles are deliberately desaturated and sit on the neutral ramp.
@@ -884,7 +884,7 @@ OspreyFlow_Core/
 │   ├── investigation/          #   the case picker, switcher, datasets and Share panel (ADR-052)
 │   ├── rights/                 #   what the rail and views show for the caller's rights (ADR-112)
 │   ├── ingest/                 #   the Ingest Studio: dag/ (pipelines home and canvas), map/, verify/, publish/
-│   └── design/                 #   tokens.css, primitives
+│   └── design/                 #   the primitives (tokens.css is in packages/design, ADR-152)
 ├── services/
 │   ├── api/                    # The Conduit. FastAPI; the rule gate, held rows, screening, KYC, sweep
 │   ├── ingest/                 # Connectors, the engine, the pipeline runner, Knowledge Adapters
@@ -901,6 +901,7 @@ OspreyFlow_Core/
 │   │                           # recognise_spacy, recognise_transformers, media_objectstore
 │   ├── ontology/               # Schema definition (default.yaml, v16), packs, validation
 │   ├── schemas/                # Shared Pydantic + generated TypeScript types
+│   ├── design/                 # tokens.css, read by the React workspace and the pages (ADR-152)
 │   └── demo_fixtures/          # Synthetic fixtures (rule 9), e.g. Operation Ledger
 ├── connectors/ providers/      # Connector and map-provider profiles (YAML)
 ├── recipes/                    # Published ingest recipes — the repository is the record
@@ -1174,6 +1175,14 @@ the person's bearer. `ws` was already a development dependency of `apps/workspac
 now also a run-time dependency of `apps/pages`, so it is in the service's image. No proxy package
 (`http-proxy`, `express-http-proxy`) is added: the proxy is this service's own, in one file over `ws`.
 Development only: `@types/ws` 8.18.2 (MIT, already a development dependency of `apps/workspace`).
+
+**ADR-152 addition (20 November 2026; slice PL9a) — the `pages` service signs people in.** Run time: `openid-client`
+6.9.0 (MIT; ADR-152 decision 2 names it), which runs the authorisation-code flow with PKCE, `state` and `nonce`
+against the realm; its two dependencies, `oauth4webapi` 3.8.8 (MIT) and `jose` 6.2.18 (MIT), are read at install and
+are on the allowlist. `jose` is also a direct dependency of `apps/pages`: the library does not check an ID token's
+signature (it relies on the token having come straight from the token endpoint), and the service checks it against
+the realm's key set, which is `jose`'s own `createRemoteJWKSet` and `jwtVerify`. No flow is hand-written. The service
+calls no address but the identity provider's own (`OSPREY_PAGES_OIDC_ISSUER`).
 
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the

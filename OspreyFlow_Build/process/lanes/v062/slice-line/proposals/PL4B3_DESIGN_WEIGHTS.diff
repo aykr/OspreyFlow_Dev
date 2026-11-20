@@ -1,0 +1,12 @@
+diff --git a/OspreyFlow_Build/spec/design/DESIGN.md b/OspreyFlow_Build/spec/design/DESIGN.md
+--- a/OspreyFlow_Build/spec/design/DESIGN.md
++++ b/OspreyFlow_Build/spec/design/DESIGN.md
+@@ -53,5 +53,5 @@
+ | Role | Family | Source | Why |
+ |---|---|---|---|
+-| UI | **Atkinson Hyperlegible Next** | Google Fonts, wght 200–800 | Letterform disambiguation is its design purpose: `1 l I`, `0 O`, `rn/m` are drawn to be told apart. Analysts read identifiers all day. Not Inter, and not a fashion pick. |
+-| Mono | **IBM Plex Mono** | Google Fonts, wght 400/500/600 | Wide aperture, clearly differentiated `0/O` and `1/l`, holds up at 11px. Carries all tabular figures. |
++| UI | **Atkinson Hyperlegible Next** | Google Fonts, self-hosted through `@fontsource`, wght 400/600/700 (the list in `packages/design`) | Letterform disambiguation is its design purpose: `1 l I`, `0 O`, `rn/m` are drawn to be told apart. Analysts read identifiers all day. Not Inter, and not a fashion pick. |
++| Mono | **IBM Plex Mono** | Google Fonts, self-hosted through `@fontsource`, wght 400/600 (the list in `packages/design`) | Wide aperture, clearly differentiated `0/O` and `1/l`, holds up at 11px. Carries all tabular figures. |
+
+ Rules:

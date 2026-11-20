@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const css = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "primitives.css"),
+  join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/design/primitives.css"),
   "utf8",
 ).replace(/\/\*[\s\S]*?\*\//g, "");
 

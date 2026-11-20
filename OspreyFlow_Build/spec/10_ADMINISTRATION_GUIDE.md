@@ -303,7 +303,12 @@ environment, installs the command as a uv tool, and records where the checkout i
 not found afterwards, open a new terminal, or run `uv tool update-shell`.
 
 The command finds its checkout by `OSPREYFLOW_HOME` first, then the recorded file, then by looking
-upwards from the folder you are in. Anything it prints that names a password, secret or token is
+upwards from the folder you are in. When the recorded folder wins and the folder you are in is a
+different checkout, the command says so in one line before it acts, naming both folders and the
+`OSPREYFLOW_HOME=<folder>` that chooses the one you are in; it says nothing when they are the same
+folder, when you are in no checkout, or when you set `OSPREYFLOW_HOME` yourself. Running the
+bootstrap again, from a checkout, records that checkout in place of the old one (ADR-114
+Amendment 50). Anything it prints that names a password, secret or token is
 hidden and replaced by a pointer to `deployment.env`.
 
 ## 4. Installing Lite
@@ -3167,6 +3172,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.client_id` | str | required | The Glass's own app registration (application id) |
 | `cloud_platform.claims.api_client_id` | str | required | This API's app registration (application id): the token's audience |
 | `cloud_platform.claims.superset_client_id` | str or none | none | Superset's own app registration (application id), when reporting.superset is on: people sign in to Superset with it, and its delegated token reads the Conduit's GET /v1/me and /v1/me/rights alone |
+| `cloud_platform.claims.pages_client_id` | str or none | none | The pages service's own app registration (application id), when the pages service is on: people sign in to it with it, and its delegated token is the person on every route their rights allow, as the Glass's |
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |

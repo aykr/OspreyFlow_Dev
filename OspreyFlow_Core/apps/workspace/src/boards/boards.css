@@ -1,4 +1,4 @@
-/* Drawing boards (ADR-143 decisions 4 to 7). Tokens only (`design/tokens.css`). A drawn item is dashed
+/* Drawing boards (ADR-143 decisions 4 to 7). Tokens only (`packages/design/tokens.css`). A drawn item is dashed
    amber (`--warning`) everywhere it appears; a loaded item is a solid grey live reference. Under the
    GOV.UK brand the forms use the package's own govuk-* classes; these rules only lay them out. Every
    control is at least 24 by 24 pixels (axe target-size). */

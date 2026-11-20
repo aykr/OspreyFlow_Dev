@@ -1,4 +1,4 @@
-/* *Show as BPMN* (ADR-146 decision 3). Colours from the tokens only (`src/design/tokens.css`). */
+/* *Show as BPMN* (ADR-146 decision 3). Colours from the tokens only (`packages/design/tokens.css`). */
 .show-as-bpmn {
   position: fixed; z-index: 20; left: 50%; top: calc(var(--h-top-bar) + var(--sp-24)); transform: translateX(-50%);
   width: min(600px, calc(100% - var(--sp-16))); box-sizing: border-box;

@@ -265,7 +265,7 @@ def test_started_sign_ins_are_bounded(idp: FakeIdentityProvider) -> None:
         ({"aud": "osprey-glass"}, "token_invalid"),  # minted for another client
         ({"aud": "osprey-conduit"}, "token_invalid"),
         ({"iss": "http://evil.example/realms/osprey"}, "token_invalid"),
-        ({"exp": int(time.time()) - 60}, "token_invalid"),
+        (lambda: {"exp": int(time.time()) - 60}, "token_invalid"),  # taken when the case runs
         ({"nonce": "somebody-elses"}, "nonce_mismatch"),
         ({"roles": "osprey-admin"}, "roles_claim_malformed"),  # a string is not a list of roles
         ({"roles": [1, 2]}, "roles_claim_malformed"),
@@ -274,7 +274,7 @@ def test_started_sign_ins_are_bounded(idp: FakeIdentityProvider) -> None:
 def test_a_token_that_does_not_verify_is_refused(
     idp: FakeIdentityProvider, override: dict, reason: str
 ) -> None:
-    idp.claim_overrides = override
+    idp.claim_overrides = override() if callable(override) else override
     with pytest.raises(SignInRefused) as refused:
         _finish(idp)
     assert refused.value.reason == reason

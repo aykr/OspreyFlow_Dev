@@ -27,7 +27,8 @@
 // ADR-086 Amendment 1: the library's layer, kept here with its y no longer tied to the box's height.
 import bindMaplibreLayer from "./sigmaMaplibreLayer";
 import Graph from "graphology";
-import maplibregl from "maplibre-gl";
+// 6.x is ESM only and has no default export (its 6.0.0 release notes).
+import * as maplibregl from "maplibre-gl";
 import type {
   GeoJSONSource,
   Map as MapLibreMap,
@@ -48,6 +49,7 @@ import { currentTheme, onThemeChange } from "../theme/theme";
 import type { WorkingSetGraph } from "../workingset/store";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { conduitRequest } from "./conduitRequest";
+import { selfHostMaplibreWorker } from "./maplibreWorker";
 import {
   BasemapSwitch,
   CaseGazetteerPanel,
@@ -59,6 +61,9 @@ import { mapStart, type BasemapCentre } from "./mapStart";
 import { overlayColours } from "./overlayColours";
 import { registerAuthorisedPmtilesSource } from "./pmtilesAuth";
 import { glyphsServed, resolveBundledStyle, resolvePmtilesSourceUrl } from "./style";
+
+// Before any map is made (ADR-014 Amendment 2): the worker is the Glass's own file.
+selfHostMaplibreWorker();
 
 const GEO_BINS_SOURCE_ID = "ospreyflow-geo-bins";
 const GEO_BINS_LAYER_ID = "ospreyflow-geo-bins-heat";
@@ -268,6 +273,9 @@ export function MapView({
   // finding, 23 September 2026: a missing local PMTiles build used to leave this view a silent
   // blank canvas rather than telling the operator what to do about it.
   const [basemapUnavailable, setBasemapUnavailable] = useState<string | null>(null);
+  // Set when MapLibre cannot start a graphics context (ADR-014 Amendment 2): 6.x dropped WebGL 1, so a
+  // browser or device without WebGL 2 would otherwise leave this view a blank panel.
+  const [noWebgl2, setNoWebgl2] = useState(false);
   // Nothing in the view has a map position (`mapStart.ts`): said in words over the map.
   const [nothingPlaced, setNothingPlaced] = useState(false);
   // Holds the real teardown for whichever mount actually ran — `mount()` below is async (the
@@ -283,6 +291,7 @@ export function MapView({
     if (!containerRef.current) return;
     const SEQ_HEX = activePalette().seq;
     setBasemapUnavailable(null);
+    setNoWebgl2(false);
     let cancelled = false;
 
     async function mount(): Promise<void> {
@@ -339,11 +348,9 @@ export function MapView({
           : null;
       sigma?.on("clickNode", ({ node }) => onNodeClickRef.current?.(node));
 
-      // `attributionControl: false` is this checkpoint's mitigation for
-      // CVE-2026-85061 (spec/06_DECISIONS.md, ADR-014 amendment) — MapLibre's
-      // own control renders attribution HTML through the broken
-      // `DOM.sanitize()` path; this component renders the same text itself,
-      // below, as a plain (never `innerHTML`) node instead.
+      // `attributionControl: false` stays on 6.x (ADR-014 Amendment 2, decision 2): CVE-2026-85061 is
+      // fixed from 6.4.1, but the trust boundary is now the library's allow list, and this component's
+      // own text node, below, needs no trust in it — no attribution string reaches `innerHTML`.
       //
       // `bindMaplibreLayer`'s own type declares its `sigma` parameter as the
       // library's default-generic `Sigma` (`Sigma<Attributes, Attributes,
@@ -365,19 +372,31 @@ export function MapView({
         : undefined;
 
       const mapOptions = { style, attributionControl: false as const, transformRequest };
-      const layer =
-        sigma !== null
-          ? bindMaplibreLayer(sigma as unknown as Sigma, { mapOptions })
-          : {
-              // Nothing to plot: the graph layer would fit the camera to an undefined box.
-              map: new maplibregl.Map({
-                container: containerRef.current,
-                center: start.kind === "view" ? start.center : [0, 0],
-                zoom: start.kind === "view" ? start.zoom : 1,
-                ...mapOptions,
-              }),
-              clean: () => undefined,
-            };
+      let layer: { map: MapLibreMap; clean: () => void };
+      try {
+        layer =
+          sigma !== null
+            ? bindMaplibreLayer(sigma as unknown as Sigma, { mapOptions })
+            : {
+                // Nothing to plot: the graph layer would fit the camera to an undefined box.
+                map: new maplibregl.Map({
+                  container: containerRef.current,
+                  center: start.kind === "view" ? start.center : [0, 0],
+                  zoom: start.kind === "view" ? start.zoom : 1,
+                  ...mapOptions,
+                }),
+                clean: () => undefined,
+              };
+      } catch (err) {
+        // 6.x needs WebGL 2 and its `Map` throws this without it (ADR-014 Amendment 2, decision 4).
+        // Anything else is not this view's to hide.
+        sigma?.kill();
+        if (err instanceof maplibregl.GPUInitializationError) {
+          if (!cancelled) setNoWebgl2(true);
+          return;
+        }
+        throw err;
+      }
       mapRef.current = layer.map;
       // The graph layer fits the camera to the plotted nodes' own box exactly (its `fitBounds`
       // runs with no padding), so a boundary marker and its label sat clipped at the viewport
@@ -502,7 +521,7 @@ export function MapView({
         style={{
           width: "100%",
           height: "100%",
-          display: basemapUnavailable ? "none" : undefined,
+          display: basemapUnavailable || noWebgl2 ? "none" : undefined,
         }}
       />
       {/* Stage 3a's own rehearsal finding, 23 September 2026: a missing local PMTiles build
@@ -532,7 +551,33 @@ export function MapView({
           </span>
         </div>
       )}
-      {!basemapUnavailable && (
+      {/* MapLibre 6 needs WebGL 2 (ADR-014 Amendment 2): said in words, with what the person can do. */}
+      {noWebgl2 && (
+        <div
+          role="alert"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            padding: 24,
+            textAlign: "center",
+            color: "var(--text-primary)",
+            background: "var(--surface-app)",
+          }}
+        >
+          <strong style={{ color: "var(--warning)" }}>The map needs WebGL 2</strong>
+          <span style={{ fontSize: "var(--fs-11)", color: "var(--text-secondary)" }}>
+            This browser or device does not offer WebGL 2, so the map cannot be drawn. Try another browser, update
+            this one, or turn on hardware acceleration in its settings. The graph and the other views are not
+            affected.
+          </span>
+        </div>
+      )}
+      {!basemapUnavailable && !noWebgl2 && (
         <div
           style={{
             position: "absolute",
@@ -550,7 +595,7 @@ export function MapView({
           {active.licence_note ? ` — ${active.licence_note}` : ""}
         </div>
       )}
-      {!basemapUnavailable && nothingPlaced && (
+      {!basemapUnavailable && !noWebgl2 && nothingPlaced && (
         <div
           role="status"
           style={{

@@ -459,7 +459,8 @@ def test_the_well_formed_entra_token_resolves(keypair, jwks_url) -> None:
         ({"iss": f"https://login.microsoftonline.com/{OTHER_TENANT}/v2.0"}, "issuer"),
         ({"aud": "ffffffff-ffff-4fff-8fff-ffffffffffff"}, "(?i)audience"),
         (
-            {
+            # a callable, so the times are taken when the case runs, not at collection
+            lambda: {
                 "iat": int(time.time()) - 7200,
                 "nbf": int(time.time()) - 7200,
                 "exp": int(time.time()) - 3600,
@@ -471,6 +472,8 @@ def test_the_well_formed_entra_token_resolves(keypair, jwks_url) -> None:
     ids=["no-oid", "no-tid", "other-tenant", "wrong-issuer", "wrong-audience", "expired", "no-exp"],
 )
 def test_a_token_entra_would_not_accept_is_refused(keypair, jwks_url, overrides, why) -> None:
+    if callable(overrides):  # times that depend on the clock are taken here, when the test runs
+        overrides = overrides()
     token = sign_token(_key(keypair), entra_claims(**_GOOD, **overrides))
     with pytest.raises(PrincipalResolutionError, match=why):
         _resolver(jwks_url, BY_EXTENSION).resolve(token)

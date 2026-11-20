@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 const require = createRequire(import.meta.url);
 const FONTS = readFileSync(join(__dirname, "fonts.ts"), "utf-8");
 const MAIN = readFileSync(join(__dirname, "..", "main.tsx"), "utf-8");
-const TOKENS = readFileSync(join(__dirname, "tokens.css"), "utf-8");
+const TOKENS = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");
 
 const WANTED = [
   "@fontsource/atkinson-hyperlegible-next/400.css",
