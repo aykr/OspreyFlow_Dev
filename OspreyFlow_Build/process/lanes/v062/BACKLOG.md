@@ -389,4 +389,12 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   still red, or the merge conflicts, the stop stands for the owner as now. Never counts a round. Tests, red first: a stop whose only
   red is a check fixed on main (cleared, recorded), one still red after the merge (stands), one whose merge conflicts (stands). Related:
   the earlier row on a slice that only needs main merged in to resolve a mechanical conflict.
+- **Rows from the stage 4 scouts (20 Nov):** (1) add the "who can" tip to the React Connect screen and the rights check to the React drawn-merge screen (the
+  pages carry both; the React screens have neither, the owner's ruling); (2) PL10 leaves the Conduit's one multipart route, `POST /v1/investigations/{id}/sites`, to
+  a later slice: recommendation, pass the multipart bytes through unchanged (a Conduit change to raw is ruled out by ADR-152 F1), the owner rules; (3) PL9a leaves
+  `kc_idp_hint` (organisation sign-in, which the Glass takes) to a later slice; (4) the nginx default body size (the template sets no `client_max_body_size`) may
+  refuse uploads above 1 MB through the Glass today, unverified: a live check; (5) `oidc-client-ts` has no named entry in `00_ARCHITECTURE.md` section 7 although
+  the Glass's `userManager.ts` says section 7 is its allowlist; (6) the stale fixed text "move-between-the-four-places" in the Studio keyboard registry (five
+  tabs); (7) keyboard specs are missing for the Releases tab, Connect, Profile, Deduplicate, the source page and the Runs grid (rule 13); (8) CO2 is still not on
+  main, and the Entra half of PL9b waits for it.
 - **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
