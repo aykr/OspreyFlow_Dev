@@ -25,6 +25,7 @@ COPY package.json package-lock.json ./
 COPY apps/workspace/package.json ./apps/workspace/
 COPY apps/harness/package.json ./apps/harness/
 COPY apps/pages/package.json ./apps/pages/
+COPY packages/glass-shared/package.json ./packages/glass-shared/
 RUN npm ci --workspace apps/pages
 
 COPY apps/pages ./apps/pages
@@ -37,6 +38,7 @@ COPY package.json package-lock.json ./
 COPY apps/workspace/package.json ./apps/workspace/
 COPY apps/harness/package.json ./apps/harness/
 COPY apps/pages/package.json ./apps/pages/
+COPY packages/glass-shared/package.json ./packages/glass-shared/
 RUN npm ci --omit=dev --workspace apps/pages && npm cache clean --force
 
 FROM node:22-slim

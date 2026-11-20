@@ -15,11 +15,12 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.27** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.28** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 2.27 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
+| 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
+| 2.27 | 2026-11-20 | Appendix A: `cloud_platform.claims.pages_client_id`, the `pages` service's own app registration, whose delegated token the Conduit admits as the person on every route their rights allow, as the Glass's (ADR-152 decision 11, X1); the Conduit half only, the `pages` service and its render's refusal come later. Version set at merge. |
 | 2.26 | 2026-11-18 | §6a.1 and the version history: the managed-platform install's RDS module named as the UK public sector client's, not by the client's own name (the owner's ruling of 18 November 2026, the client's name kept to the notices); nothing else changed. |
 | 2.25 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 2.24 | 2026-11-16 | §6a.7's Superset: a Reports Viewer is Superset's OspreyReader, which reads and changes nothing there (Superset's own Gamma saves dashboards and charts; found by v0.6.0's package test, the owner's ruling of 16 November), and every account holds it; a builder (`manage_dashboards`) reads the whole reporting mart in their own session, so the right is for people cleared for every dashboard identity's cases (ADR-148 Amendment 21). |
@@ -3359,6 +3360,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.client_id` | str | required | The Glass's own app registration (application id) |
 | `cloud_platform.claims.api_client_id` | str | required | This API's app registration (application id): the token's audience |
 | `cloud_platform.claims.superset_client_id` | str or none | none | Superset's own app registration (application id), when reporting.superset is on: people sign in to Superset with it, and its delegated token reads the Conduit's GET /v1/me and /v1/me/rights alone |
+| `cloud_platform.claims.pages_client_id` | str or none | none | The pages service's own app registration (application id), when the pages service is on: people sign in to it with it, and its delegated token is the person on every route their rights allow, as the Glass's |
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |

@@ -40841,7 +40841,10 @@ bus. Built and shown red-then-green on `lane/slice-line-setup`, merged on 18 Nov
 `OspreyFlow_Build/tests/test_release_owed.py` for the release refusal.
 
 **Cost.** A merge waits for the full gate (about 22 minutes on the Mac on 17 November: the environment, `make -k ci`
-632 s, `make test` 410 s) and for main's own gate to be green: while main is red, every merge is refused. While the
+632 s, `make test` 410 s), and for nothing else: GitHub's run on main is a second opinion, not a gate (the owner, 20 November
+2026). The Mac's full gate alone decides a merge, whatever GitHub's last run says; every merge is pushed, waiting only while a
+run is in progress; a red run is rerun once; only a test of ours failing twice stops merging, until the owner clears it; and a
+release still needs GitHub green on the commit released. While the
 live step is off, live tests are owed rather than run, and a release waits for them. Shell commands are judged by
 their text, so the merge script's diff check, not the guard, is the backstop for a computed path.
 

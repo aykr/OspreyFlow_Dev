@@ -397,4 +397,37 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   the Glass's `userManager.ts` says section 7 is its allowlist; (6) the stale fixed text "move-between-the-four-places" in the Studio keyboard registry (five
   tabs); (7) keyboard specs are missing for the Releases tab, Connect, Profile, Deduplicate, the source page and the Runs grid (rule 13); (8) CO2 is still not on
   main, and the Entra half of PL9b waits for it.
+- **Small slice after PL10 merges (the owner's ruling, 20 Nov): decouple the page service's public origin from the Conduit address.** Today
+  `config.ts` ties them (`streamSettings` throws when `OSPREY_PAGES_CONDUIT_URL` is set and `OSPREY_PAGES_PUBLIC_ORIGIN` is not: CO3's start refusal), so the HTTP
+  forwarder (PL10) needs a setting it does not use. Change: the forwarder needs only the Conduit address; the stream proxy needs the public origin and is **absent**
+  without it (every upgrade 404, in a log line in words); CO3's refusal test changes with it (`apps/pages/test/server/stream.test.ts`: "the service refuses to start in words
+  with the Conduit address set and no public origin" becomes "with no public origin the stream is absent and the forwarder still serves"). Red first on both halves. After PL10; not
+  in its round 2.
 - **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
+- **Line gap (20 Nov, PL9a's verifier start):** `common.write_json` writes through a fixed temp name (`<file>.tmp`) then `os.replace`. `run_seat.py`'s `record_limits` writes the
+  account file (`accounts/sol.json`) from every seat of that account, so two or more seats of one account that report their limits at the same moment race on `sol.json.tmp`:
+  one replaces it, the other finds it gone and the seat's launcher dies with `FileNotFoundError` seconds after starting (PL9a's verifier, started with PL4a's, PL2a's and PL10's seats).
+  No child process was left behind; the seat was restarted by hand and ran. Fix for the line's own session: a temp name unique per writer (pid and a counter) in `write_json`,
+  or a lock around the account file; test: two threads writing the same file, red on the fixed name. Until then the conductor starts same-account seats a few seconds apart.
+- **Line gap (the owner, 20 Nov, 10(a)): the builder's Stop check always runs lint and the scan-map check, whatever the brief's checks say.** PL1a went through a builder, a verifier and
+  a pass, then its full gate went red in the first minute on one docstring line of 101 characters (`ruff` E501 in `cli/ospreyflow/home.py` under `OspreyFlow_Core`), because its checks command never ran
+  ruff; CO2, PL2a, PL2b and PL4a would each have been refused at merge for a test with no scan-map row. The Stop check should run, on the files the branch changes: `ruff check` (the repository's
+  settings, `OspreyFlow_Core` only: nothing in `OspreyFlow_Build` is linted by ruff), `npm run lint` on the changed script files, and `scan_select.unmapped` for every test the branch adds
+  (with the slice's waiting row applied in memory). Until then the conductor runs the same three before a slice joins the merge queue (the conductor's helper, in its scratchpad).
+- **Line gap (the owner, 20 Nov, 10(b)): a slice whose only open finding is a test gap is offered to the standing accept before it is sent to another round.** PL9a's round-3 verifier found one
+  gap in a test (the success path never asserts the login cookie is cleared); `run_seat.py` tried the standing accept while PL1a's merge held the lock ("another merge is running"), the
+  slice went to round 4, and `resume.py PL9a accept` then refused ("not waiting on its verifier's findings"). Fix: when the accept is refused only for the lock, the slice stays in `verifying`
+  and the accept is retried when the lock is free, before any round is spent.
+- **New small slice, to be cut in the Ground lane (the owner, 20 Nov): a gate check that no secret-named setting has a literal value in any tracked file.** The check fails if any setting whose
+  name ends in `_SECRET`, `_KEY`, `_TOKEN` or `_PASSWORD` has a literal value in any tracked file (examples, compose files, fixtures, tests), with a planted fault (the shape the check really sees at its own
+  call site, rule 15; red first, then green on the real tree). Tests that need a value generate it at run time. **It closes two open items for good:** PL9a's gap in a test (brief item 5: no value of the
+  new `OSPREY_PAGES_CLIENT_SECRET` committed anywhere; accepted narrower on the standing word) and PL3's fixed secret-shaped string in a test plant (the 20 November ruling had it fixed in the next slice that touches
+  `apps/pages`; this check makes that ruling a gate). To settle when it is cut: which existing literal values are legitimate (empty values, placeholders and `${...}` references are not literals) and how they
+  are listed; whether the check joins `make ci` (rule 15: only after it has been shown red).
+- **ADR-152 I9 has no proof on main (found 20 Nov while writing PL4b3's brief).** The four proof pieces the ADR names for "the default tree never shows the crown, the GOV.UK logotype or the GOV.UK typeface" do not exist:
+  `tests/glass_trees/test_default_tree_carries_no_govuk_assets.py`, `apps/pages/test/govuk/identity.spec.ts`, `test_govuk_identity_is_off_by_default` in `tests/harness/`, and a `govuk_identity` case in `apps/workspace/src/brand/brand.test.tsx`
+  (the first two are in the citation allowlist as deliberately absent). Owner: the build that adds the default tree's assets (the first page build that loads a stylesheet or font, PL7) owns all four, named as a prerequisite in its brief. PL4b3 carries
+  only the font half (no `GDS Transport` in anything `apps/pages` serves) and says so.
+- **Release notes for v0.6.2 (the owner, 20 Nov): name SE5's fix in plain words.** Draft for the notes, to be checked against the builder's report: "A change of an AI model's address that failed part-way could leave the model's entries at the new address while the
+  record still said the old one, so a key entered afterwards could be sent to an address it was not entered for. A failed change now removes what it made or marks the model unavailable and says so, and start-up checks every entry's address against the record." (SE5; found on main by a scout on 20 November.)
+- **AD1a's key-path table must include the SE5 case (the owner, 20 Nov, item 6):** a failed or interrupted address change followed by a failed undo and a later key set (the main-code fault SE5 fixes). AD1a merges main in after SE5 and keeps the stronger behaviour of the two.

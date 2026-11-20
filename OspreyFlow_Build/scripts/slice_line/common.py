@@ -362,7 +362,8 @@ def allocate_slot(slice_id: str) -> int:
     raise SystemExit("No Playwright port slot is free for a new slice: the owner frees one (a merged or removed slice).")
 
 
-#: main's GitHub run (F2): the latest completed run on main, read with gh. Never taken as green unless it says success.
+#: main's GitHub run (F2): the latest completed run on main, read with gh. Never taken as green unless it says success;
+#: recorded at each merge, never a reason to refuse one (LINE_FIXES_4_BRIEF.md, 1a).
 GH_FIELDS = "databaseId,conclusion,status,url"
 
 
@@ -377,9 +378,45 @@ def _gh_runs(*args: str) -> list[dict]:
     return runs
 
 
+#: A test of ours failing twice on GitHub (1c): the stop that holds every merge until the owner clears it
+#: (clear_github_stop.py), each run's failing tests as watch-github read them, and the owner's clears, for audit
+#: (owner-changes.tsv's sibling). All in the data folder, which the guard keeps every agent from writing.
+GITHUB_STOP = DATA / "github.stopped.json"
+GITHUB_RECORDS = RECORDS / "github"
+GITHUB_CLEARS = DATA / "github-stop-clears.tsv"
+
+
+def github_stop_words(stop: dict | None) -> str:
+    """The stop, in the words a refused merge and the board give: the test, the job, the commit, both runs."""
+    if not stop:
+        return (f"{GITHUB_STOP} is there but cannot be read: merging stays stopped until the owner looks at it and "
+                "clears it (clear_github_stop.py).")
+    runs = " and ".join(f"run {r.get('run')} attempt {r.get('attempt')}" for r in stop.get("runs", []))
+    more = f" (and {len(stop['tests']) - 1} more)" if len(stop.get("tests") or []) > 1 else ""
+    return (f"a test of ours failed twice on GitHub on one commit: {stop.get('test')}{more}, in job {stop.get('job')}, "
+            f"at commit {str(stop.get('commit'))[:10]} ({runs}). Merging is stopped until the owner clears it "
+            "(clear_github_stop.py) once it is dealt with.")
+
+
+def main_runs_going() -> str:
+    """'in progress' or 'queued' when a run on main is, as the push script asks gh (`gh run list --branch main --status
+    in_progress|queued --json databaseId`); '' when none is. gh that cannot be read is no run going, as for the push
+    script: a push is held back only by a run a new push would cancel."""
+    for status, said in (("in_progress", "in progress"), ("queued", "queued")):
+        try:
+            p = subprocess.run(["gh", "run", "list", "--branch", "main", "--status", status, "--json", "databaseId"],
+                               cwd=str(REPO), capture_output=True, text=True, timeout=60)
+            if p.returncode == 0 and json.loads(p.stdout):
+                return said
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    return ""
+
+
 def main_ci() -> dict:
     """{state: green | red | unknown, run, url, why}: red for a failed run, or a cancelled one with nothing newer;
-    unknown when gh cannot be read or no run has completed (refused like red, never taken as green)."""
+    unknown when gh cannot be read or no run has completed (never taken as green). A record and a note on the board,
+    never a merge's gate (the owner, 20 November 2026)."""
     try:
         done = _gh_runs("--status", "completed")
         if not done:

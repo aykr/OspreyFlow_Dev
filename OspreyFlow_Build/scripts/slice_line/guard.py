@@ -92,7 +92,7 @@ ALLOWED_SCRIPT = re.compile(
     r"^\s*(?:[\w./~\-]*python[\d.]*\s+)?[\w./~\-]*OspreyFlow_Build/scripts/slice_line/"
     r"(merge_slice|run_seat|slice_start|board|resume)\.py(?:\s+[^;&|`$()<>\n]*)?\s*$"
 )
-OWNER_SCRIPTS = re.compile(r"\b(refreeze\.py|install\.sh|push_main\.sh|clear_account\.py)\b")
+OWNER_SCRIPTS = re.compile(r"\b(refreeze\.py|install\.sh|push_main\.sh|clear_account\.py|clear_github_stop\.py)\b")
 
 
 class Refuse(Exception):
@@ -275,8 +275,8 @@ def check_bash(cmd: str, seat: str, cwd: str) -> None:
     if ALLOWED_SCRIPT.match(raw) and seat in ("", "conductor"):
         return  # the line's own scripts, run whole (nothing chained), by the conductor or the owner's session
     if OWNER_SCRIPTS.search(cmd):
-        raise Refuse("refreeze.py, install.sh, push_main.sh and clear_account.py are run by the owner (or, for the "
-                     "push, by the merge script after a merge), never by an agent.")
+        raise Refuse("refreeze.py, install.sh, push_main.sh, clear_account.py and clear_github_stop.py are run by the "
+                     "owner (or, for the push, by the merge script after a merge), never by an agent.")
     if re.search(r"\bgit\b[^;&|\n]*\bpush\b", cmd) or re.search(r"\bgh\s+repo\s+sync\b", cmd):
         raise Refuse("agents never push. main reaches origin only through the merge script's push step.")
     if re.search(r"\bgit\b[^;&|\n]*\bremote\s+(add|set-url|rename|remove|rm|set-head|set-branches)\b", cmd):
