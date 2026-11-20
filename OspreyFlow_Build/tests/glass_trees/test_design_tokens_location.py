@@ -26,11 +26,14 @@ file that held it. A plant that some other rule would also have caught proves no
 same file with the new path clean.
 """
 
+# The planted lines below are the real call-site shapes, kept on one line as the tree wrote them (rule 15), and the
+# prose beside them names whole paths: neither is wrapped. `OspreyFlow_Build` is not under ruff's line-length rule.
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import difflib
 import re
-import shutil
 import subprocess
 from collections import Counter
 from collections.abc import Callable, Iterable
@@ -96,13 +99,16 @@ def old_path_mentions(root: Path, rels: Iterable[str]) -> list[tuple[str, int, s
 
 
 def tracked(root: Path = ROOT) -> list[str]:
-    out = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True, check=True).stdout
+    out = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z"], capture_output=True, check=True
+    ).stdout
     return sorted(name for name in out.decode("utf-8").split("\0") if name)
 
 
 def _kept_out(rel: str) -> bool:
-    """History and the named exceptions are not looked at. The rules file is under `process/` but is no record: it is
-    kept out by its name alone, so it is looked at again the day it leaves `NAMED`."""
+    """History and the named exceptions are not looked at. The rules file is under `process/` but is no record: it
+    is kept out by its name in `NAMED` alone, and `test_every_named_exception_still_has_its_reason` turns red the
+    day it no longer names the old path, so that it is looked at again."""
     if rel in NAMED:
         return True
     if rel == "OspreyFlow_Build/process/CLAUDE.md":
@@ -112,7 +118,9 @@ def _kept_out(rel: str) -> bool:
 
 # ----------------------------------------------------------------------------------------------------- the imports
 
-_IMPORT = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*|@import\s+(?:url\()?\s*)["']([^"']*tokens\.css[^"']*)["']""")
+_IMPORT = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(?\s*|@import\s+(?:url\()?\s*)["']([^"']*tokens\.css[^"']*)["']"""
+)
 _SOURCE_SUFFIXES = {".ts", ".tsx", ".mts", ".mjs", ".js", ".jsx", ".css"}
 
 
@@ -167,26 +175,50 @@ def test_the_tokens_are_in_packages_design_and_not_in_the_workspace() -> None:
 
 def test_no_tracked_file_names_the_old_path() -> None:
     rels = [rel for rel in tracked() if not _kept_out(rel)]
-    assert len(rels) > 1000, "the walk found too few files: git ls-files is not listing the repository"
+    assert len(rels) > 1000, (
+        "the walk found too few files: git ls-files is not listing the repository"
+    )
     found = old_path_mentions(ROOT, rels)
     shown = "\n".join(f"  {rel}:{line}: {text[:140]}" for rel, line, text in found[:40])
-    assert found == [], f"{len(found)} place(s) still name the old path; the file is now {NEW_REL}:\n{shown}"
+    assert found == [], (
+        f"{len(found)} place(s) still name the old path; the file is now {NEW_REL}:\n{shown}"
+    )
+
+
+def test_every_named_exception_still_has_its_reason() -> None:
+    """An exception outlives its reason when the file it excuses no longer names the old path (the owner applied
+    `PL4B_RULES_ROW.diff` to the rules file, say). Left in `NAMED` it keeps that file outside the walk, and the old
+    path could be written back into it unseen (rule 12). Each name must still hold the old path; when one does not,
+    remove it from `NAMED`."""
+    stale = [rel for rel in NAMED if not old_path_mentions(ROOT, [rel])]
+    assert stale == [], (
+        f"{stale} no longer name the old path: remove them from NAMED, and the walk will cover them"
+    )
 
 
 def test_every_import_of_a_tokens_file_reaches_the_one_file() -> None:
     bad, seen = imports_not_reaching(ROOT, tracked())
-    assert seen >= 2, "the walk found no import of a tokens file: the pattern no longer matches the sources"
+    assert seen >= 2, (
+        "the walk found no import of a tokens file: the pattern no longer matches the sources"
+    )
     assert bad == [], f"{len(bad)} import(s) do not reach {NEW_REL}: {bad[:10]}"
     # The two entrances of the two front ends are among those looked at, whatever the count.
-    for entrance in ("OspreyFlow_Core/apps/workspace/src/main.tsx", "OspreyFlow_Core/apps/harness/src/main.tsx"):
-        assert imports_not_reaching(ROOT, [entrance])[1] == 1, f"{entrance} does not import the tokens once"
+    for entrance in (
+        "OspreyFlow_Core/apps/workspace/src/main.tsx",
+        "OspreyFlow_Core/apps/harness/src/main.tsx",
+    ):
+        assert imports_not_reaching(ROOT, [entrance])[1] == 1, (
+            f"{entrance} does not import the tokens once"
+        )
 
 
 def test_the_two_images_copy_packages_design() -> None:
     workspace = (ROOT / WORKSPACE_DOCKERFILE).read_text(encoding="utf-8")
     harness = (ROOT / HARNESS_DOCKERFILE).read_text(encoding="utf-8")
     assert copies_design(workspace), "apps/workspace/Dockerfile does not COPY packages/design"
-    assert copies_design(harness, "frontend-builder"), "harness/Dockerfile's frontend-builder does not COPY packages/design"
+    assert copies_design(harness, "frontend-builder"), (
+        "harness/Dockerfile's frontend-builder does not COPY packages/design"
+    )
 
 
 # The install-page stamp (`apps/harness/scripts/stamp.mjs` and `harness/install_page_build.py` list the same folders; the
@@ -203,8 +235,12 @@ def test_both_stamp_lists_name_packages_design() -> None:
     from harness import install_page_build
 
     assert "packages/design" in _node_sources(), "stamp.mjs does not stamp packages/design"
-    assert "packages/design" in install_page_build.SOURCES, "install_page_build.py does not stamp packages/design"
-    assert sorted(_node_sources()) == sorted(install_page_build.SOURCES), "the two stamp lists differ"
+    assert "packages/design" in install_page_build.SOURCES, (
+        "install_page_build.py does not stamp packages/design"
+    )
+    assert sorted(_node_sources()) == sorted(install_page_build.SOURCES), (
+        "the two stamp lists differ"
+    )
 
 
 _PRODUCT = "OspreyFlow_Core/"
@@ -214,7 +250,9 @@ _NEW_SOURCES = (*_OLD_SOURCES, "packages/design")
 
 
 def _git(*args: str) -> str:
-    return subprocess.run(["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True).stdout
+    return subprocess.run(
+        ["git", "-C", str(ROOT), *args], capture_output=True, text=True, check=True
+    ).stdout
 
 
 def _stamped(commit: str, sources: tuple[str, ...]) -> dict[str, str]:
@@ -223,26 +261,40 @@ def _stamped(commit: str, sources: tuple[str, ...]) -> dict[str, str]:
     for source in sources:
         for line in _git("ls-tree", "-r", commit, "--", _PRODUCT + source).splitlines():
             meta, path = line.split("\t", 1)
-            parts = path[len(_PRODUCT):].split("/")
+            parts = path[len(_PRODUCT) :].split("/")
             if any(p.startswith(".") or p in {"node_modules", "Icon\r"} for p in parts):
                 continue
-            found[path[len(_PRODUCT):]] = meta.split()[2]
+            found[path[len(_PRODUCT) :]] = meta.split()[2]
     return found
 
 
 def _move_commit() -> str | None:
-    out = _git("log", "--follow", "-M100%", "--diff-filter=R", "--format=%H", "-1", "--", NEW_REL).strip()
+    out = _git(
+        "log", "--follow", "-M100%", "--diff-filter=R", "--format=%H", "-1", "--", NEW_REL
+    ).strip()
     return out or None
 
 
-def more_than_the_path(paths: Iterable[str], was: Callable[[str], str], now: Callable[[str], str]) -> list[str]:
+def more_than_the_path(
+    paths: Iterable[str], was: Callable[[str], str], now: Callable[[str], str]
+) -> list[str]:
     """The stamped files, of those named, that differ in more than the lines naming `tokens.css`."""
     problems = []
     for path in paths:
-        changes = [d for d in difflib.ndiff(was(path).splitlines(), now(path).splitlines()) if d[:2] in {"- ", "+ "}]
+        changes = [
+            d
+            for d in difflib.ndiff(was(path).splitlines(), now(path).splitlines())
+            if d[:2] in {"- ", "+ "}
+        ]
         removed = sum(d[:2] == "- " for d in changes)
-        if not changes or removed * 2 != len(changes) or not all("tokens.css" in d for d in changes):
-            problems.append(f"{path}: {[d for d in changes if 'tokens.css' not in d] or 'lines added or removed'}")
+        if (
+            not changes
+            or removed * 2 != len(changes)
+            or not all("tokens.css" in d for d in changes)
+        ):
+            problems.append(
+                f"{path}: {[d for d in changes if 'tokens.css' not in d] or 'lines added or removed'}"
+            )
     return problems
 
 
@@ -254,7 +306,9 @@ def test_a_stamped_file_changed_in_more_than_the_tokens_path_is_found() -> None:
     moved_and_more = 'import "../../../packages/design/tokens.css";\nimport "./other.css";\n'
     assert more_than_the_path(["main.tsx"], lambda _: old, lambda _: moved) == []
     assert len(more_than_the_path(["main.tsx"], lambda _: old, lambda _: moved_and_more)) == 1
-    assert len(more_than_the_path(["main.tsx"], lambda _: old, lambda _: old + "x\n")) == 1  # a line added
+    assert (
+        len(more_than_the_path(["main.tsx"], lambda _: old, lambda _: old + "x\n")) == 1
+    )  # a line added
 
 
 def test_the_move_changed_no_stamped_byte_but_the_paths() -> None:
@@ -265,23 +319,40 @@ def test_the_move_changed_no_stamped_byte_but_the_paths() -> None:
     if _git("rev-parse", "--is-shallow-repository").strip() == "true":
         pytest.skip("a shallow clone has no history: the move commit cannot be read")
     commit = _move_commit()
-    assert commit, "no commit in history moved tokens.css to packages/design as a pure rename (the file bytes unchanged)"
+    assert commit, (
+        "no commit in history moved tokens.css to packages/design as a pure rename (the file bytes unchanged)"
+    )
     before, after = _stamped(f"{commit}^", _OLD_SOURCES), _stamped(commit, _NEW_SOURCES)
-    old_in_stamp, new_in_stamp = "apps/workspace/src/design/tokens.css", "packages/design/tokens.css"
+    old_in_stamp, new_in_stamp = (
+        "apps/workspace/src/design/tokens.css",
+        "packages/design/tokens.css",
+    )
     assert old_in_stamp in before and new_in_stamp in after
-    assert before[old_in_stamp] == after[new_in_stamp], "the tokens file's bytes changed in the move"
-    gone, came = Counter(before.values()) - Counter(after.values()), Counter(after.values()) - Counter(before.values())
-    differing = sorted({p for p, blob in before.items() if gone[blob]} | {p for p, blob in after.items() if came[blob]})
+    assert before[old_in_stamp] == after[new_in_stamp], (
+        "the tokens file's bytes changed in the move"
+    )
+    gone, came = (
+        Counter(before.values()) - Counter(after.values()),
+        Counter(after.values()) - Counter(before.values()),
+    )
+    differing = sorted(
+        {p for p, blob in before.items() if gone[blob]}
+        | {p for p, blob in after.items() if came[blob]}
+    )
     # A stamped file whose bytes had to change is one that names the tokens file: the harness entrance, and the Vitest
     # readers in the stamped folders. In each, only the lines that name `tokens.css` differ, the same number each side.
-    assert "apps/harness/src/main.tsx" in differing, f"the harness entrance is not among the changed files: {differing}"
+    assert "apps/harness/src/main.tsx" in differing, (
+        f"the harness entrance is not among the changed files: {differing}"
+    )
     problems = more_than_the_path(
         differing,
         lambda path: _git("show", f"{commit}^:{_PRODUCT}{path}"),
         lambda path: _git("show", f"{commit}:{_PRODUCT}{path}"),
     )
     assert problems == [], problems
-    assert set(after) - set(before) == {new_in_stamp}, "a stamped file other than the tokens appeared"
+    assert set(after) - set(before) == {new_in_stamp}, (
+        "a stamped file other than the tokens appeared"
+    )
     assert set(before) - set(after) == {old_in_stamp}, "a stamped file other than the tokens went"
 
 
@@ -293,7 +364,9 @@ def test_the_move_changed_no_stamped_byte_but_the_paths() -> None:
 SCANNED_BEFORE_THE_MOVE = 482
 
 
-def test_the_colour_drift_check_scans_no_fewer_files_than_before(capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_colour_drift_check_scans_no_fewer_files_than_before(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     assert colour_drift_check.scanned_count() >= SCANNED_BEFORE_THE_MOVE
     colour_drift_check.main()
     said = re.search(r"scanned (\d+) files", capsys.readouterr().out)
@@ -314,39 +387,67 @@ def _tree(tmp_path: Path, files: dict[str, str]) -> list[str]:
 
 #: (id, file, the old line, the same line at the new place)
 READERS = [
-    ("vitest-join-from-dirname", "OspreyFlow_Core/apps/workspace/src/brand/govuk/GovukHeader.test.tsx",
-     'const tokens = readFileSync(join(__dirname, "../../design/tokens.css"), "utf-8");',
-     'const tokens = readFileSync(join(__dirname, "../../../../../packages/design/tokens.css"), "utf-8");'),
-    ("vitest-url", "OspreyFlow_Core/apps/workspace/src/color/tokens.test.ts",
-     'const TOKENS_CSS_PATH = new URL("../design/tokens.css", import.meta.url).pathname;',
-     'const TOKENS_CSS_PATH = new URL("../../../../packages/design/tokens.css", import.meta.url).pathname;'),
-    ("vitest-segments", "OspreyFlow_Core/apps/workspace/src/home/homeKey.test.ts",
-     'const tokens = strip(readFileSync(join(here, "..", "design", "tokens.css"), "utf8"));',
-     'const tokens = strip(readFileSync(join(here, "..", "..", "..", "..", "packages", "design", "tokens.css"), "utf8"));'),
-    ("vitest-bare-name-in-the-old-folder", "OspreyFlow_Core/apps/workspace/src/design/fonts.test.ts",
-     'const TOKENS = readFileSync(join(__dirname, "tokens.css"), "utf-8");',
-     'const TOKENS = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");'),
-    ("python-segments", "OspreyFlow_Build/tests/test_superset_theme.py",
-     'TOKENS = (CORE / "apps" / "workspace" / "src" / "design" / "tokens.css").read_text(encoding="utf-8")',
-     'TOKENS = (CORE / "packages" / "design" / "tokens.css").read_text(encoding="utf-8")'),
-    ("python-path-constructor", "OspreyFlow_Core/harness/keycloak_theme.py",
-     'TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.css"',
-     'TOKENS_RELATIVE_PATH = Path("packages") / "design" / "tokens.css"'),
-    ("python-slashed-string", "OspreyFlow_Build/tests/test_refresh_search_rebuild.py",
-     '    (repo / "apps/workspace/src/design/tokens.css").write_text(":root {}\\n", encoding="utf-8")',
-     '    (repo / "packages/design/tokens.css").write_text(":root {}\\n", encoding="utf-8")'),
-    ("guide-prose", "OspreyFlow_Build/spec/05_DEPLOYMENT.md",
-     "the same tokens (`apps/workspace/src/design/tokens.css`) so the journey does not change",
-     "the same tokens (`packages/design/tokens.css`) so the journey does not change"),
+    (
+        "vitest-join-from-dirname",
+        "OspreyFlow_Core/apps/workspace/src/brand/govuk/GovukHeader.test.tsx",
+        'const tokens = readFileSync(join(__dirname, "../../design/tokens.css"), "utf-8");',
+        'const tokens = readFileSync(join(__dirname, "../../../../../packages/design/tokens.css"), "utf-8");',
+    ),
+    (
+        "vitest-url",
+        "OspreyFlow_Core/apps/workspace/src/color/tokens.test.ts",
+        'const TOKENS_CSS_PATH = new URL("../design/tokens.css", import.meta.url).pathname;',
+        'const TOKENS_CSS_PATH = new URL("../../../../packages/design/tokens.css", import.meta.url).pathname;',
+    ),
+    (
+        "vitest-segments",
+        "OspreyFlow_Core/apps/workspace/src/home/homeKey.test.ts",
+        'const tokens = strip(readFileSync(join(here, "..", "design", "tokens.css"), "utf8"));',
+        'const tokens = strip(readFileSync(join(here, "..", "..", "..", "..", "packages", "design", "tokens.css"), "utf8"));',
+    ),
+    (
+        "vitest-bare-name-in-the-old-folder",
+        "OspreyFlow_Core/apps/workspace/src/design/fonts.test.ts",
+        'const TOKENS = readFileSync(join(__dirname, "tokens.css"), "utf-8");',
+        'const TOKENS = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");',
+    ),
+    (
+        "python-segments",
+        "OspreyFlow_Build/tests/test_superset_theme.py",
+        'TOKENS = (CORE / "apps" / "workspace" / "src" / "design" / "tokens.css").read_text(encoding="utf-8")',
+        'TOKENS = (CORE / "packages" / "design" / "tokens.css").read_text(encoding="utf-8")',
+    ),
+    (
+        "python-path-constructor",
+        "OspreyFlow_Core/harness/keycloak_theme.py",
+        'TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.css"',
+        'TOKENS_RELATIVE_PATH = Path("packages") / "design" / "tokens.css"',
+    ),
+    (
+        "python-slashed-string",
+        "OspreyFlow_Build/tests/test_refresh_search_rebuild.py",
+        '    (repo / "apps/workspace/src/design/tokens.css").write_text(":root {}\\n", encoding="utf-8")',
+        '    (repo / "packages/design/tokens.css").write_text(":root {}\\n", encoding="utf-8")',
+    ),
+    (
+        "guide-prose",
+        "OspreyFlow_Build/spec/05_DEPLOYMENT.md",
+        "the same tokens (`apps/workspace/src/design/tokens.css`) so the journey does not change",
+        "the same tokens (`packages/design/tokens.css`) so the journey does not change",
+    ),
 ]
 
 
 @pytest.mark.parametrize(("name", "rel", "old", "new"), READERS, ids=[r[0] for r in READERS])
-def test_a_reader_that_names_the_old_path_is_found(tmp_path: Path, name: str, rel: str, old: str, new: str) -> None:
+def test_a_reader_that_names_the_old_path_is_found(
+    tmp_path: Path, name: str, rel: str, old: str, new: str
+) -> None:
     clean = _tree(tmp_path, {rel: f"{new}\n"})
     assert old_path_mentions(tmp_path, clean) == [], f"the new-path form of {name} must be clean"
     _tree(tmp_path, {rel: f"// before\n{old}\n"})
-    assert [(r, n) for r, n, _ in old_path_mentions(tmp_path, [rel])] == [(rel, 2)], f"{name} was not found"
+    assert [(r, n) for r, n, _ in old_path_mentions(tmp_path, [rel])] == [(rel, 2)], (
+        f"{name} was not found"
+    )
 
 
 def test_the_old_path_is_found_when_a_python_path_breaks_across_lines(tmp_path: Path) -> None:
@@ -364,30 +465,53 @@ def test_the_bare_name_is_only_the_old_path_inside_the_old_folder(tmp_path: Path
 
 
 def test_a_still_older_spelling_is_not_this_moves_to_chase(tmp_path: Path) -> None:
-    rels = _tree(tmp_path, {"OspreyFlow_Core/x.ts": "// `spec/design/tokens.css` and packages/design/tokens.css\n"})
+    rels = _tree(
+        tmp_path,
+        {"OspreyFlow_Core/x.ts": "// `spec/design/tokens.css` and packages/design/tokens.css\n"},
+    )
     assert old_path_mentions(tmp_path, rels) == []
 
 
 IMPORTS = [
-    ("the workspace entrance", "OspreyFlow_Core/apps/workspace/src/main.tsx", 'import "./design/tokens.css";',
-     'import "../../../packages/design/tokens.css";'),
-    ("a showcase", "OspreyFlow_Core/apps/workspace/a11y/showcase.tsx", 'import "../src/design/tokens.css";',
-     'import "../../../packages/design/tokens.css";'),
-    ("the harness entrance", "OspreyFlow_Core/apps/harness/src/main.tsx",
-     'import "../../../apps/workspace/src/design/tokens.css";', 'import "../../../packages/design/tokens.css";'),
-    ("a harness spec's page", "OspreyFlow_Core/apps/harness/keyboard/setup-harness.tsx",
-     'import "../../../apps/workspace/src/design/tokens.css";', 'import "../../../packages/design/tokens.css";'),
+    (
+        "the workspace entrance",
+        "OspreyFlow_Core/apps/workspace/src/main.tsx",
+        'import "./design/tokens.css";',
+        'import "../../../packages/design/tokens.css";',
+    ),
+    (
+        "a showcase",
+        "OspreyFlow_Core/apps/workspace/a11y/showcase.tsx",
+        'import "../src/design/tokens.css";',
+        'import "../../../packages/design/tokens.css";',
+    ),
+    (
+        "the harness entrance",
+        "OspreyFlow_Core/apps/harness/src/main.tsx",
+        'import "../../../apps/workspace/src/design/tokens.css";',
+        'import "../../../packages/design/tokens.css";',
+    ),
+    (
+        "a harness spec's page",
+        "OspreyFlow_Core/apps/harness/keyboard/setup-harness.tsx",
+        'import "../../../apps/workspace/src/design/tokens.css";',
+        'import "../../../packages/design/tokens.css";',
+    ),
 ]
 
 
 @pytest.mark.parametrize(("name", "rel", "old", "new"), IMPORTS, ids=[i[0] for i in IMPORTS])
-def test_an_import_that_does_not_reach_the_one_file_is_found(tmp_path: Path, name: str, rel: str, old: str, new: str) -> None:
+def test_an_import_that_does_not_reach_the_one_file_is_found(
+    tmp_path: Path, name: str, rel: str, old: str, new: str
+) -> None:
     _tree(tmp_path, {NEW_REL: ":root{}\n", rel: f"{new}\n"})
     # `new` is written for a file three folders below the product; place it so that it resolves from `rel`.
     depth = len(Path(rel).parts) - 2  # below OspreyFlow_Core
     fitted = new.replace("../../../", "../" * depth)
     _tree(tmp_path, {rel: f"{fitted}\n"})
-    assert imports_not_reaching(tmp_path, [rel]) == ([], 1), f"the new-path form of {name} must resolve"
+    assert imports_not_reaching(tmp_path, [rel]) == ([], 1), (
+        f"the new-path form of {name} must resolve"
+    )
     _tree(tmp_path, {rel: f"import React from 'react';\n{old}\n"})
     bad, seen = imports_not_reaching(tmp_path, [rel])
     assert seen == 1 and len(bad) == 1, f"{name}: the old import was not found"
@@ -410,7 +534,10 @@ def test_the_workspace_image_planted_without_its_copy_is_found() -> None:
     """The line out of `apps/workspace/Dockerfile`, with the comment as it was when the file came with `COPY apps/workspace`."""
     real = _real(WORKSPACE_DOCKERFILE)
     assert copies_design(real)
-    planted = _COPY_DESIGN.sub("# `apps/workspace/src/design/tokens.css`, inside the `COPY apps/workspace` line below.", real)
+    planted = _COPY_DESIGN.sub(
+        "# `apps/workspace/src/design/tokens.css`, inside the `COPY apps/workspace` line below.",
+        real,
+    )
     assert planted != real and not copies_design(planted)
 
 
@@ -418,30 +545,51 @@ def test_the_harness_image_planted_with_the_old_copy_is_found() -> None:
     """The line out of the harness image's `frontend-builder`, put back as the old `COPY` of the workspace's design folder."""
     real = _real(HARNESS_DOCKERFILE)
     assert copies_design(real, "frontend-builder")
-    planted = _COPY_DESIGN.sub("COPY apps/workspace/src/design ./apps/workspace/src/design", real, count=1)
+    planted = _COPY_DESIGN.sub(
+        "COPY apps/workspace/src/design ./apps/workspace/src/design", real, count=1
+    )
     assert planted != real and not copies_design(planted, "frontend-builder")
 
 
 def test_a_copy_of_packages_design_in_another_stage_does_not_count_for_the_frontend() -> None:
     real = _real(HARNESS_DOCKERFILE)
-    moved = _COPY_DESIGN.sub("", real, count=1) + "\nFROM x AS elsewhere\nCOPY packages/design ./packages/design\n"
+    moved = (
+        _COPY_DESIGN.sub("", real, count=1)
+        + "\nFROM x AS elsewhere\nCOPY packages/design ./packages/design\n"
+    )
     assert not copies_design(moved, "frontend-builder")
 
 
 # The colour-drift check, on a tree in the new layout (its real shape: `apps/workspace/src` and `packages/design`).
 
 
-def test_the_drift_check_walks_the_new_folder_and_still_flags_a_colour_outside_the_tokens(tmp_path: Path) -> None:
+def test_the_drift_check_walks_the_new_folder_and_still_flags_a_colour_outside_the_tokens(
+    tmp_path: Path,
+) -> None:
     palette = colour_drift_check.palette_from("`#c08a34`")
     src = tmp_path / "src"
     design = tmp_path / "design"
     _tree(src, {"a/Map.tsx": 'const X = "#c08a34";\n'})
-    _tree(design, {"tokens.css": ":root { --stray: #123456; }\n", "primitives.css": ".x { color: #654321; }\n"})
-    flagged = colour_drift_check.find_drift(design, palette, mirrors=frozenset({"tokens.css"}), allowed=set())
-    assert [(p, lit) for p, _, lit in flagged] == [("primitives.css", "#654321")], "tokens.css exempt, a neighbour not"
+    _tree(
+        design,
+        {
+            "tokens.css": ":root { --stray: #123456; }\n",
+            "primitives.css": ".x { color: #654321; }\n",
+        },
+    )
+    flagged = colour_drift_check.find_drift(
+        design, palette, mirrors=frozenset({"tokens.css"}), allowed=set()
+    )
+    assert [(p, lit) for p, _, lit in flagged] == [("primitives.css", "#654321")], (
+        "tokens.css exempt, a neighbour not"
+    )
     unexempt = colour_drift_check.find_drift(design, palette, mirrors=frozenset(), allowed=set())
-    assert {p for p, _, _ in unexempt} == {"tokens.css", "primitives.css"}, "the exemption is what excuses the tokens"
-    assert colour_drift_check.scanned_files(design, frozenset({"tokens.css"})) == [design / "primitives.css"]
+    assert {p for p, _, _ in unexempt} == {"tokens.css", "primitives.css"}, (
+        "the exemption is what excuses the tokens"
+    )
+    assert colour_drift_check.scanned_files(design, frozenset({"tokens.css"})) == [
+        design / "primitives.css"
+    ]
 
 
 def test_a_move_of_the_tokens_does_not_lower_the_count(tmp_path: Path) -> None:
@@ -451,7 +599,9 @@ def test_a_move_of_the_tokens_does_not_lower_the_count(tmp_path: Path) -> None:
     _tree(before / "src", {**files, "design/tokens.css": ":root{}", "design/primitives.css": "p"})
     _tree(after / "src", {**files, "design/primitives.css": "p"})
     _tree(after / "design", {"tokens.css": ":root{}"})
-    count_before = len(colour_drift_check.scanned_files(before / "src", frozenset({"design/tokens.css"})))
+    count_before = len(
+        colour_drift_check.scanned_files(before / "src", frozenset({"design/tokens.css"}))
+    )
     count_after = len(colour_drift_check.scanned_files(after / "src", frozenset())) + len(
         colour_drift_check.scanned_files(after / "design", frozenset({"tokens.css"}))
     )
@@ -464,4 +614,29 @@ def test_a_walk_that_forgets_the_new_folder_lowers_the_count(tmp_path: Path) -> 
     _tree(tmp_path / "design", {"tokens.css": ":root{}", "scale.css": "s"})
     both = ((tmp_path / "src", frozenset()), (tmp_path / "design", frozenset({"tokens.css"})))
     assert colour_drift_check.scanned_count(both) == 3
-    assert colour_drift_check.scanned_count(both[:1]) == 2, "dropping the new folder from the walk must lower the count"
+    assert colour_drift_check.scanned_count(both[:1]) == 2, (
+        "dropping the new folder from the walk must lower the count"
+    )
+
+
+def test_an_exception_that_no_longer_names_the_old_path_is_stale(tmp_path: Path) -> None:
+    """Red for the case above (rule 15): the rules file before and after the owner's one-line diff, each row as the
+    file writes it. The row still naming the old path keeps its reason; the row naming only the folder has none."""
+    rel = "OspreyFlow_Build/process/CLAUDE.md"
+    before = (
+        "| `packages/design/tokens.css` (until ADR-152's move lands: `apps/workspace/src/design/tokens.css`) | Any"
+        " styling. Authoritative (it moved here from `spec/design/` in Round 14a) |\n"
+    )
+    after = (
+        "| `packages/design/tokens.css` | Any styling. Authoritative (it moved here from `spec/design/` in Round 14a,"
+        " and from `apps/workspace/src/design/` under ADR-152 slice B) |\n"
+    )
+    _tree(tmp_path, {rel: before})
+    assert old_path_mentions(tmp_path, [rel]), (
+        "the row before the diff names the old path, so its exception holds"
+    )
+    _tree(tmp_path, {rel: after})
+    assert old_path_mentions(tmp_path, [rel]) == [], (
+        "the row after the diff names it no more: the exception is stale"
+    )
+    assert rel in NAMED, "the case models the rules file, which is a name in NAMED today"

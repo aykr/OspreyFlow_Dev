@@ -6,10 +6,10 @@ that is not in this file is drift"), and the design review that adopted it asked
 hex, `rgb()`/`rgba()` and `hsl()`/`hsla()` literal in the Glass's own source must be one DESIGN.md
 holds. Two kinds of file are exempt, by name: a declared mirror of the tokens (the WebGL canvas
 cannot read CSS custom properties, so `color/tokens.ts` and `color/palette.ts` restate them, and
-their own tests hold them to `tokens.css`), and `tokens.css` itself (in `packages/design` since ADR-152: that
-folder is walked too, so its neighbours stay held to the palette). Drift already in the
-Glass when this gate was built is listed in `tests/fixtures/colour_drift_allowlist.txt`, each with
-its reason, until it is fixed; a new literal anywhere else fails.
+their own tests hold them to `tokens.css`), and `tokens.css` itself (in `packages/design` since
+ADR-152: that folder is walked too, so its neighbours stay held to the palette). Drift already in
+the Glass when this gate was built is listed in `tests/fixtures/colour_drift_allowlist.txt`, each
+with its reason, until it is fixed; a new literal anywhere else fails.
 
 Non-vacuous: `tests/test_colour_drift_check.py` plants literals in the shapes the real code uses
 (a hex in a style object, an `rgba` canvas fill, a fallback inside `var(...)`) and asserts each is
@@ -34,8 +34,9 @@ ALLOWLIST_PATH = REPO / "OspreyFlow_Build" / "tests" / "fixtures" / "colour_drif
 MIRRORS = frozenset({"color/tokens.ts", "color/palette.ts"})
 #: The tokens themselves, by name relative to `DESIGN_PACKAGE`.
 TOKENS_FILES = frozenset({"tokens.css"})
-#: Each folder the check walks, with the files in it exempt by name. The count of files scanned in them (`scanned_count`)
-#: is said on every run and held by `tests/glass_trees/test_design_tokens_location.py` not to fall.
+#: Each folder the check walks, with the files in it exempt by name. The count of files scanned in
+#: them (`scanned_count`) is said on every run and held not to fall by
+#: `tests/glass_trees/test_design_tokens_location.py`.
 SCANNED: tuple[tuple[Path, frozenset[str]], ...] = (
     (GLASS_SRC, MIRRORS),
     (DESIGN_PACKAGE, TOKENS_FILES),
@@ -59,7 +60,7 @@ def palette_from(design_text: str) -> frozenset[str]:
 
 
 def scanned_files(root: Path, mirrors: frozenset[str]) -> list[Path]:
-    """The files `find_drift` reads under `root`: stylesheets and sources, not tests, not an exempt file."""
+    """The files `find_drift` reads under `root`: styles and sources, no tests, no exempt file."""
     return [
         path
         for path in sorted(root.rglob("*"))
@@ -133,10 +134,12 @@ def main() -> int:
     allowed = _load_allowlist()
     drift = []
     for root, mirrors in SCANNED:
-        found = find_drift(root, palette, mirrors=mirrors, allowed=allowed if root == GLASS_SRC else None)
+        held = allowed if root == GLASS_SRC else None
+        found = find_drift(root, palette, mirrors=mirrors, allowed=held)
         drift += found
         for path, number, literal in found:
-            print(f"{root.relative_to(CORE).as_posix()}/{path}:{number}: {literal} is not in DESIGN.md")
+            where = root.relative_to(CORE).as_posix()
+            print(f"{where}/{path}:{number}: {literal} is not in DESIGN.md")
     stale = stale_allowlist(GLASS_SRC, palette, allowed)
     for path, literal in stale:
         print(f"{ALLOWLIST_PATH.name}: {path} {literal} excuses nothing now; remove the line")
@@ -146,7 +149,10 @@ def main() -> int:
             file=sys.stderr,
         )
         return 1
-    print(f"colour-drift-check: scanned {scanned_count()} files; every colour in them is one DESIGN.md holds")
+    print(
+        f"colour-drift-check: scanned {scanned_count()} files; "
+        "every colour in them is one DESIGN.md holds"
+    )
     return 0
 
 
