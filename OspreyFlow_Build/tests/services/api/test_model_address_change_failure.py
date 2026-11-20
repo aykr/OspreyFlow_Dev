@@ -589,6 +589,58 @@ async def test_an_interruption_before_the_change_wrote_anything_leaves_the_engin
     assert scene.admin.routes().engines["gemini"].key_present is True
 
 
+@pytest.mark.parametrize("how", ["refused", "interrupted"])
+async def test_an_edit_that_wrote_nothing_is_not_undone_so_an_undo_cannot_break_the_engine(
+    scene: Scene, monkeypatch: pytest.MonkeyPatch, how: str
+) -> None:
+    """An edit's undo deletes the engine's entries and makes them again. When the edit stopped
+    before it sent the gateway any write there is nothing to put back, so no undo is sent: here the
+    gateway refuses to make an entry, so an undo sent anyway would delete the entry and then fail,
+    leaving an engine with no entry that the file still says has a key and analysts are still
+    offered, with the answer and the audit saying only the refusal (or that all was put back). The
+    entry is kept, the engine is available and the words are true."""
+    await scene.set_up()
+    before = scene.at()
+    assert before and set(before.values()) == {OLD}
+    scene.faults.refuse.append(on("/model/new"))
+    if how == "refused":
+        # Refused before any call to the gateway: an engine's name cannot change.
+        with pytest.raises(ModelAdminRefused) as raised:
+            await scene.admin.edit_engine("admin-1", "gemini", provider(NEW, name="other"))
+        assert "unavailable" not in raised.value.words.lower()
+        assert "put back" not in raised.value.words.lower()
+        last = scene.audit.entries[-1].outcome.lower()
+        assert last.startswith("refused") and "unavailable" not in last, last
+    else:
+        reached = asyncio.Event()
+
+        async def hangs(*_args: Any, **_kwargs: Any) -> None:
+            reached.set()  # the move has begun, but the gateway has not been written to
+            await asyncio.sleep(3600)
+
+        monkeypatch.setattr(scene.admin._gateway, "delete_credential", hangs)
+        task = asyncio.ensure_future(scene.admin.edit_engine("admin-1", "gemini", provider(NEW)))
+        await asyncio.wait_for(reached.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        monkeypatch.undo()
+        last = scene.audit.entries[-1].outcome.lower()
+        assert last.startswith("interrupted"), last
+        assert "unavailable" not in last, last
+        assert "was put back" not in last, "nothing was written, so nothing was put back: " + last
+
+    assert scene.at() == before, "no undo was sent, so the engine's entry is still there"
+    assert "gemini" not in scene.admin._unavailable
+    assert scene.admin.key_state("gemini") == "set"
+    assert scene.admin.routes().engines["gemini"].key_present is True, "still offered to analysts"
+    scene.faults.refuse.clear()
+    await scene.call()
+    assert scene.addresses_reached_by(scene.first) == {OLD}
+    recorded = json.dumps([e.model_dump(mode="json") for e in scene.audit.entries])
+    assert scene.first not in recorded and scene.second not in recorded
+
+
 @pytest.mark.parametrize("moved", [True, False], ids=["the address moved", "the address kept"])
 async def test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable(
     scene: Scene, moved: bool
