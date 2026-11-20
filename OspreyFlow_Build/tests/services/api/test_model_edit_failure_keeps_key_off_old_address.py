@@ -27,11 +27,19 @@ real store, then the words `_call` gives a transport failure). And a moved edit 
 engine's entries away while it is made, not those of an engine whose name it begins:
 `test_a_moved_edit_leaves_the_entries_of_an_engine_it_prefixes_in_place`.
 
+**Round 5: the same rule holds when the gateway then refuses to remove the new key.** The undo
+cannot take the key away, so the credential may still hold it and the old address's entries must not
+be rebuilt on it. `test_a_new_key_the_gateway_will_not_remove_is_never_put_behind_the_old_address`
+refuses `DELETE /credentials` as the real gateway can, then asserts the old address has no entry, a
+later model-only edit sends nothing to the old address, and the refusal and its audit record say in
+words that the key may still be held.
+
 Keys are made at run time (the owner's rules for keys): none is written in this file.
 """
 
 from __future__ import annotations
 
+import json
 import secrets
 from pathlib import Path
 from typing import Any
@@ -193,6 +201,60 @@ def test_a_new_key_whose_answer_is_lost_is_never_left_at_the_old_address(
     monkeypatch.undo()
     view = client.get("/v1/admin/models").json()
     assert view["engines"][0]["key_state"] != "set", "not offered with no key behind it"
+
+
+def test_a_new_key_the_gateway_will_not_remove_is_never_put_behind_the_old_address(
+    client: TestClient, world: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The moved edit fails once its key is held (the entries are refused), and the gateway then
+    refuses to remove that key: it may still be the engine's credential. The undo must not make
+    the old address's entries on it; the engine is unavailable and the person and the audit are
+    told, in words, that the key may still be held."""
+    _add_at_the_old_address(client, world)
+    world.gateway.providers = {"gemini": StandInProvider(world.second, MODELS | {"gemini-2.5-pro"})}
+    real = world.admin._reconcile
+    failed: list[bool] = []
+
+    async def refuse_once(*args: Any, **kwargs: Any) -> None:
+        if not failed:
+            failed.append(True)
+            raise ModelAdminRefused("The model gateway refused the entry.", status=502)
+        await real(*args, **kwargs)
+
+    gateway = world.admin._gateway
+    real_delete = gateway.delete_credential
+
+    async def refuse_the_new_key_s_removal(provider: str) -> None:
+        if provider == "gemini" and world.gateway.credential("osprey-gemini") == world.second:
+            raise ModelAdminRefused("The model gateway refused the key's removal.", status=502)
+        await real_delete(provider)
+
+    monkeypatch.setattr(world.admin, "_reconcile", refuse_once)
+    monkeypatch.setattr(gateway, "delete_credential", refuse_the_new_key_s_removal)
+    moved = {**ENGINE, "api_base": NEW}
+    refused = client.put(ENGINES + "/gemini", json={"provider": moved, "key": world.second})
+    assert refused.status_code in (500, 502), refused.text
+    assert world.second not in refused.text
+    assert "may still be held" in refused.json()["detail"], "the person is told, in words"
+    assert world.gateway.credential("osprey-gemini") == world.second, "the stand-in refused"
+    assert not any(i.startswith("osprey-gemini-") for i in world.gateway.stored_ids()), (
+        "an entry was rebuilt at the old address on a credential that may hold the new key"
+    )
+    audit = json.dumps([e.model_dump(mode="json") for e in world.audit.entries])
+    assert "may still be held" in world.audit.entries[-1].outcome, "the audit says it"
+    assert world.second not in audit, "the audit never holds the key"
+    monkeypatch.undo()
+    view = client.get("/v1/admin/models").json()
+    assert view["engines"][0]["key_state"] == "lost", "not offered while the key may be held"
+    # A later edit of a model name alone has no key and is not moved: its check must not use the
+    # engine's credential, at the old address, with the new key behind it.
+    world.gateway.sent.clear()
+    again = client.put(
+        ENGINES + "/gemini",
+        json={"provider": {**ENGINE, "api_base": OLD, "roles": {"extraction": "gemini-2.5-pro"}}},
+    )
+    assert again.status_code in (409, 422), again.text
+    assert (OLD, world.second) not in world.gateway.sent, "the new key went to the old address"
 
 
 def test_a_moved_edit_leaves_the_entries_of_an_engine_it_prefixes_in_place(
