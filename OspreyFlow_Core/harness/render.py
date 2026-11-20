@@ -1384,9 +1384,18 @@ def _whisper_download_script(model: str) -> str:
     returns (measured: a ref and an empty snapshot folder exit 0). So the job also checks, with no
     network, for the files the speech library itself requires (`faster_whisper.utils`:
     `config.json`, `model.bin`, `tokenizer.json`, `vocabulary.*`), each present and not empty, and
-    for no half-written blob (`*.incomplete`) beside them. Anything less is fetched online, which
-    completes what the cache lacks. If that fails the job says so in words, rather than leaving a
-    traceback, and exits non-zero so the start fails loudly."""
+    for no half-written blob (`*.incomplete`) beside them.
+
+    Anything less is fetched again online, and the plain tool would not do it: read in the pinned
+    image (`huggingface_hub` 0.33.4, `file_download.py`), a snapshot file or a blob that already
+    exists, even at zero length, is returned as it is and never fetched again, and a half-written
+    blob is cleared only when the same file is being fetched again. So the job first removes the
+    half-written blobs, and then fetches with `--force-download`, which replaces what is there. (The
+    model is about 75 MB, and this path runs only when the model is not whole.) If that fails the
+    job says so in words, rather than leaving a traceback, and exits non-zero so the start fails
+    loudly. `tests/harness/test_start_needs_no_network.py` runs this script against stubs that do
+    not repair what the real tool does not."""
+    blobs = f"{_HF_CACHE}/hub/models--{model.replace('/', '--')}/blobs"
     return (
         "model_is_complete() {\n"
         f'  snapshot="$$(HF_HUB_OFFLINE=1 huggingface-cli download {model} 2>/dev/null'
@@ -1405,7 +1414,8 @@ def _whisper_download_script(model: str) -> str:
         "else\n"
         # With the hub unreachable the tool falls back to whatever the cache holds and exits 0
         # (measured), so its exit status is not the answer: the completeness check is, run again.
-        f"  huggingface-cli download {model} || true\n"
+        f"  rm -f {blobs}/*.incomplete\n"
+        f"  huggingface-cli download --force-download {model} || true\n"
         "  model_is_complete || {\n"
         f"    echo 'FATAL: the speech model {model} is not on this machine, or not all of it, "
         "and it could not be fetched. A first start needs the network once, to fetch the "

@@ -917,7 +917,8 @@ external:
   recorded id, and the speech model only when the volume does not hold all of it (the offline
   download check finds the cached snapshot, and each file the speech library requires is there and
   not empty, with no half-written blob: a first download cut short is fetched again, not taken as
-  installed); a weight that is absent, or partly there, while the network is refused fails the
+  installed. The fetch clears the half-written blobs and uses `--force-download`, because the plain
+  tool returns a file that exists, even at zero length, without fetching it again); a weight that is absent, or partly there, while the network is refused fails the
   start in words (what is missing, that the network is needed once, to connect and start again). The test that fails if this is violated is
   `tests/harness/test_start_needs_no_network.py`, which runs both jobs as rendered with every pull
   refused. Vision and embeddings run in the same Ollama and so use the GPU too; the
