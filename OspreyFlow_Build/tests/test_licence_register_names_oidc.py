@@ -202,6 +202,70 @@ def test_an_entry_left_behind_by_an_upgrade_is_flagged() -> None:
     ]
 
 
+def _with_the_row_changed(register: str, old: str, new: str) -> str:
+    """The real register with `old` replaced by `new` inside the package's row alone, and nowhere else."""
+    lines = register.splitlines(keepends=True)
+    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"| `{PACKAGE}` |"))
+    assert old in lines[at], f"the plant found nothing to change in the row: {old!r}"
+    lines[at] = lines[at].replace(old, new)
+    planted = "".join(lines)
+    assert planted != register
+    return planted
+
+
+def test_a_reason_that_stops_naming_a_sign_in_file_is_flagged() -> None:
+    """The plants: the row loses `auth/userManager.ts`, then `auth/oidcConfig.ts`, each on its own."""
+    register, package_json, lock = _real()
+    assert findings(register, package_json, lock) == []  # the same text, clean
+    for needle, label in (
+        ("auth/userManager.ts", "the sign-in code it serves"),
+        ("auth/oidcConfig.ts", "the sign-in configuration it serves"),
+    ):
+        planted = _with_the_row_changed(register, needle, "auth/elsewhere.ts")
+        assert findings(planted, package_json, lock) == [
+            f"the entry's reason does not name {label} ({needle})"
+        ]
+
+
+def test_an_entry_that_does_not_say_it_ships_in_the_workspace_bundle_is_flagged() -> None:
+    """The plant: the row's 'workspace bundle' replaced by another place."""
+    register, package_json, lock = _real()
+    assert findings(register, package_json, lock) == []
+    planted = _with_the_row_changed(register, "workspace bundle", "somewhere")
+    assert findings(planted, package_json, lock) == ["the entry does not say it ships in the workspace bundle"]
+
+
+def test_an_entry_that_does_not_say_who_named_it_and_when_is_flagged() -> None:
+    """The plant: the row's 'the owner, 20 November 2026' replaced by an unattributed, undated phrase."""
+    register, package_json, lock = _real()
+    assert findings(register, package_json, lock) == []
+    planted = _with_the_row_changed(register, "the owner, 20 November 2026", "someone, once")
+    assert findings(planted, package_json, lock) == [
+        "the entry does not say why it was named: 'the owner, 20 November 2026'"
+    ]
+
+
+def test_a_row_of_the_wrong_shape_is_flagged() -> None:
+    """The plant: the row loses its last cell, so it has four cells, not the table's five."""
+    register, package_json, lock = _real()
+    assert findings(register, package_json, lock) == []
+    row = named_entry(register, PACKAGE)
+    assert row is not None and len(row) == 5
+    lines = register.splitlines(keepends=True)
+    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"| `{PACKAGE}` |"))
+    lines[at] = "| " + " | ".join(row[:4]) + " |\n"
+    assert findings("".join(lines), package_json, lock) == [f"the {PACKAGE} row has 4 cells, not the five of the table's shape"]
+
+
+def test_a_lockfile_with_no_licence_for_the_package_is_flagged() -> None:
+    """The plant: the real lockfile with the package's `license` field removed."""
+    register, package_json, lock = _real()
+    assert findings(register, package_json, lock) == []
+    data = json.loads(lock)
+    del data["packages"][f"node_modules/{PACKAGE}"]["license"]
+    assert findings(register, package_json, json.dumps(data)) == [f"the lockfile records no licence for {PACKAGE}"]
+
+
 def test_a_new_dependency_is_not_swept_in_by_the_plant_rule() -> None:
     """The rule is about this package alone (the general rule is a proposal, see the docstring): a register with
     no row is clean when the workspace does not declare the package."""
