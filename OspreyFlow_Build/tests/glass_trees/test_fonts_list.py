@@ -279,6 +279,13 @@ def _font_file_fault(ref: str, data: dict) -> str | None:
     return UNOWNED
 
 
+def _is_gds_file(ref: str, data: dict) -> bool:
+    """True for a font file under the folder the GDS Transport entry self-hosts under, whatever its name: that folder
+    holds the files the entry owns, and the default tree serves none of it."""
+    name = ref.replace("\\", "/")
+    return any(entry["self_hosted_under"].strip("/") + "/" in name for entry in govuk_entries(data))
+
+
 def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, ...] = (), *, no_gds: bool = False) -> Scan:
     """Every family, weight and font file the folders load, against the list. `no_gds` is the pages' rule: GDS Transport
     is not on a page of the default tree, whatever the list says of it."""
@@ -292,7 +299,10 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
         rel = path.relative_to(core).as_posix()
         if path.suffix in FONT_SUFFIXES:
             result.read.append(rel)
-            if (fault := _font_file_fault(rel, data)) == UNOWNED:
+            if no_gds and _is_gds_file(rel, data):
+                # The font half of I9: a GDS Transport file, whether the list's GDS entry owns it or it sits under the GOV.UK assets folder.
+                result.violations.append(f"{rel}: a font file of GDS Transport (or its self-hosted assets), which the default tree does not serve (ADR-152 I9)")
+            elif (fault := _font_file_fault(rel, data)) == UNOWNED:
                 result.violations.append(f"{rel}: a font file that no listed family owns")
             elif fault:
                 result.violations.append(f"{rel}: a font file, {fault}")
