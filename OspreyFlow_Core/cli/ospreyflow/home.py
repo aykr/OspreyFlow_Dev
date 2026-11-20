@@ -49,8 +49,9 @@ def _is_product(folder: Path) -> bool:
 
 
 def _walk_up(start: Path | None) -> Path | None:
-    """The product folder from `start` (the current folder when None) upwards, or None. A folder that
-    is the developer repository stands for its `OspreyFlow_Core`."""
+    """The product folder from `start` (the current folder when None) upwards, or None.
+
+    A folder that is the developer repository stands for its `OspreyFlow_Core`."""
     try:
         here = (start or Path.cwd()).resolve()
     except OSError:  # the current folder was deleted under the shell: nothing to look upwards from
