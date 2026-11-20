@@ -68,7 +68,7 @@ def test_an_appended_row_and_a_status_flip_pass(
     new_row = "| ADR-110 Amendment 18 | Another | slice-y | 2026-11-20 | reserved |\n"
     _commit(repo, flipped + new_row)
     assert check.against() == 0
-    assert "only appended rows and status flips since main" in capsys.readouterr().out
+    assert "only rows added in the table and status flips since main" in capsys.readouterr().out
 
 
 def test_an_edited_title_is_reported_against_the_merge_base(
@@ -131,7 +131,7 @@ def test_main_with_against_passes_an_appended_row(
 ) -> None:
     _commit(repo, BASE + "| ADR-110 Amendment 18 | Another | slice-y | 2026-11-20 | reserved |\n")
     assert check.main(["adr_reservations_check", "--against"]) == 0
-    assert "only appended rows and status flips since main" in capsys.readouterr().out
+    assert "only rows added in the table and status flips since main" in capsys.readouterr().out
 
 
 def test_main_with_against_and_a_ref_compares_with_that_ref(

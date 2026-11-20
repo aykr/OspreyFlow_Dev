@@ -17,16 +17,18 @@ record. This check reports a heading in `06_DECISIONS.md` that has no reservatio
   sides wrote it, or a row copied by hand).
 
 **The merge-base comparison** (`--against`, `find_ledger_edits`): `spec/ADR_RESERVATIONS.md` takes
-git's
-union merge (`.gitattributes`), which is safe only while the file changes by appended rows and by a
-status flip of a row from `reserved` to `written`. The comparison reads the file as it stood at the
-merge-base with `main` and reports any other change: a title, number, lane, date or status edited,
-a row
-or line removed, a line added that is not a full reservation row (five cells ending `reserved` or
-`written`: a two-cell Baseline-shaped row would quietly move the baseline), or a row inserted above
-the end of the base. It needs a base, so on a checkout
-with
-none (no `main`, no git, a file new since) it says so and passes; the merge's gate has the base.
+git's union merge (`.gitattributes`), which is safe only while the file changes by added rows and by
+a status flip of a row from `reserved` to `written`. The comparison reads the file as it stood at
+the merge-base with `main`. **An added line is allowed if it is a full reservation row** (five cells
+ending `reserved` or `written`) **placed anywhere in the Reservations table, above `## Baseline`**
+(the end of the table, where slice GG6 put its row, or the middle); and a base row may change from
+`reserved` to `written`. Everything else is reported: a title, number, lane, date or status
+edited, a row or line removed, an added line that is not a full reservation row (prose, a two-cell
+Baseline-shaped row that would quietly move the baseline, a malformed `| ADR-` line), any added
+line below `## Baseline`, and an added row whose number the base already holds (what a union merge
+leaves of a row flipped on one side while the other side appends straight after it: the row twice,
+measured in `tests/test_ledger_union_merge.py`). It needs a base, so on a checkout with none (no
+`main`, no git, a file new since) it says so and passes; the merge's gate has the base.
 
 **The baseline** (the owner's step 0 ruling, 6 November 2026, "Baseline table"): the decision log held
 some nine hundred headings before reservations existed, some in irregular forms, so the reservations
@@ -79,6 +81,7 @@ _RESERVATION_ROW = re.compile(
 #: they do.
 KNOWN_DUPLICATE_HEADINGS: dict[str, int] = {"ADR-148 Amendment 10": 2}
 
+BASELINE_HEADING = "## Baseline"
 _SEPARATOR_LINE = re.compile(r"^[\s|:-]*$")
 _STATUS_TAIL = re.compile(r"\| *reserved *\|\s*$")
 _ROW_START = re.compile(r"^\| ADR-\d{3}\b")
@@ -120,7 +123,8 @@ def find_unreserved(decisions: str, reservations: str) -> list[str]:
     numbers = reserved_numbers(reservations)
     reserved = set(numbers)
     problems = [
-        f"{number} is reserved {count} times" for number, count in Counter(numbers).items()
+        f"{number} is reserved {count} times"
+        for number, count in Counter(numbers).items()
         if count > 1
     ]
     problems += find_doubled_lines(reservations)
@@ -186,23 +190,25 @@ def _flipped(line: str) -> str | None:
 
 
 def find_ledger_edits(base: str, current: str) -> list[str]:
-    """What changed in the reservations file other than appended rows and a reserved-to-written
-    flip.
+    """What changed in the reservations file other than rows added in the Reservations table and a
+    reserved-to-written flip.
 
-    Every non-blank line of `base` must still be in `current`, in order, unchanged or flipped; any
-    line
-    in `current` that is neither a base line nor a full reservation row (`_RESERVATION_ROW`), or is
-    one placed above the last base line, is reported too.
+    Every non-blank line of `base` must still be in `current`, in order, unchanged or flipped. Any
+    other line of `current` must be a full reservation row (`_RESERVATION_ROW`) above the
+    `## Baseline` heading whose number the base does not already hold; the rest are reported.
     """
     kept = [ln.rstrip() for ln in current.splitlines() if ln.strip()]
     used = [False] * len(kept)
     problems: list[str] = []
     edited_numbers: set[str] = set()
+    base_numbers: set[str] = set()
     position = 0
     for raw in base.splitlines():
         line = raw.rstrip()
         if not line.strip():
             continue
+        if _RESERVATION_ROW.match(line) is not None:
+            base_numbers.add(line.split("|")[1].strip())
         flipped = _flipped(line)
         for j in range(position, len(kept)):
             if kept[j] == line or (flipped is not None and kept[j].rstrip() == flipped):
@@ -216,14 +222,19 @@ def find_ledger_edits(base: str, current: str) -> list[str]:
                 problems.append(f"the row for {number} was edited, not appended to: {line[:100]!r}")
             else:
                 problems.append(f"a line was removed or edited: {line[:100]!r}")
-    last_kept = max((j for j, flag in enumerate(used) if flag), default=-1)
+    boundary = next((j for j, line in enumerate(kept) if line == BASELINE_HEADING), len(kept))
     for j, line in enumerate(kept):
         if used[j]:
             continue
+        number = line.split("|")[1].strip() if _ROW_START.match(line) else None
+        if number in edited_numbers:
+            continue  # the replacement of an edited row: reported once, as the edit
         if _RESERVATION_ROW.match(line) is None:
             problems.append(f"a line that is not a reservation row was added: {line[:100]!r}")
-        elif j < last_kept and line.split("|")[1].strip() not in edited_numbers:
-            problems.append(f"a row was inserted above the end, not appended: {line[:100]!r}")
+        elif number in base_numbers:
+            problems.append(f"an added row duplicates a row of the base: {line[:100]!r}")
+        elif j > boundary:
+            problems.append(f"a row was added below '{BASELINE_HEADING}': {line[:100]!r}")
     return problems
 
 
@@ -279,16 +290,18 @@ def against(ref: str | None = None) -> int:
     if problems:
         print(
             "adr-reservations-check --against: ADR_RESERVATIONS.md changed beyond "
-            f"appended rows ({why}):"
+            f"added rows ({why}):"
         )
         for p in problems:
             print(f"  - {p}")
         print(
-            "Only appended rows and a reserved-to-written flip are allowed; "
-            "the file takes a union merge."
+            "Only rows added in the Reservations table (above '## Baseline') and a "
+            "reserved-to-written flip are allowed; the file takes a union merge."
         )
         return 1
-    print(f"adr-reservations-check --against: only appended rows and status flips since {why}.")
+    print(
+        f"adr-reservations-check --against: only rows added in the table and status flips since {why}."
+    )
     return 0
 
 

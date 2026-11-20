@@ -304,7 +304,9 @@ def test_a_flip_of_the_last_row_with_a_row_appended_straight_after_it_leaves_the
     assert "ADR-110 Amendment 18 is reserved 2 times" in find_unreserved(BASE_LOG, merged)
     # ... and so does the comparison with the base (a second row for a number the base holds).
     problems = find_ledger_edits(base, merged)
-    assert any("ADR-110 Amendment 18" in p and "duplicates a row of the base" in p for p in problems)
+    assert any(
+        "ADR-110 Amendment 18" in p and "duplicates a row of the base" in p for p in problems
+    )
 
 
 def test_an_edit_to_an_existing_row_merges_clean_and_the_edit_check_is_red(tmp_path: Path) -> None:
@@ -318,7 +320,9 @@ def test_an_edit_to_an_existing_row_merges_clean_and_the_edit_check_is_red(tmp_p
             "| ADR-110 Amendment 14 | The Admin area becomes a place | orchestrator |", edited
         ),
     )
-    _branch(repo, "b", **_appends(16, "Second appended", block=False))
+    # The second branch adds its row at the end of the Reservations table, above `## Baseline`.
+    new_row = _row(16, "Second appended")
+    _branch(repo, "b", ledger=lambda t: t.replace("\n## Baseline", new_row + "\n## Baseline", 1))
 
     assert _merge(repo, "a") == (True, [])
     assert _merge(repo, "b") == (True, [])

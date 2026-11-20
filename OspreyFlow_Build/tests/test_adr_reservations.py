@@ -224,7 +224,9 @@ def test_a_row_that_duplicates_a_row_of_the_base_is_reported() -> None:
     """The same number again in the table (what a union merge leaves of a row edited two ways)."""
     row = _rows("written")[0]
     number = row.split("|")[1].strip()
-    [problem] = find_ledger_edits(RESERVATIONS, _end_of_table("\n" + row.replace("written", "reserved")))
+    [problem] = find_ledger_edits(
+        RESERVATIONS, _end_of_table("\n" + row.replace("written", "reserved"))
+    )
     assert "duplicates a row of the base" in problem and number in problem
 
 
@@ -253,7 +255,9 @@ def test_a_changed_cell_of_an_existing_row_is_reported(cell: int, replacement: s
     row = _rows("written")[-1]
     edited = _edited_row(change)
     assert edited != RESERVATIONS
-    [problem] = find_ledger_edits(RESERVATIONS, edited)
+    # A changed number leaves a second finding: its new row stands below `## Baseline` (the real
+    # file's last rows are there), which is also not allowed. The first finding is the edit.
+    problem = find_ledger_edits(RESERVATIONS, edited)[0]
     assert row[:40] in problem
 
 
