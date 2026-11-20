@@ -62,7 +62,7 @@ client's name; British English. You do not edit `OspreyFlow_Core/Makefile` or `.
 ## Acceptance test
 
 Already written (on the branch): they arrive with the merge and are red on main today for the right reason (a missing module or route).
-The **acceptance command** runs `tests/services/api/test_model_engine_checks.py`, `test_model_key_review.py`,
+The **acceptance command** runs (all under the services/api tests folder) `test_model_engine_checks.py`, `test_model_key_review.py`,
 `test_model_keys_commands.py`, `test_model_catalogue.py` and `tests/cli/test_models_verb.py` (the last exists on main and now fails
 against it). Do not weaken any of them. The branch's plant records (`plants_check.py`, `plants_review.py` and their `*_run.txt`) must
 be **re-run in this tree** so the red-first claim holds on main's code, not only on the branch: run each plant script as its header

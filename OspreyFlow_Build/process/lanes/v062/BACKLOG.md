@@ -379,4 +379,14 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   failed once in `make test` (its `show` output cut off before the "NEEDS YOU" section while 16 copies ran at once under xdist),
   with `make -k ci` green; the retry with nothing else running is recorded in the merge records. A timing race in the test, like
   `test_stack_lease.py::…extra_arguments` on 19 November: worker-isolation timing, same batch row.
+- **Line gap (20 Nov, the second day running): a builder that stops red only on a check that passes once main is merged in should
+  be recovered by the line itself, with no line from the owner.** PL6's builder red-stopped (six tries) on one check,
+  `test_doc_citations_check`, which failed on a citation in a brief the conductor had committed to main after the slice was cut and
+  fixed the next minute; the check was green as soon as main was merged into the branch. It cost the owner a `clear-stop` line.
+  (The day before: GG1, SE2 and SE4, the same kind of stop, three lines.) Row: when a slice reaches its red limit, the line
+  merges main into the branch itself (the same merge the builder is told to do; a conflict stops it as today), reruns the checks,
+  and if they are all green clears the stop and records it (the red stop, the main commit merged, the rerun's result); if any check is
+  still red, or the merge conflicts, the stop stands for the owner as now. Never counts a round. Tests, red first: a stop whose only
+  red is a check fixed on main (cleared, recorded), one still red after the merge (stands), one whose merge conflicts (stands). Related:
+  the earlier row on a slice that only needs main merged in to resolve a mechanical conflict.
 - **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
