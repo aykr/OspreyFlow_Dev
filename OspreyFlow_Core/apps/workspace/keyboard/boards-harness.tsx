@@ -9,7 +9,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { BoardsPlace } from "../src/boards/BoardsPlace";
 import { applyHarnessBrand } from "./brandHarness";
 

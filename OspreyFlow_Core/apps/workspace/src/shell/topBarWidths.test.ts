@@ -5,7 +5,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(join(__dirname, "../design/primitives.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readFileSync(join(__dirname, "../../../../packages/design/primitives.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 const rule = (selector: string) =>
   [...CSS.matchAll(/([^{}]+)\{([^{}]*)\}/g)].find(([, sel]) => sel!.split(",").map((x) => x.trim()).includes(selector))?.[2] ?? "";
 

@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import type { Node } from "../../../packages/schemas/generated";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";

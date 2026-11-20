@@ -78,7 +78,7 @@ for (const theme of ["dark", "light"] as const) {
   test(`${theme} theme has no automated colour-contrast violations`, async ({ page }) => {
     // Found while verifying Phase 7 Stage 5 (unrelated to it — this file was untouched): the
     // light-theme switch below flips `data-theme` on an already-painted page, and `.btn`'s own
-    // `transition: background-color ...` (`design/primitives.css`) races it — axe-core can sample
+    // `transition: background-color ...` (`packages/design/primitives.css`) races it — axe-core can sample
     // mid-transition, an interpolated colour (e.g. `#a07323`, between dark `--brass:#c08a34` and
     // light `--brass:#8a6318`) that never actually rests there, an intermittent false positive on
     // `.btn--primary`'s real, passing light-theme contrast (5.42:1). `tokens.css` already zeroes

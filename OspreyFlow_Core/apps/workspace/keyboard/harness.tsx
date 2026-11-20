@@ -13,7 +13,7 @@ import { createRef, StrictMode, useEffect, useState } from "react";
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { applyTheme } from "../src/theme/theme";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { SelectionList } from "../src/inspector/SelectionList";
 import { createCrossFilterStore } from "../src/crossfilter/store";

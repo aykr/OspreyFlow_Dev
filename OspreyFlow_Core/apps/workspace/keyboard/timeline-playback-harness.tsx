@@ -24,7 +24,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { followCrossFilterWithMapBins } from "../src/crossfilter/mapBins";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { Timeline } from "../src/timeline/Timeline";

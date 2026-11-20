@@ -7,7 +7,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import "../src/admin/admin.css";
 import { Maps } from "../src/admin/sections/Maps";
 import { applyHarnessBrand } from "./brandHarness";

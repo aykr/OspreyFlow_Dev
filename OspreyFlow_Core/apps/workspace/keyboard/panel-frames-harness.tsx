@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { BottomPanelFrame, DetailsToggle, SidePanelFrame } from "../src/layout/PanelFrames";
 import { SidePanelStack } from "../src/layout/SidePanelStack";
 

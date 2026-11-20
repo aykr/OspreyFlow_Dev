@@ -6,7 +6,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { LinkChange } from "../src/inspector/LinkChange";
 import type { LinkChangeResult } from "../src/inspector/linkChangeApi";
 import type { Edge, EdgeTypeDef } from "../../../packages/schemas/generated";

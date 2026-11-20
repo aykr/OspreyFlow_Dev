@@ -10,7 +10,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { CaseList } from "../src/investigation/CaseList";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";

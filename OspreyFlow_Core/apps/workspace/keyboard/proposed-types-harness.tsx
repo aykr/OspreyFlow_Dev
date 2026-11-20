@@ -5,7 +5,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { Button } from "../src/design/primitives/Button";
 import { ProposedTypes } from "../src/linktypes/ProposedTypes";
 

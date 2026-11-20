@@ -16,7 +16,7 @@ import { createRoot } from "react-dom/client";
 import type { BackgroundLayerSpecification, FillLayerSpecification, LineLayerSpecification, SymbolLayerSpecification } from "maplibre-gl";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { activePalette } from "../src/color/palette";
 import { contrastRatio as contrast } from "../src/map/contrast";
 import { BasemapSwitch, PlaceSearch } from "../src/map/MapControls";

@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(join(__dirname, "primitives.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readFileSync(join(__dirname, "../../../../packages/design/primitives.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 function gridRules(css: string): { selector: string; body: string }[] {
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]

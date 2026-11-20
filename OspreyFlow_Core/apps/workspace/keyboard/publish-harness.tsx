@@ -3,7 +3,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { PublishScreen } from "../src/ingest/publish/PublishScreen";
 
 createRoot(document.getElementById("root")!).render(

@@ -8,7 +8,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { PipelineStudio } from "../src/ingest/dag/PipelineStudio";
 

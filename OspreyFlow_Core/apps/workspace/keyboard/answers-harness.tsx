@@ -6,7 +6,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import "../src/home/home.css";
 import { AnswersForSection } from "../src/home/AnswersForSection";
 import { HomePage } from "../src/home/HomePage";

@@ -778,7 +778,7 @@ and the keyboard harnesses as `useSearchResultsOverlay` is.
   analyst put it (`App.tsx`'s `WelcomeFocusedOnce`). The batch job's panel at the canvas's foot is hidden under the
   page, as under the results, and back when it closes; beside the drawer it stays, moved clear of it.
 - **Room beside the drawer:** the results page's Filters and the batch job's panel make room for the drawer
-  (`--w-drawer`, `design/primitives.css`; `data-ask-drawer`, `questions/askPage.css`), so no control lies under it
+  (`--w-drawer`, `packages/design/primitives.css`; `data-ask-drawer`, `questions/askPage.css`), so no control lies under it
   while Tab reaches it.
 - The rail's opener says it opens a dialog (`aria-haspopup="dialog"`) while Ask & Chat is closed or the drawer, none
   while it is the page, and is `aria-expanded` while Ask & Chat shows, in either shape. While Ask & Chat is hidden for a document read from an answer it is not expanded, and one press shows

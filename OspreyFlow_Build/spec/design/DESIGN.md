@@ -83,10 +83,10 @@ Mono sizes: 11, 12, 13 with `letter-spacing: -0.005em`.
 A heading or a control that sets no size of its own is on this scale too, never the browser's own (v0.6.0 #6, the
 orchestrator's ruling of 15 November 2026, in every look): `h1` a screen title (`--fs-23`), `h2` a section heading
 (`--fs-19`), `h3` and `h4` a panel title (`--fs-16`), `h5` and `h6` a secondary label (`--fs-12`), and a button, field
-or select inherits the page's font (`src/design/scale.css`). A heading drawn as a label (`.label`) stays the
+or select inherits the page's font (`packages/design/scale.css`). A heading drawn as a label (`.label`) stays the
 label's size, `--fs-13`, in every level, never above what it labels (case's ruling, 15 November 2026). Code, keys and
 output (`code`, `kbd`, `samp`, `pre`) are in `--mono`, as is a field classed `.value`, though `.input` inherits its font.
-Any size a component sets, and a panel's own rule (`panelType.css`), wins. On the GOV.UK pages' remapped scale the same tokens give GOV.UK's sizes.
+Any size a component sets, and a panel's own rule (`packages/design/panelType.css`), wins. On the GOV.UK pages' remapped scale the same tokens give GOV.UK's sizes.
 `keyboard/govuk-type-pass.spec.ts` measures every harness that applies the brand, in each of its states, under GOV.UK.
 It fails on a text element off the scale, on words set in mono, and on a value to copy that is not in mono.
 `keyboard/scale-rules.spec.ts` holds these rules at the browser's cascade. It trusts `.value`: an element classed so is a
@@ -477,7 +477,7 @@ Inside a drawer, a canvas menu, the top bar's or the case line's menus, the stri
 as a view form, GOV.UK Frontend's type classes take the page's tokens: body text, headings, links, buttons and
 fields at `--fs-13`; small text, hints, captions and tags at `--fs-12`, never below. Each panel and menu sets
 the body size itself, so it never inherits the row it opens from. The case line is that exception: a GOV.UK
-notification banner at 19px under the brand, by design. `OspreyFlow_Core/apps/workspace/src/design/panelType.css` holds this,
+notification banner at 19px under the brand, by design. `OspreyFlow_Core/packages/design/panelType.css` holds this,
 and `OspreyFlow_Core/apps/workspace/keyboard/glass-panels-look.spec.ts` measures it in every look.
 
 | Token | GOV.UK pages | Use |

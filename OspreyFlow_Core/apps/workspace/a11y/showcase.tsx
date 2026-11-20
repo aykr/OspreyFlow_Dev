@@ -11,7 +11,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "../keyboard/brandHarness";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { SEQ_HEX } from "../src/color/tokens";
 import { Button } from "../src/design/primitives/Button";
 import { Checkbox } from "../src/design/primitives/Checkbox";

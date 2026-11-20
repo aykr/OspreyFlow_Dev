@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { PLAIN_APPEARANCE } from "../src/brand/brand";
