@@ -9,13 +9,17 @@ import session from "express-session";
 import nunjucks from "nunjucks";
 import { fileURLToPath } from "node:url";
 
+import { DEFAULT_BODY_STALL_MS, pageBodyStall } from "./bodyStall.js";
+import type { ForwardSettings } from "./config.js";
 import { csrfProtection } from "./csrf.js";
+import { forwarder, v1Gate } from "./forward.js";
 import { PagesSessionStore } from "./expressStore.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderUnavailable } from "./identity.js";
 import type { IdentityProvider } from "./identity.js";
 import { COOKIE_NAME, IDLE_SECONDS, MIN_SECRET_LENGTH, newRecord, randomToken } from "./sessionPolicy.js";
 import type { SessionStore } from "./sessionStore.js";
+import { isV1Path, rawPathOf } from "./v1.js";
 
 export interface AppDeps {
   store: SessionStore;
@@ -26,6 +30,12 @@ export interface AppDeps {
   clock?: () => number;
   /** Routes a later slice adds, after the core routes and behind the same session, headers and anti-forgery. */
   extraRoutes?: (router: Router) => void;
+  /** The `/v1` forwarder's settings (slice PL10). Absent: there is no forwarder, and every `/v1` path answers 404. */
+  forward?: ForwardSettings;
+  /** Where the forwarder says what went wrong: a fixed phrase and a status. */
+  log?: (message: string) => void;
+  /** How long a browser may send nothing mid-body before its connection is ended (default 60 s; a test shortens it). */
+  bodyStallMs?: number;
 }
 
 const VIEWS = fileURLToPath(new URL("./views", import.meta.url));
@@ -66,6 +76,12 @@ export function createApp(deps: AppDeps): Express {
     res.json({ status: "ok" });
   });
 
+  // Before the session is read: with no forwarder every /v1 path is 404, and a path or method it will not carry is
+  // refused here, so that nothing of the session store or the Conduit is touched for it.
+  app.use(v1Gate(deps.forward !== undefined));
+  // Node's whole-request timeout is off (`start.ts`): a page route's body that goes silent is ended here, a /v1 body in the forwarder.
+  app.use(pageBodyStall(deps.bodyStallMs ?? DEFAULT_BODY_STALL_MS));
+
   app.use(
     session({
       name: COOKIE_NAME,
@@ -79,7 +95,17 @@ export function createApp(deps: AppDeps): Express {
       cookie: { ...COOKIE_OPTIONS, maxAge: IDLE_SECONDS * 1000 },
     }),
   );
-  app.use(express.urlencoded({ extended: false, limit: "16kb" }));
+  // A /v1 body is the forwarder's to read, whole or streamed: this parser would take it, and refuse past 16 kB.
+  const forms = express.urlencoded({ extended: false, limit: "16kb" });
+  app.use((req, res, next) => {
+    if (isV1Path(rawPathOf(req))) next();
+    else forms(req, res, next);
+  });
+  // The anti-forgery token, for a page's own script (a meta tag in the layout) and for its forms. No endpoint returns it.
+  app.use((req, res, next) => {
+    res.locals["csrfToken"] = req.session?.auth?.csrfToken;
+    next();
+  });
   app.use(csrfProtection());
 
   app.get("/", (req, res) => {
@@ -127,9 +153,15 @@ export function createApp(deps: AppDeps): Express {
     res.redirect(303, "/");
   });
 
-  if (deps.extraRoutes) {
+  if (deps.extraRoutes || deps.forward) {
     const router = express.Router();
-    deps.extraRoutes(router);
+    deps.extraRoutes?.(router);
+    // Behind the same headers, session and anti-forgery as every page: nothing here is reached without them.
+    if (deps.forward) router.use(forwarder({
+          settings: deps.forward,
+          ...(deps.log ? { log: deps.log } : {}),
+          ...(deps.bodyStallMs === undefined ? {} : { bodyStallMs: deps.bodyStallMs }),
+        }));
     app.use(router);
   }
 

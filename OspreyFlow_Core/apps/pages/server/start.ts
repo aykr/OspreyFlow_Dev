@@ -3,6 +3,7 @@
  * session secret is missing or short), builds the Valkey client and the app, and listens. Everything it
  * reaches for is passed in, so that a test starts the real thing with an in-memory store and a free port.
  */
+import { createServer } from "node:http";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 
@@ -33,12 +34,20 @@ export interface StartDeps {
   clock?: () => number;
   /** How often the live-updates proxy looks at its open sockets, in milliseconds. */
   streamCheckMs?: number;
+  /** How long a browser may send nothing mid-body before it is ended, in milliseconds (default 60 s). A test shortens it. */
+  bodyStallMs?: number;
 }
 
 export interface Running {
   port: number;
+  /** The listening server: a test reads the timeouts it was given. */
+  server: Server;
   stop(): Promise<void>;
 }
+
+/** Longer than the front proxy's idle keep-alive, so that it never reuses a connection this side is closing. */
+const KEEP_ALIVE_TIMEOUT_MS = 65_000;
+const HEADERS_TIMEOUT_MS = 66_000;
 
 const processIo: Io = {
   log: (message) => console.log(message),
@@ -79,10 +88,24 @@ export async function main(
     identityProvider: deps.identityProvider ?? unconfiguredProvider,
     sessionSecret: config.sessionSecret.reveal(),
     ...(deps.clock ? { clock: deps.clock } : {}),
+    ...(config.forward ? { forward: config.forward } : {}),
+    ...(deps.bodyStallMs === undefined ? {} : { bodyStallMs: deps.bodyStallMs }),
+    log: (message) => {
+      io.error(message);
+    },
   });
-  const server = await new Promise<Server>((resolve, reject) => {
-    const listening = app.listen(config.port, deps.host ?? "0.0.0.0", () => resolve(listening));
-    listening.once("error", reject);
+  // Node's own timeouts must not cut a long upload or a long read short (nginx gave an hour). The whole-request
+  // timeout is off: an upload is as long as its file. What ends a browser that stops sending is `bodyStall.ts`'s
+  // stall timer (a body read here, a page route's body), and what ends a Conduit that goes silent is the forwarder's
+  // upstream timeout. The header timeout stays, above the keep-alive's, as Node requires.
+  const server = createServer(
+    { requestTimeout: 0, headersTimeout: HEADERS_TIMEOUT_MS, keepAliveTimeout: KEEP_ALIVE_TIMEOUT_MS },
+    app,
+  );
+  server.timeout = 0;
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(config.port, deps.host ?? "0.0.0.0", () => resolve());
   });
   // Every WebSocket upgrade is answered here, never by a page's route: with no Conduit address set the
   // proxy is absent and each one is refused 404 (ADR-152 decision 5).
@@ -101,6 +124,7 @@ export async function main(
 
   return {
     port,
+    server,
     stop: () =>
       new Promise<void>((resolve) => {
         stream.close();
@@ -108,6 +132,8 @@ export async function main(
           client?.disconnect();
           resolve();
         });
+        // A call still in flight (an upload, a long read) is ended rather than waited for.
+        server.closeAllConnections();
       }),
   };
 }
