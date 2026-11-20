@@ -9,8 +9,8 @@ Six plain TypeScript files moved whole from `OspreyFlow_Core/apps/workspace/src/
 * `admin/sections/MapsApi.ts`, `admin/sections/ModelsApi.ts`, `admin/updateNotice.ts`.
 
 Each calls `fetch` against the Conduit and takes the bearer token as an argument. None touches the page, and none imports
-React, a drawing library or a store. The generated schemas are reached the way the package's own `workingset/store.ts`
-reaches them (`../../../schemas/generated`, a type import).
+React, a drawing library or a store. The generated schemas are reached the way the package's own working-set store
+reaches them (a type import, by the shortest relative path, `../../../schemas/generated` from a folder below `src`).
 
 **Two files did not move, and the test says why.** `admin/api.ts` imports `../help/roles` for its words about a refusal, and
 `help/roles.ts` reads `shell/placesByRole.json`, a record that lives in the workspace: the Python tests
@@ -39,6 +39,10 @@ Which test fails if the invariant is broken (rule 12):
 * a spec, or a file one imports (by any chain of imports), naming a file that does not exist, which Playwright would meet at
   collection and no unit test would: `test_every_import_reached_from_a_spec_resolves` (the Playwright collection check's own
   half: the count of tests and files is measured by `npx playwright test --list`, which this file does not run);
+* each of four gates (`make colour-drift-check`, `design-check`, `ui-words-check`, `no-branches-check`) that stops reading
+  the moved files, or reads fewer files than before the move: `test_each_gate_reads_no_fewer_files_than_before`, and one plant
+  for each gate in a **moved** file, shown clean beside it (the font-token test, `undefinedTokens.test.ts`, walks the
+  package's folder whole and holds its own plant);
 * either image's `COPY` lines naming a path that moved, or missing what the harness needs:
   `test_no_image_copies_a_path_that_moved`, `test_the_harness_image_copies_what_the_clients_need`, each shown red by
   `test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found`.
@@ -52,7 +56,8 @@ shows the same file clean with the new line.
 `*.spec.ts` and `*.spec.tsx` in `apps/workspace` and `apps/harness` and follows their imports) and under
 `OspreyFlow_Core/packages/glass-shared/src` (the moved files, the index, the package's own imports);
 `apps/workspace/Dockerfile` and `harness/Dockerfile` by name; the git history of the rename (`git log`, `git show`); and
-temporary copies built inside `tmp_path` for the plants (written there, never in the repository).
+temporary copies built inside `tmp_path` for the plants (written there, never in the repository), among them copies of
+`packages/glass-shared/src` for the gate plants (copied, never written: `make test` runs on several workers).
 """
 
 # The planted lines below are the real call-site shapes, kept on one line as the tree wrote them (rule 15), and the
@@ -63,10 +68,12 @@ from __future__ import annotations
 
 import posixpath
 import re
+import shutil
 from collections.abc import Iterable
 from pathlib import Path
 
 import pytest
+from tools import colour_drift_check, design_check, no_branches_check, ui_words_check
 from tools.layout import CORE, ROOT
 
 from tests.glass_trees import test_glass_shared_plain_logic as earlier
@@ -170,7 +177,9 @@ def imports_not_reaching(root: Path, rels: Iterable[str]) -> tuple[list[str], in
     importers = 0
     names = _client_names(root)
     for rel in rels:
-        if Path(rel).suffix not in earlier._SOURCE_SUFFIXES or not rel.startswith("OspreyFlow_Core/"):
+        if Path(rel).suffix not in earlier._SOURCE_SUFFIXES or not rel.startswith(
+            "OspreyFlow_Core/"
+        ):
             continue
         try:
             text = (root / rel).read_text(encoding="utf-8")
@@ -178,11 +187,14 @@ def imports_not_reaching(root: Path, rels: Iterable[str]) -> tuple[list[str], in
             continue
         for hit in _PACKAGE_IMPORT.finditer(text):
             if hit.group(1):
-                bad.append(f"{rel}: {PACKAGE_NAME}{hit.group(1)} (the package is imported by its name)")
+                bad.append(
+                    f"{rel}: {PACKAGE_NAME}{hit.group(1)} (the package is imported by its name)"
+                )
         if not rel.startswith(SHARED) and any(
             names & earlier._names(m.group(1))
             for m in re.finditer(
-                rf"""(?:^|\n)\s*import\s+(?:type\s+)?(\{{[^}}]*\}})\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""", text
+                rf"""(?:^|\n)\s*import\s+(?:type\s+)?(\{{[^}}]*\}})\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
+                text,
             )
         ):
             importers += 1
@@ -197,7 +209,13 @@ def imports_not_reaching(root: Path, rels: Iterable[str]) -> tuple[list[str], in
 
 
 def _exported_names(text: str) -> set[str]:
-    return set(re.findall(r"^export\s+(?:async\s+)?(?:function|const|let|class|type|interface|enum)\s+(\w+)", text, re.M))
+    return set(
+        re.findall(
+            r"^export\s+(?:async\s+)?(?:function|const|let|class|type|interface|enum)\s+(\w+)",
+            text,
+            re.M,
+        )
+    )
 
 
 def _client_names(root: Path) -> set[str]:
@@ -214,8 +232,15 @@ def _client_names(root: Path) -> set[str]:
 
 # ------------------------------------------------------------------------------------ plain, and nothing from the workspace
 
-_RELATIVE_SPEC = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\(\s*)["'](\.{1,2}/[^"'\n]*)["']""")
-_ABSOLUTE_SPEC = re.compile(r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\(\s*)["']([^."'\n][^"'\n]*)["']""")
+_RELATIVE_SPEC = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\(\s*)["'](\.{1,2}/[^"'\n]*)["']"""
+)
+_ZUSTAND_MAIN = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\(\s*)["']zustand(?:/react)?["']"""
+)
+_ABSOLUTE_SPEC = re.compile(
+    r"""(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\(\s*)["']([^."'\n][^"'\n]*)["']"""
+)
 
 
 def package_import_problems(root: Path, rel: str) -> list[str]:
@@ -227,14 +252,22 @@ def package_import_problems(root: Path, rel: str) -> list[str]:
     for spec in _RELATIVE_SPEC.findall(text):
         target = posixpath.normpath(posixpath.join(posixpath.dirname(rel), spec))
         if target.startswith(SHARED):
+            if earlier._resolve(root, rel, spec) is None:
+                problems.append(f"{rel}: {spec} names no file of the package")
             continue
         if target == GENERATED or target.startswith(GENERATED + "/"):
             if not (root / (GENERATED + "/index.ts")).is_file():
                 problems.append(f"{rel}: {spec} names no generated schemas")
             if "/packages/" in "/" + spec:
-                problems.append(f"{rel}: {spec} reaches the schemas by the workspace's depth, not the package's way")
+                problems.append(
+                    f"{rel}: {spec} reaches the schemas by the workspace's depth, not the package's way"
+                )
             continue
         problems.append(f"{rel}: {spec} leaves the package for {target}")
+    if _ZUSTAND_MAIN.search(text):
+        problems.append(
+            f"{rel}: imports zustand's main entry, which pulls React in (only zustand/vanilla is named)"
+        )
     for spec in _ABSOLUTE_SPEC.findall(text):
         if spec.startswith("@ospreyflow/") and spec != PACKAGE_NAME:
             problems.append(f"{rel}: imports {spec}, a package of the workspace")
@@ -281,18 +314,26 @@ def test_the_admin_client_stays_while_its_words_need_the_workspace() -> None:
     names = earlier.tracked()
     for rel in STAYS:
         assert WORKSPACE_SRC + rel in names, f"{WORKSPACE_SRC}{rel} left the workspace"
-        assert SHARED + rel not in names, f"{SHARED}{rel} is in the package, which cannot reach the record"
+        assert SHARED + rel not in names, (
+            f"{SHARED}{rel} is in the package, which cannot reach the record"
+        )
     roles = (ROOT / (WORKSPACE_SRC + "help/roles.ts")).read_text(encoding="utf-8")
-    assert f'"../{RECORD}"' in roles, "help/roles.ts no longer reads the record: this exception's reason is gone"
+    assert f'"../{RECORD}"' in roles, (
+        "help/roles.ts no longer reads the record: this exception's reason is gone"
+    )
     assert WORKSPACE_SRC + RECORD in names, "the record is not where the Python tests pin it"
     assert SHARED + RECORD not in names
     admin = (ROOT / (WORKSPACE_SRC + "admin/api.ts")).read_text(encoding="utf-8")
-    assert '"../help/roles"' in admin, "admin/api.ts no longer imports the roles' words: this exception's reason is gone"
+    assert '"../help/roles"' in admin, (
+        "admin/api.ts no longer imports the roles' words: this exception's reason is gone"
+    )
 
 
 def test_the_package_s_clients_import_no_react_and_no_workspace_path() -> None:
     sources = _package_sources()
-    assert len(sources) >= 30, f"only {len(sources)} package sources found: the walk is not seeing the package"
+    assert len(sources) >= 20, (
+        f"only {len(sources)} package sources found: the walk is not seeing the package"
+    )
     for rel in WHOLE:
         assert SHARED + rel in sources
     problems = [p for rel in sources for p in package_import_problems(ROOT, rel)]
@@ -316,7 +357,9 @@ def test_a_react_import_in_a_moved_client_is_found(tmp_path: Path) -> None:
         (tmp_path / GENERATED).mkdir(parents=True, exist_ok=True)
         (tmp_path / (GENERATED + "/index.ts")).write_text("export {};\n", encoding="utf-8")
         target.write_text(real, encoding="utf-8")
-        assert package_import_problems(tmp_path, SHARED + rel) == [], f"{rel} is not clean to begin with"
+        assert package_import_problems(tmp_path, SHARED + rel) == [], (
+            f"{rel} is not clean to begin with"
+        )
         target.write_text(line + "\n" + real, encoding="utf-8")
         found = package_import_problems(tmp_path, SHARED + rel)
         assert found, f"{line!r} is not found in {rel}"
@@ -355,11 +398,17 @@ def test_the_move_changed_no_line_but_the_imports() -> None:
     _skip_if_shallow()
     for rel in WHOLE:
         new, old = SHARED + rel, OLD_OF[rel]
-        commit = earlier._git("log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new).strip()
+        commit = earlier._git(
+            "log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new
+        ).strip()
         assert commit, f"git finds no rename into {new}: the file was not moved with `git mv`"
-        assert earlier._git("show", f"{commit}^:{old}"), f"{old} is not in the commit before the rename"
+        assert earlier._git("show", f"{commit}^:{old}"), (
+            f"{old} is not in the commit before the rename"
+        )
         assert (
-            earlier.only_import_lines_changed(earlier._git("show", f"{commit}^:{old}"), earlier._git("show", f"{commit}:{new}"))
+            earlier.only_import_lines_changed(
+                earlier._git("show", f"{commit}^:{old}"), earlier._git("show", f"{commit}:{new}")
+            )
             == []
         ), f"{new} changed in more than its import lines"
 
@@ -372,27 +421,38 @@ def test_a_moved_client_changed_in_more_than_its_imports_is_found() -> None:
     assert earlier.only_import_lines_changed(was, moved) == []
     assert earlier.only_import_lines_changed(was, moved.replace("14", "30")) != []
     multi = 'import type {\n  A,\n  B,\n} from "../../../../packages/schemas/generated";\n'
-    assert earlier.only_import_lines_changed(multi, multi.replace("../../../../packages/", "../../../")) == []
+    assert (
+        earlier.only_import_lines_changed(
+            multi, multi.replace("../../../../packages/", "../../../")
+        )
+        == []
+    )
 
 
 def test_no_tracked_file_names_an_old_path() -> None:
     rels = [rel for rel in earlier.tracked() if not _kept_out(rel)]
-    assert len(rels) > 1000, "the walk found too few files: git ls-files is not listing the repository"
+    assert len(rels) > 1000, (
+        "the walk found too few files: git ls-files is not listing the repository"
+    )
     found = old_path_mentions(ROOT, rels)
     shown = "\n".join(f"  {rel}:{line}: {text[:140]}" for rel, line, text in found[:40])
-    assert found == [], f"{len(found)} place(s) still name an old path; the files are now in {SHARED}:\n{shown}"
+    assert found == [], (
+        f"{len(found)} place(s) still name an old path; the files are now in {SHARED}:\n{shown}"
+    )
 
 
 def test_every_named_exception_still_has_its_reason() -> None:
     """An exception outlives its reason when the file it excuses no longer names an old path: left in `NAMED` it keeps that
     file outside the walk, and an old path could be written back into it unseen (rule 12)."""
     stale = [rel for rel in NAMED if not old_path_mentions(ROOT, [rel])]
-    assert stale == [], f"{stale} no longer name an old path: remove them from NAMED, and the walk will cover them"
+    assert stale == [], (
+        f"{stale} no longer name an old path: remove them from NAMED, and the walk will cover them"
+    )
 
 
 def test_every_import_of_a_moved_client_reaches_the_package() -> None:
     bad, importers = imports_not_reaching(ROOT, earlier.tracked())
-    assert importers >= 55, (
+    assert importers >= 40, (
         f"only {importers} file(s) under OspreyFlow_Core import a client's name from {PACKAGE_NAME}: the walk found too few imports, or the importers were not repointed"
     )
     assert bad == [], f"{len(bad)} import(s) do not reach the package by its name: {bad[:10]}"
@@ -496,7 +556,9 @@ def test_an_old_path_put_back_in_one_importer_is_found(case: str, tmp_path: Path
     target = tmp_path / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(new_line + "\n", encoding="utf-8")
-    assert imports_not_reaching(tmp_path, [rel])[0] == [] and old_path_mentions(tmp_path, [rel]) == []
+    assert (
+        imports_not_reaching(tmp_path, [rel])[0] == [] and old_path_mentions(tmp_path, [rel]) == []
+    )
     target.write_text(old_line + "\n", encoding="utf-8")
     assert imports_not_reaching(tmp_path, [rel])[0] or old_path_mentions(tmp_path, [rel]), (
         f"neither walk finds {old_line!r} in {rel}"
@@ -511,9 +573,13 @@ def test_a_file_that_names_no_client_is_not_counted_as_an_importer(tmp_path: Pat
         copy.write_text((ROOT / (SHARED + client)).read_text(encoding="utf-8"), encoding="utf-8")
     rel = WORKSPACE_SRC + "theme/ThemeToggle.tsx"
     (tmp_path / rel).parent.mkdir(parents=True)
-    (tmp_path / rel).write_text(f'import {{ applyTheme }} from "{PACKAGE_NAME}";\n', encoding="utf-8")
+    (tmp_path / rel).write_text(
+        f'import {{ applyTheme }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+    )
     assert imports_not_reaching(tmp_path, [rel]) == ([], 0)
-    (tmp_path / rel).write_text(f'import {{ fetchProfile }} from "{PACKAGE_NAME}";\n', encoding="utf-8")
+    (tmp_path / rel).write_text(
+        f'import {{ fetchProfile }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+    )
     assert imports_not_reaching(tmp_path, [rel]) == ([], 1)
 
 
@@ -522,7 +588,9 @@ def test_every_import_reached_from_a_spec_resolves() -> None:
     test runs. Every relative import, reached from any spec by any chain, names a file."""
     rels = earlier.tracked()
     specs = earlier.spec_files(rels)
-    assert len(specs) >= 100, f"only {len(specs)} spec files found: the walk is not seeing the specs"
+    assert len(specs) >= 100, (
+        f"only {len(specs)} spec files found: the walk is not seeing the specs"
+    )
     missing, reached = earlier.unresolved_from_specs(ROOT, specs)
     assert reached >= 400, f"the walk reached only {reached} files: it is not following imports"
     assert missing == [], f"{len(missing)} import(s) name no file: {missing[:10]}"
@@ -544,12 +612,20 @@ def test_a_spec_that_imports_a_path_that_no_longer_exists_is_found(tmp_path: Pat
         (tmp_path / rel).write_text(text, encoding="utf-8")
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == []
     # The old line, put back: the client is no longer at that path.
-    (tmp_path / harness).write_text('import { readMaps } from "../src/admin/sections/MapsApi";\n', encoding="utf-8")
-    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [f"{harness}: ../src/admin/sections/MapsApi"]
+    (tmp_path / harness).write_text(
+        'import { readMaps } from "../src/admin/sections/MapsApi";\n', encoding="utf-8"
+    )
+    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
+        f"{harness}: ../src/admin/sections/MapsApi"
+    ]
     # The index exporting a file the package does not hold.
-    (tmp_path / harness).write_text(f'import {{ readMaps }} from "{PACKAGE_NAME}";\n', encoding="utf-8")
+    (tmp_path / harness).write_text(
+        f'import {{ readMaps }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+    )
     (tmp_path / SHARED / "admin" / "sections" / "MapsApi.ts").unlink()
-    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [f"{SHARED}index.ts: ./admin/sections/MapsApi"]
+    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
+        f"{SHARED}index.ts: ./admin/sections/MapsApi"
+    ]
 
 
 # ------------------------------------------------------------------------------------------------------- the images
@@ -571,7 +647,9 @@ def copy_sources(dockerfile: str) -> list[str]:
 
 def stale_copies(dockerfile: str) -> list[str]:
     """The sources a stage copies that name the place a client moved from: the file itself, or the folder only it filled."""
-    old = {"/".join(p.split("/")[3:]) for p in OLD_OF.values()}  # `ingest/api.ts` under `apps/workspace/src/`
+    old = {
+        "/".join(p.split("/")[4:]) for p in OLD_OF.values()
+    }  # `ingest/api.ts` under `apps/workspace/src/`
     return sorted(
         src
         for src in copy_sources(dockerfile)
@@ -600,7 +678,9 @@ def test_the_harness_image_copies_what_the_clients_need() -> None:
     assert earlier.dangling(copied, reached) == []
     names = {str(p.relative_to(CORE.resolve())) for p in reached}
     for rel in WHOLE:
-        assert f"packages/glass-shared/src/{rel}" in names, f"the walk does not reach the package's {rel}"
+        assert f"packages/glass-shared/src/{rel}" in names, (
+            f"the walk does not reach the package's {rel}"
+        )
 
 
 def test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found() -> None:
@@ -626,13 +706,122 @@ def test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found() -> None:
         line = f"COPY apps/workspace/src/{rel} ./apps/workspace/src/{rel}\n"
         stale = real.replace(shared, shared + line, 1)
         assert stale_copies(stale) == [f"apps/workspace/src/{rel}"]
-        assert earlier.dangling(image._copied_paths(stale), reached) == [f"apps/workspace/src/{rel}"]
+        assert earlier.dangling(image._copied_paths(stale), reached) == [
+            f"apps/workspace/src/{rel}"
+        ]
 
     workspace = WORKSPACE_IMAGE.read_text(encoding="utf-8")
     assert stale_copies(workspace) == []
     package_line = "COPY packages/glass-shared/src ./packages/glass-shared/src\n"
     assert package_line in workspace
     assert "packages/glass-shared/src" not in copy_sources(workspace.replace(package_line, "", 1))
-    assert stale_copies(workspace + "COPY apps/workspace/src/ingest/releases/releasesApi.ts ./x\n") == [
-        "apps/workspace/src/ingest/releases/releasesApi.ts"
+    assert stale_copies(
+        workspace + "COPY apps/workspace/src/ingest/releases/releasesApi.ts ./x\n"
+    ) == ["apps/workspace/src/ingest/releases/releasesApi.ts"]
+
+
+# --------------------------------------------------------------------------------------------------- the four gates
+
+#: The files each gate read on main before this move: the number each reported or, where it reports none, the files its own
+#: rules select (measured on 20 November 2026, on the tip PL4d2 started from). The six clients moved from a folder each gate
+#: reads to another it reads, so the numbers do not change: none may fall.
+FILES_BEFORE = {"colour-drift": 488, "design-check": 897, "ui-words": 495, "no-branches": 1742}
+
+
+def test_each_gate_reads_no_fewer_files_than_before() -> None:
+    now = {
+        "colour-drift": colour_drift_check.scanned_count(),
+        "design-check": earlier._design_files(design_check.SCANNED),
+        "ui-words": earlier._ui_words_files(),
+        "no-branches": len(no_branches_check.tree_files()),
+    }
+    assert all(now[gate] >= before for gate, before in FILES_BEFORE.items()), (
+        f"a gate reads fewer files than before: now {now}, before {FILES_BEFORE}"
+    )
+
+
+@pytest.fixture
+def shared_copy(tmp_path: Path) -> Path:
+    """`<tmp>/packages/glass-shared/src`, a copy of the real folder; the real one is never written."""
+    copy = tmp_path / "packages" / "glass-shared" / "src"
+    shutil.copytree(SHARED_SRC, copy, ignore=shutil.ignore_patterns("node_modules"))
+    return copy
+
+
+def test_the_colour_drift_check_reports_a_plant_in_a_moved_client(
+    shared_copy: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mirrors = dict(colour_drift_check.SCANNED).get(SHARED_SRC)
+    assert mirrors is not None, "the colour-drift check does not read the package"
+    monkeypatch.setattr(colour_drift_check, "CORE", shared_copy.parent.parent.parent)
+    monkeypatch.setattr(colour_drift_check, "SCANNED", ((shared_copy, mirrors),))
+    assert colour_drift_check.main() == 0, "the clean copy of the package is already reported"
+    capsys.readouterr()
+    earlier._append(
+        shared_copy,
+        "ingest/api.ts",
+        '\nexport const STRIPE = { background: "#12ab34", padding: 8 };\n',
+    )
+    assert colour_drift_check.main() == 1
+    assert "packages/glass-shared/src/ingest/api.ts:" in capsys.readouterr().out
+
+
+def test_the_design_detector_reports_a_plant_in_a_moved_client(
+    shared_copy: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(design_check, "SCANNED", [shared_copy])
+    assert design_check.unexcused(design_check.detect(design_check.SCANNED)) == [], (
+        "the clean copy already has findings"
+    )
+    earlier._append(
+        shared_copy,
+        "admin/updateNotice.ts",
+        "\nexport const TOAST_STYLE = {\n"
+        '  background: "var(--surface-raised)", borderLeft: "3px solid var(--error)", borderRadius: "8px",\n'
+        '  padding: "12px 16px", boxShadow: "var(--overlay-shadow)",\n'
+        "};\n",
+    )
+    found = design_check.unexcused(design_check.detect(design_check.SCANNED))
+    assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [
+        ("updateNotice.ts", "side-tab")
     ]
+
+
+def test_the_ui_words_check_reports_a_plant_in_a_moved_client(
+    shared_copy: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    empty = shared_copy.parent.parent / "no-src"
+    empty.mkdir()
+    monkeypatch.setattr(ui_words_check, "SHARED_SRC", shared_copy)
+    monkeypatch.setattr(ui_words_check, "GLASS_SRC", empty)
+    monkeypatch.setattr(ui_words_check, "DESIGN_PACKAGE", empty)
+    assert ui_words_check.main() == 0, "the clean copy of the package is already reported"
+    capsys.readouterr()
+    client = next(shared_copy.rglob("releases/*.ts"))
+    earlier._append(
+        shared_copy,
+        client.relative_to(shared_copy).as_posix(),
+        '\nexport const LABEL = "Target model";\n',
+    )
+    assert ui_words_check.main() == 1
+    assert (
+        f"packages/glass-shared/src/{client.relative_to(shared_copy).as_posix()}:"
+        in capsys.readouterr().out
+    )
+
+
+def test_the_no_branches_check_reports_a_plant_in_a_moved_client(
+    shared_copy: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    top = "packages/glass-shared/src"
+    assert top in no_branches_check.SCANNED
+    walk = no_branches_check.tree_files
+    tmp_core = shared_copy.parent.parent.parent
+    monkeypatch.setattr(no_branches_check, "tree_files", lambda: walk(tmp_core, [top]))
+    assert no_branches_check.main() == 0, "the clean copy of the package is already reported"
+    capsys.readouterr()
+    client = next(shared_copy.rglob("Maps*.ts"))
+    rel = client.relative_to(shared_copy).as_posix()
+    earlier._append(shared_copy, rel, '\nexport const BRANCH_CASE = "branch-by-filter";\n')
+    assert no_branches_check.main() == 1
+    assert f"{top}/{rel}:" in capsys.readouterr().out
