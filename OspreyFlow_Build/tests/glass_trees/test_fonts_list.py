@@ -249,19 +249,34 @@ def _gds_names(data: dict) -> list[str]:
     return [e["family"] for e in govuk_entries(data)]
 
 
-def _font_file_listed(ref: str, data: dict) -> bool:
-    """A font file (or a URL to one) is the list's when it belongs to a listed `@fontsource` package, or is one of the
-    stems the GDS Transport entry names under its own folder."""
+#: How @fontsource names a file: `<package>-<subset>-<weight>-<style>.<ext>`, as `ibm-plex-mono-latin-400-normal.woff2`.
+FONTSOURCE_FILE = r"{package}-[a-z0-9]+(?:-[a-z0-9]+)*?-(?P<weight>\d{{3}})-(?P<style>normal|italic)\.[a-z0-9]+"
+UNOWNED = "no listed family owns it"
+
+
+def _font_file_fault(ref: str, data: dict) -> str | None:
+    """Why a font file (or a URL to one) is not the list's, or None when it is. A file is the list's when it belongs to a
+    listed `@fontsource` package *at a weight and a style the list names* (the file name carries both), or is one of the
+    stems the GDS Transport entry names under its own folder. UNOWNED is the answer for a file no listed family owns."""
     name = ref.replace("\\", "/")
+    base = name.rsplit("/", 1)[-1].split("?")[0].split("#")[0]
     for entry in fontsource_entries(data):
-        if entry["source"].removeprefix("@fontsource/") in name:
-            return True
+        package = entry["source"].removeprefix("@fontsource/")
+        if package not in name:
+            continue
+        parsed = re.fullmatch(FONTSOURCE_FILE.format(package=re.escape(package)), base, re.I)
+        if parsed is None:
+            return f"a file of {entry['family']} whose weight and style the list cannot be read against"
+        if parsed.group("style").lower() != "normal":
+            return f"the {parsed.group('style').lower()} style of {entry['family']}, which the list does not name"
+        if int(parsed.group("weight")) not in entry["weights"]:
+            return f"weight {int(parsed.group('weight'))} of {entry['family']}, which the list does not name"
+        return None
     for entry in govuk_entries(data):
         folder = entry["self_hosted_under"].strip("/") + "/fonts/"
-        base = name.rsplit("/", 1)[-1]
         if folder in name and any(base.startswith(stem + "-") for stem in entry["file_stems"]):
-            return True
-    return False
+            return None
+    return UNOWNED
 
 
 def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, ...] = (), *, no_gds: bool = False) -> Scan:
@@ -277,8 +292,10 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
         rel = path.relative_to(core).as_posix()
         if path.suffix in FONT_SUFFIXES:
             result.read.append(rel)
-            if not _font_file_listed(rel, data):
+            if (fault := _font_file_fault(rel, data)) == UNOWNED:
                 result.violations.append(f"{rel}: a font file that no listed family owns")
+            elif fault:
+                result.violations.append(f"{rel}: a font file, {fault}")
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -324,13 +341,19 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
             for ref in FACE_URL.findall(block):
                 if _is_external(ref):
                     result.violations.append(f"{rel}: an @font-face loads {ref}, from outside the repository: fonts are self-hosted")
-                elif not _font_file_listed(ref, data):
+                elif (fault := _font_file_fault(ref, data)) == UNOWNED:
                     result.violations.append(f"{rel}: an @font-face loads {ref}, which no listed family owns")
+                elif fault:
+                    result.violations.append(f"{rel}: an @font-face loads {ref}, {fault}")
         rest = FONT_FACE.sub("", text)
         # A font file named outside an `@font-face` (a preload, a `url(...)`); an external one is reported below.
         for ref in FONT_REF.findall(rest):
-            if not ref.startswith("//") and not _font_file_listed(ref, data):
+            if ref.startswith("//"):
+                continue
+            if (fault := _font_file_fault(ref, data)) == UNOWNED:
                 result.violations.append(f"{rel}: names the font file {ref}, which no listed family owns")
+            elif fault:
+                result.violations.append(f"{rel}: names the font file {ref}, {fault}")
         # What leaves the repository: a font host, an external font file, or an external stylesheet (a `<link>` or an
         # `@import`, which can load any family at any weight). Each URL is reported once, however it was found.
         sheets = _stylesheet_urls(rest)
@@ -576,6 +599,10 @@ FRONT_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     # A listed name over a file the list does not name: the `src` of the rule is held to the list, not only its family.
     ("a listed family whose @font-face points at a hosted file", "apps/workspace/src/design/extra.css", _append("@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(https://fonts.gstatic.com/s/roboto/v30/x.woff2)}"), "an @font-face loads https://fonts.gstatic.com/s/roboto/v30/x.woff2, from outside the repository"),
     ("a listed family whose @font-face points at an unlisted local file", "apps/workspace/src/design/extra.css", _append(REAL_FONTSOURCE_FACE.replace("atkinson-hyperlegible-next-latin-400-normal.woff2", "roboto-latin-400-normal.woff2")), "an @font-face loads ./files/roboto-latin-400-normal.woff2, which no listed family owns"),
+    # A listed family's own file at a weight or a style the list does not name: the declared weight (400) passes, the file is 500.
+    ("a listed family whose @font-face declares 400 and serves the 500 file", "apps/workspace/src/design/extra.css", _append("@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(./files/ibm-plex-mono-latin-500-normal.woff2) format('woff2')}"), "an @font-face loads ./files/ibm-plex-mono-latin-500-normal.woff2, weight 500 of IBM Plex Mono, which the list does not name"),
+    ("a listed family whose @font-face serves its italic file", "apps/workspace/src/design/extra.css", _append(REAL_FONTSOURCE_FACE.replace("latin-400-normal", "latin-400-italic")), "the italic style of Atkinson Hyperlegible Next, which the list does not name"),
+    ("a listed family's file at an unlisted weight in the generated fonts folder", "apps/workspace/public/assets/govuk/fonts/ibm-plex-mono-latin-500-normal.woff2", _append("x"), "a font file, weight 500 of IBM Plex Mono, which the list does not name"),
     ("a listed family whose @font-face points at a file with no font extension", "apps/workspace/src/design/extra.css", _append("@font-face{font-family:'IBM Plex Mono';font-weight:400;src:url(https://fonts.gstatic.com/l/font?kit=abc)}"), "an @font-face loads https://fonts.gstatic.com/l/font?kit=abc, from outside the repository"),
 ]
 
@@ -600,6 +627,9 @@ PAGES_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     ("an unlisted @fontsource package in the pages' package.json", "apps/pages/package.json", _after('"express-session": "1.19.0",', '\n    "@fontsource/roboto": "5.3.0",'), "loads @fontsource/roboto, a family the list does not name"),
     # A font file the list does not own, in a static folder.
     ("an unlisted font file among the pages' static files", "apps/pages/server/static/fonts/comic-neue-latin-400-normal.woff2", _append("x"), "a font file that no listed family owns"),
+    # A listed family's own file at a weight the list does not name, in a static folder and as a preload.
+    ("a listed family's file at an unlisted weight among the pages' static files", "apps/pages/server/static/fonts/ibm-plex-mono-latin-500-normal.woff2", _append("x"), "a font file, weight 500 of IBM Plex Mono, which the list does not name"),
+    ("a listed family's file at an unlisted weight preloaded by a view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="preload" href="/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" crossorigin>' + LAYOUT_HEAD, 1), "names the font file /fonts/ibm-plex-mono-latin-500-normal.woff2, weight 500 of IBM Plex Mono"),
     # A bare font URL, as a preload `<link>` in a view writes it.
     ("an unlisted font preloaded by a view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="preload" href="/fonts/comic-neue-latin-400-normal.woff2" as="font" crossorigin>' + LAYOUT_HEAD, 1), "names the font file /fonts/comic-neue-latin-400-normal.woff2"),
     # GDS Transport in a pages stylesheet, as the GOV.UK brand's own token writes it: a *listed* family, so the list passes it.

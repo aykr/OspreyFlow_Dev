@@ -41589,7 +41589,8 @@ amendment adds to decision 6, whose "tokens.css, primitives.css, fonts; read by 
    default tree serves no GDS Transport at all (I9, its font half).
 4. **A test fails if either loads a font the list does not name.** It reads `apps/workspace`, `apps/harness`, `packages/design` and
    `apps/pages`, and looks for an `@fontsource` import or package, an `@font-face`, a font file, and a font URL, and requires each family
-   and weight to be on the list; every listed `@fontsource` weight must be imported, and its package declared. For `apps/pages` it also fails
+   and weight to be on the list (a font file's weight and style are read from its name, `<package>-<subset>-<weight>-<style>`; a file at a
+   weight the list does not name, or in italic, fails as an unlisted `@font-face` weight does); every listed `@fontsource` weight must be imported, and its package declared. For `apps/pages` it also fails
    on GDS Transport, or on a path under `/assets/govuk/`, anywhere. The invariants I9 names as proof pieces (the default tree's assets test,
    `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case) are not built here; this amendment holds only the font half.
 5. **The weights text.** `spec/design/DESIGN.md` §2 says Atkinson 200 to 800 and Plex 400, 500 and 600; the code ships 400, 600 and 700 and
