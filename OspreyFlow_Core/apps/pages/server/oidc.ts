@@ -82,6 +82,20 @@ function isUnreachable(error: unknown): boolean {
   });
 }
 
+/**
+ * The realm's key set could not be had: it answered something other than 200 (a 500, or a gateway's 502 while the realm
+ * restarts), or answered something that is not a key set. jose raises those as a bare `JOSEError` (`ERR_JOSE_GENERIC`) and
+ * `JWKSInvalid`; a token that merely fails to verify raises one of the specific classes (`JWSSignatureVerificationFailed`,
+ * `JWTClaimValidationFailed`, `JWTExpired`, `JWKSNoMatchingKey` and the rest), which stay refusals. This is the provider
+ * failing, not the provider saying no (ADR-044).
+ */
+function keySetFailed(error: unknown): boolean {
+  return causes(error).some((cause) => {
+    const code = (cause as { code?: unknown }).code;
+    return cause instanceof joseErrors.JOSEError && (code === "ERR_JOSE_GENERIC" || code === "ERR_JWKS_INVALID");
+  });
+}
+
 /** What a failure of the exchange is: unreachable (503) or refused (403). The words are ours, never the library's. */
 function classify(error: unknown, refusal: string): IdentityProviderRefused | IdentityProviderUnavailable {
   if (isUnreachable(error)) return new IdentityProviderUnavailable("the identity provider could not be reached or failed");
@@ -173,6 +187,7 @@ export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions 
           clockTolerance: CLOCK_TOLERANCE_SECONDS,
         }));
       } catch (error) {
+        if (keySetFailed(error)) throw new IdentityProviderUnavailable("the identity provider's key set could not be had");
         throw classify(error, "the ID token does not verify");
       }
       // The nonce again, on the token whose signature is now known to be the realm's.
