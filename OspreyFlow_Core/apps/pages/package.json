@@ -24,7 +24,9 @@
     "express-session": "1.19.0",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
+    "jose": "^6.2.18",
     "nunjucks": "^3.2.4",
+    "openid-client": "^6.9.0",
     "ws": "^8.18.0"
   }
 }
