@@ -1,0 +1,48 @@
+# The functions, and the parts of functions, the GOV.UK tree is agreed to leave out (ADR-152 invariant I6 and
+# Amendment 1, decision 1; slice PL4a). Each line is the owner's: his reason, and the day he agreed it.
+# A line lists only what one tree lacks, never a version or a look difference (decision 9).
+#
+#   id      a function's id in FUNCTIONS.yaml, or (for a "scripts off only" line) the name of a class of
+#           behaviour: scripts-off-resize, scripts-off-reorder or scripts-off-drawn-canvas
+#   reason  why it is left out
+#   scope   whole function        the function has no GOV.UK page, and the tree is complete without it
+#           part of a function    one named part is left out; the rest of the function stays a function
+#           scripts off only      the behaviour needs scripts and is excused for the scripts-off case only.
+#                                 Every task can be done without it. It is never read as a full exception:
+#                                 with scripts on, the GOV.UK tree must still offer it
+#   agreed  who agreed it, and when
+#
+# Row 515 (the rest of the GOV.UK frame) and row 516 (the status bar and classification strip) of the front-end
+# inventory are NOT here: they are functions in FUNCTIONS.yaml with the status "owner to rule", until the owner
+# rules. Panel frames (517) and the Studio dataset map (482) are functions with an empty route, not exceptions.
+#
+# Checked by the developer repository's `tests/glass_trees/test_functions_yaml.py`.
+exceptions:
+  - id: govuk-frame
+    reason: "The light/dark switch, one part of the GOV.UK frame row: the GOV.UK look is light only (ADR-132 decision 3, kept by ADR-152 decision 13), so a switch between light and dark means nothing on its pages. The rest of the row (header, footer, phase banner, skip link) stays a function."
+    scope: "part of a function"
+    agreed: "the owner, 20 November 2026"
+  - id: admin-proposed-types
+    reason: "Dead code: the Admin screen for Proposed types is mounted nowhere (its section was removed in 027cbad), so no person can reach it, and neither tree rebuilds a screen no one can reach."
+    scope: "whole function"
+    agreed: "the owner, 20 November 2026"
+  - id: studio-api-helpers
+    reason: "Plain shared code with no screen: the Studio's request functions and helpers. They move to the shared package (PL4 slice D) and every page uses them; there is no page to build."
+    scope: "whole function"
+    agreed: "the owner, 20 November 2026"
+  - id: app-shell
+    reason: "No function: the app shell and shared infrastructure (App.tsx, colour, design, ontology, rights, analytics, time, motion, testing). It is wiring, not something a person does; the pages have their own server and templates."
+    scope: "whole function"
+    agreed: "the owner, 20 November 2026"
+  - id: scripts-off-resize
+    reason: "Resizing the side, stacked-panel and timeline sashes needs a pointer and a script. With scripts off the panels keep their set sizes; every task can still be done."
+    scope: "scripts off only"
+    agreed: "the owner, 20 November 2026"
+  - id: scripts-off-reorder
+    reason: "Moving a panel up and down, by menu and by Alt-arrow, needs a script. With scripts off the panels keep their order; every task can still be done."
+    scope: "scripts off only"
+    agreed: "the owner, 20 November 2026"
+  - id: scripts-off-drawn-canvas
+    reason: "The drawn canvases (the graph, the map and the Studio canvases) need a script. With scripts off a table takes the place of the graph, and every task can still be done."
+    scope: "scripts off only"
+    agreed: "the owner, 20 November 2026"

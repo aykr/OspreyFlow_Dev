@@ -1,0 +1,383 @@
+# The React workspace's function list (ADR-152 Amendment 1, decision 1; slice PL4a).
+#
+# The GOV.UK tree is *complete* when every row below has its GOV.UK page, less the owner-agreed lines of
+# PARITY_EXCEPTIONS.yaml. The state is derived from this file by `govuk_tree_state` in
+# `scripts/tree_parity.py` (slice PL7); nothing records "complete" and nobody writes it.
+#
+# One row per function: the 46 rows of the front-end inventory (`FRONT_END_ANSWERS.md` part B, section 1,
+# the owner's file kept outside the repository) and one row for the sign-in page's GOV.UK assets.
+#
+#   id        a short stable slug
+#   name      the inventory's Function cell (the "ADDED" marker the inventory puts before some names is
+#             left out: it says the inventory added the row, not what the function is called)
+#   where     the inventory's Where cell, with its paths written from the checkout's root
+#   slice     the plan's build that owns the page; "none named" where no build owns it yet; where the plan
+#             has not yet named a build, the inventory's own slice (R1 to R8) is kept
+#   scenario  the spec/08 id or ids, or empty. Only A and B are owner-ruled; scenario C is proposed, so
+#             a function with only a C scenario has none here. A function with none gets one before its
+#             page is built (decision 12)
+#   route     EMPTY until the function has its GOV.UK page: a route enters `tree-govuk`'s route list only
+#             with its slice's scenario passing on that tree (I8). A row with a route has a scenario
+#   status    planned | owner to rule | parity exception
+#
+# Checked by the developer repository's `tests/glass_trees/test_functions_yaml.py`.
+functions:
+  - id: studio-model-text
+    name: "Studio: Model step, domain model text"
+    where: "apps/workspace/src/ingest/studio/ModelTab.tsx (20, a placeholder: \"thin until phase 5\", :1), studio/packs.ts"
+    slice: "IS2"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-model-proposals
+    name: "Studio: Model step, proposed link types"
+    where: "apps/workspace/src/linktypes/ModelProposals.tsx, modelProposalsApi.ts, mounted apps/workspace/src/ingest/IngestStudio.tsx:20,219 (shares linktypes/http.ts 53 and linkTypesApi.ts 171)"
+    slice: "IS2"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # B11 names it by its wording only.
+  - id: inspector-define-link-type
+    name: "Inspector: define a new link type"
+    where: "apps/workspace/src/linktypes/DefineLinkType.tsx, defineType.ts; mounted only apps/workspace/src/inspector/LinkChange.tsx:6"
+    slice: "none named"
+    scenario: "B11"
+    route: ""
+    status: "planned"
+  # Dead code: mounted nowhere. A whole-function line in PARITY_EXCEPTIONS.yaml.
+  - id: admin-proposed-types
+    name: "Admin's Proposed types: dead code"
+    where: "apps/workspace/src/linktypes/ProposedTypes.tsx; no import outside its test and apps/workspace/keyboard/proposed-types-harness.tsx:10; its section was removed in 027cbad"
+    slice: "none named"
+    scenario: ""
+    route: ""
+    status: "parity exception"
+  - id: studio-frame
+    name: "Studio frame: tabs, readiness strip, rights gate, dataset switch, Needs-you reminder"
+    where: "apps/workspace/src/ingest/IngestStudio.tsx (tabs :44–51), studio/{ReadinessStrip,rightsGate,useStudioData,datasets,vocabulary}"
+    slice: "IS5a"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-sources
+    name: "Studio: Sources (register, source page, governance)"
+    where: "apps/workspace/src/ingest/studio/SourcesTab.tsx, useRegisteredSources.ts, apps/workspace/src/ingest/sources/ except ScreeningLists; uses apps/workspace/src/content/AddFiles.tsx"
+    slice: "IS5b"
+    scenario: "B1, B2, B3, B13"
+    route: ""
+    status: "planned"
+  # C2 (spec/08) is proposed, not owner-ruled, so it is not a scenario.
+  - id: studio-screening-lists
+    name: "Studio: screening lists"
+    where: "apps/workspace/src/ingest/sources/ScreeningLists.tsx"
+    slice: "IS5c"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # In FUNCTIONS.yaml with an empty route, not an exception (the owner, 20 November 2026).
+  - id: studio-dataset-map
+    name: "Studio: dataset map"
+    where: "does not exist (no file; grep -ri \"dataset map\" apps/workspace/src/ finds only \"dataset maps\" in a ModelTab sentence)"
+    slice: "IS3"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-pipeline-canvas
+    name: "Studio: pipeline editor canvas"
+    where: "apps/workspace/src/ingest/dag/PipelineCanvas.tsx (read-only, :1–4), pipelineLayout.ts, pipelineGraphEdit.ts"
+    slice: "IS4"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-pipelines-place
+    name: "Studio: Pipelines place (home, guided list, node drawer, YAML, staging step, expert SQL and fuzzy-match drawers)"
+    where: "apps/workspace/src/ingest/dag/ except the canvas and NodePreview: PipelineStudio.tsx, GuidedSteps.tsx, NodeDrawer.tsx, StagingDrawer.tsx+stagePanels.tsx+stagingSteps.ts (948), ExpertStepDrawer.tsx (414), PipelineYaml.tsx, studioMode.ts"
+    slice: "IS4"
+    scenario: "B13"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: studio-preview
+    name: "Studio: preview at every step"
+    where: "apps/workspace/src/ingest/dag/NodePreview.tsx (exists today: ADR-140 decision 14, :1–4)"
+    slice: "R3 (F)"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # B1 indirectly; B13 by the walk through the Studio.
+  - id: studio-map-step
+    name: "Studio: Map step (row template, field bindings, its own Sigma instance; the only dragging in the Studio)"
+    where: "apps/workspace/src/ingest/map/ (MapEditor, MapScreen, MapCanvas :1–4, ElementInspector, FieldBindingEditor, SourceFieldsPanel, …)"
+    slice: "none named"
+    scenario: "B1, B13"
+    route: ""
+    status: "planned"
+  - id: studio-connect
+    name: "Studio: Connect (with Profile and Deduplicate)"
+    where: "apps/workspace/src/ingest/ConnectScreen.tsx, ProfileScreen.tsx, DeduplicateControl.tsx, mounted from dag/NodeDrawer.tsx"
+    slice: "IS5f"
+    scenario: "B1, B2, B3"
+    route: ""
+    status: "planned"
+  # C1 (spec/08) is proposed, not owner-ruled.
+  - id: studio-verify
+    name: "Studio: Verify"
+    where: "apps/workspace/src/ingest/verify/"
+    slice: "IS5g"
+    scenario: "B13"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row. C1 and C3 (spec/08) are proposed, not owner-ruled.
+  - id: studio-checks
+    name: "Studio: Checks"
+    where: "apps/workspace/src/ingest/checks/ChecksScreen.tsx"
+    slice: "R3 (H)"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-publish
+    name: "Studio: Publish and schedule"
+    where: "apps/workspace/src/ingest/publish/"
+    slice: "IS5e"
+    scenario: "B13"
+    route: ""
+    status: "planned"
+  - id: studio-runs
+    name: "Studio: Runs (grid, revert)"
+    where: "apps/workspace/src/ingest/runs/RunsTab.tsx, runsGrid.ts"
+    slice: "IS5d"
+    scenario: "B13"
+    route: ""
+    status: "planned"
+  - id: studio-runs-promotions
+    name: "Studio: Runs, analyst promotions"
+    where: "apps/workspace/src/ingest/runs/promotions.tsx, promotionsApi.ts"
+    slice: "IS5d"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-runs-drawn-merge
+    name: "Studio: Runs, merge a drawn dataset"
+    where: "apps/workspace/src/ingest/runs/drawnMerge.tsx, drawnMergeApi.ts"
+    slice: "IS5d"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-runs-external-orchestration
+    name: "Studio: Runs, external orchestration"
+    where: "apps/workspace/src/ingest/runs/ExternalOrchestration.tsx"
+    slice: "IS5d"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: studio-releases
+    name: "Studio: Releases"
+    where: "apps/workspace/src/ingest/releases/"
+    slice: "IS5a"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # Plain shared code with no screen. A whole-function line in PARITY_EXCEPTIONS.yaml.
+  - id: studio-api-helpers
+    name: "Studio API and helpers"
+    where: "apps/workspace/src/ingest/api.ts (757), handlingParts.ts, alreadyLoaded.ts, fileSize.ts, percent.ts"
+    slice: "none named"
+    scenario: ""
+    route: ""
+    status: "parity exception"
+  - id: graph-canvas
+    name: "Graph canvas: select, open links, drag, remove, find groups, mark for suppression (spec/02 §9.5, :2407)"
+    where: "apps/workspace/src/canvas/ (GlassCanvas.tsx 4,078)"
+    slice: "GG2"
+    scenario: "A9, A10, B5, B7, B15"
+    route: ""
+    status: "planned"
+  - id: working-set
+    name: "Working set, delta stream, cap refusal, batch expansion (\"large sets\")"
+    where: "apps/workspace/src/workingset/ (store and deltaClient: 713 plain; BatchExpansion, ViewOverCap: 675 React); apps/workspace/src/canvas/CapRefusalPrompt.tsx, LargeExpansionPrompt.tsx"
+    slice: "GG2"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: cases-and-views
+    name: "Cases, case brief, saved views, history (also access, settings, datasets, domains, new case)"
+    where: "apps/workspace/src/investigation/, apps/workspace/src/views/, apps/workspace/src/history/"
+    slice: "R4 (list), R5"
+    scenario: "A7, B14, B21"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: inspector
+    name: "Inspector (link change, notes, events, risk)"
+    where: "apps/workspace/src/inspector/"
+    slice: "R5"
+    scenario: "B11"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: search
+    name: "Search and the results page"
+    where: "apps/workspace/src/search/"
+    slice: "R5"
+    scenario: "B4"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: timeline-playback
+    name: "Timeline and playback"
+    where: "apps/workspace/src/timeline/, apps/workspace/src/playback/"
+    slice: "R5"
+    scenario: "A4, A5, A11, B16, B17, B18"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: ask-chat
+    name: "Ask & Chat"
+    where: "apps/workspace/src/questions/ (also uses apps/workspace/src/models/engines.tsx, counted under Admin)"
+    slice: "R5"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: documents
+    name: "Documents: reader, a node's Messages, adding files"
+    where: "apps/workspace/src/reader/, apps/workspace/src/dossier/, apps/workspace/src/content/"
+    slice: "R5"
+    scenario: "A6, B6"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: graph-extras
+    name: "Graph extras: Explore panel, find connections (layouts, menus, icons, labels, zoom are inside `W/canvas/`)"
+    where: "apps/workspace/src/explore/, apps/workspace/src/connections/"
+    slice: "R6"
+    scenario: "A9, B21"
+    route: ""
+    status: "planned"
+  - id: drawing-boards
+    name: "Drawing boards (and a watch or alert drawn from them)"
+    where: "apps/workspace/src/boards/"
+    slice: "GG4"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row. C5 (spec/08) is proposed, not owner-ruled; the Matrix has none.
+  - id: matrix-ownership
+    name: "Matrix and Ownership views"
+    where: "apps/workspace/src/matrix/, apps/workspace/src/ownership/"
+    slice: "R6"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: query-builder
+    name: "Query builder, metrics, match strictness and explain, cross-filter"
+    where: "apps/workspace/src/patterns/, apps/workspace/src/metrics/, apps/workspace/src/resolution/, apps/workspace/src/crossfilter/"
+    slice: "R6"
+    scenario: "A3, A7, A8, A12, B9, B10, B19"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: assessment-export
+    name: "Assessment and export"
+    where: "apps/workspace/src/assessment/, apps/workspace/src/export/"
+    slice: "R7"
+    scenario: "A13, A14, A15"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row. C8, C11 and C12 (spec/08) are proposed, not owner-ruled.
+  - id: reports
+    name: "Reports: Reports and Figures views, trends, packs, published, data feeds, embedded dashboards, alert monitoring board"
+    where: "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
+    slice: "R7"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: alerts-rules-watches
+    name: "Alerts, rules, watches, connection strength"
+    where: "apps/workspace/src/alerts/, apps/workspace/src/watches/, apps/workspace/src/strength/"
+    slice: "R7"
+    scenario: "B12, B13, B14, B20"
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row. C9 and C11 (spec/08) are proposed, not owner-ruled.
+  - id: admin
+    name: "Admin: every section in `W/admin/sections.json` (people, roles, dashboard identities, datasets, connections, operations, system, models, maps, grading scheme, audit, demo packs; 2 still \"coming\")"
+    where: "apps/workspace/src/admin/ except needsYou (6,326), plus apps/workspace/src/models/ (458)"
+    slice: "R7"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory counts it inside the Admin row.
+  - id: needs-you
+    name: "Needs you (proposals queue on Home and in the Studio)"
+    where: "apps/workspace/src/admin/needsYou/; mounted apps/workspace/src/App.tsx:1743 and apps/workspace/src/ingest/IngestStudio.tsx:8"
+    slice: "R7"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  - id: top-bar-home-help
+    name: "Top bar, context banner, Home, Welcome, Help"
+    where: "apps/workspace/src/shell/, apps/workspace/src/home/, apps/workspace/src/welcome/, apps/workspace/src/help/"
+    slice: "R1 (header), R7"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The owner rules on this row line by line. The light/dark switch is a parity exception (a part of the row); the rest of the row stays a function.
+  - id: govuk-frame
+    name: "GOV.UK frame (header, footer, phase banner, skip link) and light/dark switch"
+    where: "apps/workspace/src/brand/, apps/workspace/src/theme/"
+    slice: "R1 (header)"
+    scenario: ""
+    route: ""
+    status: "owner to rule"
+  # The owner rules on this row.
+  - id: status-bar
+    name: "Status bar (dimmed count, withheld sentence) and classification strip"
+    where: "apps/workspace/src/statusbar/ (71); apps/workspace/src/shell/ClassificationStrip.tsx (38, already in the shell count)"
+    slice: "none named"
+    scenario: "A3"
+    route: ""
+    status: "owner to rule"
+  # A function, built as PL8 (the owner, 20 November 2026): not an exception, whatever Amendment 1's earlier wording said.
+  - id: panel-frames
+    name: "Panel frames (move or hide the side and bottom panels)"
+    where: "apps/workspace/src/layout/"
+    slice: "PL8"
+    scenario: ""
+    route: ""
+    status: "planned"
+  - id: map-and-site-plans
+    name: "Map and site plans (heat layer, hotspot histogram, boundary filter, gazetteers, site calibration)"
+    where: "apps/workspace/src/map/, apps/workspace/src/site/"
+    slice: "GG5"
+    scenario: "A1, A2, A3, B17"
+    route: ""
+    status: "planned"
+  - id: sign-in-session
+    name: "Sign-in, session renewal, account menu, launcher handoff"
+    where: "apps/workspace/src/auth/ (userManager.ts uses oidc-client-ts)"
+    slice: "PL9"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # No function: the app shell and shared infrastructure. A whole-function line in PARITY_EXCEPTIONS.yaml.
+  - id: app-shell
+    name: "No function: the app shell and shared infrastructure"
+    where: "apps/workspace/src/App.tsx 3,109 (+main.tsx 43 etc.: 3,213); apps/workspace/src/color/ 1,165; apps/workspace/src/design/ 1,226; apps/workspace/src/ontology/ 81; apps/workspace/src/rights/ 122; apps/workspace/src/analytics/ 141; apps/workspace/src/time/ 19; apps/workspace/src/motion/ 6; apps/workspace/src/testing/ 143"
+    slice: "none named"
+    scenario: ""
+    route: ""
+    status: "parity exception"
+  # The sign-in page's GOV.UK assets: the sign-in theme's stylesheet is the workspace's file today, and the
+  # front proxy sends the sign-in name's /assets/govuk/* to the workspace (Amendment 1, "Context").
+  - id: signin-govuk-assets
+    name: "Sign-in page's GOV.UK assets"
+    where: "harness/keycloak_theme.py (the sign-in theme's stylesheet); harness/site.py (the sign-in name's /assets/govuk/* route)"
+    slice: "PL7"
+    scenario: ""
+    route: ""
+    status: "planned"

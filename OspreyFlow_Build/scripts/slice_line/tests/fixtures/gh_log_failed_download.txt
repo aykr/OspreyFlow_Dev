@@ -1,0 +1,2 @@
+lint	Set up job	2026-11-20T08:02:11.4410021Z ##[error]Failed to download action 'https://api.github.com/repos/astral-sh/setup-uv/tarball/v6'. Error: Response status code does not indicate success: 503 (Service Unavailable).
+lint	Set up job	2026-11-20T08:02:11.4419822Z ##[error]Process completed with exit code 1.

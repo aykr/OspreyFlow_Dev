@@ -24,6 +24,7 @@ WORKDIR /app
 # across source-only changes.
 COPY package.json package-lock.json ./
 COPY apps/workspace/package.json ./apps/workspace/
+COPY packages/glass-shared/package.json ./packages/glass-shared/
 RUN npm ci
 
 # `tokens.css` moved into the product tree at Trigger A (round 14a, ADR-034 §B8) —
