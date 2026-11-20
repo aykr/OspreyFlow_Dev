@@ -84,7 +84,10 @@ class NotProvisionedError(RuntimeError):
 
 
 def _is_checkout() -> bool:
-    return (Path(__file__).resolve().parents[2] / ".git").exists()
+    """A user's checkout has the product at its root; the developer repository one folder down
+    (as `seed_enron._is_checkout`; ADR-114 Amendment 50)."""
+    here = Path(__file__).resolve()
+    return (here.parents[1] / ".git").exists() or (here.parents[2] / ".git").exists()
 
 
 def resolve_source(data_dir: Path, *, is_checkout: bool) -> Path:

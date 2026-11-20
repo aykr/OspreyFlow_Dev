@@ -24,7 +24,7 @@ from scripts import superset_theme
 from tools.layout import CORE
 
 THEME_FILE = CORE / "deploy" / "superset" / "osprey_theme.json"
-TOKENS = (CORE / "apps" / "workspace" / "src" / "design" / "tokens.css").read_text(encoding="utf-8")
+TOKENS = (CORE / "packages" / "design" / "tokens.css").read_text(encoding="utf-8")
 CHANNELS = ("azure", "ochre", "jade", "violet", "cyan", "rose", "moss", "indigo", "plum")
 
 

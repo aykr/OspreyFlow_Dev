@@ -4,8 +4,8 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import type { Node } from "../../../packages/schemas/generated";
 import { FindConnectionsPanel } from "../src/connections/FindConnectionsPanel";
 

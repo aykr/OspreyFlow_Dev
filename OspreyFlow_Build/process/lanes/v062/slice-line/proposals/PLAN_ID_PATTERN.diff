@@ -1,0 +1,10 @@
+diff --git a/OspreyFlow_Build/scripts/slice_line/common.py b/OspreyFlow_Build/scripts/slice_line/common.py
+--- a/OspreyFlow_Build/scripts/slice_line/common.py
++++ b/OspreyFlow_Build/scripts/slice_line/common.py
+@@ -80,5 +80,5 @@
+ def plan_ids() -> set[str]:
+     """The build ids in the owner's plan page (index.html's N list): BL1, CO1, IS2 ..."""
+-    return set(re.findall(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,', PLAN_HTML.read_text()))
++    return set(re.findall(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,', PLAN_HTML.read_text()))
+
+

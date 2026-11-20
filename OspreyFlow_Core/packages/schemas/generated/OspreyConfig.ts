@@ -222,6 +222,10 @@ export type ApiClientId = string;
  */
 export type SupersetClientId = string | null;
 /**
+ * The pages service's own app registration (application id), when the pages service is on: people sign in to it with it, and its delegated token is the person on every route their rights allow, as the Glass's (ADR-152 decision 11)
+ */
+export type PagesClientId = string | null;
+/**
  * Default: api://<api_client_id>. The API's application id URI, which the Glass's scope names
  */
 export type ApiIdUri = string | null;
@@ -846,6 +850,7 @@ export interface EntraSignInConfig {
   client_id: ClientId1;
   api_client_id: ApiClientId;
   superset_client_id?: SupersetClientId;
+  pages_client_id?: PagesClientId;
   api_id_uri?: ApiIdUri;
   token_version?: TokenVersion;
   scope?: Scope;

@@ -2,8 +2,8 @@
 // notes: `link-events.spec.ts` intercepts the events route and walks the list by keyboard.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import { LinkEvents } from "../src/inspector/LinkEvents";
 
 declare global {

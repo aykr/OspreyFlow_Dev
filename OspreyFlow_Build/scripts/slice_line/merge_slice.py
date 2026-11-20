@@ -3,11 +3,17 @@
 
     merge_slice.py merge <slice>                 one verified slice branch onto main, then the push step
     merge_slice.py records -m "<msg>" <path>...  the conductor's records, OspreyFlow_Build/process/lanes/v062/ only
+    merge_slice.py push-pending                  a push the push step deferred (push.pending), once no run on main is
+                                                 in progress or queued (1b); the conductor runs it when a run ends
+    merge_slice.py watch-github                  the latest red run on main read for its failing tests; one test of
+                                                 ours red twice on a commit stops merging (1c); the conductor runs it
 
 `merge` refuses unless every one of these holds, in this order, and stops at the first that does not:
-  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted; and main's
-     latest completed GitHub run is green (a failed one, a cancelled one with nothing newer, or one gh cannot read
-     refuses: F2);
+  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted; and no test of
+     ours has failed twice on GitHub on one commit (watch-github, run first: github.stopped.json, until the owner's
+     clear_github_stop.py). GitHub's last
+     completed run on main is read and recorded (merged.json's github_at_merge) and said in one line, but it is a
+     second opinion, not a gate: red, cancelled or unreadable, the merge goes on (the owner, 20 November 2026);
   2. the slice was started (its frozen record exists) and main's backlog row still matches what was frozen;
   3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it; or,
      in its place and for that exact tip only, the owner's acceptance (resume.py accept: accepted-<tip>.json, its
@@ -60,6 +66,15 @@ GATE_LANE = "merger"
 
 class Refused(Exception):
     pass
+
+
+#: What the merge says beside its result (GitHub's last run, what watch-github found), printed by main() after the
+#: result, so a refusal's stderr still starts with "Refused: ".
+NOTES: list[str] = []
+
+
+def note(text: str) -> None:
+    NOTES.append(text)
 
 
 def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = False, env: dict | None = None) -> int:
@@ -680,6 +695,114 @@ def apply_scan_rows(slice_id: str, tree: Path, base: str, tip: str) -> list[str]
     return applied
 
 
+#: pytest's summary line for a failed test, as `gh run view --log-failed` gives it after GitHub's job, step and
+#: timestamp (run 44681092481, 20 November 2026: `conformance<TAB><step><TAB>2026-11-20T06:26:58.8411472Z FAILED
+#: ../OspreyFlow_Build/tests/ingest/test_typology_rules.py::test_an_alert_... - adapters...ArcadeDBError: ...`).
+GH_STAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T[\d:.]+Z ")
+GH_FAILED = re.compile(r"^FAILED (.+?)(?: - .*)?$")
+GH_LIST_FIELDS = "databaseId,attempt,conclusion,status,headSha,url,workflowName"
+
+
+def failed_tests(log_failed: str) -> list[dict]:
+    """The tests a run's failed log names, each with its job, once each, in the order printed. A job that failed on a
+    download, the network or a runner prints no FAILED line, so it names no test."""
+    out: list[dict] = []
+    for ln in log_failed.splitlines():
+        parts = ln.split("\t", 2)
+        job, text = (parts[0], parts[2]) if len(parts) == 3 else ("", ln)
+        m = GH_FAILED.match(GH_STAMP.sub("", text.strip(), count=1))
+        if m and all(t["test"] != m.group(1).strip() for t in out):
+            out.append({"test": m.group(1).strip(), "job": job})
+    return out
+
+
+def gh_json(args: list[str]):
+    p = subprocess.run(["gh", *args], cwd=str(c.REPO), capture_output=True, text=True, timeout=120)
+    if p.returncode != 0:
+        raise ValueError(f"gh {' '.join(args[:2])} exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")
+    return p.stdout
+
+
+def attempt_tests(run: dict, attempt: int) -> list[dict]:
+    """One completed attempt's failing tests, read once with gh and kept in records/github/<run>.json (a completed
+    attempt never changes)."""
+    f = c.GITHUB_RECORDS / f"{run['databaseId']}.json"
+    rec = c.read_json(f) or {"run": run["databaseId"], "head": run.get("headSha"), "url": run.get("url"),
+                              "workflow": run.get("workflowName"), "attempts": {}}
+    have = rec["attempts"].get(str(attempt))
+    if have is not None:
+        return have["tests"]
+    tests = failed_tests(gh_json(["run", "view", str(run["databaseId"]), "--attempt", str(attempt), "--log-failed"]))
+    rec["attempts"][str(attempt)] = {"tests": tests, "read_at": c.now()}
+    c.write_json(f, rec)
+    return tests
+
+
+def cleared_stops() -> set[str]:
+    rows = c.GITHUB_CLEARS.read_text().splitlines()[1:] if c.GITHUB_CLEARS.exists() else []
+    return {r.split("\t")[1] for r in rows if len(r.split("\t")) > 1}
+
+
+def watch_github() -> str:
+    """1c: the latest completed run on main, when red, read for its failing tests; the same test failing in it and in
+    the attempt before it on the same commit (the run's previous attempt, or the previous run on that head) writes
+    the stop (github.stopped.json). A first red, a red that passed on rerun, a different test, a failure with no FAILED
+    line, a pair the owner already cleared, and gh unreadable write none. What it found, in one line; never raises."""
+    try:
+        runs = json.loads(gh_json(["run", "list", "--branch", "main", "--status", "completed", "--limit", "20",
+                                   "--json", GH_LIST_FIELDS]))
+        if not runs:
+            return "watch-github: no run on main has completed: nothing to watch."
+        last = runs[0]
+        if last.get("conclusion") != "failure":
+            return f"watch-github: run {last.get('databaseId')} on main is {last.get('conclusion')}: no stop."
+        attempt = int(last.get("attempt") or 1)
+        now = attempt_tests(last, attempt)
+        if attempt > 1:
+            prev, prev_attempt = last, attempt - 1
+        else:
+            prev = next((r for r in runs[1:] if r.get("headSha") == last.get("headSha")), None)
+            prev_attempt = int(prev.get("attempt") or 1) if prev else 0
+        if not prev:
+            return (f"watch-github: run {last['databaseId']} is red, its first on {str(last.get('headSha'))[:10]} "
+                    f"({len(now)} failing tests): recorded, no stop; a red run is rerun once.")
+        before = {t["test"] for t in attempt_tests(prev, prev_attempt)}
+        both = [t for t in now if t["test"] in before]
+        if not both:
+            return (f"watch-github: run {last['databaseId']} attempt {attempt} is red again on "
+                    f"{str(last.get('headSha'))[:10]}, but no test failed in both ({len(now)} now, {len(before)} "
+                    "before): no stop.")
+        key = f"{last.get('headSha')}:{prev['databaseId']}/{prev_attempt}:{last['databaseId']}/{attempt}"
+        stop = {"test": both[0]["test"], "tests": [t["test"] for t in both], "job": both[0]["job"],
+                "commit": last.get("headSha"), "key": key, "at": c.now(),
+                "runs": [{"run": prev["databaseId"], "attempt": prev_attempt, "url": prev.get("url")},
+                         {"run": last["databaseId"], "attempt": attempt, "url": last.get("url")}]}
+        if key in cleared_stops():
+            return f"watch-github: {stop['test']} failed twice on {str(last.get('headSha'))[:10]}; the owner cleared it."
+        if not c.GITHUB_STOP.exists():
+            c.write_json(c.GITHUB_STOP, stop)
+        return "watch-github: " + c.github_stop_words(c.read_json(c.GITHUB_STOP))
+    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as e:
+        return f"watch-github: GitHub could not be read ({e}): nothing recorded, no stop."
+
+
+def github_stop() -> None:
+    """While the stop is there (a test of ours failed twice on GitHub), no merge, in words that say what and who."""
+    if c.GITHUB_STOP.exists():
+        raise Refused(c.github_stop_words(c.read_json(c.GITHUB_STOP)))
+
+
+def github_at_merge() -> dict:
+    """GitHub's last completed run on main, as common.main_ci() reads it, with the time: recorded in merged.json and
+    said in one line, never a reason to refuse (the owner, 20 November 2026: merges go on the Mac's full gate alone,
+    whatever GitHub's last run says; a run that cannot be read is no reason to hold a merge the gate passed)."""
+    ci = {**c.main_ci(), "at": c.now()}
+    shown = {"green": "green", "red": "red"}.get(ci["state"])
+    said = f"{shown} (run {ci['run']})" if shown else f"cannot be read ({ci['why']})"
+    note(f"GitHub's last run on main: {said}, not a gate; merging")
+    return ci
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
     trees: list[Path] = []
@@ -687,12 +810,9 @@ def merge(slice_id: str) -> dict:
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
     try:
         base = main_ready()
-        ci = c.main_ci()  # F2: while main is red, every merge is refused (ADR-142 Amendment 9)
-        if ci["state"] == "red":
-            raise Refused(f"main is red: GitHub run {ci['run']} ({ci['why']}) {ci['url']}. No merge until a run on main "
-                          "is green (RULINGS.md, GitHub failures: the conductor reruns a fault that is not ours).")
-        if ci["state"] != "green":
-            raise Refused(f"main's GitHub run cannot be read, so it is not taken as green: {ci['why']}.")
+        note(watch_github())  # 1c: a test of ours red twice stops merging
+        github_stop()
+        github = github_at_merge()  # a record, never a decision (1a: GitHub is a second opinion, not a gate)
         frozen = c.read_json(rec / "frozen.json")
         if not frozen:
             raise Refused(f"{slice_id} was never started (no frozen record).")
@@ -803,7 +923,8 @@ def merge(slice_id: str) -> dict:
             raise Refused("main moved while the merge was being tested.")
         c.git(["merge", "--ff-only", merged], c.REPO)
         done = {"slice": slice_id, "build": frozen["build"], "merge": merged, "tip": tip, "base": base,
-                "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"), "at": c.now()}
+                "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"),
+                "github_at_merge": github, "at": c.now()}
         if retried:
             done["retried"] = retried  # 1d: steps run once more after a network failure, and green the second time
         if scan_rows:
@@ -835,6 +956,35 @@ def merge(slice_id: str) -> dict:
             drop_tree(t)
             shutil.rmtree(t, ignore_errors=True)
             shutil.rmtree(gate_pytest_base(t), ignore_errors=True)  # the full gate's pytest base (1e)
+        fh.close()
+
+
+PUSH_PENDING = "push.pending"
+
+
+def push_pending() -> str:
+    """The push the push step deferred, run once no run on main is in progress or queued (1b: every merge is pushed;
+    a deferred push is never forgotten). Nothing pending: said, nothing done. A run still going: refused, the push
+    still waits. Otherwise push_main.sh runs, with every rule it keeps (main's tip written by the merge script, the
+    recorded origin, a fast-forward), and its words are given back. Under the merge lock, so no merge runs meanwhile."""
+    fh = lock()
+    try:
+        note(watch_github())
+        pending = c.DATA / PUSH_PENDING
+        if not pending.is_file():
+            return "No push is pending."
+        sha = pending.read_text().strip()[:10]
+        busy = c.main_runs_going()
+        if busy:
+            raise Refused(f"a run on main is {busy}: the push of {sha} still waits (push.pending). Run push-pending "
+                          "again when it ends.")
+        p = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True,
+                           text=True)
+        said = (p.stdout + p.stderr).strip()
+        if p.returncode != 0:
+            raise Refused(f"the pending push of {sha} did not go (push_main.sh exit {p.returncode}): {said}")
+        return said
+    finally:
         fh.close()
 
 
@@ -882,11 +1032,17 @@ def main() -> int:
     r = sub.add_parser("records")
     r.add_argument("-m", "--message", required=True)
     r.add_argument("paths", nargs="+")
+    sub.add_parser("push-pending")
+    sub.add_parser("watch-github")
     a = ap.parse_args()
     try:
         if a.cmd == "merge":
             done = merge(a.slice)
             print(json.dumps(done, indent=1))
+        elif a.cmd == "push-pending":
+            print(push_pending())
+        elif a.cmd == "watch-github":
+            print(watch_github())
         else:
             print("Committed", records(a.message, a.paths))
     except Refused as e:
@@ -894,6 +1050,8 @@ def main() -> int:
         rc = 1
     else:
         rc = 0
+    for n in NOTES:
+        print(n, file=sys.stderr)
     subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"])
     return rc
 

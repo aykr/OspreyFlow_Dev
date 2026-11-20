@@ -2,8 +2,8 @@
 2026): no route, screen, module or test in the Glass or the Conduit makes, lists or reads a case's
 branch once L3.2 merges. A case is the only container and a view is a saved lens on it.
 
-It scans every source file under `apps/workspace/src`, `services/api` and `packages/schemas` (and
-its generated types) in `OspreyFlow_Core`
+It scans every source file under `apps/workspace/src`, `packages/design`, `services/api` and
+`packages/schemas` (and its generated types) in `OspreyFlow_Core`
 for the word *branch* in any case and any form (`branch`, `Branched`, `branchNodes`,
 `BRANCH_CASE`, `/branch-by-filter`), and names each line that holds one. Two other meanings stay,
 as the amendment's decision 4 says:
@@ -32,7 +32,7 @@ from pathlib import Path
 from tools.layout import CORE
 
 #: The trees the amendment names, relative to `OspreyFlow_Core`.
-SCANNED = ("apps/workspace/src", "services/api", "packages/schemas")
+SCANNED = ("apps/workspace/src", "packages/design", "services/api", "packages/schemas")
 SUFFIXES = frozenset({".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".html", ".md"})
 
 #: Files where *branch* means a pipeline's branch in the Studio's DAG, each by name.

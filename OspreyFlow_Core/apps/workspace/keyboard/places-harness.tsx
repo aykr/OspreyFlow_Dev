@@ -15,8 +15,8 @@ import { ShowToolbarButton } from "../src/canvas/ToolbarToggle";
 import { isCompactToolbar } from "../src/canvas/toolbarCompact";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import "../src/design/fonts";
 import { applyHarnessBrand } from "./brandHarness";
 import { loadLookFaces } from "./lookFaces";

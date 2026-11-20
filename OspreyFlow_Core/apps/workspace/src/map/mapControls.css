@@ -1,5 +1,5 @@
 /* The analyst's map controls (`MapControls.tsx`): over the map, at its lower left, above the
-   attribution line. Tokens only (`design/tokens.css`), so the dark, light and GOV.UK themes each
+   attribution line. Tokens only (`packages/design/tokens.css`), so the dark, light and GOV.UK themes each
    draw them from their own values. */
 .map-controls {
   position: absolute;

@@ -24,14 +24,15 @@ WORKDIR /app
 # across source-only changes.
 COPY package.json package-lock.json ./
 COPY apps/workspace/package.json ./apps/workspace/
+COPY packages/glass-shared/package.json ./packages/glass-shared/
 RUN npm ci
 
-# `tokens.css` moved into the product tree at Trigger A (round 14a, ADR-034 §B8) —
-# `apps/workspace/src/design/tokens.css`, inside the `COPY apps/workspace` line below. No
-# separate COPY or `.dockerignore` negation is needed any more; both existed only because the
-# file used to live under the private `docs/` tree this image otherwise excludes wholesale.
+# `tokens.css` lives in `packages/design` (ADR-152 decision 6; it was inside `apps/workspace` until then, and
+# before round 14a under the private `docs/` tree this image otherwise excludes wholesale). The bundle imports
+# it by a relative path, so the folder must be in the build context's copy; no `.dockerignore` negation is needed.
 COPY tsconfig.json ./
 COPY apps/workspace ./apps/workspace
+COPY packages/design ./packages/design
 
 # **Same-origin, so the bundle carries no address** (05_DEPLOYMENT.md
 # §2.6 item 1, the owner's decision of 25 September 2026). Vite inlines

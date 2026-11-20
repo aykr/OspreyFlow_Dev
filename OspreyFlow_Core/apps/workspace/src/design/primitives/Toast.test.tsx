@@ -25,7 +25,7 @@ describe("Toast", () => {
   });
 
   it("has no status stripe", () => {
-    const css = readFileSync(join(__dirname, "..", "primitives.css"), "utf-8");
+    const css = readFileSync(join(__dirname, "../../../../../packages/design/primitives.css"), "utf-8");
     expect(css).not.toMatch(/\.toast[^{]*\{[^}]*border-left/);
   });
 });

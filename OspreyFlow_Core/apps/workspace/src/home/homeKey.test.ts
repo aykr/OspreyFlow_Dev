@@ -17,7 +17,7 @@ import { contrastRatio } from "../map/contrast";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const strip = (text: string) => text.replace(/\/\*[\s\S]*?\*\//g, "");
-const tokens = strip(readFileSync(join(here, "..", "design", "tokens.css"), "utf8"));
+const tokens = strip(readFileSync(join(here, "..", "..", "..", "..", "packages", "design", "tokens.css"), "utf8"));
 const home = strip(readFileSync(join(here, "home.css"), "utf8"));
 
 function block(css: string, selector: string): string {

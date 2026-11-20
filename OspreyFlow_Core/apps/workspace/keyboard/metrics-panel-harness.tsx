@@ -11,9 +11,9 @@
 import { createRoot } from "react-dom/client";
 import { useRef } from "react";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { MetricsPanel } from "../src/metrics/MetricsPanel";
 import type { MetricFilter } from "../src/metrics/filters";

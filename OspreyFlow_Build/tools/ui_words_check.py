@@ -14,7 +14,9 @@ its own, and says "Edit target model": the lane review of L1.8). Words the Condu
 (none says it today) and `apps/harness` are outside the Glass's `src` and not scanned. Words joined at run
 time from two strings (`"target " + "model"`, `["target", "model"].join(" ")`) are not seen either: no
 copy in the Glass builds a sentence that way today, and a review is what holds it. Files scanned:
-`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.css` (a `content:` string), `.json`, `.html` and `.md`.
+`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.css` (a `content:` string), `.json`, `.html` and `.md`, under
+the Glass's `src` and under `packages/design` (`tests/glass_trees/test_design_gates_reach.py`
+holds the second).
 
 Tests (`*.test.*`, `*.spec.*`) and generated types are not on screen and are skipped.
 
@@ -39,6 +41,9 @@ from pathlib import Path
 from tools.layout import CORE
 
 GLASS_SRC = CORE / "apps" / "workspace" / "src"
+#: The design package (ADR-152 decision 6): `primitives.css` and its two imports; their `content:`
+#: strings are copy.
+DESIGN_PACKAGE = CORE / "packages" / "design"
 
 #: The banned phrase, its words apart by whitespace, a hyphen, or JSX's `{" "}`. The words in its place
 #: are "domain model".
@@ -141,7 +146,8 @@ def find_banned(root: Path) -> list[tuple[str, int, str]]:
 
 
 def main() -> int:
-    found = find_banned(GLASS_SRC)
+    in_design = find_banned(DESIGN_PACKAGE)
+    found = find_banned(GLASS_SRC) + [(f"packages/design/{p}", n, w) for p, n, w in in_design]
     for path, line, phrase in found:
         print(f"{path}:{line}: \"{phrase}\" on screen: the screens say \"domain model\" (ADR-140 Amendment 9)")
     if found:

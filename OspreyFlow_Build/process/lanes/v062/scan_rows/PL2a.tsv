@@ -1,0 +1,1 @@
+tests/test_conduit_image_java_notice.py	-	reads OspreyFlow_Core/services/api/Dockerfile and notices/JAVA_NOTICE by name; the Dockerfile cases it plants are text in memory; the one glob is over a COPY source the Dockerfile names, and the tools.licence_check helpers it imports are called on text, not on a folder

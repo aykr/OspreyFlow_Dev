@@ -8,8 +8,8 @@
 // someone holding no Studio right, so each action says why and who can (L1.8).
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import type { DeploymentList, SourceTable } from "../../../packages/schemas/generated";
 import { RegisterSourceWizard } from "../src/ingest/sources/RegisterSourceWizard";
 import { ImportListForm, ScheduleForm, ScreeningLists } from "../src/ingest/sources/ScreeningLists";

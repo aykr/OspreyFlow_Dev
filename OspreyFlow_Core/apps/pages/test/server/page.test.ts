@@ -30,7 +30,7 @@ describe("GET /", () => {
     expect(res.text).toContain('lang="en-GB"');
   });
 
-  it("shows nothing else of the session: no subject, no token, no identifier, the anti-forgery token only in its form", async () => {
+  it("shows nothing else of the session: no subject, no token, no identifier, the anti-forgery token only in its form and its meta tag", async () => {
     const { app } = build();
     const { cookie, id, csrf } = await signIn(app);
     const res = await request(app).get("/").set("Cookie", cookie);
@@ -41,9 +41,11 @@ describe("GET /", () => {
     }
     expect(res.text).not.toContain(id);
     expect(res.text).not.toContain(COOKIE_NAME);
-    // The anti-forgery token is the session's, not a credential, and appears once: in the form.
-    expect(res.text.split(csrf)).toHaveLength(2);
+    // The anti-forgery token is the session's, not a credential, and appears twice: in the form, and in the meta
+    // tag a page's script reads it from for its /v1 calls (slice PL10, ADR-152 decision 5). Nowhere else.
+    expect(res.text.split(csrf)).toHaveLength(3);
     expect(res.text).toContain(`name="_csrf" value="${csrf}"`);
+    expect(res.text).toContain(`<meta name="csrf-token" content="${csrf}">`);
   });
 
   it("escapes the display name: markup in a name is text", async () => {
@@ -95,6 +97,7 @@ describe("GET /healthz", () => {
       set: boom("store.set"),
       expire: boom("store.expire"),
       del: boom("store.del"),
+      take: boom("store.take"),
     };
     const identityProvider: IdentityProvider = { signIn: boom("provider.signIn") };
     return { calls, store, identityProvider };
