@@ -1,5 +1,5 @@
-"""*Admin › Models*: every point where a key or its credential exists and a later step can fail or be
-interrupted, held as **rows** of `process/lanes/v062/slices/AD1a_KEY_PATHS_TABLE.md` (the owner's
+"""*Admin › Models*: every point where a key or its credential exists and a later step can fail or
+be interrupted, held as **rows** of `process/lanes/v062/slices/AD1a_KEY_PATHS_TABLE.md` (the owner's
 rule, 20 November 2026: a fault that can send a key to an address it was not given for, show it
 back, log it or audit it is never accepted; one that leaves an engine unavailable or the words wrong
 is fixed here).
@@ -45,6 +45,8 @@ import httpx
 import pytest
 from pydantic import SecretStr
 from services.api.model_admin import ModelAdminRefused
+
+from adapters.model_litellm.stand_in import _seal
 from tests.services.api.test_model_address_change_failure import (
     MODEL,
     NEW,
@@ -55,8 +57,6 @@ from tests.services.api.test_model_address_change_failure import (
     a_key,
     provider,
 )
-
-from adapters.model_litellm.stand_in import _seal
 
 
 class Plants(Faults):
@@ -98,8 +98,8 @@ def credential_of(method: str, engine: str = "gemini") -> Callable[[httpx.Reques
     """The live engine's own credential, not a check's probe."""
     if method == "DELETE":
         return lambda r: r.method == "DELETE" and r.url.path == f"/credentials/osprey-{engine}"
-    return (
-        lambda r: r.method == "POST"
+    return lambda r: (
+        r.method == "POST"
         and r.url.path == "/credentials"
         and json.loads(r.content)["credential_name"] == f"osprey-{engine}"
     )
@@ -123,7 +123,9 @@ def faults(scene: Scene) -> Plants:
 
 
 async def moved(scene: Scene, key: str | None = None) -> None:
-    await scene.admin.edit_engine("admin-1", "gemini", provider(NEW), SecretStr(key or scene.second))
+    await scene.admin.edit_engine(
+        "admin-1", "gemini", provider(NEW), SecretStr(key or scene.second)
+    )
 
 
 async def no_key_goes_to_the_old_address(scene: Scene, key: str, *, restart: bool = True) -> None:
@@ -135,7 +137,9 @@ async def no_key_goes_to_the_old_address(scene: Scene, key: str, *, restart: boo
         await restarted.start()
         await restarted.close()
         await scene.call()
-    assert (OLD, key) not in scene.gateway.sent, f"a key typed for the new address went to the old: {scene.at()}"
+    assert (OLD, key) not in scene.gateway.sent, (
+        f"a key typed for the new address went to the old: {scene.at()}"
+    )
     assert (NEW, key) not in scene.gateway.sent
 
 
@@ -151,7 +155,8 @@ def audited(scene: Scene, action: str) -> list[str]:
 
 
 async def test_the_answer_to_the_key_being_stored_is_lost_row_3(world: Scene) -> None:
-    """Row 3. The gateway stores the new key and the answer is lost (a read timeout): the code cannot
+    """Row 3. The gateway stores the new key and the answer is lost (a read timeout): the code
+    cannot
     tell the key is held. The credential is removed, and no later call, restart or key set sends the
     new key to the old address."""
     await world.set_up()
@@ -197,7 +202,9 @@ async def test_a_process_killed_after_the_key_and_before_the_record_row_15(world
     await no_key_goes_to_the_old_address(world, world.second)
 
     third = a_key()
-    world.gateway.providers["gemini"] = type(world.gateway.providers["gemini"])(third, frozenset({MODEL}))
+    world.gateway.providers["gemini"] = type(world.gateway.providers["gemini"])(
+        third, frozenset({MODEL})
+    )
     world.gateway.sent.clear()
     again = world.process(faulty=False, retry_seconds=3600)
     await again.set_key("admin-1", "gemini", SecretStr(third))
@@ -279,14 +286,17 @@ async def test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17
     world: Scene, how: str
 ) -> None:
     """Row 17. After the key is stored, the edit is left by a cancellation, by a gateway answer that
-    is not JSON, or by a stream cut short (`asyncio.IncompleteReadError`, none of them a refusal or an `OSError`). Each takes
+    is not JSON, or by a stream cut short (`asyncio.IncompleteReadError`): none a refusal or an
+    `OSError`. Each takes
     the same road out: the credential is removed before anything is made on it, shielded from the
     cancellation, so no later call, restart or key set sends the key to the old address."""
     await world.set_up()
     stop = faults(world)
     if how == "a cancellation":
         reached = asyncio.Event()
-        stop.hang_after.append(lambda r: live("/key/update")(r) and not reached.is_set() and not reached.set())
+        stop.hang_after.append(
+            lambda r: live("/key/update")(r) and not reached.is_set() and not reached.set()
+        )
         task = asyncio.ensure_future(moved(world))
         await asyncio.wait_for(reached.wait(), 5)
         task.cancel()
@@ -308,7 +318,9 @@ async def test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17
         if how == "a JSON error":
             stop.garble.append(first)
         else:
-            stop.raw.append((first, asyncio.IncompleteReadError(b"", 10)))  # a stream cut short: not an OSError
+            stop.raw.append(
+                (first, asyncio.IncompleteReadError(b"", 10))
+            )  # a stream cut short: not an OSError
         with pytest.raises(ModelAdminRefused):
             await moved(world)
     assert world.gateway.credential("osprey-gemini") is None, "the new key was left held"
@@ -339,14 +351,18 @@ async def test_an_entry_at_the_new_address_that_survives_a_refused_put_back_row_
         return bool(armed) and live("/model/delete")(r)
 
     faults(world).refuse.append(refuse_the_update_then_every_removal)
-    faults(world).refuse.append(lambda r: r.url.path == "/key/update" and b".check" not in r.content)
+    faults(world).refuse.append(
+        lambda r: r.url.path == "/key/update" and b".check" not in r.content
+    )
     with pytest.raises(ModelAdminRefused):
         await moved(world)
     assert NEW in world.at().values(), "the plant: an entry survives at the new address"
     faults(world).refuse.pop()  # the engine's key update works again; the removals do not
 
     third = a_key()
-    world.gateway.providers["gemini"] = type(world.gateway.providers["gemini"])(third, frozenset({MODEL}))
+    world.gateway.providers["gemini"] = type(world.gateway.providers["gemini"])(
+        third, frozenset({MODEL})
+    )
     with pytest.raises(ModelAdminRefused):
         await world.admin.set_key("admin-1", "gemini", SecretStr(third))
     assert world.gateway.credential("osprey-gemini") != third, "the key was taken beside the entry"
@@ -364,7 +380,9 @@ async def test_an_entry_at_the_new_address_that_survives_a_refused_put_back_row_
 # --- rows 29 and 30: a record that cannot be saved, an exception, a cancellation, first ---------
 
 
-@pytest.mark.parametrize("how", ["the record cannot be saved", "an exception nobody named", "a cancellation"])
+@pytest.mark.parametrize(
+    "how", ["the record cannot be saved", "an exception nobody named", "a cancellation"]
+)
 async def test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30(
     world: Scene, how: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -623,13 +641,14 @@ async def test_start_after_a_kill_between_the_delete_and_the_save_row_36(
     assert restarted.routes().engines["gemini"].key_present is False
 
 
-# --- row 37: start-up and the unpriced rebuild -----------------------------------------------------
+# --- row 37: start-up and the unpriced rebuild ----------------------------------------------
 
 
 async def test_an_engine_whose_unpriced_rebuild_did_not_finish_is_not_offered_row_37(
     world: Scene,
 ) -> None:
-    """Row 37. An entry made before ADR-135 Amendment 3 is not priced a unit a token, so start deletes
+    """Row 37. An entry made before ADR-135 Amendment 3 is not priced a unit a token, so start
+    deletes
     and makes it again; the gateway refuses the new entry. The engine is marked and offered to no
     analyst while the entries are missing (never a log line alone), and offered again once the retry
     makes them."""

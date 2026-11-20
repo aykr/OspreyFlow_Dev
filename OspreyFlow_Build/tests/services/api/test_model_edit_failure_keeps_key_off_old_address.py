@@ -1,44 +1,41 @@
 """*Admin › Models*: an edit that moves an engine's address and fails after its key is in the
-gateway (AD1a's verifier, round 1; ADR-135 Amendment 14 decision 1: a key entered for one address is
-never sent to another).
+gateway (ADR-135 Amendment 14 decision 1: a key entered for one address is never sent to another).
 
-The check at the new address passes, the new key becomes the engine's credential, and then the
-gateway refuses the entries or the models file cannot be written. The change is put back as the file
-says, at the **old** address, and the engine's credential must not be the key typed for the new one:
-the next analyst call would send it to the old address. The old key was replaced and cannot be
-restored (a key is write-only), so the engine's key is recorded lost and entered again.
+Held by **rows** of `process/lanes/v062/slices/AD1a_KEY_PATHS_TABLE.md`, not by the order they were
+found in. The check at the new address passes, the new key becomes the engine's credential, and
+then something stops the edit. The engine goes back to the **old** address, and its credential must
+not be the key typed for the new one: the next analyst call would send it to the old address. The
+old key was replaced and cannot be restored (a key is write-only), so the engine's key is recorded
+lost and entered again.
 
-The case that catches it (rule 12):
-`test_a_failed_moved_edit_never_leaves_the_new_key_at_the_old_address`, once for each way the
-change can fail after the key is held.
+- **Row 1 of the verifier's findings, and rows 14 to 16 and 18 of the table** (the gateway refuses
+  the entries, or the file cannot be written, after the key is held):
+  `test_a_failed_moved_edit_never_leaves_the_new_key_at_the_old_address`, once for each way.
+- **Row 18, the first save:** `test_a_moved_edit_whose_file_cannot_be_written_at_all_stores_no_key`
+  (the record of intent is written before any key is stored).
+- **Row 19, an analyst's call during the edit:**
+  `test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made`, which
+  makes a call at the point between the key and the rebuild.
+- **Row 3, the key's answer lost after the gateway stored it:**
+  `test_a_new_key_whose_answer_is_lost_is_never_left_at_the_old_address`.
+- **Rows 16 and 39, the gateway will not remove the new key:**
+  `test_a_new_key_the_gateway_will_not_remove_is_never_put_behind_the_old_address` refuses
+  `DELETE /credentials` as the real gateway can, then asserts the old address has no entry **after
+  the refusal, after another engine is added, after a restart and after the retry** (each a
+  reconcile that used to rebuild it: the exclusion is a property of the record, in `_reconcile`, not
+  of the undo), and that the refusal and its audit record say in words that the key may still be
+  held. `test_model_key_paths.py` holds the same row end to end, with the gateway healing.
+- **The name rule the withdrawal rests on:** a moved edit takes only its own engine's entries away
+  (`test_a_moved_edit_leaves_the_entries_of_an_engine_it_prefixes_in_place`,
+  `test_an_engine_name_with_a_hyphen_is_refused_so_the_withdrawal_prefix_is_exact`).
 
-**Round 3: the same rule holds while the edit succeeds.** The new key becomes the engine's
-credential before the entries are rebuilt, and an entry names its credential, so for that moment
-the old address's entries would carry the new key to the old address. An analyst call is not held
-by the edit's lock, so
-`test_a_moved_edit_never_sends_the_new_key_to_the_old_address_even_while_it_is_made` makes a call
-at that very point (by wrapping `_reconcile`) and says where the gateway sent each key.
-
-**Round 4: the same rule holds when the gateway's answer to the new key is lost.** A read timeout
-or a dropped connection after the gateway stored the credential is read as "not stored", yet the
-key is held and the edit then puts the engine back at the old address.
-`test_a_new_key_whose_answer_is_lost_is_never_left_at_the_old_address` makes exactly that call (the
-real store, then the words `_call` gives a transport failure). And a moved edit takes only its own
-engine's entries away while it is made, not those of an engine whose name it begins:
-`test_a_moved_edit_leaves_the_entries_of_an_engine_it_prefixes_in_place`.
-
-**Round 5: the same rule holds when the gateway then refuses to remove the new key.** The undo
-cannot take the key away, so the credential may still hold it and the old address's entries must not
-be rebuilt on it. `test_a_new_key_the_gateway_will_not_remove_is_never_put_behind_the_old_address`
-refuses `DELETE /credentials` as the real gateway can, then asserts the old address has no entry, a
-later model-only edit sends nothing to the old address, and the refusal and its audit record say in
-words that the key may still be held.
-
-Keys are made at run time (the owner's rules for keys): none is written in this file.
+Rows 15, 17 and 28 to 38 are in `test_model_key_paths.py`. Keys are made at run time (the owner's
+rules for keys): none is written in this file.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import secrets
 from pathlib import Path
@@ -274,6 +271,24 @@ def test_a_new_key_the_gateway_will_not_remove_is_never_put_behind_the_old_addre
     audit = json.dumps([e.model_dump(mode="json") for e in world.audit.entries])
     assert "may still be held" in world.audit.entries[-1].outcome, "the audit says it"
     assert world.second not in audit, "the audit never holds the key"
+    # Row 16, every other reconcile: another engine added (its reconcile runs over every engine),
+    # then a restart, then the background retry. The credential still holds the new key.
+    pro = {"name": "gemini_pro", "label": "Gemini Pro", "roles": {"extraction": "gemini-2.5-flash"}}
+    world.gateway.providers["gemini_pro"] = StandInProvider(world.first, MODELS)
+    check = client.post(
+        CHECKS, json={"provider": {**pro, "api_base": OLD}, "key": world.first}
+    ).json()
+    assert check["ok"], check
+    assert client.post(f"{CHECKS}/{check['check']}/add").status_code == 200
+    assert not any(i.startswith("osprey-gemini-") for i in world.gateway.stored_ids()), (
+        "another engine's change rebuilt an entry on the credential"
+    )
+    world.gateway.sent.clear()
+    asyncio.run(world.admin._start_once())
+    assert not any(i.startswith("osprey-gemini-") for i in world.gateway.stored_ids()), (
+        "a restart's reconcile rebuilt an entry on the credential"
+    )
+    assert (OLD, world.second) not in world.gateway.sent
     monkeypatch.undo()
     view = client.get("/v1/admin/models").json()
     assert view["engines"][0]["key_state"] == "lost", "not offered while the key may be held"

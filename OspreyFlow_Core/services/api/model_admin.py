@@ -37,7 +37,7 @@ import os
 import re
 import secrets
 import tempfile
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -101,15 +101,20 @@ class KeyRemovedNotReplaced(ModelAdminRefused):
     now, and is recorded so (`ModelAdmin.set_key`)."""
 
 
-class KeyMayStillBeHeld(ModelAdminRefused):
-    """A change failed once a key typed for a new address was in the gateway, and the gateway then
-    refused to remove it (ADR-135 Amendment 14 point 9). The credential may still hold that key, so
-    nothing may be made at the old address on it: `_change` leaves the engine's entries out of the
-    undo. The words, which the person and the audit both get, say so and carry no key."""
+class GatewayUnanswered(ModelAdminRefused):
+    """The gateway gave no answer (a transport failure): the request may have landed, and the code
+    cannot tell. A refusal the gateway *answered* is a plain `ModelAdminRefused`: that write did not
+    land (ADR-135 Amendment 14 point 9)."""
 
-    def __init__(self, words: str, *, engine: str, status: int = 502) -> None:
-        super().__init__(words, status=status)
-        self.engine = engine
+
+@dataclass(frozen=True)
+class Undone:
+    """What an undo did: `restored` is true only when the gateway was made equal to the saved
+    settings **and** no engine's credential may still hold a key it was not given for; `held` names
+    the engines whose credential the gateway would not remove."""
+
+    restored: bool
+    held: frozenset[str] = frozenset()
 
 
 # --- the models file ---------------------------------------------------------------------------
@@ -429,18 +434,29 @@ class GatewayAdmin:
         #: How many requests that may change the gateway have been sent (answered or not), so a
         #: change that failed can say whether it had begun to change anything.
         self.writes = 0
+        self._probing = 0
+
+    @contextlib.contextmanager
+    def probing(self) -> Iterator[None]:
+        """Writes to a check's own credential and entries (`probe_name`) are not counted: they are
+        never the live engine's, so a change that wrote only those has nothing to put back."""
+        self._probing += 1
+        try:
+            yield
+        finally:
+            self._probing -= 1
 
     @property
     def http(self) -> httpx.AsyncClient:
         return self._http
 
     async def _call(self, method: str, path: str, body: object | None = None) -> httpx.Response:
-        if method != "GET":
+        if method != "GET" and not self._probing:
             self.writes += 1
         try:
             resp = await self._http.request(method, path, json=body, timeout=30.0)
         except httpx.HTTPError:
-            raise ModelAdminRefused(
+            raise GatewayUnanswered(
                 "The model gateway could not be reached; the change was not saved.", status=502
             ) from None
         return resp
@@ -601,9 +617,7 @@ class GatewayAdmin:
         (measured: at most 100 a page, newest first, so deleting while reading would skip keys),
         and each stale key is named by its SHA-256 alone (measured: `/key/delete` takes it), so no
         old key travels anywhere. A key without the tag is someone else's and is left alone."""
-        current = {
-            hashlib.sha256(self._engine_key(e).encode()).hexdigest() for e in engines
-        }
+        current = {hashlib.sha256(self._engine_key(e).encode()).hexdigest() for e in engines}
         stale: list[str] = []
         page, pages = 1, 1
         while page <= pages:
@@ -945,6 +959,10 @@ class ModelAdmin:
         #: finds the same at its own start, and no key is ever held while an entry disagrees
         #: (`set_key` withdraws first; a moved address removes the key before anything is made).
         self._unavailable: set[str] = set()
+        #: Engines whose credential the gateway would not remove while the record says their key is
+        #: lost, so it may hold a key not given for the recorded address: they get no entry from any
+        #: reconcile until a later one removes it. A subset of `_unavailable`.
+        self._withheld: set[str] = set()
 
     # --- reading --------------------------------------------------------------------------
 
@@ -1171,7 +1189,15 @@ class ModelAdmin:
                 for p in current.providers:
                     record = keys.get(p.name)
                     wanted = {entry_id(p.name, m) for m in p.roles.values()}
-                    if record is not None and not record.lost and not wanted & set(held):
+                    # An engine this process already knows is unavailable (a rebuild it began and
+                    # could not finish) has no entries because of that, not because the gateway
+                    # lost its state: its key is not marked lost on that account (row 37).
+                    if (
+                        record is not None
+                        and not record.lost
+                        and not wanted & set(held)
+                        and p.name not in self._unavailable
+                    ):
                         keys[p.name] = record.model_copy(update={"lost": True})
                 if keys != current.keys:
                     self._save(current.model_copy(update={"keys": keys}, deep=True))
@@ -1188,7 +1214,9 @@ class ModelAdmin:
                 for p in self.settings.providers:
                     if not p.keyless:
                         await self._gateway.delete_credential(probe_name(p.name))
-            return True
+            # An engine whose credential could not be removed is tried again by the retry, with
+            # the others' work already done: it is withheld and unavailable meanwhile.
+            return not self._withheld
         except (ModelAdminRefused, OSError) as failed:
             log.warning("model engines not reconciled with the gateway: %s", _said(failed))
             return False
@@ -1262,45 +1290,88 @@ class ModelAdmin:
         settings: ModelSettings,
         held: Mapping[str, HeldEntry] | None = None,
         rebuilt: frozenset[str] = frozenset(),
-    ) -> None:
+    ) -> frozenset[str]:
         """The gateway's entries made equal to `settings`: stale ones, and ones at another address
         than the record gives, deleted; missing ones made; and every entry of an engine in `rebuilt`
         (just edited) deleted and made again. **An entry held under the right id at the wrong
-        address is never kept**: it would send the engine's key there."""
+        address is never kept**: it would send the engine's key there.
+
+        **An engine whose key the record says is lost is not given entries on a credential that
+        may hold a key** (a key typed for another address, whose removal was refused or never
+        finished; a process that stopped between the key and the record). Its credential is removed
+        first, whatever the gateway says it holds (404: none), and an engine whose credential the
+        gateway will not remove is *withheld*: no entry is made for it, those it has are deleted,
+        and it is offered to no analyst. This is a property of the record, so **every** caller
+        (start, the retry, a key, a new engine, another engine's edit) keeps it, not only the undo.
+        Returns the withheld engines. An engine is marked unavailable if this fails part-way for
+        it, and the mark is cleared only for an engine this made whole."""
         settings = self._hosted(settings)
         known = await self._gateway.held_entries() if held is None else held
-        wanted = self._wanted(settings)
-        at_odds = set(self._disagreeing(settings, known))
-        remaining = set(known)
-        for model_id in sorted(known):
-            if model_id in at_odds or wanted[model_id][0].name in rebuilt:
-                await self._gateway.delete_entry(model_id)
-                remaining.discard(model_id)
-        for model_id, (p, model) in wanted.items():
-            if model_id not in remaining:
-                await self._gateway.add_entry(p, model)
+        withheld: set[str] = set()
         for p in settings.providers:
-            await self._gateway.put_engine_key(p, settings.limits.get(p.name, EngineLimits()))
-        await self._gateway.revoke_stale_engine_keys([p.name for p in settings.providers])
-        self._unavailable.clear()  # the gateway is equal to the record again
+            record = settings.keys.get(p.name)
+            if record is not None and record.lost and not p.keyless:
+                try:
+                    await self._gateway.delete_credential(p.name)
+                except ModelAdminRefused:
+                    withheld.add(p.name)
+                    self._unavailable.add(p.name)
+                    self._withheld.add(p.name)
+        live = settings.model_copy(
+            update={"providers": [p for p in settings.providers if p.name not in withheld]}
+        )
+        wanted = self._wanted(live)
+        at_odds = set(self._disagreeing(live, known))
+        known_names = {p.name for p in live.providers}
+        pending = (
+            (rebuilt & known_names)
+            | ({_owner(i) for i in at_odds} & known_names)
+            | {wanted[i][0].name for i in wanted if i not in known}
+        )
+        try:
+            remaining = set(known)
+            for model_id in sorted(known):
+                if model_id in at_odds or wanted[model_id][0].name in rebuilt:
+                    await self._gateway.delete_entry(model_id)
+                    remaining.discard(model_id)
+            for model_id, (p, model) in wanted.items():
+                if model_id not in remaining:
+                    await self._gateway.add_entry(p, model)
+            for p in live.providers:
+                await self._gateway.put_engine_key(p, settings.limits.get(p.name, EngineLimits()))
+            await self._gateway.revoke_stale_engine_keys([p.name for p in settings.providers])
+        except BaseException:
+            # Part-way: an engine whose entries were being changed is not whole, so none is
+            # offered until a later reconcile finishes (never a log line alone: row 37).
+            self._unavailable |= pending
+            raise
+        # Whole: the gateway holds what the record says for these. A mark stays on an engine this
+        # did not make whole (withheld), and is dropped for one the record no longer holds.
+        self._unavailable -= {p.name for p in live.providers}
+        self._unavailable &= {p.name for p in settings.providers}
+        self._withheld -= {p.name for p in live.providers}
+        self._withheld &= {p.name for p in settings.providers}
+        return frozenset(withheld)
 
-    async def _put_back(self, settings: ModelSettings, rebuilt: frozenset[str]) -> bool:
-        """After a change failed part-way: the gateway made equal to the file again. True when it
-        was. **False is never only a log line**: the caller says it in words, marks the engine
-        unavailable and audits it. Any failure counts, a named refusal or not; only a
-        cancellation passes through."""
+    async def _put_back(self, settings: ModelSettings, rebuilt: frozenset[str]) -> Undone:
+        """After a change failed part-way: the gateway made equal to the file again. `restored` only
+        when it was **and** no credential may still hold a key it was not given for. **Not
+        restored is never only a log line**: the caller says it in words, marks the engine
+        unavailable and audits it. Any failure counts, a named refusal or not; only a cancellation
+        passes through."""
         try:
             await self._reconcile(settings, rebuilt=rebuilt)
         except asyncio.CancelledError:
             raise
         except Exception as failed:  # noqa: BLE001 - whatever stopped the undo is told, not lost
             log.error("model engines not put back after a failed change: %s", _said(failed))
-            return False
-        return True
+            return Undone(False)
+        return Undone(not self._withheld, frozenset(self._withheld))
 
-    async def _undone(self, settings: ModelSettings, rebuilt: frozenset[str]) -> bool:
+    async def _undone(self, settings: ModelSettings, rebuilt: frozenset[str]) -> Undone:
         """`_put_back`, finished even when this task is cancelled meanwhile (the stop goes on once
-        it is done), so an interrupted change never leaves what it made at a new address."""
+        it is done), so an interrupted change never leaves what it made at a new address or a key
+        in a credential."""
         task = asyncio.ensure_future(self._put_back(settings, rebuilt))
         while not task.done():
             try:
@@ -1400,68 +1471,150 @@ class ModelAdmin:
     ) -> Any:
         """One change, held exclusively against the file read afresh: `work` changes the gateway
         and returns what to save. **Whatever stops it**, a refusal, a file that cannot be written,
-        an exception nobody named or a cancellation, is audited, and when it had sent the gateway
-        a write it puts the gateway back as the file still says (when it had sent none there is
-        nothing to put back, and no undo is sent). **If the gateway cannot be put back**, that is
-        said in words in the answer, the engine is marked unavailable (offered to no analyst, its
-        test says so) and the audit says so: never a log line alone."""
+        an exception nobody named, a cancellation or anything else, takes **one** road out: when it
+        had sent the gateway a write, the gateway is put back as the file *now* says (the last
+        record saved, which names any key the change had removed or could not account for), shielded
+        from cancellation; with none sent there is nothing to put back and no undo is sent. The
+        answer and the audit then say, in the same words whichever way it stopped: that nothing was
+        saved; **that the gateway was put back only if it was** (the entries and the credentials);
+        that an engine's key was removed and the removal saved, with a `key_removed` audit; and that
+        a key the gateway would not remove may still be held. An engine not put back is marked
+        unavailable. Never a log line alone."""
         async with self._exclusive:
             self._fresh()
             current = self.settings
             began = self._gateway.writes
+            stopped: BaseException | None = None
             unnamed_failure = False
             try:
-                result = await work(current)
-            except asyncio.CancelledError:
-                # No write sent, nothing to put back: an undo would only be writes of its own.
-                touched = self._gateway.writes != began
-                restored = await self._undone(current, rebuilt) if touched else True
-                if touched and not restored:
-                    self._mark_unavailable(engine)
-                await self._audited(
-                    by, action, engine if engine and _NAMEABLE.fullmatch(engine) else None,
-                    outcome="interrupted: " + (
-                        "nothing had been changed at the gateway" if not touched
-                        else "the gateway was put back as the saved settings say" if restored
-                        else "the gateway was not put back; " + UNAVAILABLE_WORDS),
-                )  # fmt: skip
-                raise
+                return await work(current)
             except ModelAdminRefused as refused:
                 failed = refused
             except OSError:
                 failed = ModelAdminRefused(
                     "The models file could not be written; the change was not saved.", status=500
                 )
-            except Exception as unnamed:  # noqa: BLE001 - put back and said, never a bare 500
-                log.error(
-                    "a change to the model engines failed part-way: %s", type(unnamed).__name__
-                )
+            except Exception as bug:  # noqa: BLE001 - put back and said, never a bare 500
+                log.error("a change to the model engines failed part-way: %s", type(bug).__name__)
                 failed = ModelAdminRefused(
                     "The change failed part-way and was not saved.", status=500
                 )
                 unnamed_failure = True
-            else:
-                return result
+            except BaseException as other:  # cancellation, and whatever else leaves the task
+                stopped = other
+                failed = ModelAdminRefused("The change was interrupted and was not saved.")
             # **No undo unless the change sent a write**: with none sent the gateway is as it was,
             # and an undo is only writes of its own that could fail half-way and break the engine.
             touched = self._gateway.writes != began
-            restored = await self._undone(current, rebuilt) if touched else True
-            if not restored:
-                self._mark_unavailable(engine)
-                failed = ModelAdminRefused(_not_put_back(failed.words), status=failed.status)
-            elif unnamed_failure:
-                # Said only once it is so: before the undo ran, this sentence would have claimed
-                # what had not yet happened, and contradicted the one above when the undo failed.
-                said = (
-                    "The model gateway was put back as the saved settings say."
-                    if touched else "Nothing had been changed at the model gateway."
-                )
-                failed = ModelAdminRefused(f"{failed.words} {said}", status=failed.status)
-            raise await self._refusing(by, action, engine, failed) from None
+            self._fresh()
+            latest = self.settings
+            undone = await self._undone(latest, rebuilt) if touched else Undone(True)
+            if not touched:
+                latest = self._intent_withdrawn(current, latest, engine)
+            said = self._why_it_stopped(
+                current, latest, engine, touched, undone, failed.words,
+                say_the_gateway=stopped is not None or unnamed_failure,
+            )  # fmt: skip
+            if not undone.restored and not undone.held and engine is not None:
+                self._unavailable.add(engine)
+            key_removed = self._key_taken(current, latest, engine) and engine not in undone.held
+            if stopped is not None:
+                await self._audited(
+                    by, action, engine if engine and _NAMEABLE.fullmatch(engine) else None,
+                    outcome="interrupted: " + said,
+                )  # fmt: skip
+                if key_removed:
+                    await self._key_removal_audited(by, engine, interrupted=True)
+                raise stopped
+            answer = ModelAdminRefused(said, status=failed.status)
+            audited = await self._refusing(by, action, engine, answer)
+            if key_removed:
+                await self._key_removal_audited(by, engine)
+            raise audited from None
 
-    def _mark_unavailable(self, engine: str | None) -> None:
-        if engine is not None:
-            self._unavailable.add(engine)
+    def _intent_withdrawn(
+        self, current: ModelSettings, latest: ModelSettings, engine: str | None
+    ) -> ModelSettings:
+        """A change that sent the gateway nothing but had already recorded its intent (an engine's
+        key marked lost before a credential was to be touched) gives the record back, so a change
+        that never began leaves nothing marked. A file that cannot be written leaves the mark: the
+        engine is then entered again, never offered on a guess."""
+        if engine is None or latest.keys.get(engine) == current.keys.get(engine):
+            return latest
+        restored = {**latest.keys}
+        if engine in current.keys:
+            restored[engine] = current.keys[engine]
+        else:
+            restored.pop(engine, None)
+        proposed = latest.model_copy(update={"keys": restored}, deep=True)
+        try:
+            self._save(proposed)
+        except OSError:
+            return latest
+        return proposed
+
+    def _why_it_stopped(
+        self,
+        current: ModelSettings,
+        latest: ModelSettings,
+        engine: str | None,
+        touched: bool,
+        undone: Undone,
+        words: str,
+        *,
+        say_the_gateway: bool,
+    ) -> str:
+        """The one sentence for every way a change stops (decision 2 of the key paths): what failed,
+        then what became of the gateway and of the key, **each said only when it is so**. Where
+        nothing named the failure (an exception nobody named, an interruption) the gateway's own
+        state is said too: put back, or nothing changed there."""
+        said = [words]
+        # A key the gateway would not remove is not removed: it is said held, never removed.
+        taken = self._key_taken(current, latest, engine) and engine not in undone.held
+        if undone.held:
+            names = ", ".join(sorted(undone.held))
+            said.append(
+                f"A key held for {names} could not be removed from the model gateway, so it may "
+                f"still be held there: {names} is offered to no analyst and has no entries until "
+                "it is removed (the Conduit tries again at every change and at each retry); run "
+                "ospreyflow doctor."
+            )
+        elif not undone.restored:
+            said.append("The gateway was not put back. " + UNAVAILABLE_WORDS)
+        elif say_the_gateway:
+            said.append(
+                "The model gateway was put back as the saved settings say."
+                if touched
+                else "Nothing had been changed at the model gateway."
+            )
+        if taken and touched:
+            said.append(
+                f"{engine}'s key was removed by this change and the removal is saved: it cannot be "
+                "put back (a key is never kept to restore), so enter it again."
+            )
+        elif taken:
+            said.append(
+                f"{engine}'s key was marked lost and the mark could not be taken back: enter it "
+                "again."
+            )
+        return " ".join(said)
+
+    @staticmethod
+    def _key_taken(current: ModelSettings, latest: ModelSettings, engine: str | None) -> bool:
+        """Whether this change left an engine's key set before it and removed or lost now: saved."""
+        if engine is None:
+            return False
+        before, after = current.keys.get(engine), latest.keys.get(engine)
+        return before is not None and not before.lost and (after is None or after.lost)
+
+    async def _key_removal_audited(
+        self, by: str, engine: str | None, *, interrupted: bool = False
+    ) -> None:
+        await self._audited(
+            by, "key_removed", engine if engine and _NAMEABLE.fullmatch(engine) else None,
+            outcome="done: the change " + ("was interrupted" if interrupted else "failed")
+            + " after the key was removed, and the removal was saved",
+        )  # fmt: skip
 
     async def edit_engine(
         self, by: str, name: str, provider: ModelProviderConfig, key: SecretStr | None = None
@@ -1528,27 +1681,21 @@ class ModelAdmin:
                     # be sent to the old address from the moment it is the credential. They go
                     # first, so the engine is briefly unavailable and never served by the wrong key.
                     await self._withdraw_entries(current, name)
-            try:
-                if key is not None:
-                    # From here the key may be the engine's credential, and the code cannot always
-                    # tell: a read timeout after the gateway wrote it reads as "not stored". Any
-                    # failure from this call on is taken as "held" (deleting a credential that was
-                    # never stored is safe, the gateway answers 404), so the safe answer is the
-                    # assumed one.
-                    await self._put_key(current, name, key)
-                    keys = {**proposed.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
-                    proposed = proposed.model_copy(update={"keys": keys}, deep=True)
-                await self._reconcile(proposed, rebuilt=frozenset({name}))
-                self._save(proposed)
-            except (ModelAdminRefused, OSError) as failed:
-                if moved and key is not None:
-                    # The key was typed for the new address; `_change` now puts the engine back at
-                    # the old one, and the key must not go with it (the ruling quoted above). The
-                    # old key was replaced and cannot be restored, so the engine's key is lost (the
-                    # file already says so) and entered again. A removal the gateway refuses is
-                    # said, never only logged.
-                    await self._drop_the_moved_key(name, failed)
-                raise
+            if key is not None:
+                # From here the key may be the engine's credential, and the code cannot always
+                # tell: a read timeout after the gateway wrote it reads as "not stored". Whatever
+                # leaves this call, a refusal, a file that cannot be written, a cancellation, a
+                # garbled answer or any other exception, takes one road out: `_change` puts the
+                # gateway back as the file now says, and the file says this engine's key is lost
+                # (saved above, before any key was held), so **the reconcile removes the
+                # credential before it makes any entry for the engine**, and an engine whose
+                # credential cannot be removed is given none. A process that dies here finds the
+                # same at its next start.
+                fresh = await self._put_key(current, name, key, by, settle=not moved)
+                keys = {**proposed.keys, name: fresh}
+                proposed = proposed.model_copy(update={"keys": keys}, deep=True)
+            await self._reconcile(proposed, rebuilt=frozenset({name}))
+            self._save(proposed)
             return before
 
         before = await self._change(by, "engine_edited", name, work, rebuilt=frozenset({name}))
@@ -1576,26 +1723,6 @@ class ModelAdmin:
         keys = {**current.keys, name: record.model_copy(update={"lost": True})}
         return current.model_copy(update={"keys": keys}, deep=True)
 
-    async def _drop_the_moved_key(self, name: str, failed: ModelAdminRefused | OSError) -> None:
-        """After a moved edit failed once its key was in the gateway: the credential removed, so
-        the old address is never sent a key typed for the new one. If the gateway refuses the
-        removal the key may still be held, and that is raised in words (`KeyMayStillBeHeld`, which
-        `_change` audits and answers, and which keeps the undo off that credential), never logged
-        alone."""
-        try:
-            await self._gateway.delete_credential(name)
-        except ModelAdminRefused:
-            first = "The models file could not be written; the change was not saved."
-            if isinstance(failed, ModelAdminRefused):
-                first = failed.words
-            raise KeyMayStillBeHeld(
-                f"{first} The key entered for {name}'s new address could not be removed from the "
-                f"model gateway either, so it may still be held there. {name} is offered to no "
-                "analyst and is left without entries until its key is entered again; run "
-                "ospreyflow doctor.",
-                engine=name,
-            ) from None
-
     async def remove_engine(self, by: str, name: str) -> None:
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
@@ -1617,7 +1744,7 @@ class ModelAdmin:
             # The engine's own key first: if its removal is refused, the credential is still there,
             # so the entries put back answer and the file's "key set" stays true.
             await self._gateway.delete_engine_key(name)
-            await self._gateway.delete_credential(name)
+            await self._delete_credential_with_intent(current, name, by)
             self._save(proposed)
 
         await self._change(by, "engine_removed", name, work)
@@ -1683,10 +1810,10 @@ class ModelAdmin:
             # key is stored while an entry stands at an address the record does not give: such
             # entries are withdrawn first, and a withdrawal the gateway refuses refuses the key.
             await self._withdraw_disagreeing(current)
-            await self._put_key(current, name, key)
-            await self._reconcile(current)
-            keys = {**current.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
-            self._save(current.model_copy(update={"keys": keys}, deep=True))
+            fresh = await self._put_key(current, name, key, by, settle=True)
+            proposed = current.model_copy(update={"keys": {**current.keys, name: fresh}}, deep=True)
+            await self._reconcile(proposed)
+            self._save(proposed)
 
         await self._change(by, said[0], name, work)
         await self._audited(by, said[0], name)
@@ -1701,7 +1828,7 @@ class ModelAdmin:
                     "none to remove.",
                     status=409,
                 )
-            await self._gateway.delete_credential(name)
+            await self._delete_credential_with_intent(current, name, by)
             keys = {k: v for k, v in current.keys.items() if k != name}
             self._save(current.model_copy(update={"keys": keys}, deep=True))
 
@@ -1762,7 +1889,8 @@ class ModelAdmin:
             model = next(iter(provider.roles.values()))
             # Tagged as the engine's `test` job, so the usage counts it apart (P2's review).
             check = await check_connection(
-                self._gateway.http, gateway_model_name(provider.name, model),
+                self._gateway.http,
+                gateway_model_name(provider.name, model),
                 tag=usage_tag(provider.name, "test"),
             )
             outcome = check.outcome
@@ -1776,9 +1904,7 @@ class ModelAdmin:
                 # OpenAI's shape): it was reached, and refused (Amendment 7 decision 5).
                 outcome = "request_refused"
             words = KIND_WORDS.get((provider.kind, outcome), WORDS[outcome])
-            result = ConnectionTestResult(
-                engine=name, outcome=outcome, ok=check.ok, words=words
-            )
+            result = ConnectionTestResult(engine=name, outcome=outcome, ok=check.ok, words=words)
         await self._audited(by, "connection_tested", name, outcome=result.outcome)
         return result
 
@@ -1850,26 +1976,29 @@ class ModelAdmin:
             )
         probe = probe_name(provider.name)
         own = key is not None and not provider.keyless
-        if own:
-            assert key is not None
-            try:
-                await self._gateway.put_credential(probe, key)
-            except KeyRemovedNotReplaced:  # the probe held no key before: none is lost
-                raise ModelAdminRefused(
-                    "The model gateway refused the key; nothing was changed. Run ospreyflow "
-                    "doctor.",
-                    status=502,
-                ) from None
-        try:
-            checked = await self._prove(
-                provider,
-                models,
-                named=probe_entries(provider.name),
-                credential=probe if own else provider.name,
-            )
-        finally:
+        # The check's own credential and entries are never the live engine's: their writes are not
+        # the change's, so a check that fails has nothing to put back (`GatewayAdmin.probing`).
+        with self._gateway.probing():
             if own:
-                await self._gateway.delete_credential(probe)
+                assert key is not None
+                try:
+                    await self._gateway.put_credential(probe, key)
+                except KeyRemovedNotReplaced:  # the probe held no key before: none is lost
+                    raise ModelAdminRefused(
+                        "The model gateway refused the key; nothing was changed. Run ospreyflow "
+                        "doctor.",
+                        status=502,
+                    ) from None
+            try:
+                checked = await self._prove(
+                    provider,
+                    models,
+                    named=probe_entries(provider.name),
+                    credential=probe if own else provider.name,
+                )
+            finally:
+                if own:
+                    await self._gateway.delete_credential(probe)
         failed = [m for m in checked if not m.ok]
         if failed:
             said = " ".join(m.words for m in failed)
@@ -1877,17 +2006,77 @@ class ModelAdmin:
                 f"{said} Nothing was changed: {provider.label or provider.name} keeps {kept}."
             )
 
-    async def _put_key(self, current: ModelSettings, name: str, key: SecretStr) -> None:
-        """A checked key as the engine's own credential. **A replacement the gateway refuses after
-        the old key was removed is recorded truthfully**: the engine's key is then lost."""
+    async def _put_key(
+        self, current: ModelSettings, name: str, key: SecretStr, by: str, *, settle: bool
+    ) -> KeyRecord:
+        """A checked key as the engine's own credential, returning the record that says so.
+
+        **The record of intent is written first** (an engine whose key was set is saved lost before
+        the credential is touched), so a record save that fails stops the change with nothing
+        done, and a process that dies, a task that is cancelled or an answer that is lost after the
+        gateway wrote never leaves "set" over a credential the code cannot account for. The
+        reconcile then treats the engine as holding no key it may trust (it removes the credential
+        before making any entry). A removal the gateway *answered* with a refusal changed nothing,
+        so the record is given back; one it did not answer may have landed, so the mark stays. A
+        replacement the gateway refuses after the old key was removed is recorded truthfully: the
+        engine's key is then lost. With `settle` the record says set once the key is stored (the
+        address is the one it was typed for); a moved edit settles only when its entries are made
+        at the new address."""
+        record = current.keys.get(name)
+        if record is not None and not record.lost:
+            self._save(current.model_copy(
+                update={"keys": {**current.keys, name: record.model_copy(update={"lost": True})}},
+                deep=True,
+            ))  # fmt: skip
         try:
             await self._gateway.put_credential(name, key)
         except KeyRemovedNotReplaced as gone:
-            record = current.keys.get(name)
-            if record is not None:
-                keys = {**current.keys, name: record.model_copy(update={"lost": True})}
-                self._save(current.model_copy(update={"keys": keys}, deep=True))
             raise ModelAdminRefused(gone.words, status=gone.status) from None
+        except GatewayUnanswered:
+            raise
+        except ModelAdminRefused:
+            self._give_the_record_back(current, name, record)
+            raise
+        fresh = KeyRecord(set_at=self._now(), set_by=by)
+        if settle:
+            self._save(
+                current.model_copy(update={"keys": {**current.keys, name: fresh}}, deep=True)
+            )
+        return fresh
+
+    def _give_the_record_back(
+        self, current: ModelSettings, name: str, record: KeyRecord | None
+    ) -> None:
+        """The gateway refused (and said so) the removal a record of intent was written for: the
+        credential is as it was, so the record is. A file that cannot be written leaves the mark,
+        which is the safe side: the engine is then entered again, never offered on a guess."""
+        if record is None or record.lost:
+            return
+        with contextlib.suppress(OSError):
+            self._save(current)
+
+    async def _delete_credential_with_intent(
+        self, current: ModelSettings, name: str, by: str
+    ) -> None:
+        """An engine's credential removed, **the record first**: an engine whose key was set is
+        saved
+        lost before the delete, and cleared (given back) only when the gateway answered that it
+        refused; so a record save that fails stops the change with nothing deleted, and a save that
+        fails, a cancellation or a process that dies after the delete leaves "lost", never "set"
+        over no credential. The caller's own save then says the key is removed."""
+        record = current.keys.get(name)
+        if record is not None and not record.lost:
+            self._save(current.model_copy(
+                update={"keys": {**current.keys, name: record.model_copy(update={"lost": True})}},
+                deep=True,
+            ))  # fmt: skip
+        try:
+            await self._gateway.delete_credential(name)
+        except GatewayUnanswered:
+            raise
+        except ModelAdminRefused:
+            self._give_the_record_back(current, name, record)
+            raise
 
     async def _expired(self, current: ModelSettings) -> tuple[ModelSettings, list[str]]:
         """`current` without the checks older than `CHECK_LIFE`, their credentials removed."""
@@ -2088,12 +2277,6 @@ def _no_key_shown(provider: ModelProviderConfig, then: str) -> None:
             )
 
 
-def _without(settings: ModelSettings, name: str) -> ModelSettings:
-    return settings.model_copy(
-        update={"providers": [p for p in settings.providers if p.name != name]}
-    )
-
-
 def _plain_key(key: SecretStr) -> None:
     text = key.get_secret_value()
     if not text.strip() or any(ch.isspace() for ch in text):
@@ -2117,10 +2300,6 @@ UNAVAILABLE_WORDS = (
     "or enter the engine's key again where it has one: either makes the gateway agree with the "
     "saved settings."
 )
-
-
-def _not_put_back(words: str) -> str:
-    return f"{words} {UNAVAILABLE_WORDS}"
 
 
 def _number(value: object) -> float | None:

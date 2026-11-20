@@ -41489,7 +41489,19 @@ the guide's lines that were not updated then.
    recorded lost, the record written before the key is stored so that no process or replica reads "set" while it is
    held. If the gateway refuses that removal, the key may still be held: the edit says so in words and the audit
    record says so without the key, the engine is left without entries and offered to no analyst, and no check
-   without a key is run for it, so nothing is made at the old address on a credential that may hold the new key. A key
+   without a key is run for it, so nothing is made at the old address on a credential that may hold the new key.
+   **That is a property of the record, not of the undo** (the owner's rule on keys, 20 November 2026, AD1a's
+   restart; the key-path table's rows 15 to 17 and 39): an engine whose key the record says is lost has its
+   credential removed by **every** reconcile before any entry is made for it (the next start, the background retry,
+   a key, a new engine, another engine's edit, the undo), and one whose credential the gateway will not remove is
+   given no entry by any of them until it does. A credential is deleted only after a **record of intent** (the
+   key marked lost) is saved, so a process that stops, a task cancelled, a record save that fails or an answer
+   that is lost after the gateway wrote never leaves "set" over a credential nobody can account for (rotation,
+   *Remove key*, *Remove engine* and a moved edit alike); start reads the record, never a credential
+   (`GET /credentials` answers with part of the key). Whatever stops a change takes one road out, the same words
+   and audit for a refusal, an error, a cancellation or any other exception: "put back" is said only when the
+   entries **and** the credentials were, a removal saved is said with a `key_removed` audit, and an engine whose
+   rebuild did not finish is marked at start and not offered. A key
    given with an edit is checked against every model. A label or an agreement changed alone asks nothing. The
    check runs under a probe name beside the live engine: the new key as the probe's own credential
    (`probe_name`: `<engine>.check`, which no engine can be named, an engine's name having no dot), the entries

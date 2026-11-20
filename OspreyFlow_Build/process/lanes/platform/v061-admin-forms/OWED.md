@@ -75,3 +75,16 @@ first (`_withdraw_entries`), so the engine is briefly unavailable, never served 
 rebuild, by wrapping `_reconcile`). ADR-135 Amendment 14 point 9 says so. (4) `test_admin_models_extraction_engine.py`'s
 body scan now reads FastAPI's typed body parameters too, so a write route with `body: SomeInput` and no `request` is read,
 never passed over; shown red on planted scratch routes (the typed one, one wrapping a model, one reading by hand).
+
+**Round 6 (20 November 2026): main taken in, and the 38-row key-path table held by one design.** Merge `1427b57` (main, with SE5, taken
+in; `placesByRole.json` regenerated from main's state by `OSPREY_WRITE_PLACES_BY_ROLE=1`, never merged; the administration guide's
+rows are 2.29 and 2.30 above main's 2.28, its PDF and manifest reprinted for that guide alone). The design is in
+`services/api/model_admin.py` (`_reconcile`, `_change`, `_put_key`, `_delete_credential_with_intent`) and is held by
+`tests/services/api/test_model_key_paths.py`, one case per row, red first on 1427b57 (`plants_key_paths_run.txt`). SE5's
+`test_model_address_change_failure.py` is kept, every case, brought onto this edit path (an engine added by a check and Add; a moved
+address given with its key; the fault planted at the live call, not the check's probe; "the process stops" a real stop).
+**Owed from this round:** start-up reads no credential (`GET /credentials` answers with part of the key), so an engine whose
+record says a key is set and whose credential is gone for a reason **no code of the Conduit wrote** (the gateway's own database
+lost it) is still found only when its entries are also gone (the old start-up rule); every removal the Conduit makes now writes
+its intent first, so the states the Conduit itself can leave are all "lost". An unpriced rebuild killed by a process stop is marked
+lost at the next start (the key to be entered again), not held "rebuilding": a record of that intent is not kept.
