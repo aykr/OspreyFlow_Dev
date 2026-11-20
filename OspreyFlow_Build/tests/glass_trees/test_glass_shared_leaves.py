@@ -25,8 +25,8 @@ Which test fails if the invariant is broken (rule 12):
   and the build record (`process/`) may keep one (they are history), and the few files named in `NAMED`, each with why;
 * an import in `apps/` that still reaches an old path, reaches into the package's folder instead of its name, or a walk
   that read too few files to say so: `test_every_import_of_a_moved_module_reaches_the_package`;
-* the two registry-coverage tests (the workspace's and the harness's) not reading the registry from the package, or the
-  workspace one no longer scanning its own folder's specs:
+* the workspace's registry-coverage test (and the harness's `actions.ts`, through which the harness reads the registry)
+  not reading the registry from the package, or the workspace test no longer scanning its own folder's specs:
   `test_the_two_registry_coverage_tests_read_the_registry_from_the_package`;
 * the manifest listing more or less than `graphology` and `zustand` as dependencies, at the ranges the workspace uses,
   or a name from the React family anywhere, or a source file importing `zustand` other than through `zustand/vanilla`
@@ -131,6 +131,8 @@ def old_path_mentions(root: Path, rels: Iterable[str]) -> list[tuple[str, int, s
     """`(file, line, text)` for each place under `root` that names an old path. `rels` are repository-relative."""
     found: list[tuple[str, int, str]] = []
     for rel in rels:
+        if rel.startswith(SHARED):
+            continue  # inside the package a module is named by its place in the package (`./keyboard/actionRegistry`)
         try:
             text = (root / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
@@ -372,24 +374,37 @@ def test_every_import_of_a_moved_module_reaches_the_package() -> None:
 
 
 def test_the_two_registry_coverage_tests_read_the_registry_from_the_package() -> None:
-    workspace = (CORE / "apps" / "workspace" / "keyboard" / "registryCoverage.test.ts").read_text(
-        encoding="utf-8"
-    )
+    """The workspace's test enumerates `ALL_REGISTRIES` and so imports it from the package, still scanning its own
+    folder's specs. The harness's test does not import the registry at all (it scans its own folder's text, and says
+    why: importing it would demand the workspace's registries be covered there too); what it reads the registry
+    through is the harness's `actions.ts`, which imports it from the package."""
+    keyboard = CORE / "apps" / "workspace" / "keyboard"
+    workspace = (keyboard / "registryCoverage.test.ts").read_text(encoding="utf-8")
     harness = (CORE / "apps" / "harness" / "keyboard" / "registryCoverage.test.ts").read_text(
         encoding="utf-8"
     )
     harness_actions = (CORE / "apps" / "harness" / "keyboard" / "actions.ts").read_text(
         encoding="utf-8"
     )
-    for name, text in {"the workspace's": workspace, "the harness's": harness}.items():
-        assert re.search(
-            rf"""import\s*\{{[^}}]*\bALL_REGISTRIES\b[^}}]*\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
-            text,
-        ), f"{name} registryCoverage.test.ts does not import ALL_REGISTRIES from {PACKAGE_NAME}"
-    assert f'from "{PACKAGE_NAME}"' in harness_actions
+    assert re.search(
+        rf"""import\s*\{{[^}}]*\bALL_REGISTRIES\b[^}}]*\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
+        workspace,
+    ), (
+        f"the workspace's registryCoverage.test.ts does not import ALL_REGISTRIES from {PACKAGE_NAME}"
+    )
+    assert re.search(
+        rf"""import\s*\{{[^}}]*\bdefineActionRegistry\b[^}}]*\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
+        harness_actions,
+    ), f"the harness's actions.ts does not import defineActionRegistry from {PACKAGE_NAME}"
+    assert re.search(
+        rf"""export\s*\{{[^}}]*\bassertAllCovered\b[^}}]*\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
+        harness_actions,
+    ), f"the harness's actions.ts does not re-export assertAllCovered from {PACKAGE_NAME}"
+    # Neither reaches the registry by a path, nor reads the package's folder for specs.
+    assert "workspace/keyboard/actionRegistry" not in harness + harness_actions
     # The scan stays where the specs are: the workspace's own folder, never the package's.
     assert "const KEYBOARD_DIR = dirname(fileURLToPath(import.meta.url));" in workspace
-    assert len(list((CORE / "apps" / "workspace" / "keyboard").glob("*.spec.ts"))) >= 90
+    assert len(list(keyboard.glob("*.spec.ts"))) >= 90
 
 
 _PLANTED_IMPORTS = {
@@ -643,10 +658,12 @@ def test_the_design_detector_reports_a_plant_in_the_package(
         "the clean copy already has findings"
     )
     plant = shared_copy / "planted.ts"
-    # The shape the old toast had, as a plain module would hold it: a side stripe on a card-like rule.
+    # The shape the old toast had, as a plain module holds a style: a side stripe on a card-like object.
     plant.write_text(
-        'export const TOAST_CSS = ".toast { background: var(--surface-raised); box-shadow: var(--overlay-shadow); border-radius: var(--r-overlay); padding: var(--sp-8) var(--sp-12); }\\n'
-        '.toast--error { border-left: 3px solid var(--error); }";\n',
+        "export const TOAST_STYLE = {\n"
+        '  background: "var(--surface-raised)", borderLeft: "3px solid var(--error)", borderRadius: "8px",\n'
+        '  padding: "12px 16px", boxShadow: "var(--overlay-shadow)",\n'
+        "};\n",
         encoding="utf-8",
     )
     found = design_check.unexcused(design_check.detect(design_check.SCANNED))
