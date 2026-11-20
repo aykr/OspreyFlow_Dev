@@ -223,7 +223,9 @@ def test_the_view_reads_as_its_reader_not_its_creator(world: _World) -> None:
     view_id = _saved()
     opened = _as("alice").get(f"{VIEWS}/{view_id}").json()
     assert sorted(n["id"] for n in opened["nodes"]) == ["near", "open", "secret"]
-    assert opened["missing"] == 2
+    # Not told how many of the five she cannot read: that counts `elsewhere` (a dataset the case
+    # does not read, never hers to see) with `never-held` (C045; `test_case_view_counts.py`).
+    assert opened["missing"] == 0
 
 
 def test_the_missing_check_fails_with_the_stored_selection_returned(
