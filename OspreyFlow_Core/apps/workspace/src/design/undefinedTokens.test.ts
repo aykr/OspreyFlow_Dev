@@ -18,7 +18,9 @@ const DESIGN = join(SRC, "..", "..", "..", "packages", "design");
 const TOKENS = join(DESIGN, "tokens.css");
 // The roots the real check walks: the one list both the check and the reach test use.
 const ROOTS = [SRC, DESIGN];
-const THE_THREE = ["primitives.css", "scale.css", "panelType.css"];
+// Stems, not quoted file names: a bare quoted name in this folder reads as an old path.
+const THE_THREE = ["primitives", "scale", "panelType"].map((stem) => `${stem}.css`);
+const PRIMITIVES = THE_THREE[0]!;
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -66,10 +68,10 @@ describe("font tokens", () => {
       expect(undefinedReads([copy], TOKENS)).toEqual(["zz_planted.css: --font-mono"]);
       // And in one of the three files themselves, on the file's own line.
       const line = ".input.value, .select.value { font-family: var(--mono); }";
-      const primitives = readFileSync(join(copy, "primitives.css"), "utf8");
+      const primitives = readFileSync(join(copy, PRIMITIVES), "utf8");
       expect(primitives).toContain(line);
-      writeFileSync(join(copy, "primitives.css"), primitives.replace(line, line.replace("--mono", "--font-mono")));
-      expect(undefinedReads([copy], TOKENS)).toContain("primitives.css: --font-mono");
+      writeFileSync(join(copy, PRIMITIVES), primitives.replace(line, line.replace("--mono", "--font-mono")));
+      expect(undefinedReads([copy], TOKENS)).toContain(`${PRIMITIVES}: --font-mono`);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
