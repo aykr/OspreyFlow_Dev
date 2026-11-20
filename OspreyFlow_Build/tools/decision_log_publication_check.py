@@ -138,10 +138,10 @@ def _load_allowlist() -> set[tuple[str, str]]:
 
 
 def main() -> int:
-    violations = find_violations()
+    violations = find_violations(DECISIONS_PATH)
     allowlisted = _load_allowlist()
     new_violations = [v for v in violations if v not in allowlisted]
-    repeated = find_duplicate_headings()
+    repeated = find_duplicate_headings(DECISIONS_PATH)
     if repeated:
         print(
             "decision-log-publication-check: headings written twice (each is read as one section):"

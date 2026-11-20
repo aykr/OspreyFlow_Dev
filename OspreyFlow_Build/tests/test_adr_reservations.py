@@ -156,10 +156,13 @@ def test_a_doubled_prose_line_is_reported() -> None:
 
 
 def test_a_row_left_twice_with_two_statuses_is_reported() -> None:
-    """What union leaves when both sides flip a held row and one rewords it."""
+    """What union leaves when one side flips a held row to written and the other rewords it but
+    keeps it reserved: the same number, once `written` and once `reserved`."""
     held = _rows("reserved")[-1]
     flipped = held.replace("| reserved |", "| written |")
-    reworded = flipped.replace(held.split(" | ")[1], held.split(" | ")[1] + ", reworded")
+    title = held.split(" | ")[1]
+    reworded = held.replace(title, title + ", reworded")
+    assert flipped.endswith("| written |") and reworded.endswith("| reserved |")
     reservations = RESERVATIONS.replace(held, flipped + "\n" + reworded)
     number = held.split(" | ")[0][2:]
     assert f"{number} is reserved 2 times" in find_unreserved(DECISIONS, reservations)
@@ -230,3 +233,36 @@ def test_an_edited_prose_line_is_reported() -> None:
 def test_an_added_line_that_is_not_a_row_is_reported() -> None:
     [problem] = find_ledger_edits(RESERVATIONS, RESERVATIONS + "A note, not a reservation.\n")
     assert problem.startswith("a line that is not a reservation row was added")
+
+
+# A row shaped like the Baseline table's (`| ADR-n | m |`) matches the start of a reservation row
+# but is not one; `parse_baseline` reads the whole file and the last occurrence wins, so
+# appending one would quietly move the baseline the file says is never edited.
+
+
+def test_an_appended_baseline_shaped_row_is_reported_and_would_have_moved_the_baseline() -> None:
+    last_adr = max(parse_baseline(RESERVATIONS).last_amendment)
+    planted = RESERVATIONS + f"| ADR-{last_adr:03d} | 999 |\n"
+    assert parse_baseline(planted).last_amendment[last_adr] == 999  # the harm the check prevents
+    [problem] = find_ledger_edits(RESERVATIONS, planted)
+    assert problem.startswith("a line that is not a reservation row was added")
+    assert f"| ADR-{last_adr:03d} | 999 |" in problem
+
+
+def test_an_appended_malformed_row_is_reported() -> None:
+    [problem] = find_ledger_edits(RESERVATIONS, RESERVATIONS + "| ADR-199 | x |\n")
+    assert problem.startswith("a line that is not a reservation row was added")
+
+
+def test_an_appended_row_with_an_unknown_status_is_reported() -> None:
+    row = "| ADR-199 | A planted record | studio | 2026-11-20 | pending |\n"
+    [problem] = find_ledger_edits(RESERVATIONS, RESERVATIONS + row)
+    assert problem.startswith("a line that is not a reservation row was added")
+
+
+def test_a_row_inserted_above_the_end_is_reported() -> None:
+    first_row = _rows("written")[0]
+    row = "| ADR-199 | A planted record | studio | 2026-11-20 | reserved |"
+    inserted = RESERVATIONS.replace(first_row, first_row + "\n" + row, 1)
+    [problem] = find_ledger_edits(RESERVATIONS, inserted)
+    assert problem.startswith("a row was inserted above the end, not appended")

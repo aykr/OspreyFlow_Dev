@@ -22,7 +22,9 @@ union merge (`.gitattributes`), which is safe only while the file changes by app
 status flip of a row from `reserved` to `written`. The comparison reads the file as it stood at the
 merge-base with `main` and reports any other change: a title, number, lane, date or status edited,
 a row
-or line removed, or a line added that is not a reservation row. It needs a base, so on a checkout
+or line removed, a line added that is not a full reservation row (five cells ending `reserved` or
+`written`: a two-cell Baseline-shaped row would quietly move the baseline), or a row inserted above
+the end of the base. It needs a base, so on a checkout
 with
 none (no `main`, no git, a file new since) it says so and passes; the merge's gate has the base.
 
@@ -189,11 +191,13 @@ def find_ledger_edits(base: str, current: str) -> list[str]:
 
     Every non-blank line of `base` must still be in `current`, in order, unchanged or flipped; any
     line
-    in `current` that is neither a base line nor a reservation row is reported too.
+    in `current` that is neither a base line nor a full reservation row (`_RESERVATION_ROW`), or is
+    one placed above the last base line, is reported too.
     """
     kept = [ln.rstrip() for ln in current.splitlines() if ln.strip()]
     used = [False] * len(kept)
     problems: list[str] = []
+    edited_numbers: set[str] = set()
     position = 0
     for raw in base.splitlines():
         line = raw.rstrip()
@@ -208,12 +212,18 @@ def find_ledger_edits(base: str, current: str) -> list[str]:
         else:
             number = line.split("|")[1].strip() if _ROW_START.match(line) else None
             if number is not None and any(k.startswith(f"| {number} |") for k in kept):
+                edited_numbers.add(number)
                 problems.append(f"the row for {number} was edited, not appended to: {line[:100]!r}")
             else:
                 problems.append(f"a line was removed or edited: {line[:100]!r}")
+    last_kept = max((j for j, flag in enumerate(used) if flag), default=-1)
     for j, line in enumerate(kept):
-        if not used[j] and not _ROW_START.match(line):
+        if used[j]:
+            continue
+        if _RESERVATION_ROW.match(line) is None:
             problems.append(f"a line that is not a reservation row was added: {line[:100]!r}")
+        elif j < last_kept and line.split("|")[1].strip() not in edited_numbers:
+            problems.append(f"a row was inserted above the end, not appended: {line[:100]!r}")
     return problems
 
 
