@@ -303,7 +303,12 @@ environment, installs the command as a uv tool, and records where the checkout i
 not found afterwards, open a new terminal, or run `uv tool update-shell`.
 
 The command finds its checkout by `OSPREYFLOW_HOME` first, then the recorded file, then by looking
-upwards from the folder you are in. Anything it prints that names a password, secret or token is
+upwards from the folder you are in. When the recorded folder wins and the folder you are in is a
+different checkout, the command says so in one line before it acts, naming both folders and the
+`OSPREYFLOW_HOME=<folder>` that chooses the one you are in; it says nothing when they are the same
+folder, when you are in no checkout, or when you set `OSPREYFLOW_HOME` yourself. Running the
+bootstrap again, from a checkout, records that checkout in place of the old one (ADR-114
+Amendment 50). Anything it prints that names a password, secret or token is
 hidden and replaced by a pointer to `deployment.env`.
 
 ## 4. Installing Lite

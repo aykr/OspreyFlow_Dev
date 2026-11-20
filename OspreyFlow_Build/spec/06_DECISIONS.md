@@ -41513,3 +41513,56 @@ the owner):
 
 **Spec amendments that follow from this one, made with slice PL7:** `05_DEPLOYMENT.md` §1 (a GOV.UK
 deployment's services follow the derived tree state); `02_GLASS_FRONTEND.md` §1 (the same, in a sentence).
+
+### ADR-114, Amendment 50 (20 November 2026) — the command says when the recorded home wins over the checkout you are in; a synthetic pack seeds from a repository with no `.git` — Accepted by the owner, 20 November 2026
+
+*Slice PL1a, on the owner's word of 20 November (PL1 is the four demo and install faults; PL1a is N05 and N06, agreed on
+the readings below). The specification did not rule on either fault; the readings contradict no accepted decision.*
+
+**N05, the finding.** `ospreyflow.home.find_product` resolves `OSPREYFLOW_HOME`, then the folder the bootstrap recorded,
+then a walk up from the current folder (Amendment 3 decision 3; the administration guide, §3; ADR-132 Amendment 1
+decision 4). A person standing in a fresh checkout, with another deployment's folder recorded, had every command act on the
+recorded folder without a word; and the record goes stale after a repoint or a reinstall, with nothing to say so.
+
+**N06, the finding.** `scripts.seed_internal` refused with "this is not a checkout of the repository" when neither
+`<product>/.git` nor `<product>/../.git` existed, before any per-dataset branch, so for every dataset, the synthetic packs
+included. A user repository made by `git archive` has no `.git`, so no demo pack could be seeded on it. Amendment 2
+decision 2 groups "the attested checkout" with the real-data checks; the refusal had been applied wider than that.
+`scripts.seed_paysim._is_checkout` looked only at the developer layout, the same fault in another shape.
+
+**Decisions.**
+1. **The order is not changed.** When the recorded folder wins, and the walk up from the current folder also finds a
+   product, and the two are different folders (compared as the system resolves them, so a link to the same folder is the
+   same folder), the command prints **one line on standard error before it acts**:
+   `ospreyflow: using the recorded folder <A>, not the checkout you are in (<B>). To use this one, set OSPREYFLOW_HOME=<B>.`
+   Nothing else about the command changes, and its exit code does not. There is no line when the two are the same
+   folder, when the current folder holds no product, when `OSPREYFLOW_HOME` is set (the person chose), or when the recorded
+   folder is gone or holds no product (the walk up serves, as before). `doctor`'s tolerance of a missing product is
+   unchanged. That the current folder should beat the recorded one is the other reading, and would be an amendment to
+   Amendment 3, the guide's §3 and ADR-132 Amendment 1; it is not made here.
+2. **The bootstrap records the folder it installs, every time it runs.** `install.sh` and `install.ps1` each write the
+   path (`> "$home_file"`, `Set-Content`) with no test of what was there, so a second run, from the same checkout or from
+   another, replaces the record with the checkout it installs. Nothing in the scripts changes; what was only true of their
+   text is now held by a test.
+3. **A synthetic pack needs no checkout; a real or internal dataset keeps its refusal.** `seed_internal` refuses outside a
+   checkout (a `.git` in the product folder or the folder above it) only a dataset that is real (`real_dataset` set) or
+   reads a data folder (`data_folder` set: PaySim, the Enron corpus, a staged public dataset), in the words it had. A pack
+   its seed generates by code (hmp, fixture-corp, operation-ledger, prison-intelligence and its scale cohort,
+   cyber-intrusion) seeds without a `.git`, and the container is not told a checkout was attested, since none was read.
+   A dataset added later must be placed on one side by a test that names every dataset. `seed_paysim._is_checkout`
+   recognises the user repository's layout as `seed_enron._is_checkout` does; PaySim's own refusal of a bundle, and its
+   download delivery's checks, are not touched.
+4. **Other callers of `.git`, not changed** (none is a seed path): `scripts/write_pid_files.py` refuses an output folder
+   inside the working tree, and without a `.git` there is none to be inside; `harness/backup.checkout_root` falls back to
+   the product folder, and the doctor's copy to none; `harness/release.checkout_version` reads `VERSION`, else
+   `dev-unknown`; `harness/update.py` runs `git` against the checkout and fails on a repository with none (a release
+   update of an archive install is not made here).
+
+Not checked: a pack seeded for real on a git-archive install (it needs the stack; owed to a live run).
+
+Tests that would fail (rule 12; each shown red against a planted fault, rule 15):
+`tests/cli/test_home_says_when_recorded_wins.py` (the line, its words, its place before the command acts, and no line in
+the five cases above); `tests/test_seed_internal_git_archive.py` (each synthetic pack seeds with no `.git` anywhere above
+it; paysim, enron and a public dataset are still refused in the old words; every dataset is placed on a side;
+`_is_checkout` on both layouts and on a bundle); `tests/test_seed_internal.py` (the refusal's cases, one per kind);
+`tests/cli/test_bootstrap.py` (the scripts record the folder on every run).

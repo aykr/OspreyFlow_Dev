@@ -11,6 +11,10 @@ What a mistake would do, and the case that catches it:
   `test_the_package_is_the_small_command_the_decision_describes`;
 - the Python and the Windows scripts disagreeing on where the home file lives —
   `test_both_scripts_agree_with_the_command_on_the_home_file`;
+- a second run of a bootstrap leaving the first run's recorded folder in place, so a reinstall or a
+  repoint goes stale and the command follows the old one (ADR-114 Amendment 50 decision 2; the
+  command says so when the recorded folder wins, but it is only true that a reinstall fixes it if
+  the script overwrites) — `test_both_scripts_record_the_folder_they_install_on_every_run`;
 - the bootstrap stripping what a checkout already has installed — found running it on the owner's
   developer checkout for B2e: a plain `uv sync` uninstalled the `extraction` extra (spaCy, torch,
   deepparse and their dependencies) and left their folders behind as broken namespace packages —
@@ -44,6 +48,27 @@ def test_both_scripts_install_the_tool_and_record_the_home_file() -> None:
         assert "ospreyflow/home" in text.replace("\\", "/"), name
         assert "uv sync" in text, name
         assert "ospreyflow doctor" in text and "ospreyflow install --mode lite" in text, name
+
+
+def test_both_scripts_record_the_folder_they_install_on_every_run() -> None:
+    """The record is written by a plain overwrite of the folder the script just installed, with no
+    test of what was there: not appended, not written only when absent. Read from the scripts' own
+    text, as the neighbouring cases are (neither can be run here: they install `uv` and a tool)."""
+    sh = (CORE / "install.sh").read_text(encoding="utf-8").splitlines()
+    (written,) = [i for i, line in enumerate(sh) if "$home_file" in line and ">" in line]
+    assert sh[written].strip() == "printf '%s\\n' \"$product\" > \"$home_file\""  # one `>`, not `>>`
+    start = next(i for i, line in enumerate(sh) if line.startswith("# 4."))
+    between = [line.strip() for line in sh[start:written] if line.strip()]
+    assert not [line for line in between if line.startswith(("if ", "[ ", "test ", "case "))], between
+    assert 'uv tool install --editable "$product/cli"' in sh  # the folder it installs is `$product`
+
+    ps = (CORE / "install.ps1").read_text(encoding="utf-8").splitlines()
+    (written,) = [i for i, line in enumerate(ps) if "$homeFile" in line and "Content" in line]
+    assert ps[written].strip() == "Set-Content -Path $homeFile -Value $product -Encoding utf8"
+    start = next(i for i, line in enumerate(ps) if line.startswith("# 4."))
+    between = [line.strip() for line in ps[start:written] if line.strip()]
+    assert not [line for line in between if line.startswith(("if ", "if(", "} else"))], between
+    assert "uv tool install --editable (Join-Path $product \"cli\")" in ps
 
 
 def test_the_bootstrap_never_removes_installed_packages() -> None:

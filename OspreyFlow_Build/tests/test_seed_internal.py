@@ -787,10 +787,35 @@ def test_a_user_repository_is_a_checkout_when_the_git_folder_is_in_the_product_i
     assert call[call.index("-m") + 1] == "scripts.seed_hmp_fixture"
 
 
-def test_neither_a_git_folder_in_the_product_nor_above_it_is_still_refused(user_repo: Path) -> None:
+def test_a_synthetic_pack_needs_no_git_folder_in_the_product_or_above_it(user_repo: Path) -> None:
+    """ADR-114 Amendment 50: a repository made by `git archive` has no `.git`, and a pack its seed
+    generates by code reads nothing from a checkout (this asserted the refusal before)."""
     (user_repo / ".git").rmdir()
-    with pytest.raises(seed_internal.SeedRefused, match="checkout"):
-        _go(user_repo, Runner(), dataset="hmp")
+    runner = Runner()
+    _go(user_repo, runner, dataset="hmp")
+    assert _seed_call(runner)[_seed_call(runner).index("-m") + 1] == "scripts.seed_hmp_fixture"
+
+
+def test_an_internal_dataset_with_no_git_folder_in_the_product_or_above_it_is_refused(
+    user_repo: Path, tmp_path: Path
+) -> None:
+    (user_repo / ".git").rmdir()
+    (tmp_path / "OspreyFlow_Data" / "PaySIM_Dataset").mkdir(parents=True)
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="not a checkout of the repository"):
+        _go(user_repo, runner, dataset="paysim")
+    assert runner.calls == []
+
+
+def test_a_real_dataset_with_no_git_folder_in_the_product_or_above_it_is_refused(
+    user_repo: Path, tmp_path: Path
+) -> None:
+    (user_repo / ".git").rmdir()
+    (tmp_path / "OspreyFlow_Data" / "Enron_Mails").mkdir(parents=True)
+    runner = Runner()
+    with pytest.raises(seed_internal.SeedRefused, match="not a checkout of the repository"):
+        _go(user_repo, runner, dataset="enron")
+    assert runner.calls == []
 
 
 def test_the_data_root_is_the_environments_when_set(
