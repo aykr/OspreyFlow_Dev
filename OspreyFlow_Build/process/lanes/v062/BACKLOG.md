@@ -404,3 +404,8 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   with the Conduit address set and no public origin" becomes "with no public origin the stream is absent and the forwarder still serves"). Red first on both halves. After PL10; not
   in its round 2.
 - **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
+- **Line gap (20 Nov, PL9a's verifier start):** `common.write_json` writes through a fixed temp name (`<file>.tmp`) then `os.replace`. `run_seat.py`'s `record_limits` writes the
+  account file (`accounts/sol.json`) from every seat of that account, so two or more seats of one account that report their limits at the same moment race on `sol.json.tmp`:
+  one replaces it, the other finds it gone and the seat's launcher dies with `FileNotFoundError` seconds after starting (PL9a's verifier, started with PL4a's, PL2a's and PL10's seats).
+  No child process was left behind; the seat was restarted by hand and ran. Fix for the line's own session: a temp name unique per writer (pid and a counter) in `write_json`,
+  or a lock around the account file; test: two threads writing the same file, red on the fixed name. Until then the conductor starts same-account seats a few seconds apart.

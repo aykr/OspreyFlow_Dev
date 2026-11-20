@@ -89,6 +89,12 @@ The owner's word, about 13:20 UTC, on a run of main whose `conformance-recognise
 
 Every report says which of these applied.
 
+**Superseded on 20 November 2026 (the owner: "Applied", the fourth line fixes are on main).** Item 1 stands as the
+first step of the new rule below. **Items 2 to 4 are replaced** by the 20 November ruling "GitHub is a second opinion, not a
+gate" (section of 20 November 2026): merges go on the Mac's full gate whatever GitHub's last run says; every merge is
+pushed; a red run is rerun once by hand; the same test of ours failing on the rerun too makes the line write a stop that
+refuses merges, which only the owner clears; a release needs GitHub green on exactly the commit released (`release_green.py`).
+
 ## 18 November 2026: how the line runs, to cut down what needs the owner's hand
 
 The owner's four rulings of 18 November 2026 (about 12:40 UTC).
@@ -214,8 +220,12 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   every merge is pushed, waiting only while a run is in progress; a red run is rerun once without asking; only a test of ours failing
   twice stops merging and comes to the owner with the job, the test and the commit; a release still needs GitHub green on the commit
   released. This replaces items 2 to 4 of the 18 November ruling on GitHub failures and the sentence in ADR-142 Amendment 9 ("while
-  main is red, every merge is refused"; the owner applies `ADR142_AM9_COST_SENTENCE.diff`). **Until the fixes are applied** the line
-  carries on as before: the conductor reruns the red run and merges when main is green, and says so.
+  main is red, every merge is refused"; the owner applies `ADR142_AM9_COST_SENTENCE.diff`). **Applied by the owner on 20 November**
+  (commits eeb217b to e29d1dd; 355 cases, every planted fault caught, installed). From then the conductor: merges on the Mac's gate
+  whatever GitHub's last run says; when a run on main ends, runs `merge_slice.py watch-github`; if red, reruns it once by hand and then
+  runs `merge_slice.py push-pending`; if the same test of ours fails on the rerun too, the line writes a stop and refuses merges, and the
+  conductor tells the owner at once with the test, the job and the commit (only the owner clears it, `clear_github_stop.py`); a release
+  needs GitHub green on exactly the commit released (`release_green.py`).
 - **Two foundations every page build needs** (the owner, 20 November, after the stage 4 scouts): **PL9**, a real sign-in for the page service (the round trip,
   the session on the server, the page service's own client in the realm, sign-out and renewal; ADR-152 decision 5), and **PL10**, the `/v1` forwarder with the
   token kept on the server, uploads included. Both need only PL3 and touch no workspace file; they run beside the queue and beside PL4. Every page build's brief
