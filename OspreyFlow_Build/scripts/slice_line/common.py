@@ -378,6 +378,21 @@ def _gh_runs(*args: str) -> list[dict]:
     return runs
 
 
+def main_runs_going() -> str:
+    """'in progress' or 'queued' when a run on main is, as the push script asks gh (`gh run list --branch main --status
+    in_progress|queued --json databaseId`); '' when none is. gh that cannot be read is no run going, as for the push
+    script: a push is held back only by a run a new push would cancel."""
+    for status, said in (("in_progress", "in progress"), ("queued", "queued")):
+        try:
+            p = subprocess.run(["gh", "run", "list", "--branch", "main", "--status", status, "--json", "databaseId"],
+                               cwd=str(REPO), capture_output=True, text=True, timeout=60)
+            if p.returncode == 0 and json.loads(p.stdout):
+                return said
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            pass
+    return ""
+
+
 def main_ci() -> dict:
     """{state: green | red | unknown, run, url, why}: red for a failed run, or a cancelled one with nothing newer;
     unknown when gh cannot be read or no run has completed (never taken as green). A record and a note on the board,

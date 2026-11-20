@@ -3,6 +3,8 @@
 
     merge_slice.py merge <slice>                 one verified slice branch onto main, then the push step
     merge_slice.py records -m "<msg>" <path>...  the conductor's records, OspreyFlow_Build/process/lanes/v062/ only
+    merge_slice.py push-pending                  a push the push step deferred (push.pending), once no run on main is
+                                                 in progress or queued (1b); the conductor runs it when a run ends
 
 `merge` refuses unless every one of these holds, in this order, and stops at the first that does not:
   1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted. GitHub's last
@@ -854,6 +856,34 @@ def merge(slice_id: str) -> dict:
         fh.close()
 
 
+PUSH_PENDING = "push.pending"
+
+
+def push_pending() -> str:
+    """The push the push step deferred, run once no run on main is in progress or queued (1b: every merge is pushed;
+    a deferred push is never forgotten). Nothing pending: said, nothing done. A run still going: refused, the push
+    still waits. Otherwise push_main.sh runs, with every rule it keeps (main's tip written by the merge script, the
+    recorded origin, a fast-forward), and its words are given back. Under the merge lock, so no merge runs meanwhile."""
+    fh = lock()
+    try:
+        pending = c.DATA / PUSH_PENDING
+        if not pending.is_file():
+            return "No push is pending."
+        sha = pending.read_text().strip()[:10]
+        busy = c.main_runs_going()
+        if busy:
+            raise Refused(f"a run on main is {busy}: the push of {sha} still waits (push.pending). Run push-pending "
+                          "again when it ends.")
+        p = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True,
+                           text=True)
+        said = (p.stdout + p.stderr).strip()
+        if p.returncode != 0:
+            raise Refused(f"the pending push of {sha} did not go (push_main.sh exit {p.returncode}): {said}")
+        return said
+    finally:
+        fh.close()
+
+
 def records(message: str, paths: list[str]) -> str:
     fh = lock()
     try:
@@ -898,11 +928,14 @@ def main() -> int:
     r = sub.add_parser("records")
     r.add_argument("-m", "--message", required=True)
     r.add_argument("paths", nargs="+")
+    sub.add_parser("push-pending")
     a = ap.parse_args()
     try:
         if a.cmd == "merge":
             done = merge(a.slice)
             print(json.dumps(done, indent=1))
+        elif a.cmd == "push-pending":
+            print(push_pending())
         else:
             print("Committed", records(a.message, a.paths))
     except Refused as e:

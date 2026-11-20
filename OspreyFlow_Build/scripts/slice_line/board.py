@@ -298,7 +298,8 @@ def main() -> int:
             print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         pending = c.DATA / "push.pending"
         if pending.exists():
-            print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")
+            print(f"push pending ({pending.read_text().strip()[:10]}): waits for the run on main in progress; the "
+                  "conductor runs merge_slice.py push-pending when it ends")
         print(f"status file: {path}")
     for p in problems:
         print(f"REPORT TO OWNER: {p}", file=sys.stderr)

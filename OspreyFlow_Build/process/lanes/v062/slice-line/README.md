@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (320 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (248 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (329 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (257 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -98,7 +98,7 @@ without a tool call; the line's own cap is 6 red stops.
    acceptance (`accepted-<tip>.json`, behind it the verifier's unchanged findings record for the tip and its use logged
    in `owner-changes.tsv`); a tip that moved after the acceptance has neither. Then the acceptance (red before) and the checks and scans (green after) run in an
    environment built as CI builds it, its venv outside the tree, with the slice's slot; `node_modules` is removed
-   before the full gate, which builds its own. Then main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
+   before the full gate, which builds its own. Then main fast-forwarded to the tested merge commit, then `push_main.sh` (every merge is pushed; only a run on main in progress or queued defers it: below). A red full gate
    (or a merge refused for a conflict with main: kind `records` in the records folder alone, kind `conflict` for any other, with the files `git merge-tree` names; a merge that fails with no file named is refused in words and not recorded) leaves the slice `refused`: the failing tests and
    their failing lines (not the whole log) are written as a findings record (`verify-gate-<tip>.json`), the board
    shows "refused by the gate: N tests", and `resume.py <ID> send-back` returns it to the builder with those findings.
@@ -133,6 +133,8 @@ row naming a test or a prefix that is not there. `install.sh` installs the map a
 
 ## GitHub: a second opinion, not a gate
 **A merge reads GitHub, never waits for it** (1a). `merge_slice.py merge` reads GitHub's latest completed run on main (`common.main_ci()`: `gh run list --branch main --status completed`) and records it in `merged.json` as `github_at_merge` (`state` green, red or unknown, `run`, `url`, `why`, `at`), saying it in one line after its result ("GitHub's last run on main: red (run N), not a gate; merging"). A record, never a decision: the Mac's full gate alone decides, and a run gh cannot read is no reason to hold a merge the gate passed. Every other refusal stands.
+
+**Every merge is pushed** (1b), so GitHub always tests the newest main. `push_main.sh` defers only while a run on main is in progress or queued (a new push would cancel it), never for a completed red run, and writes the commit to `push.pending`. A deferred push is never forgotten: the board prints "push pending (<commit>)", and the conductor runs `merge_slice.py push-pending` when the run ends (a conductor command, like `merge` and `records`): under the merge lock, once nothing is in progress or queued, it runs `push_main.sh` with every rule it keeps (main's tip written by the merge script, the recorded origin, a fast-forward) and gives its words back. The guard still refuses `push_main.sh` to every agent.
 
 ## Resuming a slice
 
