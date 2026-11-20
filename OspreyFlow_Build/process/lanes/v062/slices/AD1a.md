@@ -85,3 +85,23 @@ test that scans a folder the slice changes (the specification walkers and the ge
 
 The screen (AD1b); AD1c's items; the live measured run (owed); PL4 (the shared package move; it waits for the owner's word and for
 AD1 to merge); AD5; the invite form (AD2, merged).
+
+## Round 2 (the owner's ruling of 20 November 2026, after the stop on the scans): one workspace file is allowed
+
+The scans stopped this slice on three tests: `tests/services/api/test_admin_sections.py::test_every_admin_route_is_some_section_s` and, in
+`tests/services/api/test_place_routes.py`, `test_the_record_of_places_by_role_is_the_routes` and
+`test_every_route_of_a_hidden_place_refuses_the_role[right:manage_models]`. The routes this slice adds (`checks`, `check-add`, `check-cancel`) are
+not in the places record or the sections list, and the old add route still is. **The owner's ruling, which changes items 2 and 4 above:**
+
+1. **This branch may change one workspace file: `OspreyFlow_Core/apps/workspace/src/shell/placesByRole.json`, and no other file under `apps/workspace`.**
+   It is produced by its generator and never edited by hand: run `tests/services/api/test_place_routes.py::test_the_record_of_places_by_role_is_the_routes`
+   with the environment variable `OSPREY_WRITE_PLACES_BY_ROLE=1` (the test rewrites the file from the routes), then run both place tests without the
+   variable and see them pass. Say in your report that the file was generated, and by which command.
+2. **The sections list** (`test_admin_sections.py` reads the admin routes against the sections): bring the new routes into whatever server-side file
+   that test reads (not under `apps/workspace`). If the only way to make it green is a second workspace file, stop and say so; do not touch it.
+3. **This slice still does not merge.** It stays unmerged until AD1b is verified, which is after PL4's slice E. The rule it bends (nothing else
+   touches `apps/workspace` while PL4 runs) is about landing on main, and this does not land then.
+4. **When main is brought into this branch before its merge** (the conductor sends it back for that): `placesByRole.json` is **regenerated again
+   from main's state with the same command, never merged by hand** (if the merge conflicts on it, take main's copy first, then regenerate), and the
+   three tests above are rerun and reported.
+5. Everything else stands, including the screen files (take main's version of them).

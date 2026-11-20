@@ -194,6 +194,13 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   `keyboard/admin-models.spec.ts`); AD1a and AD1b merge back to back, with no release between; AD1c after them. The owner's rules for
   keys bind every AD1 slice: write-only, replace and remove and never reveal, audited without the key, only a holder of the right,
   the server command stays as a second route, synthetic keys only.
+- **AD1a: one workspace file allowed** (the owner, 20 November, option 2 with conditions). AD1a's three red scan tests
+  (`test_admin_sections`; in `test_place_routes`: the record of places by role, and the hidden-place refusal for `right:manage_models`) need
+  `apps/workspace/src/shell/placesByRole.json`. AD1a may change **that one file** on its own branch, produced by its generator
+  (`OSPREY_WRITE_PLACES_BY_ROLE=1` on the record test), never by hand, and no other file under `apps/workspace`. The rule it bends is about
+  *landing on main* during PL4, and AD1a does not land then: it stays unmerged until AD1b is verified, after PL4's slice E. When main is
+  brought into AD1a before its merge, the file is regenerated again from main's state, not merged by hand, and the three tests are rerun.
+  The brief's "Round 2" section says so (`slices/AD1a.md`).
 - **PL4 goes ahead of AD1**, released as five slices A to E to start after ADR-152 Amendment 1 is committed by the owner. The owner's
   ruling on ADR-152 decision 6: R2 may land as five changes, each leaving main green and changing no behaviour. `glass-shared` is an
   npm workspace dependency. Only the invite form's plain parts (`givableCodes`, `givableLevels` and the like) move; `People.tsx` and
