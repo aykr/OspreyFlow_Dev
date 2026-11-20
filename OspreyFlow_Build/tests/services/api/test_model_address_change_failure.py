@@ -45,6 +45,10 @@ at run time (the owner's rules for keys): none is written in this file.
   `test_a_key_is_not_taken_while_an_entry_disagrees_and_cannot_be_withdrawn`;
 - `_reconcile` no longer keeps an entry at another address, because it was held under the same id:
   `test_adding_an_engine_over_a_stale_entry_at_another_address_makes_it_at_the_new_one`;
+- an address that is none on one side only (an engine the record gives no address, an entry at a
+  proxy; an entry showing none for an engine the record gives an address) is a disagreement too,
+  never read as agreeing, at start and at a key change:
+  `test_an_address_that_is_none_on_one_side_only_is_a_disagreement`;
 - the fix does not rebuild what agrees (a check that a good deployment is left alone):
   `test_a_deployment_that_agrees_loses_no_entry_at_start_or_at_a_key_change`;
 - the paths the scout found to send no key anywhere (`remove_key`, `remove_engine`, and a rotation
@@ -191,9 +195,9 @@ class Scene:
             retry_seconds=retry_seconds,
         )
 
-    async def set_up(self) -> None:
-        """The engine at the old address, with its key."""
-        await self.admin.add_engine("admin-1", provider(OLD))
+    async def set_up(self, address: str | None = OLD) -> None:
+        """The engine at the old address (or at none: the provider's own), with its key."""
+        await self.admin.add_engine("admin-1", provider(address))
         await self.admin.set_key("admin-1", "gemini", SecretStr(self.first))
         assert self.gateway.credential("osprey-gemini") == self.first
 
@@ -221,7 +225,7 @@ class Scene:
     def addresses_reached_by(self, key: str) -> set[str | None]:
         return {base for base, sent in self.gateway.sent if sent == key}
 
-    async def plant_entries_at(self, address: str) -> None:
+    async def plant_entries_at(self, address: str | None) -> None:
         """What a deployment the fault already reached holds: the record says the old address, the
         engine's entries are at another (made through the real adapter, as the rebuild made
         them)."""
@@ -651,6 +655,33 @@ async def test_adding_an_engine_over_a_stale_entry_at_another_address_makes_it_a
         "admin-1", provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"})
     )
     assert set(scene.at().values()) == {OLD}, scene.at()
+
+
+@pytest.mark.parametrize("through", ["start", "a key change"])
+@pytest.mark.parametrize(
+    ("recorded", "planted"),
+    [(None, NEW), (OLD, None)],
+    ids=["record gives none, entry at a proxy", "record gives an address, entry shows none"],
+)
+async def test_an_address_that_is_none_on_one_side_only_is_a_disagreement(
+    scene: Scene, recorded: str | None, planted: str | None, through: str
+) -> None:
+    """`_same_address` fails closed: where one side has no address and the other has one, the entry
+    is withdrawn and made again as the record says, never kept, so the key reaches only where the
+    record sends it (the provider's own default when the record gives none)."""
+    await scene.set_up(recorded)
+    await scene.plant_entries_at(planted)
+    assert set(scene.at().values()) == {planted}
+    if through == "start":
+        await scene.process(faulty=False).start()
+        assert set(scene.at().values()) == {recorded}, scene.at()
+        key = scene.first
+    else:
+        await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
+        assert set(scene.at().values()) == {recorded}, scene.at()
+        key = scene.second
+    await scene.call()
+    assert scene.addresses_reached_by(key) == {recorded}, scene.gateway.sent
 
 
 async def test_a_deployment_that_agrees_loses_no_entry_at_start_or_at_a_key_change(
