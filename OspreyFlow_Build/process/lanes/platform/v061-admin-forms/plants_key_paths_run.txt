@@ -118,3 +118,4 @@ P10 the undo does not settle notes of intent: 16 red
     (and 12 more)
 
 Two cases were added after the red commit (the note an earlier change left must not be given back by a refused step; a check killed after its key was stored is settled at start): both red on c66961a's model_admin.py (2 failed), green now. The put-back words, SE5's and the branch's own failure tests were adapted where they counted saves (a counted second save is now a note's save): each now fails the save that carries the record's new address.
+Rows 4 (a rotation killed after the old key was removed, and after the new was stored) and 5 (a probe's store whose answer was lost) were added last: red on c66961a's model_admin.py (3 failed), green now.

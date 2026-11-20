@@ -1089,3 +1089,54 @@ async def test_a_check_killed_after_its_key_was_stored_is_settled_at_start_row_2
     assert world.gateway.credential("osprey-openai") is None, "the key outlived its check"
     assert not restarted.settings.checks and not restarted.settings.intents
     assert world.gateway.credential_reads == 0
+
+
+# --- rows 4 and 5: a rotation killed between its steps; a probe key whose store was lost ----------
+
+
+@pytest.mark.parametrize("where", ["after the old key was removed", "after the new key was stored"])
+async def test_a_rotation_killed_between_its_steps_is_settled_at_start_row_4(
+    world: Scene, where: str
+) -> None:
+    """Row 4. A rotation deletes the old credential, then stores the new one, then saves. The
+    process stops after either step: the note of intent saved first is what start reads, so the
+    restart does not offer an engine whose record says "set" over a credential that is gone or that
+    holds a key the record has not been given (rows 4 and 36)."""
+    await world.set_up()
+    stop = faults(world)
+    stop.die_after.append(credential_of("DELETE" if where.startswith("after the old") else "POST"))
+    with pytest.raises(Died):
+        await world.admin.set_key("admin-1", "gemini", SecretStr(world.second))
+    stop.dead = False
+    assert set(world.admin.settings.intents) == {"gemini"}, "the plant: the note is outstanding"
+    held = world.gateway.credential("osprey-gemini")
+    assert held in (None, world.second), "the plant"
+
+    restarted = world.process(faulty=False, retry_seconds=3600)
+    await restarted.start()
+    await restarted.close()
+    assert not restarted.settings.intents
+    assert world.gateway.credential("osprey-gemini") is None, "no key the record did not name"
+    assert restarted.key_state("gemini") == "lost"
+    assert restarted.routes().engines["gemini"].key_present is False
+    assert world.gateway.credential_reads == 0
+
+
+async def test_a_probe_key_whose_store_was_lost_is_removed_row_5(world: Scene) -> None:
+    """Row 5. The gateway stores the check's own credential and the answer is lost: the store reads
+    as refused, and the probe was not removed (the removal began after the store). The removal is
+    now asked whatever stopped the store, so the typed key never stays held."""
+    await world.set_up()
+    faults(world).lose_answer.append(
+        lambda r: (
+            r.method == "POST"
+            and r.url.path == "/credentials"
+            and json.loads(r.content)["credential_name"] == "osprey-gemini.check"
+        )
+    )
+    with pytest.raises(ModelAdminRefused):
+        await moved(world)
+    faults(world).lose_answer.clear()
+    assert world.gateway.credential("osprey-gemini.check") is None, "the probe still holds a key"
+    assert world.gateway.credential("osprey-gemini") == world.first
+    assert world.second not in recorded(world)
