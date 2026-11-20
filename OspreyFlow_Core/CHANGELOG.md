@@ -6,6 +6,11 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+**The Glass (ADR-014 Amendment 2).**
+- **The map moves to MapLibre 6**, which closes CVE-2026-85061 (fixed from 6.4.1) instead of accepting it. The map
+  now needs WebGL 2: a browser or device without it shows a message saying so, where the map would have been a
+  blank panel. The map's worker file is served by the Glass itself. The Graph, and every other view, are unchanged.
+
 ## v0.6.1 — 2026-11-16
 
 A patch to v0.6.0: Ask & Chat opens as a drawer again, and search on Small and Lite keeps up with new data.

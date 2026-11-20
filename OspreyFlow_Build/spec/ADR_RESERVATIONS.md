@@ -127,6 +127,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-140 Amendment 22 | The Studio as server-rendered pages; one view, not two modes; S1-S21 (16 and 18 Nov) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
 | ADR-141 Amendment 2 | The whole-dataset load: the dataset the unit an outside tool starts; a failure stops only what depends on it; one neutral job file, no generated Airflow job (D7-D9, D16, 19 Nov answer 18) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
 | ADR-148 Amendment 23 | The `pages` service on cloud-platform, no Superset under the GOV.UK theme, and the identity switch | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+| ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
 
 ## Baseline
 
