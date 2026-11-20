@@ -2613,18 +2613,7 @@ for it.
 At install, each provider's key is `OSPREY_MODEL_KEY_<NAME>`, for example `OSPREY_MODEL_KEY_GEMINI`
 (the single `provider:` keeps `OSPREY_MODEL_PROVIDER_KEY`). Give it in the installer's terminal
 before `ospreyflow install`, or on the guided install's Models screen; an enabled provider without
-its key stops the install, and a later install keeps a key already given. The install writes it to
-`deployment.env` only until the gateway is up, then hands it to the model gateway's own store, sealed under the
-deployment's own salt (ADR-135 Amendment 2 decision 3), and removes its line. If that fails it says so, the key
-stays in `deployment.env`, and the next `ospreyflow apply` tries again. To enable a provider on a running
-deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes its key from
-`OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt, and hands it on the same way. On the
-cloud-platform profile it stays, besides, in the namespace's Kubernetes Secret, the cluster's own secret store,
-given to the model gateway alone and to no other workload (section 6a). From then on the gateway alone reads it:
-it is never written to `osprey.yaml`, never logged and never in the audit. It is **managed** in
-*Admin › Models* (section 10.1), write-only: set, replaced or removed there, never shown back, to anyone. On its
-way from the screen it passes through the Conduit in transit only, and the Conduit keeps nothing of it (ADR-135
-Amendments 2 and 14).
+its key stops the install, and a later install keeps a key already given. The install writes it to `deployment.env` only until the gateway is up, then hands it to the gateway and removes its line. If that fails it says so, the key stays in `deployment.env`, and the next `ospreyflow apply` tries again. The gateway keeps it in its own store, sealed under the deployment's own salt (ADR-135 Amendment 2 decision 3). To enable a provider on a running deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes its key from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt, and hands it on the same way. On the cloud-platform profile it stays, besides, in the namespace's Kubernetes Secret, the cluster's own secret store, given to the model gateway alone and to no other workload (section 6a). From then on the gateway alone reads it: it is never written to `osprey.yaml`, never logged and never in the audit. It is **managed** in *Admin › Models* (section 10.1), write-only: set, replaced or removed there, never shown back, to anyone. On its way from the screen it passes through the Conduit in transit only, and the Conduit keeps nothing of it (ADR-135 Amendments 2 and 14).
 
 **From the command line**, for headless use and recovery, `ospreyflow models key <name>` sets or
 replaces a key and `ospreyflow models remove-key <name>` removes it (section 8). Both run the
