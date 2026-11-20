@@ -135,14 +135,13 @@ import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
-import type { LimitExceeded, WorkingSetDelta } from "./workingset/models";
+import { createWorkingSet, type HistoryStepSummary, type LimitExceeded, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
 import { useOnReturn } from "./strength/useOnReturn";
 import { TimelineStrip } from "./timeline/TimelineStrip";
 import { lastChangeText } from "./history/lastChange";
-import type { HistoryStepSummary } from "./workingset/models";
 import { guideUrl, openGuide } from "./home/guides";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
@@ -176,7 +175,6 @@ import {
   type DeltaClient,
   type SocketLike,
 } from "./workingset/deltaClient";
-import { createWorkingSet } from "./workingset/store";
 import { applyRestoredSnapshot, ViewOverCapGate } from "./workingset/ViewOverCapGate";
 import { ViewOverCapDialog } from "./workingset/ViewOverCapDialog";
 import { BatchExpansion } from "./workingset/BatchExpansion";

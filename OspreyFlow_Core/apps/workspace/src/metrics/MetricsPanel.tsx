@@ -24,7 +24,7 @@ import { Select } from "../design/primitives/Select";
 import { Toggle } from "../design/primitives/Toggle";
 import { Slider } from "../design/primitives/Slider";
 import { NO_FILTER, valueRange, type FilterMetricName, type MetricFilter } from "./filters";
-import type { WorkingSetGraph } from "../workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 import { fetchComputeMetric } from "./api";
 import { fetchConnectionStrengths, fetchRarity, type RarityScope } from "../strength/api";
 import { strengthValues } from "../strength/words";

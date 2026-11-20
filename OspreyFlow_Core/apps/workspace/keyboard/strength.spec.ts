@@ -5,7 +5,7 @@
 // strength blank, in the sentence builder. Never `page.mouse` or `.click()`.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { assertAllCovered, registerCovered, STRENGTH_ACTIONS } from "./actionRegistry";
+import { assertAllCovered, registerCovered, STRENGTH_ACTIONS } from "@ospreyflow/glass-shared";
 
 /** Tabs until `target` is focused — never a counted number of Tabs. */
 async function tabUntilFocused(page: Page, target: Locator, max = 80): Promise<void> {

@@ -5,8 +5,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { DeltaSnapshot, LimitExceeded } from "./models";
-import { createWorkingSet } from "./store";
+import { createWorkingSet, type DeltaSnapshot, type LimitExceeded } from "@ospreyflow/glass-shared";
 import { applyRestoredSnapshot, ViewOverCapGate } from "./ViewOverCapGate";
 
 afterEach(cleanup);

@@ -2,7 +2,7 @@
 // ("Everything cross-filters... A brush on the timeline dims the graph") and
 // rule 2 ("Filters dim, they do not remove"), `08_ACCEPTANCE_SCENARIOS.md` A3.
 //
-// Mirrors `workingset/store.ts`'s vanilla-store split deliberately: this
+// Mirrors `packages/glass-shared/src/workingset/store.ts`'s vanilla-store split deliberately: this
 // module holds only the filter *inputs* (`window`, `cells`, `selectedNodeIds`) and
 // their *derived* dimming result as plain reactive state, never the working
 // set's own graphology instance — `GlassCanvas.tsx` reads `dimmedNodeIds`
@@ -92,7 +92,7 @@ export interface CrossFilterStore {
    * set's own membership changes (a node added after the last refresh has
    * no dimming state yet otherwise). Takes the id list rather than a
    * graph reference: this store has no graphology dependency, matching
-   * `workingset/store.ts`'s own separation. */
+   * `packages/glass-shared/src/workingset/store.ts`'s own separation. */
   refresh: (allNodeIds: readonly string[], allEdgeIds?: readonly string[]) => Promise<void>;
 }
 

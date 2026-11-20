@@ -4,7 +4,7 @@
 // "Try again" comes first, and Tab stays inside the prompt. This test never calls `.click()`.
 import { expect, test } from "@playwright/test";
 
-import { SESSION_PROMPT_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { SESSION_PROMPT_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 test("an ended session: Enter on Sign in again asks for the sign-in window, and the page is kept", async ({ page }) => {
   await page.goto("/keyboard/session-prompt-harness.html");

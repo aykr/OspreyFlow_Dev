@@ -9,7 +9,7 @@ import { createRequire } from "node:module";
 
 import { expect, test } from "@playwright/test";
 
-import { shadowCoverageRange } from "../../src/color/textContrast";
+import { shadowCoverageRange } from "@ospreyflow/glass-shared";
 
 const { PNG } = createRequire(import.meta.url)("playwright-core/lib/utilsBundle") as {
   PNG: { sync: { read(b: Buffer): { width: number; height: number; data: Buffer } } };

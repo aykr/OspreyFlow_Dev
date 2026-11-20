@@ -1096,7 +1096,7 @@ so a dependency a workspace gains is entered here, in prose, as the entries abov
 
 | Package | Range | Licence (as its metadata gives it) | Why | Workspace |
 | --- | --- | --- | --- | --- |
-| `graphology` | `^0.26.0` | MIT | the working set's graph, which `workingset/store.ts` builds and `apps/workspace` and the pages both read | `packages/glass-shared`, already used by `apps/workspace` at the same range |
+| `graphology` | `^0.26.0` | MIT | the working set's graph, which the shared package's working-set store (`packages/glass-shared/src/workingset/store.ts`) builds and `apps/workspace` and the pages both read | `packages/glass-shared`, already used by `apps/workspace` at the same range |
 | `zustand` | `^5.0.2` | MIT | the working set's store; **only `zustand/vanilla` is imported** (the package's main entry imports React, and the shared package imports none: I1) | `packages/glass-shared`, already used by `apps/workspace` at the same range |
 
 Neither brings React into the shared package or the `pages` image: `zustand`'s React binding is a separate entry the

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 import type { OntologyRegistry } from "../ontology/schema";
-import type { WorkingSetGraph } from "../workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 import { SOURCES_WITHHELD_TEXT } from "../inspector/sourcesWithheld";
 import { fetchDocumentView } from "./api";
 import { HighlightedMessage } from "./HighlightedMessage";

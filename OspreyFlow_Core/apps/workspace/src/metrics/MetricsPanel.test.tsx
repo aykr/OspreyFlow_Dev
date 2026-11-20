@@ -6,7 +6,7 @@
 // independently; the community-hull choice survives its section being closed; the ranked list still
 // centres the canvas on a node.
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { createWorkingSet } from "../workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MetricsPanel } from "./MetricsPanel";

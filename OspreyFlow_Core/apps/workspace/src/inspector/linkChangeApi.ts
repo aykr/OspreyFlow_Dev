@@ -4,7 +4,7 @@
 // The shapes are written out here because they are not domain models (`schemas/generated` holds
 // only those); they mirror `LinkChange`, `LinkChangeRequest` and `LinkChangeResult` in the server.
 import type { Edge, Handling } from "../../../../packages/schemas/generated";
-import type { DeltaReplaceEdge } from "../workingset/models";
+import type { DeltaReplaceEdge } from "@ospreyflow/glass-shared";
 
 export interface LinkChangeRecord {
   id: string;

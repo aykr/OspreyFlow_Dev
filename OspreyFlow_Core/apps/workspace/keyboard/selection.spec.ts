@@ -3,7 +3,7 @@
 // No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { SELECTION_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { SELECTION_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 declare global {
   interface Window {

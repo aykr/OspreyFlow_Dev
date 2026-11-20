@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BatchExpansion } from "./BatchExpansion";
 import type { BatchExpansionRequest } from "./batchExpansionApi";
-import type { LimitExceeded } from "./models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

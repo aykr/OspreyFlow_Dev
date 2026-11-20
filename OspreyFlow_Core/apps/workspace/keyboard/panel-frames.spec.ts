@@ -2,7 +2,7 @@
 // (rule 13): each button is focused and pressed with Enter. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { PANEL_FRAME_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { PANEL_FRAME_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "PANEL_FRAME_ACTIONS";
 const URL = "/keyboard/panel-frames-harness.html";

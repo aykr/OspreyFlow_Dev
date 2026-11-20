@@ -22,7 +22,7 @@ import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { MatrixView } from "../src/matrix/MatrixView";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { TopBar } from "../src/shell/TopBar";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import type { Edge, Node, OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {

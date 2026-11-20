@@ -10,7 +10,7 @@ import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { Timeline } from "../src/timeline/Timeline";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { FRAUD_EDGES, FRAUD_NODES, FRAUD_SCHEMA } from "./fraudFixture";
 
 const workingSet = createWorkingSet();

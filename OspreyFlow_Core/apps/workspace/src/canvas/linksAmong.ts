@@ -1,7 +1,7 @@
 // The links among nodes already in the view (ADR-098 decision 1): an expansion returns only the
 // links it walked along, so the links between the nodes on screen are asked for separately.
 // `POST .../links-among` adds all of them or, past the working set's cap, none (rule 2).
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const COUNT = new Intl.NumberFormat("en-GB");
 

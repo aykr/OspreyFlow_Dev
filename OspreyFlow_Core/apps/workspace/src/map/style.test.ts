@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { PublicMapProvider } from "../../../../packages/schemas/generated";
 import { oklabLightness } from "../color/oklab";
 import { paletteFor } from "../color/palette";
-import { contrastRatio } from "./contrast";
+import { contrastRatio } from "@ospreyflow/glass-shared";
 import {
   BUNDLED_DARK_STYLE_ID,
   BUNDLED_RASTER_OVERLAY_STYLE_ID,

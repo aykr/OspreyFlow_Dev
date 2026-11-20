@@ -6,7 +6,7 @@
 // shown afterwards, which is read back from the server this spec plays.
 import { expect, test, type Page } from "@playwright/test";
 
-import { CASE_BRIEF_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { CASE_BRIEF_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 type Attachment = { kind: string; id: string; title: string };
 type Requirement = { id: string; text: string; status: "open" | "answered"; answered_at: string | null; attachments: Attachment[] };

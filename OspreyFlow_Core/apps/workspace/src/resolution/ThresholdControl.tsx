@@ -11,8 +11,7 @@ import type { StoreApi } from "zustand/vanilla";
 
 import { CanvasToolbarCompact } from "../canvas/toolbarCompact";
 import { Slider } from "../design/primitives/Slider";
-import type { ResolutionOutcome, WorkingSetDelta } from "../workingset/models";
-import type { WorkingSetStoreState } from "../workingset/store";
+import type { ResolutionOutcome, WorkingSetDelta, WorkingSetStoreState } from "@ospreyflow/glass-shared";
 
 // `services/resolve/projection.py`'s three named constants, checked directly rather than assumed
 // — B9's own wording names exactly these three, not a continuous scale, so the slider exposes

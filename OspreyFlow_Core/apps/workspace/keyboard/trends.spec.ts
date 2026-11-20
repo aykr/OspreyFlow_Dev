@@ -3,7 +3,7 @@
 // proves its call reached the server with the right body.
 import { expect, test, type Page } from "@playwright/test";
 
-import { TRENDS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { TRENDS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 import { PACK, SAVED_TREND, serveWorld, world } from "./reportsFixtures";
 
 const REGISTRY = "TRENDS_ACTIONS";

@@ -9,7 +9,7 @@ import {
   RULE_STANDARDS_ACTIONS,
   assertAllCovered,
   registerCovered,
-} from "./actionRegistry";
+} from "@ospreyflow/glass-shared";
 
 const REGISTRY = "RULE_STANDARDS_ACTIONS";
 

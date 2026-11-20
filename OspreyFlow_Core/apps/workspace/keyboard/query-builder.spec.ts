@@ -13,7 +13,7 @@
 // `/compute/degree`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { assertAllCovered, QUERY_BUILDER_ACTIONS, registerCovered } from "./actionRegistry";
+import { assertAllCovered, QUERY_BUILDER_ACTIONS, registerCovered } from "@ospreyflow/glass-shared";
 
 const SEARCH_NODE = {
   id: "n42",
