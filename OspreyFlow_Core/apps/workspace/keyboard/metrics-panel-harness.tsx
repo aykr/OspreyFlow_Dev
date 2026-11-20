@@ -18,7 +18,7 @@ import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { MetricsPanel } from "../src/metrics/MetricsPanel";
 import type { MetricFilter } from "../src/metrics/filters";
 import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import type { OntologySchema, Node, Edge } from "../../../packages/schemas/generated";
 
 declare global {

@@ -10,6 +10,9 @@ const SHARED_BANNED_NAMES = [
   ["react-dom", "no React in the shared package (I1)"],
   ["sigma", "the shared package imports no drawing library (I13, D46)"],
   ["maplibre-gl", "the shared package imports no drawing library (I13, D46)"],
+  // `zustand`'s main entry imports React (it binds a store to a hook): the working set's store is plain, and imports
+  // `zustand/vanilla` only. `zustand/react` and every other entry are refused below.
+  ["zustand", "the shared package imports zustand only through zustand/vanilla: the main entry pulls React in (I1)"],
 ];
 const SHARED_BANNED_PATTERNS = [
   ["react/*", "no React in the shared package (I1)"],
@@ -17,11 +20,14 @@ const SHARED_BANNED_PATTERNS = [
   ["sigma/*", "the shared package imports no drawing library (I13, D46)"],
   ["@sigma/*", "the shared package imports no drawing library (I13, D46)"],
   ["maplibre-gl/*", "the shared package imports no drawing library (I13, D46)"],
+  // A gitignore-style group: every `zustand/` entry but `vanilla`.
+  [["zustand/*", "!zustand/vanilla"], "the shared package imports zustand only through zustand/vanilla (I1)"],
 ];
 // `import("sigma").Map` in a type position, and `import("sigma")` as an expression, are not import statements, so the rule
 // above does not see them.
 // The slash is escaped because the selector's own regular expression ends at the first plain one.
-const SHARED_BANNED_MODULE = "^(react|react-dom|sigma|maplibre-gl|@sigma)($|\\/)";
+// `zustand` is banned but for its `vanilla` entry, which the lookahead lets through.
+const SHARED_BANNED_MODULE = "^(react|react-dom|sigma|maplibre-gl|@sigma|zustand(?!\\/vanilla$))($|\\/)";
 
 export default [
   js.configs.recommended,
@@ -112,7 +118,7 @@ export default [
         "error",
         {
           paths: SHARED_BANNED_NAMES.map(([name, message]) => ({ name, message, allowTypeImports: false })),
-          patterns: SHARED_BANNED_PATTERNS.map(([group, message]) => ({ group: [group], message, allowTypeImports: false })),
+          patterns: SHARED_BANNED_PATTERNS.map(([group, message]) => ({ group: [group].flat(), message, allowTypeImports: false })),
         },
       ],
       "no-restricted-syntax": [

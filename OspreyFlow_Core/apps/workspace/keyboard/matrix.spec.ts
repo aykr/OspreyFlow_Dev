@@ -4,7 +4,7 @@
 // canvas itself — Expand proven by the real request it sends.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { assertAllCovered, MATRIX_ACTIONS, registerCovered } from "./actionRegistry";
+import { assertAllCovered, MATRIX_ACTIONS, registerCovered } from "@ospreyflow/glass-shared";
 
 // The harness opens on the Matrix; every walk here starts on the Graph and reaches it by keyboard.
 const HARNESS = "/keyboard/matrix-harness.html?view=graph";

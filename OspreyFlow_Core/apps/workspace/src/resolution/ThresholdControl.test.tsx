@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CanvasToolbarCompact } from "../canvas/toolbarCompact";
-import { createWorkingSet } from "../workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { ResolutionThresholdControl } from "./ThresholdControl";
 
 function renderControl(props: { compact?: boolean; onChangeSummary?: (m: string) => void; store?: ReturnType<typeof createWorkingSet>["store"] } = {}) {

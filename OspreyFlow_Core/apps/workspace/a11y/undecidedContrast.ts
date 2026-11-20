@@ -9,7 +9,7 @@
 // which of those elements lie under each probed point of its own words, a painted `::before`/`::after`
 // laid over it, the SVG shapes under an SVG label's words, the browser's own canvas colour, and what
 // `elementsFromPoint` finds at each point, with every element taking pointer events and none inert for
-// the probe. `src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
+// the probe. `packages/glass-shared/src/color/textContrast.ts` judges it, in Node, unit-tested at every boundary. It fails
 // closed: an element painted under or over the words that is neither the node nor an ancestor (map
 // tiles under a chip, a translucent overlay, a drawn line, a descendant's background), a filter or
 // blend, a colour it cannot read, a node in a frame or shadow root are offenders, never passes. Text
@@ -34,7 +34,7 @@ import {
   type Judgement,
   type ListedFinding,
   type Sample,
-} from "../src/color/textContrast";
+} from "@ospreyflow/glass-shared";
 
 /** What this reads of an axe-core result: the rules left incomplete, their nodes and axe's reasons. */
 export interface AxeIncomplete {

@@ -6,7 +6,7 @@
 // `page.mouse`, no `.click()`. Each domain step asserts the request body sent and the packs shown.
 import { expect, test, type Page } from "@playwright/test";
 
-import { CASE_DATASETS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { CASE_DATASETS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const DATASETS = [
   { id: "enron", name: "Enron corpus", owning_unit: "unit-1" },

@@ -1,14 +1,13 @@
 // `06_DECISIONS.md` ADR-049 Stage 2 §6 amendment 21: "a new keyboard-driven surface needs its own
 // action registry and spec file, in the same change [as the first keyboard action]." Reuses
-// `apps/workspace/keyboard/actionRegistry.ts`'s own mechanism directly (imported, not copied —
-// the brief's own instruction) rather than moving it to a shared package: this app is a second
-// consumer of one already-shared module, not a reason to relocate it and touch every existing
-// import in `apps/workspace` to do so.
-import { defineActionRegistry } from "../../workspace/keyboard/actionRegistry";
+// `packages/glass-shared/src/keyboard/actionRegistry.ts`'s own mechanism directly (imported, not
+// copied — the brief's own instruction): the registry lives in the shared package since PL4 slice C
+// (ADR-152 decision 6), and this app is a second consumer of it, as `apps/workspace` is.
+import { defineActionRegistry } from "@ospreyflow/glass-shared";
 
 // Re-exported so this app's own `*.spec.ts` files import both the registry and its proving
-// helpers from one local module, rather than reaching into `apps/workspace` twice per file.
-export { assertAllCovered, registerCovered } from "../../workspace/keyboard/actionRegistry";
+// helpers from one local module, rather than reaching into the shared package twice per file.
+export { assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 // Every action on this surface that mutates state or reaches the network — each screen's own
 // "Save", the Governance screen's exceptions-panel add/remove, and the Geospatial screen's three

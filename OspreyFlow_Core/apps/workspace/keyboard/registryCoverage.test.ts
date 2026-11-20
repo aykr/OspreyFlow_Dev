@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { ALL_REGISTRIES } from "./actionRegistry";
+import { ALL_REGISTRIES } from "@ospreyflow/glass-shared";
 
 const KEYBOARD_DIR = dirname(fileURLToPath(import.meta.url));
 

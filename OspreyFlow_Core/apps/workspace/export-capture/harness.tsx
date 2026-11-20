@@ -15,7 +15,7 @@ import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import type { ExportMark } from "../src/export/api";
 import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import type { Edge, Node, OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {

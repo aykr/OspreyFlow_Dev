@@ -7,7 +7,7 @@ import {
   ACCOUNT_UNREAD_ACTIONS,
   assertAllCovered,
   registerCovered,
-} from "./actionRegistry";
+} from "@ospreyflow/glass-shared";
 
 const REGISTRY = "ACCOUNT_UNREAD_ACTIONS";
 const HARNESS = "/keyboard/account-unread-harness.html";

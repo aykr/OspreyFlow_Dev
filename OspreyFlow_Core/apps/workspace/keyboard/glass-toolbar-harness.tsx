@@ -25,7 +25,7 @@ import { ResolutionThresholdControl } from "../src/resolution/ThresholdControl";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { ContextBanner } from "../src/shell/ContextBanner";
 import { applyTheme } from "../src/theme/theme";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import type { Edge, Node, OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {

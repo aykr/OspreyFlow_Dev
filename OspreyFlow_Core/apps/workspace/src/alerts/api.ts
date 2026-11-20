@@ -34,7 +34,7 @@ import type {
   TypologyRule,
   TypologyRuleInput,
 } from "../../../../packages/schemas/generated";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 export type QueueFilter = "active" | "closed" | "all";
 export type KindFilter = "all" | "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";

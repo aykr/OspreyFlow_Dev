@@ -17,7 +17,7 @@
 import Graph from "graphology";
 import { createStore, type StoreApi } from "zustand/vanilla";
 
-import type { Edge, Node } from "../../../../packages/schemas/generated";
+import type { Edge, Node } from "../../../schemas/generated";
 import type {
   DeltaAdd,
   DeltaRemove,

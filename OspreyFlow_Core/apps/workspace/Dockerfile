@@ -33,6 +33,11 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY apps/workspace ./apps/workspace
 COPY packages/design ./packages/design
+# The shared package's source (ADR-152 decision 6; PL4 slice C): the working set's store, the keyboard
+# registry and the other plain modules the bundle imports by `@ospreyflow/glass-shared` (npm links the
+# package into `node_modules`, so only its source is needed here: its manifest is copied above).
+# `tests/harness/test_harness_frontend_copies.py` and `tests/glass_trees/test_glass_shared_leaves.py` hold it.
+COPY packages/glass-shared/src ./packages/glass-shared/src
 
 # **Same-origin, so the bundle carries no address** (05_DEPLOYMENT.md
 # §2.6 item 1, the owner's decision of 25 September 2026). Vite inlines

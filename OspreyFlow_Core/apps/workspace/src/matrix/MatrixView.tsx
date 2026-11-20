@@ -21,7 +21,7 @@ import type { StoreApi } from "zustand/vanilla";
 import type { NamedType } from "../canvas/linkLabel";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";
-import type { WorkingSetGraph, WorkingSetStoreState } from "../workingset/store";
+import type { WorkingSetGraph, WorkingSetStoreState } from "@ospreyflow/glass-shared";
 import { fetchConnectionStrengths, fetchRarity } from "../strength/api";
 import {
   entityRows,
@@ -367,7 +367,7 @@ export function MatrixView({
   onShowOnGraph,
   strength,
 }: MatrixViewProps) {
-  // Every change to what the working set holds moves `seq` (`workingset/store.ts` is the only
+  // Every change to what the working set holds moves `seq` (`packages/glass-shared/src/workingset/store.ts` is the only
   // place the graph's membership changes), so the rows are read again from the graph then.
   const seq = useStore(store, (s) => s.seq);
   const entities = useMemo(

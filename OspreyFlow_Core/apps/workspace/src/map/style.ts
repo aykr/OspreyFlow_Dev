@@ -21,7 +21,7 @@
 import type { StyleSpecification } from "maplibre-gl";
 
 import { activePalette, type Palette } from "../color/palette";
-import { contrastRatio, NON_TEXT_FLOOR } from "./contrast";
+import { contrastRatio, NON_TEXT_FLOOR } from "@ospreyflow/glass-shared";
 import type { PublicMapProvider } from "../../../../packages/schemas/generated";
 
 export const BUNDLED_DARK_STYLE_ID = "bundled:osprey-dark";

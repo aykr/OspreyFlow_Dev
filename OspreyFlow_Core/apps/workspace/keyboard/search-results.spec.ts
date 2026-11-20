@@ -6,7 +6,7 @@
 // search box. In dark, light and GOV.UK. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { SEARCH_RESULTS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { SEARCH_RESULTS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "SEARCH_RESULTS_ACTIONS";
 const state = (page: Page) => page.evaluate(() => window.__SEARCH__!);

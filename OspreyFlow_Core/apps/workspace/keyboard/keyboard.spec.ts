@@ -36,7 +36,7 @@ import {
   assertAllCovered,
   CANVAS_ACTIONS,
   registerCovered,
-} from "./actionRegistry";
+} from "@ospreyflow/glass-shared";
 
 /** Tabs until `target` is focused — never a counted number of Tabs, which breaks whenever the
  * menu gains an item (seen 9 October 2026: *Set picture…* and the Depicts link row joined the

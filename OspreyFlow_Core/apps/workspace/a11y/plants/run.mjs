@@ -17,14 +17,14 @@ import { fileURLToPath } from "node:url";
 import { VARIANTS } from "./variants.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const judgement = join(HERE, "..", "..", "src", "color", "textContrast");
+const judgement = join(HERE, "..", "..", "..", "..", "packages", "glass-shared", "src", "color", "textContrast");
 const probe = readFileSync(join(HERE, "..", "undecidedContrast.ts"), "utf8");
 
 const out = mkdtempSync(join(tmpdir(), "osprey-plant-variants-"));
 let code = 1;
 try {
   for (const [name, edits] of Object.entries(VARIANTS)) {
-    let text = probe.replace(`from "../src/color/textContrast"`, () => `from ${JSON.stringify(judgement)}`);
+    let text = probe.replace(`from "@ospreyflow/glass-shared"`, () => `from ${JSON.stringify(judgement)}`);
     for (const [from, to] of edits) {
       const count = text.split(from).length - 1;
       if (count !== 1) throw new Error(`variant ${name}: its edit matches ${count} times, not once: ${from.slice(0, 80)}`);

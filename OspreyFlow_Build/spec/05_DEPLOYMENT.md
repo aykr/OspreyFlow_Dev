@@ -445,7 +445,7 @@ truth. Found 8 October 2026: the canvas did, so the deployed Glass never asked f
 link counts and never offered links among the view or adding files, while every test, run with a
 non-empty address, passed; and the map attached the token to its own Conduit reads only under a
 non-empty address. Which of MapLibre's reads carry the token is decided by resolving the address
-against the page's origin and matching that origin's `/v1/` (`map/conduitRequest.ts`), so a tile
+against the page's origin and matching that origin's `/v1/` (`packages/glass-shared/src/map/conduitRequest.ts`), so a tile
 server's URL never receives it. The keyboard harness runs the canvas in both shapes
 (`?api=same-origin`).
 

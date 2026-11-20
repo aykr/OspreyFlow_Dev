@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import type { HistoryStepSummary, WorkingSetDelta } from "../workingset/models";
+import type { HistoryStepSummary, WorkingSetDelta } from "@ospreyflow/glass-shared";
 import { Drawer } from "../design/primitives/Drawer";
 import { Table } from "../design/primitives/Table";
 

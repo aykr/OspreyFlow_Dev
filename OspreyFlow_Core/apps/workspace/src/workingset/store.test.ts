@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeEdge, makeNode } from "../testing/fixtures";
-import type { WorkingSetDelta } from "./models";
-import { createWorkingSet } from "./store";
+import { createWorkingSet, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 describe("createWorkingSet", () => {
   it("applies an add delta to the graph and bumps seq", () => {

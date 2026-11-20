@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeEdge, makeNode } from "../testing/fixtures";
-import { createWorkingSet } from "../workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import {
   PAGE_SIZE,
   entityRows,

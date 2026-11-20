@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { contrastRatio } from "./contrast";
+import { contrastRatio } from "@ospreyflow/glass-shared";
 
 describe("contrastRatio", () => {
   it("is WCAG's ratio, unrounded", () => {

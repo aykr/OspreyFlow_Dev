@@ -3,7 +3,7 @@
 // Conduit's stand-in (`maps-harness.tsx`, which records each request).
 import { expect, test, type Page } from "@playwright/test";
 
-import { MAPS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { MAPS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "MAPS_ACTIONS";
 const SYNTHETIC_KEY = "k-synthetic-keyboard-map-key";
