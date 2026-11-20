@@ -44,6 +44,8 @@ GLASS_SRC = CORE / "apps" / "workspace" / "src"
 #: The design package (ADR-152 decision 6): `primitives.css` and its two imports; their `content:`
 #: strings are copy.
 DESIGN_PACKAGE = CORE / "packages" / "design"
+#: The shared package's source (PL4 slice C): the plain modules that moved out of the Glass hold copy too.
+SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
 
 #: The banned phrase, its words apart by whitespace, a hyphen, or JSX's `{" "}`. The words in its place
 #: are "domain model".
@@ -147,7 +149,12 @@ def find_banned(root: Path) -> list[tuple[str, int, str]]:
 
 def main() -> int:
     in_design = find_banned(DESIGN_PACKAGE)
-    found = find_banned(GLASS_SRC) + [(f"packages/design/{p}", n, w) for p, n, w in in_design]
+    in_shared = find_banned(SHARED_SRC)
+    found = (
+        find_banned(GLASS_SRC)
+        + [(f"packages/design/{p}", n, w) for p, n, w in in_design]
+        + [(f"packages/glass-shared/src/{p}", n, w) for p, n, w in in_shared]
+    )
     for path, line, phrase in found:
         print(f"{path}:{line}: \"{phrase}\" on screen: the screens say \"domain model\" (ADR-140 Amendment 9)")
     if found:

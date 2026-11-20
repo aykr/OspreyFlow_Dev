@@ -27,6 +27,9 @@ from tools.layout import CORE, REPO
 GLASS_SRC = CORE / "apps" / "workspace" / "src"
 #: The design tokens' own folder (ADR-152 decision 6); `tokens.css` is exempt in it by name.
 DESIGN_PACKAGE = CORE / "packages" / "design"
+#: The shared package's source (ADR-152 decision 6): the plain leaves and stores that moved out of the Glass's own
+#: folder (PL4 slice C), so the check must read them where they are now.
+SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
 DESIGN_PATH = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 ALLOWLIST_PATH = REPO / "OspreyFlow_Build" / "tests" / "fixtures" / "colour_drift_allowlist.txt"
 
@@ -36,10 +39,11 @@ MIRRORS = frozenset({"color/tokens.ts", "color/palette.ts"})
 TOKENS_FILES = frozenset({"tokens.css"})
 #: Each folder the check walks, with the files in it exempt by name. The count of files scanned in
 #: them (`scanned_count`) is said on every run and held not to fall by
-#: `tests/glass_trees/test_design_tokens_location.py`.
+#: `tests/glass_trees/test_design_tokens_location.py` and `test_glass_shared_leaves.py`.
 SCANNED: tuple[tuple[Path, frozenset[str]], ...] = (
     (GLASS_SRC, MIRRORS),
     (DESIGN_PACKAGE, TOKENS_FILES),
+    (SHARED_SRC, frozenset()),
 )
 
 _HEX = re.compile(r"(?<![&\w])#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])")

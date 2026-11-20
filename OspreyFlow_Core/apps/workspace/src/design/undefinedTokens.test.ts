@@ -4,9 +4,10 @@
 // of names no stylesheet defines (some with a fallback, some built up in code) are listed in the
 // hand-back, not asserted here.
 //
-// The walk reads two roots: `apps/workspace/src`, and `packages/design`, where `primitives.css`,
-// `scale.css` and `panelType.css` live since ADR-152 decision 6 (slice PL4b2). Before that move the
-// walk read the three files because they were under `src/design`; a walk of `src` alone would have
+// The walk reads three roots: `apps/workspace/src`, `packages/design`, where `primitives.css`,
+// `scale.css` and `panelType.css` live since ADR-152 decision 6 (slice PL4b2), and
+// `packages/glass-shared/src`, where the plain modules that left the workspace live (slice PL4c). Before
+// each move the walk read those files because they were under `src`; a walk of `src` alone would have
 // stopped reading them without any test failing.
 import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,9 +16,10 @@ import { describe, expect, it } from "vitest";
 
 const SRC = join(__dirname, "..");
 const DESIGN = join(SRC, "..", "..", "..", "packages", "design");
+const SHARED = join(SRC, "..", "..", "..", "packages", "glass-shared", "src");
 const TOKENS = join(DESIGN, `${"tokens"}.css`);
 // The roots the real check walks: the one list both the check and the reach test use.
-const ROOTS = [SRC, DESIGN];
+const ROOTS = [SRC, DESIGN, SHARED];
 // Stems, not quoted file names: a bare quoted name in this folder reads as an old path.
 const THE_THREE = ["primitives", "scale", "panelType"].map((stem) => `${stem}.css`);
 const PRIMITIVES = THE_THREE[0]!;
@@ -56,9 +58,11 @@ describe("font tokens", () => {
   it("the walk reads the three stylesheets that live in packages/design", () => {
     const walked = ROOTS.flatMap(files);
     for (const name of THE_THREE) expect(walked).toContain(join(DESIGN, name));
+    // And the shared package's own source, which the index leads into.
+    expect(walked).toContain(join(SHARED, "index.ts"));
   });
 
-  it("a misspelt font token in a packages/design file is reported (planted in a temporary copy)", () => {
+  it("a misspelt font token in a packages/design or packages/glass-shared/src file is reported (planted in a temporary copy)", () => {
     const tmp = mkdtempSync(join(tmpdir(), "undefined-tokens-"));
     try {
       const copy = join(tmp, "design");
@@ -72,6 +76,12 @@ describe("font tokens", () => {
       expect(primitives).toContain(line);
       writeFileSync(join(copy, PRIMITIVES), primitives.replace(line, line.replace("--mono", "--font-mono")));
       expect(undefinedReads([copy], TOKENS)).toContain(`${PRIMITIVES}: --font-mono`);
+      // The shared package: a module there writes a style string, misspelt, as a plain module would.
+      const shared = join(tmp, "shared");
+      cpSync(SHARED, shared, { recursive: true, filter: (p) => !p.includes("node_modules") });
+      expect(undefinedReads([shared], TOKENS)).toEqual([]);
+      writeFileSync(join(shared, "zz_planted.ts"), 'export const LABEL_STYLE = "font-family: var(--font-mono)";\n');
+      expect(undefinedReads([shared], TOKENS)).toEqual(["zz_planted.ts: --font-mono"]);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
