@@ -51,16 +51,20 @@ def _is_product(folder: Path) -> bool:
 def _walk_up(start: Path | None) -> Path | None:
     """The product folder from `start` (the current folder when None) upwards, or None.
 
-    A folder that is the developer repository stands for its `OspreyFlow_Core`."""
+    A folder that is the developer repository stands for its `OspreyFlow_Core`. A folder the person
+    cannot search holds no product they can use, so it is passed over, not allowed to end the
+    command in a traceback (the recorded home may well be serving it)."""
     try:
         here = (start or Path.cwd()).resolve()
     except OSError:  # the current folder was deleted under the shell: nothing to look upwards from
         return None
     for folder in (here, *here.parents):
-        if _is_product(folder):
-            return folder
-        if _is_product(folder / "OspreyFlow_Core"):
-            return folder / "OspreyFlow_Core"
+        for candidate in (folder, folder / "OspreyFlow_Core"):
+            try:
+                if _is_product(candidate):
+                    return candidate
+            except OSError:  # refused (EACCES, EPERM) or otherwise unreadable: not a product here
+                continue
     return None
 
 
