@@ -18,11 +18,15 @@ What a mistake would do, and the case that catches it:
   reinstall-or-repoint case) gets a traceback instead of the recorded deployment (Amendment 50
   decision 1, "nothing else about the command changes") —
   `test_a_deleted_current_folder_does_not_stop_the_recorded_home_serving` and
-  `test_a_deleted_current_folder_with_no_recorded_home_is_refused_in_words`.
+  `test_a_deleted_current_folder_with_no_recorded_home_is_refused_in_words`;
+- the same read crashing on a current folder the person cannot search (EACCES from `Path.is_file`,
+  which `pathlib` re-raises), so a command that acted on the recorded home ends in a traceback —
+  `test_an_unsearchable_current_folder_does_not_stop_the_recorded_home_serving`.
 """
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -135,3 +139,22 @@ def test_a_deleted_current_folder_with_no_recorded_home_is_refused_in_words(
     _stand_in_a_deleted_folder(tmp_path, monkeypatch)
     with pytest.raises(CommandRefused, match="No OspreyFlow checkout found"):
         find_product(None, {}, recorded=_none)
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or (hasattr(os, "geteuid") and os.geteuid() == 0),
+    reason="needs a folder the current user is refused (not Windows, not root)",
+)
+def test_an_unsearchable_current_folder_does_not_stop_the_recorded_home_serving(
+    tmp_path: Path,
+) -> None:
+    recorded = _make_product(tmp_path / "recorded")
+    here = tmp_path / "here"
+    (here / "harness").mkdir(parents=True)
+    (here / "harness").chmod(0o000)  # `harness/__init__.py` cannot even be looked up: EACCES
+    try:
+        said: list[str] = []
+        assert find_product(here, {}, recorded=lambda: recorded, notice=said.append) == recorded
+        assert said == []  # nothing readable there to choose between
+    finally:
+        (here / "harness").chmod(0o755)
