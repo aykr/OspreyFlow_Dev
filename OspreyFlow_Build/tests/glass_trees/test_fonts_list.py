@@ -636,6 +636,10 @@ PAGES_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     ("GDS Transport in a pages stylesheet", "apps/pages/server/static/app.css", _append('body{font-family:"GDS Transport",arial,sans-serif}'), "names GDS Transport"),
     # GDS Transport as a listed `@font-face` (the list passes it; only the GDS rule can catch it), as the generator writes it.
     ("a GDS Transport @font-face in the built output", "apps/pages/dist/server/static/govuk.css", _append(REAL_GDS_FACES.splitlines()[0]), "names GDS Transport"),
+    # The GDS Transport font files themselves, at the shape `sync_govuk_assets.mjs` writes them (REAL_GDS_FACES' names), in the
+    # pages' served folder and in its built output: each is a file the list's GDS entry owns, and the default tree serves none.
+    ("a GDS Transport font file among the pages' public files", "apps/pages/public/assets/govuk/fonts/bold-b542beb274-v2.woff2", _append("x"), "bold-b542beb274-v2.woff2: a font file of GDS Transport"),
+    ("a GDS Transport font file in the pages' built output", "apps/pages/dist/public/assets/govuk/fonts/light-f591b13f7d-v2.woff", _append("x"), "light-f591b13f7d-v2.woff: a font file of GDS Transport"),
     # A hosted font stylesheet linked from the layout's head (the pages' CSP and page.test.ts also refuse it; this names the font).
     ("a hosted Google Fonts stylesheet linked from a pages view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">' + LAYOUT_HEAD, 1), "loads https://fonts.googleapis.com/css2?family=IBM+Plex+Mono"),
     # The font folder of the GOV.UK assets named from a view.
