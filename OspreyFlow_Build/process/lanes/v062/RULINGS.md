@@ -216,3 +216,20 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   released. This replaces items 2 to 4 of the 18 November ruling on GitHub failures and the sentence in ADR-142 Amendment 9 ("while
   main is red, every merge is refused"; the owner applies `ADR142_AM9_COST_SENTENCE.diff`). **Until the fixes are applied** the line
   carries on as before: the conductor reruns the red run and merges when main is green, and says so.
+- **Two foundations every page build needs** (the owner, 20 November, after the stage 4 scouts): **PL9**, a real sign-in for the page service (the round trip,
+  the session on the server, the page service's own client in the realm, sign-out and renewal; ADR-152 decision 5), and **PL10**, the `/v1` forwarder with the
+  token kept on the server, uploads included. Both need only PL3 and touch no workspace file; they run beside the queue and beside PL4. Every page build's brief
+  names both. Cut: PL9a (Keycloak first) and PL9b (renewal, provider-side logout, Entra after CO2); PL10 in one.
+- **Scripts off: core works, extras excused.** Every task can be completed without scripts (read, search, forms, show, hide and fold panels, a table in place of
+  the graph). Resize, reorder and the drawn canvas need scripts and are agreed exceptions **for that case only**: lines in `PARITY_EXCEPTIONS.yaml` marked
+  "scripts off only".
+- **Settled, not to be asked again** (the owner, 20 November): IS5g Verify waits for GG2 (no table exception); the Runs screen's Airflow download becomes the
+  one neutral job file; IS5a builds the Studio frame and the Pipelines place goes to IS4, IS5's cut a to g is agreed; the pages carry the rights tip on Connect
+  and the rights check on drawn merge (a backlog row adds both to the React screens); the matching rule lives on the type record, and IS2 is cut as the port, then
+  types (after PL4 C), then make-live, versions and reference lists; IS3 is the read-only map, editing the run order and the whole-dataset load are IS6 with its
+  Conduit change, a table with scripts off and lines as an enhancement; both trees carry the panel actions, PL8 in three slices, `frame-scroll.spec.ts` is in scope,
+  the layout stores move in PL4 slice D; the Needs-you jump and typed text kept behind the help overlay are rebuilt, not excepted; PL7 in two (PL7b adds a test that a
+  GOV.UK deployment renders no Superset; PL7a fixes the guide's section 6a); the GOV.UK demo is protected: no render change reaches it without the owner's word.
+- **Deferred:** GG2's scope and the I12 thresholds, until GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go to the owner then.
+- **Slice A of PL4 may start** (Amendment 1 is on main, 2bcee28); its baseline is taken on main as it is after GG6 with nothing else running at that moment.
+  `FUNCTIONS.yaml` follows the owner's rulings of 20 November, not any older text (row 517 is a function, PL8).

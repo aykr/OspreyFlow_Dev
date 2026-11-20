@@ -20,5 +20,20 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [react()],
     server: { port: 5173 },
+    build: {
+      rollupOptions: {
+        output: {
+          // ADR-014 Amendment 2: MapLibre 6's worker is `maplibre-gl-worker.mjs`, which
+          // `src/map/maplibreWorker.ts` has the build emit. A module worker is refused unless it is served
+          // as JavaScript, and a web server's stock table has no `.mjs` (the deployed image's own nginx
+          // 1.30 serves it as `application/octet-stream`: the map drew nothing). Emitted as `.js`, it
+          // is a JavaScript file for every server there is, with no server setting to remember.
+          assetFileNames: (asset: { names: string[] }) =>
+            asset.names.some((name) => name.endsWith(".mjs"))
+              ? "assets/[name]-[hash].js"
+              : "assets/[name]-[hash][extname]",
+        },
+      },
+    },
   };
 });

@@ -569,6 +569,111 @@ the risk named rather than silently suppressed.
 the start of any later phase touching `apps/workspace`'s map dependencies, not only when
 `.trivyignore` is next edited by hand.
 
+### ADR-014, Amendment 2 — the revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree
+
+**Status.** Accepted by the owner, 18 November 2026 (build id GG6). It replaces Amendment 1's accepted
+risk once GG6 has merged.
+
+**Trigger (a) is met, in its own words.** `@sigma/layer-maplibre` 4.0.1 (npm, 9 November 2026) declares
+`maplibre-gl: "^4.5.0 || ^5.0.0 || ^6.0.0"` (sigma.js `CHANGELOG.md`, 4.0.5: "Adds MapLibre 5 and 6 to
+the `maplibre-gl` peer range"). It also declares `sigma: "^4.0.0"`. Trigger (b) is not met: 4.7.1 is
+still the last `4.x`. `maplibre-gl` 5.24.1 (11 November 2026) carries the fix (its release notes list
+#8189), but the advisory GHSA-jrc7-96c5-q579 still gives the affected range as `<= 6.4.0`, so
+`make trivy` still fails on 5.24.1 (shown on a scratch lockfile, trivy 0.76.1, database of
+18 November 2026).
+
+**Three statements in Amendment 1 are no longer true.**
+- "the binding this ADR requires": since ADR-086 Amendment 1 (29 October 2026) the product draws the
+  graph over the map with its own copy of the 3.0.0 binding, `apps/workspace/src/map/sigmaMaplibreLayer.ts`.
+  No file imports `@sigma/layer-maplibre`. Its only remaining effect is its peer range in
+  `apps/workspace/package.json`, which is what holds `maplibre-gl` at `^4.5.0`: npm refuses
+  `maplibre-gl@6.19.0` beside it (`ERESOLVE`, "peer maplibre-gl@^4.5.0 from @sigma/layer-maplibre@3.0.0").
+  `@sigma/edge-curve` is in the same state: listed, imported by no file.
+- "fixed upstream only in 6.4.1": see 5.24.1 above.
+- "a critical XSS sanitizer bypass in `DOM.sanitize()`" in 4.7.1: `DOM.sanitize()` does not exist in
+  4.7.1. It was added in maplibre-gl-js #5057 (18 November 2024) and first released in 5.0.0. In 4.7.1
+  the attribution control writes the joined attribution strings into `innerHTML` with no sanitising at
+  all (`src/ui/control/attribution_control.ts:176` in the 4.7.1 package). The scanner's match on
+  version is right to flag it. The exposure is broader than the CVE text, and the mitigation covers
+  it unchanged: with `attributionControl: false` no attribution string reaches `innerHTML`, sanitised
+  or not.
+
+**Decision.**
+1. The Glass moves to `maplibre-gl` `>=6.4.1 <7` and stays on Sigma 3, keeping its own binding.
+   `@sigma/layer-maplibre` and `@sigma/edge-curve` leave `apps/workspace/package.json`, and the
+   CVE-2026-85061 entry leaves `.trivyignore`, in the same change.
+2. `attributionControl: false` and the attribution drawn as text stay. The trust boundary is now the
+   library's allow list, and the product's own text node needs no trust in it.
+3. The 6.x worker is self-hosted. The Glass calls `setWorkerUrl` with the URL of the worker file its
+   build emits, so a strict policy needs `worker-src 'self'` and no `blob:`. A Vite build left to
+   MapLibre's default emits no worker file and points at `/assets/maplibre-gl-worker.mjs`, which does
+   not exist.
+4. WebGL 2 is required (6.0.0 dropped WebGL 1). Where it is missing, the `Map` constructor throws
+   `GPUInitializationError`, and the Map view shows a message saying so instead of a blank panel.
+5. Sigma 4, and with it `@sigma/layer-maplibre` 4.x, is not a condition of this amendment. The owner ruled on
+   18 November 2026 (`process/lanes/v062/RULINGS.md`) that the GOV.UK tree's graph and map modules start on Sigma 4,
+   and that moving today's workspace to Sigma 4 is decided only after the graph module has met the budget on it. The 4.x binding makes the map non-interactive and syncs one way, from
+   sigma to the map. Amendment 1's threat model needs no change: it named the one input, and the
+   control that reads it stays off.
+
+**Tests, named before the change (`CLAUDE.md` rules 12 and 15).**
+- `make trivy` with `maplibre-gl` 4.7.1 left in the lockfile and the `.trivyignore` entry removed:
+  red. With 6.x in the lockfile: green.
+- `keyboard/map-view.spec.ts`, "MapLibre's attribution control is never drawn": unchanged. It must be
+  shown red again on 6.x with `attributionControl: true` planted.
+- New, in the build's own tests: the production build contains the worker file, and the URL the page
+  passes to `setWorkerUrl` resolves to it. Red on a build without the `setWorkerUrl` call.
+- New: the Map view under a WebGL-less context shows the message. Red with the handler removed.
+- The performance gate (`spec/02_GLASS_FRONTEND.md` §5, `perf/perf.spec.ts`) and every map spec in
+  `keyboard/` pass before and after, against the same fixture.
+
+**Checked in a browser, and not (GG6, 18 November 2026).** The amendment was written from reading and a
+type-check; GG6 ran it. On `maplibre-gl` 6.19.0 (the lockfile's), in Chromium under Playwright:
+- *Tiles.* A synthetic vector PMTiles archive, read through `addProtocol` and the real `pmtiles://` path,
+  is drawn by the real Map view: `keyboard/map-tiles.spec.ts` reads the version from the page (>= 6.4.1),
+  sees the protocol read a tile block (not only the header and root directory), finds the canvas a
+  different colour on the fixture's water, its land cover and the bare ground, and sees the worker file
+  asked for and answered with a JavaScript content type, with nothing on the page failing. The route
+  that answers the archive refuses (401) any read without the exact bearer token the harness gave the
+  Map view, as the Conduit's does, and the spec asserts none was refused: so the tile reads went through
+  the authorised `PMTiles` instance `MapView` registers, not an unauthenticated one the protocol builds
+  for itself (red with the token left out of `registerAuthorisedPmtilesSource`). It passes under the Vite
+  dev server and under a production bundle served by `vite preview` (`map-build/playwright.config.ts`),
+  and the production run also asserts that the worker URL is a hashed `.js` file. The archive's bytes are
+  checked against the script that writes them.
+- *The worker.* With the `setWorkerUrl` call removed the production run is red (no tile block is ever
+  read: the worker is not found), as the amendment said it would be. **A third finding the amendment did
+  not have:** the Glass's own image serves the bundle from `nginx:1.30-alpine`, whose stock `mime.types`
+  has no `.mjs`, so the worker file came out as `application/octet-stream` and a module worker was
+  refused: the bundle behind that nginx drew no tile (red in the browser), though the dev server and
+  `vite preview`, which both know `.mjs`, were green. The build now emits the worker as a `.js` file
+  (`vite.config.ts`, `assetFileNames`, with a unit test), and the same run behind that nginx is green.
+  That measurement behind nginx was made by hand and is not a committed test. What is committed is the
+  production run's assertion that the worker file the bundle emitted and loaded is a `.js` file served as
+  JavaScript (red with the `assetFileNames` rule reverted); it does not run nginx.
+- *The camera across a resize.* ADR-086 Amendment 1's two cases in `keyboard/map-view.spec.ts` and the
+  three in `keyboard/map-canvas.spec.ts` pass, with the basemap switch and the place search.
+- *The attribution control.* `map-view.spec.ts`'s case passes, and is red with `attributionControl: true`
+  planted.
+- *WebGL 2.* With the context blocked by the page, the Map view shows its message. Red with the handler
+  removed. (Chromium here has WebGL 2; the missing context is simulated in the page, not a machine without one.)
+- *The scanner.* `make trivy` is green with 6.19.0 and no ignore entry; with 4.7.1 left in the lockfile and
+  the entry removed it is red on CVE-2026-85061 alone.
+- *zustand.* 6.19.0 depends on `zustand ^5.1.0`, so the workspace's moved from 5.0.15 to 5.1.0; all 3,705
+  unit tests of `apps/workspace` pass, the working set's own included.
+
+Still not checked: the **site image source** and the site calibration wizard on 6.x (their unit tests
+pass, no browser case draws an image source); the map's **frame rate** on 6.x (`perf/perf.spec.ts`,
+which passes 4/4, measures the Graph canvas, which does not run MapLibre: no test times the Map view, and
+`02_GLASS_FRONTEND.md` §5 has no map budget); the bearer token on the site-image `transformRequest` against a
+real Conduit (the basemap's own tile reads carry it in the spec, against a route that refuses without it,
+but that route is a fixture, not a Conduit); any browser but Chromium; a machine with no WebGL 2 at all; and a strict content security
+policy (the workspace has none). The type-check passes, with `MapView.tsx` on a namespace import.
+
+**Also found, and not decided here.** `00_ARCHITECTURE.md` says rotation and pitch are needed for site
+geospatial. Both the product's binding and the 4.x binding pin pitch to 0 and turn sigma's camera
+rotation off. That was true before this amendment and stays true after it.
+
 ---
 
 ## ADR-015 — Map providers ship as tiers, with OpenStreetMap as the shipped default
@@ -41277,6 +41382,134 @@ fake identity provider refusing what Keycloak refuses (rule 15, as decision 10's
 Tests that would fail: ADR-152 X1's four tests; `tests/harness/test_govuk_renders_no_superset.py` for the
 cloud-platform and poc shapes; the poc manifest held to the render both ways (Amendment 12's test) with the
 `pages` workload added.
+
+### ADR-152, Amendment 1 (20 November 2026) — a clean GOV.UK install: the React workspace leaves a GOV.UK deployment by itself once every function has its page, and the `pages` image is scanned for React — Accepted by the owner, 20 November 2026
+
+Status: **Accepted by the owner, 20 November 2026**, as redrafted the same day under his rulings 1 to 7 of 20
+November, with his answers to the three questions the redraft left open (each option A). **Not built.** Drafted read-only from `main` at `d64ad0e` for the owner's question: a UK
+public-sector client will want its installed GOV.UK tree to contain no React at all. The evidence, each line
+with its file and line or marked "read, not measured", is in
+`Claude outputs/ospreyflow_clean_govuk_install_2026-11-20/REPORT.md`. This amendment adds to ADR-152 and changes
+none of its decisions. I24 and I25 are recorded as held: accepted as named, not to be built until the owner
+releases them.
+
+**Context.** I1 holds React out of the *source* of `apps/pages` and `packages/glass-shared`, and I18 holds the
+served tree to the brand. Neither says what a GOV.UK deployment *installs*. Read on `main` at `d64ad0e`:
+
+- Every shape renders the React workspace whatever the brand. `service_images` names it unconditionally
+  (`harness/render.py`, line 617), and compose, the cluster's values and the cloud-platform values are all made
+  from that list. The front proxy sends the deployment's own name to `workspace:8080` (`harness/site.py`,
+  line 69). Under `govuk` it also sends the sign-in name's `/assets/govuk/*` there (lines 103 to 109; the same
+  Ingress path at `harness/cloud_platform/__init__.py`, lines 944 to 947), because the sign-in page's GOV.UK
+  stylesheet is the workspace's file (`harness/keycloak_theme.py`, line 59). Decision 7 sends every path to
+  `pages` once the GOV.UK tree is complete. Nothing then takes the workspace out of the render.
+- The `pages` image installs its run-time packages with `npm ci --omit=dev --workspace apps/pages`
+  (`apps/pages/Dockerfile`, line 40). This was measured in `node:22-slim` (npm 10.9.9) on a copy of `main`'s
+  manifests and lockfile: 86 packages, with no `react`, `react-dom` or `scheduler`. The same command without
+  `--workspace` installs all three. Nothing scans the built image: no `trivy image` target names `pages`, and no
+  image has an SBOM.
+
+**Decision.**
+
+1. **The GOV.UK tree's state is derived, never written.** The tree is *complete* when every row of
+   `apps/pages/FUNCTIONS.yaml` has its GOV.UK page, less the owner-agreed lines of
+   `apps/pages/PARITY_EXCEPTIONS.yaml`. Until then it is *partial*.
+   - `FUNCTIONS.yaml` is the React workspace's function list, written by PL4 from `FRONT_END_ANSWERS.md`
+     part B. It has one row per function, plus one row for the sign-in page's GOV.UK assets.
+   - A row has its page when its route is in `tree-govuk`'s route list (I6's list). A route enters that list
+     only with its slice's D10 scenario passing on the GOV.UK tree (I8).
+   - One function decides the state: `govuk_tree_state` in `scripts/tree_parity.py`, the code that
+     `tests/glass_trees/test_tree_parity.py` drives. The parity test is the state's only authority, and the
+     renderer calls that same function. No file, setting or flag records "complete", and nobody writes it.
+   - While the tree is partial, decision 7's mixed serving is unchanged: each function's path goes to `pages`
+     once the tree has it, and to the workspace until then.
+2. **A complete GOV.UK deployment renders no workspace (I22). The cutover is automatic.** Under
+   `appearance.brand: govuk`, from the first render whose derived state is complete, no shape renders any of
+   these:
+   - the `workspace` service, workload or image, or its row in the images list, the signatures, the profile's
+     `ours` or the poc manifest;
+   - an upstream, door or Ingress path to it;
+   - its `glass.json` mount.
+
+   Every path goes to `pages`, the sign-in name's `/assets/govuk/*` included. The renderer then reads nothing
+   from `apps/workspace` for a GOV.UK render:
+   - the Ingress timeouts come from `pages`' own setting, not `WORKSPACE_NGINX`
+     (`harness/cloud_platform/__init__.py`, lines 122 and 935);
+   - the runbook finds the Glass's name by its site (`harness/cloud_platform/runbooks.py`, line 274);
+   - the sign-in theme's tokens come from `packages/design/tokens.css` (`harness/keycloak_theme.py`, line 63,
+     moved by PL4);
+   - the map's glyphs are served by `pages` (`harness/render.py`, lines 1036 to 1045).
+
+   The default brand is unchanged. No code is removed from `apps/workspace` (F7).
+
+   The Glass's realm client and Entra registration stay rendered (the owner's answer 6). Removing them would
+   touch `ClaimMapping`, below the Glass and outside F1's exceptions.
+   - **The release says so.** The release whose commit first derives `complete`, where the previous release
+     derived `partial`, says in its section of `CHANGELOG.md` that a GOV.UK deployment updating to it stops
+     running the React workspace. A test fails if it does not.
+   - **The render follows the state.** A test fails if the derived state and the rendered services disagree, in
+     either direction, in any shape.
+3. **The `pages` image carries no React (I23).** The scan runs on the built image, in CI (slice PL6) and, once
+   `pages` is released (slice PL7), in the release workflow before a push. It checks two things:
+   - the image's CycloneDX SBOM (`trivy image --format cyclonedx`) and its exported file system hold no package
+     named `react`, `react-dom` or `scheduler`;
+   - no file under `/app` holds `react/jsx-runtime`, `react/jsx-dev-runtime` or React's element marker
+     (`Symbol.for("react.element")`, `Symbol.for("react.transitional.element")`).
+
+   The scan must also find `express` and `nunjucks` in the same SBOM, or it fails, so an SBOM that is empty or
+   was never read is not a pass (rule 15). There is **one `pages` image** for both trees (the owner's answer 3);
+   I23 runs on it. The React workspace's image is outside the scan, and so is the guided install page (point 5).
+4. **What a department's adapter consumes** (the owner's answer 4): the signed `pages` image. The source is
+   there for a department's architecture board to read, not to build from. How a department supplies its own
+   template is a later amendment of its own and is not decided here.
+   - **A department's everyday changes are settings, never uploaded templates.** Its name, logo, header and
+     footer links, standard wording and statement links are settings in *Admin › Themes* (build AD4), held to
+     decision 14's rules. A setting is data that the GOV.UK tree draws through its own tested, policy-checked
+     macros, whereas an uploaded template is code that would run on every page outside the product's tests and
+     security policy.
+   - **AD4 builds the wider Themes list** (the owner's answer of 20 November). The header and footer links,
+     the standard wording and the statement links join decision 14's list of Themes settings. X8's key-list
+     test (`test_the_public_appearance_read_carries_only_the_presentational_settings`) is written with the new
+     keys.
+5. **A GOV.UK install is done from the command line** (the owner's answer 5): `ospreyflow install`, headless.
+   - The guided page (`ospreyflow install --gui`) is the `apps/harness` React application. It is served only on
+     the installing computer while an install runs, is never rendered into a deployment, and is outside I23.
+   - Both guides say this: the Installation and Administration Guide, `docs/administration-guide.md` (section
+     4.1, the guided page, and section 6a, `cloud-platform`), and the repository's front page, `README.md`
+     ("Installing and running it"). There is no separate install guide on `main`, and these two files are where
+     installing is told. Slice PL7 writes the two passages.
+6. **Held (recorded, not built):**
+   - **I24, one image per tree** (the owner's answer 3: one image, I24 held);
+   - **I25, a GOV.UK source export** (answer 4: held). Today it could not be made: `apps/pages/Dockerfile`
+     copies `apps/workspace/package.json` (lines 25 and 37), and the renderer and the harness image read
+     workspace files.
+
+**Invariants added to ADR-152's table** (each shown red with a planted fault in the shape the code really emits
+before it is wired into `make ci`, rule 15; `make ci` and `ci.yml` are protected, so the wiring is a diff for
+the owner):
+
+| # | Invariant | Test that fails | Planted fault that shows it red |
+|---|---|---|---|
+| I22 | A GOV.UK deployment whose derived tree state is complete renders no workspace service and no route to it, in any shape; a partial one still renders it; the render always follows the derived state; and the release that first carries the cutover says so in its notes | `tests/harness/test_complete_govuk_renders_no_workspace.py` covers local-lite, small, cluster, cloud-platform and the poc manifest under `govuk`, with fixture trees that derive complete and partial. Its case `test_the_rendered_services_follow_the_derived_state` compares `govuk_tree_state` with the rendered services both ways. `tests/glass_trees/test_tree_parity.py` gains `test_a_function_without_its_govuk_route_keeps_the_tree_partial`. `tests/glass_trees/test_cutover_is_in_the_release_notes.py` reads the release's `CHANGELOG.md` section when the derived state differs from the previous tag's | the sign-in name's `/assets/govuk/*` handler left on `workspace:8080` while everything else is removed (today's shape, `harness/site.py`, lines 103 to 109); a renderer that decides from a setting of its own rather than `govuk_tree_state`; one `FUNCTIONS.yaml` row with no route; a release section with no cutover line on a commit that flips the state |
+| I23 | The built `pages` image holds no `react`, `react-dom`, `scheduler` or JSX runtime, in its SBOM or its file system | `tests/glass_trees/test_pages_image_carries_no_react.py`, driving `scripts/pages_image_react_scan.py` over the built image | the run-time stage's `npm ci --omit=dev` without `--workspace apps/pages` (measured: it installs `react`, `react-dom` and `scheduler`); a served bundle holding `react/jsx-runtime`; an empty SBOM (red by the positive control, not by a pass) |
+| I24 (held) | A GOV.UK `pages` image holds one tree | not written while held | not written while held |
+| I25 (held) | A GOV.UK source export holds no `apps/workspace` and no `apps/harness`, and builds | not written while held | not written while held |
+
+**Consequences.**
+- A GOV.UK deployment changes shape by itself at the first update whose release derives `complete`. That is why
+  the release notes must say it.
+- A complete GOV.UK deployment runs one fewer owned container. The workspace's 2 replicas on cluster and 1 on
+  cloud-platform go (`harness/cluster.py`, line 46).
+- What can be said to the client (the owner's answer 7), until I22 and I23 are built and green: "The GOV.UK
+  pages are built with no React (checked on the source). Once the GOV.UK tree is complete, the deployment will
+  run no React, and the image that serves it will be scanned for React on every build." After they are green,
+  the "will" goes. It is not "no React in the repository": the product repository keeps `apps/workspace` for the
+  default brand. The only claim made about the standard is "designed to meet the GDS Service Standard".
+- Plan: the image scan is slice **PL6**. The slice that renders `pages` in every deployment shape, with I22 and
+  the two guide passages, is **PL7**. GG2 needs PL7.
+
+**Spec amendments that follow from this one, made with slice PL7:** `05_DEPLOYMENT.md` §1 (a GOV.UK
+deployment's services follow the derived tree state); `02_GLASS_FRONTEND.md` §1 (the same, in a sentence).
 
 ### ADR-114, Amendment 50 (20 November 2026) — the command says when the recorded home wins over the checkout you are in; a synthetic pack seeds from a repository with no `.git` — Accepted by the owner, 20 November 2026
 
