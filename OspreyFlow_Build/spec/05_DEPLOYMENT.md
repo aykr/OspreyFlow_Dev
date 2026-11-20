@@ -912,7 +912,13 @@ external:
   service alone a device reservation — `deploy.resources.reservations.devices`: driver
   `nvidia`, count `all`, capabilities `[gpu]` — and nothing else changes: the same pinned Ollama
   image, which carries CUDA, the same weights and the same gateway. `ollama-models` only downloads,
-  so it reserves none. Vision and embeddings run in the same Ollama and so use the GPU too; the
+  so it reserves none. **A start needs no network once the weights are installed** (NW1): each model
+  is pulled only when `ollama list`, which asks the local server alone, does not hold it at the
+  recorded id, and the speech model only when the offline download check finds no cached copy; a
+  weight that is absent while the network is refused fails the start in words (what is missing, that
+  the network is needed once, to connect and start again). The test that fails if this is violated is
+  `tests/harness/test_start_needs_no_network.py`, which runs both jobs as rendered with every pull
+  refused. Vision and embeddings run in the same Ollama and so use the GPU too; the
   `whisper` and `ner` containers stay on the CPU. The extraction model is `qwen2.5:14b-instruct`
   unless `models.extraction` is in `osprey.yaml` (`OspreyConfig.extraction_model`). `doctor`,
   `install` and `apply` check, before anything starts, a Linux host, `nvidia-smi` answering, and

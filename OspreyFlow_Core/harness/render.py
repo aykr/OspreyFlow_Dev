@@ -130,6 +130,12 @@ RECIPE_REPO_DIRNAME = "recipes"
 #: into running different weights — `test_the_rendered_model_pull_matches_the_developer_stacks`
 #: compares them and is what fails if they do.
 #:
+#: **A start needs no network once installed (NW1, 20 November 2026).** A model is pulled only when
+#: `ollama list`, which asks the local server alone, does not hold it at the recorded id: measured
+#: on `ollama/ollama:0.18.2` with the network off, `ollama pull` of a model that is already present
+#: still asks the registry for its manifest and fails. A refused pull says in words what is
+#: missing and what to do; the digest check after a pull that happens is unchanged.
+#:
 #: Assembled from three pieces rather than written as one literal only because the `FATAL` line
 #: is 191 characters and must not be wrapped: wrapping it would change the script's bytes, and
 #: byte-identity with `dev.yaml` is the property the test above checks.
@@ -139,13 +145,22 @@ _OLLAMA_PULL_SCRIPT = (
     "until ollama list >/dev/null 2>&1; do sleep 1; done\n"
     "pull_and_verify() {\n"
     '  model="$$1"; expected="$$2"\n'
-    '  ollama pull "$$model"\n'
     '  actual="$$(ollama list | awk -v m="$$model" \'$$1 == m {print $$2}\')"\n'
     '  if [ "$$actual" != "$$expected" ]; then\n'
-    '    echo "FATAL: $$model resolved to manifest $$actual, expected $$expected '
+    '    ollama pull "$$model" || {\n'
+    '      echo "FATAL: $$model is not on this machine at the recorded version, and it could '
+    "not be fetched. A first start needs the network once, to fetch the model weights: "
+    "connect this machine to the network, then start again. The weights are kept, so later "
+    'starts need no network." >&2\n'
+    "      exit 1\n"
+    "    }\n"
+    '    actual="$$(ollama list | awk -v m="$$model" \'$$1 == m {print $$2}\')"\n'
+    '    if [ "$$actual" != "$$expected" ]; then\n'
+    '      echo "FATAL: $$model resolved to manifest $$actual, expected $$expected '
     "(spec/06_DECISIONS.md ADR-020) \u2014 the tag moved upstream; update the ADR "
     'deliberately, do not proceed silently." >&2\n'
-    "    exit 1\n"
+    "      exit 1\n"
+    "    fi\n"
     "  fi\n"
     "}\n"
     "pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701\n"
@@ -1246,10 +1261,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 str(service["image"]),
                 volume=f"whisper-models:{_HF_CACHE}",
                 entrypoint=["/bin/sh", "-c"],
-                command=[
-                    f"huggingface-cli download {config.models.transcription} "
-                    f"&& chown -R 1000:1000 {_HF_CACHE}"
-                ],
+                command=[_whisper_download_script(config.models.transcription)],
                 user="0",
             )
         services[entry.service] = service
@@ -1359,6 +1371,30 @@ POSTGRES_IMAGE = "postgres:16.4"
 
 #: Where the speech server keeps its downloaded models (measured: speaches runs as uid 1000).
 _HF_CACHE = "/home/ubuntu/.cache/huggingface"
+
+
+def _whisper_download_script(model: str) -> str:
+    """`whisper-models`' script (NW1, 20 November 2026): the speech model is fetched only when the
+    volume does not already hold it, so a start with the model installed needs no network.
+
+    The check is the download tool's own, run offline: with `HF_HUB_OFFLINE=1` it never touches the
+    network and exits 0 only for a cached snapshot (measured in the pinned image with the network
+    off). Without the flag the same tool tries the hub first and, with it unreachable, falls back to
+    the cache only after the attempt, which waits out a slow network on every start. Only when the
+    model is absent is the download run online; if that fails the job says so in words, rather than
+    leaving a traceback, and exits non-zero so the start fails loudly."""
+    return (
+        f"if HF_HUB_OFFLINE=1 huggingface-cli download {model} >/dev/null 2>&1; then\n"
+        f"  echo '{model} is already on this machine; nothing to fetch.'\n"
+        f"elif ! huggingface-cli download {model}; then\n"
+        f"  echo 'FATAL: the speech model {model} is not on this machine, and it could not be "
+        "fetched. A first start needs the network once, to fetch the model weights: connect "
+        "this machine to the network, then start again. The weights are kept, so later starts "
+        "need no network.' >&2\n"
+        "  exit 1\n"
+        "fi\n"
+        f"chown -R 1000:1000 {_HF_CACHE}\n"
+    )
 
 
 def _model_download_step(
