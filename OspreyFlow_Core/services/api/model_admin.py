@@ -1594,11 +1594,12 @@ class ModelAdmin:
     async def _change(
         self,
         by: str,
-        action: ModelAdminAction,
+        action: ModelAdminAction | Callable[[], ModelAdminAction],
         engine: str | None,
         work: Callable[[ModelSettings], Any],
         *,
         rebuilt: frozenset[str] = frozenset(),
+        key_action: Callable[[], ModelAdminAction | None] | None = None,
     ) -> Any:
         """One change, held exclusively against the file read afresh: `work` changes the gateway
         and returns what to save. **Whatever stops it**, a refusal, a file that cannot be written,
@@ -1610,7 +1611,14 @@ class ModelAdmin:
         saved; **that the gateway was put back only if it was** (the entries and the credentials);
         that an engine's key was removed and the removal saved, with a `key_removed` audit; and that
         a key the gateway would not remove may still be held. An engine not put back is marked
-        unavailable. Never a log line alone."""
+        unavailable. Never a log line alone.
+
+        `action` may be a function, read **when the change stops**, so a name `work` settles from
+        the locked record is the one the failure is audited under (row 43: one change, one name
+        however it ends). `key_action` names the key action a change that carried a key was
+        making, when it got that far (an edit that keeps its address and carries a key: row 42):
+        a failure then writes a row under it too, with the same outcome, naming the key action and
+        never carrying a key."""
         async with self._exclusive:
             self._fresh()
             current = self.settings
@@ -1657,16 +1665,21 @@ class ModelAdmin:
             if not undone.restored and not undone.held and engine is not None:
                 self._unavailable.add(engine)
             key_removed = self._key_taken(current, latest, engine) and engine not in undone.held
+            if callable(action):
+                action = action()
+            keyed = key_action() if key_action is not None else None
+            shown = engine if engine and _NAMEABLE.fullmatch(engine) else None
             if stopped is not None:
-                await self._audited(
-                    by, action, engine if engine and _NAMEABLE.fullmatch(engine) else None,
-                    outcome="interrupted: " + said,
-                )  # fmt: skip
+                await self._audited(by, action, shown, outcome="interrupted: " + said)
+                if keyed is not None:
+                    await self._audited(by, keyed, shown, outcome="interrupted: " + said)
                 if key_removed:
                     await self._key_removal_audited(by, engine, interrupted=True)
                 raise stopped
             answer = ModelAdminRefused(said, status=failed.status)
             audited = await self._refusing(by, action, engine, answer)
+            if keyed is not None:
+                await self._refusing(by, keyed, engine, answer)
             if key_removed:
                 await self._key_removal_audited(by, engine)
             raise audited from None
@@ -1808,8 +1821,10 @@ class ModelAdmin:
                     provider, key, models, kept="its models, address and key", by=by
                 )
             if key is not None:
-                record = current.keys.get(name)
-                rotated.append("key_rotated" if record and not record.lost else "key_set")
+                # Named from the saved record, as `set_key` names it (row 43): one name.
+                rotated.append(
+                    "key_rotated" if self._recorded_key_state(name) == "set" else "key_set"
+                )
                 # An entry names its engine's one credential and goes where its own address says,
                 # and an analyst's call does not take the edit's lock. So no key is stored while an
                 # entry stands at an address the record does not give (row 28: `set_key` does the
@@ -1836,7 +1851,10 @@ class ModelAdmin:
             self._save(proposed)
             return before
 
-        before = await self._change(by, "engine_edited", name, work, rebuilt=frozenset({name}))
+        before = await self._change(
+            by, "engine_edited", name, work, rebuilt=frozenset({name}),
+            key_action=lambda: rotated[0] if rotated else None,
+        )  # fmt: skip
         changes = {
             f: {"from": _plain(getattr(before, f)), "to": _plain(getattr(provider, f))}
             for f in _EDITABLE
@@ -1917,10 +1935,13 @@ class ModelAdmin:
         gateway refuses after the old key was removed is recorded truthfully**: the engine's key
         is then lost, and it is offered to no analyst until a key is entered again. **Checked
         first** (the owner's ruling 19): a key the provider refuses replaces nothing."""
-        # Named before the change runs: a rotation that fails is audited as a rotation (round 8),
-        # not as a first key (`key_state` is "set" only for a key held and recorded).
+        # A rotation that fails is audited as a rotation (round 8), not as a first key, and **named
+        # from the saved record** (`_recorded_key_state`), never `key_state`, which says "lost" for
+        # an engine the record says is set but this process marked unavailable (row 43): one change
+        # has one name however it ends. `work` settles it again from the locked record, and
+        # `_change` reads it when the change stops.
         said: list[ModelAdminAction] = [
-            action or ("key_rotated" if self.key_state(name) == "set" else "key_set")
+            action or ("key_rotated" if self._recorded_key_state(name) == "set" else "key_set")
         ]
 
         async def work(current: ModelSettings) -> None:
@@ -1942,7 +1963,9 @@ class ModelAdmin:
                 )
             _plain_key(key)
             record = current.keys.get(name)
-            said[0] = action or ("key_rotated" if record and not record.lost else "key_set")
+            said[0] = action or (
+                "key_rotated" if self._recorded_key_state(name) == "set" else "key_set"
+            )
             if action != "key_moved":
                 # The owner's ruling 19: a new key is proved against each of the engine's models
                 # before it replaces the one held. A key moved out of `deployment.env` at install
@@ -1959,7 +1982,7 @@ class ModelAdmin:
             await self._reconcile(proposed)
             self._save(proposed)
 
-        await self._change(by, said[0], name, work)
+        await self._change(by, lambda: said[0], name, work)
         await self._audited(by, said[0], name)
 
     async def remove_key(self, by: str, name: str) -> None:

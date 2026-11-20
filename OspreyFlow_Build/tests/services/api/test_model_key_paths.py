@@ -1466,6 +1466,7 @@ async def test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42(
     await world.set_up()
     stop = faults(world)
     rotations_before = len(audited(world, "key_rotated"))
+    sets_before = len(audited(world, "key_set"))
     if fault == "the key update is refused":
         stop.refuse.append(live("/key/update"))
         with pytest.raises(ModelAdminRefused):
@@ -1490,7 +1491,7 @@ async def test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42(
     assert rows[0].startswith(expect), rows
     assert "key was removed" in rows[0].lower() and "enter it again" in rows[0].lower(), rows
     assert not says_put_back(rows[0]), rows
-    assert not any(e.action == "key_set" and "gemini" == e.engine for e in world.audit.entries[-4:])
+    assert len(audited(world, "key_set")) == sets_before, "named as a first key: it replaced one"
     assert edit_rows(world)[-1].startswith(expect), "the edit's own row is still written"
     assert audited(world, "key_removed"), "the removal of the key is audited"
     assert world.first not in recorded(world) and world.second not in recorded(world)
