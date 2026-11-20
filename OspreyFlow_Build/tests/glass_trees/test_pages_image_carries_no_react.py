@@ -2,7 +2,8 @@
 
 `scripts/pages_image_react_scan.py` reads the CycloneDX SBOM that `trivy image --format cyclonedx` writes
 and the image's exported file system (`docker create`, `docker export`), and fails on a package named
-`react`, `react-dom` or `scheduler`, on `react/jsx-runtime`, `react/jsx-dev-runtime` or React's element
+`react`, `react-dom` or `scheduler` (in the SBOM, and in the exported tree as a `node_modules` folder or a
+package.json by that name, listed or not), on `react/jsx-runtime`, `react/jsx-dev-runtime` or React's element
 markers in any file under `/app`, and unless the SBOM names `express` and `nunjucks`. This file drives its
 pure functions over a synthetic SBOM and a synthetic exported tree, both in the shape `trivy` and
 `docker export` really produce. No Docker, no network. Nothing here is, or looks like, a secret: the one
@@ -297,7 +298,8 @@ def test_a_marker_in_a_dependency_or_a_binary_file_is_refused(tmp_path: Path) ->
     ]
 
 
-SCHEDULER_FILE = 'module.exports = require("./cjs/scheduler.production.js");\n'  # no React marker in it
+# a file with no React marker in it, as `scheduler`'s own files are
+SCHEDULER_FILE = 'module.exports = require("./cjs/scheduler.production.js");\n'
 
 
 @pytest.mark.parametrize("package", scan.REACT_PACKAGES)

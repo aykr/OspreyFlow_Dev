@@ -6,6 +6,8 @@ to `<file>`, and the image's own file system (`docker create`, `docker export`; 
 `/app` is extracted to a temporary folder that is removed). It exits 1, naming each finding, when:
 
   * the SBOM names a component `react`, `react-dom` or `scheduler`;
+  * `/app` holds a package of that name (a `node_modules/<name>` folder, or a package.json
+    naming it), whether or not the SBOM lists it;
   * a file under `/app` holds `react/jsx-runtime`, `react/jsx-dev-runtime` or one of React's element
     markers (the `react.element` and `react.transitional.element` symbols, or `Symbol.for("react.`);
   * the SBOM does not name both `express` and `nunjucks`: an empty SBOM, one for the wrong image or
@@ -145,15 +147,39 @@ def sbom_findings(sbom: object) -> list[Finding]:
 # --- the exported file system ----------------------------------------------------------------
 
 
+def _package_json_name(data: bytes) -> str | None:
+    """The lower-case `name` of a package.json, or None if it is not JSON or names nothing."""
+    try:
+        document = json.loads(data)
+    except ValueError:
+        return None
+    name = document.get("name") if isinstance(document, dict) else None
+    return name.strip().lower() if isinstance(name, str) else None
+
+
 def tree_findings(root: Path) -> list[Finding]:
-    """Files under `root/app` holding a React marker. Links are not followed; nothing outside
-    /app is read."""
+    """What under `root/app` is React: a `node_modules/<react, react-dom or scheduler>` folder, a
+    package.json whose name is one of them, or a file holding a marker. Links are not followed;
+    nothing outside /app is read."""
     app = root / APP
     if app.is_symlink() or not app.is_dir():
         return [Finding("no-app", f"/{APP}", "the image's file system has no /app to scan")]
     findings: list[Finding] = []
+    # package folders already named, so their package.json is not repeated
+    flagged: set[Path] = set()
     for folder, subfolders, files in os.walk(app, followlinks=False):
         subfolders.sort()
+        if os.path.basename(folder) == "node_modules":
+            for sub in subfolders:  # a package by its folder, whatever its files hold
+                if sub.lower() in REACT_PACKAGES:
+                    flagged.add(Path(folder) / sub)
+                    findings.append(
+                        Finding(
+                            "react-package",
+                            (Path(folder) / sub).relative_to(root).as_posix(),
+                            "a React package is installed in the image",
+                        )
+                    )
         for name in sorted(files):
             path = Path(folder) / name
             if path.is_symlink() or not path.is_file():
@@ -168,6 +194,12 @@ def tree_findings(root: Path) -> list[Finding]:
                     )
                 )
                 continue
+            if name == "package.json" and Path(folder) not in flagged:
+                package = _package_json_name(data)
+                if package in REACT_PACKAGES:
+                    findings.append(
+                        Finding("react-package", where, f"the package.json names {package}")
+                    )
             hits = [label for label, pattern in _MARKERS if pattern.search(data)]
             if hits:
                 findings.append(Finding("react-marker", where, "holds " + ", ".join(hits)))
