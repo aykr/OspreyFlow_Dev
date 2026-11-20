@@ -18,7 +18,8 @@ Which test fails if the invariant is broken (rule 12):
 
 * a **real change goes unseen** (a different string, a changed condition, a changed number, a removed statement, a
   removed export, a removed declarator, a different CSS rule or CSS order, a changed or removed asset, a changed public
-  file, a rewired chunk): `test_a_planted_change_of_behaviour_is_red` (one case each) and, over real output,
+  file, a rewired chunk, **a reference or an import pointed at another binding of the same shape**):
+  `test_a_planted_change_of_behaviour_is_red` (one case each) and, over real output,
   `test_a_real_vite_build_with_one_real_change_is_red`;
 * a **move is read as a change** (so every later slice would fail on a harmless move):
   `test_a_planted_move_is_green`, `test_a_move_with_the_statements_in_another_order_is_green` and
@@ -49,7 +50,7 @@ CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
 SCRIPT = CORE / "scripts" / "dist_compare.mjs"
 RECORD = CORE / "apps" / "workspace" / "PL4_BASELINE.json"
 # The version the script's normaliser has (`NORMALISER_VERSION`): a record is comparable only with the same one.
-NORMALISER_VERSION = 1
+NORMALISER_VERSION = 2
 
 
 def node() -> str:
@@ -110,6 +111,10 @@ class Build:
     crown_name: str = "crown.svg"
     lazy_uses_main: bool = True
     extra_asset: bytes | None = None
+    # Which of the main chunk's constants (slot 4: the number, slot 5: the greeting) a statement of its own logs, and
+    # which of the lazy chunk's two exports (`t` or `u`) the main chunk imports: a reference rewired to another binding.
+    show: int = 5
+    import_name: str = "t"
 
     def main_file(self) -> str:
         return f"{self.main_stem}-{token(self.seed, 'main')}.js"
@@ -138,6 +143,8 @@ def main_chunk(b: Build) -> str:
         "consts": f"var {s[4]}={b.answer},{s[5]}=`{b.greeting}`;",
         "obj": f"var {s[6]}={{{b.prop}:1,items:[2,3]}};",
         "run": f"{s[2]}({s[4]}),console.log({s[5]});",
+        "show": f"console.warn({s[b.show]});",
+        "imported": f"console.debug({s[8]});",
         "lazy": f'function {s[7]}(){{return import("./{b.lazy_file()}")}}',
         "extra": b.extra,
     }
@@ -145,7 +152,7 @@ def main_chunk(b: Build) -> str:
     if b.reverse:
         order.reverse()
     exports = ",".join(f"{s[2 if name == 't' else 4]} as {name}" for name in b.export_names)
-    head = f'import{{t as {s[8]}}}from"./{b.lazy_file()}";'
+    head = f'import{{{b.import_name} as {s[8]}}}from"./{b.lazy_file()}";'
     tail = f"export{{{exports}}};" if exports else ""
     comment = f"\n//# sourceMappingURL={b.main_file()}.map" if b.maps else ""
     return head + "".join(statements[name] for name in order) + tail + comment + "\n"
@@ -154,8 +161,8 @@ def main_chunk(b: Build) -> str:
 def lazy_chunk(b: Build) -> str:
     s = list(reversed(b.names))
     if b.lazy_uses_main:
-        return f'import{{t as {s[0]}}}from"./{b.main_file()}";var {s[1]}={s[0]}(5);export{{{s[1]} as t}};\n'
-    return f"var {s[1]}=5;export{{{s[1]} as t}};\n"
+        return f'import{{t as {s[0]}}}from"./{b.main_file()}";var {s[1]}={s[0]}(5),{s[2]}=`other`;export{{{s[1]} as t,{s[2]} as u}};\n'
+    return f"var {s[1]}=5,{s[2]}=`other`;export{{{s[1]} as t,{s[2]} as u}};\n"
 
 
 def css_text(b: Build) -> str:
@@ -263,7 +270,7 @@ CHANGES: list[tuple[str, dict[str, object], str]] = [
     ("a removed statement", {"drop": ("run",)}, "console.log"),
     ("an added statement", {"extra": "console.log(`added`);"}, "added"),
     ("a removed declarator", {"lib_count": 1}, "Object.defineProperty"),
-    ("a removed export", {"export_names": ("t",)}, "export{*"),
+    ("a removed export", {"export_names": ("t",)}, "export:"),
     ("a different CSS value", {"css": (".a{color:blue}", ".b{margin:0 auto}", "@media (min-width:600px){.c{padding:4px}}")}, "blue"),
     ("a different CSS rule", {"css": (".a{color:red}", ".b{margin:0 auto}", "@media (min-width:600px){.c{padding:4px}}", ".d{top:0}")}, ".d{top:0}"),
     ("a removed CSS rule", {"css": (".a{color:red}", ".b{margin:0 auto}")}, "min-width"),
@@ -275,7 +282,10 @@ CHANGES: list[tuple[str, dict[str, object], str]] = [
     ("an added asset", {"extra_asset": b"\x89PNG"}, "added: extra.png"),
     ("a changed public file", {"crown": "<svg>another crown</svg>"}, "changed: assets/govuk/crown.svg"),
     ("a public file under another name", {"crown_name": "crest.svg"}, "assets/govuk/crown.svg"),
-    ("a rewired chunk", {"lazy_uses_main": False}, "differs"),
+    ("a rewired chunk", {"lazy_uses_main": False}, "import{*1}"),
+    # A reference pointed at another binding of the same chunk: every unit keeps its shape, only the name differs.
+    ("a reference rewired to another constant of the chunk", {"show": 4}, "console.warn"),
+    ("an import rewired to another export of the chunk it comes from", {"import_name": "u"}, "console.debug"),
 ]
 
 

@@ -233,10 +233,10 @@ def test_a_check_with_nothing_to_bundle_does_not_pass(tree: Path) -> None:
 # ---------------------------------------------------------------------------------------------------- the type half: lint
 
 
-def lint(source: str) -> list[dict[str, object]]:
-    """ESLint over `source` as if it were `packages/glass-shared/src/planted.ts`, with the real config."""
+def lint(source: str, filename: str = "planted.ts") -> list[dict[str, object]]:
+    """ESLint over `source` as if it were `packages/glass-shared/src/<filename>`, with the real config."""
     done = subprocess.run(
-        [node(), str(CORE / "node_modules/eslint/bin/eslint.js"), "--stdin", "--stdin-filename", "packages/glass-shared/src/planted.ts", "--format", "json"],
+        [node(), str(CORE / "node_modules/eslint/bin/eslint.js"), "--stdin", "--stdin-filename", f"packages/glass-shared/src/{filename}", "--format", "json"],
         cwd=CORE,
         input=source,
         capture_output=True,
@@ -268,6 +268,24 @@ def test_the_lint_rule_refuses_a_drawing_library_or_react_by_any_import_form(sou
     """The planted `import type` of the owner's evidence, and the other forms a type can name a library by."""
     messages = lint(source)
     assert [m["ruleId"] for m in messages if m["severity"] == 2] == [rule], messages
+
+
+@pytest.mark.parametrize("extension", ["ts", "tsx", "mts", "cts"])
+@pytest.mark.parametrize(
+    "source",
+    [
+        'import type { Map } from "maplibre-gl";\nexport type M = Map;\n',
+        'import type Sigma from "sigma";\nexport type S = Sigma;\n',
+        'export type M = import("maplibre-gl").Map;\n',
+    ],
+)
+def test_the_lint_rule_reaches_every_extension_a_source_file_of_the_package_may_have(source: str, extension: str) -> None:
+    """The brief: the block is for `packages/glass-shared/**`. A type-only `import` in a `.mts` (or `.tsx`, `.cts`) file
+    is invisible to the bundler (it drops the import) and to the React check, so the lint rule is the only thing that
+    can refuse it; a block limited to `*.ts` leaves `eslint .` not reading the file at all."""
+    messages = [m for m in lint(source, f"planted.{extension}") if m["severity"] == 2]
+    assert messages, f"nothing refused a type import of a drawing library in planted.{extension}"
+    assert {m["ruleId"] for m in messages} <= {"@typescript-eslint/no-restricted-imports", "no-restricted-syntax"}, messages
 
 
 @pytest.mark.parametrize(

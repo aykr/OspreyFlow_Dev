@@ -11,7 +11,8 @@ owner-agreed lines of `PARITY_EXCEPTIONS.yaml`. It names no schema; the owner ac
 Which test fails if the invariant is broken (rule 12):
 
 * a function dropped from the list (the tree would be "complete" with a function never built)
-      -> `test_the_real_files_hold_47_functions` and `test_a_row_removed_is_caught`
+      -> `test_the_real_files_hold_47_functions` and `test_a_row_removed_is_caught` (an ordinary row, which
+         has no exception line, so the count in `check` is the only thing that can find it)
 * two rows with one id           -> `test_a_duplicate_id_is_caught`
 * an exception that excuses nothing real (a typo, or a function since removed)
       -> `test_an_exception_naming_a_missing_id_is_caught`
@@ -149,6 +150,10 @@ def check(functions_doc: Any, exceptions_doc: Any) -> list[str]:
         if row["route"] and not row["scenario"]:
             problems.append(f"function {row['id']} has a route but no scenario (ADR-152 decision 12)")
 
+    # The tree is "complete" when every row has its page: a row dropped from the list is a function never built.
+    if len(functions) != EXPECTED_FUNCTIONS:
+        problems.append(f"FUNCTIONS.yaml has {len(functions)} functions, not the {EXPECTED_FUNCTIONS} of the inventory")
+
     exception_ids: set[str] = set()
     for index, line in enumerate(exceptions):
         label = f"exception row {index + 1}"
@@ -261,13 +266,23 @@ def test_the_flag_finds_a_function_without_a_scenario_and_not_one_with() -> None
 # ---------------------------------------------------------------------------------------------- planted faults
 
 
-def test_a_row_removed_is_caught() -> None:
+@pytest.mark.parametrize("removed", ["search", "panel-frames"])
+def test_a_row_removed_is_caught(removed: str) -> None:
+    """An ordinary row, with no exception line to give it away: only the count can catch it (rule 15)."""
+    functions_doc, exceptions_doc = planted()
+    assert removed not in {line["id"] for line in exceptions_doc["exceptions"]}
+    functions_doc["functions"] = [row for row in functions_doc["functions"] if row["id"] != removed]
+    assert len(functions_doc["functions"]) == EXPECTED_FUNCTIONS - 1
+    problems = check(functions_doc, exceptions_doc)
+    assert problems == [f"FUNCTIONS.yaml has {EXPECTED_FUNCTIONS - 1} functions, not the {EXPECTED_FUNCTIONS} of the inventory"]
+
+
+def test_a_whole_function_row_removed_leaves_its_exception_naming_nothing() -> None:
     functions_doc, exceptions_doc = planted()
     functions_doc["functions"] = [row for row in functions_doc["functions"] if row["id"] != "app-shell"]
     problems = check(functions_doc, exceptions_doc)
-    # The row is gone, so its own exception now names nothing, and the count is no longer 47.
     assert any("exception app-shell names no function" in problem for problem in problems)
-    assert len(functions_doc["functions"]) != EXPECTED_FUNCTIONS
+    assert any("not the 47 of the inventory" in problem for problem in problems)
 
 
 def test_a_duplicate_id_is_caught() -> None:
