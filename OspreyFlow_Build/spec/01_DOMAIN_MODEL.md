@@ -746,9 +746,20 @@ selection is its creator's, so naming an id the reader may not see would tell th
 (rules 3 and 7). Opening a view (`CaseViewOpened`) gives:
 - the items the reader may see now;
 - the saved positions of those items alone;
-- `missing`, told to the view's creator alone (the boards' rule, below): a store cannot tell a node
-  that was deleted from one the reader may not see without an unfiltered lookup, so nobody else is
-  told a number of hidden nodes.
+- `missing`: **0 for every principal, the creator included, until the store records deletions.**
+  The boards' rule (below) has two halves: `missing` counts only items lost after they were placed
+  (deleted or removed), told to the creator who placed each seeing it, and anything hidden by a
+  marking is counted nowhere. A board keeps both because each item's record carries a
+  `withdrawn_at`. A view has no such record: the store keeps no time and no placing for a removed
+  graph node (only an untimed `reverted` flag, which reads the same for a node the reader may not
+  see, and which says nothing of whether the creator ever saw it). So a number of "lost" nodes can
+  only be got as the chosen ids less the nodes shown, which counts every node above the reader's
+  clearance or outside the case as well as the ones that are gone, or by an existence lookup
+  (`existing_node_ids`, which no route may call), which is an oracle: a count that differs for an id
+  that does not exist and for one that exists and is hidden lets anyone who can save a view probe
+  the store for hidden nodes (rule 3). So a view reports what is visible and does not report what
+  is gone, to anyone. The field stays on the wire as a number (the Glass reads it so and shows
+  nothing for 0); it is the place a count of recorded deletions goes if the store ever keeps them.
 
 `chosen`, on every answer that carries a `CaseView` (the list, save, share, open and a batch
 expansion's status), is **how many of the chosen nodes this reader may see now**, never the count the
@@ -760,17 +771,20 @@ rule 3), and a merged drawing's drawn nodes are not counted (L3.9).
 
 The invariants, each with the test that fails if it is broken (rule 12):
 - **Live, never a copy.** Opening a view re-reads the case under the reader's own principal.
-  `CaseViewOpened` returns only what that reader may see, and `missing` counts the chosen nodes it
-  could not show to the view's creator alone, without naming them.
+  `CaseViewOpened` returns only what that reader may see, and `missing` is 0 for everyone (above).
   - `test_a_view_shows_the_rest_and_counts_the_missing` is red with the view returning its stored
     selection.
-- **A view's count never includes what its reader may not see** (C045): `chosen` is the reader's
-  visible count and `missing` is the creator's alone.
+- **A view's count never includes what its asker may not see** (C045): `chosen` is the asker's
+  visible count, and `missing` is nothing, for the creator as for a reader. A node re-marked above
+  them after the save, one in a dataset the case does not read, one deleted, one reverted, and their
+  own clearance lowered each leave no trace in a number; an id nobody holds and an id that exists
+  and is hidden answer alike.
   - `test_the_list_counts_what_the_reader_may_see`,
-    `test_open_save_and_share_count_what_the_reader_may_see` and
-    `test_a_reader_is_never_told_how_many_are_hidden` (`test_case_view_counts.py`), each red with a
-    planted fault at the real call site; `test_count_visible_*` in the graph port's conformance
-    suite for the store's count.
+    `test_open_save_and_share_count_what_the_reader_may_see`,
+    `test_no_number_includes_what_the_asker_may_not_see` and
+    `test_a_missing_id_and_a_hidden_one_answer_alike` (`test_case_view_counts.py`), each red with a
+    planted fault at the real call site (the difference put back, an existence count);
+    `test_count_visible_*` in the graph port's conformance suite for the store's count.
 - **Private until shared.** Another member of the case is answered 404 for a private view, not
   403, and the case's view list never shows it to them. Once shared, it opens for every member at
   their own level.

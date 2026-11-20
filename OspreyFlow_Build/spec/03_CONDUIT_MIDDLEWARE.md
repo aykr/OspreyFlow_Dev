@@ -123,7 +123,7 @@ nodes and never names them or their positions (rules 3 and 7).
 ```
 GET    /v1/investigations/{id}/views                  the case's views the caller may see: their own, and those shared
 POST   /v1/investigations/{id}/views                  save a view, private to the caller (`CaseViewInput`: a name, exactly one of `node_ids` or `filter`, a layout, a window, a threshold)
-GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, which only its creator is told, naming none; `chosen` on every `CaseView` is how many the caller may see (C045)
+GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, which is 0 for everyone until the store records deletions; `chosen` on every `CaseView` is how many the caller may see (C045)
 POST   /v1/investigations/{id}/views/{view}/share     share it with the case's members, at their own levels (its creator only; 403 `not_the_views_creator` for a member who can see it)
 DELETE /v1/investigations/{id}/views/{view}           delete it, and nothing else (its creator only, as above)
 ```

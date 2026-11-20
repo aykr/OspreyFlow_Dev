@@ -12,12 +12,13 @@ view and is not its creator is refused in words (`NotTheViewsCreator`), since th
 exists.
 
 **Live.** A view of chosen nodes reads them from the graph by id (`GraphPort.get_nodes`, filtered in
-the adapter) and the links among those it may show (`edges_among`); `missing` counts the chosen
-ids it could not show to the view's creator alone (C045: told to anyone else, it is how many nodes
-above their clearance the view holds), and names none; `chosen` on every answer is the count this
-reader may see now (`visible_chosen`). A filtered view narrows the reader's own projection of the
-case's working set, as ADR-124's filter did. A result past the working set's cap is the typed
-`limit_exceeded` (rule 2).
+the adapter) and the links among those it may show (`edges_among`); `chosen` on every answer is the
+count this reader may see now (`visible_chosen`), and `missing` is 0 for everyone, the creator too
+(C045): the chosen ids less the nodes shown counts every node above the reader as well as the ones
+that are gone, and an existence lookup is an oracle, so a view reports what is visible and not what
+is gone until the store records deletions (`missing_for`). A filtered view narrows the reader's own
+projection of the case's working set, as ADR-124's filter did. A result past the working set's cap
+is the typed `limit_exceeded` (rule 2).
 
 **Collapsed at the view's own threshold** (ADR-144 decision 1 and Amendment 2; spec 03 §3.1, case
 views): each node shown carries the cluster it falls in at the view's `threshold`, or at the case's
@@ -594,17 +595,26 @@ async def _collapsed(
 
 
 def missing_for(view: StoredCaseView, reader: str, shown: Sequence[Node]) -> int:
-    """`CaseViewOpened.missing` (ADR-144 decision 2), under the boards' rule (`boards.py`, the
-    orchestrator's ruling on L3.3, applied to views for C045): told to the view's creator, who chose
-    each item seeing it, as how many of their chosen nodes they can no longer be shown; **never to
-    anyone else**. A store cannot tell a node that was deleted from one the reader may not see
-    without an unfiltered lookup (`existing_node_ids`, which no route may call), so a reader who
-    did not make the view is told nothing, and a number of hidden nodes is told to no one who may
-    not see them (rule 3). A merged drawing's drawn nodes are not counted (rule 7)."""
-    if view.node_ids is None or view.created_by != reader:
-        return 0
-    added = set(view.merged_added)
-    return len(set(view.node_ids) - added) - sum(1 for n in shown if n.id not in added)
+    """`CaseViewOpened.missing` (ADR-144 decision 2): **0 for every principal, the creator too**,
+    until the store records deletions.
+
+    The boards' rule (`boards.py`, the orchestrator's ruling on L3.3) is that `missing` counts only
+    what was *lost after placement*, and that anything hidden by a marking is counted nowhere. A
+    board can keep it because each item's record carries a `withdrawn_at`. A view has no such
+    record: the store keeps no time and no placing for a removed graph node (only an untimed
+    `reverted` flag, which is the same for a node the reader may not read), so the number can only
+    be got two ways, and each breaks rule 3. The chosen ids less the nodes shown counts every node
+    the reader cannot read now (re-marked above them, in a dataset the case does not read, their
+    own clearance lowered) with the ones that are gone; told even to the creator, it says how many
+    of the view's nodes are above them. An existence lookup (`existing_node_ids`, which no route
+    may call) is an oracle: a count that differs for an id that does not exist and for one that
+    exists and is hidden lets anyone who can save a view probe the store for hidden nodes. So the
+    answer is nothing, to everyone: a view reports what is visible (`chosen`, and the nodes) and
+    does not report what is gone. The wire keeps the field (the Glass reads it as a number and
+    shows nothing for 0); the arguments stay so a recorded deletion can be counted here without
+    touching a caller."""
+    del view, reader, shown
+    return 0
 
 
 async def open_view(

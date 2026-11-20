@@ -4796,8 +4796,8 @@ async def open_case_view(
     items: BoardItemsDep,
 ) -> CaseViewOpened:
     """ADR-144 decision 2: the view re-read now, as this reader may see the case. `chosen` is how
-    many of its chosen items they may see; `missing` is told to the view's creator alone and names
-    none (C045; the boards' rule)."""
+    many of its chosen items they may see; `missing` is 0 for everyone, the creator included, until
+    the store records deletions (C045; `missing_for`)."""
     view = await views.get(investigation.id, view_id, principal.id)
     opened = await open_view(
         view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach

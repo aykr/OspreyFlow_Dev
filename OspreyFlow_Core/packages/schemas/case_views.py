@@ -129,8 +129,9 @@ class ViewAnnotation(BaseModel):
 
 class CaseViewOpened(BaseModel):
     """A view opened now (decision 2): what the reader may see of it, live, and the saved positions
-    of those items alone. `missing` counts the chosen nodes it could not show, for whatever reason,
-    and names none of them."""
+    of those items alone. `missing` is 0 for every reader, the creator included, until the store
+    records deletions: it counts only what was lost after the view was placed, never what a marking
+    hides (the boards' rule, C045), and says nothing of the chosen nodes it could not show."""
 
     model_config = ConfigDict(extra="forbid")
 
