@@ -16,7 +16,9 @@ library of the specification's table, each shown red). The omitted build and the
 `test_no_other_stage_copies_the_notice` (a `COPY` of the file itself) and
 `test_no_route_carries_the_notice_into_the_omitted_image` (a folder copy that contains it, and the final stage's
 `COPY --from=builder` that brings it in: the real Dockerfile with the notice put back under `services/`, and with
-a `notices` folder copied through); for Java in the final stage, `tests/test_conduit_image_java_licence.py`.
+a `notices` folder copied through) and `test_an_add_or_a_builder_copy_into_the_omitted_image_is_flagged` (an `ADD`
+of the file or the folder in either stage, and the omitted stage's own `COPY --from=builder`); for Java in the
+final stage, `tests/test_conduit_image_java_licence.py`.
 Each library is tied to its own licence by `test_the_licence_of_each_library_is_the_tables_wording`, one row at a
 time.
 
@@ -77,11 +79,12 @@ def _words(text: str) -> str:
 
 
 def _copies(stage: str) -> list[tuple[list[str], str, str | None]]:
-    """Each `COPY` of the stage: its sources, its destination, and the stage it takes from (None: the context)."""
+    """Each `COPY` or `ADD` of the stage (`ADD` puts a file or folder of the context into the image just as `COPY`
+    does): its sources, its destination, and the stage it takes from (None: the context)."""
     found = []
     for instruction in _instructions(stage):
         word, _, rest = instruction.partition(" ")
-        if word.upper() != "COPY":
+        if word.upper() not in ("COPY", "ADD"):
             continue
         tokens = rest.split()
         origin = next((t.removeprefix("--from=") for t in tokens if t.startswith("--from=")), None)
@@ -177,13 +180,17 @@ def dockerfile_problems(dockerfile: str, notice_path: Path = NOTICE_PATH) -> lis
     included = _copies_of_the_notice(_stage(dockerfile, "runtime-included"), notice_path)
     if included != [NOTICE_DESTINATION]:
         problems.append(f"the runtime-included stage must copy the notice once, to {NOTICE_DESTINATION}: {included}")
-    if _copies_of_the_notice(_stage(dockerfile, "runtime-omitted"), notice_path):
+    omitted = _stage(dockerfile, "runtime-omitted")
+    if _copies_of_the_notice(omitted, notice_path):
         problems.append("the runtime-omitted stage copies the notice")
     final = _final(dockerfile)
     if _copies_of_the_notice(final, notice_path):
         problems.append("the final stage copies the notice")
-    # The final stage serves both builds, so what it takes from the builder reaches the image with no Java.
+    # Both the omitted stage and the final stage (which serves both builds) reach the image with no Java, so
+    # what either takes from the builder must not hold the notice.
     landings = _landings_in_the_builder(dockerfile, notice_path)
+    if brought := _brought_from_the_builder(omitted, landings):
+        problems.append(f"the runtime-omitted stage brings the notice in from the builder: {brought}")
     if brought := _brought_from_the_builder(final, landings):
         problems.append(f"the final stage brings the notice in from the builder, into the image without Java: {brought}")
     # The notice says the licence texts are in /opt/java/legal: true only while the whole runtime is copied.
@@ -337,6 +344,39 @@ def test_no_route_carries_the_notice_into_the_omitted_image() -> None:
     # Not over-flagged: a builder that copies the folder, with the final stage taking nothing of it, ships nothing.
     only_builder = _plant(DOCKERFILE, builder_copy, builder_copy + "COPY notices ./notices\n")
     assert dockerfile_problems(only_builder) == []
+
+
+def test_an_add_or_a_builder_copy_into_the_omitted_image_is_flagged() -> None:
+    """`ADD` puts the notice into a stage as surely as `COPY`, and the omitted stage can take it from the builder
+    as the final stage can: the header's "by any route", each route planted in the real Dockerfile."""
+    omitted_last = 'LABEL org.ospreyflow.runtime.java.included="omitted"'
+    builder_copy = "\nCOPY services ./services\n"
+    omitted_flag = ["the runtime-omitted stage copies the notice"]
+    final_flag = ["the final stage copies the notice"]
+    add_file = f"ADD notices/JAVA_NOTICE {NOTICE_DESTINATION}"
+    # No `ADD` in the real Dockerfile, so the parse has nothing to be fooled by today.
+    assert not [i for i in _instructions(DOCKERFILE) if i.split(" ", 1)[0].upper() == "ADD"]
+    # `ADD` of the file itself, and of a folder holding it (with a flag, as `ADD --chmod=...` is written), in each stage.
+    assert dockerfile_problems(_plant(DOCKERFILE, omitted_last, omitted_last + "\n" + add_file)) == omitted_flag
+    assert dockerfile_problems(_plant(DOCKERFILE, omitted_last, omitted_last + "\nADD notices /x")) == omitted_flag
+    assert dockerfile_problems(_plant(DOCKERFILE, omitted_last, omitted_last + "\nADD --chmod=0444 notices /x")) == omitted_flag
+    assert dockerfile_problems(_plant(DOCKERFILE, "USER 10001:10001", add_file + "\nUSER 10001:10001")) == final_flag
+    assert dockerfile_problems(_plant(DOCKERFILE, "USER 10001:10001", "add notices /x\nUSER 10001:10001")) == final_flag
+    # In the included stage, `ADD` is read as a copy: in place of the `COPY` it is clean, and added twice it is flagged.
+    assert dockerfile_problems(_plant(DOCKERFILE, COPY_LINE, add_file)) == []
+    twice = _plant(DOCKERFILE, COPY_LINE, COPY_LINE + "\n" + add_file)
+    assert any("must copy the notice once" in p for p in dockerfile_problems(twice))
+    # The omitted stage taking the notice's folder from the builder, which copied it (the final stage's route, in the
+    # other stage); and the whole of /app.
+    builder_has = _plant(DOCKERFILE, builder_copy, builder_copy + "COPY notices ./notices\n")
+    carried = _plant(builder_has, omitted_last, omitted_last + "\nCOPY --from=builder /app/notices /x")
+    problems = dockerfile_problems(carried)
+    assert len(problems) == 1 and "runtime-omitted stage brings the notice in from the builder" in problems[0], problems
+    everything = _plant(builder_has, omitted_last, omitted_last + "\nCOPY --from=builder /app /x")
+    assert any("runtime-omitted stage brings the notice in" in p for p in dockerfile_problems(everything))
+    # Not over-flagged: the omitted stage taking something else from the builder, or the builder alone holding it.
+    other = _plant(builder_has, omitted_last, omitted_last + "\nCOPY --from=builder /app/packages /x")
+    assert dockerfile_problems(other) == []
 
 
 def test_the_legal_tree_travels_only_while_the_whole_runtime_is_copied() -> None:
