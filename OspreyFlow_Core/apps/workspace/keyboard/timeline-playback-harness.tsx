@@ -22,7 +22,7 @@
 import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { followCrossFilterWithMapBins } from "../src/crossfilter/mapBins";

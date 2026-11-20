@@ -4,7 +4,7 @@
 // `window.__acted`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/shell/chrome.css";
 import { AccountUnread } from "../src/auth/AccountUnread";

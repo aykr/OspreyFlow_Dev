@@ -17,7 +17,7 @@
 // writes a sentence set to run every week.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { RulesPlace } from "../src/alerts/RulesPlace";

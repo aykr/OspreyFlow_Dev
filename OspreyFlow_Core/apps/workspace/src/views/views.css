@@ -1,5 +1,5 @@
 /* Case views (ADR-144): the *Views in this case* panel, the *Save as a view* form and the lens banner.
-   Tokens only (`design/tokens.css`). Under the GOV.UK brand the panel and the form use the package's
+   Tokens only (`packages/design/tokens.css`). Under the GOV.UK brand the panel and the form use the package's
    own govuk-summary-list, govuk-tag, govuk-form-group and govuk-button classes; these rules only
    space them. Every control is at least 24 by 24 pixels (axe target-size). */
 /* Each grid's one column is `minmax(0, 1fr)` and the panel itself may shrink (`min-width: 0`): with a grid's

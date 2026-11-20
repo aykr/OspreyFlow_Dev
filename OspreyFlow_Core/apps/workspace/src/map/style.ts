@@ -1,6 +1,6 @@
 // The bundled dark MapLibre style — `spec/00_ARCHITECTURE.md` §1.2's
 // tier-1 "Two MapLibre styles ship with it, dark and light, built
-// against `design/tokens.css`".
+// against `packages/design/tokens.css`".
 //
 // **Dark only for now.** Same deferral `color/tokens.ts`'s
 // `SURFACE_PANEL_DARK_HEX` already states for node rendering: Checkpoint 2

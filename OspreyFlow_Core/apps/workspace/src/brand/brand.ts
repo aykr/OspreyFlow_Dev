@@ -4,7 +4,7 @@
 // in a cookie. Under `govuk` the page is light only, because the GOV.UK Design System has no dark
 // mode, and the theme buttons are not drawn.
 //
-// Everything drawn by CSS follows `data-brand` on `<html>` (the brand block in `design/tokens.css`).
+// Everything drawn by CSS follows `data-brand` on `<html>` (the brand block in `packages/design/tokens.css`).
 // The network's nine channels, the charts and the ramps are the same under every brand.
 export type Brand = "ospreyflow" | "govuk";
 export type Phase = "alpha" | "beta" | "live" | "none";

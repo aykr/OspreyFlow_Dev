@@ -2,7 +2,7 @@
 // surface, its own registry (`ADMIN_ACTIONS`). Every call is intercepted by `admin.spec.ts`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/shell/places.css";
 import { AdminPlace } from "../src/admin/AdminPlace";

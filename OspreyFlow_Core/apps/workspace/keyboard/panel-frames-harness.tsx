@@ -4,7 +4,7 @@
 // box, to show that what is typed in it survives hiding the panel.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
 import "../src/design/primitives.css";
 import { BottomPanelFrame, DetailsToggle, SidePanelFrame } from "../src/layout/PanelFrames";

@@ -44,7 +44,7 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     out = tmp_path / "home" / ".ospreyflow" / "deployments" / "osprey-upg"
     shutil.copytree(FIXTURE, out)
     (out / "deployment.env").chmod(0o600)
-    tokens = tmp_path / "checkout" / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    tokens = tmp_path / "checkout" / "packages" / "design" / "tokens.css"
     tokens.parent.mkdir(parents=True)
     tokens.write_text(TOKENS, encoding="utf-8")
     write_login_theme(out, tokens_css=TOKENS)

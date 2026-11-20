@@ -43,7 +43,7 @@ def test_start_build_rebuilds_the_index_after_every_up_where_compose_renders_ope
     repo: Path,  # noqa: F811
 ) -> None:
     _compose(repo, OPENSEARCH)
-    (repo / "apps/workspace/src/design/tokens.css").write_text(":root {}\n", encoding="utf-8")
+    (repo / "packages/design/tokens.css").write_text(":root {}\n", encoding="utf-8")
     run = Recorder()
     refresh.refresh(repo, run=run, register=Registrar())
     rebuilt = _rebuilds(run.calls)

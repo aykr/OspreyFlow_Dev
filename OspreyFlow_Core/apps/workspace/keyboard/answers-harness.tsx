@@ -5,7 +5,7 @@
 // columns, its sub-headings beneath its title, measured by `needs-you.spec.ts`).
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/home/home.css";
 import { AnswersForSection } from "../src/home/AnswersForSection";

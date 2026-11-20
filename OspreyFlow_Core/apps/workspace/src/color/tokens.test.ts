@@ -22,7 +22,7 @@ import {
 // If someone edits a channel hue in the authoritative CSS file without
 // updating this module, this test fails instead of the drift sitting
 // unnoticed until a node renders the wrong colour.
-const TOKENS_CSS_PATH = new URL("../design/tokens.css", import.meta.url).pathname;
+const TOKENS_CSS_PATH = new URL("../../../../packages/design/tokens.css", import.meta.url).pathname;
 
 function readTokensCss(): string {
   return readFileSync(TOKENS_CSS_PATH, "utf8");

@@ -2,7 +2,7 @@
 
 Seen on the owner's deployment: the launcher and the workspace use the OspreyFlow design system, and
 then Keycloak's stock grey sign-in page appeared in the middle of the journey. `harness/
-keycloak_theme.py` produces a Keycloak login theme from `apps/workspace/src/design/tokens.css` (the
+keycloak_theme.py` produces a Keycloak login theme from `packages/design/tokens.css` (the
 authoritative source: "Do not introduce a colour that is not defined here").
 
 What a theme can get wrong without anything failing loudly: Keycloak falls back to its stock page
@@ -32,7 +32,7 @@ from harness.render import _render_compose, service_images
 from schemas.deployment import OspreyConfig
 from tools.layout import REPO as REPO_ROOT
 
-TOKENS = (REPO_ROOT / "apps" / "workspace" / "src" / "design" / "tokens.css").read_text(
+TOKENS = (REPO_ROOT / "packages" / "design" / "tokens.css").read_text(
     encoding="utf-8"
 )
 

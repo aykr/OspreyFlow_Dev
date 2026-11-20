@@ -2,7 +2,7 @@
 // `case-access.spec.ts` intercepts the access routes.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { CaseAccessPanel } from "../src/investigation/CaseAccessPanel";
 

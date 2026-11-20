@@ -1,4 +1,4 @@
-/* Ask & Chat (ADR-145 Amendment 20): a drawer by default, a page when expanded. Tokens only (`design/tokens.css`).
+/* Ask & Chat (ADR-145 Amendment 20): a drawer by default, a page when expanded. Tokens only (`packages/design/tokens.css`).
    The page (v0.6.0 #4, Amendment 18) fills the main area over the view the person left, in the same layer as the search
    results page (`search/searchResults.css`, which says why 19): above every control a view docks over itself, below the
    search box's own suggestions. The two never show at once. */

@@ -10,7 +10,7 @@
 import { createRoot } from "react-dom/client";
 import { createRef, StrictMode, useEffect, useState } from "react";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { applyTheme } from "../src/theme/theme";
 import "../src/design/primitives.css";

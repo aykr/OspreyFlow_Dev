@@ -9,7 +9,7 @@ import { getVersion } from "maplibre-gl";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { MapView } from "../src/map/MapView";
 import type { WorkingSetGraph } from "../src/workingset/store";

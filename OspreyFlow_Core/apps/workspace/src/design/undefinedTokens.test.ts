@@ -19,7 +19,7 @@ function files(dir: string): string[] {
 
 describe("font tokens", () => {
   it("every var(--font-…) or var(--mono) the source reads is defined in tokens.css", () => {
-    const tokens = readFileSync(join(SRC, "design", "tokens.css"), "utf8");
+    const tokens = readFileSync(join(SRC, "..", "..", "..", "packages", "design", "tokens.css"), "utf8");
     const defined = new Set([...tokens.matchAll(/(--[a-zA-Z0-9-]+)\s*:/g)].map((m) => m[1]!));
     expect(defined.has("--mono")).toBe(true);
     const missing: string[] = [];

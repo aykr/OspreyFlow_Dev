@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "../src/App";
 import { applyTheme, readStoredTheme } from "../../workspace/src/theme/theme";
-import "../../../apps/workspace/src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../../workspace/src/design/primitives.css";
 import "../src/app.css";
 

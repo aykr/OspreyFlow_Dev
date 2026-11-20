@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { BrandFrame } from "../src/brand/BrandFrame";

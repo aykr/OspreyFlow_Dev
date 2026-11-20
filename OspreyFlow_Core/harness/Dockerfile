@@ -96,11 +96,12 @@ COPY apps/workspace/package.json apps/workspace/package.json
 COPY packages/glass-shared/package.json packages/glass-shared/package.json
 RUN npm ci
 COPY apps/harness ./apps/harness
-# Only the one design-token source this app's own CSS imports reach (`apps/harness/src/main.tsx`,
-# `apps/harness/keyboard/setup-harness.tsx`) — not the whole of `apps/workspace`, which this build
-# does not need and should not pull into this image's own build context. Round 14a (Trigger A)
-# moved `tokens.css` from `docs/design/` (now `spec/design/`) into `apps/workspace/src/design/`,
-# so the separate `COPY docs/design` this used to need is gone — this one line now covers it.
+# The design tokens this app's own CSS imports reach (`apps/harness/src/main.tsx`,
+# `apps/harness/keyboard/setup-harness.tsx`), now in `packages/design` (ADR-152 decision 6) — not the whole
+# of `apps/workspace`, which this build does not need and should not pull into this image's own build
+# context. `tests/harness/test_harness_frontend_copies.py` follows the imports into that folder too.
+COPY packages/design ./packages/design
+# The workspace's design folder, for the primitives' stylesheet (`apps/harness/src/main.tsx` imports it).
 COPY apps/workspace/src/design ./apps/workspace/src/design
 # The theme module the admin console shares with the Glass (`apps/harness/src/main.tsx` imports
 # `../../workspace/src/theme/theme`): without it this image stopped building the day that import

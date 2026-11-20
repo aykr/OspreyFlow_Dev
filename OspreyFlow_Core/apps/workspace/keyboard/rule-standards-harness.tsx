@@ -7,7 +7,7 @@
 // rule's process, so nothing is drawn). `keyboard/rule-standards.spec.ts` walks it by keyboard.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import BPMN from "../src/alerts/ruleStandards/fixtures/visits-to-listed-people.bpmn?raw";
 import { ShowAsBpmn } from "../src/alerts/ruleStandards/ShowAsBpmn";
