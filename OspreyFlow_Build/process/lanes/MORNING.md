@@ -465,7 +465,7 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
      - AE slide 11 and the prison editor slide's subtitle are the tightest fits.
 
 31. **Laurium's licence check is done, and you ruled at about 06:00 (all four recommendations).** Laurium is MIT
-   (Ministry of Justice), and no copyleft licence appears anywhere in its tree. Your four rulings:
+   (the library's publisher), and no copyleft licence appears anywhere in its tree. Your four rulings:
    - Laurium runs as its own Python 3.13 service, because Laurium needs Python 3.13 (ADR-135 Amendment 6, reserved for platform).
    - Recorded licence entries for `laurium`, `arrow-pd-parser` and `tiktoken`.
    - The spaCy model is accepted, from its pinned GitHub release.
@@ -1046,7 +1046,7 @@ where it is recorded, and how to overrule it. Overrule any of them and I'll reve
         copy each of Glass, API, workers; no ingest image; Laurium and report sync own images); the orchestrator sends
         the exact image, ECR and container list for poc at v0.5.2. (3) OpenSearch: what search loses on PostgreSQL at
         the client's size, or what it costs on poc (being researched). (4) RDS max_connections set explicitly in the
-        parameter group, **default 1000** (the owner), sized for Superset and an upgrade; MoJ's RDS module takes it as
+        parameter group, **default 1000** (the owner), sized for Superset and an upgrade; the UK public sector client's RDS module takes it as
         db_parameter (pending-reboot). Pool settings after v0.5.2. (5) Any ruling of the orchestrator's that removes
         or defers something the client page or an ADR requires goes to the owner first (the orchestrator's ruling (a)
         of 11 Nov deferred Superset without asking).

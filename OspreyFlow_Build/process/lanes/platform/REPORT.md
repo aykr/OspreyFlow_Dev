@@ -7,7 +7,7 @@ Branch `lane/platform-poc-rds` on main `3f18d71`. Offline; nothing on the server
 | db.t4g.large in every shape | done (`terraform.RDS_INSTANCE_CLASS`) | `test_the_rendered_rds_sets_max_connections_to_1000_in_its_parameter_group` |
 | max_connections 1000 in an `aws_db_parameter_group` (postgres16, pending-reboot) attached to the instance | done | the same test, ×3 fixtures |
 | The least, derived in code from the render's own copies (one Superset and one report sync on poc, the owner's ruling) and an upgrade in progress: 834 on poc (166 to spare), 918 in production | done (`connections.py`, counted again in the test) | red first, and red with Superset's or the upgrade's term dropped: `poc-rds/red-1000.txt` |
-| INSTALL.md: N, why, MoJ module's `db_parameter` line, when it takes effect | done | `test_the_install_says_how_many_connections…` |
+| INSTALL.md: N, why, the UK public sector client's module's `db_parameter` line, when it takes effect | done | `test_the_install_says_how_many_connections…` |
 | Admin guide §6a, PDF reprinted alone | 1.93 (1.91 and 1.92 were the evening's earlier rulings) | `tools.docs_pdf` check exit 0 |
 | ADR-114 Amendment 46 | written | `tools.adr_reservations_check` |
 | CARRIES row 227 | closed at 1000 | — |

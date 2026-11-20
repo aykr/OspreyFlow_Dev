@@ -4,7 +4,7 @@
 # with this folder on `PYTHONPATH` — so every command and every relative path in it is unchanged.
 # The reasoning each target used to carry in Core's Makefile is in git history (`git log -p
 # OspreyFlow_Core/Makefile`) and in each tool's own docstring.
-.PHONY: publish-user-repo ci cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
+.PHONY: publish-user-repo ci client-name-check cp-policy-check lanes-check core-check lint-tools licence-check design-check chart-check schemas-check authorized-query-check demo-guide-check demo-manifest domain-model-coverage-check route-coverage-check product-tree-link-check provenance-annotation-check decision-log-publication-check citation-check test-file-coverage-check conformance-guard conformance conformance-recognise conformance-model conformance-model-vision golden-set test test-all idp-test exit-over-the-wire ci-status ci-local bundle live-collect
 
 # The day's stamp each image's upgrade layer is keyed on (`harness/upgrade_stamp.py`, v0.6.0): an
 # upgrade layer is made again each day, never kept from a builder's cache.
@@ -22,7 +22,7 @@ TOOLS := PYTHONPATH=$(BUILD)
 
 # Phase 0's exit criterion: CI green; a GPL dependency fails; a schema drift fails. Core's own
 # gates first (lint, type check, image scans, the harness's accessibility suite), then these.
-ci: core-check slice-line-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check bundle
+ci: core-check slice-line-check lint-tools licence-check design-check ui-words-check opentofu-check chart-check cp-policy-check schemas-check authorized-query-check demo-guide-check domain-model-coverage-check route-coverage-check product-tree-link-check decision-log-publication-check provenance-annotation-check test-file-coverage-check citation-check conformance-guard lanes-check confinement-check no-branches-check no-langchain-check client-name-check bundle
 
 # ADR-142: the lease, the heartbeat, the launcher, the friction assembler, the reservation check and the
 # widened spec scan, each shown red first (rule 15); the reservation check also runs over the real log.
@@ -47,6 +47,14 @@ confinement-check:
 no-branches-check:
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.no_branches_check
 	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_no_branches_check.py
+
+# The owner's rulings of 18 November 2026 (slice BL6): the client's name only in the four keep-files, Laurium's never in
+# a published website file. Hashed names, a count and a place printed, never the name; where the owner's list is absent it
+# says so and passes (the merge gate copies it in). The tool reads only the standard library, so it runs under the product's
+# environment where there is one and under the machine's python3 where there is not (a fresh worktree). The proof it can
+# fail is tests/test_client_name_check.py and tests/test_client_name_check_compressed.py, which `make test` runs.
+client-name-check:
+	$(IN_CORE) $(TOOLS) $(if $(wildcard $(CORE)/.venv/bin/python),$(PY),python3) -m tools.client_name_check
 
 # ADR-135 Amendment 6: no LangChain, spaCy or Laurium outside Laurium's own image. The source leg here,
 # offline; the image leg (`--image`) is carried: no CI step runs it yet. Each refusal shown red

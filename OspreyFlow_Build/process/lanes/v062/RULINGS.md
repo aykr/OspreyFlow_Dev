@@ -172,3 +172,64 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   `sites/README.md`: the wording rule "Laurium is not named (the owner's decision, 12 November 2026)".
 - **Laurium beside the client.** Where a record credits Laurium to its publisher, the publisher becomes "the library's
   publisher"; Laurium's own name stays.
+
+## 20 November 2026: PL1, PL2, BL2, AD1, PL4 and PL6 (the owner's words of the day)
+
+- **PL1 is the four demo and install faults (N05, N06, N07, N11)**; "sound" meant "in working order". PL1a (N05 and N06) is agreed on
+  the readings: N05 keeps the resolution order and warns when the recorded home wins over a different product in the current
+  folder; N06 exempts synthetic packs only from the checkout refusal. PL1b (N07 and N11) follows PL1a.
+- **PL2** is the connection setting with the computed default and a refusal below a floor, and the Java notice in the image with a test.
+  Cut as PL2a (Java notice) and PL2b (connection limits); the floor (420), the ceiling and the scope are the conductor's, told to the owner.
+- **BL2:** the placed table is committed as it is, with a note giving both counts (180 placed; 154 open on 18 November; the 26 are
+  the 19 "cannot tell" rows and the 7 proposed N19 rows).
+- **PL3's fixed secret-shaped string** in a test plant is fixed in the next slice that touches `apps/pages`; tests generate one at run time.
+- **AD1** is cut in three: AD1a (the server half, no workspace file), AD1b (the screen) and AD1c (the key review's open items). AD1a
+  builds beside PL4 and is held unmerged; AD1b follows PL4 with its two imports adjusted (`keyboard/models-harness.tsx`,
+  `keyboard/admin-models.spec.ts`); AD1a and AD1b merge back to back, with no release between; AD1c after them. The owner's rules for
+  keys bind every AD1 slice: write-only, replace and remove and never reveal, audited without the key, only a holder of the right,
+  the server command stays as a second route, synthetic keys only.
+- **PL4 goes ahead of AD1**, released as five slices A to E to start after ADR-152 Amendment 1 is committed by the owner. The owner's
+  ruling on ADR-152 decision 6: R2 may land as five changes, each leaving main green and changing no behaviour. `glass-shared` is an
+  npm workspace dependency. Only the invite form's plain parts (`givableCodes`, `givableLevels` and the like) move; `People.tsx` and
+  every React component stay in the workspace (I1). Conditions on "nothing changed": (a) slice A's comparison script tolerates
+  differences that come only from a file's new path (chunk names, module order, source maps) and fails on a real change, shown red on a
+  planted change of behaviour and green on a planted move before any later slice relies on it; (b) the budget, accessibility and
+  keyboard runs are proved on GitHub after each merge, the next PL4 slice does not start until that run is green, and if it is red
+  because of the slice the conductor stops and tells the owner; (c) slice E's budget comparison against A's baseline is on the Mac,
+  with nothing else running. `PARITY_EXCEPTIONS.yaml` decides when a GOV.UK deployment drops React: each line is the owner's. While
+  PL4 runs nothing else touches `apps/workspace`.
+- **PL6** (the `pages` image scan): the scan script and its test with three planted faults; no edit to the Makefile or `ci.yml`
+  (those are the owner's diffs).
+- **Six builders** under balanced, tracks 5 and 6 on the default account (committed by the owner, 50ba572).
+- **Panel frames are not a parity exception.** All ten panel actions are rebuilt for the pages in plain TypeScript as the new build
+  **PL8** (needs PL3 and PL4; GG3 needs PL8). Row 517 of the front-end inventory goes in `FUNCTIONS.yaml` with an empty route. **Only
+  the light/dark switch is a parity exception**; the other lines of the owner's list stand (478, 496, 520; 482 is a function with an
+  empty route, planned as IS3; 515 and 516 as the owner decides line by line).
+- **Standing design rule for the GOV.UK pages.** They keep the Default theme's behaviour wherever it can be rebuilt in plain
+  TypeScript. An exception is only for something impossible or meaningless on a server-rendered page, and each is agreed by the
+  owner. A scout for every GOV.UK page lists what the React screen does and flags anything the page would leave out, **before a
+  builder starts**.
+- **GitHub is a second opinion, not a gate** (the owner, 20 November). Once the fourth line-fixes session
+  (`slice-line/proposals/LINE_FIXES_4_BRIEF.md`) is applied: merges go on the Mac's full gate alone, whatever GitHub's last run says;
+  every merge is pushed, waiting only while a run is in progress; a red run is rerun once without asking; only a test of ours failing
+  twice stops merging and comes to the owner with the job, the test and the commit; a release still needs GitHub green on the commit
+  released. This replaces items 2 to 4 of the 18 November ruling on GitHub failures and the sentence in ADR-142 Amendment 9 ("while
+  main is red, every merge is refused"; the owner applies `ADR142_AM9_COST_SENTENCE.diff`). **Until the fixes are applied** the line
+  carries on as before: the conductor reruns the red run and merges when main is green, and says so.
+- **Two foundations every page build needs** (the owner, 20 November, after the stage 4 scouts): **PL9**, a real sign-in for the page service (the round trip,
+  the session on the server, the page service's own client in the realm, sign-out and renewal; ADR-152 decision 5), and **PL10**, the `/v1` forwarder with the
+  token kept on the server, uploads included. Both need only PL3 and touch no workspace file; they run beside the queue and beside PL4. Every page build's brief
+  names both. Cut: PL9a (Keycloak first) and PL9b (renewal, provider-side logout, Entra after CO2); PL10 in one.
+- **Scripts off: core works, extras excused.** Every task can be completed without scripts (read, search, forms, show, hide and fold panels, a table in place of
+  the graph). Resize, reorder and the drawn canvas need scripts and are agreed exceptions **for that case only**: lines in `PARITY_EXCEPTIONS.yaml` marked
+  "scripts off only".
+- **Settled, not to be asked again** (the owner, 20 November): IS5g Verify waits for GG2 (no table exception); the Runs screen's Airflow download becomes the
+  one neutral job file; IS5a builds the Studio frame and the Pipelines place goes to IS4, IS5's cut a to g is agreed; the pages carry the rights tip on Connect
+  and the rights check on drawn merge (a backlog row adds both to the React screens); the matching rule lives on the type record, and IS2 is cut as the port, then
+  types (after PL4 C), then make-live, versions and reference lists; IS3 is the read-only map, editing the run order and the whole-dataset load are IS6 with its
+  Conduit change, a table with scripts off and lines as an enhancement; both trees carry the panel actions, PL8 in three slices, `frame-scroll.spec.ts` is in scope,
+  the layout stores move in PL4 slice D; the Needs-you jump and typed text kept behind the help overlay are rebuilt, not excepted; PL7 in two (PL7b adds a test that a
+  GOV.UK deployment renders no Superset; PL7a fixes the guide's section 6a); the GOV.UK demo is protected: no render change reaches it without the owner's word.
+- **Deferred:** GG2's scope and the I12 thresholds, until GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go to the owner then.
+- **Slice A of PL4 may start** (Amendment 1 is on main, 2bcee28); its baseline is taken on main as it is after GG6 with nothing else running at that moment.
+  `FUNCTIONS.yaml` follows the owner's rulings of 20 November, not any older text (row 517 is a function, PL8).
