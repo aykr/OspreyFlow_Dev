@@ -13,9 +13,11 @@ exists.
 
 **Live.** A view of chosen nodes reads them from the graph by id (`GraphPort.get_nodes`, filtered in
 the adapter) and the links among those it may show (`edges_among`); `missing` counts the chosen
-ids it could not show, for whatever reason (gone, hidden, outside the case's read set), and names
-none. A filtered view narrows the reader's own projection of the case's working set, as ADR-124's
-filter did. A result past the working set's cap is the typed `limit_exceeded` (rule 2).
+ids it could not show to the view's creator alone (C045: told to anyone else, it is how many nodes
+above their clearance the view holds), and names none; `chosen` on every answer is the count this
+reader may see now (`visible_chosen`). A filtered view narrows the reader's own projection of the
+case's working set, as ADR-124's filter did. A result past the working set's cap is the typed
+`limit_exceeded` (rule 2).
 
 **Collapsed at the view's own threshold** (ADR-144 decision 1 and Amendment 2; spec 03 §3.1, case
 views): each node shown carries the cluster it falls in at the view's `threshold`, or at the case's
@@ -68,16 +70,41 @@ class StoredCaseView(BaseModel):
     merged_load: str | None = None
     merged_added: list[NodeId] = Field(default_factory=list)
 
-    def wire(self) -> CaseView:
-        """What a reader is sent: the selection counted, never named."""
+    def wire(self, *, chosen: int | None) -> CaseView:
+        """What a reader is sent: the selection counted, never named. `chosen` is how many of the
+        chosen nodes *this reader* may see now (`visible_chosen`, or the shown nodes when the view
+        was just read for them), `None` for a filtered view. It has no default and the stored
+        count is never offered: a count of the stored ids tells a reader how many nodes a shared
+        view holds above their clearance (C045; rules 3 and 7)."""
         return CaseView(
-            **self.model_dump(exclude={"node_ids", "layout", "merged_added"}),
-            # A merged drawing's drawn nodes are not counted (L3.9): some may be above a reader,
-            # and the merge, not its creator, chose them (rule 7; the lane review, item 13).
-            chosen=len(set(self.node_ids) - set(self.merged_added))
-            if self.node_ids is not None
-            else None,
+            **self.model_dump(exclude={"node_ids", "layout", "merged_added"}), chosen=chosen
         )
+
+    def creators_choice(self) -> list[NodeId] | None:
+        """The nodes its creator chose, in the order chosen; `None` for a filtered view. A merged
+        drawing's drawn nodes are not in it (L3.9): some may be above a reader, and the merge, not
+        its creator, chose them (rule 7; the lane review, item 13)."""
+        if self.node_ids is None:
+            return None
+        added = set(self.merged_added)
+        return [n for n in self.node_ids if n not in added]
+
+
+async def visible_chosen(
+    graph: GraphPort, view: StoredCaseView, principal: Principal
+) -> int | None:
+    """How many of the view's chosen nodes `principal` may see now, counted by the graph port in
+    the store through its access step (`GraphPort.count_visible`, rule 3), so a view of 50,000
+    costs a count and not 50,000 reads, and a node above the reader is in no number they are told.
+    `None` for a filtered view, which has no chosen nodes."""
+    ids = view.creators_choice()
+    return None if ids is None else await graph.count_visible(ids, principal)
+
+
+async def wired(graph: GraphPort, view: StoredCaseView, principal: Principal) -> CaseView:
+    """`view` as `principal` is sent it: the one way a route that has not just read the view for
+    them (the list, save, share and a batch expansion's status) builds a `CaseView`."""
+    return view.wire(chosen=await visible_chosen(graph, view, principal))
 
 
 class ViewNotFound(Exception):
@@ -566,6 +593,20 @@ async def _collapsed(
     ]
 
 
+def missing_for(view: StoredCaseView, reader: str, shown: Sequence[Node]) -> int:
+    """`CaseViewOpened.missing` (ADR-144 decision 2), under the boards' rule (`boards.py`, the
+    orchestrator's ruling on L3.3, applied to views for C045): told to the view's creator, who chose
+    each item seeing it, as how many of their chosen nodes they can no longer be shown; **never to
+    anyone else**. A store cannot tell a node that was deleted from one the reader may not see
+    without an unfiltered lookup (`existing_node_ids`, which no route may call), so a reader who
+    did not make the view is told nothing, and a number of hidden nodes is told to no one who may
+    not see them (rule 3). A merged drawing's drawn nodes are not counted (rule 7)."""
+    if view.node_ids is None or view.created_by != reader:
+        return 0
+    added = set(view.merged_added)
+    return len(set(view.node_ids) - added) - sum(1 for n in shown if n.id not in added)
+
+
 async def open_view(
     view: StoredCaseView,
     principal: Principal,
@@ -578,13 +619,14 @@ async def open_view(
     if view.node_ids is not None:
         nodes, edges = await _read_selection(graph, view.node_ids, principal)
         # A merged drawing's drawn nodes (`merged_added`) are shown when the reader may see them
-        # and never counted when not, as on the board they came from (rule 7).
+        # and never counted, as on the board they came from (rule 7).
         added = set(view.merged_added)
-        missing = len(set(view.node_ids) - added) - sum(1 for n in nodes if n.id not in added)
+        chosen: int | None = sum(1 for n in nodes if n.id not in added)
+        missing = missing_for(view, principal.id, nodes)
     else:
         assert view.filter is not None  # one lens, exactly (`CaseViewInput`)
         nodes, edges = await working_set.filtered_view(view.case_id, principal, view.filter)
-        missing = 0
+        chosen, missing = None, 0
     breach = cap_breach(len(nodes), len(edges))
     if breach is not None:
         raise LimitExceededError(breach)
@@ -597,5 +639,5 @@ async def open_view(
     shown = {n.id for n in nodes}
     layout = {k: v for k, v in view.layout.items() if k in shown}
     return CaseViewOpened(
-        view=view.wire(), nodes=nodes, edges=edges, layout=layout, missing=missing
+        view=view.wire(chosen=chosen), nodes=nodes, edges=edges, layout=layout, missing=missing
     )

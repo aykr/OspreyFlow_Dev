@@ -228,6 +228,18 @@ class GraphPort(Protocol):
         is a sequence of characters and would be read as one-character ids."""
         ...
 
+    async def count_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
+        """How many of the given ids `principal` may read: exactly `len(await get_nodes(node_ids,
+        principal))`, counted in the store through the same access step and structural exclusions,
+        so a view of 50,000 ids is counted without reading 50,000 nodes (rule 3: the access step is
+        in the query, never applied to a count of what was retrieved). A hidden, superseded,
+        reverted or absent id is not counted, identically: nothing in the number says which, or how
+        many, were left out. Each id counts once however often it is given. No ids give `0`. A bare
+        `str` is a `TypeError`, as for `get_nodes`. For a caller that must tell a reader how many
+        of a saved selection they may see (a case view's `chosen`, C045) and never how many they
+        may not."""
+        ...
+
     async def existing_node_ids(self, node_ids: Sequence[NodeId]) -> set[NodeId]:
         """ADR-127 decision 6. Which of `node_ids` name a node already in the store, **whatever the
         caller may read**: no principal, no access step. For the recipe engine's write path alone,

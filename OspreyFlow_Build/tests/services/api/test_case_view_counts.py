@@ -82,7 +82,8 @@ def test_a_view_of_only_hidden_nodes_counts_none_to_the_reader(world: _World) ->
 
 
 def test_a_filtered_view_has_no_count(world: _World) -> None:
-    response = _as("alice").post(VIEWS, json={"name": "People", "filter": {"entity_types": ["Person"]}})
+    body = {"name": "People", "filter": {"entity_types": ["Person"]}}
+    response = _as("alice").post(VIEWS, json=body)
     assert response.status_code == 201, response.json()
     assert response.json()["chosen"] is None
     assert _listed("alice")[0]["chosen"] is None
@@ -116,7 +117,8 @@ def test_the_count_check_fails_with_the_port_counting_without_the_reader(
     world: _World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Rule 15: the port's count read with a principal wider than the reader's (the `get_nodes`
-    plant's shape). Bob is told what Alice may read."""
+    plant's shape). Bob is told every chosen node the store holds: the SECRET one, and the one in a
+    dataset the case does not read."""
     real = FakeGraphPort.count_visible
 
     async def wide(self: FakeGraphPort, node_ids: Any, principal: Principal) -> int:
@@ -125,7 +127,7 @@ def test_the_count_check_fails_with_the_port_counting_without_the_reader(
 
     monkeypatch.setattr(FakeGraphPort, "count_visible", wide)
     _saved(shared=True)
-    assert _listed("bob")[0]["chosen"] == ALICE_SEES
+    assert _listed("bob")[0]["chosen"] == len(CHOSEN) - 1  # all but `never-held`
 
 
 # --- opening, saving and sharing --------------------------------------------------------------
@@ -156,7 +158,8 @@ def test_the_wire_check_fails_with_the_stored_count_restored(
         from schemas.case_views import CaseView
 
         held = None if self.node_ids is None else len(set(self.node_ids) - set(self.merged_added))
-        return CaseView(**self.model_dump(exclude={"node_ids", "layout", "merged_added"}), chosen=held)
+        shown = self.model_dump(exclude={"node_ids", "layout", "merged_added"})
+        return CaseView(**shown, chosen=held)
 
     monkeypatch.setattr(StoredCaseView, "wire", stored)
     view_id = _saved(shared=True)

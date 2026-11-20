@@ -746,16 +746,31 @@ selection is its creator's, so naming an id the reader may not see would tell th
 (rules 3 and 7). Opening a view (`CaseViewOpened`) gives:
 - the items the reader may see now;
 - the saved positions of those items alone;
-- `missing`.
+- `missing`, told to the view's creator alone (the boards' rule, below): a store cannot tell a node
+  that was deleted from one the reader may not see without an unfiltered lookup, so nobody else is
+  told a number of hidden nodes.
+
+`chosen`, on every answer that carries a `CaseView` (the list, save, share, open and a batch
+expansion's status), is **how many of the chosen nodes this reader may see now**, never the count the
+creator stored: a stored count tells a reader how many nodes a shared view holds above their
+clearance (C045). It is counted in the store through the access step (`GraphPort.count_visible`,
+rule 3), and a merged drawing's drawn nodes are not counted (L3.9).
 
 `test_no_listing_names_a_chosen_node` checks that no answer names a chosen node.
 
 The invariants, each with the test that fails if it is broken (rule 12):
 - **Live, never a copy.** Opening a view re-reads the case under the reader's own principal.
   `CaseViewOpened` returns only what that reader may see, and `missing` counts the chosen nodes it
-  could not show without naming them.
+  could not show to the view's creator alone, without naming them.
   - `test_a_view_shows_the_rest_and_counts_the_missing` is red with the view returning its stored
     selection.
+- **A view's count never includes what its reader may not see** (C045): `chosen` is the reader's
+  visible count and `missing` is the creator's alone.
+  - `test_the_list_counts_what_the_reader_may_see`,
+    `test_open_save_and_share_count_what_the_reader_may_see` and
+    `test_a_reader_is_never_told_how_many_are_hidden` (`test_case_view_counts.py`), each red with a
+    planted fault at the real call site; `test_count_visible_*` in the graph port's conformance
+    suite for the store's count.
 - **Private until shared.** Another member of the case is answered 404 for a private view, not
   403, and the case's view list never shows it to them. Once shared, it opens for every member at
   their own level.

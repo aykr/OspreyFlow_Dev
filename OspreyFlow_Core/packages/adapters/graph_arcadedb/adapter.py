@@ -123,6 +123,7 @@ from .builders import (
     SearchNodesBuilder,
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
+    render_count_visible_gremlin,
     render_edges_among_gremlin,
     render_existing_ids_sql,
     render_field_record_id_lookup_sql,
@@ -943,6 +944,18 @@ class GraphArcadeDBAdapter:
                 node = node_from_element_map(record, principal)
                 found[node.id] = node
         return [found[node_id] for node_id in sorted(found)]
+
+    async def count_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
+        chunks = _id_chunks(node_ids)
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        counted = 0
+        for chunk in chunks:
+            rids = await self._record_ids(types, chunk)
+            # Sent even when no id resolved: an absent id must cost what a hidden one costs.
+            query = render_count_visible_gremlin(rids, self._access, principal)
+            results = await self._client.gremlin(query)
+            counted += int(results[0].get("result") or 0) if results else 0
+        return counted
 
     async def existing_node_ids(self, node_ids: Sequence[NodeId]) -> set[NodeId]:
         found: set[NodeId] = set()
