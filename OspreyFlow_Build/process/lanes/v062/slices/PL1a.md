@@ -82,8 +82,8 @@ State, in each file's header, which test fails if the fault returns (rule 12).
 ## Checks
 
 Pure only. The **checks command** runs `tests/cli/test_home.py`, `tests/cli/test_bootstrap.py`, `tests/cli/test_named_deployments.py`,
-`tests/cli/test_cli_dependencies.py`, `tests/test_seed_internal.py`, `tests/test_seed_internal_ceiling.py` and
-`tests/test_seed_links_replace.py`. The **acceptance command** runs the two new files. The line adds every mapped pure test that
+`tests/cli/test_cli_dependencies.py`, `tests/test_seed_internal.py` and `tests/test_seed_internal_ceiling.py`
+(`test_seed_links_replace.py` needs a live store, so it is not a check). The **acceptance command** runs the two new files. The line adds every mapped pure test that
 scans a folder the slice changes (the CLI and specification walkers among them). Never run `test_apply_env`.
 
 ## Out of scope
