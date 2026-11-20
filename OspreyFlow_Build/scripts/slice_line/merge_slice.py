@@ -5,9 +5,9 @@
     merge_slice.py records -m "<msg>" <path>...  the conductor's records, OspreyFlow_Build/process/lanes/v062/ only
 
 `merge` refuses unless every one of these holds, in this order, and stops at the first that does not:
-  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted; and main's
-     latest completed GitHub run is green (a failed one, a cancelled one with nothing newer, or one gh cannot read
-     refuses: F2);
+  1. no other merge is running (a lock), and the main checkout is on main with nothing uncommitted. GitHub's last
+     completed run on main is read and recorded (merged.json's github_at_merge) and said in one line, but it is a
+     second opinion, not a gate: red, cancelled or unreadable, the merge goes on (the owner, 20 November 2026);
   2. the slice was started (its frozen record exists) and main's backlog row still matches what was frozen;
   3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it; or,
      in its place and for that exact tip only, the owner's acceptance (resume.py accept: accepted-<tip>.json, its
@@ -60,6 +60,15 @@ GATE_LANE = "merger"
 
 class Refused(Exception):
     pass
+
+
+#: What the merge says beside its result (GitHub's last run, what watch-github found), printed by main() after the
+#: result, so a refusal's stderr still starts with "Refused: ".
+NOTES: list[str] = []
+
+
+def note(text: str) -> None:
+    NOTES.append(text)
 
 
 def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = False, env: dict | None = None) -> int:
@@ -680,6 +689,17 @@ def apply_scan_rows(slice_id: str, tree: Path, base: str, tip: str) -> list[str]
     return applied
 
 
+def github_at_merge() -> dict:
+    """GitHub's last completed run on main, as common.main_ci() reads it, with the time: recorded in merged.json and
+    said in one line, never a reason to refuse (the owner, 20 November 2026: merges go on the Mac's full gate alone,
+    whatever GitHub's last run says; a run that cannot be read is no reason to hold a merge the gate passed)."""
+    ci = {**c.main_ci(), "at": c.now()}
+    shown = {"green": "green", "red": "red"}.get(ci["state"])
+    said = f"{shown} (run {ci['run']})" if shown else f"cannot be read ({ci['why']})"
+    note(f"GitHub's last run on main: {said}, not a gate; merging")
+    return ci
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
     trees: list[Path] = []
@@ -687,12 +707,7 @@ def merge(slice_id: str) -> dict:
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
     try:
         base = main_ready()
-        ci = c.main_ci()  # F2: while main is red, every merge is refused (ADR-142 Amendment 9)
-        if ci["state"] == "red":
-            raise Refused(f"main is red: GitHub run {ci['run']} ({ci['why']}) {ci['url']}. No merge until a run on main "
-                          "is green (RULINGS.md, GitHub failures: the conductor reruns a fault that is not ours).")
-        if ci["state"] != "green":
-            raise Refused(f"main's GitHub run cannot be read, so it is not taken as green: {ci['why']}.")
+        github = github_at_merge()  # a record, never a decision (1a: GitHub is a second opinion, not a gate)
         frozen = c.read_json(rec / "frozen.json")
         if not frozen:
             raise Refused(f"{slice_id} was never started (no frozen record).")
@@ -803,7 +818,8 @@ def merge(slice_id: str) -> dict:
             raise Refused("main moved while the merge was being tested.")
         c.git(["merge", "--ff-only", merged], c.REPO)
         done = {"slice": slice_id, "build": frozen["build"], "merge": merged, "tip": tip, "base": base,
-                "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"), "at": c.now()}
+                "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"),
+                "github_at_merge": github, "at": c.now()}
         if retried:
             done["retried"] = retried  # 1d: steps run once more after a network failure, and green the second time
         if scan_rows:
@@ -894,6 +910,8 @@ def main() -> int:
         rc = 1
     else:
         rc = 0
+    for n in NOTES:
+        print(n, file=sys.stderr)
     subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"])
     return rc
 

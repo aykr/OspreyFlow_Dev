@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (317 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (245 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (320 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (248 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows
 | GOV.UK demo, airbyte | guard | `govuk.ospreyflow.app`, `/opt/ospreyflow*`, `osprey-small`, `:8000`, airbyte/abctl; any hand change on the test server |
 | The line itself | guard, merge_slice.py | `.claude/`, `scripts/slice_line/`, the records, the status file, `OSPREY_*` overrides, nested `claude` |
 | Cannot stop on red | stop_check.py | the frozen checks and acceptance run at Stop; red (or uncommitted) sends back the failure lines only; after 6, stopped |
-| Main is red | merge_slice.py, board.py | a merge while main's latest completed GitHub run failed, or was cancelled with nothing newer, or cannot be read (`gh run list --branch main --status completed`; never taken as green); records mode is exempt. The board prints "main is red: run N" and `status.js` carries it (`main_ci`) |
+| GitHub's run on main | merge_slice.py, board.py | nothing: a second opinion, not a gate (the owner, 20 November 2026). Each merge records the latest completed run on main (`github_at_merge` in `merged.json`) and goes on, red, cancelled or unreadable; the board prints "main is red: run N" as a note and `status.js` carries it (`main_ci`) |
 | Merge | merge_slice.py | see the script's docstring: lock, frozen match, verifier pass for the tip, protected paths, red before, green after, **today's full gate**: `make -k ci` and `make test`, both run and both reported, in the merge tree's own environment built as CI's `test` job builds it (`uv sync --frozen` on the `UV_PYTHON` `ci.yml` sets, `npm ci` under the Node major `ci.yml` names, no `VIRTUAL_ENV` or other `.venv/bin`, closed ports, the merger's slot), never the main checkout's; then **the live step** (below) |
 | Status file | board.py | `done` only with a merge record, its test run and a verifier pass; unknown build ids reported, not written; a bad or incomplete record skipped and reported, the slice shown from its other records and every other slice carried on |
 
@@ -130,6 +130,9 @@ a `tools/` module or test helper it imports or runs, walks a folder, with no row
 row naming a test or a prefix that is not there. `install.sh` installs the map and `scan_select.py` beside the hooks.
 
 **A slice that adds a pure walker** (19 November 2026, for BL6): its rows wait on main in `OspreyFlow_Build/process/lanes/v062/scan_rows/<ID>.tsv`, committed by the conductor in records mode from rows the verifier or the owner proposed (never from the slice's branch: that folder is a protected path), in the map's own columns. Nothing in main's suite reads them, so main stays green while they wait. The merge applies them to `scan_map.tsv` in the merge commit itself and removes the file, only as added rows, each naming a test file the branch adds, with no row yet, and a why; then it checks on the merge result that no test the branch adds or changes walks a folder without a row, and that no row names a test the branch removes. A refusal is in words, not the slice's fault. The slice's tip is unchanged, so a verifier's pass or the owner's acceptance for it still holds; `merged.json` names the rows (`scan_rows`). The Stop hook reads the installed copy of the map, which `install.sh` refreshes.
+
+## GitHub: a second opinion, not a gate
+**A merge reads GitHub, never waits for it** (1a). `merge_slice.py merge` reads GitHub's latest completed run on main (`common.main_ci()`: `gh run list --branch main --status completed`) and records it in `merged.json` as `github_at_merge` (`state` green, red or unknown, `run`, `url`, `why`, `at`), saying it in one line after its result ("GitHub's last run on main: red (run N), not a gate; merging"). A record, never a decision: the Mac's full gate alone decides, and a run gh cannot read is no reason to hold a merge the gate passed. Every other refusal stands.
 
 ## Resuming a slice
 

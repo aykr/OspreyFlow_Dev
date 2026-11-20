@@ -362,7 +362,8 @@ def allocate_slot(slice_id: str) -> int:
     raise SystemExit("No Playwright port slot is free for a new slice: the owner frees one (a merged or removed slice).")
 
 
-#: main's GitHub run (F2): the latest completed run on main, read with gh. Never taken as green unless it says success.
+#: main's GitHub run (F2): the latest completed run on main, read with gh. Never taken as green unless it says success;
+#: recorded at each merge, never a reason to refuse one (LINE_FIXES_4_BRIEF.md, 1a).
 GH_FIELDS = "databaseId,conclusion,status,url"
 
 
@@ -379,7 +380,8 @@ def _gh_runs(*args: str) -> list[dict]:
 
 def main_ci() -> dict:
     """{state: green | red | unknown, run, url, why}: red for a failed run, or a cancelled one with nothing newer;
-    unknown when gh cannot be read or no run has completed (refused like red, never taken as green)."""
+    unknown when gh cannot be read or no run has completed (never taken as green). A record and a note on the board,
+    never a merge's gate (the owner, 20 November 2026)."""
     try:
         done = _gh_runs("--status", "completed")
         if not done:

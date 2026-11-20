@@ -278,9 +278,10 @@ def main() -> int:
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
         if ci["state"] == "red":
-            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: no merge until it is green")
+            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: not a gate; merges go on (a red run is "
+                  "rerun once; a test of ours red twice stops them)")
         elif ci["state"] != "green":
-            print(f"main's GitHub run cannot be read ({ci['why']}): no merge until it can")
+            print(f"main's GitHub run cannot be read ({ci['why']}): not a gate; merges go on")
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
