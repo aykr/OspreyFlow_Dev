@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "4fbe726ebce8f326860b37b4c1741ec3f9aa5b55b6aa532c35e01e4a2d2f96bc",
+    "body": "5b6f6e2701e18fc9393c08b1d2147db959e0d49868107b366cae2cac414f2677",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,9 +12,9 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "078701f78fde86e7089f86f68bda2cd3b5d6069c284eb5d54f716c6956268859",
-    "source": "6b436908f1ca57b7dfd64f7a58ff1d034301667966e308bd9ff261af24dd71f3",
-    "version": "2.26"
+    "pdf": "7dab24cc0167d35f21936693273b78c402d42a49510d30d262cde98e4d251e44",
+    "source": "de60848410ab4196bc763b3d3dded3b691073a78967cf136136324818e68dfb3",
+    "version": "2.27"
   },
   "architecture-guide.md": {
     "body": "64863ff4e301ec2ae5b72e94a2fc5d81179b59dd6d378b5307efc8175b273629",

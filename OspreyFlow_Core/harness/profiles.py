@@ -235,6 +235,21 @@ POSTGRES_MAX_CONNECTIONS_FLOOR = (
     + OPERATOR_RESERVE
 )
 
+#: ADR-114 Amendment 49: PostgreSQL 16's own limit on server processes (`MAX_BACKENDS`, 0x3FFFF).
+#: `max_connections` plus the other processes it counts (below) may not pass it: the server stops
+#: at start-up ("too many server processes configured"), and `max_connections` alone outside
+#: 1..`MAX_BACKENDS` is refused in the same way.
+POSTGRES_MAX_BACKENDS = 0x3FFFF
+#: The other processes PostgreSQL 16 counts against `MAX_BACKENDS`, at the defaults the rendered
+#: command leaves alone: autovacuum workers (3) and their launcher (1), `max_worker_processes` (8)
+#: and `max_wal_senders` (10).
+POSTGRES_OTHER_SERVER_PROCESSES = 3 + 1 + 8 + 10
+#: ADR-114 Amendment 49: the most `resources.postgres_max_connections` may be set to, 262121: what
+#: the real PostgreSQL does not refuse at start-up. A limit of the server's range, not a promise
+#: that a host's memory holds a number near it (the setting's refusal and its words read this
+#: name, `schemas/deployment.py`).
+POSTGRES_MAX_CONNECTIONS_CEILING = POSTGRES_MAX_BACKENDS - POSTGRES_OTHER_SERVER_PROCESSES
+
 
 def postgres_command(
     memory: StoreMemory | None = None, max_connections: int | None = None

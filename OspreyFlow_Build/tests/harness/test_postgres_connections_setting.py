@@ -292,7 +292,9 @@ def test_a_value_below_the_floor_is_refused_in_words(value: int) -> None:
         assert "remove" in said or "set it to" in said  # how to fix it
 
 
-CEILING = 262121  # PostgreSQL 16's MAX_BACKENDS (262143) less the 22 other server processes at default
+CEILING = (
+    262121  # PostgreSQL 16's MAX_BACKENDS (262143) less the 22 other server processes at default
+)
 
 
 @pytest.mark.parametrize("value", [CEILING + 1, 300_000, 10**12])

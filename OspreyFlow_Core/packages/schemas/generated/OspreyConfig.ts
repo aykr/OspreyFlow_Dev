@@ -625,7 +625,7 @@ export type SearchHeapGib = number | null;
  */
 export type PostgresSharedBuffersGib = number | null;
 /**
- * Overrides PostgreSQL's max_connections: the connections its services may hold at once. Default: none — the computed number (660), from the pools the product's services open. Not less than 420, the same sum with one Conduit. Lite, and Small with every store in a container; a cluster's or a cloud platform's database is set where it is run.
+ * Overrides PostgreSQL's max_connections: the connections its services may hold at once. Default: none — the computed number (660), from the pools the product's services open. Not less than 420, the same sum with one Conduit, and not more than 262121, PostgreSQL's own limit. Lite, and Small with every store in a container; a cluster's or a cloud platform's database is set where it is run.
  */
 export type PostgresMaxConnections = number | null;
 /**

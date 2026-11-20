@@ -37331,6 +37331,16 @@ and the owner is told afterwards. Changing the floor later is one constant.
    the check (never a copy of 420). A value below it is refused in words that give the value, the floor, what it is
    made of and the computed default (660), and say how to fix it: set it to the floor or more, or remove it. A value
    that is not a whole number (a fraction, `900.0`, a string, `true`), or is zero or negative, is refused in words too.
+   **The ceiling: 262121** (`POSTGRES_MAX_CONNECTIONS_CEILING`), what the real PostgreSQL refuses above (found by the
+   verifier's round-1 finding, rule 15: the real dependency's refusals, not only its grants). PostgreSQL 16 counts
+   `max_connections` plus its other server processes (autovacuum workers 3 and their launcher 1, `max_worker_processes` 8,
+   `max_wal_senders` 10: 22, at the defaults the rendered command leaves alone) against `MAX_BACKENDS`, 0x3FFFF (262143),
+   and stops at start-up past it ("too many server processes configured"; `max_connections` alone outside 1..262143 is
+   refused the same way). So 262143 − 22 = 262121, a named constant computed from `POSTGRES_MAX_BACKENDS` and
+   `POSTGRES_OTHER_SERVER_PROCESSES`, and a value above it is refused in words that give the value, the ceiling, what it
+   is made of and the computed default. It is the server's range, not a promise that a host's memory holds a number near
+   it, and no set value is proved against a real server by a pure test (`test_postgres_connections_live.py` runs the
+   computed number).
 3. **Scope: the deployment's own PostgreSQL, rendered in compose**: Lite, and Small with every store in a container.
    Under `cluster` (whose database is the operator's, `external.postgres`) and `cloud-platform` (whose RDS is set at
    creation to the owner's 1000, `harness/cloud_platform/connections.py`, Amendment 46) the field is **refused in
@@ -37354,7 +37364,8 @@ the lane stacks' 400 (`stack_lease.sh`); the live proof that PostgreSQL accepts 
 **Tests**, red first, `tests/harness/test_postgres_connections_setting.py` (pure: nothing started): unset is 660 exactly
 as before on every profile; 900 reaches the rendered command (Lite, Small, Small sized) and a refresh of a file holding
 660 brings it to 900 and leaves it, while a file holding 900 is current; 420 accepted, 419 refused in words that name 420
-and 660; zero, negative, a fraction, a float, a string, `true` refused in words; the field refused under `cluster`,
+and 660; zero, negative, a fraction, a float, a string, `true` refused in words; 262122 and above refused in words that name
+262121 and 262143, 262121 accepted; the field refused under `cluster`,
 `cloud-platform` and on a managed Small; the floor follows a raised `KEYCLOAK_POOL_MAX` in the test's own copy of
 `profiles.py`, and the schema follows the constant, not a literal; both guides' Appendix A and the generated TypeScript
 carry the field. `tests/harness/test_postgres_connections.py`, `test_render_memory.py` and `test_cloud_platform_poc.py`
