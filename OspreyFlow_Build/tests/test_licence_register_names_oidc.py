@@ -27,11 +27,21 @@ nothing here.
 installed package (`node_modules`), because the lockfile records the licence of the version it pins.
 
 **Proposed, not built (the count is the reason).** The general rule, "every run-time dependency of `apps/workspace` has a
-named entry in section 7", fails today for 17 packages besides this one: `@fontsource/atkinson-hyperlegible-next`,
-`@fontsource/ibm-plex-mono`, `@sigma/export-image`, `@sigma/node-border`, `@sigma/node-image`, `comlink`, `d3-polygon`,
-`echarts`, `graphology-communities-louvain`, `graphology-metrics`, `graphology-types`, `immer`, `maplibre-gl`, `pmtiles`,
-`react`, `react-dom` and `sigma`. That list is too long for a test with a stated reason and date on each, so this test
-holds to `oidc-client-ts` alone and the owner decides whether the rest are named (the slice's report says so).
+named entry in section 7", is counted here by one definition only: this file's `named_entry()`, a section-7 table row whose
+first cell is the package in backticks. `apps/workspace/package.json` declares 23 run-time dependencies; three have a named
+entry (`graphology`, `zustand` and, from this slice, `oidc-client-ts`), so the rule would fail for **20**: 19 third-party
+packages and the in-house `@ospreyflow/glass-shared`. The 20, in two groups:
+
+* mentioned in section 7's prose by package name, with a licence, but in no table row (2): `@superset-ui/embedded-sdk` and
+  `govuk-frontend`;
+* with no table row and no mention by package name (18): `@fontsource/atkinson-hyperlegible-next` and
+  `@fontsource/ibm-plex-mono` (the families are named in prose, not the packages), `@ospreyflow/glass-shared` (in-house),
+  `@sigma/export-image`, `@sigma/node-border`, `@sigma/node-image`, `comlink`, `d3-polygon`, `echarts` ("Apache ECharts" in
+  the rejected-alternatives table), `graphology-communities-louvain`, `graphology-metrics`, `graphology-types`, `immer`,
+  `maplibre-gl` ("MapLibre GL JS" in the same table), `pmtiles`, `react`, `react-dom` and `sigma`.
+
+That list is too long for a test with a stated reason and date on each, so this test holds to `oidc-client-ts` alone and the
+owner decides whether the rest are named (the slice's report says so).
 """
 
 from __future__ import annotations
