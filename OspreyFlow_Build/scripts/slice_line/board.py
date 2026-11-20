@@ -152,6 +152,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         state, source = "building", "branch exists, not green yet"
         if st.get("round", 1) > 1:
             note = f"round {st['round']} after the verifier's findings"
+    sf = st.get("seat_failure")
+    if isinstance(sf, dict) and state in ("building", "verifying"):  # a refused call: no verdict, never findings
+        note = (f"seat failed: the {sf.get('seat')}'s call on {sf.get('account')} was refused "
+                f"({str(sf.get('error', ''))[:80]}); the owner clears the account or moves the seat")
+        source = "seat failure record"
     if state and state != "done":
         try:
             builds_entry = entry(state, note=note, evidence=evidence, **kw)
@@ -168,6 +173,8 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         shown = f"stopped: {note[:60]}"
     elif state == "done" and note:
         shown = note
+    elif state and isinstance(sf, dict) and note.startswith("seat failed"):
+        shown = f"{state}: seat failed on {sf.get('account')}"
     elif state:
         shown = state
     else:
