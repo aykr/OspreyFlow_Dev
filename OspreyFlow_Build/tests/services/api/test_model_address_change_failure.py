@@ -22,7 +22,8 @@ at run time (the owner's rules for keys): none is written in this file.
   later key set, and where the stand-in says the key was sent):
   `test_a_failed_move_never_lets_a_later_key_reach_an_address_the_record_does_not_hold`;
 - part 1, a failed change withdraws what it made at the new address, whatever failed (an exception
-  nobody named, an interruption, a timeout after the gateway wrote, a record that cannot be saved):
+  nobody named, an interruption, a second one while it is undone, a timeout after the gateway
+  wrote, a record that cannot be saved):
   `test_a_failed_move_withdraws_the_new_address_entries_whatever_the_failure`;
 - part 2, an undo that fails is said in words, the engine is marked unavailable, and the audit says
   so without the key, and a key entered again repairs it:
@@ -308,6 +309,7 @@ async def test_a_failed_move_never_lets_a_later_key_reach_an_address_the_record_
     [
         "an exception nobody named",
         "an interruption",
+        "an interruption, and another while it is undone",
         "a timeout after the gateway wrote",
         "the record cannot be saved",
     ],
@@ -326,14 +328,26 @@ async def test_a_failed_move_withdraws_the_new_address_entries_whatever_the_fail
             first.append(True)
             if how == "an exception nobody named":
                 raise RuntimeError("a garbled answer")
-            if how == "an interruption":
+            if how.startswith("an interruption"):
                 reached.set()
                 await asyncio.sleep(3600)
         await real(p, limits)
 
+    undoing = asyncio.Event()
+    real_delete = gateway.delete_entry
+
+    async def slow_delete(model_id: str) -> None:
+        if reached.is_set() and not undoing.is_set():  # the undo's first removal
+            undoing.set()
+            await asyncio.sleep(0.05)
+        await real_delete(model_id)
+
     moved = provider(NEW)
     if how in ("an exception nobody named", "an interruption"):
         monkeypatch.setattr(gateway, "put_engine_key", fails_once)
+    elif how.startswith("an interruption, and"):
+        monkeypatch.setattr(gateway, "put_engine_key", fails_once)
+        monkeypatch.setattr(gateway, "delete_entry", slow_delete)
     elif how == "a timeout after the gateway wrote":
         wrote: list[bool] = []
 
@@ -356,11 +370,14 @@ async def test_a_failed_move_withdraws_the_new_address_entries_whatever_the_fail
 
         monkeypatch.setattr(scene.admin._file, "save", full)
 
-    if how == "an interruption":
+    if how.startswith("an interruption"):
         task = asyncio.ensure_future(scene.admin.edit_engine("admin-1", "gemini", moved))
         await asyncio.wait_for(reached.wait(), 5)
         assert NEW in scene.at().values(), "the plant stops it with the new entries made"
         task.cancel()
+        if how != "an interruption":
+            await asyncio.wait_for(undoing.wait(), 5)
+            task.cancel()  # asked to stop again while it is putting the gateway back
         with pytest.raises(asyncio.CancelledError):
             await task
     else:

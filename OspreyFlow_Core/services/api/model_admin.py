@@ -345,6 +345,23 @@ _KEY_PAGE = 100
 _MAX_KEY_PAGES = 100
 
 
+@dataclass(frozen=True)
+class HeldEntry:
+    """A model entry the gateway holds: whether it is priced a unit a token, and **the address it
+    carries** (`api_base`; None where it carries none or the gateway shows none). An entry names its
+    engine's one credential and is sent there, so its address is where that key goes."""
+
+    priced: bool
+    api_base: str | None
+
+
+def _same_address(held: HeldEntry, provider: ModelProviderConfig) -> bool:
+    """Whether the entry is at the address the record gives the engine. An address the gateway does
+    not show reads as none, so an engine with an address and an entry showing none disagree: the
+    check fails closed, never open."""
+    return (held.api_base or None) == (provider.api_base or None)
+
+
 class GatewayAdmin:
     """LiteLLM's admin API, as measured (ADR-135 Amendments 2 and 3). Every failure becomes a
     `ModelAdminRefused` with fixed words and the status alone."""
@@ -353,12 +370,17 @@ class GatewayAdmin:
         self._http = http
         # The master key the client already carries; each engine's key is derived from it.
         self._master = master or str(http.headers.get("authorization", "")).removeprefix("Bearer ")
+        #: How many requests that may change the gateway have been sent (answered or not), so a
+        #: change that failed can say whether it had begun to change anything.
+        self.writes = 0
 
     @property
     def http(self) -> httpx.AsyncClient:
         return self._http
 
     async def _call(self, method: str, path: str, body: object | None = None) -> httpx.Response:
+        if method != "GET":
+            self.writes += 1
         try:
             resp = await self._http.request(method, path, json=body, timeout=30.0)
         except httpx.HTTPError:
@@ -375,22 +397,31 @@ class GatewayAdmin:
         )
 
     async def stored_entries(self) -> set[str]:
-        return set(await self.entries())
+        return set(await self.held_entries())
 
     async def entries(self) -> dict[str, bool]:
         """Each entry the Conduit made, and whether it is priced a unit a token (an entry made
         before ADR-135 Amendment 3 is not, so its engine's budget would never be reached)."""
+        return {i: held.priced for i, held in (await self.held_entries()).items()}
+
+    async def held_entries(self) -> dict[str, HeldEntry]:
+        """Each entry the Conduit made, with whether it is priced a unit a token and the address
+        it carries (read from `/v2/model/info`, which shows an entry's parameters, never its
+        key)."""
         resp = await self._call("GET", "/v2/model/info")
         if resp.status_code != 200:
             raise self._refused(resp, "the list of engines")
-        held: dict[str, bool] = {}
+        held: dict[str, HeldEntry] = {}
         for row in resp.json().get("data", []):
             model_id = str(dict(row.get("model_info") or {}).get("id") or "")
             if model_id.startswith("osprey-"):
                 params = dict(row.get("litellm_params") or {})
-                held[model_id] = all(
-                    _number(params.get(f)) == TOKEN_PRICE
-                    for f in ("input_cost_per_token", "output_cost_per_token")
+                held[model_id] = HeldEntry(
+                    priced=all(
+                        _number(params.get(f)) == TOKEN_PRICE
+                        for f in ("input_cost_per_token", "output_cost_per_token")
+                    ),
+                    api_base=str(params["api_base"]) if params.get("api_base") else None,
                 )
         return held
 
@@ -765,6 +796,13 @@ class ModelAdmin:
         self._settings = settings_file.load()
         self._stamp = settings_file.stamp()
         self._exclusive = _Exclusive(settings_file.path.parent)
+        #: Engines whose gateway entries are known, or may be, not to agree with the record: a
+        #: change that failed and could not be put back, or an entry at start that could not be
+        #: withdrawn. Such an engine is offered to no analyst and its test says so, until a later
+        #: reconcile makes the gateway equal to the record. Kept in this process: another process
+        #: finds the same at its own start, and no key is ever held while an entry disagrees
+        #: (`set_key` withdraws first; a moved address removes the key before anything is made).
+        self._unavailable: set[str] = set()
 
     # --- reading --------------------------------------------------------------------------
 
@@ -785,6 +823,12 @@ class ModelAdmin:
         )
 
     def key_state(self, name: str) -> KeyState:
+        state = self._recorded_key_state(name)
+        if state == "set" and name in self._unavailable:
+            return "lost"  # to be entered again: that is the repair (`set_key` makes it agree)
+        return state
+
+    def _recorded_key_state(self, name: str) -> KeyState:
         self._fresh()
         if any(p.name == name and p.keyless for p in self.settings.providers):
             return "iam_role"
@@ -806,7 +850,8 @@ class ModelAdmin:
                 label=p.label or p.name,
                 models={r: gateway_model_name(p.name, m) for r, m in p.roles.items() if r in ROLES},
                 # An IAM-role engine signs in with no key, so it is offered as a keyed one is.
-                key_present=self.key_state(p.name) in ("set", "iam_role"),
+                key_present=self.key_state(p.name) in ("set", "iam_role")
+                and p.name not in self._unavailable,
                 privacy_contract=p.privacy_contract,
                 contract_reference=p.contract_reference,
                 budget_period=current.limits.get(p.name, EngineLimits()).budget_period,
@@ -908,34 +953,66 @@ class ModelAdmin:
             self._retrying = None
 
     async def _start_once(self) -> bool:
-        if self._settings is None and not any(p.keyless for p in self._installed.providers):
-            # Before any change in *Models*, a keyed engine's entries are made when its key moves
-            # in. An IAM-role engine has no key to move (ADR-135 Amendment 4), so its entries and
-            # its own gateway key are made here, from `osprey.yaml`'s engines.
-            return True
         try:
             async with self._exclusive:
                 self._fresh()
-                entries = await self._gateway.entries()
-                held = set(entries)
+                held = await self._gateway.held_entries()
                 current = self.settings
+                await self._say_what_disagrees(current, held)
+                if self._settings is None and not any(p.keyless for p in self._installed.providers):
+                    # Before any change in *Models*, a keyed engine's entries are made when its key
+                    # moves in. An IAM-role engine has no key to move (ADR-135 Amendment 4), so its
+                    # entries and its own gateway key are made here, from `osprey.yaml`'s engines.
+                    # Nothing is made here for a keyed one, but what disagrees with `osprey.yaml`
+                    # (an engine it does not hold, an address it does not give) is withdrawn.
+                    await self._withdraw_disagreeing(current, held)
+                    self._unavailable.clear()
+                    return True
                 keys = dict(current.keys)
                 for p in current.providers:
                     record = keys.get(p.name)
                     wanted = {entry_id(p.name, m) for m in p.roles.values()}
-                    if record is not None and not record.lost and not wanted & held:
+                    if record is not None and not record.lost and not wanted & set(held):
                         keys[p.name] = record.model_copy(update={"lost": True})
                 if keys != current.keys:
                     self._save(current.model_copy(update={"keys": keys}, deep=True))
                 unpriced = frozenset(
                     p.name for p in current.providers
-                    if any(not entries.get(entry_id(p.name, m), True) for m in p.roles.values())
+                    if any(
+                        entry_id(p.name, m) in held and not held[entry_id(p.name, m)].priced
+                        for m in p.roles.values()
+                    )
                 )  # fmt: skip
                 await self._reconcile(self.settings, held, rebuilt=unpriced)
             return True
         except (ModelAdminRefused, OSError) as failed:
             log.warning("model engines not reconciled with the gateway: %s", _said(failed))
             return False
+
+    async def _say_what_disagrees(
+        self, settings: ModelSettings, held: Mapping[str, HeldEntry]
+    ) -> None:
+        """At start, every entry's address is compared with the record. An engine whose entries are
+        at another address is marked unavailable **before** a withdrawal is tried, so one that
+        cannot be made leaves it so, and is said in words; an entry for an engine the record does
+        not hold is said too. Both are then withdrawn by the reconcile that follows."""
+        at_odds = self._disagreeing(self._hosted(settings), held)
+        known = {p.name for p in settings.providers}
+        engines = sorted({_owner(i) for i in at_odds} & known)
+        for name in engines:
+            self._unavailable.add(name)
+            log.warning(
+                "model engine %s: its gateway entries are at an address the saved settings do not "
+                "give, so it is unavailable until they are withdrawn",
+                name,
+            )
+        strays = [i for i in at_odds if _owner(i) not in known]
+        if strays:
+            log.warning(
+                "the model gateway holds %d entries for an engine the saved settings do not hold; "
+                "they are withdrawn",
+                len(strays),
+            )
 
     def _hosted(self, settings: ModelSettings) -> ModelSettings:
         """What the gateway should hold: nothing hosted while the deployment is local only, and on
@@ -948,39 +1025,85 @@ class ModelAdmin:
             return settings.model_copy(update={"providers": made})
         return settings
 
-    async def _reconcile(
-        self,
-        settings: ModelSettings,
-        held: set[str] | None = None,
-        rebuilt: frozenset[str] = frozenset(),
-    ) -> None:
-        """The gateway's entries made equal to `settings`: stale ones deleted, missing ones made,
-        and every entry of an engine in `rebuilt` (just edited) deleted and made again."""
-        settings = self._hosted(settings)
-        held = await self._gateway.stored_entries() if held is None else held
+    def _wanted(self, settings: ModelSettings) -> dict[str, tuple[ModelProviderConfig, str]]:
+        """The entries the record asks of the gateway, by id (`settings` already `_hosted`)."""
         wanted: dict[str, tuple[ModelProviderConfig, str]] = {}
         for p in settings.providers:
             for model in dict.fromkeys(p.roles.values()):
                 wanted[entry_id(p.name, model)] = (p, model)
-        for model_id in sorted(held):
-            stale = model_id not in wanted
-            if stale or wanted[model_id][0].name in rebuilt:
+        return wanted
+
+    def _disagreeing(self, settings: ModelSettings, held: Mapping[str, HeldEntry]) -> list[str]:
+        """The held entries the record does not agree with: one for an engine it does not hold (or
+        a model the engine no longer has), and one at **another address than the record gives its
+        engine**. An entry names its engine's one credential and goes where its address says, so
+        either could carry a key where it was not given (`settings` already `_hosted`)."""
+        wanted = self._wanted(settings)
+        return [
+            i for i in sorted(held) if i not in wanted or not _same_address(held[i], wanted[i][0])
+        ]
+
+    async def _withdraw_disagreeing(
+        self, settings: ModelSettings, held: Mapping[str, HeldEntry] | None = None
+    ) -> None:
+        """Every entry the record does not agree with deleted, and nothing made: what a key must
+        wait for, so it never reaches an entry at an address the record does not give."""
+        settings = self._hosted(settings)
+        known = await self._gateway.held_entries() if held is None else held
+        for model_id in self._disagreeing(settings, known):
+            await self._gateway.delete_entry(model_id)
+
+    async def _reconcile(
+        self,
+        settings: ModelSettings,
+        held: Mapping[str, HeldEntry] | None = None,
+        rebuilt: frozenset[str] = frozenset(),
+    ) -> None:
+        """The gateway's entries made equal to `settings`: stale ones, and ones at another address
+        than the record gives, deleted; missing ones made; and every entry of an engine in `rebuilt`
+        (just edited) deleted and made again. **An entry held under the right id at the wrong
+        address is never kept**: it would send the engine's key there."""
+        settings = self._hosted(settings)
+        known = await self._gateway.held_entries() if held is None else held
+        wanted = self._wanted(settings)
+        at_odds = set(self._disagreeing(settings, known))
+        remaining = set(known)
+        for model_id in sorted(known):
+            if model_id in at_odds or wanted[model_id][0].name in rebuilt:
                 await self._gateway.delete_entry(model_id)
-                held = held - {model_id}
+                remaining.discard(model_id)
         for model_id, (p, model) in wanted.items():
-            if model_id not in held:
+            if model_id not in remaining:
                 await self._gateway.add_entry(p, model)
         for p in settings.providers:
             await self._gateway.put_engine_key(p, settings.limits.get(p.name, EngineLimits()))
         await self._gateway.revoke_stale_engine_keys([p.name for p in settings.providers])
+        self._unavailable.clear()  # the gateway is equal to the record again
 
-    async def _put_back(self, settings: ModelSettings, rebuilt: frozenset[str]) -> None:
-        """After a change failed part-way: the gateway made equal to the file again, best effort;
-        what cannot be put back now is put back at the next start."""
+    async def _put_back(self, settings: ModelSettings, rebuilt: frozenset[str]) -> bool:
+        """After a change failed part-way: the gateway made equal to the file again. True when it
+        was. **False is never only a log line**: the caller says it in words, marks the engine
+        unavailable and audits it. Any failure counts, a named refusal or not; only a
+        cancellation passes through."""
         try:
             await self._reconcile(settings, rebuilt=rebuilt)
-        except ModelAdminRefused as refused:
-            log.warning("model engines not put back after a failed change: %s", refused.words)
+        except asyncio.CancelledError:
+            raise
+        except Exception as failed:  # noqa: BLE001 - whatever stopped the undo is told, not lost
+            log.error("model engines not put back after a failed change: %s", _said(failed))
+            return False
+        return True
+
+    async def _undone(self, settings: ModelSettings, rebuilt: frozenset[str]) -> bool:
+        """`_put_back`, finished even when this task is cancelled meanwhile (the stop goes on once
+        it is done), so an interrupted change never leaves what it made at a new address."""
+        task = asyncio.ensure_future(self._put_back(settings, rebuilt))
+        while not task.done():
+            try:
+                await asyncio.shield(task)
+            except asyncio.CancelledError:
+                continue
+        return task.result()
 
     # --- changing -------------------------------------------------------------------------
 
@@ -1072,23 +1195,55 @@ class ModelAdmin:
         rebuilt: frozenset[str] = frozenset(),
     ) -> Any:
         """One change, held exclusively against the file read afresh: `work` changes the gateway
-        and returns what to save. A refusal, or a file that cannot be written, puts the gateway
-        back as the file still says, is audited and is said in words."""
+        and returns what to save. **Whatever stops it**, a refusal, a file that cannot be written,
+        an exception nobody named or a cancellation, puts the gateway back as the file still says,
+        and is audited. **If the gateway cannot be put back after the change had begun to alter
+        it**, that is said in words in the answer, the engine is marked unavailable (offered to no
+        analyst, its test says so) and the audit says so: never a log line alone."""
         async with self._exclusive:
             self._fresh()
             current = self.settings
+            began = self._gateway.writes
             try:
                 result = await work(current)
+            except asyncio.CancelledError:
+                restored = await self._undone(current, rebuilt)
+                touched = self._gateway.writes != began
+                if touched and not restored:
+                    self._mark_unavailable(engine)
+                await self._audited(
+                    by, action, engine if engine and _NAMEABLE.fullmatch(engine) else None,
+                    outcome="interrupted: the gateway was "
+                    + ("put back as the saved settings say" if restored or not touched
+                       else "not put back; " + UNAVAILABLE_WORDS),
+                )  # fmt: skip
+                raise
             except ModelAdminRefused as refused:
-                await self._put_back(current, rebuilt)
-                raise await self._refusing(by, action, engine, refused) from None
+                failed = refused
             except OSError:
-                await self._put_back(current, rebuilt)
-                unsaved = ModelAdminRefused(
+                failed = ModelAdminRefused(
                     "The models file could not be written; the change was not saved.", status=500
                 )
-                raise await self._refusing(by, action, engine, unsaved) from None
-            return result
+            except Exception as unnamed:  # noqa: BLE001 - put back and said, never a bare 500
+                log.error(
+                    "a change to the model engines failed part-way: %s", type(unnamed).__name__
+                )
+                failed = ModelAdminRefused(
+                    "The change failed part-way and was not saved; the model gateway was put back "
+                    "as the saved settings say.",
+                    status=500,
+                )
+            else:
+                return result
+            restored = await self._undone(current, rebuilt)
+            if not restored and self._gateway.writes != began:
+                self._mark_unavailable(engine)
+                failed = ModelAdminRefused(_not_put_back(failed.words), status=failed.status)
+            raise await self._refusing(by, action, engine, failed) from None
+
+    def _mark_unavailable(self, engine: str | None) -> None:
+        if engine is not None:
+            self._unavailable.add(engine)
 
     async def add_engine(self, by: str, provider: ModelProviderConfig) -> None:
         sent = sent_values(provider)
@@ -1243,6 +1398,10 @@ class ModelAdmin:
                 )
             record = current.keys.get(name)
             said[0] = action or ("key_rotated" if record and not record.lost else "key_set")
+            # An entry names the engine's one credential and goes where its own address says, so no
+            # key is stored while an entry stands at an address the record does not give: such
+            # entries are withdrawn first, and a withdrawal the gateway refuses refuses the key.
+            await self._withdraw_disagreeing(current)
             try:
                 await self._gateway.put_credential(name, key)
             except KeyRemovedNotReplaced as gone:
@@ -1308,7 +1467,11 @@ class ModelAdmin:
         except ModelAdminRefused as refused:
             raise await self._refusing(by, "connection_tested", name, refused) from None
         state = self.key_state(name)
-        if self._installed.local_only:
+        if name in self._unavailable and not self._installed.local_only:
+            result = ConnectionTestResult(
+                engine=name, outcome="not_routed", ok=False, words=UNAVAILABLE_WORDS
+            )
+        elif self._installed.local_only:
             result = ConnectionTestResult(
                 engine=name, outcome="not_routed", ok=False,
                 words="This deployment is local only: no engine outside it is asked anything.",
@@ -1347,6 +1510,25 @@ class ModelAdmin:
 
 def _said(failed: BaseException) -> str:
     return failed.words if isinstance(failed, ModelAdminRefused) else type(failed).__name__
+
+
+def _owner(model_id: str) -> str:
+    """The engine an entry belongs to: `entry_id` is `osprey-<engine>-<model>`, and an engine's name
+    has no hyphen (`schemas.deployment`'s name rule), so the first segment is exact."""
+    return model_id.removeprefix("osprey-").partition("-")[0]
+
+
+#: What a person is told while an engine's gateway entries may not agree with the saved settings.
+UNAVAILABLE_WORDS = (
+    "The gateway could not be put back as the saved settings say, so the engine is unavailable "
+    "until it is repaired. Run ospreyflow doctor; once the gateway answers, restart the Conduit, "
+    "or enter the engine's key again where it has one: either makes the gateway agree with the "
+    "saved settings."
+)
+
+
+def _not_put_back(words: str) -> str:
+    return f"{words} {UNAVAILABLE_WORDS}"
 
 
 def _number(value: object) -> float | None:
