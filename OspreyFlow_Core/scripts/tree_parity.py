@@ -31,8 +31,9 @@ row that is not a mapping) raises `ValueError`: a corrupt record is an error to 
 "complete" or a quiet "partial".
 
 Nothing records the state: no file, setting or flag holds "complete".
-`tests/glass_trees/test_tree_parity.py` is the state's authority and the renderer calls this same
-function.
+`tests/glass_trees/test_tree_parity.py` is the state's authority. No renderer calls this function
+yet: wiring it into the render is a later slice (PL7a2), and when it lands the renderer will call
+this same function, not one of its own.
 """
 
 from __future__ import annotations
@@ -104,11 +105,18 @@ def _row_has_page(row: dict[str, Any], routes: Iterable[str]) -> bool:
 
 
 def govuk_tree_state(
-    functions: Path = FUNCTIONS,
-    exceptions: Path = EXCEPTIONS,
-    route_list: Path = ROUTE_LIST,
+    functions: Path | None = None,
+    exceptions: Path | None = None,
+    route_list: Path | None = None,
 ) -> str:
-    """The state: "complete" or "partial" (see the module's text); paths default to real ones."""
+    """The state: "complete" or "partial" (see the module's text).
+
+    A path left out is the real file (`FUNCTIONS`, `EXCEPTIONS`, `ROUTE_LIST`), looked up when the
+    function is called, so a test can point the no-argument call at a fixture tree.
+    """
+    functions = FUNCTIONS if functions is None else functions
+    exceptions = EXCEPTIONS if exceptions is None else exceptions
+    route_list = ROUTE_LIST if route_list is None else route_list
     rows = _mappings(functions, "functions")
     if not rows:
         return PARTIAL

@@ -12,7 +12,8 @@ absent today. Absent means partial: a missing list can never be read as "every r
 Which test fails if the invariant is broken (rule 12):
 
 * a row with no GOV.UK route, and the state still reads complete
-      -> `test_one_row_unrouted_is_partial`, `test_the_planted_fault_complete_with_a_row_unrouted_is_caught`
+      -> `test_a_function_without_its_govuk_route_keeps_the_tree_partial` (the name I22 gives it),
+         `test_the_planted_fault_complete_with_a_row_unrouted_is_caught`
 * the exceptions file ignored, so an excused row still holds the tree back (or, read the other way, an
   exception that excuses more than its one row)
       -> `test_an_exception_line_removes_exactly_one_row`, `test_the_planted_fault_exceptions_ignored_is_caught`
@@ -24,6 +25,10 @@ Which test fails if the invariant is broken (rule 12):
 * an absent or empty file read as "complete"
       -> `test_absent_files_are_partial`, `test_the_real_tree_is_partial`
 * the real tree reading complete before its pages exist -> `test_the_real_tree_is_partial`
+* the no-argument call (the way the renderer will call it) reading the wrong files, which every
+  "absent means partial" branch would hide -> `test_the_defaults_point_at_the_real_files`,
+  `test_the_no_argument_call_reads_the_default_files`,
+  `test_the_planted_fault_a_wrong_default_path_is_caught`
 
 Rule 15: each plant replaces one of the function's own internals (`_row_has_page`, `_required_rows`) so the real
 `govuk_tree_state` runs, on the same fixture files the passing cases use, and must be caught by the same
@@ -169,7 +174,47 @@ def test_the_real_tree_is_partial() -> None:
     """Today `FUNCTIONS.yaml` has 47 rows, every route empty, and there is no GOV.UK tree."""
     assert len(real_rows()) == 47
     assert tree_parity.govuk_tree_state() == PARTIAL
-    assert not tree_parity.ROUTE_LIST.exists(), "a route list exists: this case must be rewritten with it"
+    assert not tree_parity.ROUTE_LIST.exists(), (
+        "a route list exists: this case must be rewritten with it"
+    )
+
+
+def real_defaults_problems() -> list[str]:
+    """Where the no-argument call would read, against the real files by name. Empty for the real module."""
+    problems: list[str] = []
+    for name, real in (("FUNCTIONS", REAL_FUNCTIONS), ("EXCEPTIONS", REAL_EXCEPTIONS)):
+        default = getattr(tree_parity, name)
+        if default != real or not default.is_file():
+            problems.append(f"{name} is not the real {real.name}")
+    # The route list belongs to the GOV.UK tree, under the same `apps/pages` folder as the other two.
+    if tree_parity.ROUTE_LIST != REAL_FUNCTIONS.parent / "tree-govuk" / "routes.yaml":
+        problems.append("ROUTE_LIST is not apps/pages/tree-govuk/routes.yaml")
+    return problems
+
+
+def test_the_defaults_point_at_the_real_files() -> None:
+    """The real call is partial whatever it reads (every absent file means partial), so say where it reads."""
+    assert real_defaults_problems() == []
+    assert len(tree_parity._mappings(tree_parity.FUNCTIONS, "functions") or []) == 47
+    assert tree_parity._mappings(tree_parity.EXCEPTIONS, "exceptions"), (
+        "the real exception lines did not load"
+    )
+
+
+def test_the_no_argument_call_reads_the_default_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """With the defaults pointed at a complete fixture tree, `govuk_tree_state()` says complete: it reads them."""
+    tree, _, _ = complete_tree(tmp_path)
+    assert tree.state() == COMPLETE
+    assert tree_parity.govuk_tree_state() == PARTIAL  # the real files, before the patch
+    monkeypatch.setattr(tree_parity, "FUNCTIONS", tree.functions)
+    monkeypatch.setattr(tree_parity, "EXCEPTIONS", tree.exceptions)
+    monkeypatch.setattr(tree_parity, "ROUTE_LIST", tree.routes)
+    assert tree_parity.govuk_tree_state() == COMPLETE
+    # Each default is read on its own: take the route list away and the same call is partial.
+    tree.routes.unlink()
+    assert tree_parity.govuk_tree_state() == PARTIAL
 
 
 def test_the_real_rows_with_no_routes_are_partial_even_with_a_route_list(tmp_path: Path) -> None:
@@ -190,7 +235,7 @@ def test_the_real_rows_all_routed_less_the_real_exceptions_are_complete(tmp_path
     assert tree.state() == COMPLETE
 
 
-def test_one_row_unrouted_is_partial(tmp_path: Path) -> None:
+def test_a_function_without_its_govuk_route_keeps_the_tree_partial(tmp_path: Path) -> None:
     rows = [{"id": "a", "route": "/a"}, {"id": "b", "route": "/b"}]
     assert Tree(tmp_path).write(rows, [], ["/a"]).state() == PARTIAL
 
@@ -242,7 +287,9 @@ def test_absent_files_are_partial(tmp_path: Path) -> None:
     # The exceptions file is absent: no line is agreed, so every row is required.
     absent_exc = Tree(tmp_path / "no_exc").write(rows, None, ["/a"])
     assert absent_exc.state() == COMPLETE
-    absent_exc_gap = Tree(tmp_path / "no_exc_gap").write([*rows, {"id": "b", "route": ""}], None, ["/a"])
+    absent_exc_gap = Tree(tmp_path / "no_exc_gap").write(
+        [*rows, {"id": "b", "route": ""}], None, ["/a"]
+    )
     assert absent_exc_gap.state() == PARTIAL
     # The function list is absent, or lists nothing: there is nothing to be complete.
     gone = Tree(tmp_path / "gone").write(rows, [], ["/a"])
@@ -268,7 +315,9 @@ def test_the_function_finds_nothing_wrong_with_itself(tmp_path: Path) -> None:
 
 
 def _plant(monkeypatch: pytest.MonkeyPatch, name: str, replacement: Callable[..., Any]) -> None:
-    assert hasattr(tree_parity, name), f"{name} is not an internal of tree_parity: the plant would prove nothing"
+    assert hasattr(tree_parity, name), (
+        f"{name} is not an internal of tree_parity: the plant would prove nothing"
+    )
     monkeypatch.setattr(tree_parity, name, replacement)
 
 
@@ -315,3 +364,15 @@ def test_the_planted_fault_a_prefix_counts_is_caught(
     )
     problems = parity_problems(tmp_path)
     assert "a route present for another function made the row count" in problems
+
+
+def test_the_planted_fault_a_wrong_default_path_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fault the real-tree case cannot see: a default one folder too high still reads partial."""
+    monkeypatch.setattr(tree_parity, "FUNCTIONS", CORE / "apps" / "FUNCTIONS.yaml")
+    assert (
+        tree_parity.govuk_tree_state() == PARTIAL
+    )  # the wrong path is silently "partial": that is the hazard
+    assert "FUNCTIONS is not the real FUNCTIONS.yaml" in real_defaults_problems()
+    monkeypatch.undo()
+    monkeypatch.setattr(tree_parity, "ROUTE_LIST", CORE / "apps" / "tree-govuk" / "routes.yaml")
+    assert "ROUTE_LIST is not apps/pages/tree-govuk/routes.yaml" in real_defaults_problems()
