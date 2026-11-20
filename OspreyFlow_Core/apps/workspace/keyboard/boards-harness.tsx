@@ -8,8 +8,8 @@
 // the axe scan of a form or a question. What was sent is on `window.__BOARDS__`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import { BoardsPlace } from "../src/boards/BoardsPlace";
 import { applyHarnessBrand } from "./brandHarness";
 

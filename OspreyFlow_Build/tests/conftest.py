@@ -40,7 +40,13 @@ from tests.port_guard import outside_reserved
 # A test that calls the docker CLI skips at once, in words, where local stacks are off (T2,
 # tests/local_docker_guard.py).
 # tests.worker_isolation: each pytest-xdist worker its own stores (admin T1 part 4); a no-op without -n.
-pytest_plugins = ["tests.store_mark", "tests.local_docker_guard", "tests.worker_isolation"]
+# tests.clock_skew: OSPREY_TEST_CLOCK_SKEW_SECONDS moves the clock past collection (CO2b); a no-op unset.
+pytest_plugins = [
+    "tests.store_mark",
+    "tests.local_docker_guard",
+    "tests.worker_isolation",
+    "tests.clock_skew",
+]
 
 
 @pytest.fixture(autouse=True)

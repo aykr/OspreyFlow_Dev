@@ -4,8 +4,8 @@
 // the keyboard suite uses.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { createCrossFilterStore } from "../src/crossfilter/store";
 import { OntologyRegistry } from "../src/ontology/schema";

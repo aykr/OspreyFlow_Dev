@@ -1,6 +1,6 @@
 """The install package's guides as PDFs (`06_DECISIONS.md` ADR-114 Amendment 15 point 2, Amendment
 26): the Markdown in Core's `docs/` is the source; each guide is rendered by `tools.simple_markdown`
-into a page styled from the design tokens (`apps/workspace/src/design/tokens.css`, light theme — no
+into a page styled from the design tokens (`packages/design/tokens.css`, light theme — no
 colour of its own), printed to `docs/pdf/<guide>.pdf`, and recorded in `docs/pdf/manifest.json` with
 the SHA-256 of its Markdown, of every image it shows, and of the PDF made from them.
 
@@ -51,7 +51,7 @@ from tools.layout import BUILD, CORE
 from tools.simple_markdown import render_markdown
 
 DOCS = CORE / "docs"
-TOKENS = CORE / "apps" / "workspace" / "src" / "design" / "tokens.css"
+TOKENS = CORE / "packages" / "design" / "tokens.css"
 PRINTER = BUILD / "tools" / "print_pdf.mjs"
 #: Each guide, in the order its reader meets them: its file, its title, and its short name.
 GUIDES: tuple[tuple[str, str], ...] = (

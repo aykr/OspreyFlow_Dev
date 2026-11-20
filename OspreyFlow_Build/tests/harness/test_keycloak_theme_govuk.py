@@ -26,7 +26,7 @@ from tools.layout import REPO as REPO_ROOT
 
 from schemas.deployment import AppearanceConfig, OspreyConfig
 
-TOKENS = (REPO_ROOT / "apps" / "workspace" / "src" / "design" / "tokens.css").read_text(
+TOKENS = (REPO_ROOT / "packages" / "design" / "tokens.css").read_text(
     encoding="utf-8"
 )
 GLASS = "http://govuk.ospreyflow.localhost:8081"

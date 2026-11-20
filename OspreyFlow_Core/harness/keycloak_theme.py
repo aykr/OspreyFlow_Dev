@@ -1,6 +1,6 @@
 """The sign-in page Keycloak shows, restyled with the OspreyFlow design system.
 
-The launcher and the workspace use `apps/workspace/src/design/tokens.css`; Keycloak's stock sign-in
+The launcher and the workspace use `packages/design/tokens.css`; Keycloak's stock sign-in
 page is grey, in another typeface, under the realm's name in capitals. This module renders a
 Keycloak *login theme* that extends Keycloak's own (`keycloak.v2`, so password reset, error pages
 and the rest still exist) and restyles it from the same tokens. Nothing here changes who can sign
@@ -60,7 +60,7 @@ GOVUK_STYLESHEET_URL = "/assets/govuk/govuk-frontend.css"
 #: Where, beside the compose file, the theme is written and where compose mounts it from.
 THEME_DIRECTORY = "keycloak-theme"
 
-TOKENS_RELATIVE_PATH = Path("apps") / "workspace" / "src" / "design" / "tokens.css"
+TOKENS_RELATIVE_PATH = Path("packages") / "design" / "tokens.css"
 
 _PROPERTIES = """\
 parent=keycloak.v2

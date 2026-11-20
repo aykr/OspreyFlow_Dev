@@ -54,7 +54,7 @@ export interface LegendLink {
   shown: boolean;
 }
 
-// The nine data channels (`design/tokens.css`); any other name draws the ordinary line colour, so
+// The nine data channels (`packages/design/tokens.css`); any other name draws the ordinary line colour, so
 // no colour outside the tokens reaches the legend.
 const CHANNELS: ReadonlySet<string> = new Set([
   "ochre", "rose", "plum", "violet", "indigo", "azure", "cyan", "jade", "moss",

@@ -1,4 +1,4 @@
-/* The search results page (ADR-145 Amendment 15 Part A). Tokens only (`design/tokens.css`). It fills the main area,
+/* The search results page (ADR-145 Amendment 15 Part A). Tokens only (`packages/design/tokens.css`). It fills the main area,
    laid over the view the person left, which stays as it was beneath it. Under the GOV.UK brand the controls are the
    package's own govuk-* classes; these rules only lay them out. Every control is at least 24 by 24 pixels. */
 /* Its layer: above every control a view docks over itself (the canvas's toolbar 11, its zoom column and legend 10, the

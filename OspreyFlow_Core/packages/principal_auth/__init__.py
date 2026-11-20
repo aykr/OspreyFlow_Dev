@@ -264,6 +264,10 @@ class ClaimMapping(BaseModel):
     #: Superset's own app registration (ADR-148 Amendment 9): a person's delegated token issued to
     #: it, with this API's scope, is admitted to `SUPERSET_ROUTES` alone (`Principal.routes`).
     superset_client_id: str | None = None
+    #: The `pages` service's own app registration (ADR-152 decision 11, X1): it signs a person in as
+    #: a confidential client and calls this API with their bearer, so a token issued to it is the
+    #: person on every route their rights allow (`Principal.routes` None, as the Glass's).
+    pages_client_id: str | None = None
 
     @model_validator(mode="after")
     def _entra_needs_its_tenant(self) -> ClaimMapping:
@@ -290,6 +294,17 @@ class ClaimMapping(BaseModel):
                 "`superset_client_id` must be Superset's own application id (a GUID) in an Entra "
                 "ID "
                 "mapping, neither the Glass's nor the API's"
+            )
+        if self.pages_client_id is not None and (
+            self.tenant_id is None
+            or not _GUID.match(self.pages_client_id)
+            or self.pages_client_id in (self.client_id, self.api_client_id, self.superset_client_id)
+        ):
+            # ADR-152 decision 11: its own registration in the Entra tenant. Never the Glass's or
+            # the API's, as Superset's; nor Superset's, or one token would mean two route sets.
+            raise ValueError(
+                "`pages_client_id` must be the `pages` service's own application id (a GUID) in an "
+                "Entra ID mapping, none of the Glass's, the API's or Superset's"
             )
         if self.tenant_id is None and (
             self.client_id is not None
@@ -970,10 +985,13 @@ def _verified_parts(claims: Mapping[str, Any], mapping: ClaimMapping) -> _Verifi
             )
         # v2.0 names the client in `azp`, v1.0 in `appid`: whichever is present must be the Glass,
         # or Superset's own registration (ADR-148 Amendment 9), whose person is admitted to
-        # reading who they are alone (`SUPERSET_ROUTES`), so Superset can give them their role.
+        # reading who they are alone (`SUPERSET_ROUTES`), so Superset can give them their role,
+        # or the `pages` service's (ADR-152 decision 11), whose person is admitted as the Glass's.
         clients = {claims[c] for c in ("azp", "appid") if c in claims}
         if clients == {mapping.client_id}:
             pass
+        elif mapping.pages_client_id is not None and clients == {mapping.pages_client_id}:
+            pass  # every route their rights allow: `routes` stays None, as for the Glass's
         elif mapping.superset_client_id is not None and clients == {mapping.superset_client_id}:
             routes = sorted(SUPERSET_ROUTES)
         else:

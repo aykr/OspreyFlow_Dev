@@ -3,8 +3,8 @@
 // hands the canvas is recorded on `window.__OWNERSHIP__`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import { OwnershipPlace } from "../src/ownership/OwnershipPlace";
 
 declare global {

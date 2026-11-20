@@ -965,7 +965,7 @@ def _old_rendered_deployment(repo: Path) -> Path:
     (out / "deployment.env").write_text(
         (out / "deployment.env").read_text(encoding="utf-8") + held, encoding="utf-8"
     )
-    tokens = repo / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    tokens = repo / "packages" / "design" / "tokens.css"
     tokens.parent.mkdir(parents=True)
     tokens.write_text(TOKENS, encoding="utf-8")
     write_login_theme(out, tokens_css=TOKENS)

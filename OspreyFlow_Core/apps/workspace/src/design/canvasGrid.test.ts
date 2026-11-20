@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const CSS = readFileSync(join(__dirname, "primitives.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+const CSS = readFileSync(join(__dirname, "../../../../packages/design/primitives.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 function gridRules(css: string): { selector: string; body: string }[] {
   return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
@@ -20,7 +20,7 @@ describe("the canvas grid", () => {
     expect(rules.map((r) => r.selector)).toEqual([".network-canvas"]);
     expect(rules[0]!.body).toMatch(/var\(--grid-line\) 1px/);
     expect(rules[0]!.body).toMatch(/background-size:\s*16px 16px/);
-    const tokens = readFileSync(join(__dirname, "tokens.css"), "utf-8");
+    const tokens = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");
     expect(tokens).toMatch(/--grid-line:\s*color-mix\(in oklab, var\(--border-subtle\) 40%, transparent\);/);
   });
 

@@ -1,4 +1,4 @@
-/* Ask & Chat (ADR-145 Amendment 20): a drawer by default, a page when expanded. Tokens only (`design/tokens.css`).
+/* Ask & Chat (ADR-145 Amendment 20): a drawer by default, a page when expanded. Tokens only (`packages/design/tokens.css`).
    The page (v0.6.0 #4, Amendment 18) fills the main area over the view the person left, in the same layer as the search
    results page (`search/searchResults.css`, which says why 19): above every control a view docks over itself, below the
    search box's own suggestions. The two never show at once. */
@@ -36,7 +36,7 @@
 .ask-surface__head > h2 { margin: 0; }
 .ask-surface__actions { display: inline-flex; gap: var(--sp-4); }
 .ask-page__shape { margin: 0; }
-/* The drawer's shape: the workspace's drawer (`.drawer`, `design/primitives.css`), its title the panel title's size. */
+/* The drawer's shape: the workspace's drawer (`.drawer`, `packages/design/primitives.css`), its title the panel title's size. */
 .ask-drawer[hidden] { display: none; }
 .ask-drawer__title { font-size: inherit; line-height: inherit; font-weight: inherit; }
 .ask-drawer__title:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
@@ -46,7 +46,7 @@
 .ask-page__body, .ask-page .ask-surface__head { max-width: 72ch; }
 /* Beside the drawer, what lies at the window's right makes room for it (ADR-145 Amendment 20; the lane review): the
    results page's Filters column and the batch job's panel, each of which it would cover while their controls stayed in
-   the tab order. The drawer's width is `.drawer`'s own, `--w-drawer` (`design/primitives.css`); `AskPage` sets the
+   the tab order. The drawer's width is `.drawer`'s own, `--w-drawer` (`packages/design/primitives.css`); `AskPage` sets the
    attribute. */
 :root[data-ask-drawer] .search-results { padding-right: calc(var(--w-drawer) + var(--sp-24)); }
 :root[data-ask-drawer] .batch-expansion { right: calc(var(--w-drawer) + var(--sp-16)); max-width: calc(100% - var(--w-drawer) - var(--sp-32)); }

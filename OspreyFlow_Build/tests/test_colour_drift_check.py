@@ -52,8 +52,22 @@ def test_a_declared_mirror_and_an_allowlisted_literal_pass(tmp_path: Path) -> No
 
 
 def test_tests_and_the_tokens_file_are_not_scanned(tmp_path: Path) -> None:
-    root = _tree(tmp_path, {"x.test.ts": '"#123456"\n', "design/tokens.css": "--a:#123456;\n"})
-    assert find_drift(root, palette_from(DESIGN), mirrors=frozenset(), allowed=set()) == []
+    """The tokens file is exempt by name in its own folder, `packages/design` (ADR-152), and a neighbour is not."""
+    root = _tree(tmp_path, {"x.test.ts": '"#123456"\n', "tokens.css": "--a:#123456;\n"})
+    assert find_drift(root, palette_from(DESIGN), mirrors=colour_drift_check.TOKENS_FILES, allowed=set()) == []
+    root = _tree(tmp_path, {"primitives.css": ".x { color: #123456; }\n"})
+    drift = find_drift(root, palette_from(DESIGN), mirrors=colour_drift_check.TOKENS_FILES, allowed=set())
+    assert [(path, literal) for path, _, literal in drift] == [("primitives.css", "#123456")]
+    # And the exemption is what lets the tokens through: without it the file is flagged.
+    unexempt = find_drift(root, palette_from(DESIGN), mirrors=frozenset(), allowed=set())
+    assert {path for path, _, _ in unexempt} == {"tokens.css", "primitives.css"}
+
+
+def test_the_real_check_walks_the_workspace_and_the_design_package_and_says_how_many(capsys) -> None:  # type: ignore[no-untyped-def]
+    roots = [root for root, _ in colour_drift_check.SCANNED]
+    assert roots == [colour_drift_check.GLASS_SRC, colour_drift_check.DESIGN_PACKAGE]
+    assert colour_drift_check.main() == 0
+    assert f"scanned {colour_drift_check.scanned_count()} files" in capsys.readouterr().out
 
 
 def test_the_real_glass_has_no_new_drift() -> None:

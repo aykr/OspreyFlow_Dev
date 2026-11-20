@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { generateSecret } from "../support/secret.js";
 import { SECRET_NAME, filesUnder, scanTree } from "../support/secretScan.js";
 
 const PAGES = fileURLToPath(new URL("../..", import.meta.url));
@@ -42,8 +43,9 @@ describe("the scan itself: a planted value is found, in the shape it would be co
     writeFileSync(join(dir, file), text);
   };
 
-  // The planted values are the shape of a real one, not a convenient string that fails a different way.
-  const value = "k7Q2mZ0pL9xV4sT8uB3nW6yD1fH5jR2c";
+  // The planted values are the shape of a real one, not a convenient string that fails a different way, and made now,
+  // at random, so that no secret-shaped string is committed in this file either (the owner, 20 November 2026).
+  const value = generateSecret(32);
   const cases: Array<[string, string, string]> = [
     ["an example environment file", ".env.example", `${SECRET_NAME}=${value}\n`],
     ["a sample environment file with quotes", "env.sample", `${SECRET_NAME}="${value}"\n`],

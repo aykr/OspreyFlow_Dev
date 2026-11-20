@@ -10,6 +10,13 @@
 
 export const SESSION_KEY_PREFIX = "pages-session:";
 
+/**
+ * A started sign-in, kept from the start to the callback (ADR-152 decision 4, slice PL9a): state, nonce and
+ * the PKCE verifier, single use, ten minutes. Under its own prefix so that nothing of it is ever read as a
+ * session, and every key has a limit like the rest.
+ */
+export const LOGIN_KEY_PREFIX = "pages-login:";
+
 /** The most a stored session may hold. A session is a few tokens; a value past this is a defect. */
 export const MAX_VALUE_BYTES = 64 * 1024;
 
@@ -28,11 +35,19 @@ export interface SessionStore {
   /** Gives an existing key `ttlSeconds` more from now. False when there is no such key. */
   expire(key: string, ttlSeconds: number): Promise<boolean>;
   del(key: string): Promise<void>;
+  /**
+   * Reads a key and removes it in one step: of two callers at once, one gets the value and the other `null`.
+   * A single-use record (a started sign-in) is read only this way.
+   */
+  take(key: string): Promise<string | null>;
 }
 
+const PREFIXES = [SESSION_KEY_PREFIX, LOGIN_KEY_PREFIX] as const;
+
 function guardKey(key: string): void {
-  if (typeof key !== "string" || !key.startsWith(SESSION_KEY_PREFIX) || key.length === SESSION_KEY_PREFIX.length) {
-    throw new StoreRefusal(`the key is not under this service's prefix ${SESSION_KEY_PREFIX}`);
+  const ok = typeof key === "string" && PREFIXES.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
+  if (!ok) {
+    throw new StoreRefusal(`the key is not under this service's prefixes ${PREFIXES.join(" or ")}`);
   }
 }
 
@@ -96,6 +111,14 @@ export class MemorySessionStore implements SessionStore {
     this.entries.delete(key);
   }
 
+  /** Read and remove with no `await` between the two, so no other caller can read the value in between. */
+  async take(key: string): Promise<string | null> {
+    guardKey(key);
+    const entry = this.live(key);
+    this.entries.delete(key);
+    return entry?.value ?? null;
+  }
+
   /** For tests: the keys that have not expired. */
   keys(): string[] {
     return [...this.entries.keys()].filter((key) => this.live(key) !== undefined);
@@ -114,6 +137,8 @@ export interface ValkeyClient {
   get(key: string): Promise<string | null>;
   expire(key: string, seconds: number): Promise<number>;
   del(...keys: string[]): Promise<number>;
+  /** `GETDEL`: the value and its removal in one command (Redis 6.2, Valkey). */
+  getdel(key: string): Promise<string | null>;
 }
 
 export class ValkeySessionStore implements SessionStore {
@@ -141,5 +166,10 @@ export class ValkeySessionStore implements SessionStore {
   async del(key: string): Promise<void> {
     guardKey(key);
     await this.client.del(key);
+  }
+
+  async take(key: string): Promise<string | null> {
+    guardKey(key);
+    return this.client.getdel(key);
   }
 }

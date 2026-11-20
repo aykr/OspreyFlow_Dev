@@ -81,6 +81,8 @@ from harness.realm import (
     CONDUIT_CLIENT_ID,
     DEMO_ADMIN_SUBJECT,
     DEMO_ANALYST_SUBJECT,
+    PAGES_CLIENT_SECRET_KEY,
+    PAGES_SESSION_SECRET_KEY,
     generate_client_secret,
     organisation_provider,
     render_realm_json,
@@ -169,6 +171,20 @@ def analytics_secret_lines(config: OspreyConfig) -> str:
         return ""
     password = generate_client_secret()
     return f"OSPREY_CLICKHOUSE_PASSWORD={password}\nCLICKHOUSE_PASSWORD={password}\n"
+
+
+def pages_secret_lines() -> str:
+    """The page service's two secrets (ADR-152 decision 4, ADR-050 Amendment 4), minted here on
+    every render and then replaced by the values the deployment already holds
+    (`keep_existing_secrets`: a name ending `_SECRET` is kept), so each is minted once. The client
+    secret is the one Keycloak holds for `osprey-pages` (`register_sign_in.ensure_identity` sets it
+    there); the session secret signs the service's cookies. `secrets.token_urlsafe(32)`, as the
+    Superset's is: 43 characters, past the service's floor of 32. Written into `deployment.env` and
+    nowhere else."""
+    return (
+        f"{PAGES_CLIENT_SECRET_KEY}={generate_client_secret()}\n"
+        f"{PAGES_SESSION_SECRET_KEY}={generate_client_secret()}\n"
+    )
 
 
 #: Written once the keys `deployment.env` held have been moved into the gateway (ADR-135 Amendment
@@ -1437,6 +1453,7 @@ def stage_deployment(
         + f"OIDC_ADMIN_USERS_URL=http://keycloak:8080/admin/realms/{realm}/users\n"
         # ADR-111 Amendment 2: the reporting components' secrets, only for what is switched on.
         + reporting_secrets(config)
+        + pages_secret_lines()
         + analytics_secret_lines(config)
         + proxy_lines
         + mail_secret_lines(config, environ)

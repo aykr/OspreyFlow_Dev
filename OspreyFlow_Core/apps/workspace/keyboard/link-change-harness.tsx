@@ -5,8 +5,8 @@
 // link. `?signal=1` mounts it as if the link menu's *Change link…* had just been chosen.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/tokens.css";
+import "../../../packages/design/primitives.css";
 import { LinkChange } from "../src/inspector/LinkChange";
 import type { LinkChangeResult } from "../src/inspector/linkChangeApi";
 import type { Edge, EdgeTypeDef } from "../../../packages/schemas/generated";

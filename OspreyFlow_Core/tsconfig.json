@@ -35,6 +35,13 @@
     "apps/harness/keyboard/**/*.ts",
     "apps/harness/keyboard/**/*.tsx",
     "apps/pages/server/**/*.ts",
-    "apps/pages/test/**/*.ts"
+    "apps/pages/test/**/*.ts",
+    // The shared package (ADR-152 decision 6): plain TypeScript, kept once for both front ends.
+    // Every extension a source file may have: a file the compiler never reads is a file whose imports nothing checks.
+    "packages/glass-shared/src/**/*.ts",
+    "packages/glass-shared/src/**/*.tsx",
+    "packages/glass-shared/src/**/*.mts",
+    "packages/glass-shared/src/**/*.cts",
+    "packages/glass-shared/vitest.config.ts"
   ]
 }

@@ -57,7 +57,7 @@ def repo(tmp_path: Path) -> Path:
     out.mkdir(parents=True)
     (out / "deployment.env").write_text(SECRETS, encoding="utf-8")
     (out / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
-    tokens = tmp_path / "apps" / "workspace" / "src" / "design" / "tokens.css"
+    tokens = tmp_path / "packages" / "design" / "tokens.css"
     tokens.parent.mkdir(parents=True)
     tokens.write_text(TOKENS, encoding="utf-8")
     write_login_theme(out, tokens_css=TOKENS)  # the theme is already current
@@ -118,7 +118,7 @@ def test_a_changed_theme_is_written_and_the_identity_provider_restarted_then_wai
     in the container (`kc-gzip-cache`), which a restart does not clear: found 31 October 2026, when
     the GOV.UK sign-in theme's rewritten script was served stale through the proxy after a restart
     (ADR-132 Amendment 2). The cache is cleared before the restart."""
-    (repo / "apps" / "workspace" / "src" / "design" / "tokens.css").write_text(
+    (repo / "packages" / "design" / "tokens.css").write_text(
         ":root { --brass: #aa8833; }\n", encoding="utf-8"
     )
     run = Recorder()
@@ -135,7 +135,7 @@ def test_a_changed_theme_is_written_and_the_identity_provider_restarted_then_wai
 def test_sign_in_accounts_are_registered_after_everything_has_been_restarted(repo: Path) -> None:
     """Catches the lost administrator: Keycloak's database is not persisted, so a restart removes
     the demo administrator while `deployment.env` still names their password."""
-    (repo / "apps/workspace/src/design/tokens.css").write_text(":root {}\n", encoding="utf-8")
+    (repo / "packages/design/tokens.css").write_text(":root {}\n", encoding="utf-8")
     events: list[str] = []
     run = Recorder()
     register = Registrar()

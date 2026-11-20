@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  LOGIN_KEY_PREFIX,
   MAX_VALUE_BYTES,
   MemorySessionStore,
   SESSION_KEY_PREFIX,
@@ -136,8 +137,50 @@ function recordingClient(): ValkeyClient & { calls: unknown[][]; data: Map<strin
       for (const k of keys) if (data.delete(k)) n++;
       return n;
     },
+    async getdel(key) {
+      calls.push(["getdel", key]);
+      const value = data.get(key) ?? null;
+      data.delete(key);
+      return value;
+    },
   };
 }
+
+describe("the login records (a started sign-in, PL9a)", () => {
+  const LOGIN_KEY = `${LOGIN_KEY_PREFIX}abc`;
+
+  it("are under their own prefix, with the same rules: a TTL, a limit, no other prefix", async () => {
+    const store = new MemorySessionStore({ clock: testClock() });
+    await store.set(LOGIN_KEY, "v", 600);
+    expect(store.keys()).toEqual([LOGIN_KEY]);
+    await expect(store.set(LOGIN_KEY, "v", 0)).rejects.toThrow(StoreRefusal);
+    await expect(store.set(LOGIN_KEY_PREFIX, "v", 60)).rejects.toThrow(/prefix/);
+    await expect(store.set(`x${LOGIN_KEY}`, "v", 60)).rejects.toThrow(/prefix/);
+  });
+
+  it("are read once: `take` gives the value to one caller and removes it, in the memory store and the Valkey one", async () => {
+    const memory = new MemorySessionStore({ clock: testClock() });
+    await memory.set(LOGIN_KEY, "once", 600);
+    expect(await Promise.all([memory.take(LOGIN_KEY), memory.take(LOGIN_KEY)])).toEqual(["once", null]);
+    expect(memory.keys()).toEqual([]);
+
+    const client = recordingClient();
+    const valkey = new ValkeySessionStore(client);
+    await valkey.set(LOGIN_KEY, "once", 600);
+    expect(await valkey.take(LOGIN_KEY)).toBe("once");
+    expect(await valkey.take(LOGIN_KEY)).toBeNull();
+    expect(client.calls.filter(([name]) => name === "getdel")).toHaveLength(2);
+    await expect(valkey.take("abc")).rejects.toThrow(StoreRefusal);
+  });
+
+  it("an expired record is not taken", async () => {
+    const clock = testClock();
+    const store = new MemorySessionStore({ clock });
+    await store.set(LOGIN_KEY, "v", 600);
+    clock.advance(601);
+    expect(await store.take(LOGIN_KEY)).toBeNull();
+  });
+});
 
 describe("the Valkey store", () => {
   it("writes with SET … EX, the TTL in the same command so no key is ever without one", async () => {
