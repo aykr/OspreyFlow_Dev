@@ -36,7 +36,9 @@ family, so the list's own rule passes it and only the GDS Transport rule can cat
 **The folders this test walks** (the conductor's scan-map row): under `OspreyFlow_Core`, `apps/workspace`,
 `apps/harness`, `apps/pages` and `packages/design`; it reads only the text and font files in them, and never
 `node_modules`, `dist` (except `apps/pages/dist`, the built output), `coverage`, `test-results`, `playwright-report` or,
-for `apps/pages`, its own `test/` folder (a test of the pages may name GDS Transport in order to forbid it). It also reads
+for `apps/pages`, its own `test/` folder (a test of the pages may name GDS Transport in order to forbid it). The GDS
+Transport rule leaves out `.yaml` records (`FUNCTIONS.yaml` names `/assets/govuk/*` in prose); a test file is held to the
+`@fontsource` rule but not to the `@font-face` rule (it may hold a fixture). It also reads
 `OspreyFlow_Core/node_modules/govuk-frontend/dist/govuk/govuk-frontend.min.css` when it is installed, and
 `packages/design/fonts.json`.
 """
@@ -157,7 +159,7 @@ def _gds_violations(name: str, entry: dict) -> list[str]:
         out.append(f"{name}: not conditioned on a gov.uk address (only_on is {entry['only_on']!r})")
     if entry["self_hosted_under"] != "/assets/govuk/":
         out.append(f"{name}: not self-hosted under /assets/govuk/")
-    if "GOV.UK" not in entry["licence"] or "OFL" in entry["licence"]:
+    if "GOV.UK" not in entry["licence"] or re.search(r"OFL-\d", entry["licence"]):
         out.append(f"{name}: its licence must say it is restricted to services on GOV.UK domains, and is not OFL")
     stems = entry["file_stems"]
     if not isinstance(stems, list) or not stems or not all(isinstance(s, str) and re.fullmatch(r"[a-z]+", s) for s in stems):
@@ -202,6 +204,10 @@ FONT_FACE = re.compile(r"@font-face\s*\{(.*?)\}", re.S)
 FONT_REF = re.compile(r"[\w@./\-]+\.(?:woff2?|ttf|otf|eot)\b")
 
 
+def is_test_file(path: Path) -> bool:
+    return bool(re.search(r"\.(?:test|spec)\.[cm]?[jt]sx?$", path.name))
+
+
 def _weight(file: str | None) -> int | None:
     """The weight a `@fontsource/<package>/<file>` import loads: `400.css` is 400; the bare package is its default, 400."""
     if file is None or file == "index.css":
@@ -241,7 +247,8 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
     families = by_family(data)
     sources = {e["source"]: e for e in fontsource_entries(data)}
     gds = [re.compile(r"[\s_-]*".join(map(re.escape, name.lower().split())), re.I) for name in _gds_names(data)]
-    gds.append(re.compile(r"assets/govuk/fonts", re.I))
+    # Its stylesheet and files, self-hosted under the folder the entry names, are how a page would load it.
+    gds += [re.compile(re.escape(e["self_hosted_under"].strip("/") + "/"), re.I) for e in govuk_entries(data)]
     for path in walk_files(core, folders, skipped):
         rel = path.relative_to(core).as_posix()
         if path.suffix in FONT_SUFFIXES:
@@ -270,6 +277,8 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
                 result.violations.append(f"{rel}: loads {spec}, weight {weight}, which the list does not name for {entry['family']}")
             elif rel.startswith("apps/workspace/src/"):
                 result.imported.add((source, weight))
+        if is_test_file(path):
+            continue  # a fixture about fonts is not a load: nothing serves a test file
         # `@font-face` rules: the family, and the weight it is declared for.
         for block in FONT_FACE.findall(text):
             family_m = re.search(r"font-family\s*:\s*([^;}]+)", block)
@@ -286,8 +295,9 @@ def scan(core: Path, data: dict, folders: tuple[str, ...], skipped: tuple[str, .
         for ref in FONT_REF.findall(FONT_FACE.sub("", text)):
             if not _font_file_listed(ref, data):
                 result.violations.append(f"{rel}: names the font file {ref}, which no listed family owns")
-        if no_gds and any(pattern.search(text) for pattern in gds):
-            result.violations.append(f"{rel}: names GDS Transport, which the default tree does not serve (ADR-152 I9)")
+        # The records beside the service (`FUNCTIONS.yaml` names `/assets/govuk/*` in prose) are not served.
+        if no_gds and path.suffix not in {".yaml", ".yml"} and any(pattern.search(text) for pattern in gds):
+            result.violations.append(f"{rel}: names GDS Transport (or its self-hosted assets), which the default tree does not serve (ADR-152 I9)")
     return result
 
 
@@ -389,7 +399,7 @@ def fonts_test_restates_the_list(text: str) -> list[str]:
     out: list[str] = []
     if "fonts.json" not in text:
         out.append("fonts.test.ts does not read fonts.json")
-    for literal in re.findall(r"""["'`]@fontsource/[^"'`]*["'`]""", text):
+    for literal in re.findall(r"""["'`]@fontsource(?:-variable)?/[^"'`/][^"'`]*["'`]""", text):
         out.append(f"fonts.test.ts restates {literal}")
     return out
 
@@ -545,6 +555,29 @@ def test_a_listed_face_in_the_pages_is_not_a_fault(tmp_path: Path) -> None:
     _edit(core, "apps/pages/server/static/fonts.css", _append(REAL_FONTSOURCE_FACE))
     _edit(core, "apps/pages/server/static/fonts/atkinson-hyperlegible-next-latin-400-normal.woff2", _append("x"))
     assert _pages(core) == []
+
+
+def test_a_test_file_of_the_workspace_may_hold_a_font_face_fixture_but_not_import_a_font(tmp_path: Path) -> None:
+    """`syncGovukAssets.test.ts` holds an `@font-face{src:url(/assets/fonts/a.woff2)}` string to test the URL rewrite: it
+    loads nothing. An `@fontsource` import in a test file is still a load (a harness imports what it draws with)."""
+    core = build_tree(tmp_path)
+    fixture = '  const css = "@font-face{src:url(/assets/fonts/a.woff2)}";\n'
+    _edit(core, "apps/workspace/src/brand/govuk/syncGovukAssets.test.ts", _append(fixture))
+    assert _front(core) == []
+    _edit(core, "apps/workspace/src/brand/govuk/syncGovukAssets.test.ts", _append('import "@fontsource/roboto/400.css";'))
+    found = _front(core)
+    assert len(found) == 1 and "loads @fontsource/roboto/400.css" in found[0]
+    # The same fixture in a file that is not a test is a fault.
+    _edit(core, "apps/workspace/src/brand/govuk/sync.ts", _append(fixture))
+    assert any("sync.ts: an @font-face for '(no family)'" in line for line in _front(core))
+
+
+def test_a_yaml_record_beside_the_pages_may_name_the_govuk_assets_but_a_view_may_not(tmp_path: Path) -> None:
+    core = build_tree(tmp_path)
+    _edit(core, "apps/pages/FUNCTIONS.yaml", _append("  # the proxy sends /assets/govuk/* to the workspace"))
+    assert _pages(core) == []
+    _edit(core, "apps/pages/server/views/home.njk", _append('<link rel="stylesheet" href="/assets/govuk/govuk-frontend.css">'))
+    assert len(_pages(core)) == 1
 
 
 def test_a_test_of_the_pages_may_name_gds_transport_in_order_to_forbid_it(tmp_path: Path) -> None:

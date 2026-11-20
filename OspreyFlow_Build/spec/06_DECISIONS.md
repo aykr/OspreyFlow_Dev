@@ -41566,3 +41566,38 @@ the five cases above); `tests/test_seed_internal_git_archive.py` (each synthetic
 it; paysim, enron and a public dataset are still refused in the old words; every dataset is placed on a side;
 `_is_checkout` on both layouts and on a bundle); `tests/test_seed_internal.py` (the refusal's cases, one per kind);
 `tests/cli/test_bootstrap.py` (the scripts record the folder on every run).
+
+
+### ADR-152, Amendment 2 (20 November 2026) — the fonts are listed once in `packages/design/fonts.json`, and a test fails if either front end loads a font the list does not name — Accepted by the owner, 20 November 2026
+
+Status: **Accepted by the owner, 20 November 2026**, in his ruling on "the rest of the design folder" (item 3). Built in slice PL4b3. This
+amendment adds to decision 6, whose "tokens.css, primitives.css, fonts; read by the React workspace and tree-default alike" is met for
+`tokens.css` by slice PL4b and for `primitives.css`, `scale.css` and `panelType.css` by slice PL4b2; this is the fonts.
+
+1. **One list.** Which families and weights are used is stated once, in `OspreyFlow_Core/packages/design/fonts.json`: one entry per family, with
+   its CSS name, its role (`ui`, `mono` or `govuk`), its source (`@fontsource/<package>`, or `govuk-frontend`), its weights and its licence.
+   The list states what the code ships; no weight, subset or file changed with it. Atkinson Hyperlegible Next (400, 600, 700) and IBM Plex Mono
+   (400, 600) are SIL OFL 1.1. There is no `subsets` field: narrowing the imports would change the built bytes.
+2. **Both front ends load from it, each its own way.** `apps/workspace/src/design/fonts.ts` stays where it is, because it imports the
+   `@fontsource` stylesheets for the Vite bundle; `fonts.test.ts` derives its list from `fonts.json` rather than restating it. The `pages`
+   service loads no font today; the page build that first loads one (PL7) adds `@fontsource` to its `package.json` and loads only a listed
+   face, and may not change the lockfile before then.
+3. **GDS Transport is listed with its two conditions, as fields a test reads.** `only_when: appearance.govuk_identity` and `only_on: gov.uk`:
+   it is shown only when the GOV.UK identity switch is on (ADR-152 decision 14), and only on a gov.uk address (ADR-132, Amendment 7); its
+   source is `govuk-frontend`, self-hosted under `/assets/govuk/`, and its licence is the restriction to services on GOV.UK domains
+   (`spec/00_ARCHITECTURE.md`), not OFL. No other entry carries either condition. A family on the list is not thereby on every page: the
+   default tree serves no GDS Transport at all (I9, its font half).
+4. **A test fails if either loads a font the list does not name.** It reads `apps/workspace`, `apps/harness`, `packages/design` and
+   `apps/pages`, and looks for an `@fontsource` import or package, an `@font-face`, a font file, and a font URL, and requires each family
+   and weight to be on the list; every listed `@fontsource` weight must be imported, and its package declared. For `apps/pages` it also fails
+   on GDS Transport, or on a path under `/assets/govuk/`, anywhere. The invariants I9 names as proof pieces (the default tree's assets test,
+   `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case) are not built here; this amendment holds only the font half.
+5. **The weights text.** `spec/design/DESIGN.md` §2 says Atkinson 200 to 800 and Plex 400, 500 and 600; the code ships 400, 600 and 700 and
+   400 and 600. The owner applies a diff to the text; the code does not change.
+
+Tests that would fail (rule 12; each shown red against a planted fault in the shape the code writes it, rule 15):
+`tests/glass_trees/test_fonts_list.py` (the list's shape and GDS Transport's two conditions; an unlisted `@fontsource` import in `fonts.ts`, at an
+unlisted weight, bare, from the variable scope or in a package.json; a listed weight nothing imports; an unlisted `@font-face` or font file in the
+workspace, the generated GOV.UK stylesheet or its fonts folder, a pages view or the pages' built output; GDS Transport in a pages stylesheet,
+as a listed `@font-face`, or by its assets path); `apps/workspace/src/design/fonts.test.ts` (the imports against the list, the families against
+`tokens.css`, and the package's own face and weight against the list).

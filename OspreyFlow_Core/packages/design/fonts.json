@@ -1,0 +1,29 @@
+{
+  "fonts": [
+    {
+      "family": "Atkinson Hyperlegible Next",
+      "role": "ui",
+      "source": "@fontsource/atkinson-hyperlegible-next",
+      "weights": [400, 600, 700],
+      "licence": "OFL-1.1"
+    },
+    {
+      "family": "IBM Plex Mono",
+      "role": "mono",
+      "source": "@fontsource/ibm-plex-mono",
+      "weights": [400, 600],
+      "licence": "OFL-1.1"
+    },
+    {
+      "family": "GDS Transport",
+      "role": "govuk",
+      "source": "govuk-frontend",
+      "weights": [400, 700],
+      "licence": "Restricted to services on GOV.UK domains; not OFL (spec/00_ARCHITECTURE.md, ADR-132)",
+      "only_when": "appearance.govuk_identity",
+      "only_on": "gov.uk",
+      "self_hosted_under": "/assets/govuk/",
+      "file_stems": ["bold", "light"]
+    }
+  ]
+}
