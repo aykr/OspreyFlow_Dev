@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { Node } from "../../../../packages/schemas/generated";
 import { Combobox } from "../design/primitives/Combobox";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import { AddFromList } from "./AddFromList";
 import { SearchFilters } from "./SearchFilters";
 import {

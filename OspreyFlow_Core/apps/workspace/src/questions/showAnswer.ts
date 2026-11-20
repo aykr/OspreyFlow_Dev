@@ -3,7 +3,7 @@
 // brought into view; how many are not shown said, never which; past the working set's cap nothing added and the typed
 // refusal said with its figures (rule 2). One function, so the harness proves the App's own steps.
 import { addByIds, type ConnectionsContext } from "../connections/connectionsApi";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import type { AnswerIds } from "./AnswerActions";
 
 export interface ShowAnswerCanvas {

@@ -11,7 +11,7 @@
 // deterministic.
 import { expect, test, type Page } from "@playwright/test";
 
-import { ASSESSMENT_PANEL_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { ASSESSMENT_PANEL_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 declare global {
   interface Window {

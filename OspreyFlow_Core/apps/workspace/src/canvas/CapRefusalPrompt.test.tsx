@@ -6,7 +6,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
-import type { LimitExceeded } from "../workingset/models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 import { CapRefusalPrompt } from "./CapRefusalPrompt";
 
 afterEach(cleanup);

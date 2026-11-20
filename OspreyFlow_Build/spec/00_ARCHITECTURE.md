@@ -954,7 +954,8 @@ against it, and the Classpath exception keeps a program run on it outside the GP
 program on a JVM. **Distributing the image distributes the runtime under GPL-2.0**, so a release
 that ships the Conduit's image carries, with it, the offer of its corresponding source (Temurin's
 published source at the image's tag, `jdk-21.0.13+9`, and the `jlink` line that derived it,
-`services/api/Dockerfile`), and its NOTICE names the runtime and its licence; a release step, not
+`services/api/Dockerfile`), and its NOTICE names the runtime and its licence. Both are carried in the image, at
+`/opt/java/NOTICE` (`notices/JAVA_NOTICE`; ADR-147 Amendment 6); the publication of the image is the release step, not
 this register's to perform. **Only that exception, only for a runtime recorded here, and only for
 GPL-2.0:** a plain GPL (any version), a GPL-3.0 with the exception, a GPL with any other exception,
 and AGPL still never pass. A runtime in an image is declared by a `LABEL
@@ -986,9 +987,10 @@ from the built image at `jdk-21.0.13+9`). All are permissive; a NOTICE shipping 
 | xwd 1.0.7 (`libawt_xawt`'s list, multiVis and wsutils files) | the Open Group's permission notice (X11-style) |
 | Eastman Kodak's colour management and imaging portions | a copyright notice (Eastman Kodak 1991–2003) |
 
-The NOTICE carries the whole `/opt/java/legal` tree (every module's notices, `java.desktop`'s above
-among them) beside the runtime's GPL-2.0 text and Classpath exception (`ASSEMBLY_EXCEPTION`); a
-release step, as the source offer is.
+The image carries the whole `/opt/java/legal` tree (every module's notices, `java.desktop`'s above
+among them) beside the runtime's GPL-2.0 text and Classpath exception (`ASSEMBLY_EXCEPTION`); the NOTICE
+the image carries (`/opt/java/NOTICE`, ADR-147 Amendment 6) names each library above and points to that tree in the
+same image.
 
 **Fetched at deployment, not shipped in the repository:** the basemap's label glyphs, Noto Sans
 Regular from the OpenMapTiles fonts release v2.0 (SIL-OFL-1.1), installed into the tiles folder by
@@ -1087,6 +1089,21 @@ signs the released images keyless in the user repository's `release.yml` and ver
 `ospreyflow update` changes anything; on the host it runs from its image
 `ghcr.io/sigstore/cosign/cosign:v2.4.1`, pinned by digest, as OpenTofu does; an offline bundle carries
 that image (Amendment 34). Nothing of it is in a deployment's images.
+
+**ADR-152 decision 6 addition (20 November 2026; PL4 slice C) — two npm dependencies gained by a second workspace,
+`packages/glass-shared`.** The register is by licence, not by package, and `make licence-check`'s Node half reads
+`license-checker`'s metadata against the allowlist above, so a package already installed for another workspace is
+already checked; this entry records why the shared package declares them (the register has no per-package table for npm,
+so a dependency a workspace gains is entered here, in prose, as the entries above are):
+
+| Package | Range | Licence (as its metadata gives it) | Why | Workspace |
+| --- | --- | --- | --- | --- |
+| `graphology` | `^0.26.0` | MIT | the working set's graph, which the shared package's working-set store (`packages/glass-shared/src/workingset/store.ts`) builds and `apps/workspace` and the pages both read | `packages/glass-shared`, already used by `apps/workspace` at the same range |
+| `zustand` | `^5.0.2` | MIT | the working set's store; **only `zustand/vanilla` is imported** (the package's main entry imports React, and the shared package imports none: I1) | `packages/glass-shared`, already used by `apps/workspace` at the same range |
+
+Neither brings React into the shared package or the `pages` image: `zustand`'s React binding is a separate entry the
+package never names (the lint block for `packages/glass-shared` in `eslint.config.js` refuses it, type imports included),
+and `scripts/no_react_check.mjs` and `tests/glass_trees/test_pages_image_carries_no_react.py` run over the result.
 
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo

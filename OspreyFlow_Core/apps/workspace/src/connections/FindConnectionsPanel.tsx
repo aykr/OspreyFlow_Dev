@@ -10,7 +10,7 @@ import { useState } from "react";
 
 import type { Node, Path } from "../../../../packages/schemas/generated";
 import { linkTypeName, type NamedType } from "../canvas/linkLabel";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { GlobalSearch } from "../search/GlobalSearch";

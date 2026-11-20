@@ -65,6 +65,10 @@ render to a string or a temp folder), each case **red first** against the real c
 - the field is documented where the guide's appendix A lists it (read both guides) and the generated TypeScript carries it.
 State, in the file's header, which test would fail if the floor were not applied (rule 12).
 
+## Merging main in after PL4b: the design tokens moved (the conductor, 20 November, after the builder stopped on six tries)
+
+PL4b moved `tokens.css` from `OspreyFlow_Core/apps/workspace/src/design/` to **`OspreyFlow_Core/packages/design/tokens.css`**. Your own acceptance file `OspreyFlow_Build/tests/harness/test_postgres_connections_setting.py` builds a fake repository in `tmp_path` (the `_deployment` helper) and **its fake tree does not contain the tokens at the new place**, so the refresh code (`harness/keycloak_theme.py`, which reads the tokens, then `scripts/refresh.py`) raises "the design tokens were not found at …/packages/design/tokens.css". That is the one red the last six tries repeated, and it is **your test's fake tree, not the product**: put `packages/design/tokens.css` in the fake tree the way PL4b did for the neighbouring refresh tests (`tests/test_refresh.py`, `test_refresh_before_the_gateway.py`, `test_refresh_search_rebuild.py`, `tests/harness/test_install_page_build.py`: read how each lays its fake tree out after PL4b and do the same; a copied file or a symlink, as they do). Do not touch the product's path. After that the checks must be green; if any other red remains, say exactly which test and why in your report.
+
 ## Checks
 
 Pure only. The **checks command** runs `tests/harness/test_postgres_connections.py`, `tests/harness/test_render_memory.py`,

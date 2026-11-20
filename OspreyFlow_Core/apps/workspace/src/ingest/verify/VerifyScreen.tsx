@@ -26,7 +26,7 @@ import { Panel } from "../../design/primitives/Panel";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { rowNumber } from "../../inspector/sourceLocator";
 import { OntologyRegistry } from "../../ontology/schema";
-import { createWorkingSet, type WorkingSet } from "../../workingset/store";
+import { createWorkingSet, type WorkingSet } from "@ospreyflow/glass-shared";
 import { alreadyLoadedWords } from "../alreadyLoaded";
 import { ExpertDisclosure } from "../dag/ExpertStepDrawer";
 import { WouldRaisePanel } from "./WouldRaisePanel";

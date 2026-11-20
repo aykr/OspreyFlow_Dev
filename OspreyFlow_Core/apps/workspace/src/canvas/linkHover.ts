@@ -8,7 +8,7 @@ export function linkHoverText(graph: Graph, key: string, types: readonly NamedTy
   if (!graph.hasEdge(key)) return null;
   const data = graph.getEdgeAttribute(key, "data") as { type: string; source: string; target: string } | undefined;
   if (!data) return null;
-  // The working set is a mixed multigraph (`workingset/store.ts`): `edges(a, b)` holds the links
+  // The working set is a mixed multigraph (`packages/glass-shared/src/workingset/store.ts`): `edges(a, b)` holds the links
   // between the two either way round.
   const same = graph
     .edges(data.source, data.target)

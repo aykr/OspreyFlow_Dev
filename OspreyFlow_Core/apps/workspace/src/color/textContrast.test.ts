@@ -17,7 +17,7 @@ import {
   type Layer,
   type Rgba,
   type Sample,
-} from "./textContrast";
+} from "@ospreyflow/glass-shared";
 
 const WHITE = "rgb(255, 255, 255)";
 

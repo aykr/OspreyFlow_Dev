@@ -13,7 +13,7 @@ import {
   assertAllCovered,
   registerCovered,
   TIMELINE_PLAYBACK_ACTIONS,
-} from "./actionRegistry";
+} from "@ospreyflow/glass-shared";
 
 // A strip with one dated event: a case with none has no brush and no playback at all (ADR-087), so
 // the playback and exact-date cases below need a case that has them.

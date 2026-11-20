@@ -3,8 +3,7 @@
 // the Conduit gave: the items this reader may see now, each already collapsed at the view's
 // threshold, placed where the view keeps them. The case's own working set is left as it is.
 import type { Edge, Node } from "../../../../packages/schemas/generated";
-import type { DeltaSnapshot } from "../workingset/models";
-import { createWorkingSet, type WorkingSet } from "../workingset/store";
+import { createWorkingSet, type DeltaSnapshot, type WorkingSet } from "@ospreyflow/glass-shared";
 import type { CaseViewOpened } from "./viewsApi";
 
 export interface Lens {

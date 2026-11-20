@@ -5,7 +5,7 @@
 // Conduit's do (`?rights=none` clears every right they grant), so a press that reached one would show.
 import { expect, test, type Page } from "@playwright/test";
 
-import { STUDIO_TIPS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { STUDIO_TIPS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "STUDIO_TIPS_ACTIONS";
 const HARNESS = "/keyboard/ingest-studio-harness.html";

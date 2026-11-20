@@ -4,7 +4,7 @@
 // requests that went out can be read back.
 import { expect, test, type Page } from "@playwright/test";
 
-import { EXPLORE_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { EXPLORE_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "EXPLORE_ACTIONS";
 

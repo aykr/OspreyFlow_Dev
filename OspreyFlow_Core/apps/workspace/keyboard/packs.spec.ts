@@ -3,7 +3,7 @@
 // no `page.mouse`, no `.click()`; each proves its call reached the server with the right body.
 import { expect, test, type Page } from "@playwright/test";
 
-import { PACKS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { PACKS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 import { LIVE_VERSION, NOTE_ITEM, PACK, TREND_ITEM, serveWorld, world } from "./reportsFixtures";
 
 const REGISTRY = "PACKS_ACTIONS";

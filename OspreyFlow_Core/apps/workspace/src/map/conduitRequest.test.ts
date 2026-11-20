@@ -5,7 +5,7 @@
 // server's included, and send it the analyst's token: the second case below is the one that stops it.
 import { describe, expect, it } from "vitest";
 
-import { conduitRequest } from "./conduitRequest";
+import { conduitRequest } from "@ospreyflow/glass-shared";
 
 const ORIGIN = "http://localhost:8080";
 const TOKEN = "eyJhbGciOiJSUzI1NiJ9.test-token";

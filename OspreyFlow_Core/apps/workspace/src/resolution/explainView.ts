@@ -14,8 +14,7 @@
 // the same "belt and braces" reasoning `set_resolution_threshold`'s own fix used, applied one
 // layer up. A pair failing either check is dropped entirely, never shown in a redacted form: a
 // redacted row still asserts "an edge exists here," which is exactly the signal to avoid.
-import type { WorkingSetGraph } from "../workingset/store";
-import type { ClusterExplanation, PairwiseExplanation } from "../workingset/models";
+import type { ClusterExplanation, PairwiseExplanation, WorkingSetGraph } from "@ospreyflow/glass-shared";
 
 export function visiblePairs(
   explanation: ClusterExplanation,

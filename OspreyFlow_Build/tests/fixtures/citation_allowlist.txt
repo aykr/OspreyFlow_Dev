@@ -88,3 +88,9 @@ apps/workspace/src/design/tokens.css
 apps/workspace/src/design/primitives.css
 apps/workspace/src/design/scale.css
 apps/workspace/src/design/panelType.css
+
+# Moved by PL4 slice C to `packages/glass-shared/src/`: the keyboard action registry (`keyboard/actionRegistry.ts`), the working set's
+# store and models (`workingset/`), `color/textContrast.ts`, and `map/contrast.ts` and `map/conduitRequest.ts`. The build record and the
+# decision-log entries that name the old places are history and stay as written; only these two are named in full there.
+apps/workspace/keyboard/actionRegistry.ts
+apps/workspace/src/workingset/store.ts

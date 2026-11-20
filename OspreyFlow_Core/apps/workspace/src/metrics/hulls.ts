@@ -11,7 +11,7 @@
 // this file's own commit history has the full figure.
 import { polygonHull } from "d3-polygon";
 
-import type { WorkingSetGraph } from "../workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 
 /**
  * One hull polygon (graph-space `[x, y]` points, counterclockwise, per `d3-polygon`'s own

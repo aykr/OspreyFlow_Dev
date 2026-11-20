@@ -5,7 +5,7 @@
 import { useEffect, useState, type RefObject } from "react";
 import type Sigma from "sigma";
 
-import type { WorkingSetEdgeAttributes, WorkingSetNodeAttributes } from "../workingset/store";
+import type { WorkingSetEdgeAttributes, WorkingSetNodeAttributes } from "@ospreyflow/glass-shared";
 
 export interface PreviousPosition {
   id: string;

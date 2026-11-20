@@ -12,7 +12,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vi
 
 import type { App as AppComponent } from "./App";
 import type { GlassCanvasProps } from "./canvas/GlassCanvas";
-import type { LimitExceeded } from "./workingset/models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 
 const canvasProps: { current: Partial<GlassCanvasProps> | null } = { current: null };
 vi.mock("./canvas/GlassCanvas", () => ({

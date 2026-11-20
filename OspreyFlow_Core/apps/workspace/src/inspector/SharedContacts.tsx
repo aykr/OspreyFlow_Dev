@@ -8,7 +8,7 @@ import type { EdgeTypeDef, Node } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkTypeName } from "../canvas/linkLabel";
 import type { SharedContacts as Found } from "../../../../packages/schemas/generated";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const COUNT = new Intl.NumberFormat("en-GB");
 

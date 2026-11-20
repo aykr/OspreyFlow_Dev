@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { contrastRatio } from "../map/contrast";
+import { contrastRatio } from "@ospreyflow/glass-shared";
 
 /**
  * Home's key cap ("G", "S", "R", "A" on each place's Open button, `HomePage.tsx`): its text is the

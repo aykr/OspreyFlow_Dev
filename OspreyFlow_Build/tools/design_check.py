@@ -30,8 +30,13 @@ from tools.layout import CORE, REPO
 DESIGN_SOURCE = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 #: The Glass's source, and the design package (ADR-152 decision 6) where `primitives.css` (which
 #: holds the one documented exception), `scale.css` and `panelType.css` live.
-#: `tests/glass_trees/test_design_gates_reach.py` holds the reach.
-SCANNED = [CORE / "apps" / "workspace" / "src", CORE / "packages" / "design"]
+#: `tests/glass_trees/test_design_gates_reach.py` holds the reach. The shared package's source
+#: (PL4 slice C) is read too: what moved out of the Glass's folder is still read.
+SCANNED = [
+    CORE / "apps" / "workspace" / "src",
+    CORE / "packages" / "design",
+    CORE / "packages" / "glass-shared" / "src",
+]
 
 #: (antipattern, the CSS rule it is excused in) — DESIGN.md §9.
 EXCEPTIONS = {("codex-grid-background", ".network-canvas")}

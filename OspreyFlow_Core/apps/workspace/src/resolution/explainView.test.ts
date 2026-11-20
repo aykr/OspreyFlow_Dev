@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { makeNode } from "../testing/fixtures";
-import { createWorkingSet } from "../workingset/store";
+import { createWorkingSet, type ClusterExplanation, type PairwiseExplanation } from "@ospreyflow/glass-shared";
 import { explanationBasis, visiblePairs } from "./explainView";
-import type { ClusterExplanation, PairwiseExplanation } from "../workingset/models";
 
 function pair(overrides: Partial<PairwiseExplanation> = {}): PairwiseExplanation {
   return {

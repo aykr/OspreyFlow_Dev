@@ -1,5 +1,5 @@
 // An expansion the working set's cap refuses (rule 2; spec/00 §4: the Glass offers the cap's explicit choices,
-// never a cut). The Conduit answers 409 with the typed `limit_exceeded` (`workingset/models.ts`'s
+// never a cut). The Conduit answers 409 with the typed `limit_exceeded` (`packages/glass-shared/src/workingset/models.ts`'s
 // LimitExceeded, the body `services/api/app.py` sends). The canvas says it in the over-cap dialog's words, adds
 // nothing, and offers, by keyboard: expand by one relationship instead (the cap's *filter*), and save a smaller
 // view of the case (*save_as_view*, handed to the App's over-cap dialog, `App.expandCap.test.tsx`), and run it as a
@@ -8,7 +8,7 @@
 // which is how a single choice can reach the cap.
 import { expect, type Page, test } from "@playwright/test";
 
-import { CANVAS_CAP_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { CANVAS_CAP_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "CANVAS_CAP_ACTIONS";
 const REFUSED = { error: "limit_exceeded", cap_kind: "nodes", cap: 5000, would_be: 6210, options: ["save_as_view", "filter", "promote_to_batch"] };

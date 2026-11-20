@@ -4,7 +4,7 @@
 // server or the canvas callback.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { OWNERSHIP_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { OWNERSHIP_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "OWNERSHIP_ACTIONS";
 

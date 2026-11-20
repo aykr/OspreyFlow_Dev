@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { linkHoverText } from "./linkHover";
 
 function graph() {
-  const g = new Graph({ multi: true, type: "mixed" }); // as `workingset/store.ts` makes it
+  const g = new Graph({ multi: true, type: "mixed" }); // as `packages/glass-shared/src/workingset/store.ts` makes it
   for (const id of ["a", "b", "c"]) g.addNode(id);
   const add = (key: string, type: string, s: string, t: string) =>
     g.addEdgeWithKey(key, s, t, { data: { id: key, type, source: s, target: t } });

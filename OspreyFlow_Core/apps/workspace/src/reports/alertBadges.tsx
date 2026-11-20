@@ -8,7 +8,7 @@ import type Sigma from "sigma";
 
 import type { QueuedAlert } from "../../../../packages/schemas/generated";
 import { NodeBadgeOverlay, type NodeBadge } from "../canvas/JudgementBadgeOverlay";
-import type { WorkingSetEdgeAttributes, WorkingSetNodeAttributes } from "../workingset/store";
+import type { WorkingSetEdgeAttributes, WorkingSetNodeAttributes } from "@ospreyflow/glass-shared";
 import { fetchNewestAlerts, type ReportsApi } from "./api";
 
 const STILL_OPEN = new Set(["open", "claimed", "closing"]);
