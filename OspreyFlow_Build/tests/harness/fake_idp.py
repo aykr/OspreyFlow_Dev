@@ -5,10 +5,15 @@ and a planted violation must take the real call-site shape. So this is an actual
 (the code under test uses `urllib` and `PyJWKClient` against it exactly as it does against
 Keycloak) that
 
-- serves signing keys at Keycloak's `certs` path;
+- serves signing keys at Keycloak's `certs` path, and its discovery document;
 - refuses an unregistered client, an inexact redirect URI, a plain (non-S256) challenge;
 - issues single-use codes bound to their PKCE challenge, and refuses a wrong verifier, a reused
   code, a code redeemed for another client or redirect;
+- **PL9a (the page service's confidential client), all off unless asked for, so the existing users
+  are unchanged:** authenticates the client at the token endpoint when `client_secret` is set (a wrong
+  or missing secret: `401 invalid_client`, before the code is looked at, as Keycloak does and
+  `tests/conftest.py` records), lets a code expire (`code_ttl_seconds`, moved by `advance`), and
+  hands out a real signed JWT access token for `access_token_audience` instead of an opaque string;
 - signs ID tokens whose claims a test can bend one at a time (audience, issuer, nonce, expiry,
   roles, another signing key, no ID token at all);
 - can answer 500 on the token endpoint, and can be stopped so nothing answers.
@@ -71,6 +76,7 @@ class _Code:
     username: str
     roles: list[str]
     used: bool = False
+    issued_at: float = 0.0
 
 
 @dataclass
@@ -85,10 +91,18 @@ class FakeIdentityProvider:
     omit_id_token: bool = False
     token_status: int | None = None  # force this status from the token endpoint
     token_calls: int = 0
+    #: A confidential client: the secret the provider holds. `None` is a public client (no
+    #: authentication at the token endpoint), which is what the existing tests use.
+    client_secret: str | None = None
+    #: Whole seconds a code lives by the provider's own clock; `None` is for ever.
+    code_ttl_seconds: float | None = None
+    #: When set, the access token is a real signed JWT naming this audience (the Conduit's).
+    access_token_audience: str | None = None
 
     def __post_init__(self) -> None:
         self._key, self._other_key = _keys()
         self._codes: dict[str, _Code] = {}
+        self._offset = 0.0
         outer = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -100,6 +114,20 @@ class FakeIdentityProvider:
                     jwk = json.loads(RSAAlgorithm.to_jwk(outer._key.public_key()))
                     jwk.update({"kid": KID, "use": "sig", "alg": "RS256"})
                     self._send(200, {"keys": [jwk]})
+                elif self.path.endswith("/.well-known/openid-configuration"):
+                    oidc = f"{outer.issuer}/protocol/openid-connect"
+                    self._send(200, {
+                        "issuer": outer.issuer,
+                        "authorization_endpoint": f"{oidc}/auth",
+                        "token_endpoint": f"{oidc}/token",
+                        "jwks_uri": f"{oidc}/certs",
+                        "response_types_supported": ["code"],
+                        "subject_types_supported": ["public"],
+                        "id_token_signing_alg_values_supported": ["RS256"],
+                        "code_challenge_methods_supported": ["S256"],
+                        "token_endpoint_auth_methods_supported": [
+                            "client_secret_basic", "client_secret_post"],
+                    })  # fmt: skip
                 else:
                     self._send(404, {"error": "not_found"})
 
@@ -107,7 +135,9 @@ class FakeIdentityProvider:
                 length = int(self.headers.get("Content-Length", "0"))
                 form = urllib.parse.parse_qs(self.rfile.read(length).decode())
                 if self.path.endswith("/protocol/openid-connect/token"):
-                    status, body = outer._token({k: v[0] for k, v in form.items()})
+                    status, body = outer._token(
+                        {k: v[0] for k, v in form.items()}, self.headers.get("Authorization")
+                    )
                     self._send(status, body)
                 else:
                     self._send(404, {"error": "not_found"})
@@ -153,6 +183,7 @@ class FakeIdentityProvider:
             nonce=query.get("nonce", ""),
             username=username,
             roles=list(self.users[username]),
+            issued_at=self._now(),
         )
         return f"{self.redirect_uri}?" + urllib.parse.urlencode(
             {"code": code, "state": query["state"]}
@@ -160,16 +191,48 @@ class FakeIdentityProvider:
 
     # --- the token endpoint ---
 
-    def _token(self, form: dict[str, str]) -> tuple[int, dict[str, Any]]:
+    def _now(self) -> float:
+        return time.time() + self._offset
+
+    def advance(self, seconds: float) -> None:
+        """Moves the provider's own clock, which decides when a code expires."""
+        self._offset += seconds
+
+    def _authenticated(self, form: dict[str, str], authorization: str | None) -> bool:
+        """A confidential client's secret, by a Basic header or by the form's own fields."""
+        assert self.client_secret is not None
+        client_id: str | None = form.get("client_id")
+        secret: str | None = form.get("client_secret")
+        if authorization and authorization.lower().startswith("basic "):
+            decoded = base64.b64decode(authorization[6:]).decode()
+            name, _, password = decoded.partition(":")
+            client_id, secret = urllib.parse.unquote_plus(name), urllib.parse.unquote_plus(password)
+        return client_id == self.client_id and bool(secret) and secret == self.client_secret
+
+    def _token(
+        self, form: dict[str, str], authorization: str | None = None
+    ) -> tuple[int, dict[str, Any]]:
         self.token_calls += 1
         if self.token_status is not None:
             return self.token_status, {"error": "forced"}
+        # The client is authenticated before the code is looked at, as Keycloak does: a wrong
+        # secret does not spend the code (Keycloak's own refusal, recorded in tests/conftest.py).
+        if self.client_secret is not None and not self._authenticated(form, authorization):
+            return 401, {
+                "error": "invalid_client",
+                "error_description": "Invalid client or Invalid client credentials",
+            }
         if form.get("grant_type") != "authorization_code":
             return 400, {"error": "unsupported_grant_type"}
         stored = self._codes.get(form.get("code", ""))
         if stored is None or stored.used:
             return 400, {"error": "invalid_grant"}
-        stored.used = True  # single use, even when the rest is wrong
+        stored.used = True  # single use, even when the rest is wrong or the code has expired
+        if (
+            self.code_ttl_seconds is not None
+            and self._now() - stored.issued_at > self.code_ttl_seconds
+        ):
+            return 400, {"error": "invalid_grant", "error_description": "Code not valid"}
         if form.get("client_id") != stored.client_id:
             return 400, {"error": "invalid_grant"}
         if form.get("redirect_uri") != stored.redirect_uri:
@@ -192,7 +255,24 @@ class FakeIdentityProvider:
         claims.update(self.claim_overrides)
         key = self._other_key if self.sign_with_other_key else self._key
         token = jwt.encode(claims, key, algorithm="RS256", headers={"kid": KID})
-        return 200, {"id_token": token, "access_token": "opaque", "token_type": "Bearer"}
+        access: str = "opaque"
+        if self.access_token_audience is not None:
+            access = jwt.encode(
+                {
+                    "iss": self.issuer,
+                    "aud": self.access_token_audience,
+                    "azp": stored.client_id,
+                    "sub": f"sub-{stored.username}",
+                    "typ": "Bearer",
+                    "roles": stored.roles,
+                    "iat": now,
+                    "exp": now + 300,
+                },
+                self._key,
+                algorithm="RS256",
+                headers={"kid": KID},
+            )
+        return 200, {"id_token": token, "access_token": access, "token_type": "Bearer"}
 
     def stop(self) -> None:
         """After this nothing answers: the connection is refused."""
