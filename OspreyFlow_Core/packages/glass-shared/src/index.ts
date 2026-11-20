@@ -18,6 +18,8 @@
 // Two checks hold that: `scripts/no_react_check.mjs` and `scripts/version_isolation_check.mjs` (what a bundle
 // reaches) and the `no-restricted-imports` block for this folder in `eslint.config.js` (what a source file
 // names, a type import included: a bundler drops a type-only import, so only the lint rule sees it).
+// `package.json` declares `sideEffects: false`: the registry registers itself at import, which a bundler would keep
+// in every bundle that imports the package for one function (`src/manifest.test.ts` holds the flag).
 export * from "./keyboard/actionRegistry";
 export * from "./workingset/store";
 export * from "./workingset/models";
