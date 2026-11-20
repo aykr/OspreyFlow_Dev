@@ -68,27 +68,38 @@ esac
 
 _HF_STUB = r"""#!/bin/sh
 [ "$1" = download ] || { echo "stub: unmodelled huggingface-cli $*" >&2; exit 2; }
-repo="$NW_HF_CACHE/hub/models--$(echo "$2" | sed 's,/,--,')"
+shift
+asked="$*"
+force=0
+if [ "$1" = --force-download ]; then force=1; shift; fi
+repo="$NW_HF_CACHE/hub/models--$(echo "$1" | sed 's,/,--,')"
 snapshots="$repo/snapshots"
 # Measured: the tool never checks that the snapshot's files are there. A ref that names a snapshot
 # folder that exists is a cache hit, whether the folder is full, partly filled or empty.
 held() { [ -f "$repo/refs/main" ] && [ -d "$snapshots/$(cat "$repo/refs/main")" ]; }
 if [ "$HF_HUB_OFFLINE" = 1 ]; then
-  echo "local huggingface-cli download $2 (HF_HUB_OFFLINE=1)" >> "$NW_LOG"
+  echo "local huggingface-cli download $1 (HF_HUB_OFFLINE=1)" >> "$NW_LOG"
+  if [ "$force" = 1 ]; then echo "ValueError: Cannot pass 'force_download=True' when offline mode is enabled." >&2; exit 1; fi
   if held; then echo "$snapshots/$(cat "$repo/refs/main")"; exit 0; fi
   echo "huggingface_hub.errors.LocalEntryNotFoundError: Cannot find an appropriate cached snapshot folder for the specified revision on the local disk and outgoing traffic has been disabled." >&2
   exit 1
 fi
-echo "NETWORK huggingface-cli download $2" >> "$NW_LOG"
+echo "NETWORK huggingface-cli download $asked" >> "$NW_LOG"
 if [ "$NW_HF_REACHABLE" = 1 ]; then
-  # Online, it fetches whatever the snapshot lacks, and clears a blob left half-written.
+  # Read in huggingface_hub 0.33.4 (`file_download.py`, lines 1066, 1148 and 1152): online, a file
+  # whose snapshot entry or blob already exists, at any length, is returned as it is. Only
+  # `--force-download` replaces it. A half-written blob is cleared only when its own file is fetched
+  # again, and a stray one is never touched.
   mkdir -p "$repo/refs" "$repo/blobs" "$snapshots/0123abc"
   echo 0123abc > "$repo/refs/main"
-  rm -f "$repo/blobs/"*.incomplete
   for f in config.json model.bin tokenizer.json vocabulary.txt; do
-    [ -s "$snapshots/0123abc/$f" ] || echo "$f" > "$snapshots/0123abc/$f"
+    if [ "$force" = 1 ] || [ ! -e "$snapshots/0123abc/$f" ]; then echo "$f" > "$snapshots/0123abc/$f"; fi
   done
   echo "$snapshots/0123abc"; exit 0
+fi
+if [ "$force" = 1 ]; then
+  echo "huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on." >&2
+  exit 1
 fi
 # Measured: with the hub unreachable it falls back to the cache, whatever the cache holds, and
 # exits 0; only with nothing cached does it fail.
@@ -109,6 +120,7 @@ echo "chown $*" >> "$NW_LOG"
 _HF_CACHE_IN_THE_JOB = "/home/ubuntu/.cache/huggingface"
 #: What the speech library requires of a model's snapshot (`faster_whisper.utils.download_model`'s
 #: `allow_patterns`, read in the pinned image; `vocabulary.*` is `vocabulary.txt` for the repo used).
+FORCED_FETCH_PREFIX = "NETWORK huggingface-cli download --force-download "
 SPEECH_FILES = ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt")
 
 
@@ -129,6 +141,7 @@ def _local_lite_jobs() -> tuple[str, str, str]:
 
 
 OLLAMA_JOB, WHISPER_JOB, SPEECH_MODEL = _local_lite_jobs()
+FORCED_FETCH = f"{FORCED_FETCH_PREFIX}{SPEECH_MODEL}"
 #: (model, the id a deployment records for it): read from the rendered script, not restated.
 MODELS = re.findall(r"^pull_and_verify (\S+) (\S+)$", OLLAMA_JOB, re.M)
 
@@ -355,6 +368,54 @@ def test_the_stub_calls_a_cut_short_cache_a_hit_as_the_real_tool_does(
         assert found.returncode == 0, found.stderr
 
 
+@pytest.mark.parametrize("how", ["weights of zero length", "a blob left half-written"])
+def test_the_stub_does_not_repair_online_what_the_real_tool_leaves_as_it_is(
+    machine: _Machine, how: str
+) -> None:
+    """Rule 15, second worked example (round 3's finding). Read in `huggingface_hub` 0.33.4: a
+    snapshot file that exists is returned without a fetch, even at zero length, and a stray
+    half-written blob is never cleared. A stub that mended these would let the job's check pass
+    while the product's check still failed after a real download. Only `--force-download` replaces."""
+    machine.hold_speech_model(**INTERRUPTED[how])
+    machine.hf_reachable = True
+    env = {"PATH": f"{machine.stubs}:/usr/bin:/bin", "NW_LOG": str(machine.log)}
+    env |= {"NW_HF_CACHE": str(machine.hf_cache), "NW_HF_REACHABLE": "1"}
+    plain = subprocess.run(
+        ["huggingface-cli", "download", SPEECH_MODEL],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert plain.returncode == 0, plain.stderr
+    assert not machine.speech_model_is_complete()
+    forced = subprocess.run(
+        ["huggingface-cli", "download", "--force-download", SPEECH_MODEL],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert forced.returncode == 0, forced.stderr
+    # Forcing replaces the files; a stray blob is still the job's to remove.
+    assert machine.speech_model_is_complete() == (how == "weights of zero length")
+
+
+def test_the_stub_refuses_a_forced_download_with_the_hub_unreachable(machine: _Machine) -> None:
+    """The real tool raises when it cannot reach the hub and is told to fetch again."""
+    machine.hold_speech_model()
+    env = {"PATH": f"{machine.stubs}:/usr/bin:/bin", "NW_LOG": str(machine.log)}
+    env |= {"NW_HF_CACHE": str(machine.hf_cache), "NW_HF_REACHABLE": "0"}
+    forced = subprocess.run(
+        ["huggingface-cli", "download", "--force-download", SPEECH_MODEL],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert forced.returncode == 1 and "LocalEntryNotFoundError" in forced.stderr
+
+
 @pytest.mark.parametrize("how", INTERRUPTED)
 def test_a_speech_model_cut_short_is_fetched_when_the_hub_is_reachable(
     machine: _Machine, how: str
@@ -363,12 +424,13 @@ def test_a_speech_model_cut_short_is_fetched_when_the_hub_is_reachable(
     machine.hf_reachable = True
     result = machine.run(WHISPER_JOB)
     assert result.returncode == 0, result.stderr
-    assert f"NETWORK huggingface-cli download {SPEECH_MODEL}" in machine.network_calls()
+    # Not the plain call: the real tool leaves a zero-length file and a stray blob as they are.
+    assert machine.network_calls() == [FORCED_FETCH]
     assert machine.speech_model_is_complete()
     assert any(line.startswith("chown -R 1000:1000") for line in machine.calls())
 
 
-@pytest.mark.parametrize("how", INTERRUPTED)
+@pytest.mark.parametrize("how", [how for how in INTERRUPTED if how != "a blob left half-written"])
 def test_a_speech_model_cut_short_with_the_hub_refused_fails_in_words(
     machine: _Machine, how: str
 ) -> None:
@@ -378,6 +440,19 @@ def test_a_speech_model_cut_short_with_the_hub_refused_fails_in_words(
     assert result.returncode != 0
     assert not any(line.startswith("chown") for line in machine.calls())
     _says_what_to_do(result, SPEECH_MODEL)
+
+
+def test_a_stray_half_written_blob_beside_a_whole_model_is_cleared_and_the_hub_is_not_needed(
+    machine: _Machine,
+) -> None:
+    """Every file the speech library requires is there, so the model is whole and the network
+    cannot add to it: the job removes the stray blob (which the real tool never would) and starts,
+    rather than failing with advice to connect that could never help."""
+    machine.hold_speech_model(incomplete=True)
+    result = machine.run(WHISPER_JOB)
+    assert result.returncode == 0, result.stderr
+    assert machine.speech_model_is_complete()
+    assert any(line.startswith("chown -R 1000:1000") for line in machine.calls())
 
 
 # --- A first install, with the network, still works and still checks the digest ---------------
@@ -392,7 +467,7 @@ def test_a_first_install_fetches_every_model_and_the_speech_model(machine: _Mach
     assert machine.network_calls() == [f"NETWORK ollama pull {model}" for model, _ in MODELS]
     second = machine.run(WHISPER_JOB)
     assert second.returncode == 0, second.stderr
-    assert f"NETWORK huggingface-cli download {SPEECH_MODEL}" in machine.network_calls()
+    assert FORCED_FETCH in machine.network_calls()
 
 
 def test_the_digest_is_still_checked_after_a_pull_that_happens(machine: _Machine) -> None:
