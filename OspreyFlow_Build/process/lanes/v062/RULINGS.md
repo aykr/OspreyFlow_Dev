@@ -220,6 +220,9 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   touches no workspace file, runs beside PL4, **merges ahead of everything except a PL4 slice**. Fix: a failed address change never leaves entries the record does not agree with; the undo failing is loud (words and an audit record without the key), never a log line alone;
   start-up compares every entry's address with the record. The owner's key rules bind it. AD1a merges main in afterwards and keeps the stronger behaviour. Release notes name the fix in plain words (BACKLOG). **A fault in key handling is never accepted narrower:**
   AD1a's round 4 is judged against the conductor's table of every key path, and any row it does not close stops AD1a and goes to the owner.
+- **AD1a stopped on a key-handling fault, 20 November (after round 4).** The conductor's table of every key path (`slices/AD1a_KEY_PATHS_TABLE.md`, 28 rows) was made while round 4 built; judged against it, round 4 closes
+  row 3 and leaves rows 15, 16, 17 (and the SE5 case, row 28) open, and the round-4 verifier found the same fault (a refused credential delete). By the owner's rule (a fault in key handling is never accepted; no standing accept, no narrower accept) AD1a is
+  **stopped and not merged on any record the line writes**. Proposed to the owner: SE5 merges first; main is merged into AD1a (the stronger behaviour kept); the owner adds a round (`AD1a add-round`) with a short brief for the rows that remain; the table is rerun against that tip.
 - **AD1a: one workspace file allowed** (the owner, 20 November, option 2 with conditions). AD1a's three red scan tests
   (`test_admin_sections`; in `test_place_routes`: the record of places by role, and the hidden-place refusal for `right:manage_models`) need
   `apps/workspace/src/shell/placesByRole.json`. AD1a may change **that one file** on its own branch, produced by its generator
