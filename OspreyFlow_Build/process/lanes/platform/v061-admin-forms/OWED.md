@@ -22,3 +22,26 @@ out of 6bc6eae; the CARRIES row for route-coverage-check's reverse check.
 
 **Do not redo:** the shapes, refusals and plants above; key_moved stays unchecked (ruling 21); the cluster Secret
 keeps the key (ruling 28: do not touch cluster_install.py). osprey-small is never this lane's.
+
+## Brought onto main by slice AD1a (20 November 2026): what the merge settled, and what is still owed
+
+**Settled in AD1a (the server half, merge 6f4b918 and after):** the branch merged into `lane/slice-AD1a` with the screen's
+files kept at main's; ADR-135 Amendment 14 kept as 14 (reservation row: lane `v062 AD1a`, written); the plants re-run on main's
+code, 21 of 21 and 17 of 17 red (`plants_run_on_main.txt`, `plants_review_run_on_main.txt`). "Move the deployment.py helper out of
+6bc6eae" needs nothing on main: main already holds `_a_key_in_the_path` identically and the merge added only
+`model_looks_like_a_key` and `label_looks_like_a_key` beside it, once. The `CARRIES` row for the route-coverage reverse check
+is not needed on main: the check reports 431 routes, none allowlisted, no new drift.
+
+**Still owed, and not AD1a's:**
+1. **Q2 (the owner's key review, question 2, ruling 27): one measured run on the demo's real LiteLLM at its log level with a
+   synthetic key**, searching its logs and the credentials row. The live step is off (`process/lanes/v062/live_step.yaml`), so
+   this is owed, not run; a release is refused until it has run.
+2. The live cases of `tests/services/api/test_route_rights.py` (Postgres): three need a store and were not run in AD1a (the two
+   pure cases pass, among them `test_every_route_names_the_right_the_table_gives_it` for the three check routes).
+3. A live LiteLLM run under a lease (check, Add, edit with a moved address, a new key, the one-minute cooldown, a duplicate
+   credential name).
+4. **AD1b** (the screen): the two `.diff` files here (`ACTION_REGISTRY.diff`, `EVERY_HARNESS.diff`), `placesByRole.json`, the screen
+   files, and P8's browser run (`plants_p8_run.txt`). Main's screen still calls the removed `POST /v1/admin/models/engines`: it
+   compiles against the new generated types and its tests pass, but its Add fails at run time until AD1b lands, so AD1a and AD1b
+   merge back to back.
+5. **AD1c:** Fix D, the defaults and limits routes' words, `redacted()`, P1 for Edit and P9 for a query string.
