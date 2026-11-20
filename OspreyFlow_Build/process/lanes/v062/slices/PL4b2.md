@@ -24,7 +24,7 @@ and repoint what names them:
    after the move** (it counts the scanned files; if it prints no count, make it print one, a one-line change with its own test; the count after the move is at least the count before, and your report gives both numbers).
 4. **The images and the stamp.** B already copies `packages/design` in the two images and lists it in the two install-page lists; the three files are inside it, so nothing more is needed there. **Confirm that in your report, and show
    the install-page stamp's files hold the same bytes before and after (only the relative paths differ), the same case B added, run again on this move.**
-5. **The guards.** `OspreyFlow_Build/tests/harness/test_harness_frontend_copies.py` (extended by B to follow imports into `packages/design`) must now reach `packages/design/primitives.css` and see its COPY. Read
+5. **The guards.** `OspreyFlow_Build/tests/harness/test_harness_frontend_copies.py` (extended by B to follow imports into `packages/design`) must now reach the moved `primitives.css` (in the new folder) and see its COPY. Read
    `OspreyFlow_Core/apps/workspace/scripts/sync_govuk_assets.mjs` (it writes the GOV.UK stylesheet into `apps/workspace/public/assets/govuk/` and touches none of these three files: nothing to change; say so).
 6. **The words.** Comments naming the old paths (`OspreyFlow_Core/DESIGN.md` about lines 86, 89 and 480; `apps/workspace/src/views/views.css` about line 38; `apps/workspace/keyboard/scale-rules.spec.ts` lines 1 and 2) and any guide or
    specification text outside the decision log and the records folders follow the files. The acceptance of B (no code, configuration, test, build or guide file names the old path) extends to these three files' old paths. Past

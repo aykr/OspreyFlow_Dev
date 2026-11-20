@@ -12,7 +12,7 @@
 ## What the scout found (the builder re-reads)
 
 `apps/workspace/src/design/fonts.ts` (lines 3 to 7) imports Atkinson Hyperlegible Next 400, 600 and 700 and IBM Plex Mono 400 and 600 from `@fontsource/*`; `src/main.tsx` (line 4) and four keyboard harnesses load it; `@fontsource` is declared
-in `apps/workspace/package.json` only. The CSS uses only the weights 400, 600 and 700. GDS Transport is named in `tokens.css` (about line 189); its files are copied by `scripts/sync_govuk_assets.mjs` into
+in `apps/workspace/package.json` only. The CSS uses only the weights 400, 600 and 700. GDS Transport is named in `tokens.css` (about line 189); its files are copied by `OspreyFlow_Core/apps/workspace/scripts/sync_govuk_assets.mjs` into
 `apps/workspace/public/assets/govuk/fonts/` with a stylesheet (`govuk-frontend.css`) that carries its `@font-face` rules; it is not from `@fontsource`, and its licence limits it to services on gov.uk addresses
 (`spec/00_ARCHITECTURE.md` about lines 1150 to 1156). `apps/harness` loads tokens and primitives and no font; `harness/keycloak_theme.py` uses `var(--ui)` and `var(--mono)` and loads no font file; `apps/pages` loads no font and no
 stylesheet today (no static middleware; `test/server/page.test.ts` forbids an external `<link>`), and its CSP has no `font-src`, so a same-origin font falls under `default-src 'self'`. The existing `fonts.test.ts` checks that `main.tsx`
@@ -54,7 +54,7 @@ scan-map row from that. `fonts.test.ts` is adapted as item 2 says and stays gree
 
 ## Checks
 
-The **checks command**, pure only: the licence checks (`tools.licence_check`, `licence_check.mjs`), `tests/glass_trees/test_fonts_list.py`'s neighbours (`test_no_react_check.py` and the other `glass_trees` tests), `test_doc_citations_check.py`, `ruff check .` in `OspreyFlow_Core`, `npm run lint`, `npm run typecheck`,
+The **checks command**, pure only: the licence checks (`tools.licence_check`, `licence_check.mjs`), the new test's neighbours (`test_no_react_check.py` and the other `glass_trees` tests), `test_doc_citations_check.py`, `ruff check .` in `OspreyFlow_Core`, `npm run lint`, `npm run typecheck`,
 `npm test --workspace apps/workspace` and `apps/pages`, and `node scripts/dist_compare.mjs verify --build`. **Before your final report run by hand the cheap checks the conductor will run again before the merge:** ruff and eslint on every file you changed and the scan-map check for the test you add
 (a row the conductor commits; say what to write). A merge attempt costs 25 minutes: a lint error or a missing row found there is your round.
 
