@@ -1186,9 +1186,7 @@ async def rotate(scene: Scene, how: str) -> None:
     if how == "set_key":
         await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
     else:
-        await scene.admin.edit_engine(
-            "admin-1", "gemini", provider(OLD), SecretStr(scene.second)
-        )
+        await scene.admin.edit_engine("admin-1", "gemini", provider(OLD), SecretStr(scene.second))
 
 
 def failure_rows(scene: Scene, how: str) -> list[str]:

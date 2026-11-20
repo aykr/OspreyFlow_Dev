@@ -1642,12 +1642,17 @@ class ModelAdmin:
             # **No undo unless the change sent a write**: with none sent the gateway is as it was,
             # and an undo is only writes of its own that could fail half-way and break the engine.
             touched = self._gateway.writes != began
+            # A note outstanding for this engine now means a credential was deleted or stored and
+            # the change did not complete: the undo removes it and restores none (one function for
+            # the words, `_why_it_stopped`).
+            self._fresh()
+            noted = engine is not None and engine in self.settings.intents
             undone = await self._undone(rebuilt) if touched else Undone(True)
             self._fresh()
             latest = self.settings  # after the undo: it settles every note of intent
             said = self._why_it_stopped(
                 current, latest, engine, touched, undone, failed.words,
-                say_the_gateway=stopped is not None or unnamed_failure,
+                say_the_gateway=stopped is not None or unnamed_failure, noted=noted,
             )  # fmt: skip
             if not undone.restored and not undone.held and engine is not None:
                 self._unavailable.add(engine)
@@ -1676,18 +1681,24 @@ class ModelAdmin:
         words: str,
         *,
         say_the_gateway: bool,
+        noted: bool = False,
     ) -> str:
         """The one sentence for every way a change stops (decision 2 of the key paths): what failed,
         then what became of the gateway and of the key, **each said only when it is so**. "Put
         back" is said only when the undo restored the entries **and** the credential: an undo
         removes a credential it settles and never restores it (a key is never kept), so a change
-        that took an engine's key says the entries are as the record says and the key is removed,
-        never that anything was put back. Where nothing named the failure (an exception nobody
-        named, an interruption) the gateway's own state is said too."""
+        that took an engine's key, or stored one the undo then removed (`noted`: the note of intent
+        was still outstanding, whatever the record said before: a key already lost, a rotation, an
+        edit that keeps its address), says the entries are as the record says and the key is
+        removed, never that anything was put back. Where nothing named the failure (an exception
+        nobody named, an interruption) the gateway's own state is said too."""
         said = [words]
         # A key the gateway would not remove is not removed: it is said held, never removed.
         taken = self._key_taken(current, latest, engine) and engine not in undone.held
         is_engine = engine is not None and any(p.name == engine for p in latest.providers)
+        # A credential this change stored or deleted, which the undo removed and did not restore:
+        # a key already lost before the change is not "taken" by it, and is not put back either.
+        removed = taken or (noted and is_engine and engine not in undone.held)
         if undone.held:
             names = ", ".join(sorted(undone.held))
             said.append(
@@ -1703,7 +1714,7 @@ class ModelAdmin:
                 "A key this change had stored could not be removed from the model gateway yet: "
                 "the Conduit removes it at the next change or start; run ospreyflow doctor."
             )
-        elif say_the_gateway and touched and not taken:
+        elif say_the_gateway and touched and not removed:
             said.append("The model gateway was put back as the saved settings say.")
         elif say_the_gateway and touched:
             said.append("The model gateway's entries are as the saved settings say.")
@@ -1713,6 +1724,11 @@ class ModelAdmin:
             said.append(
                 f"{engine}'s key was removed by this change and the removal is saved: a key is "
                 "never kept to restore, so enter it again."
+            )
+        elif removed and touched:
+            said.append(
+                f"The key typed with this change was removed from the model gateway and is not "
+                f"kept: {engine} has no key, so enter it again."
             )
         elif taken:
             said.append(
@@ -1807,12 +1823,14 @@ class ModelAdmin:
                     await self._withdraw_entries(current, name)
                 # From here the key may be the engine's credential, and the code cannot always
                 # tell: a read timeout after the gateway wrote it reads as "not stored". The note
-                # of intent is saved first, and whatever leaves this call, a refusal, a file that
-                # cannot be written, a cancellation, a garbled answer or any other exception, takes
-                # one road out: `_change` settles the note (the credential is removed before any
-                # entry is made for the engine) and puts the entries back as the file says. A
-                # process that dies here finds the same note at its next start.
-                fresh = await self._put_key(name, key, by, settle=not moved)
+                # of intent is saved first and **cleared only by the final save below**, moved or
+                # not (round 8): whatever leaves this call, a refusal, a file that cannot be
+                # written, a cancellation, a garbled answer or any other exception, takes one road
+                # out: `_change` settles the note (the credential is removed before any entry is
+                # made for the engine, the key recorded lost) and puts the entries back as the
+                # file says, saying the key was removed. A process that dies here finds the same
+                # note at its next start.
+                fresh = await self._put_key(name, key, by)
                 proposed = _with_key(proposed, name, fresh)
             await self._reconcile(proposed, rebuilt=frozenset({name}))
             self._save(proposed)
@@ -1899,7 +1917,11 @@ class ModelAdmin:
         gateway refuses after the old key was removed is recorded truthfully**: the engine's key
         is then lost, and it is offered to no analyst until a key is entered again. **Checked
         first** (the owner's ruling 19): a key the provider refuses replaces nothing."""
-        said: list[ModelAdminAction] = [action or "key_set"]
+        # Named before the change runs: a rotation that fails is audited as a rotation (round 8),
+        # not as a first key (`key_state` is "set" only for a key held and recorded).
+        said: list[ModelAdminAction] = [
+            action or ("key_rotated" if self.key_state(name) == "set" else "key_set")
+        ]
 
         async def work(current: ModelSettings) -> None:
             if all(p.name != name for p in current.providers):
@@ -1932,7 +1954,7 @@ class ModelAdmin:
             # key is stored while an entry stands at an address the record does not give: such
             # entries are withdrawn first, and a withdrawal the gateway refuses refuses the key.
             await self._withdraw_disagreeing(current)
-            fresh = await self._put_key(name, key, by, settle=True)
+            fresh = await self._put_key(name, key, by)
             proposed = _with_key(current, name, fresh)
             await self._reconcile(proposed)
             self._save(proposed)
@@ -2142,35 +2164,43 @@ class ModelAdmin:
                 f"{said} Nothing was changed: {provider.label or provider.name} keeps {kept}."
             )
 
-    async def _put_key(self, name: str, key: SecretStr, by: str, *, settle: bool) -> KeyRecord:
-        """A checked key as the engine's own credential, returning the record that says so.
+    async def _put_key(self, name: str, key: SecretStr, by: str) -> KeyRecord:
+        """A checked key as the engine's own credential, returning the record that will say so.
 
         **The note of intent is saved first** (`_intending`), so a record save that fails stops the
         change with nothing done, and a process that dies, a task that is cancelled or an answer
         that is lost after the gateway wrote never leaves "set" over a credential the code cannot
-        account for. Whatever then leaves this call, the note stays and `_resolve` removes the
-        credential before any entry is made for the engine. A removal the gateway *answered* with a
+        account for. **It is cleared only by the change's own final save** (the caller puts the
+        returned record in the settings it saves last), for a rotation and an edit that keeps its
+        address as for a moved one: whatever then leaves the change, a refused update of the
+        engine's limits, a garbled list of keys, a cancellation, the note stays and `_resolve`
+        removes the credential before any entry is made for the engine, and the answer and the
+        audit say the key was removed (`_why_it_stopped`). A removal the gateway *answered* with a
         refusal changed nothing, so the note is given back. A replacement the gateway refuses after
-        the old key was removed leaves the note too, and the engine's key is then recorded lost.
-        With `settle` the record says set once the key is stored (the address is the one it was
-        typed for) and the note is cleared; a moved edit settles only when its entries are made at
-        the new address (the caller's final save clears it)."""
+        the old key was removed leaves the note too, and the engine's key is then recorded lost."""
         async with self._intending(name, by):
             await self._gateway.put_credential(name, key)
-        fresh = KeyRecord(set_at=self._now(), set_by=by)
-        if settle:
-            self._save(_with_key(self.settings, name, fresh))
-        return fresh
+        return KeyRecord(set_at=self._now(), set_by=by)
 
     async def _expired(self, current: ModelSettings) -> tuple[ModelSettings, list[str]]:
-        """`current` without the checks older than `CHECK_LIFE`, their credentials removed."""
+        """`current` without the checks older than `CHECK_LIFE`, their credentials removed.
+
+        **A lapsed check's credential joins the one mechanism** (round 8, N1): the note of intent
+        is saved before it is deleted and cleared with the record that drops the check (the
+        settings returned here, which the caller saves). A removal that landed and whose record was
+        never saved leaves the note, which the next change or start settles by removing the check
+        with its credential; one the gateway answered with a refusal changed nothing, so the note is
+        given back and the check stays until a later sweep."""
         now = self._now()
         late = {i: c for i, c in current.checks.items() if now - c.at > CHECK_LIFE}
         for pending in late.values():
             if not pending.provider.keyless:
-                await self._gateway.delete_credential(pending.provider.name)
+                async with self._intending(pending.provider.name, "system"):
+                    await self._gateway.delete_credential(pending.provider.name)
         kept = {i: c for i, c in current.checks.items() if i not in late}
-        return current.model_copy(update={"checks": kept}, deep=True), [
+        names = {c.provider.name for c in late.values()}
+        intents = {k: v for k, v in current.intents.items() if k not in names}
+        return current.model_copy(update={"checks": kept, "intents": intents}, deep=True), [
             c.provider.name for c in late.values()
         ]
 

@@ -176,8 +176,8 @@ class EngineCheckInput(BaseModel):
 
 
 class ModelCheck(BaseModel):
-    """One typed model's answer to the check's one call, in fixed words, by the jobs it was typed for:
-    never the typed name, which may be a key pasted in the wrong field (the owner's ruling 22)."""
+    """One typed model's answer to the check's one call, in fixed words, by the jobs it was typed
+    for: never the typed name, which may be a key pasted in the wrong field (owner's ruling 22)."""
 
     roles: list[str]
     outcome: ConnectionOutcome
