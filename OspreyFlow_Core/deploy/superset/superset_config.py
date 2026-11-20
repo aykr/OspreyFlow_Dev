@@ -280,8 +280,9 @@ TALISMAN_DEV_CONFIG = {
     "force_https": False,
     "session_cookie_secure": False,
 }
-# Superset's own content security policy stays on (its default); rate limits are counted in the
-# deployment's Valkey, so every worker and replica counts together.
+# The policy above is the one sent, and it is pinned on (`TALISMAN_ENABLED`, above): it is not
+# Superset's shipped policy and it is not on merely by Superset's default. Rate limits are counted
+# in the deployment's Valkey, so every worker and replica counts together.
 # Reached only through the deployment's front proxy (ADR-114 Amendment 4), which is the only thing
 # that can send these headers: trust its scheme and host when building sign-in redirects.
 ENABLE_PROXY_FIX = True

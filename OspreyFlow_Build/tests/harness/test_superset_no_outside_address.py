@@ -5,9 +5,11 @@ What is proved here, and what is not (rule 12; the owner's order of 20 November 
 - **Superset's content-security policy names no host outside the deployment** in any directive. The
   policy is loaded as Superset loads it (`deploy/superset/superset_config.py`, with Superset and
   Flask-AppBuilder stubbed, from the environment the render writes), so a host added to a directive
-  on the way to the browser turns this red. The two outside hosts the file carried until SE6
-  (Scarf's image hosts, Mapbox's connection hosts) are each planted back, in the directive they
-  were in, and found.
+  turns this red. So does any other key handed to Talisman (it builds a `report-uri` directive from
+  `content_security_policy_report_uri`, which would send each blocked pixel's report outside): the
+  keys are listed with their reasons, and a new one is red until it is. The two outside hosts the
+  file carried until SE6 (Scarf's image hosts, Mapbox's connection hosts) are each planted back, in
+  the directive they were in, and found.
 - **The built policy replaces the shipped one.** `from superset_config import *` rebinds the name
   `TALISMAN_CONFIG`; Superset 6.1.0 does not merge the two dictionaries (read in the pinned image,
   `superset/initialization/__init__.py` line 894: it takes `TALISMAN_DEV_CONFIG` when Flask's debug
@@ -16,6 +18,9 @@ What is proved here, and what is not (rule 12; the owner's order of 20 November 
   domains. Because debug mode would take the shipped *development* policy, this file's own
   development policy is checked as well.
 - **No Mapbox key is set**, in the loaded configuration or in either profile's rendered environment.
+  The cloud platform's render is made **with Superset on** (the fixture has none; its Superset
+  settings are added only then), shown to carry Superset's own sign-in settings, and a setting
+  planted where it builds them is found.
 - **The Glass's and the pages service's served source files name no outside host**: the pages
   service's views and `headers.ts`, the Glass's `index.html` and its static pages.
 
@@ -44,6 +49,10 @@ written, because Superset 6.1.0 has no runtime switch. Measured on the image the
   It is drawn with no condition after the navigation bar's "Login" link:
   `(0,n.Y)(A,{version:t.version_string,sha:t.version_sha,build:t.build_number})]})`.
 
+(Found in round 1, and measured again in round 3 on the local copy of the same digest, which the
+local Docker holds as `apache/superset:6.1.0`: the same two greps, run in a container with no
+network and no ports, gave the same result.)
+
 So the only thing that stops that request is the policy's `img-src`, which this slice made name no
 outside host: the browser refuses the image before any request leaves, and says so with a
 `securitypolicyviolation` event. **That makes the policy the whole protection, so the policy being
@@ -69,11 +78,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+import harness.cloud_platform as cloud_platform
 import pytest
+import yaml
 from harness.reporting import reporting_env
+from tools.cp_policy_check import FIXTURES
 
 from schemas.deployment import OspreyConfig
-from tests.harness.test_cloud_platform_render import _config as _cloud_config
 from tests.harness.test_cloud_platform_render import _values as _cloud_values
 from tests.harness.test_superset_entra_sign_in import _superset
 
@@ -144,6 +155,23 @@ def rendered() -> list[str]:
 
 def _env(lines: Iterable[str]) -> dict[str, str]:
     return dict(line.split("=", 1) for line in lines if "=" in line and not line.startswith("#"))
+
+
+def _cloud_superset_environment() -> dict[str, str]:
+    """The environment the cloud platform's render gives its workloads **with Superset in it**.
+
+    The shipped fixture has no `reporting` block, and Superset's cloud settings are added only
+    `if config.reporting.superset`, so a render of the fixture as it stands holds none of them and
+    a setting planted in that branch would go unseen. The fixture is read as `cp-policy-check` reads
+    it, Superset is turned on, and the app registration the render's own refusal asks for is added
+    (a synthetic id, rule 9); the render is then shown to carry Superset's own sign-in settings."""
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw["reporting"] = {"superset": True}
+    raw["cloud_platform"]["claims"]["superset_client_id"] = "cccccccc-dddd-4eee-8fff-000000000000"
+    environment: dict[str, str] = _cloud_values(OspreyConfig.model_validate(raw))["environment"]
+    assert environment["SUPERSET_SIGN_IN"] == "entra"
+    assert "SUPERSET_OIDC_CLIENT_ID" in environment
+    return environment
 
 
 def _own_hosts(env: Mapping[str, str]) -> set[str]:
@@ -228,10 +256,35 @@ def test_the_check_is_red_when_the_policy_is_switched_off(config: Any) -> None:
 
 def test_neither_profiles_render_switches_the_policy_off(rendered: list[str]) -> None:
     assert "TALISMAN_ENABLED" not in _env(rendered)
-    cloud = _cloud_values(_cloud_config())["environment"]
-    assert "TALISMAN_ENABLED" not in cloud
+    assert "TALISMAN_ENABLED" not in _cloud_superset_environment()
     # The check can fail: the same lookups on a render that sets one.
     assert "TALISMAN_ENABLED" in _env([*rendered, "TALISMAN_ENABLED=false"])
+
+
+def _plant_in_the_cloud_superset_settings(
+    monkeypatch: pytest.MonkeyPatch, **extra: str
+) -> dict[str, str]:
+    """The cloud render with `extra` added where it builds Superset's own settings (the real call
+    site: `_reporting_on_entra`, which only runs when Superset is on)."""
+    real = cloud_platform._reporting_on_entra
+
+    def planted(*args: Any, **kwargs: Any) -> dict[str, str]:
+        return {**real(*args, **kwargs), **extra}
+
+    monkeypatch.setattr(cloud_platform, "_reporting_on_entra", planted)
+    return _cloud_superset_environment()
+
+
+def test_a_setting_added_only_to_the_cloud_profiles_superset_is_found(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15: the lookups above see the cloud render's Superset, so a planted setting is found."""
+    assert "TALISMAN_ENABLED" not in _cloud_superset_environment()
+    planted = _plant_in_the_cloud_superset_settings(
+        monkeypatch, TALISMAN_ENABLED="false", MAPBOX_API_KEY="a-synthetic-value"
+    )
+    assert "TALISMAN_ENABLED" in planted
+    assert "MAPBOX_API_KEY" in planted
 
 
 @pytest.mark.parametrize(
@@ -282,6 +335,73 @@ def test_the_deployments_own_origin_is_not_flagged_but_a_lookalike_is(own: set[s
     assert sources_outside({"img-src": [f"https://{host}@example.test/"]}, own) != []
 
 
+# --- the rest of what is handed to Talisman -----------------------------------------------------
+# Superset passes the whole dictionary on (`talisman.init_app(app, **talisman_config)`), and
+# Talisman builds some directives from its *other* keyword arguments: the key
+# `content_security_policy_report_uri` becomes a `report-uri` directive, so with this policy each
+# blocked tracking pixel would send a violation report to wherever it points. The policy
+# dictionary alone does not show that.
+
+#: The keys this file hands Talisman, each with why it cannot name an address. A new key is a
+#: decision to read, not one to slip in: it is red until it is written here with its reason.
+TALISMAN_KEYS: dict[str, str] = {
+    "content_security_policy": "the policy itself, checked directive by directive above",
+    "content_security_policy_nonce_in": "names directives (script-src), not hosts",
+    "force_https": "a switch",
+    "session_cookie_secure": "a switch",
+}
+
+
+def talisman_keys_outside(talisman_config: Mapping[str, Any]) -> list[str]:
+    return sorted(set(talisman_config) - set(TALISMAN_KEYS))
+
+
+def talisman_values_naming_an_address(talisman_config: Mapping[str, Any]) -> list[str]:
+    """The keys, other than the policy, whose value names an address (a `*_uri`, say)."""
+    return sorted(
+        key
+        for key, value in talisman_config.items()
+        if key != "content_security_policy" and _ADDRESS.search(repr(value))
+    )
+
+
+@pytest.mark.parametrize("name", ["TALISMAN_CONFIG", "TALISMAN_DEV_CONFIG"])
+def test_nothing_else_handed_to_talisman_can_name_an_address(config: Any, name: str) -> None:
+    talisman_config = getattr(config, name)
+    assert talisman_keys_outside(talisman_config) == []
+    assert talisman_values_naming_an_address(talisman_config) == []
+    # Not vacuous: the keys that are there are the ones written down.
+    assert set(talisman_config) == set(TALISMAN_KEYS)
+
+
+@pytest.mark.parametrize("name", ["TALISMAN_CONFIG", "TALISMAN_DEV_CONFIG"])
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("content_security_policy_report_uri", "https://report.example.test/csp"),
+        ("content_security_policy_report_uri", "/csp-report"),
+        ("content_security_policy_report_only", True),
+        ("referrer_policy", "unsafe-url"),
+    ],
+)
+def test_a_key_added_to_the_talisman_configuration_is_red(
+    config: Any, name: str, key: str, value: Any
+) -> None:
+    """Planted at the call site: the real loaded dictionary with one key added."""
+    talisman_config = {**getattr(config, name), key: value}
+    assert talisman_keys_outside(talisman_config) == [key]
+    if isinstance(value, str) and "://" in value:
+        assert talisman_values_naming_an_address(talisman_config) == [key]
+
+
+@pytest.mark.parametrize("name", ["TALISMAN_CONFIG", "TALISMAN_DEV_CONFIG"])
+def test_a_report_uri_directive_in_the_policy_is_red(config: Any, own: set[str], name: str) -> None:
+    policy = copy.deepcopy(_policies(config)[name])
+    assert sources_outside(policy, own) == []
+    policy["report-uri"] = ["https://report.example.test/csp"]
+    assert sources_outside(policy, own) == [("report-uri", "https://report.example.test/csp")]
+
+
 # --- no map key ---------------------------------------------------------------------------------
 
 
@@ -290,8 +410,7 @@ def test_no_map_key_is_set_in_the_configuration_or_in_either_profiles_render(
 ) -> None:
     assert not hasattr(config, "MAPBOX_API_KEY")
     assert "MAPBOX_API_KEY" not in _env(rendered)
-    cloud = _cloud_values(_cloud_config())["environment"]
-    assert "MAPBOX_API_KEY" not in cloud
+    assert "MAPBOX_API_KEY" not in _cloud_superset_environment()
     # The check can fail: the same lookups on a render that sets one.
     assert "MAPBOX_API_KEY" in _env([*rendered, "MAPBOX_API_KEY=a-synthetic-value"])
 
