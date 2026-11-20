@@ -31,7 +31,8 @@ Which test fails if the invariant is broken (rule 12):
 * the manifest listing more or less than `graphology` and `zustand` as dependencies, at the ranges the workspace uses,
   or a name from the React family anywhere, or a source file importing `zustand` other than through `zustand/vanilla`
   (whose main entry pulls React in): `test_the_manifest_lists_graphology_and_zustand_and_nothing_from_react`,
-  `test_the_source_imports_zustand_only_through_vanilla` and `test_the_lint_rule_refuses_the_zustand_that_pulls_in_react`;
+  `test_the_source_imports_zustand_only_through_vanilla`, `test_the_lint_rule_refuses_the_zustand_that_pulls_in_react` and
+  (for `import("zustand")` as a type or an expression, in every extension) `test_the_lint_selectors_refuse_the_zustand_that_pulls_in_react_as_a_type_or_a_dynamic_import`;
 * each of four gates (`make colour-drift-check`, `design-check`, `ui-words-check`, `no-branches-check`) that stops
   reading `packages/glass-shared/src`, or reads fewer files than it did before the move:
   `test_each_gate_reads_packages_glass_shared_src`, `test_each_gate_reads_no_fewer_files_than_before` and one plant case
@@ -240,10 +241,9 @@ def zustand_problems(root: Path) -> tuple[list[str], int]:
     return bad, seen
 
 
-def eslint_refusals(source: str) -> list[str]:
-    """The `no-restricted-imports` messages ESLint gives `source` read as a file of the shared package (a name, never a file)."""
+def _eslint_messages(source: str, filename: str, rule_suffix: str) -> list[str]:
     done = subprocess.run(
-        ["npx", "--no-install", "eslint", "--stdin", "--stdin-filename", "packages/glass-shared/src/planted.ts", "--format", "json"],
+        ["npx", "--no-install", "eslint", "--stdin", "--stdin-filename", f"packages/glass-shared/src/{filename}", "--format", "json"],
         cwd=CORE, input=source, capture_output=True, text=True, check=False,
     )  # fmt: skip
     results = json.loads(done.stdout)
@@ -251,8 +251,18 @@ def eslint_refusals(source: str) -> list[str]:
         m["message"]
         for r in results
         for m in r["messages"]
-        if str(m.get("ruleId", "")).endswith("no-restricted-imports")
+        if str(m.get("ruleId", "")).endswith(rule_suffix)
     ]
+
+
+def eslint_refusals(source: str) -> list[str]:
+    """The `no-restricted-imports` messages ESLint gives `source` read as a file of the shared package (a name, never a file)."""
+    return _eslint_messages(source, "planted.ts", "no-restricted-imports")
+
+
+def eslint_syntax_refusals(source: str, filename: str = "planted.ts") -> list[str]:
+    """The `no-restricted-syntax` messages: the selectors for `import("name")` as a type and as an expression."""
+    return _eslint_messages(source, filename, "no-restricted-syntax")
 
 
 # ---------------------------------------------------------------------------------------------------- the images
@@ -322,7 +332,10 @@ def _git(*args: str) -> str:
 
 def test_the_move_changed_no_line_but_the_imports() -> None:
     """Each file is read as the commit that renamed it left it against the commit before: the rename is found by
-    git's own detection, at the same bytes but for the lines naming a module."""
+    git's own detection, at the same bytes but for the lines naming a module. (A shallow clone has no history to read:
+    skipped, as the two earlier move tests in this folder are.)"""
+    if _git("rev-parse", "--is-shallow-repository").strip() == "true":
+        pytest.skip("a shallow clone has no history: the move commit cannot be read")
     for new, old in zip(NEW_RELS, OLD_RELS, strict=True):
         commit = _git(
             "log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new
@@ -552,6 +565,30 @@ def test_the_lint_rule_refuses_the_zustand_that_pulls_in_react() -> None:
         'import type { StoreApi } from "zustand";\nexport type S = StoreApi<number>;\n',
     ):
         assert eslint_refusals(planted), f"the lint rule lets {planted.splitlines()[0]!r} through"
+
+
+@pytest.mark.parametrize("filename", ["planted.ts", "planted.tsx", "planted.mts", "planted.cts"])
+def test_the_lint_selectors_refuse_the_zustand_that_pulls_in_react_as_a_type_or_a_dynamic_import(
+    filename: str,
+) -> None:
+    """The `zustand(?!\\/vanilla$)` part of `SHARED_BANNED_MODULE` (rule 15): feeds the two selectors for the
+    `import("zustand")` that is not an import statement. The `zustand/vanilla` entry is let through in both shapes first,
+    so what is refused is the lookahead's work and not a blanket ban on the name; then the main entry and `zustand/react`
+    are refused in both, in every extension the lint block covers."""
+    for allowed in (
+        'export type S = import("zustand/vanilla").StoreApi<number>;\n',
+        'export const later = () => import("zustand/vanilla");\n',
+    ):
+        assert eslint_syntax_refusals(allowed, filename) == [], f"{allowed.strip()!r} is refused"
+    for planted in (
+        'export type S = import("zustand").StoreApi<number>;\n',
+        'export type S = import("zustand/react").UseBoundStore<number>;\n',
+        'export const later = () => import("zustand");\n',
+        'export const later = () => import("zustand/react");\n',
+    ):
+        assert len(eslint_syntax_refusals(planted, filename)) == 1, (
+            f"the lint selectors let {planted.strip()!r} through in {filename}"
+        )
 
 
 # --------------------------------------------------------------------------------------------------- the four gates
