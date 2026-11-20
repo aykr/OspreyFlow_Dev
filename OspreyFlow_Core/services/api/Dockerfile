@@ -65,9 +65,11 @@ RUN jlink \
 FROM python:3.12-slim AS runtime-included
 COPY --from=java /opt/jre /opt/java
 # ADR-147 Amendment 6: the runtime's NOTICE and source offer travel with it, beside the `legal` tree the
-# copy above takes whole. Only in this stage: the build that omits Java carries no Java notice.
-# `tests/test_conduit_image_java_notice.py` holds this line, the notice and the labels it must match.
-COPY services/api/JAVA_NOTICE /opt/java/NOTICE
+# copy above takes whole. Only in this stage: the build that omits Java carries no Java notice. The file
+# lives in `notices/`, not under `services/`, because the builder copies the whole of `services/` and the final
+# stage takes it on, which would carry anything under `services/` into the image that has no Java.
+# `tests/test_conduit_image_java_notice.py` holds this line, that route, the notice and the labels it must match.
+COPY notices/JAVA_NOTICE /opt/java/NOTICE
 LABEL org.ospreyflow.runtime.java.included="included"
 LABEL org.ospreyflow.runtime.java.licence="GPL-2.0-only WITH Classpath-exception-2.0"
 LABEL org.ospreyflow.runtime.java.version="21.0.13+9"

@@ -41294,9 +41294,11 @@ nothing to attach.
 
 **Decision.**
 
-1. **The notice is in the image.** `services/api/JAVA_NOTICE` is copied by one `COPY` in the Dockerfile's
+1. **The notice is in the image.** `notices/JAVA_NOTICE` is copied by one `COPY` in the Dockerfile's
    `runtime-included` stage to `/opt/java/NOTICE`. The `runtime-omitted` stage (the cloud-platform build, which
-   carries no Java) and the final stage do not copy it, and no stage is added.
+   carries no Java) and the final stage do not copy it, and no stage is added. The file is outside `services/`
+   on purpose: the builder stage copies `services/` whole and the final stage, which serves both builds, takes it
+   on, so a file under `services/` would reach the image with no Java.
 2. **What it holds**: the runtime's name (Eclipse Temurin, from the OpenJDK), its version and licence exactly as
    the Dockerfile's `org.ospreyflow.runtime.java.version` and `.licence` labels give them; the offer of its
    corresponding source, which is Temurin's published source at the tag `jdk-<version>` with the `jlink` line of the
@@ -41309,6 +41311,7 @@ nothing to attach.
    the vendors'.
 
 Tests that would fail: `tests/test_conduit_image_java_notice.py` (the `COPY` deleted, or added to the omitted or the
-final stage; the notice's version, licence, runtime name, source tag or `jlink` line differing from the Dockerfile's;
-a library of §7's table missing from it; a client named; each planted in the real files, rule 15), and
+final stage, or reaching the final stage by a folder copy through the builder; the notice's version, licence,
+runtime name, source tag or `jlink` line differing from the Dockerfile's; a library of §7's table missing from it
+or given another library's licence; a client named; each planted in the real files, rule 15), and
 `tests/test_conduit_image_java_licence.py` (no Java in the final stage).

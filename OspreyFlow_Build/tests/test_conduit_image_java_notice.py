@@ -307,9 +307,9 @@ OLD_PLACE = CORE / "services" / "api" / "JAVA_NOTICE"
 def test_no_route_carries_the_notice_into_the_omitted_image() -> None:
     """The final stage serves both builds. A folder copy that holds the notice, taken on by the final stage's
     `COPY --from=builder`, puts it into the image that has no Java, though no line names the file."""
-    builder_copy = "COPY services ./services"
-    final_copy = "COPY --from=builder /app/services ./services"
-    assert builder_copy in DOCKERFILE and final_copy in DOCKERFILE, "the real Dockerfile's lines are not the shape planted"
+    builder_copy = "\nCOPY services ./services\n"
+    final_copy = "\nCOPY --from=builder /app/services ./services\n"
+    assert DOCKERFILE.count(builder_copy) == 1 and DOCKERFILE.count(final_copy) == 1, "the real Dockerfile's lines are not the shape planted"
     # The real Dockerfile as it stands: the notice is outside every folder the builder copies.
     assert _landings_in_the_builder(DOCKERFILE, NOTICE_PATH) == []
     # Plant 1 (round 2's fault, exactly): the notice back under services/, the real Dockerfile's included-stage line
@@ -319,8 +319,8 @@ def test_no_route_carries_the_notice_into_the_omitted_image() -> None:
     problems = dockerfile_problems(back, OLD_PLACE)
     assert len(problems) == 1 and "brings the notice in from the builder" in problems[0], problems
     # Plant 2: the notice's own folder copied by the builder and taken on by the final stage.
-    through = _plant(DOCKERFILE, builder_copy, builder_copy + "\nCOPY notices ./notices")
-    through = _plant(through, final_copy, final_copy + "\nCOPY --from=builder /app/notices ./notices")
+    through = _plant(DOCKERFILE, builder_copy, builder_copy + "COPY notices ./notices\n")
+    through = _plant(through, final_copy, final_copy + "COPY --from=builder /app/notices ./notices\n")
     problems = dockerfile_problems(through)
     assert len(problems) == 1 and "brings the notice in from the builder" in problems[0], problems
     # Plant 3: the whole of /app taken on, which holds the folder the builder copied.
@@ -335,7 +335,7 @@ def test_no_route_carries_the_notice_into_the_omitted_image() -> None:
         "the final stage copies the notice"
     ]
     # Not over-flagged: a builder that copies the folder, with the final stage taking nothing of it, ships nothing.
-    only_builder = _plant(DOCKERFILE, builder_copy, builder_copy + "\nCOPY notices ./notices")
+    only_builder = _plant(DOCKERFILE, builder_copy, builder_copy + "COPY notices ./notices\n")
     assert dockerfile_problems(only_builder) == []
 
 

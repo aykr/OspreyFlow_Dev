@@ -954,7 +954,7 @@ program on a JVM. **Distributing the image distributes the runtime under GPL-2.0
 that ships the Conduit's image carries, with it, the offer of its corresponding source (Temurin's
 published source at the image's tag, `jdk-21.0.13+9`, and the `jlink` line that derived it,
 `services/api/Dockerfile`), and its NOTICE names the runtime and its licence. Both are carried in the image, at
-`/opt/java/NOTICE` (`services/api/JAVA_NOTICE`; ADR-147 Amendment 6); the publication of the image is the release step, not
+`/opt/java/NOTICE` (`notices/JAVA_NOTICE`; ADR-147 Amendment 6); the publication of the image is the release step, not
 this register's to perform. **Only that exception, only for a runtime recorded here, and only for
 GPL-2.0:** a plain GPL (any version), a GPL-3.0 with the exception, a GPL with any other exception,
 and AGPL still never pass. A runtime in an image is declared by a `LABEL
