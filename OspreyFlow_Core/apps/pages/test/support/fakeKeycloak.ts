@@ -23,7 +23,7 @@ import type { AddressInfo } from "node:net";
 import { createHash, randomBytes } from "node:crypto";
 
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
-import type { JWK, KeyLike } from "jose";
+import type { CryptoKey, JWK } from "jose";
 
 export const REALM = "osprey";
 export const CONDUIT_AUDIENCE = "osprey-conduit";
@@ -37,8 +37,8 @@ export class AuthorisationRefused extends Error {
 }
 
 interface Keys {
-  signing: KeyLike;
-  other: KeyLike;
+  signing: CryptoKey;
+  other: CryptoKey;
   jwk: JWK;
 }
 

@@ -233,7 +233,9 @@ class FakeIdentityProvider:
             and self._now() - stored.issued_at > self.code_ttl_seconds
         ):
             return 400, {"error": "invalid_grant", "error_description": "Code not valid"}
-        if form.get("client_id") != stored.client_id:
+        # With a Basic header the form need not name the client again; the authenticated one counts.
+        client_id = form.get("client_id") or (self.client_id if self.client_secret else "")
+        if client_id != stored.client_id:
             return 400, {"error": "invalid_grant"}
         if form.get("redirect_uri") != stored.redirect_uri:
             return 400, {"error": "invalid_grant"}

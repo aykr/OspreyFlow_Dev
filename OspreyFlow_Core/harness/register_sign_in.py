@@ -34,6 +34,8 @@ from harness.realm import (
     LOGIN_THEME_NAME,
     REALM_DISPLAY_NAME,
     RETIRED_CLIENT_IDS,
+    PAGES_CLIENT_ID,
+    PAGES_CLIENT_SECRET_KEY,
     SUPERSET_CLIENT_ID,
     WITHDRAWN_DEMO_ROLES,
     generate_client_secret,
@@ -42,6 +44,7 @@ from harness.realm import (
     organisation_provider_mappers,
     organisation_redirect_uris,
     organisation_sign_in_flows,
+    pages_client,
     render_realm,
     sign_in_rules,
     superset_client,
@@ -260,6 +263,18 @@ def ensure_identity(
             + keycloak_admin.ensure_client(
                 issuer=issuer, realm=realm, token=token,
                 client={**superset_client(origin), "secret": superset_secret},
+            )
+        )  # fmt: skip
+    pages_secret = values.get(PAGES_CLIENT_SECRET_KEY)
+    if pages_secret:
+        # ADR-152 decision 4, ADR-050 Amendment 4: the page service's own confidential client, its
+        # secret set from the env file `apply` minted it into. A deployment whose file holds none
+        # (not yet applied since this existed) is left as it is, as Superset's is.
+        lines.append(
+            f"sign-in client {PAGES_CLIENT_ID}: "
+            + keycloak_admin.ensure_client(
+                issuer=issuer, realm=realm, token=token,
+                client={**pages_client(config), "secret": pages_secret},
             )
         )  # fmt: skip
     provider = organisation_provider(config)

@@ -367,6 +367,54 @@ def superset_client(origin: str) -> dict[str, Any]:
     }
 
 
+#: ADR-152 decision 4 and ADR-050 Amendment 4: the page service's own client.
+PAGES_CLIENT_ID = "osprey-pages"
+#: The names `apps/pages` reads (`server/config.ts`) and `deployment.env` holds. Minted once by
+#: `apply` (`harness/apply.py`), kept across a re-apply by `keep_existing_secrets`, set on this
+#: client by `register_sign_in.ensure_identity`; never in the realm document.
+PAGES_CLIENT_SECRET_KEY = "OSPREY_PAGES_CLIENT_SECRET"
+PAGES_SESSION_SECRET_KEY = "OSPREY_PAGES_SESSION_SECRET"
+
+
+def pages_client(config: OspreyConfig) -> dict[str, Any]:
+    """The page service signs people in on the server as a **confidential** client
+    (`06_DECISIONS.md` ADR-152 decision 4, ADR-050 Amendment 4): authorisation code with PKCE (S256),
+    the standard flow and no other, the client secret sent at the token endpoint (set after
+    registration from `deployment.env`, never in this document), and a refresh token kept on the
+    server, which the Glass's own client does not have (`use.refresh.tokens` is on here alone).
+
+    Its one redirect is exact: `<origin>/session/callback`, the deployment's own origin. The same
+    claim mappers as the Glass's client, and the **audience mapper for the Conduit**: `_audience_mapper`'s
+    own docstring says every client whose tokens the Conduit accepts needs it, and the service forwards
+    this client's access token as the person's bearer.
+
+    Deliberately **not** in `render_realm`: the realm every deployment imports is mounted into
+    Keycloak's container, so a new client there would change a file an existing deployment holds and
+    restart its identity provider. It is registered through the admin API instead
+    (`register_sign_in.ensure_identity`), as Superset's is, when `deployment.env` holds its secret."""
+    origin = config.network.public_origin
+    return {
+        "clientId": PAGES_CLIENT_ID,
+        "name": "Pages (server-rendered tree)",
+        "enabled": True,
+        "protocol": "openid-connect",
+        "clientAuthenticatorType": "client-secret",
+        "publicClient": False,
+        "standardFlowEnabled": True,
+        "implicitFlowEnabled": False,
+        "directAccessGrantsEnabled": False,
+        "serviceAccountsEnabled": False,
+        "redirectUris": [f"{origin}/session/callback"],
+        "webOrigins": [origin],
+        "attributes": {
+            "pkce.code.challenge.method": "S256",
+            "post.logout.redirect.uris": f"{origin}/",
+            "use.refresh.tokens": "true",
+        },
+        "protocolMappers": [*_claim_mappers(), _audience_mapper()],
+    }
+
+
 def sign_in_rules(config: OspreyConfig) -> dict[str, Any]:
     """The realm's sign-in rules (ADR-115 decisions 5 and 6), which the sign-in page's words name.
     Measured on Keycloak 26.0.8: four wrong passwords then the right one sign in; five wrong then
