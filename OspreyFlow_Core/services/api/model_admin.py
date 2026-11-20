@@ -1340,8 +1340,17 @@ class ModelAdmin:
                 await self._put_key(current, name, key)
                 keys = {**proposed.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
                 proposed = proposed.model_copy(update={"keys": keys}, deep=True)
-            await self._reconcile(proposed, rebuilt=frozenset({name}))
-            self._save(proposed)
+            try:
+                await self._reconcile(proposed, rebuilt=frozenset({name}))
+                self._save(proposed)
+            except (ModelAdminRefused, OSError):
+                if moved and key is not None:
+                    # The key was typed for the new address; `_change` now puts the engine back at
+                    # the old one, and the key must not go with it (the ruling quoted above). The
+                    # old key was replaced and cannot be restored, so the engine's key is lost,
+                    # said so in the file where it can be written, and entered again.
+                    await self._drop_the_moved_key(current, name)
+                raise
             return before
 
         before = await self._change(by, "engine_edited", name, work, rebuilt=frozenset({name}))
@@ -1353,6 +1362,28 @@ class ModelAdmin:
         await self._audited(by, "engine_edited", name, changes)
         if rotated:
             await self._audited(by, rotated[0], name)
+
+    async def _drop_the_moved_key(self, current: ModelSettings, name: str) -> None:
+        """After a moved edit failed once its key was in the gateway: the credential removed, so
+        the old address is never sent a key typed for the new one, and the engine's key recorded
+        as lost. Best effort, each step on its own: what cannot be written is found at the next
+        start, as a key the gateway no longer holds."""
+        try:
+            await self._gateway.delete_credential(name)
+        except ModelAdminRefused as refused:
+            log.warning("a key typed for a new address not removed for %s: %s", name, refused.words)
+        record = current.keys.get(name)
+        if record is not None and not record.lost:
+            keys = {**current.keys, name: record.model_copy(update={"lost": True})}
+            lost = current.model_copy(update={"keys": keys}, deep=True)
+            try:
+                self._save(lost)
+            except OSError:
+                # The file cannot be written, so only this process knows: the engine is withdrawn
+                # from the routing now, and the gateway holds no key for it either way.
+                log.warning("the key of %s could not be recorded as lost in the file", name)
+                self._settings = lost
+                self._on_change(self.routes())
 
     async def remove_engine(self, by: str, name: str) -> None:
         async def work(current: ModelSettings) -> None:

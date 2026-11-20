@@ -50,3 +50,20 @@ is not needed on main: the check reports 431 routes, none allowlisted, no new dr
 **Round 2 (20 November 2026):** `placesByRole.json` was generated on AD1a's branch by `OSPREY_WRITE_PLACES_BY_ROLE=1` on
 `test_place_routes.py::test_the_record_of_places_by_role_is_the_routes`, never by hand; it is regenerated from main's state, never merged,
 when main is brought in. AD1b does not regenerate it unless its screen changes a route.
+
+**Round 3 (20 November 2026): fixed key-shaped strings brought in, said here (the brief's rule: not carried silently).** The
+branch's new acceptance tests hold fixed strings in the shape of a provider key (the prefix `s`, `k`, hyphen), all synthetic
+and none a real key, and the owner's rule for keys is that tests make theirs at run time. They are in files frozen for AD1a
+(the acceptance files cannot be changed, so AD1a did not change them): `test_model_engine_checks.py` (`PLANTED` at line 42, the
+literals at lines 148, 168 and 190, `WRONG` at 445, `second` at 551), `test_model_key_review.py` (`QUOTED` at 67, `PLANTED` at
+216) and `test_model_keys_commands.py` (`MASTER`, `KEY` and `REFUSED`, lines 28 to 30). The files AD1a does not freeze that hold
+the same shape were on main already (`test_model_admin_routes.py`'s `GOOD` and its neighbours). **Owed, for the owner or a slice
+that unfreezes them:** replace each by a key made with `secrets.token_hex` in a fixture, and re-run the plants. The
+two tests AD1a adds in this round (`test_model_edit_failure_keeps_key_off_old_address.py`, `test_engine_kind_description.py`) make theirs
+at run time or hold none.
+
+**Round 3 fixes:** (1) an edit that moves the address and fails after its new key is in the gateway now removes the credential and
+records the engine's key lost (`_drop_the_moved_key`), so the old address is never sent a key typed for the new one; the old key
+was replaced and cannot be restored (write-only). Red first, both failure ways, in
+`test_model_edit_failure_keeps_key_off_old_address.py`. (2) the `kind` description, the generated types, both administration guides' reference rows and
+the `ospreyflow models` row say what Amendment 14 decided.

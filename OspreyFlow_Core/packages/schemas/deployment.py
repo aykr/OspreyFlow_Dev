@@ -371,10 +371,10 @@ class ModelProviderConfig(BaseModel):
     )
     kind: EngineKind = Field(
         default="provider",
-        description="ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by "
-        "name), or at profile: cloud-platform only, gateway (your organisation's own "
-        "OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). "
-        "Default: provider.",
+        description="ADR-135 Amendments 4, 7 and 14: provider (a hosted provider LiteLLM knows by "
+        "name), gateway (your organisation's own OpenAI-compatible AI gateway, at api_base; on "
+        "every profile) or, at profile: cloud-platform only, bedrock (Amazon Bedrock in "
+        "London). Default: provider.",
     )
     auth: EngineAuth | None = Field(
         default=None,
