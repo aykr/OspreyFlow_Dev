@@ -343,7 +343,7 @@ Set on the source at registration (wizard step "Governance and refresh") and edi
 | Part | Choices | Notes |
 | --- | --- | --- |
 | Trigger | Files: folder watch (each new matching file once settled; ADR-110 decision 5) or manual. SQL / API: a schedule (ADR-110's editor: hourly, daily, weekday, weekly, cron, named zone, previewed in words) or a short poll, or manual. | The scheduler, its executor, run ledger and refusals are unchanged; the schedule's owner is whoever set it. |
-| Mode (SQL, API) | **Incremental**: rows past a watermark column (`updated_at`, an increasing id); the highest value seen is kept per source. **Full snapshot**: the whole table each time. | The MoJ nightly nodes/edges overwrite is a full snapshot. |
+| Mode (SQL, API) | **Incremental**: rows past a watermark column (`updated_at`, an increasing id); the highest value seen is kept per source. **Full snapshot**: the whole table each time. | The UK public sector client's nightly nodes/edges overwrite is a full snapshot. |
 | Rows that disappear (full snapshot only) | Keep what was loaded; or supersede the elements made only by the previous snapshot. | Nothing is deleted; superseding is reversible; the previous load's audit trail stays. |
 
 A refresh is a run of every pipeline that uses the source, each under its own load id, judged by its load rules,

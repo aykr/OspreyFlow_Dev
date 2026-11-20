@@ -23162,7 +23162,7 @@ are as of `main` at `4421fd8`.
 
 **The owner, 3 November 2026:** build a self-contained Small regardless of the client's choice; both
 options (self-contained, and Small on managed services) go to the client's architecture session on
-Thursday 5 November. The client's need is in `OspreyFlow_presentations/client_poc/MoJ_PNA_PoC_Briefing.md`
+Thursday 5 November. The client's need is in the client's PoC briefing
 §2: "One Linux VM inside [the client's] network … reachable over HTTPS by a small named test group …
 with a way to bring in a CSV export". §6 of that briefing lists what OspreyFlow cannot do today; this
 amendment closes those rows.
@@ -23561,7 +23561,7 @@ The test CA, certificates and keys are generated per test in a temporary folder;
   interfaces bullet.
 - **`spec/06_DECISIONS.md`:** this amendment; a pointer under ADR-115 decision 3; the licence register
   for carried CPython (PSF-2.0) and uv (MIT / Apache-2.0).
-- **`OspreyFlow_presentations/client_poc/MoJ_PNA_PoC_Briefing.md`:** §4.3's wildcard sentence; §6's
+- **The client's PoC briefing:** §4.3's wildcard sentence; §6's
   rows once built.
 
 #### Build plan
@@ -35387,7 +35387,7 @@ licences are proprietary or absent.
    (`tools/licence_check.RECORDED_LICENCE_EVIDENCE`, and the copy in the service's own image gate,
    `services/laurium/licence_gate.py`) admit exactly those packages at exactly those versions, and only while each
    declares what its evidence was for (no readable licence, or MIT's own text): a release declaring a GPL, an LGPL
-   or anything else is judged afresh. The deployment's notices carry the Ministry of Justice's copyright notices for `laurium` and
+   or anything else is judged afresh. The deployment's notices carry the library publisher's copyright notices for `laurium` and
    `arrow-pd-parser`.
 8. **The gateway's master key never crosses into Laurium's container** (the orchestrator's ruling of 11 November
    on P12 part 1's review, on its recommendation; recorded for the owner, and it makes P12 part 1 a credential
@@ -37236,7 +37236,7 @@ profile:**
 1. **`db.t4g.large` (8 GiB) in every shape**, poc and development as production, as the client's page asks in every
    sizing option (`harness/cloud_platform/terraform.py`, `RDS_INSTANCE_CLASS`).
 2. **`max_connections` set to 1000** in an `aws_db_parameter_group` (family `postgres16`, `apply_method` `pending-reboot`,
-   since the parameter is static in PostgreSQL) attached to the instance. With MoJ's `cloud-platform-terraform-rds-instance`
+   since the parameter is static in PostgreSQL) attached to the instance. With the UK public sector client's `cloud-platform-terraform-rds-instance`
    module in the client's environments repository, the install runbook gives the module's equivalent,
    `db_parameter = [{ name = "max_connections", value = "1000", apply_method = "pending-reboot" }]`, and says it takes
    effect at creation, and on an existing instance only at its next reboot.
