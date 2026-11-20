@@ -11,3 +11,5 @@ tracks:
   "2": sol
   "3": sol          # Sprint only
   "4": sol              # Sprint only
+  "5": default
+  "6": default
