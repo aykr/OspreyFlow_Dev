@@ -161,6 +161,16 @@ M = [
  ("clear_github_stop.py", '    if not c.GITHUB_STOP.exists():\n        raise SystemExit', '    if False:\n        raise SystemExit', "clear_github_stop_refuses_when_there_is_no_stop"),
  ("clear_github_stop.py", '        fh.write("\\t".join(', '        ("\\t".join(', "red_twice_on_one_commit_stops_merging"),
  ("guard.py", '|clear_account\\.py|clear_github_stop\\.py)', '|clear_account\\.py)', "clear_github_stop_is_executable_and_refused"),
+ # 1d: a release needs GitHub green on exactly the commit released
+ ("release_green.py", '    if last.get("conclusion") != "success":', '    if False:', "red_run_only_refuses"),
+ ("release_green.py", '        p = subprocess.run(["gh", "run", "list", "--commit", commit, "--status", "completed", "--limit", "50",\n                            "--json", FIELDS], cwd=str(HERE), capture_output=True, text=True, timeout=120)\n        if p.returncode != 0:\n            raise ValueError(f"gh exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")\n        runs = json.loads(p.stdout)\n        if not isinstance(runs, list):\n            raise ValueError("gh\'s answer is not a list of runs")\n    except (OSError, ValueError, subprocess.TimeoutExpired) as e:\n        return (f"GitHub cannot be read ({e}), so commit {commit} is not shown green on GitHub: no release until it "\n                "can be read and is green."), ""\n    ours = [r for r in runs if isinstance(r, dict) and r.get("workflowName") == WORKFLOW and r.get("headSha") == commit]',
+  '        p = subprocess.run(["gh", "run", "list", "--branch", "main", "--status", "completed", "--limit", "50",\n                            "--json", FIELDS], cwd=str(HERE), capture_output=True, text=True, timeout=120)\n        if p.returncode != 0:\n            raise ValueError(f"gh exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")\n        runs = json.loads(p.stdout)\n        if not isinstance(runs, list):\n            raise ValueError("gh\'s answer is not a list of runs")\n    except (OSError, ValueError, subprocess.TimeoutExpired) as e:\n        return (f"GitHub cannot be read ({e}), so commit {commit} is not shown green on GitHub: no release until it "\n                "can be read and is green."), ""\n    ours = [r for r in runs if isinstance(r, dict) and r.get("workflowName") == WORKFLOW]', "release_green and parent_but_none_on_the_commit"),  # both layers: the commit filter and the head check
+ ("release_green.py", 'isinstance(r, dict) and r.get("workflowName") == WORKFLOW and ', 'isinstance(r, dict) and ', "another_workflow_does_not_count"),
+ ("release_green.py", '    last = max(ours, key=', '    last = min(ours, key=', "latest_completed_run_on_the_commit_decides"),
+ ("release_green.py", '    except (OSError, ValueError, subprocess.TimeoutExpired) as e:\n        return (f"GitHub cannot', '    except OSError as e:\n        return (f"GitHub cannot', "release_green and gh_unreadable"),
+ ("release_green.py", '    if not re.fullmatch(r"[0-9a-f]{40}", commit or ""):', '    if False:', "not_a_whole_sha"),
+ ("OspreyFlow_Build/tools/release_local.py", '    refusal = green_refusal(sha)\n    if refusal:', '    refusal = None\n    if refusal:', "both_release_paths_check_github_green"),
+ ("OspreyFlow_Build/scripts/publish_user_repo_update.sh", 'python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check', 'true "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check', "both_release_paths_check_github_green"),
  ("board.py", '            print(f"main is red: run {ci[\'run\']}', '            print(f"main: run {ci[\'run\']}', "board_prints_main_is_red"),
  ("board.py", '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, ci=ci)', '    ci = c.main_ci()\n    path = write_status(builds, owed=owed)', "board_prints_main_is_red"),
  ("guard.py", '    r"(?:^|[\\s;&|(`\'\\"\\\\/=])(?:claude|claude-sol|claude-ayan)(?=$|[\\s;&|)`\'\\"<>])"', '    r"(?:^|[\\s;&|(`])(?:claude|claude-sol|claude-ayan)(?:\\s|$)"', "seat_launch_every_variant"),
@@ -292,6 +302,9 @@ M = [
  ("run_seat.py", '    account = st["verifier_account"]\n', '    account = c.account_for("verifier")\n', "move_seat_the_verifier_then_launches"),
  ("merge_slice.py", '        if not sid or sid in builders:', '        if not sid:', "never_takes_a_builders_session"),
 ]
+#: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
+#: checkout for every fault, so one fault never stays behind for the next.
+EXTRA = ("OspreyFlow_Build/tools/release_local.py", "OspreyFlow_Build/scripts/publish_user_repo_update.sh")
 bad = 0
 for f, old, new, test in M:
     if ONLY and not any(o in f + " " + test for o in ONLY.split(",")):
@@ -302,7 +315,11 @@ for f, old, new, test in M:
     agents = S / ".claude/agents"  # the seats' definitions, read by the suite from the repository's root
     if agents.exists(): shutil.rmtree(agents)
     shutil.copytree(W / ".claude/agents", agents)
-    target = S / f if f.startswith(".claude/") else d / f
+    for x in EXTRA:
+        if (W / x).exists():
+            (S / x).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(W / x, S / x)
+    target = S / f if f.startswith((".claude/", "OspreyFlow_Build/")) else d / f
     t = target.read_text()
     if old not in t:
         print("NOT FOUND", f, test); bad += 1; continue

@@ -24,6 +24,11 @@ is refused: `--dry-run` is required.
 test files its change reaches owed until a live run has run them green
 (`OspreyFlow_Build/scripts/slice_line/owed.py`); this refuses before anything is built while any is owed, as
 `OspreyFlow_Build/scripts/publish_user_repo_update.sh` does before the product is published.
+
+**No release unless GitHub is green on the commit released** (the owner, 20 November 2026): the latest completed run
+of `ci` on exactly that commit concluded success, a rerun that passed included
+(`OspreyFlow_Build/scripts/slice_line/release_green.py`); refused before anything is built otherwise, as the publish
+script does.
 """
 
 from __future__ import annotations
@@ -42,6 +47,17 @@ from harness.render import REPO_ROOT, git_sha
 
 #: The slice line's owed live tests (owed.py check: exit 1 while any is owed or its records cannot be read).
 OWED = REPO_ROOT.parent / "OspreyFlow_Build" / "scripts" / "slice_line" / "owed.py"
+
+
+#: GitHub green on the commit released (release_green.py check: exit 1 unless the latest completed ci run on exactly
+#: that commit concluded success; the owner, 20 November 2026).
+GREEN = REPO_ROOT.parent / "OspreyFlow_Build" / "scripts" / "slice_line" / "release_green.py"
+
+
+def green_refusal(sha: str) -> str | None:
+    """Why a release of `sha` must wait for GitHub green on it, in release_green.py's words, or None when it is."""
+    p = subprocess.run([sys.executable, str(GREEN), "check", sha], capture_output=True, text=True, check=False)
+    return None if p.returncode == 0 else (p.stdout + p.stderr).strip()
 
 
 def owed_refusal() -> str | None:
@@ -152,6 +168,11 @@ def main(argv: list[str] | None = None) -> int:
     sha = git_sha()
     if sha == "unknown":
         print("release_local: refusing — this checkout has no resolvable git sha", file=sys.stderr)
+        return 1
+    refusal = green_refusal(sha)
+    if refusal:
+        print(f"release_local: refusing — GitHub is not green on the commit released ({sha}):\n{refusal}",
+              file=sys.stderr)
         return 1
     args.out.mkdir(parents=True, exist_ok=True)
     print(f"release_local: the product's release of {args.tag}, from commit {sha}, short of the push")

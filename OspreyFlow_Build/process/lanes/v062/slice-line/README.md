@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (344 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (274 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (355 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (282 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -139,6 +139,8 @@ row naming a test or a prefix that is not there. `install.sh` installs the map a
 
 **A test of ours red twice stops merging** (1c). `merge_slice.py watch-github` (the conductor's, after a run ends; `merge` runs it before it starts, and `push-pending` too) reads the latest completed run on main; when it is red, it reads the failing tests from `gh run view <run> --attempt <n> --log-failed` (pytest's `FAILED <path>::<test> - <why>` lines, after GitHub's job, step and timestamp) and records them in `records/github/<run>.json`. The same test failing in that attempt and in the one before it on the same commit (the run's previous attempt, or the previous run on that head) writes `github.stopped.json` (the test, the job, the commit, both runs); while it is there every merge is refused, naming them, and the conductor tells the owner. A first red, a red that passes on its rerun, a different test failing on the rerun, a job that failed with no `FAILED` line (a download, the network, a runner) and gh unreadable write no stop and hold no merge. The owner clears it with `OspreyFlow_Build/scripts/slice_line/clear_github_stop.py` (no arguments; refused when there is no stop): the file goes and a line is appended to `github-stop-clears.tsv` beside `owner-changes.tsv`, which `watch-github` reads, so the same pair of runs never stops merging again. The line never asks GitHub to rerun or cancel anything: the conductor reruns a red run once, by hand.
 
+**A release still needs GitHub green on the commit released** (1d). `OspreyFlow_Build/scripts/slice_line/release_green.py check <commit>` passes only when the latest completed run of `ci` on exactly that commit concluded success (`gh run list --commit <sha> --status completed`; a red run that passed on its rerun counts); a green run on another commit, its parent included, does not; none, red, or gh unreadable refuses in words naming the commit. `OspreyFlow_Build/tools/release_local.py` calls it before it builds anything, and `OspreyFlow_Build/scripts/publish_user_repo_update.sh` before it exports the product, beside the owed live tests.
+
 ## Resuming a slice
 
 `resume.py <ID> <action>` is the only way back to `building` for a stopped or refused slice. The conductor runs it,
@@ -187,7 +189,7 @@ The owner's `OspreyFlow_Build/process/lanes/v062/live_step.yaml` turns the step 
 change that reaches live files merges on the offline gates, and the merge log and `merged.json` (`live_step`) name
 each live file not run. **Each is owed** (`OspreyFlow_Build/scripts/slice_line/owed.py`) until a live run that
 passed has run it since: the board prints what is owed and `status.js` carries it (`owed_live_tests`), and a release
-is refused while anything is owed or the records cannot be read (`owed.py check`, called by
+is refused while anything is owed or the records cannot be read (`owed.py check`; and unless GitHub is green on the commit released, `release_green.py check`: both called by
 `OspreyFlow_Build/tools/release_local.py` and `OspreyFlow_Build/scripts/publish_user_repo_update.sh`). With the step
 on, each merge's live run also runs every owed file and, green, records them paid (`live-paid.json`). On, the step first reads the server's run queue (`osprey-runs/QUEUE` and `pgrep -x make` on
 each host in `scripts/lane_stack_hosts.tsv`): it goes when the queue is empty or has `merger` first and no make runs,
