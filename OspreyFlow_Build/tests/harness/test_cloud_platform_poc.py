@@ -672,7 +672,7 @@ def test_the_install_says_how_many_connections_the_managed_postgres_must_allow(
     assert "least it must allow in this\nshape is 834" in needs and "166 to spare" in needs
     assert "(918)" in needs and "more room" in needs
     assert "Amendment 43" in needs and "db.t4g.large" in needs
-    # The client's environments repository: MoJ's cloud-platform-terraform-rds-instance module.
+    # The client's environments repository: the UK public sector client's cloud-platform-terraform-rds-instance module.
     assert (
         'db_parameter = [{ name = "max_connections", value = "1000", '
         'apply_method = "pending-reboot" }]'

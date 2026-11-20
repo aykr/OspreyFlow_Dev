@@ -4668,8 +4668,8 @@ docker build --pull --build-arg OSPREY_UPGRADE_STAMP=2026-11-15 -f services/laur
 #11 1.615 
 #11 1.624 Successfully installed pip-licenses-5.5.5 prettytable-3.18.0 wcwidth-0.9.4
 #11 1.624 WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
-#11 4.378 licence-gate: arrow_pd_parser 2.2.0 admitted by recorded evidence: MIT, Ministry of Justice, in LICENCE.md inside the wheel; no licence in its metadata (P12's licence check, 11 November 2026)
-#11 4.378 licence-gate: laurium 0.6.0 admitted by recorded evidence: MIT, 'Copyright (c) 2025 Ministry of Justice', in its LICENSE file and the wheel's License-File; no licence in its metadata (P12's licence check, 11 November 2026)
+#11 4.378 licence-gate: arrow_pd_parser 2.2.0 admitted by recorded evidence: MIT, the library's publisher, in LICENCE.md inside the wheel; no licence in its metadata (P12's licence check, 11 November 2026)
+#11 4.378 licence-gate: laurium 0.6.0 admitted by recorded evidence: MIT, 'Copyright (c) 2025 [the library's publisher]', in its LICENSE file and the wheel's License-File; no licence in its metadata (P12's licence check, 11 November 2026)
 #11 4.378 licence-gate: tiktoken 0.14.0 admitted by recorded evidence: MIT, its full text in the License field, which this gate's expression parser refuses (P12's licence check, 11 November 2026)
 #11 5.205 Found existing installation: pip-licenses 5.5.5
 #11 5.206 Uninstalling pip-licenses-5.5.5:

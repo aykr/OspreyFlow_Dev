@@ -212,7 +212,9 @@ slice-scout) lists every read the form makes before it offers a choice: the invi
 classification list, the roles catalogue, and anything else it finds; the list goes into the brief, and the builder starts only
 from it. The two gaps in a test AD2 left are in scope: a late and a failed load of each read (the roles catalogue first), a
 classification list that is empty, and a test double that refuses what the real route's giver rule refuses (rule 15).
-**After:** AD2 (merged) and PL4 (the shared package move; the form's code moves with it). **PL4 does not wait for AD5**: AD5
+**After:** AD2 (merged) and PL4 (the shared package move; **only the form's plain parts**, `givableCodes`, `givableLevels` and the
+like, move to `packages/glass-shared`: `People.tsx`, the loader AD5 builds and every other React component stay in the workspace,
+as I1 requires; the owner, 20 November). **PL4 does not wait for AD5**: AD5
 is queued behind PL4, never the other way. Until AD5 merges, AD2's form can be drawn before the roles list loads; the
 release notes should say so if v0.6.2 cuts before AD5.
 
@@ -288,3 +290,122 @@ is not one of these named, mechanical kinds is the builder's, in a round as now.
 real shape (two appended rows at the table's end) and a conflict that is not mechanical (two edits of one row), and show
 the second is not resolved by the line. Related: the board's "verifying" label for a slice that has a verified tip and a
 new tip with no test record.
+
+### Left stopped for the owner (night of 19 Nov): PL1, PL2 and BL2 each need a decision that is his
+
+From a read-only scout of 19 November. The owner's standing word for the night (RULINGS.md) puts them in the order CO3, BL7, PL2,
+PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped and listed. None was started.
+- **PL1, "Laptop demo sound"** (plan row, account Default). No ruling, backlog row or note says what it is; the decision record
+  places four demo and install faults under PL1 (N05, N06, N07, N11: OPEN_BACKLOG_PLACED.tsv), none about sound. Questions: what
+  does "laptop demo sound" mean, and is PL1 the four D35 rows or a sound fix? Sound cannot be proved by a pure test (it needs a
+  physical laptop and audio device). Recommendation: PL1 is the four D35 rows (pure-testable), and the sound item gets its own id.
+- **PL2, "Connection limits, Java licence notice"**. Connection limits: the owner's word "Connection limits from settings"
+  (15 Nov list) and L10 "partly built": Postgres max_connections is a computed constant (harness/profiles.py, harness/cloud_platform/
+  connections.py); nothing reads it from a setting. Java notice: C020, the runtime's NOTICE and GPL-2.0 source offer before any
+  image carrying it is published (ADR-147 Amendment 2), which the architecture text calls "a release step, not this register's
+  to perform". Questions: what does "from settings" mean (a deployment-config field with the computed value as its default and a
+  refusal below a floor?); does the Java notice go into the image in this slice or stay a release step? Recommendation: the
+  setting with the computed default, and the notice file in the image with a test on the Dockerfile and the NOTICE.
+- **BL2, "True backlog"**: not a code slice. The closures (153 rows) are on main; the placement is not: it lives only in the
+  git-ignored decision-record folder (180 rows placed, against the plan's 154 open). Questions: which count the record uses; whether
+  the placed table is committed into the backlog folder; the seven proposed ids N19-01 to N19-07 (the conductor renumbers them
+  once the owner says); question 23 on C023; and the 16 rows that need a run on a test stack. Recommendation: commit the
+  placed table verbatim with its counts note, say "180 placed, of which 154 were open on 18 November" only if the owner confirms it.
+- **CO3 is ready only when PL3 merges** (the plan row: after PL3, no Conduit change, three tests through the page service's
+  proxy). The conductor's earlier "nothing to build" reading was wrong; the id is kept from when it was thought a Conduit route.
+
+### New rows (night of 19 Nov): gaps accepted on the standing line, and what the night's merges showed
+
+- **PL3 (merged 9745a9f; two gaps in a test, accepted at round 3):** (1) the secret scan in OspreyFlow_Core/apps/pages/test/support/
+  secretScan.ts matches only a line holding the setting's name directly followed by `=`, `ENV` or `:`; it misses `{ [NAME]: "…" }`,
+  `sessionSecret: "…"`, `process.env["…"] = "…"` and `vi.stubEnv("…", "…")`, which are the shapes the tests use. Also
+  secretFiles.test.ts (about line 46) commits a fixed 32-character secret-shaped string as a plant, which the owner's rule ("no value
+  committed anywhere, including test fixtures") forbids: use the generator. (2) No test covers the one place the real Valkey client is
+  built from `valkeyOptions` (start.ts about lines 64-70); `main` is always called with an injected store. Needs a client factory a test
+  can inspect.
+- **BL7 (merged 6318956; one gap in a test, accepted at round 3):** no test writes `dial.current = "auto"` back after another value; if
+  `auto` were dropped from what the panel accepts, no test would fail (tools/control_panel/panel.py about line 321; one VALID case that
+  changes `current` away and back).
+- **CO3 (for the owner's decision, from the first verifier):** the Conduit refuses the stream before it accepts the socket, so uvicorn
+  answers HTTP 403 with no close code or reason, and a client cannot tell a refused credential (1008) from a principal store that is
+  down (1013, retry). The page service therefore maps a pre-accept refusal to 1008 (the same as the Glass gets through nginx today).
+  Row: change the stream route to accept and then close with the code and reason, so both survive the handshake. That is a Conduit
+  change, which ADR-152 X2 says is not made (an amendment to X2 if wanted), and it also changes what the Glass sees.
+- **Line gap (found on PL3's merge):** the slice's checks command runs no linter, so a lint failure (ruff E501 on a PL3 inventory
+  line) passed the builder and the verifier and was found only by the merge gate's `make -k ci`. The checks should include
+  `ruff check` on the changed Python files and the linter for changed TypeScript.
+- **Line gap (found on BL7's verifier):** a test that reads the owner's live yaml files goes red when the owner changes a setting;
+  the same class of fault as the dial-dependent test of 18 November. The verifier caught it this time, the builders' briefs should say
+  it, and the line's scan could flag a test that reads dial.yaml, accounts.yaml or live_step.yaml from the repository.
+- **Line gap (night of 19 Nov):** a seat started with a plain shell `&` has its output discarded and no notification when it ends;
+  the conductor now waits on its process. Not a line fault, a practice note: start seats only as background tasks.
+
+### 20 November 2026: the owner's rulings on the three held slices, and what the scouts found
+
+- **PL1 is the four demo and install faults (N05, N06, N07, N11); "sound" meant "in working order"** (the owner). **Not started:** a
+  scout found that each of the four rests on a reading of the specification that the owner has not ruled, and process/CLAUDE.md says
+  an accepted decision believed wrong is raised, not implemented. Findings, for his rulings:
+  - **N05** (the CLI follows the recorded home over the current folder): the code does what ADR-114 Amendment 3 decision 3,
+    `10_ADMINISTRATION_GUIDE.md` line 305 and ADR-132 Amendment 1 decision 4 say (env, then the recorded home, then the folder).
+    Reading (a): the folder beats the recorded home (an amendment to three accepted texts); reading (b): the recorded home goes stale
+    after a repoint or reinstall and is never re-recorded (fix at recording, `install.sh`/`install.ps1`, or a warning).
+  - **N06** (a git archive cannot seed demo packs): the refusal is at `scripts/seed_internal.py` 620-626, for every dataset, synthetic
+    packs included; the row's line 611 is stale. ADR-114 Amendment 2 decision 2 groups the attested checkout with the real-data
+    checks. Reading (a): synthetic packs are exempt, real and internal ones keep the check (the existing test at
+    `test_seed_internal.py` 790-793 flips); reading (b): the install must carry `.git`. `seed_paysim.py` 86-87 has the same fault
+    in another shape.
+  - **N07** (the places stage attaches the gazetteer to no case): by design under ADR-147 Amendments 1 and 2 (copies go in when a
+    case's Author adds a gazetteer). Reading (a): a missing demo step (nothing adds the gazetteer to the demo case; depends on
+    N06); reading (b): the build attaches to the demo case, which needs an ADR-147 amendment.
+  - **N11** (apply does not remake an engine's entry in the gateway's database): `harness/apply.py` never calls the model admin; the
+    entries are made again in the Conduit's start (`model_admin.py` 865-975), which returns early with no models file (911-915).
+    Reading (a): apply triggers a reconcile; (b): the Conduit's start reconciles after a gateway database change. A wiped database
+    probably drops the credential too (inference, not measured), so a remake needs the key again. The stand-in has no
+    empty-database shape yet.
+  - Cut if the rulings come in two goes: N05+N06 first, N07+N11 after.
+- **PL2 is two slices: PL2a (the Java notice in the image, C020) and PL2b (connection limits from settings, L10).** The owner gave no
+  floor, no profile scope and no word on the pools; the conductor settled them in the brief from numbers already in the code: the
+  floor is 420 (the same sum with one Conduit instead of two), the setting is `resources.postgres_max_connections` on the owned
+  Postgres only (a `cluster` or `cloud-platform` profile refuses it in words), the pools stay constants. New amendments: ADR-147
+  Amendment 6 (PL2a), ADR-114 Amendment 49 (PL2b). The scout also found a stale "at least 750" sentence in the administration guide
+  (corrected inside PL2b). The Java source offer's contact and URL are not in the repository: the notice carries the tag and the
+  `jlink` line, and the owner supplies the rest.
+- **BL2 (done):** the placed table, its counts note and a note giving both counts are committed under `backlog/`
+  (`OPEN_BACKLOG_PLACED_NOTE.md`). 180 placed; 154 open on 18 November (138 open + 16 partly built); the difference of 26 is the 19
+  "cannot tell — needs a run" rows plus the 7 proposed rows N19-01 to N19-07. N19 ids stay as proposed.
+- **PL3's fixed secret-shaped string** (`secretFiles.test.ts` about line 46): the owner's word is to fix it in the next slice that
+  touches `apps/pages`, with the generator, and tests generate one at run time. That slice's brief must carry it.
+- **Line gap (BL6's first merge attempt, 20 Nov):** `tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines`
+  failed once in `make test` (its `show` output cut off before the "NEEDS YOU" section while 16 copies ran at once under xdist),
+  with `make -k ci` green; the retry with nothing else running is recorded in the merge records. A timing race in the test, like
+  `test_stack_lease.py::…extra_arguments` on 19 November: worker-isolation timing, same batch row.
+- **Line gap (20 Nov, the second day running): a builder that stops red only on a check that passes once main is merged in should
+  be recovered by the line itself, with no line from the owner.** PL6's builder red-stopped (six tries) on one check,
+  `test_doc_citations_check`, which failed on a citation in a brief the conductor had committed to main after the slice was cut and
+  fixed the next minute; the check was green as soon as main was merged into the branch. It cost the owner a `clear-stop` line.
+  (The day before: GG1, SE2 and SE4, the same kind of stop, three lines.) Row: when a slice reaches its red limit, the line
+  merges main into the branch itself (the same merge the builder is told to do; a conflict stops it as today), reruns the checks,
+  and if they are all green clears the stop and records it (the red stop, the main commit merged, the rerun's result); if any check is
+  still red, or the merge conflicts, the stop stands for the owner as now. Never counts a round. Tests, red first: a stop whose only
+  red is a check fixed on main (cleared, recorded), one still red after the merge (stands), one whose merge conflicts (stands). Related:
+  the earlier row on a slice that only needs main merged in to resolve a mechanical conflict.
+- **Rows from the stage 4 scouts (20 Nov):** (1) add the "who can" tip to the React Connect screen and the rights check to the React drawn-merge screen (the
+  pages carry both; the React screens have neither, the owner's ruling); (2) PL10 leaves the Conduit's one multipart route, `POST /v1/investigations/{id}/sites`, to
+  a later slice: recommendation, pass the multipart bytes through unchanged (a Conduit change to raw is ruled out by ADR-152 F1), the owner rules; (3) PL9a leaves
+  `kc_idp_hint` (organisation sign-in, which the Glass takes) to a later slice; (4) the nginx default body size (the template sets no `client_max_body_size`) may
+  refuse uploads above 1 MB through the Glass today, unverified: a live check; (5) `oidc-client-ts` has no named entry in `00_ARCHITECTURE.md` section 7 although
+  the Glass's `userManager.ts` says section 7 is its allowlist; (6) the stale fixed text "move-between-the-four-places" in the Studio keyboard registry (five
+  tabs); (7) keyboard specs are missing for the Releases tab, Connect, Profile, Deduplicate, the source page and the Runs grid (rule 13); (8) CO2 is still not on
+  main, and the Entra half of PL9b waits for it.
+- **Small slice after PL10 merges (the owner's ruling, 20 Nov): decouple the page service's public origin from the Conduit address.** Today
+  `config.ts` ties them (`streamSettings` throws when `OSPREY_PAGES_CONDUIT_URL` is set and `OSPREY_PAGES_PUBLIC_ORIGIN` is not: CO3's start refusal), so the HTTP
+  forwarder (PL10) needs a setting it does not use. Change: the forwarder needs only the Conduit address; the stream proxy needs the public origin and is **absent**
+  without it (every upgrade 404, in a log line in words); CO3's refusal test changes with it (`apps/pages/test/server/stream.test.ts`: "the service refuses to start in words
+  with the Conduit address set and no public origin" becomes "with no public origin the stream is absent and the forwarder still serves"). Red first on both halves. After PL10; not
+  in its round 2.
+- **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
+- **Line gap (20 Nov, PL9a's verifier start):** `common.write_json` writes through a fixed temp name (`<file>.tmp`) then `os.replace`. `run_seat.py`'s `record_limits` writes the
+  account file (`accounts/sol.json`) from every seat of that account, so two or more seats of one account that report their limits at the same moment race on `sol.json.tmp`:
+  one replaces it, the other finds it gone and the seat's launcher dies with `FileNotFoundError` seconds after starting (PL9a's verifier, started with PL4a's, PL2a's and PL10's seats).
+  No child process was left behind; the seat was restarted by hand and ran. Fix for the line's own session: a temp name unique per writer (pid and a counter) in `write_json`,
+  or a lock around the account file; test: two threads writing the same file, red on the fixed name. Until then the conductor starts same-account seats a few seconds apart.

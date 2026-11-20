@@ -6,6 +6,11 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 ## Unreleased
 
+**The Glass (ADR-014 Amendment 2).**
+- **The map moves to MapLibre 6**, which closes CVE-2026-85061 (fixed from 6.4.1) instead of accepting it. The map
+  now needs WebGL 2: a browser or device without it shows a message saying so, where the map would have been a
+  blank panel. The map's worker file is served by the Glass itself. The Graph, and every other view, are unchanged.
+
 ## v0.6.1 — 2026-11-16
 
 A patch to v0.6.0: Ask & Chat opens as a drawer again, and search on Small and Lite keeps up with new data.
@@ -247,7 +252,7 @@ in the GOV.UK look, and a refresh that keeps you signed in and where you were.
 - **The Conduit and the workspace say when they are ready**, so the install's waits, `helm --wait` and a
   rolling update no longer send people to a service that is not yet listening.
 - **The managed PostgreSQL (RDS) is `db.t4g.large` with `max_connections` = 1000**, set in its parameter
-  group (MoJ's module: `db_parameter`, `pending-reboot`). Two Conduits side by side in an update, the
+  group (the UK public sector client's module: `db_parameter`, `pending-reboot`). Two Conduits side by side in an update, the
   worker, the gateway and, from v0.5.2, reporting fit with room to spare.
 - **Entra ID sign-in**: two app registrations (the workspace's and the API's) and the first
   administrators named by object id (administration guide §6a.11).

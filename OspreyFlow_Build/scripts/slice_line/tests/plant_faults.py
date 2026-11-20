@@ -23,7 +23,7 @@ M = [
  ("merge_slice.py", 'if not tp.is_file() or tip not in tp.read_text(errors="ignore"):', 'if False:', "never_saw_the_commit"),
  ("merge_slice.py", 'if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:', 'if False:', "never_red"),
  ("merge_slice.py", 'if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:', 'if False:', "refuses_a_red_branch"),
- ("merge_slice.py", 'if FULL_GATE(after, base, log) != 0:', 'if False:', "full_gate_is_red"),
+ ("merge_slice.py", '        if code != 0:\n            names, findings = gate_findings', '        if False:\n            names, findings = gate_findings', "full_gate_is_red"),
  ("merge_slice.py", '        if bad:\n', '        if False:\n', "protected_path"),
  ("merge_slice.py", 'FULL_GATE_TARGETS = (("make", "-k", "ci"), ("make", "test"))', 'FULL_GATE_TARGETS = (("make", "-k", "ci"),)', "runs_make_ci_and_make_test"),
  ("merge_slice.py", '    if any(codes):\n', '    if codes[0]:\n', "only_one_of_make_ci_and_make_test_is_red"),
@@ -125,10 +125,52 @@ M = [
  ("run_seat.py", '    usage_hook.conductor_row(Path(tp), session, account)', '    pass', "never_twice"),
  ("board.py", '        print(f"{a:8} {line(v)}  {windows_of(a)}")', '        print(f"{a:8} {line(v)}")', "board_usage_totals"),
  ("board.py", '            out.append(f"{shown}: not reported by its sessions\' stream")', '            pass', "board_usage_totals"),
- ("merge_slice.py", '        if ci["state"] == "red":\n', '        if False:\n', "failed_run_on_main"),
- ("common.py", '            return {"state": "red", "run": run, "url": url, "why": "cancelled, with nothing newer"}', '            return {"state": "green", "run": run, "url": url, "why": "x"}', "cancelled_run_with_nothing_newer"),
- ("merge_slice.py", '        if ci["state"] != "green":\n', '        if False:\n', "cannot_be_read_refuses"),
- ("common.py", '            return {"state": "unknown", "run": None, "url": "", "why": "no run on main has completed"}', '            return {"state": "green", "run": None, "url": "", "why": "x"}', "cannot_be_read_refuses_never_green"),
+ # 1a: GitHub is a second opinion, not a gate: the old refusal put back, the record dropped, the board's old words
+ ("merge_slice.py", '        github = github_at_merge()  # a record', '        github = github_at_merge()\n        if github["state"] == "red":\n            raise Refused("main is red")\n        # a record', "merge_goes_on_whatever and red"),
+ ("merge_slice.py", '        github = github_at_merge()  # a record', '        github = github_at_merge()\n        if github["state"] != "green":\n            raise Refused("main\'s GitHub run cannot be read")\n        # a record', "merge_goes_on_whatever and gh"),
+ ("merge_slice.py", '                "github_at_merge": github, "at": c.now()}', '                "at": c.now()}', "merge_goes_on_whatever and green"),
+ ("merge_slice.py", '    note(f"GitHub\'s last run on main: {said}, not a gate; merging")', '    note(f"GitHub\'s last run on main: {said}")', "merge_goes_on_whatever"),
+ ("common.py", '            return {"state": "red", "run": run, "url": url, "why": "cancelled, with nothing newer"}', '            return {"state": "green", "run": run, "url": url, "why": "x"}', "merge_goes_on_whatever and cancelled"),
+ ("common.py", '            return {"state": "unknown", "run": None, "url": "", "why": "no run on main has completed"}', '            return {"state": "green", "run": None, "url": "", "why": "x"}', "merge_goes_on_whatever and no"),
+ ("board.py", ':\n            print(f"main\'s GitHub run cannot be read ({ci[\'why\']}): not a gate; merges go on")', ':\n            print(f"main\'s GitHub run cannot be read ({ci[\'why\']}): no merge until it can, not a gate")', "board_prints_main_is_red"),
+ # 1b: every merge pushed, deferring only for a run in progress or queued; a deferred push never forgotten
+ ("push_main.sh", '  if [ "${busy:-0}" != "0" ] || [ "${queued:-0}" != "0" ]; then', '  failed="$(gh run list --branch main --status failure --json databaseId -q \'length\' 2>/dev/null || echo 0)"\n  if [ "${busy:-0}" != "0" ] || [ "${queued:-0}" != "0" ] || [ "${failed:-0}" != "0" ]; then', "completed_red_run_does_not_defer"),
+ ("push_main.sh", ' || [ "${queued:-0}" != "0" ]; then', '; then', "in_progress_or_queued_defers and queued"),
+ ("push_main.sh", 'rm -f "$DATA/push.pending"\n', '\n', "push_clears_what_was_pending"),
+ ("merge_slice.py", '        if busy:\n            raise Refused(f"a run on main is {busy}', '        if False:\n            raise Refused(f"a run on main is {busy}', "push_pending_pushes_only_once"),
+ ("common.py", '            if p.returncode == 0 and json.loads(p.stdout):\n                return said', '            if False:\n                return said', "push_pending_pushes_only_once"),
+ ("merge_slice.py", '        if not pending.is_file():\n            return "No push is pending."', '        if False:\n            return "No push is pending."', "push_pending_with_nothing_pending"),
+ ("merge_slice.py", '        if p.returncode != 0:\n            raise Refused(f"the pending push', '        if False:\n            raise Refused(f"the pending push', "push_pending_refuses_when_mains_tip"),
+ ("board.py", '            print(f"push pending ({pending.read_text().strip()[:10]}): waits', '            print(f"push waits ({pending.read_text().strip()[:10]}): waits', "board_prints_push_pending"),
+ ("guard.py", '|install\\.sh|push_main\\.sh|', '|install\\.sh|', "push_pending_is_the_conductors"),
+ # 1c: a test of ours failing twice stops merging, until the owner clears it
+ ("merge_slice.py", '        both = [t for t in now if t["test"] in before]', '        both = list(now)', "different_test_failing_on_the_rerun"),
+ ("merge_slice.py", '        m = GH_FAILED.match(GH_STAMP.sub("", text.strip(), count=1))', '        m = GH_FAILED.match(GH_STAMP.sub("", text.strip(), count=1)) or re.match(r"()(.*##\\[error\\].*)", text)', "no_failed_line_names_no_test"),
+ ("merge_slice.py", '        m = GH_FAILED.match(GH_STAMP.sub("", text.strip(), count=1))', '        m = GH_FAILED.match(text.strip())', "first_red_records_its_failing_test"),
+ ("merge_slice.py", '        job, text = (parts[0], parts[2]) if', '        job, text = ("", parts[2]) if', "first_red_records_its_failing_test"),
+ ("merge_slice.py", '            prev = next((r for r in runs[1:] if r.get("headSha") == last.get("headSha")), None)', '            prev = next((r for r in runs[1:]), None)', "another_commit_before_is_a_first_red"),
+ ("merge_slice.py", '        if attempt > 1:\n            prev, prev_attempt = last, attempt - 1', '        if False:\n            prev, prev_attempt = last, attempt - 1', "red_twice_on_one_commit_stops_merging and second"),
+ ("merge_slice.py", '        note(watch_github())  # 1c', '        pass  # 1c', "red_twice_on_one_commit_stops_merging"),
+ ("merge_slice.py", '        github_stop()\n', '\n', "red_twice_on_one_commit_stops_merging"),
+ ("merge_slice.py", '    if c.GITHUB_STOP.exists():\n        raise Refused(c.github_stop_words', '    if c.read_json(c.GITHUB_STOP):\n        raise Refused(c.github_stop_words', "stop_that_cannot_be_read_still_refuses"),
+ ("merge_slice.py", '        if key in cleared_stops():', '        if False:', "red_twice_on_one_commit_stops_merging"),
+ ("merge_slice.py", '    try:\n        note(watch_github())\n        pending', '    try:\n        pending', "push_pending_runs_it"),
+ ("merge_slice.py", '    except (OSError, ValueError, KeyError, TypeError, subprocess.TimeoutExpired) as e:\n        return f"watch-github: GitHub', '    except KeyError as e:\n        return f"watch-github: GitHub', "gh_unreadable_writes_no_stop"),
+ ("merge_slice.py", '        if not c.GITHUB_STOP.exists():\n            c.write_json(c.GITHUB_STOP, stop)', '        if not c.GITHUB_STOP.exists():\n            subprocess.run(["gh", "run", "rerun", str(last["databaseId"])], cwd=str(c.REPO), capture_output=True)\n            c.write_json(c.GITHUB_STOP, stop)', "never_asks_github_to_rerun"),
+ ("board.py", '            print("merging stopped: " + c.github_stop_words(c.read_json(c.GITHUB_STOP)))', '            pass', "board_prints_the_stop"),
+ ("clear_github_stop.py", '    if not c.GITHUB_STOP.exists():\n        raise SystemExit', '    if False:\n        raise SystemExit', "clear_github_stop_refuses_when_there_is_no_stop"),
+ ("clear_github_stop.py", '        fh.write("\\t".join(', '        ("\\t".join(', "red_twice_on_one_commit_stops_merging"),
+ ("guard.py", '|clear_account\\.py|clear_github_stop\\.py)', '|clear_account\\.py)', "clear_github_stop_is_executable_and_refused"),
+ # 1d: a release needs GitHub green on exactly the commit released
+ ("release_green.py", '    if last.get("conclusion") != "success":', '    if False:', "red_run_only_refuses"),
+ ("release_green.py", '        p = subprocess.run(["gh", "run", "list", "--commit", commit, "--status", "completed", "--limit", "50",\n                            "--json", FIELDS], cwd=str(HERE), capture_output=True, text=True, timeout=120)\n        if p.returncode != 0:\n            raise ValueError(f"gh exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")\n        runs = json.loads(p.stdout)\n        if not isinstance(runs, list):\n            raise ValueError("gh\'s answer is not a list of runs")\n    except (OSError, ValueError, subprocess.TimeoutExpired) as e:\n        return (f"GitHub cannot be read ({e}), so commit {commit} is not shown green on GitHub: no release until it "\n                "can be read and is green."), ""\n    ours = [r for r in runs if isinstance(r, dict) and r.get("workflowName") == WORKFLOW and r.get("headSha") == commit]',
+  '        p = subprocess.run(["gh", "run", "list", "--branch", "main", "--status", "completed", "--limit", "50",\n                            "--json", FIELDS], cwd=str(HERE), capture_output=True, text=True, timeout=120)\n        if p.returncode != 0:\n            raise ValueError(f"gh exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")\n        runs = json.loads(p.stdout)\n        if not isinstance(runs, list):\n            raise ValueError("gh\'s answer is not a list of runs")\n    except (OSError, ValueError, subprocess.TimeoutExpired) as e:\n        return (f"GitHub cannot be read ({e}), so commit {commit} is not shown green on GitHub: no release until it "\n                "can be read and is green."), ""\n    ours = [r for r in runs if isinstance(r, dict) and r.get("workflowName") == WORKFLOW]', "release_green and parent_but_none_on_the_commit"),  # both layers: the commit filter and the head check
+ ("release_green.py", 'isinstance(r, dict) and r.get("workflowName") == WORKFLOW and ', 'isinstance(r, dict) and ', "another_workflow_does_not_count"),
+ ("release_green.py", '    last = max(ours, key=', '    last = min(ours, key=', "latest_completed_run_on_the_commit_decides"),
+ ("release_green.py", '    except (OSError, ValueError, subprocess.TimeoutExpired) as e:\n        return (f"GitHub cannot', '    except OSError as e:\n        return (f"GitHub cannot', "release_green and gh_unreadable"),
+ ("release_green.py", '    if not re.fullmatch(r"[0-9a-f]{40}", commit or ""):', '    if False:', "not_a_whole_sha"),
+ ("OspreyFlow_Build/tools/release_local.py", '    refusal = green_refusal(sha)\n    if refusal:', '    refusal = None\n    if refusal:', "both_release_paths_check_github_green"),
+ ("OspreyFlow_Build/scripts/publish_user_repo_update.sh", 'python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check', 'true "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check', "both_release_paths_check_github_green"),
  ("board.py", '            print(f"main is red: run {ci[\'run\']}', '            print(f"main: run {ci[\'run\']}', "board_prints_main_is_red"),
  ("board.py", '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, ci=ci)', '    ci = c.main_ci()\n    path = write_status(builds, owed=owed)', "board_prints_main_is_red"),
  ("guard.py", '    r"(?:^|[\\s;&|(`\'\\"\\\\/=])(?:claude|claude-sol|claude-ayan)(?=$|[\\s;&|)`\'\\"<>])"', '    r"(?:^|[\\s;&|(`])(?:claude|claude-sol|claude-ayan)(?:\\s|$)"', "seat_launch_every_variant"),
@@ -183,7 +225,86 @@ M = [
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
  ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ # 1e: the merge gate's pytest runs use a temp base of their own, removed with the merge's trees
+ ("merge_slice.py", '    env["PYTEST_DEBUG_TEMPROOT"] = str(base)\n', '', "not_removed_by_other_pytest_runs"),
+ ("merge_slice.py", '    env["PYTEST_DEBUG_TEMPROOT"] = str(base)\n', '', "full_gate_runs_make_under_a_base"),
+ ("merge_slice.py", '    own_pytest_base(env, gate_pytest_base(tree), log)\n', '', "full_gate_runs_make_under_a_base"),
+ ("merge_slice.py", '    if pytest_base is not None:\n        own_pytest_base(env, pytest_base, log)\n', '', "not_removed_by_other_pytest_runs"),
+ ("merge_slice.py", '            shutil.rmtree(gate_pytest_base(t), ignore_errors=True)', '            pass', "removes_its_bases_with_its_trees"),
+ ("merge_slice.py", ', pytest_base=envs / "pytest-after")', ', pytest_base=Path(tempfile.mkdtemp()))', "removes_its_bases_with_its_trees"),
+ # 1d: a gate red only for a registry or a download is retried once; twice is kind network, never the slice's fault
+ ("merge_slice.py", '    why = network_only(since(start), tests) if code != 0 else None\n', '    why = None\n', "registry_timeout_is_retried_once"),
+ ("merge_slice.py", '    why = network_only(since(start), tests) if code != 0 else None\n', '    why = None\n', "download_that_fails_while_the_gate_builds"),
+ ("merge_slice.py", '    if tests and any(FAILED_TEST.match(ln) for ln in lines):\n        return None\n', '', "beside_a_failing_test_of_ours"),
+ ("merge_slice.py", '    if {m.group(1) for ln in lines if (m := MAKE_ERROR.match(ln))} - set(NETWORK_STEPS):\n        return None\n', '    pass\n', "beside_a_failing_test_of_ours"),
+ ("merge_slice.py", '    if again:\n', '    if False:\n', "two_timeouts_in_a_row"),
+ ("merge_slice.py", '        if codes[-1] == NETWORK:\n', '        if False:\n', "two_timeouts_in_a_row"),
+ ("merge_slice.py", '        if code == NETWORK:  # 1d', '        if False:  # 1d', "records_kind_network"),
+ ("merge_slice.py", '            done["retried"] = retried  # 1d', '            pass  # 1d', "retry_that_went_green_is_named"),
+ # 1c: the acceptance command's expected red on the base is never a finding
+ ("merge_slice.py", '            skip = bool(RED_BEFORE_TREE.search(m.group(1)))', '            skip = False', "gate_findings"),
+ ("merge_slice.py", '    if not any(ln.strip() for ln in lines):\n        return [], []\n', '', "only_the_expected_red_are_none"),
+ ("merge_slice.py", '    lines = gate_part(log_text)\n', '    lines = log_text.splitlines()\n', "counts_one_test_not_two"),
+ # 1b: a slice's scan rows wait on main and the merge applies them; main is never red in between
+ ("merge_slice.py", '    if missing:\n', '    if False:\n', "pure_walker_with_no_row_is_refused"),
+ ("scan_select.py", ' or (only is not None and rel not in only):', ' or only is not None:', "pure_walker_with_no_row_is_refused"),
+ ("merge_slice.py", '        scan_rows = apply_scan_rows(slice_id, after, base, tip)  # 1b', '        scan_rows = []  # 1b', "recorded_on_main_merge_with_the_tip_unchanged"),
+ ("merge_slice.py", '        c.git(["rm", "-q", "--", f"{SCAN_ROWS_REL}/{slice_id}.tsv"], tree)\n', '', "recorded_on_main_merge_with_the_tip_unchanged"),
+ ("merge_slice.py", '        c.git(["commit", "-q", "--amend", "--no-edit"], tree)\n', '        c.git(["commit", "-q", "-m", "scan rows"], tree)\n', "recorded_on_main_merge_with_the_tip_unchanged"),
+ ("merge_slice.py", '            if tests.get(t) != "A":', '            if False:', "naming_a_test_the_branch_does_not_add"),
+ ("merge_slice.py", '            if t in named:\n                raise', '            if False:\n                raise', "edits_one_already_in_the_map"),
+ ("merge_slice.py", '            if not why.strip():', '            if False:', "row_with_no_reason"),
+ ("merge_slice.py", '    if stale:\n        raise Refused("on the merge result', '    if False:\n        raise Refused("on the merge result', "removing_a_mapped_test"),
+ ("merge_slice.py", ' *OWNER_FILES, SCAN_ROWS_REL + "/",', ' *OWNER_FILES,', "scan_rows_on_a_slices_branch_are_a_protected_path"),
+ # 1a: any merge conflict is recorded, and its send-back is free
+ ("merge_slice.py", '            if files:  # any other conflict: recorded', '            if False:  # any other conflict: recorded', "conflict_outside_the_records_folder_is_recorded"),
+ ("merge_slice.py", '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []', '    return ["x"] if p.returncode == 1 else []', "conflict_outside_the_records_folder_is_recorded"),
+ ("merge_slice.py", '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []', '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] or ["(none named)"]', "fails_with_no_file_named_by_merge_tree"),
+ ("resume.py", '            if st.get("refused_for") == "conflict":', '            if False:', "conflict_send_back_works_at_the_rounds_limit"),
+ ("resume.py", '                said = back_to_building(slice_id, wt)\n                c.log_owner_change(slice_id, action, f"standing: a merge conflict', '                said = back_to_building(slice_id, wt, round=rnd + 1)\n                c.log_owner_change(slice_id, action, f"standing: a merge conflict', "conflict_send_back_works_at_the_rounds_limit"),
+ ("merge_slice.py", '                    0, "conflict")', '                    0, "records")', "conflict_outside_the_records_folder_is_recorded"),
+ ("merge_slice.py", '    return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []', '    return []', "records_only_conflict_keeps_its_own_kind"),
+ # 1f: a refused call is a seat failure, retried; CO2's round given back; the owner clears a stopped account
+ ("run_seat.py", '    if refused or (res.get("is_error") is True and', '    if (res.get("is_error") is True and', "every_refusal_shape"),
+ ("run_seat.py", '    if refused or (res.get("is_error") is True and (status is not None or (res.get("num_turns") or 0) <= 1)):', '    if refused:', "every_refusal_shape"),
+ ("run_seat.py", '    if wants_verdict and not verdict_of(res) and not res.get("num_turns"):', '    if False:', "every_refusal_shape"),
+ ("run_seat.py", '    if not res or res.get("type") != "result":\n', '    if False:\n', "builder_refused_once_then_working"),
+ ("run_seat.py", '        why = seat_failure(res, wants_verdict)\n        if not why:', '        why = None\n        if not why:', "refused_verifier_call_is_retried"),
+ ("run_seat.py", '        why = seat_failure(res, wants_verdict)\n        if not why:', '        why = None\n        if not why:', "refused_builder_call_is_retried"),
+ ("run_seat.py", '        if attempt < SEAT_TRIES:\n            time.sleep', '        break\n        if attempt < SEAT_TRIES:\n            time.sleep', "succeeds_on_the_second_try"),
+ ("run_seat.py", 'SEAT_TRIES = 3\n', 'SEAT_TRIES = 4\n', "three_refusals_leave_the_slice"),
+ ("run_seat.py", '    if not c.account_stop(account):\n        c.write_json(c.DATA / "accounts"', '    if False:\n        c.write_json(c.DATA / "accounts"', "three_refusals_leave_the_slice"),
+ ("run_seat.py", '        if c.account_stop(account):\n            break\n', '', "stops_retrying_once_the_account_is_stopped"),
+ ("run_seat.py", '                wants_verdict=True)\n', '                wants_verdict=False)\n', "every_refusal_shape"),
+ ("board.py", '    if isinstance(sf, dict) and state in ("building", "verifying"):', '    if False:', "read_by_nothing_that_reads_a_verdict"),
+ ("resume.py", '    if not passes or any([f.get("what") for f in (p.get("findings") or [])] != [NO_VERDICT] or p.get("commit")\n                         for p in passes) or any(f.get("what") != NO_VERDICT for f in v.get("findings") or []):', '    if not passes:', "undo_seat_failure_refuses_a_record_a_verifier_really_wrote"),
+ ("resume.py", '        if not got:\n            raise Refused(f"the verifier session', '        if False:\n            raise Refused(f"the verifier session', "undo_seat_failure_refuses_a_record_a_verifier_really_wrote"),
+ ("resume.py", '    tag = authority(slice_id, "undo-seat-failure")\n', '    tag = "x"\n', "undo_seat_failure_gives_co2"),
+ ("resume.py", '    st.update(phase="verifying", round=rnd - 1, tip=tip, updated=c.now())', '    st.update(phase="verifying", tip=tip, updated=c.now())', "undo_seat_failure_gives_co2"),
+ ("clear_account.py", '    why = rs.seat_failure(res, wants_verdict=False)\n', '    why = None\n', "clear_account_keeps_the_stop"),
+ ("clear_account.py", '    if p.returncode != 0 or not isinstance(res, dict):', '    if not isinstance(res, dict):', "clear_account_keeps_the_stop"),
+ ("clear_account.py", '    if not have:\n', '    if False:\n', "clear_account_removes_the_stop_only"),
+ ("clear_account.py", '    if used >= have:\n', '    if False:\n', "clear_account_removes_the_stop_only"),
+ ("clear_account.py", '    if not stop:\n', '    if False:\n', "clear_account_refuses_an_account_not_stopped"),
+ ("clear_account.py", '    if account not in known:', '    if False:', "clear_account_refuses_an_account_not_stopped"),
+ ("guard.py", '|push_main\\.sh|clear_account\\.py|', '|push_main\\.sh|', "clear_account_is_refused_to_every_agent"),
+ # 1g: move-seat (LINE_FIXES_3_BRIEF.md)
+ ("resume.py", '    if not have:\n        raise Refused(f"no line \'{chr(9)', '    if False:\n        raise Refused(f"no line \'{chr(9)', "move_seat_refuses_without_the_owners_line"),
+ ("resume.py", '    if used >= have:\n        raise Refused(f"the owner\'s line \'{chr(9)', '    if False:\n        raise Refused(f"the owner\'s line \'{chr(9)', "move_seat_rewrites_that_seats_account_alone"),
+ ("resume.py", '    raw[key] = to\n', '    raw.update(phase="building", round=1, **{key: to})\n', "move_seat_rewrites_that_seats_account_alone"),
+ ("resume.py", '    if running:\n', '    if False:\n', "move_seat_refuses_while_a_seat"),
+ ("common.py", '        if isinstance(r.get("pid"), int) and pid_alive(r["pid"]):', '        if False:', "move_seat_refuses_while_a_seat"),
+ ("run_seat.py", '        with seat_running(slice_id, seat, account):', '        with contextlib.nullcontext():', "move_seat_sees_a_seat_running"),
+ ("run_seat.py", '        f.unlink(missing_ok=True)\n\n\n#: A seat failure', '        pass\n\n\n#: A seat failure', "move_seat_sees_a_seat_running"),
+ ("resume.py", '    if not c.signed_in(to):', '    if False:', "move_seat_refuses_an_account_that_is_signed_out"),
+ ("resume.py", '    if stop:\n        raise Refused(f"account {to} is stopped', '    if False:\n        raise Refused(f"account {to} is stopped', "move_seat_refuses_an_account_that_is_signed_out"),
+ ("resume.py", '    if to not in known:', '    if False:', "move_seat_refuses_an_account_that_is_signed_out"),
+ ("run_seat.py", '    account = st["verifier_account"]\n', '    account = c.account_for("verifier")\n', "move_seat_the_verifier_then_launches"),
+ ("merge_slice.py", '        if not sid or sid in builders:', '        if not sid:', "never_takes_a_builders_session"),
 ]
+#: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
+#: checkout for every fault, so one fault never stays behind for the next.
+EXTRA = ("OspreyFlow_Build/tools/release_local.py", "OspreyFlow_Build/scripts/publish_user_repo_update.sh")
 bad = 0
 for f, old, new, test in M:
     if ONLY and not any(o in f + " " + test for o in ONLY.split(",")):
@@ -194,7 +315,11 @@ for f, old, new, test in M:
     agents = S / ".claude/agents"  # the seats' definitions, read by the suite from the repository's root
     if agents.exists(): shutil.rmtree(agents)
     shutil.copytree(W / ".claude/agents", agents)
-    target = S / f if f.startswith(".claude/") else d / f
+    for x in EXTRA:
+        if (W / x).exists():
+            (S / x).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(W / x, S / x)
+    target = S / f if f.startswith((".claude/", "OspreyFlow_Build/")) else d / f
     t = target.read_text()
     if old not in t:
         print("NOT FOUND", f, test); bad += 1; continue

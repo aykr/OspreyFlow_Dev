@@ -17,6 +17,13 @@
                    <date>) accepts a slice at round N or later whose newest findings record is the     standing line
                    verifier's for its tip and holds only gaps in a test; run_seat.py tries it after
                    each verifier record with findings
+  move-seat <builder|verifier> <account>                                                        owner's line:
+                   a started slice's seat moves to another account the owner's accounts.yaml names,   <ID> move-seat
+                   signed in and not stopped, while none of its seats runs: state.json's account or  <seat> <account>
+                   verifier_account is rewritten, and nothing else (no record, finding or round)      <YYYY-MM-DD>
+  undo-seat-failure  a verifier call that was refused, written before seat failures existed as the    owner's line
+                   finding "no verdict returned" (CO2, 19 November 2026): the record becomes a
+                   seat_failure record, the round goes back by one, the phase to verifying
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -43,7 +50,12 @@ import dry_run  # noqa: E402
 import merge_slice as ms  # noqa: E402
 import run_seat as rs  # noqa: E402
 
-ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept")
+ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat",
+           "undo-seat-failure")
+#: What run_seat.py wrote, before 1f, for a verifier session whose call was refused (CO2, 19 November 2026).
+NO_VERDICT = "no verdict returned"
+#: The seat move-seat moves, and the key of state.json run_seat.py reads its account from.
+SEAT_KEYS = {"builder": "account", "verifier": "verifier_account"}
 OWNER_ACTIONS = ("refreeze", "add-round", "clear-stop", "accept")
 #: What a corrected command may not add: anything that changes what a check tests rather than how it is run.
 LOOSENING = ("||", "; true", "exit 0", " -k ", "--deselect", "--ignore", "--grep", " -t ", "--passWithNoTests", "skip",
@@ -62,18 +74,16 @@ def today() -> str:
 # ------------------------------------------------------------------ the owner's word
 
 
+def resume_lines() -> list[list[str]]:
+    """The owner's lines in resume.tsv, each split into its words; comments left out."""
+    if not c.RESUME_FILE.is_file():
+        return []
+    return [ln.split() for ln in c.RESUME_FILE.read_text().splitlines() if ln.strip() and not ln.strip().startswith("#")]
+
+
 def owner_lines(slice_id: str, action: str) -> int:
     """How many of the owner's lines in resume.tsv name this slice and action today."""
-    if not c.RESUME_FILE.is_file():
-        return 0
-    n = 0
-    for ln in c.RESUME_FILE.read_text().splitlines():
-        if ln.strip().startswith("#"):
-            continue
-        parts = ln.split()
-        if len(parts) == 3 and parts[0] == slice_id and parts[1] == action and parts[2] == today():
-            n += 1
-    return n
+    return sum(1 for parts in resume_lines() if parts == [slice_id, action, today()])
 
 
 def authority(slice_id: str, action: str) -> str:
@@ -349,14 +359,129 @@ def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[st
             f"become a backlog row; verified. The conductor runs merge_slice.py merge {slice_id} and tells the owner."]
 
 
-def act(slice_id: str, action: str, standing_only: bool = False) -> list[str]:
+def move_seat(slice_id: str, args: list[str] | tuple[str, ...]) -> list[str]:
+    """A started slice's builder or verifier seat moves to another account, on the owner's line `<ID> move-seat <seat>
+    <account> <YYYY-MM-DD>` (LINE_FIXES_3_BRIEF.md, 1g). Rewrites that one key of state.json, nothing else. The
+    builder and the verifier stay apart by session, not by account: the merge refuses a pass from a session that built
+    the slice (merge_slice.verifier_sessions), on any account, and every launch is a new session."""
+    if len(args) != 2 or args[0] not in SEAT_KEYS:
+        raise Refused("move-seat takes the seat (builder or verifier) and the account: resume.py <ID> move-seat "
+                      "<builder|verifier> <account>. Nothing changed.")
+    seat, to = args
+    key = SEAT_KEYS[seat]
+    want = [slice_id, "move-seat", seat, to, today()]
+    have = sum(1 for parts in resume_lines() if parts == want)
+    tag = f"resume.tsv {today()} move-seat {seat} {to}"
+    used = sum(1 for r in c.owner_changes()
+               if r["slice"] == slice_id and r["action"] == "move-seat" and r["detail"].startswith(tag + ":"))
+    if not have:
+        raise Refused(f"no line '{chr(9).join(want)}' in {c.RESUME_FILE} (the owner's word, today, UTC): nothing "
+                      "changed.")
+    if used >= have:
+        raise Refused(f"the owner's line '{chr(9).join(want)}' in resume.tsv is already used ({used} use(s) logged in "
+                      "owner-changes.tsv): one line, one use. Nothing changed.")
+    known = c.known_accounts()
+    if to not in known:
+        raise Refused(f"{to!r} is not an account the owner's accounts.yaml names ({', '.join(sorted(known))}). "
+                      "Nothing changed.")
+    st = c.state(slice_id)
+    frm = st.get(key, "")
+    if frm == to:
+        raise Refused(f"{slice_id}'s {seat} is already on {to}. Nothing changed.")
+    running = c.running_seats(slice_id)
+    if running:
+        raise Refused(f"a seat of {slice_id} is running (" + "; ".join(
+            f"{r.get('seat')} on {r.get('account')}, pid {r.get('pid')}" for r in running) +
+            "): a seat moves only between sessions. Nothing changed.")
+    stop = c.account_stop(to)
+    if stop:
+        raise Refused(f"account {to} is stopped ({stop.get('error')} at {stop.get('at')}): the owner clears it first. "
+                      "Nothing changed.")
+    if not c.signed_in(to):
+        raise Refused(f"account {to} is signed out: the owner signs in to it first. Nothing changed.")
+    path = c.rec_dir(slice_id) / "state.json"
+    raw = c.read_json(path) or {}
+    raw[key] = to
+    c.write_json(path, raw)
+    c.log_owner_change(slice_id, "move-seat", f"{tag}: {seat} {frm or '(none)'} -> {to}")
+    return [f"{slice_id}: its {seat} seat moves from {frm or '(none)'} to {to}; its phase, round and records are "
+            f"unchanged ({st.get('phase')}, round {st.get('round', 1)})."]
+
+
+def refused_results(rec: Path, session: str) -> list[dict]:
+    """The result lines, in the slice's seat logs, of this session, when run_seat.py reads each as a seat failure."""
+    out = []
+    for f in sorted(rec.glob("verifier-*.jsonl")):
+        for ln in f.read_text(errors="replace").splitlines():
+            try:
+                d = json.loads(ln)
+            except ValueError:
+                continue
+            if isinstance(d, dict) and d.get("type") == "result" and d.get("session_id") == session \
+                    and rs.seat_failure(d, wants_verdict=True):
+                out.append(d)
+    return out
+
+
+def undo_seat_failure(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[str]:
+    """A verifier session whose call was refused, written before 1f as a findings record ("no verdict returned") that
+    sent the slice back to its builder (CO2, 19 November 2026): the record becomes a seat_failure record, the round
+    goes back by one and the phase to verifying, so the verifier runs again on the same tip. Only when every pass of
+    the record is that line and the session's own stream shows its call refused; on the owner's line."""
+    phase, rnd = st.get("phase"), st.get("round", 1)
+    tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    vf = rec / f"verify-{tip}.json"
+    v = c.read_json(vf)
+    if phase != "building" or rnd < 2:
+        raise Refused(f"{slice_id} was not sent back by a verifier record (phase {phase}, round {rnd}). Nothing changed.")
+    if not v or v.get("commit") != tip or v.get("verdict") != "findings":
+        raise Refused(f"no verifier findings record for the tip {tip[:10]}. Nothing changed.")
+    passes = v.get("passes") or []
+    if not passes or any([f.get("what") for f in (p.get("findings") or [])] != [NO_VERDICT] or p.get("commit")
+                         for p in passes) or any(f.get("what") != NO_VERDICT for f in v.get("findings") or []):
+        raise Refused(f"the verifier record for {tip[:10]} is not a refused call written as a finding: its findings "
+                      f"are not only '{NO_VERDICT}'. A verifier's real findings are never undone. Nothing changed.")
+    results = {}
+    for p in passes:
+        got = refused_results(rec, p.get("session", ""))
+        if not got:
+            raise Refused(f"the verifier session {str(p.get('session'))[:8]}'s stream shows no refused call (no result "
+                          "line read as a seat failure): not a refused call. Nothing changed.")
+        results[p["session"]] = got[-1]
+    tests = c.read_json(rec / f"tests-{tip}.json")
+    if not (tests and tests.get("green") and tests.get("commit") == tip):
+        raise Refused(f"the tip {tip[:10]} has no green test record: the verifier cannot run on it. Nothing changed.")
+    newest_record_is(slice_id, tip)
+    tag = authority(slice_id, "undo-seat-failure")
+    first = next(iter(results.values()))
+    name = f"seat-failure-verifier-undone-{tip[:10]}.json"
+    c.write_json(rec / name, {"kind": "seat_failure", "slice": slice_id, "seat": "verifier",
+                              "account": passes[0].get("account"), "tip": tip, "error": rs.refusal_words(first),
+                              "result": first, "results": results, "replaces": v, "line": tag, "at": c.now(),
+                              "note": "a refused call that run_seat.py wrote as a finding before 1f; undone"})
+    vf.unlink()
+    st.pop("note", None)
+    st.update(phase="verifying", round=rnd - 1, tip=tip, updated=c.now())
+    c.write_json(rec / "state.json", st)
+    c.log_owner_change(slice_id, "undo-seat-failure", f"{tag}: tip {tip}; verify-{tip[:10]}.json -> {name}; "
+                                                      f"round {rnd} -> {rnd - 1}; building -> verifying")
+    return [f"{slice_id}: the refused verifier call at {tip[:10]} is a seat failure, not a finding; round "
+            f"{rnd - 1}, verifying. The conductor runs run_seat.py verifier {slice_id} once its account is clear."]
+
+
+def act(slice_id: str, action: str, standing_only: bool = False, args: list[str] | tuple[str, ...] = ()) -> list[str]:
     fh = ms.lock()
     try:
         frozen = frozen_of(slice_id)
+        if action == "move-seat":  # touches state.json's one key only: a builder at work in the worktree is no matter
+            return move_seat(slice_id, args)
         wt = clean_worktree(frozen)
         st = c.state(slice_id)
         phase, rnd, limit = st.get("phase"), st.get("round", 1), st.get("rounds_limit", 1)
         rec = c.rec_dir(slice_id)
+
+        if action == "undo-seat-failure":
+            return undo_seat_failure(slice_id, frozen, st, rec)
 
         if action == "refreeze":
             _old, new = changed_row(slice_id, c.FROZEN_KEYS)
@@ -396,6 +521,14 @@ def act(slice_id: str, action: str, standing_only: bool = False) -> list[str]:
                 said = back_to_building(slice_id, wt)
                 c.log_owner_change(slice_id, action, "standing: a records-only conflict; main merged in; round unchanged")
                 return [f"{slice_id}: back to building (round {rnd} of {limit}), main merged in.", *said]
+            if st.get("refused_for") == "conflict":  # main moved under a verified slice: no round, no line (1a)
+                gate = c.read_json(rec / f"verify-gate-{st.get('tip') or ''}.json") or {}
+                files = ((gate.get("findings") or [{}])[0]).get("file") or "see the gate's finding"
+                said = back_to_building(slice_id, wt)
+                c.log_owner_change(slice_id, action, f"standing: a merge conflict with main ({files}); the builder merges "
+                                                     "main in; round unchanged")
+                return [f"{slice_id}: back to the builder to merge main in (a conflict in {files}), round {rnd} of "
+                        f"{limit}, no round spent.", *said]
             if rnd < limit:
                 said = back_to_building(slice_id, wt, round=rnd + 1)
                 c.log_owner_change(slice_id, action, f"standing (within the rounds limit): round {rnd} -> {rnd + 1}")
@@ -455,9 +588,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("slice")
     ap.add_argument("action", choices=ACTIONS)
+    ap.add_argument("args", nargs="*", help="move-seat: the seat (builder or verifier) and the account")
     a = ap.parse_args()
     try:
-        said = act(a.slice, a.action)
+        if a.args and a.action != "move-seat":
+            raise Refused(f"{a.action} takes no arguments ({' '.join(a.args)}). Nothing changed.")
+        said = act(a.slice, a.action, args=a.args)
     except (Refused, ms.Refused) as e:
         print(f"Refused: {e}", file=sys.stderr)
         return 1

@@ -12,6 +12,9 @@ FRESH="$(mktemp -d)/export"
 # No release while a live test is owed (the v0.6.2 slice line merged it with its live step off and it has not run since).
 python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/owed.py" check \
   || { echo "STOP: live tests are owed (above); nothing was published." >&2; exit 1; }
+# No release unless GitHub is green on exactly the commit published (the owner, 20 November 2026).
+python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check "$(git -C "$ROOT/ospreyflow" rev-parse HEAD)" \
+  || { echo "STOP: GitHub is not green on the commit published (above); nothing was published." >&2; exit 1; }
 make -C "$ROOT/ospreyflow/OspreyFlow_Build" publish-user-repo COMMIT=HEAD OUT="$FRESH"
 
 # Names any case; the local path case-sensitively (Keycloak's API paths are /users/).

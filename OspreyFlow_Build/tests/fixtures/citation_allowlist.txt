@@ -55,9 +55,7 @@ apps/pages/test/default/theme.spec.ts
 apps/pages/test/govuk/identity.spec.ts
 apps/pages/test/govuk/theme.spec.ts
 apps/pages/test/perf/graph.spec.ts
-apps/pages/test/server/csrf.test.ts
 apps/pages/test/server/refresh.test.ts
-apps/pages/test/server/session.test.ts
 packages/design/tokens.css
 scripts/no_react_check.mjs
 scripts/same_drawing_versions_check.mjs
@@ -74,3 +72,15 @@ tests/harness/test_pages_tree_follows_the_brand.py
 tests/harness/test_realm_pages_client.py
 tests/ingest/test_dataset_load_order.py
 tests/ingest/test_job_file_schema.py
+
+# Named by ADR-152 Amendment 1 (accepted by the owner, 20 November 2026): the React workspace's function list, the
+# one function that derives the GOV.UK tree's state, and the gates for I22 and I23. Absent on purpose until the
+# slice that writes each: PL4 for `FUNCTIONS.yaml`; PL7 for the tree state, the render test and the release notes
+# test; PL6 for the image scan and its test. Each slice removes its own line in the change that writes the file, so
+# the list shrinks to nothing; a path left here after its slice has merged is a defect.
+apps/pages/FUNCTIONS.yaml
+scripts/pages_image_react_scan.py
+scripts/tree_parity.py
+tests/glass_trees/test_cutover_is_in_the_release_notes.py
+tests/glass_trees/test_pages_image_carries_no_react.py
+tests/harness/test_complete_govuk_renders_no_workspace.py

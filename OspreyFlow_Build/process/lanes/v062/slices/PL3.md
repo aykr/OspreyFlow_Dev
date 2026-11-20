@@ -86,9 +86,12 @@ real app factory and an HTTP client (supertest or Node's own), not through a hel
 
 ## Checks
 
-Pure only (no store, no network): the acceptance files above, run from OspreyFlow_Core/apps/pages; and the neighbours a new
-service touches (ports 9): OspreyFlow_Build/tests/harness/test_dockerfiles_numeric_user.py, test_service_inventory.py,
-test_helm_chart.py and OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py. The line adds every mapped pure test that
+Pure only (no store, no network). The **checks command** runs the neighbours a new service touches (ports 9):
+OspreyFlow_Build/tests/harness/test_dockerfiles_numeric_user.py, test_helm_chart.py and
+OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py, and the licence check. The **acceptance command** runs the four
+vitest files from OspreyFlow_Core/apps/pages **and** OspreyFlow_Build/tests/harness/test_service_inventory.py (the inventory test
+is in the acceptance command, not the checks, because on main the new folder alone turns it red; it goes green only when the
+inventory row is written). Run the acceptance command yourself before you stop. The line adds every mapped pure test that
 scans a folder the slice changes. Also the licence check, run as the checks command runs it (a worktree has no Core .venv, so `make licence-check` does not run
 there: the Python module through `uv run` and the two Node steps, from OspreyFlow_Core), and the citation check.
 
@@ -106,3 +109,56 @@ there: the Python module through `uv run` and the two Node steps, from OspreyFlo
 - Any page beyond the one above; the GOV.UK and default trees; the shared package (PL4). Do not touch the Glass, the Conduit,
   the Makefile or the CI workflow.
 - **If npm cannot reach its registry** in the builder's environment, stop and say: do not vendor a package by hand.
+
+## Round 2 (19 November 2026): what the first verifier found, and the conductor's ruling on it
+
+The round-1 verifier found one fault in behaviour and two gaps in a test, all at tip 1f6560c9dc. Fix those three and nothing
+else.
+
+1. **The fault: use `express-session`, as ADR-152 decision 2 names it** ("`openid-client` for sign-in, `helmet` for headers,
+   `express-session` with a Valkey store", about line 40785). The round-1 slice built its own session layer (sessions.ts,
+   sessionStore.ts, and the cookie and session middleware in app.ts) because this brief settled a bare 43-character cookie value,
+   and `express-session` signs its cookie as `s:<id>.<signature>`. That conflict was the brief's, not the builder's: **the brief's
+   bare-identifier choice is withdrawn.** The ADR decides. Replace the hand-built session layer with `express-session` and a store
+   for Valkey that implements its Store interface (a package for it is allowed if it passes the licence check and is entered in
+   OspreyFlow_Build/spec/00_ARCHITECTURE.md section 7; otherwise write the Store in this slice). Keep everything else the brief
+   settled: the cookie's name `osprey_pages`; HttpOnly, Secure, SameSite=Lax and no Domain; the key prefix `pages-session:`; the
+   database number from `OSPREY_PAGES_VALKEY_DB` (default 1); a TTL on every key; the one-hour sliding idle lifetime (express-session's
+   `rolling`) and the eight-hour absolute lifetime, each key's TTL never longer than either; the in-memory store that refuses what
+   Valkey refuses (a write with no TTL, a key without the prefix); no token in any response but the cookie. The cookie's value is now
+   express-session's signed value, still opaque to the browser; the signing secret is a new setting, `OSPREY_PAGES_SESSION_SECRET`
+   (the owner's rules for it are acceptance items, item 4 below). The tests change with the cookie's shape: they assert the cookie
+   is signed and opaque, not that it is 43 characters.
+2. **Gap: the database number reaches the client.** Move the Valkey client's options out of main.ts into a pure function (for
+   example `valkeyOptions(config)`) and test that it sets `db` from `OSPREY_PAGES_VALKEY_DB` (default 1, never the Conduit's 0
+   unless set so), so that dropping `db` or fixing it to 0 fails a test.
+3. **Gap: /healthz touches neither the provider nor the store.** In page.test.ts the health test must be able to fail: build the
+   app with a store wrapper that throws on every call (and a provider that throws), request /healthz with and without a cookie,
+   and assert it answers 200 and the wrapper was never called.
+
+4. **The session secret's rules (the owner's word, 19 November; each is an acceptance item with a test that fails if it is
+   broken).** `OSPREY_PAGES_SESSION_SECRET`:
+   - **No value for it is committed anywhere**: not in the service's own files, an example or sample environment file, a Dockerfile
+     (no ENV or ARG with a value), a compose or Helm file, a README, or a test fixture. A test reads every file of the apps/pages
+     folder (and its Dockerfile) and fails if any assigns a value to the name; plant a file that does and show it red (rule 15).
+   - **Tests generate their own at run time** (random, at least 32 characters, created in the test, never written to disk or
+     committed). A fixed dummy string in a test is not allowed.
+   - **The service refuses to start, in words, when it is missing, empty, or shorter than 32 characters.** The words name the
+     setting and the rule (it is required, at least 32 characters) and **never include the value**, not even a short one's. Tests:
+     missing, empty, 31 characters (refused), 32 characters (starts), each through the startup path (the function main.ts calls), not
+     a helper; the refusal's message and the process's output are checked not to contain the value that was given.
+   - **It is never printed or sent**: a test gives the service a generated sentinel secret, drives every route (page, health,
+     sign-in, sign-out, a 404, a refused state-changing request) with and without a session, and fails if the sentinel appears in
+     any response body or header, any cookie (the signed cookie value must not contain it either), or anything the service wrote to
+     its logs, stdout or stderr. The configuration's own printed or JSON form shows it as redacted.
+
+Do not add the real sign-in, the render wiring or any other out-of-scope item. Run the acceptance command and the checks before you stop.
+
+## Round 4, the last (19 November 2026): the merge gate's one finding
+
+The round-3 verifier found only two gaps in a test (accepted on the owner's standing line), and the merge then refused the slice on
+the full gate: `make -k ci` runs `ruff check .` in OspreyFlow_Core and it reports **E501, line too long (over 100)** on three lines
+of the page service's entry in OspreyFlow_Core/harness/service_inventory.py (about lines 198-200, the `note=` text). The one fix:
+re-wrap that text so no line exceeds 100 characters, keeping its words. Change nothing else: no other file, no test, no code. Then
+run, from OspreyFlow_Core, `ruff check .` (through `uv run`, as the checks do) and the acceptance command, and stop. (The line's
+checks command does not run ruff; run it yourself.)

@@ -8,9 +8,11 @@
 // list is a GOV.UK side navigation (decision 13).
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
+import { fetchResolvedPrincipal } from "../auth/userManager";
 import { currentBrand } from "../brand/brand";
 import { whyNotByRole } from "../help/roles";
 import type { AdminApi } from "./api";
+import { InviterContext, type InviterRead } from "./inviter";
 import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
 import { Audit } from "./sections/Audit";
@@ -158,6 +160,21 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
     if (moved.current) heading.current?.focus();
   }, [chosen]);
   const govuk = currentBrand() === "govuk";
+  // What this person holds, for what an invitation may offer (AD2): read here and handed to People through a context, so
+  // the People screen calls no route beyond its section's. The invite form is drawn only once this has answered, so no
+  // choice is made before it; an answer that does not come is said there in words (a later failure keeps the earlier answer).
+  const [inviter, setInviter] = useState<InviterRead>({ state: "waiting" });
+  useEffect(() => {
+    let current = true;
+    void fetchResolvedPrincipal(api.apiBaseUrl, api.bearerToken).then((me) => {
+      if (!current) return;
+      if (me) setInviter({ state: "ready", inviter: { clearance: me.clearance, codes: me.receivable_handling_codes } });
+      else setInviter((before) => (before.state === "ready" ? before : { state: "unavailable" }));
+    });
+    return () => {
+      current = false;
+    };
+  }, [api.apiBaseUrl, api.bearerToken]);
   // ADR-145 Amendment 4 decision 12: *Roles, teams and Authors*, the one help page, opened from here.
   const [help, setHelp] = useState(false);
   if (help) {
@@ -191,7 +208,7 @@ export function AdminPlace({ rights, ...api }: AdminPlaceProps) {
             <h1 id="admin-section-title" ref={heading} tabIndex={-1} className={govuk ? "govuk-heading-l admin-place__heading" : "value admin-place__heading"}>
               {section.label}
             </h1>
-            {SCREENS[section.id]?.(api, rights)}
+            <InviterContext.Provider value={inviter}>{SCREENS[section.id]?.(api, rights)}</InviterContext.Provider>
           </div>
         </div>
       )}

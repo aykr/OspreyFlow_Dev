@@ -36,29 +36,20 @@ def sh(cmd, cwd, env=None, check=True, input=None):
 # ------------------------------------------------------------------ fixtures
 
 GREEN_RUN = '[{"databaseId": 44000000001, "conclusion": "success", "status": "completed", "url": "https://github.invalid/r/1"}]'
-GH = r"""#!/bin/sh
-# a stand-in for gh: `gh run list --branch main [--status completed] --limit 1 --json <fields>` only
-[ -n "${FAKE_GH_EXIT:-}" ] && { echo "error connecting to api.github.com" >&2; exit "$FAKE_GH_EXIT"; }
-green='@GREEN@'
-completed="${FAKE_GH_COMPLETED:-$green}"
-latest="${FAKE_GH_LATEST:-$completed}"
-[ "$1 $2" = "run list" ] || { echo "unknown command \"$1 $2\" for gh" >&2; exit 1; }
-case " $* " in *" --branch main "*) ;; *) echo "this stand-in answers only for main" >&2; exit 1;; esac
-case " $* " in *" --json "*) ;; *) echo "this stand-in answers only --json" >&2; exit 1;; esac
-case " $* " in *" --limit 1 "*) ;; *) echo "this stand-in answers only --limit 1" >&2; exit 1;; esac
-case " $* " in
-  *" --status completed "*) printf '%s\n' "$completed";;
-  *" --status "*) echo "[]";;
-  *) printf '%s\n' "$latest";;
-esac
-""".replace("@GREEN@", GREEN_RUN)
+#: gh, as the line calls it: tests/fake_gh.py answers `gh run list` as the real gh does (its docstring).
+GH = (Path(__file__).resolve().parent / "fake_gh.py").read_text()
 
 #: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
-#: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules).
+#: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
+#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them.
 STAND_IN_GATE = """def _stand_in_gate(t, b, l):
+    Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
+    l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
     if os.environ.get('TEST_GATE_LOG'):
         l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())
+    if os.environ.get('TEST_GATE_RETRIES'):
+        l.with_suffix('.retries.json').write_text(os.environ['TEST_GATE_RETRIES'])
     if os.environ.get('TEST_LIVE_NOTE'):
         l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE'])
     if os.environ.get('TEST_GATE_SEES'):
@@ -81,9 +72,9 @@ def world(tmp_path):
         if (SRC / f).exists():
             shutil.copy(SRC / f, data / "bin" / f)
     (data / "emails.sha256").write_text(hashlib.sha256(OWNER.encode()).hexdigest() + "\n")
-    # gh, as merge_slice.py and board.py call it (run list on main, --json fields); a call in another shape is refused
-    # as the real gh refuses an unknown flag. FAKE_GH_COMPLETED: the latest completed run's JSON list; FAKE_GH_LATEST:
-    # the newest run of any status; FAKE_GH_EXIT: a failing gh (signed out, offline).
+    # gh, as the line calls it (tests/fake_gh.py): FAKE_GH_RUNS, every run newest first; or FAKE_GH_COMPLETED, the
+    # latest completed run's JSON list, and FAKE_GH_LATEST, the newest run of any status; FAKE_GH_EXIT: a failing gh
+    # (signed out, offline). A call in another shape is refused as the real gh refuses it.
     ghbin = tmp_path / "ghbin"
     ghbin.mkdir()
     (ghbin / "gh").write_text(GH)

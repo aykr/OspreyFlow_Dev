@@ -48,6 +48,10 @@ function serve() {
       if (path === "people/rows") return json(200, { rows: [], without_author: [] });
       if (path === "roles") return json(200, CATALOGUE);
       if (path === "organisation-arrivals") return json(200, []);
+      // The invite form is drawn once the inviter's own details have arrived (AD2).
+      // ...and the handling scheme (AD2): the route answers the classifications, never a bare object.
+      if (path === "/v1/handling-scheme") return json(200, { classification: ["PUBLIC", "OFFICIAL"], handling_codes: {} });
+      if (path === "/v1/me") return json(200, { id: "adm-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: ["osprey-admin"], receivable_handling_codes: [] });
       return json(200, {});
     }),
   );

@@ -54,6 +54,19 @@ class SourceNotFoundError(Exception):
     """No source of that id in the dataset (another dataset's included: rule 3)."""
 
 
+class SourceMarkingChangedError(Exception):
+    """The source's marking is no longer the one the edit was judged against: another edit of it
+    landed first (SE2, round 4). Nothing was written; the edit is judged again against what is now
+    stored."""
+
+
+class _Unguarded:
+    """The default of `edit_governance`'s `if_marking`: no guard (a caller that judged nothing)."""
+
+
+UNGUARDED = _Unguarded()
+
+
 class SourceStore(Protocol):
     async def connections(self) -> list[Connection]: ...
     async def add_connection(self, body: ConnectionInput, principal: Principal) -> Connection: ...
@@ -63,8 +76,20 @@ class SourceStore(Protocol):
         self, dataset_id: str, body: RegisterSourceInput, principal: Principal
     ) -> SourceTable: ...
     async def edit_governance(
-        self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
-    ) -> SourceTable: ...
+        self,
+        dataset_id: str,
+        source_id: str,
+        body: SourceGovernanceInput,
+        principal: Principal,
+        *,
+        if_marking: object = UNGUARDED,
+    ) -> SourceTable:
+        """Writes the edit. With `if_marking` (the classification the edit was judged against, None
+        when the source carries none), the write happens only if the stored classification is
+        still that one, decided by the write itself: otherwise `SourceMarkingChangedError`, and
+        nothing is written. Two edits at once then never put back a lower marking."""
+        ...
+
     async def adopt_refresh(self, source_id: str, refresh: SourceRefresh) -> None: ...
     async def set_default_marking(
         self, dataset_id: str, source_id: str, marking: str | None, principal: Principal
@@ -126,6 +151,71 @@ def default_marking_problems(
         ]
     if marking is None:
         return []
+    return marking_problems(
+        marking,
+        source.handling.get("classification"),
+        principal,
+        scheme,
+        ceiling,
+        subject="the default marking",
+        lowering="a default never lowers a marking",
+        own_name="own",
+    )
+
+
+def governance_marking_problems(
+    source: SourceTable,
+    handling: dict[str, Any],
+    principal: Principal,
+    scheme: HandlingScheme,
+    ceiling: DeploymentCeiling,
+) -> list[str]:
+    """Why a governance edit may not give `source` the marking its `handling` carries (SE2, C187;
+    ADR-140 Amendment 19's three checks, judged by `marking_problems`), in words; none when it may.
+    Only a marking the edit changes is judged: one it leaves as it is is not newly refused (a
+    source marked above a ceiling set later stays editable in its other declarations). The edit's
+    handling replaces the source's whole handling, so one that carries no marking (left out, or
+    null) on a marked source erases it: a lowering, refused as one."""
+    current = source.handling.get("classification")
+    marking = handling.get("classification")
+    if marking == current:
+        return []
+    if marking is None:
+        return [
+            f"the marking is left out, which is below the source's current marking, {current}: "
+            "an edit never lowers a marking"
+        ]
+    if not isinstance(marking, str):
+        return [f"the marking must be one of the {scheme.name} handling scheme's classifications"]
+    return marking_problems(
+        marking,
+        source.handling.get("classification"),
+        principal,
+        scheme,
+        ceiling,
+        subject="the marking",
+        lowering="an edit never lowers a marking",
+        own_name="current",
+    )
+
+
+def marking_problems(
+    marking: str,
+    own: object,
+    principal: Principal,
+    scheme: HandlingScheme,
+    ceiling: DeploymentCeiling,
+    *,
+    subject: str,
+    lowering: str,
+    own_name: str,
+) -> list[str]:
+    """The three checks both routes share, in words (ADR-140 Amendment 19): `marking` is one of the
+    scheme's classifications; never above the person's own clearance (they would mark rows they
+    could not read) or the deployment's highest marking (ADR-148 decision 10); never below
+    `own`, the source's marking. `subject`, `lowering` and `own_name` word the sentences for the
+    route asking, so the default-marking route's are as they were."""
+    levels = list(scheme.classification)
     if marking not in levels:
         return [
             f"{marking!r} is not a classification of the {scheme.name} handling scheme: use one "
@@ -136,19 +226,13 @@ def default_marking_problems(
         principal.clearance
     ):
         problems.append(
-            "the default marking is above your clearance: a source's rows are never marked "
+            f"{subject} is above your clearance: a source's rows are never marked "
             "higher than the person declaring it may read"
         )
     if ceiling.above(marking):
-        problems.append(
-            f"the default marking is above this deployment's highest marking, {ceiling.marking}"
-        )
-    own = source.handling.get("classification")
+        problems.append(f"{subject} is above this deployment's highest marking, {ceiling.marking}")
     if isinstance(own, str) and own in levels and levels.index(marking) < levels.index(own):
-        problems.append(
-            f"the default marking is below the source's own marking, {own}: a default never "
-            "lowers a marking"
-        )
+        problems.append(f"{subject} is below the source's {own_name} marking, {own}: {lowering}")
     return problems
 
 
@@ -294,9 +378,18 @@ class InMemorySourceStore:
         return made
 
     async def edit_governance(
-        self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
+        self,
+        dataset_id: str,
+        source_id: str,
+        body: SourceGovernanceInput,
+        principal: Principal,
+        *,
+        if_marking: object = UNGUARDED,
     ) -> SourceTable:
-        edited = _governed(await self.get(dataset_id, source_id), body, principal)
+        stored = await self.get(dataset_id, source_id)
+        if if_marking is not UNGUARDED and stored.handling.get("classification") != if_marking:
+            raise SourceMarkingChangedError(source_id)
+        edited = _governed(stored, body, principal)
         self._sources[source_id] = edited
         return edited
 
@@ -534,21 +627,44 @@ class PostgresSourceStore:
         return made
 
     async def edit_governance(
-        self, dataset_id: str, source_id: str, body: SourceGovernanceInput, principal: Principal
+        self,
+        dataset_id: str,
+        source_id: str,
+        body: SourceGovernanceInput,
+        principal: Principal,
+        *,
+        if_marking: object = UNGUARDED,
     ) -> SourceTable:
-        edited = _governed(await self.get(dataset_id, source_id), body, principal)
+        stored = await self.get(dataset_id, source_id)
+        edited = _governed(stored, body, principal)
         # The version taken in the update itself, as the default marking's is, so a governance edit
         # and a default change at once never write one version (the orchestrator's review, note 9).
+        # The marking the edit was judged against is a condition of the same update (SE2, round 4):
+        # decided on the row as the update finds it, so another edit landing between the route's
+        # read and this write never has its marking put back lower. `COALESCE(..., 'null')` makes a
+        # source carrying no classification equal to a request judged against none.
+        guard = (
+            ""
+            if if_marking is UNGUARDED
+            else (" AND COALESCE(handling -> 'classification', 'null'::jsonb) = $8::jsonb")
+        )
+        args: list[Any] = [
+            dataset_id, source_id, json.dumps(edited.handling), edited.legal_basis,
+            edited.refresh.model_dump_json(), edited.updated_by, edited.updated_at,
+        ]  # fmt: skip
+        if if_marking is not UNGUARDED:
+            args.append(json.dumps(if_marking))
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "UPDATE ingest_sources SET handling = $3::jsonb, legal_basis = $4, "
                 "refresh = $5::jsonb, version = version + 1, updated_by = $6, updated_at = $7 "
-                f"WHERE dataset_id = $1 AND id = $2 RETURNING {_SOURCE_COLUMNS}",
-                dataset_id, source_id, json.dumps(edited.handling), edited.legal_basis,
-                edited.refresh.model_dump_json(), edited.updated_by, edited.updated_at,
-            )  # fmt: skip
+                f"WHERE dataset_id = $1 AND id = $2{guard} RETURNING {_SOURCE_COLUMNS}",
+                *args,
+            )
         if row is None:
-            raise SourceNotFoundError(source_id)
+            # Either no such source, or its marking moved: told apart by reading it again.
+            await self.get(dataset_id, source_id)
+            raise SourceMarkingChangedError(source_id)
         return _source(row)
 
     async def set_default_marking(

@@ -14,6 +14,7 @@ is denied, never prompted. Scouts are not launched here: they are the conductor'
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -263,6 +264,106 @@ def rulings_note(tree: Path) -> str:
             "slice's start and may be older): read them before you begin; they bind this slice.")
 
 
+@contextlib.contextmanager
+def seat_running(slice_id: str, seat: str, account: str):
+    """A running record for the slice's seat while this process runs it (running-<seat>.json, with its pid):
+    resume.py move-seat refuses while one is alive."""
+    f = c.rec_dir(slice_id) / f"running-{seat}.json"
+    c.write_json(f, {"slice": slice_id, "seat": seat, "account": account, "pid": os.getpid(), "at": c.now()})
+    try:
+        yield
+    finally:
+        f.unlink(missing_ok=True)
+
+
+#: A seat failure (LINE_FIXES_3_BRIEF.md, 1f): a session whose call was refused analysed nothing, so it is never a
+#: verdict, a finding, a round or a red stop. CO2's verifier on 19 November 2026 came back in 332 ms with is_error,
+#: api_error_status 403, api_error_code oauth_not_allowed_for_organization, and was written as a finding.
+REFUSED_STATUSES = (401, 403, 408, 429)  # and every 5xx
+SEAT_TRIES = 3
+SEAT_PAUSES = (60, 300, 0)  # seconds before the second and the third try: growing
+
+
+class SeatFailed(Exception):
+    pass
+
+
+def verdict_of(res: dict) -> dict:
+    """The verifier's structured verdict in a session's result line, or {}."""
+    out = res.get("structured_output")
+    if isinstance(out, dict):
+        return out
+    try:
+        out = json.loads(res.get("result") or "{}")
+    except ValueError:
+        return {}
+    return out if isinstance(out, dict) else {}
+
+
+def refusal_words(res: dict) -> str:
+    head = " ".join(str(x) for x in (res.get("api_error_status"), res.get("api_error_code")) if x not in (None, ""))
+    text = str(res.get("result") or "").strip()[:300]
+    return (head + (": " if head and text else "") + text) or f"is_error with subtype {res.get('subtype')}"
+
+
+def seat_failure(res: dict, wants_verdict: bool) -> str | None:
+    """Why a session's result is a seat failure (its call refused, nothing analysed), or None for a real result.
+
+    A refused status (401, 403, 408, 429, 5xx); is_error from a session that ran no more than the refused turn (a
+    session that ran out of turns has analysed something, and is the seat's own result); no result line at all; or,
+    for a verifier, no structured verdict and no turns of analysis."""
+    if not res or res.get("type") != "result":
+        return "the session ended with no result line"
+    status = res.get("api_error_status")
+    refused = isinstance(status, int) and (status in REFUSED_STATUSES or 500 <= status <= 599)
+    if refused or (res.get("is_error") is True and (status is not None or (res.get("num_turns") or 0) <= 1)):
+        return refusal_words(res)
+    if wants_verdict and not verdict_of(res) and not res.get("num_turns"):
+        return "no verdict and no turns of analysis"
+    return None
+
+
+def launch_seat(slice_id: str, seat: str, label: str, account: str, tip: str, call, usage,
+                wants_verdict: bool = False) -> dict:
+    """A seat's session (`call`), tried up to SEAT_TRIES times while its call is refused, the pause growing. Each refused
+    try is a record of kind seat_failure (seat-failure-*.json: no board verdict, merge, standing accept or builder
+    prompt reads it). When the tries are used, or the account is stopped meanwhile (the StopFailure hook stops it at
+    the first refusal, and then a retry would be refused at the account check), the account is recorded stopped, the
+    slice's state names the failure and the account, its phase and round untouched, and SeatFailed is raised."""
+    why, attempt = "", 0
+    for attempt in range(1, SEAT_TRIES + 1):
+        with seat_running(slice_id, seat, account):
+            res = call()
+        usage(res)
+        why = seat_failure(res, wants_verdict)
+        if not why:
+            st = c.state(slice_id)
+            if "seat_failure" in st:
+                st.pop("seat_failure")
+                c.write_json(c.rec_dir(slice_id) / "state.json", st)
+            return res
+        c.write_json(c.rec_dir(slice_id) / f"seat-failure-{seat}-{uuid.uuid4().hex[:8]}.json",
+                     {"kind": "seat_failure", "slice": slice_id, "seat": seat, "pass": label, "account": account,
+                      "tip": tip, "try": attempt, "of": SEAT_TRIES, "error": why, "result": res, "at": c.now(),
+                      "note": "a refused call, not a verdict: no finding, no round, no red stop"})
+        print(f"{slice_id}: the {seat}'s call on account {account} was refused (try {attempt} of {SEAT_TRIES}): {why}")
+        if c.account_stop(account):
+            break
+        if attempt < SEAT_TRIES:
+            time.sleep(SEAT_PAUSES[attempt - 1])
+    if not c.account_stop(account):
+        c.write_json(c.DATA / "accounts" / f"{account}.stopped.json",
+                     {"account": account, "error": f"seat failure after {attempt} tries: {why}", "at": c.now(),
+                      "seat": seat, "slice": slice_id, "message": why})
+    c.set_state(slice_id, seat_failure={"seat": seat, "account": account, "error": why, "tries": attempt,
+                                        "at": c.now()})
+    raise SeatFailed(f"SEAT FAILURE {slice_id}: the {seat}'s call on account {account} was refused {attempt} "
+                     f"time(s); the slice stays where it was and account {account} is stopped "
+                     f"({(c.account_stop(account) or {}).get('error')}). Tell the owner at once, in its words: {why}. "
+                     f"The owner clears the account (clear_account.py {account}, on a resume.tsv line) or moves the "
+                     "seat (resume.py move-seat).")
+
+
 def stop_slice(slice_id: str, note: str) -> None:
     c.set_state(slice_id, phase="stopped", note=note)
     board()
@@ -282,14 +383,22 @@ def builder(slice_id: str) -> int:
               f"- checks: {frozen['checks']}{findings}")
     wt = Path(frozen["worktree"])
     prompt += rulings_note(wt)
-    log = c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"
-    res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
-                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
-                  **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})}, log)
+    tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    try:
+        res = launch_seat(
+            slice_id, "builder", f"round {st['round']}", st["account"], tip0,
+            lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
+                           {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                            **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})},
+                           c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"),
+            lambda r: append_usage(slice_id, frozen["build"], "builder", st["account"], seat["model"], seat["effort"], r))
+    except SeatFailed as e:
+        board()
+        print(e)
+        return 2
     sess = c.read_json(c.rec_dir(slice_id) / "sessions.json") or {"builder": [], "verifier": []}
     sess["builder"].append(res.get("session_id"))
     c.write_json(c.rec_dir(slice_id) / "sessions.json", sess)
-    append_usage(slice_id, frozen["build"], "builder", st["account"], seat["model"], seat["effort"], res)
     red = c.read_json(c.rec_dir(slice_id) / "red_stop.json")
     tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
     if c.account_stop(st["account"]):
@@ -341,17 +450,21 @@ def verifier(slice_id: str) -> int:
                   f"when the code does the wrong thing, '{GAP}' (a gap in a test) when the code may be right but no "
                   f"test would fail if it were wrong; a finding without a kind counts as a fault. Put "
                   f"the commit {tip} in your answer.{rulings}")
-        log = c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl"
-        res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
-                     {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,
-                     ["--json-schema", json.dumps(VERDICT_SCHEMA)])
-        append_usage(slice_id, frozen["build"], f"verifier:{focus}", account, seat["model"], seat["effort"], res)
-        out = res.get("structured_output")
-        if not isinstance(out, dict):
-            try:
-                out = json.loads(res.get("result") or "{}")
-            except ValueError:
-                out = {}
+        try:
+            res = launch_seat(
+                slice_id, "verifier", focus, account, tip,
+                lambda: launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
+                               {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)},
+                               c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl",
+                               ["--json-schema", json.dumps(VERDICT_SCHEMA)]),
+                lambda r: append_usage(slice_id, frozen["build"], f"verifier:{focus}", account, seat["model"],
+                                       seat["effort"], r),
+                wants_verdict=True)
+        except SeatFailed as e:  # no verifier record: the passes so far are run again with the rest
+            board()
+            print(e)
+            return 2
+        out = verdict_of(res)
         sid = res.get("session_id", "")
         passes.append({"pass": focus, "verdict": out.get("verdict", "findings"), "commit": out.get("commit", ""),
                        "findings": out.get("findings") or ([] if out else [{"what": "no verdict returned",

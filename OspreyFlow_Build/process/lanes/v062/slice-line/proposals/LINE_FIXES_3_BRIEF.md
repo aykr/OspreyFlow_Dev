@@ -82,6 +82,56 @@ once with nothing else running; it waits for a file its fake lease writes and th
 test (OspreyFlow_Build/tests/test_stack_lease.py, around line 1463; BACKLOG.md has the row) and is **not** in this brief's scope
 to change, but the session may say whether a base of its own made it pass.
 
+**1f. A seat that returns no verdict because its call was refused is a seat failure, retried: never a finding, never a round**
+(added on the owner's word of 19 November, evening). What happened: the `sol` account was blocked at the organisation level; CO2's
+verifier session came back in 332 ms with `is_error: true`, `api_error_status: 403`, `api_error_code:
+oauth_not_allowed_for_organization` ("Your organization has disabled Claude subscription access for Claude Code"), and
+`run_seat.py verifier` wrote it as a verifier record with one finding, "no verdict returned" (evidence "success"), and sent the
+slice back to its builder for round 2. A refused call analysed nothing.
+- In `run_seat.py`, where a seat's result is read (`launch` and the verifier and builder callers): a result with `is_error`
+  true, or an `api_error_status` of 401, 403, 408, 429 or 5xx, or no structured verdict **and** no turns of analysis, is a **seat
+  failure**. It writes no verifier record with findings (a record of kind `seat_failure` for the conductor's report, not read by
+  the board as a verdict, the merge or the standing accept), does not advance the round, does not count a red stop, and is
+  retried after a pause, a small number of times (three), the pause growing. When the retries are used the slice stays in its phase
+  with the account named, and `account_stop` is recorded for that account so `preflight` refuses further seats on it ("STOPPED:
+  account sol is stopped") until the owner clears it. The conductor tells the owner at once, with the error's own words.
+- **CO2's lost round is given back**: its state (records folder, CO2) reads phase `building`, round 2 and a verifier record with the
+  finding "no verdict returned" at tip f9011e16f6. The session repairs it as a one-off with a test (the new code path or a
+  repair step the owner runs once): the bogus record becomes a `seat_failure` record, the round returns to 1, the phase to
+  `verifying`, so the verifier runs again on the same tip.
+- **Clearing the account's stop** (found the same evening): when the owner had enabled `sol` again, `run_seat.py verifier PL3` was
+  refused by the line's own preflight, "STOPPED: account sol is stopped (oauth_org_not_allowed); the owner decides.", read from
+  the marker file `sol.stopped.json` in the accounts folder of the data directory (written by `usage_hook.py` at the first refusal;
+  `common.account_stop` reads it). The line has no command that clears it: the owner had to delete the file by hand. Add a
+  `resume.py` action (or a small owner's script) `clear-account <account>`, authority a line in `resume.tsv`, which probes the
+  account with one cheap call and removes the marker only if the call is accepted; logged in `owner-changes.tsv`.
+- Tests, red first, in the shape the call returns: the 403 result above (is_error, api_error_status, api_error_code) read by the
+  verifier path: no findings, round unchanged, retried; the same for the builder path; a real verifier result with findings is
+  unchanged; a refused call that succeeds on the second try gives that try's verdict; three refusals leave the slice where it was
+  and the account stopped; the board does not show a seat failure as "findings".
+
+**1g. An owner's line that moves a started slice's seat to another account** (added on the owner's word of 19 November). Today
+a slice's accounts are fixed at its start: `state.json` in its records folder holds `account` (the builder's) and
+`verifier_account` (the verifier's); `run_seat.py` reads `st["account"]` for the builder and `st["verifier_account"]` for the
+verifier, and `resume.py` has no action that changes either, so when an account is blocked (as `sol` was on 19 November) every
+started slice on it is stuck, whatever `accounts.yaml` says for new slices.
+- A `resume.py` action `move-seat`, authority a line in `resume.tsv`: `<ID> move-seat <builder|verifier> <account> <YYYY-MM-DD>`,
+  one use per line, logged in `owner-changes.tsv` (slice, seat, from, to). Preconditions, each refused in words with nothing
+  changed: the account is one in `accounts.yaml`'s known names and is signed in; no seat of that slice is running; no merge is
+  running (the merge lock). Effect: it rewrites `account` or `verifier_account` in the slice's `state.json` and nothing else. It
+  never touches a record, a finding or a round.
+- The separation of builder and verifier is preserved by session, not by account: the merge's rule (a verifier pass from a session
+  that did not build the slice, with a transcript naming the tip) already holds for a verifier on any account. The action
+  refuses a move that would make the same session both. `transcript_of(account, session)` reads the transcript under that account's
+  config folder, so the new account's must be the one searched.
+- Tests, red first: a line for another slice, seat, account or date is refused; a move while a seat runs is refused; a move to an
+  account that is signed out or stopped is refused; after a move to the default account the verifier seat is launched on it
+  (the plant: the launch's configuration folder), its transcript is found, and the merge accepts its pass; a builder's session id is
+  not accepted as the verifier's.
+- **Until it exists**, the only way to run a started slice's seat on another account is the owner editing `state.json` by hand
+  (the two keys above, in each slice's records folder). The line does not log it, `resume.py` does not know it, and nothing
+  checks it. It is written here so the owner knows the stopgap; the conductor does not make it.
+
 ## Part 2, only if part 1 is done and proved
 
 MERGE_PROGRESS_BRIEF.md, as written (same folder). It is the merge's and the seats' progress record for the dashboard.
@@ -104,7 +154,11 @@ a seat could use to write a pass record, change a scan row it did not add, or me
    test_client_name_check_paths.py, each walking only its own temporary repository) pass the suite's `unmapped` and `stale` checks on
    the merge result with the tip unchanged; main alone stays green; the gate's findings for the expected red are none.
 
-The conductor then runs the real GG6 send-back and the real BL6 merge.
+3. **(added 19 November, evening) CO2's refused verifier and the seat move**, in a scratch copy of its records: the 403 result
+   above is read as a seat failure (no finding, round 1 kept, retried); and a `move-seat` of the verifier to the default account
+   launches it there and its pass is accepted by the merge. PL3's verifier, held for the same reason, is the second real case.
+
+The conductor then runs the real GG6 send-back and the real BL6 merge, and the real CO2 and PL3 verifiers.
 
 ## How the owner starts it
 

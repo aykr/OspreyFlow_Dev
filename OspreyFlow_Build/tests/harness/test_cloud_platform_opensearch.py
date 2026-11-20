@@ -89,7 +89,7 @@ def test_the_conduit_and_the_worker_read_the_address_and_sign() -> None:
 
 
 def test_a_platform_that_signs_for_us_says_none() -> None:
-    """MoJ's module names its secret key `proxy_url`: if the platform's proxy signs, we must not."""
+    """the UK public sector client's module names its secret key `proxy_url`: if the platform's proxy signs, we must not."""
     platform = load_platform("client")
     assert opensearch_settings(_config("poc"), platform)["OPENSEARCH_SIGNING"] == "sigv4"
     proxied = platform.model_copy(update={"opensearch_signing": "none"})

@@ -152,6 +152,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         state, source = "building", "branch exists, not green yet"
         if st.get("round", 1) > 1:
             note = f"round {st['round']} after the verifier's findings"
+    sf = st.get("seat_failure")
+    if isinstance(sf, dict) and state in ("building", "verifying"):  # a refused call: no verdict, never findings
+        note = (f"seat failed: the {sf.get('seat')}'s call on {sf.get('account')} was refused "
+                f"({str(sf.get('error', ''))[:80]}); the owner clears the account or moves the seat")
+        source = "seat failure record"
     if state and state != "done":
         try:
             builds_entry = entry(state, note=note, evidence=evidence, **kw)
@@ -168,6 +173,8 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         shown = f"stopped: {note[:60]}"
     elif state == "done" and note:
         shown = note
+    elif state and isinstance(sf, dict) and note.startswith("seat failed"):
+        shown = f"{state}: seat failed on {sf.get('account')}"
     elif state:
         shown = state
     else:
@@ -271,9 +278,12 @@ def main() -> int:
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
         if ci["state"] == "red":
-            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: no merge until it is green")
+            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: not a gate; merges go on (a red run is "
+                  "rerun once; a test of ours red twice stops them)")
         elif ci["state"] != "green":
-            print(f"main's GitHub run cannot be read ({ci['why']}): no merge until it can")
+            print(f"main's GitHub run cannot be read ({ci['why']}): not a gate; merges go on")
+        if c.GITHUB_STOP.exists():
+            print("merging stopped: " + c.github_stop_words(c.read_json(c.GITHUB_STOP)))
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
@@ -290,7 +300,8 @@ def main() -> int:
             print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         pending = c.DATA / "push.pending"
         if pending.exists():
-            print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")
+            print(f"push pending ({pending.read_text().strip()[:10]}): waits for the run on main in progress; the "
+                  "conductor runs merge_slice.py push-pending when it ends")
         print(f"status file: {path}")
     for p in problems:
         print(f"REPORT TO OWNER: {p}", file=sys.stderr)
