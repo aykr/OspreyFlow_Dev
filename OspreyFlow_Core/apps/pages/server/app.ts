@@ -9,6 +9,7 @@ import session from "express-session";
 import nunjucks from "nunjucks";
 import { fileURLToPath } from "node:url";
 
+import { DEFAULT_BODY_STALL_MS, pageBodyStall } from "./bodyStall.js";
 import type { ForwardSettings } from "./config.js";
 import { csrfProtection } from "./csrf.js";
 import { forwarder, v1Gate } from "./forward.js";
@@ -33,6 +34,8 @@ export interface AppDeps {
   forward?: ForwardSettings;
   /** Where the forwarder says what went wrong: a fixed phrase and a status. */
   log?: (message: string) => void;
+  /** How long a browser may send nothing mid-body before its connection is ended (default 60 s; a test shortens it). */
+  bodyStallMs?: number;
 }
 
 const VIEWS = fileURLToPath(new URL("./views", import.meta.url));
@@ -76,6 +79,8 @@ export function createApp(deps: AppDeps): Express {
   // Before the session is read: with no forwarder every /v1 path is 404, and a path or method it will not carry is
   // refused here, so that nothing of the session store or the Conduit is touched for it.
   app.use(v1Gate(deps.forward !== undefined));
+  // Node's whole-request timeout is off (`start.ts`): a page route's body that goes silent is ended here, a /v1 body in the forwarder.
+  app.use(pageBodyStall(deps.bodyStallMs ?? DEFAULT_BODY_STALL_MS));
 
   app.use(
     session({
@@ -152,7 +157,11 @@ export function createApp(deps: AppDeps): Express {
     const router = express.Router();
     deps.extraRoutes?.(router);
     // Behind the same headers, session and anti-forgery as every page: nothing here is reached without them.
-    if (deps.forward) router.use(forwarder({ settings: deps.forward, ...(deps.log ? { log: deps.log } : {}) }));
+    if (deps.forward) router.use(forwarder({
+          settings: deps.forward,
+          ...(deps.log ? { log: deps.log } : {}),
+          ...(deps.bodyStallMs === undefined ? {} : { bodyStallMs: deps.bodyStallMs }),
+        }));
     app.use(router);
   }
 

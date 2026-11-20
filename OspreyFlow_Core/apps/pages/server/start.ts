@@ -34,6 +34,8 @@ export interface StartDeps {
   clock?: () => number;
   /** How often the live-updates proxy looks at its open sockets, in milliseconds. */
   streamCheckMs?: number;
+  /** How long a browser may send nothing mid-body before it is ended, in milliseconds (default 60 s). A test shortens it. */
+  bodyStallMs?: number;
 }
 
 export interface Running {
@@ -87,13 +89,15 @@ export async function main(
     sessionSecret: config.sessionSecret.reveal(),
     ...(deps.clock ? { clock: deps.clock } : {}),
     ...(config.forward ? { forward: config.forward } : {}),
+    ...(deps.bodyStallMs === undefined ? {} : { bodyStallMs: deps.bodyStallMs }),
     log: (message) => {
       io.error(message);
     },
   });
   // Node's own timeouts must not cut a long upload or a long read short (nginx gave an hour). The whole-request
-  // timeout is off: an upload is as long as its file, and the forwarder's own silence timeout (the Conduit's
-  // setting) is what ends a stalled one. The header timeout stays, above the keep-alive's, as Node requires.
+  // timeout is off: an upload is as long as its file. What ends a browser that stops sending is `bodyStall.ts`'s
+  // stall timer (a body read here, a page route's body), and what ends a Conduit that goes silent is the forwarder's
+  // upstream timeout. The header timeout stays, above the keep-alive's, as Node requires.
   const server = createServer(
     { requestTimeout: 0, headersTimeout: HEADERS_TIMEOUT_MS, keepAliveTimeout: KEEP_ALIVE_TIMEOUT_MS },
     app,

@@ -61,6 +61,7 @@ import { pipeline } from "node:stream";
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 
 import { accessTokenFor } from "./accessToken.js";
+import { BodyStalled, DEFAULT_BODY_STALL_MS, untilStalled } from "./bodyStall.js";
 import type { ForwardSettings } from "./config.js";
 import { CSRF_REFUSED, csrfDeferred, formKind, tokensMatch } from "./csrf.js";
 import { MultipartRefusal, boundaryOf, readMultipart } from "./multipart.js";
@@ -78,6 +79,7 @@ const SAFE_WORDS = {
   unreachable: "The service could not be reached just now. Nothing was changed. Try again in a few minutes.",
   timedOut: "The service took too long to answer. It may still be working. Try again in a few minutes.",
   access: "Your access could not be prepared just now. Try again in a few minutes.",
+  stalled: "The request stopped arriving, so it was ended. Nothing was changed. Go back and send it again.",
 } as const;
 
 const CARRIED_METHODS = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"]);
@@ -257,6 +259,8 @@ export interface ForwarderDeps {
   settings: ForwardSettings;
   /** Where the forwarder says what went wrong: a fixed phrase and a status, never a token, a cookie or an address. */
   log?: (message: string) => void;
+  /** How long a browser may send nothing while its body is being read before the call is ended (`bodyStall.ts`). */
+  bodyStallMs?: number;
 }
 
 export function forwarder(deps: ForwarderDeps): RequestHandler {
@@ -266,6 +270,7 @@ export function forwarder(deps: ForwarderDeps): RequestHandler {
   const transport = base.protocol === "https:" ? httpsRequest : httpRequest;
   const hostname = base.hostname.replace(/^\[|\]$/g, "");
   const timeoutMs = settings.upstreamTimeoutSeconds * 1000;
+  const stallMs = deps.bodyStallMs ?? DEFAULT_BODY_STALL_MS;
 
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!isV1Path(rawPathOf(req))) {
@@ -399,7 +404,16 @@ export function forwarder(deps: ForwarderDeps): RequestHandler {
       if (!res.writableFinished) upstream?.destroy();
     });
 
-    const stream = (): AsyncIterable<Buffer> => req.iterator({ destroyOnReturn: false }) as AsyncIterable<Buffer>;
+    // Node's whole-request timeout is off (`start.ts`), so a browser that stops sending is ended here: 408, the call to
+    // the Conduit abandoned, and the browser's connection closed once the answer is out.
+    const stream = (): AsyncIterable<Buffer> =>
+      untilStalled(req.iterator({ destroyOnReturn: false }) as AsyncIterable<Buffer>, stallMs);
+    const stalled = (): void => {
+      log("pages: forward: the browser stopped sending its body (408)");
+      refuse(408, SAFE_WORDS.stalled);
+      if (res.writableFinished) req.destroy();
+      else res.once("finish", () => req.destroy());
+    };
 
     // ---- a browser's form upload to a raw route: the file's bytes, raw, with the fields in the query ----
     if (isForm) {
@@ -468,6 +482,10 @@ export function forwarder(deps: ForwarderDeps): RequestHandler {
           refuse(error.status, error.detail);
           return;
         }
+        if (error instanceof BodyStalled) {
+          stalled();
+          return;
+        }
         // The browser went away mid-form: what the Conduit has is not a whole upload, so it is abandoned, not ended.
         settled = true;
         upstream?.destroy();
@@ -507,7 +525,11 @@ export function forwarder(deps: ForwarderDeps): RequestHandler {
           if (settled || up.destroyed) continue; // the Conduit has already answered: the rest is read and dropped
           if (!up.write(chunk)) await drained(up);
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof BodyStalled) {
+          stalled();
+          return;
+        }
         settled = true;
         up.destroy();
         return;
@@ -534,8 +556,9 @@ export function forwarder(deps: ForwarderDeps): RequestHandler {
           }
           parts.push(chunk);
         }
-      } catch {
-        return; // the browser went away: nobody to answer
+      } catch (error) {
+        if (error instanceof BodyStalled) stalled();
+        return; // otherwise the browser went away: nobody to answer
       }
       body = Buffer.concat(parts);
       if (kind === "urlencoded") {
