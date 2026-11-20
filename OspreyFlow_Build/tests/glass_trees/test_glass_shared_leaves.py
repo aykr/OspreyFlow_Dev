@@ -342,7 +342,7 @@ def test_the_move_changed_no_line_but_the_imports() -> None:
         ).strip()
         assert commit, f"git finds no rename into {new}: the file was not moved with `git mv`"
         was = _git("show", f"{commit}^:{old}")
-        now = (ROOT / new).read_text(encoding="utf-8")
+        now = _git("show", f"{commit}:{new}")
         assert only_import_lines_changed(was, now) == [], (
             f"{new} changed in more than its import lines"
         )
