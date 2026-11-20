@@ -12,6 +12,11 @@ Rule 12, each invariant and the test that fails without it:
   schema accepts 419 (no floor, or a floor lower than 420), and
   `test_the_floor_the_schema_applies_is_the_constant_not_a_copy_of_it` fails if the schema holds
   its own 420 instead of reading `harness.profiles`' constant.
+- **The ceiling is applied** (what the real PostgreSQL refuses, rule 15): PostgreSQL 16 stops at
+  start-up when `max_connections` plus its other server processes passes 262143.
+  `test_a_value_above_the_ceiling_is_refused_in_words[262122]` fails if the schema accepts it (no
+  ceiling, or one above 262121), and `test_the_ceiling_is_what_postgres_16_leaves_for_connections`
+  fails if the ceiling is not read from the named constants.
 - **The floor follows the pools**: `test_the_floor_follows_the_constants_it_is_made_of` (raise
   `KEYCLOAK_POOL_MAX` in a copy of `profiles.py`; the floor and the default rise with it).
 - **Unset changes nothing**: `test_unset_is_the_computed_number_exactly_as_before` and
@@ -285,6 +290,37 @@ def test_a_value_below_the_floor_is_refused_in_words(value: int) -> None:
         for part in ("Conduit", "Keycloak", "gateway", "Superset", "operator"):
             assert part in said, part  # what the floor is made of
         assert "remove" in said or "set it to" in said  # how to fix it
+
+
+CEILING = 262121  # PostgreSQL 16's MAX_BACKENDS (262143) less the 22 other server processes at default
+
+
+@pytest.mark.parametrize("value", [CEILING + 1, 300_000, 10**12])
+def test_a_value_above_the_ceiling_is_refused_in_words(value: int) -> None:
+    for raw in (LITE, SMALL):
+        said = _refusal(_with(raw, postgres_max_connections=value))
+        assert "resources.postgres_max_connections" in said
+        assert f"is {value}" in said and f"above {CEILING}" in said  # the value and the ceiling
+        assert "262143" in said  # what the ceiling is made of
+        assert str(DEFAULT) in said  # the computed default
+        assert "remove" in said or "set it to" in said  # how to fix it
+
+
+def test_the_ceiling_is_what_postgres_16_leaves_for_connections() -> None:
+    assert profiles.POSTGRES_MAX_BACKENDS == 0x3FFFF == 262143
+    assert profiles.POSTGRES_MAX_CONNECTIONS_CEILING == CEILING
+    for value in (CEILING, FLOOR):  # the ceiling itself is the PostgreSQL range's, so accepted
+        raw = _with(LITE, postgres_max_connections=value)
+        assert _command(raw)[2] == f"max_connections={value}"
+
+
+def test_the_ceiling_the_schema_applies_is_the_constant_not_a_copy_of_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(profiles, "POSTGRES_MAX_CONNECTIONS_CEILING", 1000)
+    said = _refusal(_with(LITE, postgres_max_connections=1001))
+    assert "above 1000" in said
+    assert OspreyConfig.model_validate(_with(LITE, postgres_max_connections=1000))
 
 
 @pytest.mark.parametrize(
