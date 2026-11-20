@@ -137,6 +137,11 @@ function expectRefused(r: Rig, res: Response): void {
   expect(res.text).toContain(REFUSED_WORDS);
   expect(hasSessionCookie(res)).toBe(false);
   expect(sessionKeys(r.store)).toEqual([]);
+  expectLoginCookieCleared(res);
+}
+
+/** The login cookie is answered with an empty, expired one: the flow is over, whatever the outcome. */
+function expectLoginCookieCleared(res: Pick<Response, "headers">): void {
   const login = setCookies(res).find((c) => c.startsWith(`${LOGIN_COOKIE_NAME}=`));
   expect(login, "the login cookie is cleared on every answer to a callback").toMatch(/^[^=]+=;.*(Max-Age=0|Expires=Thu, 01 Jan 1970)/i);
 }
@@ -248,6 +253,9 @@ describe("the round trip", () => {
     const { callback } = second;
     expect(callback.status).toBe(302);
     expect(callback.headers["location"]).toBe("/");
+    // A successful sign-in clears the login cookie too: none of the flow's own cookie stays in the browser.
+    expectLoginCookieCleared(first.callback);
+    expectLoginCookieCleared(callback);
     const newId = idFrom(callback);
     expect(newId).not.toBe(oldId);
     expect(sessionKeys(r.store), "the session the browser brought is ended, and signed out is gone").toEqual([]);
@@ -286,6 +294,7 @@ describe("the round trip", () => {
     const { callback } = await signInFully(r, { returnTo: "/studio/pipelines?open=3#top" });
     expect(callback.status).toBe(302);
     expect(callback.headers["location"]).toBe("/studio/pipelines?open=3#top");
+    expectLoginCookieCleared(callback);
   });
 
   it.each(["//evil.example", "https://evil.example", "/\\evil", "/\\/evil.example", "javascript:alert(1)", "/\t/evil.example", "/\n/evil.example", "evil", "", "/a\\b"])(
