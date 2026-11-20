@@ -157,3 +157,4 @@ tests/test_client_name_check.py	OspreyFlow_Core/,OspreyFlow_Build/,OspreyFlow_Da
 tests/test_client_name_check_compressed.py	-	walks only the git repository each case builds under its own tmp_path; reads the module's CHANCE_IN_COMPRESSED constant, no repository folder
 tests/test_client_name_check_parallel.py	-	walks only the git repository each case builds under its own tmp_path (a pool of worker processes reads those files); no repository folder
 tests/test_client_name_check_paths.py	-	walks only the git repository each case builds under its own tmp_path; no repository folder
+tests/glass_trees/test_pages_image_carries_no_react.py	-	reads OspreyFlow_Core/apps/pages/Dockerfile by name; the scan's walk runs only over the SBOM and the exported file system each case builds under its own tmp_path, never a repository folder
