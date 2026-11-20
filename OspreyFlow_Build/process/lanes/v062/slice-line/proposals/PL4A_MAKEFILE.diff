@@ -1,0 +1,41 @@
+diff --git a/OspreyFlow_Core/Makefile b/OspreyFlow_Core/Makefile
+--- a/OspreyFlow_Core/Makefile
++++ b/OspreyFlow_Core/Makefile
+@@ -1,4 +1,4 @@
+-.PHONY: check lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset trivy-image-laurium test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
++.PHONY: check lint typecheck no-react-check version-isolation-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset trivy-image-laurium test-js dev-up dev-down docker-clean glass-perf glass-a11y glass-keyboard glass-map-verify glass-live harness-keyboard harness-a11y
+
+ # The day's stamp each image's upgrade layer is keyed on (`harness/upgrade_stamp.py`, v0.6.0): an
+ # upgrade layer is made again each day, never kept from a builder's cache.
+@@ -10,7 +10,7 @@
+ # What runs from this folder alone (`06_DECISIONS.md` ADR-114 Amendment 2). The specification's own
+ # gates and the test suites are the developer repository's, in its Makefile; its `ci` runs this
+ # `check` first. A user of this repository needs nothing from it.
+-check: lint typecheck trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset trivy-image-laurium harness-a11y
++check: lint typecheck no-react-check version-isolation-check trivy trivy-image-ingest trivy-image-api trivy-image-workspace trivy-image-harness trivy-image-ner trivy-image-worker trivy-image-report-sync trivy-image-superset trivy-image-laurium harness-a11y
+
+ lint:
+ 	$(RUFF) check .
+@@ -22,10 +22,21 @@
+ 	$(MYPY) packages services harness
+ 	npm run typecheck
+
+-# The Glass's and the harness's unit tests.
++# ADR-152 I1 (no React in `apps/pages` or `packages/glass-shared`) and I13 (the shared package imports no `sigma`,
++# `@sigma/*` or `maplibre-gl`; each front end's bundle holds a drawing library only at the version its own manifest
++# asks for). Each is shown red then green by the developer repository's `tests/glass_trees/` before it is wired in (rule 15).
++# I13's type half is the `no-restricted-imports` block for `packages/glass-shared/**` in `eslint.config.js`, run by `lint`.
++no-react-check:
++	node scripts/no_react_check.mjs
++
++version-isolation-check:
++	node scripts/version_isolation_check.mjs
++
++# The Glass's, the harness's and the shared package's unit tests.
+ test-js:
+ 	npm test --workspace apps/workspace
+ 	npm test --workspace apps/harness
++	npm test --workspace packages/glass-shared
+
+ trivy:
+ 	trivy fs --exit-code 1 --severity HIGH,CRITICAL --include-dev-deps --skip-dirs node_modules,.venv .

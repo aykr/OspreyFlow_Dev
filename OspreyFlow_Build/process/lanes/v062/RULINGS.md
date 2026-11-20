@@ -215,6 +215,11 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
      minutes; the checks cost seconds). The conductor's helper for this is kept in the conductor's scratchpad, not in the product.
   10. **Backlog rows for the line:** (a) the builder's Stop check always runs lint and the scan-map check, whatever the brief says; (b) a slice
       whose only open finding is a test gap is offered to the standing accept before it is sent to another round (PL9a missed it).
+- **SE5: fix main's model-key address fault now** (the owner, 20 November, option 1). A scout found that main's model key code can leave gateway entries at a new address the record does not hold after a failed or interrupted
+  address change whose undo also fails, and that a later key set then sends the key to that address (a reasoned path, to be reproduced first; if it cannot be, the build stops and the owner is told). Build **SE5**, security lane,
+  touches no workspace file, runs beside PL4, **merges ahead of everything except a PL4 slice**. Fix: a failed address change never leaves entries the record does not agree with; the undo failing is loud (words and an audit record without the key), never a log line alone;
+  start-up compares every entry's address with the record. The owner's key rules bind it. AD1a merges main in afterwards and keeps the stronger behaviour. Release notes name the fix in plain words (BACKLOG). **A fault in key handling is never accepted narrower:**
+  AD1a's round 4 is judged against the conductor's table of every key path, and any row it does not close stops AD1a and goes to the owner.
 - **AD1a: one workspace file allowed** (the owner, 20 November, option 2 with conditions). AD1a's three red scan tests
   (`test_admin_sections`; in `test_place_routes`: the record of places by role, and the hidden-place refusal for `right:manage_models`) need
   `apps/workspace/src/shell/placesByRole.json`. AD1a may change **that one file** on its own branch, produced by its generator
@@ -232,6 +237,25 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
   because of the slice the conductor stops and tells the owner; (c) slice E's budget comparison against A's baseline is on the Mac,
   with nothing else running. `PARITY_EXCEPTIONS.yaml` decides when a GOV.UK deployment drops React: each line is the owner's. While
   PL4 runs nothing else touches `apps/workspace`.
+  **Condition (b) changed by the owner, 20 November (later):** the next PL4 slice **may start building as soon as the previous one has
+  merged**; it does not wait for GitHub. It **may not merge** until GitHub's run on the previous slice's merge commit is green for the
+  budget, accessibility and keyboard jobs. If that run is red because of the slice, the conductor stops the next one and tells the owner.
+  Slice A moved nothing, so slice B starts building the moment A merges. The protected-file diffs of slice A go to the owner as soon as it
+  lands (`slice-line/proposals/PL4A_MAKEFILE.diff` and `PL4A_CI_YML.diff`, each passing `git apply --check`; the Makefile comment names no
+  `OspreyFlow_Build` path, as the builder's last round corrected, because Core's committed files may not name the Build folder).
+  **Slice B confirmed by the owner, 20 November:** `packages/design` is a plain folder (no manifest, relative imports); `apps/workspace/Dockerfile` and `harness/Dockerfile` each copy it;
+  the `declare module "*.css"` shim stays in the workspace; the JS colour mirrors stay (slices C and D); the acceptance does not carry the figure 111 but asks that **no code, configuration, test, build or
+  guide file names the old path** (past decision-log entries are history, not rewritten, and are allowlisted for the citation check with the reason). `process/CLAUDE.md` is changed by the owner from
+  the conductor's one-line diff (`slice-line/proposals/PL4B_RULES_ROW.diff`). The rest of the design folder: `scale.css` and `panelType.css` move in a **slice B2 straight after B** (plain token-only CSS imported by
+  `primitives.css`); `primitives.css` stays with its React primitives and `fonts.ts` stays in the workspace (the conductor's reading, a scout confirms before B2's brief; all inside PL4).
+  **Superseded the same day by the owner's ruling on the rest of the design folder (next item).**
+- **The rest of the design folder** (the owner, 20 November, on ADR-152 decision 6's "tokens.css, primitives.css, fonts; read by the React workspace and tree-default alike"): (1) `scale.css` and `panelType.css` move in
+  **slice B2**; (2) **`primitives.css` also moves to `packages/design`**, in B2 with the two files it imports or a B3 straight after, with the same proof (the built CSS identical to the baseline): it is plain class-based CSS with
+  no React, the pages use the same classes so the Default tree looks the same as today, and the `.tsx` primitives stay in the workspace; (3) **fonts**: `fonts.ts` may stay in the workspace because it is tied to the Vite bundle,
+  **but which families and weights are used is stated once in `packages/design`, and both front ends load from that list, each its own way. A test fails if either loads a font the list does not name.** (4) **Standing rule,
+  restated:** any time the conductor would leave out or defer something an ADR names, it is brought to the owner as a question before the brief is written. (The conductor's reading of 20 November that `primitives.css` and
+  the fonts stay out of PL4 was exactly such a deferral; it was put to the owner as a question and is overruled.) Cut: **B2** = `scale.css`, `panelType.css`, `primitives.css`; **B3** = the font list and its test. The `pages` side of
+  the font rule is a prerequisite in the brief of the first page build that loads a font (PL7).
 - **PL6** (the `pages` image scan): the scan script and its test with three planted faults; no edit to the Makefile or `ci.yml`
   (those are the owner's diffs).
 - **Six builders** under balanced, tracks 5 and 6 on the default account (committed by the owner, 50ba572).
