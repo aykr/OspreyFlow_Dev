@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.30** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.31** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.31 | 2026-11-20 | §4.1: the sentence on a GOV.UK install no longer points to §1a, which shows the guided page's GOV.UK starter; it says only what ADR-152 Amendment 1, decision 5 says. |
 | 2.30 | 2026-11-20 | §4.1 and §6a (and the README's *Installing and running it*): a GOV.UK install is done from the command line, headless, with `ospreyflow install`; the guided page is the `apps/harness` React application, served only on the installing computer while an install runs and never rendered into a deployment (ADR-152 Amendment 1, decision 5; slice PL7a1). §6a: it said `ospreyflow install` does not run `cloud-platform`; it now says why, which is that the command has the modes `lite`, `small` and `enterprise` and no other. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
 | 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
@@ -579,9 +580,8 @@ with its signature checked against the release; in a developer's checkout it is 
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
 
 **A GOV.UK install is done from the command line, headless:** `ospreyflow install`, with its answers
-given as flags or in an answers file (`--config install.yaml --yes`, section 7), as section 1a shows for
-a GOV.UK starter. The guided page described here is the `apps/harness` React application. It is served only on the
-computer you are installing from, while an install runs, and is never rendered into a deployment: the
+given as flags or in an answers file (`--config install.yaml --yes`, section 7). The guided page described
+here is the `apps/harness` React application. It is served only on the computer you are installing from, while an install runs, and is never rendered into a deployment: the
 deployment you install holds none of it, and the rule that the `pages` service carries no React (ADR-152) does
 not apply to it.
 

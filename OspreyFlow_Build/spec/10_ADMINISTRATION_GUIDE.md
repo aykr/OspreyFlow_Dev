@@ -358,9 +358,8 @@ with its signature checked against the release; in a developer's checkout it is 
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
 
 **A GOV.UK install is done from the command line, headless:** `ospreyflow install`, with its answers
-given as flags or in an answers file (`--config install.yaml --yes`, section 7), as section 1a shows for
-a GOV.UK starter. The guided page described here is the `apps/harness` React application. It is served only on the
-computer you are installing from, while an install runs, and is never rendered into a deployment: the
+given as flags or in an answers file (`--config install.yaml --yes`, section 7). The guided page described
+here is the `apps/harness` React application. It is served only on the computer you are installing from, while an install runs, and is never rendered into a deployment: the
 deployment you install holds none of it, and the rule that the `pages` service carries no React (ADR-152) does
 not apply to it.
 
