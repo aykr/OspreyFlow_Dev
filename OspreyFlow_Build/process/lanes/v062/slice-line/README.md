@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (244 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (176 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (261 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (189 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -139,6 +139,7 @@ main's records, and sends the slice for a fresh check.
 | `correct-command` | a slice stopped **only** by the conductor's own malformed command (ruling 3) | none: the limits are in the code |
 | `accept` | a slice stopped at its rounds limit (or refused by the gate at it) whose tip has the Stop hook's green test record and a verifier's `findings` record for that same tip: writes `accepted-<tip>.json` (the owner's line, the date, every finding verbatim, split into faults in behaviour, gaps in a test and findings with no kind), phase `verified`, `accepted: true`; changes no finding and no verifier record. A last verdict of `pass` is refused (nothing to accept) | a line in `resume.tsv` |
 | `accept`, standing | with no `resume.tsv` line for the slice: the owner's one standing line in `standing.tsv`, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N 3 or more: ruling 5, "from a slice's third round on"), accepts a slice at round N or later whose newest findings record is the verifier's for its exact tip, every finding in it a gap in a test (`kind: test_gap`; in a record written before the field, the text's prefix "GAP IN A TEST:"). One fault in behaviour, or one finding with no kind, and it is refused in words; the slice goes round again or stops as before. The record is marked `by: standing`, with the rule's text; `run_seat.py verifier` tries it after each record with findings, and the conductor may run `resume.py <ID> accept` for a slice already stopped. The merge reads the line again (gone or no longer met: refused); its record lists each gap (`accepted_findings.backlog_rows`) for the conductor's backlog row, and the board adds "(standing accept: N gaps in a test for the backlog)". The conductor tells the owner afterwards | none per slice: the owner's line in `standing.tsv` (no file, or anything else in it: off) |
+| `move-seat <builder\|verifier> <account>` | a started slice's seat moved to another account (one `accounts.yaml` names, signed in and not stopped), while none of its seats runs and no merge runs: `state.json`'s `account` or `verifier_account` rewritten, and nothing else (no record, finding or round). The builder and the verifier stay apart by session, not by account: the merge refuses a pass from a session that built the slice, on any account | a line in `resume.tsv`: `<ID> move-seat <seat> <account> <YYYY-MM-DD>` |
 
 `resume.tsv` (`OspreyFlow_Build/process/lanes/v062/resume.tsv`) is the owner's: one line `<ID> <action> <YYYY-MM-DD>`
 (today, UTC), one use per line, each use logged in `owner-changes.tsv` in the data folder (time, slice, action,
@@ -191,7 +192,7 @@ it there; never committed), so the builder's checks see it, and says in words wh
 ## The dial and the accounts
 
 `dial.yaml` (Thrift 1 builder / Balanced 2 / Sprint 4; rounds 1/2/2; seat models) and `accounts.yaml` (names
-only) are the owner's. Neither is read by any gate. A started slice keeps its setting and accounts. The scouts'
+only) are the owner's. Neither is read by any gate. A started slice keeps its setting and accounts (a seat moves only on the owner's `resume.py <ID> move-seat` line). The scouts'
 model follows the dial through the Agent call's `model`; their effort stays at the definition's (an Agent call
 cannot set effort).
 
@@ -199,8 +200,7 @@ cannot set effort).
 
 Every seat session's stream reports its account's rate-limit windows; `run_seat.py` records them in
 `~/.ospreyflow/slice-line/accounts/<account>.json`. At 90% of a window, no new slice starts on that account; the
-running slice finishes. A refused session (rate limit, signed out) stops its track (`StopFailure` hook). Work is
-never moved to the other account: the owner edits `accounts.yaml`. Usage per slice, seat and account is in
+running slice finishes. A refused session (rate limit, signed out) stops its track (`StopFailure` hook). Work is never moved to the other account by the line: the owner edits `accounts.yaml` for new slices, and moves a started slice's seat with `resume.py <ID> move-seat` on a `resume.tsv` line. Usage per slice, seat and account is in
 `usage.tsv` (`board.py --usage`); the conductor's own (with its scouts') is one row per session: its SessionEnd hook
 writes it, and `run_seat.py conductor` writes it after the session when the hook did not (never twice).
 `board.py --usage` prints totals per slice and per account, each account's five-hour and seven-day windows beside

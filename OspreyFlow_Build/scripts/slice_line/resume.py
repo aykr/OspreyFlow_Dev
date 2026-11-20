@@ -17,6 +17,10 @@
                    <date>) accepts a slice at round N or later whose newest findings record is the     standing line
                    verifier's for its tip and holds only gaps in a test; run_seat.py tries it after
                    each verifier record with findings
+  move-seat <builder|verifier> <account>                                                        owner's line:
+                   a started slice's seat moves to another account the owner's accounts.yaml names,   <ID> move-seat
+                   signed in and not stopped, while none of its seats runs: state.json's account or  <seat> <account>
+                   verifier_account is rewritten, and nothing else (no record, finding or round)      <YYYY-MM-DD>
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -43,7 +47,9 @@ import dry_run  # noqa: E402
 import merge_slice as ms  # noqa: E402
 import run_seat as rs  # noqa: E402
 
-ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept")
+ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat")
+#: The seat move-seat moves, and the key of state.json run_seat.py reads its account from.
+SEAT_KEYS = {"builder": "account", "verifier": "verifier_account"}
 OWNER_ACTIONS = ("refreeze", "add-round", "clear-stop", "accept")
 #: What a corrected command may not add: anything that changes what a check tests rather than how it is run.
 LOOSENING = ("||", "; true", "exit 0", " -k ", "--deselect", "--ignore", "--grep", " -t ", "--passWithNoTests", "skip",
@@ -62,18 +68,16 @@ def today() -> str:
 # ------------------------------------------------------------------ the owner's word
 
 
+def resume_lines() -> list[list[str]]:
+    """The owner's lines in resume.tsv, each split into its words; comments left out."""
+    if not c.RESUME_FILE.is_file():
+        return []
+    return [ln.split() for ln in c.RESUME_FILE.read_text().splitlines() if ln.strip() and not ln.strip().startswith("#")]
+
+
 def owner_lines(slice_id: str, action: str) -> int:
     """How many of the owner's lines in resume.tsv name this slice and action today."""
-    if not c.RESUME_FILE.is_file():
-        return 0
-    n = 0
-    for ln in c.RESUME_FILE.read_text().splitlines():
-        if ln.strip().startswith("#"):
-            continue
-        parts = ln.split()
-        if len(parts) == 3 and parts[0] == slice_id and parts[1] == action and parts[2] == today():
-            n += 1
-    return n
+    return sum(1 for parts in resume_lines() if parts == [slice_id, action, today()])
 
 
 def authority(slice_id: str, action: str) -> str:
@@ -349,10 +353,61 @@ def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[st
             f"become a backlog row; verified. The conductor runs merge_slice.py merge {slice_id} and tells the owner."]
 
 
-def act(slice_id: str, action: str, standing_only: bool = False) -> list[str]:
+def move_seat(slice_id: str, args: list[str] | tuple[str, ...]) -> list[str]:
+    """A started slice's builder or verifier seat moves to another account, on the owner's line `<ID> move-seat <seat>
+    <account> <YYYY-MM-DD>` (LINE_FIXES_3_BRIEF.md, 1g). Rewrites that one key of state.json, nothing else. The
+    builder and the verifier stay apart by session, not by account: the merge refuses a pass from a session that built
+    the slice (merge_slice.verifier_sessions), on any account, and every launch is a new session."""
+    if len(args) != 2 or args[0] not in SEAT_KEYS:
+        raise Refused("move-seat takes the seat (builder or verifier) and the account: resume.py <ID> move-seat "
+                      "<builder|verifier> <account>. Nothing changed.")
+    seat, to = args
+    key = SEAT_KEYS[seat]
+    want = [slice_id, "move-seat", seat, to, today()]
+    have = sum(1 for parts in resume_lines() if parts == want)
+    tag = f"resume.tsv {today()} move-seat {seat} {to}"
+    used = sum(1 for r in c.owner_changes()
+               if r["slice"] == slice_id and r["action"] == "move-seat" and r["detail"].startswith(tag + ":"))
+    if not have:
+        raise Refused(f"no line '{chr(9).join(want)}' in {c.RESUME_FILE} (the owner's word, today, UTC): nothing "
+                      "changed.")
+    if used >= have:
+        raise Refused(f"the owner's line '{chr(9).join(want)}' in resume.tsv is already used ({used} use(s) logged in "
+                      "owner-changes.tsv): one line, one use. Nothing changed.")
+    known = c.known_accounts()
+    if to not in known:
+        raise Refused(f"{to!r} is not an account the owner's accounts.yaml names ({', '.join(sorted(known))}). "
+                      "Nothing changed.")
+    st = c.state(slice_id)
+    frm = st.get(key, "")
+    if frm == to:
+        raise Refused(f"{slice_id}'s {seat} is already on {to}. Nothing changed.")
+    running = c.running_seats(slice_id)
+    if running:
+        raise Refused(f"a seat of {slice_id} is running (" + "; ".join(
+            f"{r.get('seat')} on {r.get('account')}, pid {r.get('pid')}" for r in running) +
+            "): a seat moves only between sessions. Nothing changed.")
+    stop = c.account_stop(to)
+    if stop:
+        raise Refused(f"account {to} is stopped ({stop.get('error')} at {stop.get('at')}): the owner clears it first. "
+                      "Nothing changed.")
+    if not c.signed_in(to):
+        raise Refused(f"account {to} is signed out: the owner signs in to it first. Nothing changed.")
+    path = c.rec_dir(slice_id) / "state.json"
+    raw = c.read_json(path) or {}
+    raw[key] = to
+    c.write_json(path, raw)
+    c.log_owner_change(slice_id, "move-seat", f"{tag}: {seat} {frm or '(none)'} -> {to}")
+    return [f"{slice_id}: its {seat} seat moves from {frm or '(none)'} to {to}; its phase, round and records are "
+            f"unchanged ({st.get('phase')}, round {st.get('round', 1)})."]
+
+
+def act(slice_id: str, action: str, standing_only: bool = False, args: list[str] | tuple[str, ...] = ()) -> list[str]:
     fh = ms.lock()
     try:
         frozen = frozen_of(slice_id)
+        if action == "move-seat":  # touches state.json's one key only: a builder at work in the worktree is no matter
+            return move_seat(slice_id, args)
         wt = clean_worktree(frozen)
         st = c.state(slice_id)
         phase, rnd, limit = st.get("phase"), st.get("round", 1), st.get("rounds_limit", 1)
@@ -455,9 +510,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("slice")
     ap.add_argument("action", choices=ACTIONS)
+    ap.add_argument("args", nargs="*", help="move-seat: the seat (builder or verifier) and the account")
     a = ap.parse_args()
     try:
-        said = act(a.slice, a.action)
+        if a.args and a.action != "move-seat":
+            raise Refused(f"{a.action} takes no arguments ({' '.join(a.args)}). Nothing changed.")
+        said = act(a.slice, a.action, args=a.args)
     except (Refused, ms.Refused) as e:
         print(f"Refused: {e}", file=sys.stderr)
         return 1

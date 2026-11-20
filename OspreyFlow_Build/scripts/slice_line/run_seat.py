@@ -14,6 +14,7 @@ is denied, never prompted. Scouts are not launched here: they are the conductor'
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import os
@@ -263,6 +264,18 @@ def rulings_note(tree: Path) -> str:
             "slice's start and may be older): read them before you begin; they bind this slice.")
 
 
+@contextlib.contextmanager
+def seat_running(slice_id: str, seat: str, account: str):
+    """A running record for the slice's seat while this process runs it (running-<seat>.json, with its pid):
+    resume.py move-seat refuses while one is alive."""
+    f = c.rec_dir(slice_id) / f"running-{seat}.json"
+    c.write_json(f, {"slice": slice_id, "seat": seat, "account": account, "pid": os.getpid(), "at": c.now()})
+    try:
+        yield
+    finally:
+        f.unlink(missing_ok=True)
+
+
 def stop_slice(slice_id: str, note: str) -> None:
     c.set_state(slice_id, phase="stopped", note=note)
     board()
@@ -283,9 +296,10 @@ def builder(slice_id: str) -> int:
     wt = Path(frozen["worktree"])
     prompt += rulings_note(wt)
     log = c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"
-    res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
-                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
-                  **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})}, log)
+    with seat_running(slice_id, "builder", st["account"]):
+        res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
+                     {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                      **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})}, log)
     sess = c.read_json(c.rec_dir(slice_id) / "sessions.json") or {"builder": [], "verifier": []}
     sess["builder"].append(res.get("session_id"))
     c.write_json(c.rec_dir(slice_id) / "sessions.json", sess)
@@ -342,9 +356,10 @@ def verifier(slice_id: str) -> int:
                   f"test would fail if it were wrong; a finding without a kind counts as a fault. Put "
                   f"the commit {tip} in your answer.{rulings}")
         log = c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl"
-        res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
-                     {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,
-                     ["--json-schema", json.dumps(VERDICT_SCHEMA)])
+        with seat_running(slice_id, "verifier", account):
+            res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
+                         {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,
+                         ["--json-schema", json.dumps(VERDICT_SCHEMA)])
         append_usage(slice_id, frozen["build"], f"verifier:{focus}", account, seat["model"], seat["effort"], res)
         out = res.get("structured_output")
         if not isinstance(out, dict):

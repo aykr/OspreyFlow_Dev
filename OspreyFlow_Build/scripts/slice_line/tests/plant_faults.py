@@ -183,6 +183,20 @@ M = [
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
  ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ # 1g: move-seat (LINE_FIXES_3_BRIEF.md)
+ ("resume.py", '    if not have:\n        raise Refused(f"no line \'{chr(9)', '    if False:\n        raise Refused(f"no line \'{chr(9)', "move_seat_refuses_without_the_owners_line"),
+ ("resume.py", '    if used >= have:\n        raise Refused(f"the owner\'s line \'{chr(9)', '    if False:\n        raise Refused(f"the owner\'s line \'{chr(9)', "move_seat_rewrites_that_seats_account_alone"),
+ ("resume.py", '    raw[key] = to\n', '    raw.update(phase="building", round=1, **{key: to})\n', "move_seat_rewrites_that_seats_account_alone"),
+ ("resume.py", '    if running:\n', '    if False:\n', "move_seat_refuses_while_a_seat"),
+ ("common.py", '        if isinstance(r.get("pid"), int) and pid_alive(r["pid"]):', '        if False:', "move_seat_refuses_while_a_seat"),
+ ("run_seat.py", '    with seat_running(slice_id, "builder", st["account"]):', '    with contextlib.nullcontext():', "move_seat_sees_a_seat_running"),
+ ("run_seat.py", '        with seat_running(slice_id, "verifier", account):', '        with contextlib.nullcontext():', "move_seat_sees_a_seat_running"),
+ ("run_seat.py", '        f.unlink(missing_ok=True)\n\n\ndef stop_slice', '        pass\n\n\ndef stop_slice', "move_seat_sees_a_seat_running"),
+ ("resume.py", '    if not c.signed_in(to):', '    if False:', "move_seat_refuses_an_account_that_is_signed_out"),
+ ("resume.py", '    if stop:\n        raise Refused(f"account {to} is stopped', '    if False:\n        raise Refused(f"account {to} is stopped', "move_seat_refuses_an_account_that_is_signed_out"),
+ ("resume.py", '    if to not in known:', '    if False:', "move_seat_refuses_an_account_that_is_signed_out"),
+ ("run_seat.py", '    account = st["verifier_account"]\n', '    account = c.account_for("verifier")\n', "move_seat_the_verifier_then_launches"),
+ ("merge_slice.py", '        if not sid or sid in builders:', '        if not sid:', "never_takes_a_builders_session"),
 ]
 bad = 0
 for f, old, new, test in M:

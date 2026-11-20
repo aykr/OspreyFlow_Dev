@@ -152,6 +152,33 @@ def account_stop(account: str) -> dict | None:
     return json.loads(f.read_text()) if f.exists() else None
 
 
+def known_accounts() -> set[str]:
+    """Every account name the owner's accounts.yaml gives a seat or a track."""
+    acc = load_accounts() or {}
+    return {str(v) for part in ("seats", "tracks") for v in (acc.get(part) or {}).values() if v}
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def running_seats(slice_id: str) -> list[dict]:
+    """The seats of a slice whose run_seat.py is running now (its running-<seat>.json, for a process that is alive). A
+    record left by a process that has ended holds nothing."""
+    out = []
+    for f in sorted(rec_dir(slice_id).glob("running-*.json")):
+        r = read_json(f) or {}
+        if isinstance(r.get("pid"), int) and pid_alive(r["pid"]):
+            out.append(r)
+    return out
+
+
 def near_limit(account: str) -> str | None:
     st = account_state(account)
     for window, info in (st.get("windows") or {}).items():
