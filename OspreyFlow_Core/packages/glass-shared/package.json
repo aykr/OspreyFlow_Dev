@@ -11,6 +11,10 @@
   "scripts": {
     "test": "vitest run"
   },
+  "dependencies": {
+    "graphology": "^0.26.0",
+    "zustand": "^5.0.2"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2",
