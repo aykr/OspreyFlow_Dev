@@ -1,17 +1,23 @@
 """Slice BL1b: two appended rows no longer bounce a merge (the owner's order of 20 November 2026).
 
-`ADR_RESERVATIONS.md` takes git's union merge (`.gitattributes` at the repository root), so two branches
-that each append a reservation row merge cleanly, in either order, and keep both rows. The decision log
-(`06_DECISIONS.md`) is **not** on the list: it has content edited in place, which a union merge would
+`ADR_RESERVATIONS.md` takes git's union merge (`.gitattributes` at the repository root), so two
+branches
+that each append a reservation row merge cleanly, in either order, and keep both rows. The decision
+log
+(`06_DECISIONS.md`) is **not** on the list: it has content edited in place, which a union merge
+would
 double, so two appended amendment blocks still conflict there until the owner says otherwise.
 
-Everything here runs git in a temporary directory only, never in the real repository: the folder this
+Everything here runs git in a temporary directory only, never in the real repository: the folder
+this
 file walks is the system's temporary directory (one repository per case), plus a read of the real
 `.gitattributes` and nothing else.
 
 Rule 15: each plant takes the shape the tools really receive: a row appended to the end of the real
-file's layout (after its baseline table), a real amendment block, and the two files merged by git itself.
-The attributes come from the tree being merged, so `.gitattributes` is committed on the base before the
+file's layout (after its baseline table), a real amendment block, and the two files merged by git
+itself.
+The attributes come from the tree being merged, so `.gitattributes` is committed on the base before
+the
 branches part.
 """
 
@@ -23,7 +29,6 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-
 from tools.adr_reservations_check import find_unreserved
 from tools.layout import ROOT
 
@@ -191,7 +196,8 @@ def test_two_appended_reservation_rows_merge_clean_in_either_order(
 
 
 def test_two_appended_amendment_blocks_still_conflict_in_the_decision_log(tmp_path: Path) -> None:
-    """The limit, pinned: the log is not on the list, so only the log bounces (the reservations merge)."""
+    """The limit, pinned: the log is not on the list, so only the log bounces (the reservations
+    merge)."""
     repo = _new_repo(tmp_path, _real_attributes())
     _branch(repo, "a", **_appends(15, "First appended", block=True))
     _branch(repo, "b", **_appends(16, "Second appended", block=True))
@@ -205,7 +211,8 @@ def test_two_appended_amendment_blocks_still_conflict_in_the_decision_log(tmp_pa
 def test_with_the_log_listed_too_two_rows_and_two_blocks_merge_clean(
     tmp_path: Path, order: tuple[str, str]
 ) -> None:
-    """What the owner would get by adding the log to the list (not built: the owner's word first)."""
+    """What the owner would get by adding the log to the list (not built: the owner's word
+    first)."""
     repo = _new_repo(tmp_path, _real_attributes() + f"{LOG} merge=union\n")
     _branch(repo, "a", **_appends(15, "First appended", block=True))
     _branch(repo, "b", **_appends(16, "Second appended", block=True))
@@ -243,9 +250,7 @@ def test_a_status_flip_edited_two_ways_leaves_a_doubled_row_that_the_check_repor
     """Both flip the held row to written; one also changes its title: union keeps both versions."""
     held = "| ADR-110 Amendment 17 | A held number | slice-x | 2026-11-19 | reserved |\n"
     repo = _new_repo(tmp_path, _real_attributes())
-    _branch(
-        repo, "a", ledger=lambda t: t.replace(held, _row(17, "A held number", "slice-x"))
-    )
+    _branch(repo, "a", ledger=lambda t: t.replace(held, _row(17, "A held number", "slice-x")))
     _branch(
         repo, "b", ledger=lambda t: t.replace(held, _row(17, "A held number, reworded", "slice-x"))
     )
@@ -287,7 +292,8 @@ def test_an_edit_to_an_existing_row_merges_clean_and_the_edit_check_is_red(tmp_p
 
 
 def test_merge_tree_write_tree_honours_the_union_attribute(tmp_path: Path) -> None:
-    """What `merge_slice.py`'s description of a failed merge uses: with the attribute on the base the
+    """What `merge_slice.py`'s description of a failed merge uses: with the attribute on the base
+    the
     merge-tree is clean; with none, the same two branches conflict (the control)."""
     for attributes, clean in ((_real_attributes(), True), ("", False)):
         repo = _new_repo(tmp_path / ("with" if attributes else "without"), attributes)
@@ -298,12 +304,16 @@ def test_merge_tree_write_tree_honours_the_union_attribute(tmp_path: Path) -> No
 
 
 def test_a_builders_first_merge_of_main_bounces_once_and_not_again(tmp_path: Path) -> None:
-    """The commit that brings `.gitattributes` to a branch, met by the builder's plain `git merge main`.
+    """The commit that brings `.gitattributes` to a branch, met by the builder's plain `git merge
+    main`.
 
-    The attributes are read from the tree being merged into, which does not hold the file yet, so that
+    The attributes are read from the tree being merged into, which does not hold the file yet, so
+    that
     one merge bounces; resolved once, the next merge of main (the file now in the builder's tree) is
-    clean. The orchestrator's direction is not affected: it merges in a checkout of main, and `merge-tree`
-    run there sees the file whichever side it names first (run in the builder's checkout it does not).
+    clean. The orchestrator's direction is not affected: it merges in a checkout of main, and
+    `merge-tree`
+    run there sees the file whichever side it names first (run in the builder's checkout it does
+    not).
     """
     repo = _new_repo(tmp_path, "")
     _branch(repo, "builder", **_appends(15, "The builder's row", block=False))
@@ -322,8 +332,15 @@ def test_a_builders_first_merge_of_main_bounces_once_and_not_again(tmp_path: Pat
     resolved = _read(repo, LEDGER)
     for row in (_row(15, "The builder's row"), _row(16, "Main's row")):
         assert row in resolved
-    _write(repo, LEDGER, "".join(line for line in resolved.splitlines(keepends=True)
-                                 if not line.startswith(("<<<<<<<", "=======", ">>>>>>>"))))
+    _write(
+        repo,
+        LEDGER,
+        "".join(
+            line
+            for line in resolved.splitlines(keepends=True)
+            if not line.startswith(("<<<<<<<", "=======", ">>>>>>>"))
+        ),
+    )
     _git(repo, "add", LEDGER)
     _git(repo, "commit", "-q", "--no-edit")
 

@@ -6,7 +6,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.decision_log_publication_check import ALLOWLIST_PATH, find_violations
+from tools.decision_log_publication_check import (
+    ALLOWLIST_PATH,
+    DECISIONS_PATH,
+    find_duplicate_headings,
+    find_violations,
+)
 
 
 def _load_allowlist() -> set[tuple[str, str]]:
@@ -143,3 +148,45 @@ def test_an_amendment_to_a_product_adr_filed_under_a_process_one_is_still_checke
         encoding="utf-8",
     )
     assert find_violations(fixture) == [("052", "034")]
+
+
+# --- a heading written twice (slice BL1b) ------------------------------------------------------
+#
+# `_sections` joins two sections of one number, so a block repeated by a union merge or a repeated
+# commit was read as one longer section and nothing said so. The planted shape is the real one: a
+# whole amendment block appended again after the log's end.
+
+
+def test_the_real_decision_log_has_no_heading_written_twice_beyond_the_known_one() -> None:
+    assert find_duplicate_headings() == []
+
+
+def test_an_amendment_block_written_twice_is_reported(tmp_path: Path) -> None:
+    block = (
+        "### ADR-055, Amendment 10 (20 November 2026) — a planted amendment\n\n"
+        "Status: accepted from a planted ruling.\n"
+    )
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-055 — A product decision\n\nIts own text.\n\n" + block + "\n" + block,
+        encoding="utf-8",
+    )
+    assert find_duplicate_headings(fixture) == [
+        "ADR-055 Amendment 10 has 2 headings in 06_DECISIONS.md (a block written twice)"
+    ]
+
+
+def test_an_adr_heading_written_twice_is_reported(tmp_path: Path) -> None:
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-199 — A planted record — ACCEPTED\n\nText.\n\n---\n\n"
+        "## ADR-199 — A planted record — ACCEPTED\n\nText.\n",
+        encoding="utf-8",
+    )
+    assert find_duplicate_headings(fixture) == [
+        "ADR-199 has 2 headings in 06_DECISIONS.md (a block written twice)"
+    ]
+
+
+def test_the_real_log_path_is_the_one_the_gate_reads() -> None:
+    assert find_duplicate_headings(DECISIONS_PATH) == find_duplicate_headings()

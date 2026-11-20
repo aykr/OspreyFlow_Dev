@@ -16,11 +16,14 @@ record. This check reports a heading in `06_DECISIONS.md` that has no reservatio
 - a doubled line in the reservations file (the same line twice: what a union merge leaves when both
   sides wrote it, or a row copied by hand).
 
-**The merge-base comparison** (`--against`, `find_ledger_edits`): `spec/ADR_RESERVATIONS.md` takes git's
+**The merge-base comparison** (`--against`, `find_ledger_edits`): `spec/ADR_RESERVATIONS.md` takes
+git's
 union merge (`.gitattributes`), which is safe only while the file changes by appended rows and by a
 status flip of a row from `reserved` to `written`. The comparison reads the file as it stood at the
-merge-base with `main` and reports any other change: a title, number, lane, date or status edited, a row
-or line removed, or a line added that is not a reservation row. It needs a base, so on a checkout with
+merge-base with `main` and reports any other change: a title, number, lane, date or status edited,
+a row
+or line removed, or a line added that is not a reservation row. It needs a base, so on a checkout
+with
 none (no `main`, no git, a file new since) it says so and passes; the merge's gate has the base.
 
 **The baseline** (the owner's step 0 ruling, 6 November 2026, "Baseline table"): the decision log held
@@ -40,7 +43,6 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from tools.layout import REPO as REPO_ROOT
 from tools.layout import ROOT, logical
@@ -63,10 +65,14 @@ _RESERVATION_ROW = re.compile(
 )
 
 
-#: Headings known to stand twice in `06_DECISIONS.md` today, with how many times and why they are allowed.
-#: The second copy of ADR-148 Amendment 10 is a byte-for-byte repeat of the first (found 20 November 2026,
-#: slice BL1b: the same commit message was committed twice, f9f0f8b after 986440e). It is not repaired
-#: here, because deleting a 78-line block from a file other lanes append to would bounce their merges; the
+#: Headings known to stand twice in `06_DECISIONS.md` today, with how many times and why they are
+#: allowed.
+#: The second copy of ADR-148 Amendment 10 is a byte-for-byte repeat of the first (found 20
+#: November 2026,
+#: slice BL1b: the same commit message was committed twice, f9f0f8b after 986440e). It is not
+#: repaired
+#: here, because deleting a 78-line block from a file other lanes append to would bounce their
+#: merges; the
 #: owner can delete the second copy and then this entry, and the check reports a stale entry until
 #: they do.
 KNOWN_DUPLICATE_HEADINGS: dict[str, int] = {"ADR-148 Amendment 10": 2}
@@ -150,7 +156,8 @@ def find_duplicate_headings(decisions: str) -> list[str]:
 
 
 def find_stale_known_duplicates(decisions: str) -> list[str]:
-    """A KNOWN_DUPLICATE_HEADINGS entry the log no longer needs: left in, it would hide a new repeat."""
+    """A KNOWN_DUPLICATE_HEADINGS entry the log no longer needs: left in, it would hide a new
+    repeat."""
     counts = _heading_counts(decisions)
     return [
         f"{name} is in KNOWN_DUPLICATE_HEADINGS but has {counts[name]} heading(s): remove the entry"
@@ -170,15 +177,18 @@ def find_doubled_lines(reservations: str) -> list[str]:
 
 
 def _flipped(line: str) -> str | None:
-    """The row with its status changed from `reserved` to `written`, or None if it is not reserved."""
+    """The row with its status changed from `reserved` to `written`, or None if it is not
+    reserved."""
     match = _STATUS_TAIL.search(line)
     return None if match is None else line[: match.start()] + "| written |"
 
 
 def find_ledger_edits(base: str, current: str) -> list[str]:
-    """What changed in the reservations file other than appended rows and a reserved-to-written flip.
+    """What changed in the reservations file other than appended rows and a reserved-to-written
+    flip.
 
-    Every non-blank line of `base` must still be in `current`, in order, unchanged or flipped; any line
+    Every non-blank line of `base` must still be in `current`, in order, unchanged or flipped; any
+    line
     in `current` that is neither a base line nor a reservation row is reported too.
     """
     kept = [ln.rstrip() for ln in current.splitlines() if ln.strip()]
@@ -208,7 +218,8 @@ def find_ledger_edits(base: str, current: str) -> list[str]:
 
 
 def merge_base_text(ref: str | None = None) -> tuple[str | None, str]:
-    """The reservations file at the merge-base of HEAD with `ref` (default `main`, then `origin/main`),
+    """The reservations file at the merge-base of HEAD with `ref` (default `main`, then
+    `origin/main`),
     or `(None, why)` when there is no base to compare with."""
     name = logical(RESERVATIONS_PATH)
 
@@ -225,7 +236,8 @@ def merge_base_text(ref: str | None = None) -> tuple[str | None, str]:
         base = git("merge-base", "HEAD", candidate)
         if base.returncode != 0:
             continue
-        shown = git("show", f"{base.stdout.strip()}:{RESERVATIONS_PATH.relative_to(ROOT).as_posix()}")
+        path = RESERVATIONS_PATH.relative_to(ROOT).as_posix()
+        shown = git("show", f"{base.stdout.strip()}:{path}")
         if shown.returncode != 0:
             return None, f"{name} did not exist at the merge-base with {candidate}"
         return shown.stdout, candidate
@@ -255,10 +267,16 @@ def against(ref: str | None = None) -> int:
         return 0
     problems = find_ledger_edits(base, RESERVATIONS_PATH.read_text(encoding="utf-8"))
     if problems:
-        print(f"adr-reservations-check --against: ADR_RESERVATIONS.md changed beyond appended rows ({why}):")
+        print(
+            "adr-reservations-check --against: ADR_RESERVATIONS.md changed beyond "
+            f"appended rows ({why}):"
+        )
         for p in problems:
             print(f"  - {p}")
-        print("Only appended rows and a reserved-to-written flip are allowed; the file takes a union merge.")
+        print(
+            "Only appended rows and a reserved-to-written flip are allowed; "
+            "the file takes a union merge."
+        )
         return 1
     print(f"adr-reservations-check --against: only appended rows and status flips since {why}.")
     return 0
