@@ -4,7 +4,7 @@
 // reason, or a sentence saying what is wrong.
 import type { Edge, EdgeTypeDef, Handling, PropertyDef } from "../../../../packages/schemas/generated";
 import { linkTypeName } from "../canvas/linkLabel";
-import type { HandlingScheme } from "../ingest/api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import type { LinkChangeInput } from "./linkChangeApi";
 import { lowerParts } from "./linkHandling";
 

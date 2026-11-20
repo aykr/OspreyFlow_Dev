@@ -8,7 +8,7 @@ import type {
   ModelAdminHistory,
   ModelsAdminView,
   ModelUsageView,
-} from "../../../../../packages/schemas/generated";
+} from "../../../../schemas/generated";
 
 type ModelProviderConfig = AdminEngine["provider"];
 

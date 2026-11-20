@@ -60,12 +60,12 @@ import {
   previewHandling,
   updateRowTemplate,
   type HandlingScheme,
-} from "../api";
+  listSources,
+} from "@ospreyflow/glass-shared";
 import { ElementInspector, type ElementSelection } from "./ElementInspector";
 import { EntityList } from "./EntityList";
 import { LinkList } from "./LinkList";
 import { MapCanvas, type MapSelection } from "./MapCanvas";
-import { listSources } from "../sources/api";
 import { SourceFieldsPanel } from "./SourceFieldsPanel";
 import { lastStagingStep } from "../dag/stagingSteps";
 import { ChosenColumnContext } from "./chosenColumn";

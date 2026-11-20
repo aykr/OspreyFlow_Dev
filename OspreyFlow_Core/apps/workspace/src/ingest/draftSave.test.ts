@@ -3,7 +3,7 @@
 // `ConnectDraftInput` before the route runs (ADR-127 Amendment 2).
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createDraft, updateDraft } from "./api";
+import { createDraft, updateDraft } from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

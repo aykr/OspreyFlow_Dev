@@ -19,7 +19,7 @@ import type {
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { Table, type TableColumn } from "../design/primitives/Table";
-import { fetchDraft, fetchProfile, ProfileError } from "./api";
+import { fetchDraft, fetchProfile, ProfileError } from "@ospreyflow/glass-shared";
 import { percent } from "./percent";
 
 export interface ProfileScreenProps {

@@ -12,7 +12,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { bundleFromFolder, releaseName } from "./releasesApi";
+import { bundleFromFolder, releaseName } from "@ospreyflow/glass-shared";
 import { RELEASE_WORDS, ReleasesTab } from "./ReleasesTab";
 
 afterEach(() => {

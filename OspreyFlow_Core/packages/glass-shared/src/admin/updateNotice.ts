@@ -1,7 +1,7 @@
 // The version and the last update check, in words (ADR-114 decision 13, Amendment 8 point 2). The
 // check is run on the host (`ospreyflow update --check`), and so is the update: the Glass says what
 // to run there and runs nothing.
-import type { UpdateNotice } from "../../../../packages/schemas/generated";
+import type { UpdateNotice } from "../../../schemas/generated";
 
 export interface UpdateWords {
   tone: "available" | "plain" | "problem";

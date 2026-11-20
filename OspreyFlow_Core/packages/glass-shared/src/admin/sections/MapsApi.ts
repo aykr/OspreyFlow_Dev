@@ -8,7 +8,7 @@ import type {
   PrefetchArea,
   PrefetchRun,
   PrefetchSchedule,
-} from "../../../../../packages/schemas/generated";
+} from "../../../../schemas/generated";
 
 export type MapProvider = AdminMapProvider["provider"];
 

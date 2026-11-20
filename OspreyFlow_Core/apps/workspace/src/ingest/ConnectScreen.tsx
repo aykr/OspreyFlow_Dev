@@ -44,7 +44,7 @@ import {
   uploadIngestSourceFile,
   type HandlingScheme,
   type IngestSourceListing,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import { RightButton } from "./studio/rightsGate";
 
 export interface ConnectScreenProps {

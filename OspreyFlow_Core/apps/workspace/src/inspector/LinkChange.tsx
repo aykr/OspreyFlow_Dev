@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { Edge, EdgeTypeDef, Handling } from "../../../../packages/schemas/generated";
-import type { HandlingScheme } from "../ingest/api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { linkTypeName } from "../canvas/linkLabel";
 import { DefineLinkType, definitionOf } from "../linktypes/DefineLinkType";
 import { LinkChangeError, changeLink, type LinkChangeResult } from "./linkChangeApi";
