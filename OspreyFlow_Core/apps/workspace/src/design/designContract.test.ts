@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const DESIGN = readFileSync(join(__dirname, "../../../../DESIGN.md"), "utf-8");
-const TOKENS = readFileSync(join(__dirname, "tokens.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
+const TOKENS = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8").replace(/\/\*[\s\S]*?\*\//g, "");
 
 type Theme = "dark" | "light";
 

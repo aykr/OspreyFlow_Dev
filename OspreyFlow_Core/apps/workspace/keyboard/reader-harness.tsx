@@ -2,7 +2,7 @@
 // accept routes and walks it by keyboard. Closing records itself, as the Glass would return focus.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { DocumentReader } from "../src/reader/DocumentReader";

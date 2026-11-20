@@ -381,7 +381,7 @@ export function computeEdgeAttributes(
 }
 
 /** The line colour a type declares, as a hex for the current theme. Only the nine data-channel
- * names are accepted (the closed list in `design/tokens.css`); anything else, or nothing, is the
+ * names are accepted (the closed list in `packages/design/tokens.css`); anything else, or nothing, is the
  * ordinary border colour, so no colour outside the tokens can reach the canvas. */
 function declaredColour(name: string | null | undefined, palette: ReturnType<typeof activePalette>): string {
   if (typeof name === "string" && DATA_CHANNEL_NAMES.has(name)) return palette.channel(name);

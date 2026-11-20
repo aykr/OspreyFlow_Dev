@@ -4,7 +4,7 @@
 // quota's save 403, as the Conduit does a reader without Administer system. Synthetic data (rule 9).
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { OperationsFigures } from "../src/admin/OperationsFigures";
 import { applyHarnessBrand } from "./brandHarness";

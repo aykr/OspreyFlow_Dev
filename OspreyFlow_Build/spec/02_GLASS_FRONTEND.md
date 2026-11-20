@@ -15,7 +15,7 @@
 | Data fetching | TanStack Query | MIT | |
 | Worker orchestration | Comlink | Apache-2.0 | Layout and metrics run off the main thread |
 
-No component library. The design system in `design/tokens.css` is specific enough that a generic
+No component library. The design system in `packages/design/tokens.css` is specific enough that a generic
 kit would be fought rather than used. Build the twenty primitives listed in §8.
 
 **Two trees (ADR-152).** The Glass is built two ways. The React workspace (`apps/workspace`) serves the
@@ -2060,8 +2060,8 @@ the owner to accept, amend or reject as real spec.
 
 ## 4. Design system binding
 
-`design/tokens.css` is authoritative and is extracted verbatim from the brand foundations. Do not
-introduce a colour that is not a token. Under ADR-152 it moves to `packages/design/tokens.css`, read by the
+`packages/design/tokens.css` is authoritative and is extracted verbatim from the brand foundations. Do not
+introduce a colour that is not a token. Under ADR-152 it lives there, out of the workspace's design folder, read by the
 React workspace and the `pages` default tree alike; the GOV.UK tree takes its colours from GOV.UK Frontend
 and never from a `[data-brand]` block. Under either GOV.UK frame the crown, the GOV.UK logotype and GDS
 Transport show only when `appearance.govuk_identity` is on (off by default; ADR-152 decision 14). A deployment brand (ADR-132, `appearance.brand`) is one more
@@ -2495,7 +2495,7 @@ here rather than left a placeholder. Decided, not merely disclosed as open:
   — no new format invented; a subgraph export is a snapshot in the same shape the Glass already
   receives over the wire.
 - **Report — a self-contained HTML document.** Judgement/gap/assumption content, cited evidence
-  and the yardstick band render inline as prose, styled against `design/tokens.css`'s own light
+  and the yardstick band render inline as prose, styled against `packages/design/tokens.css`'s own light
   theme (§4's "an exported chart destined for an intelligence product should default to light,"
   extended here to the report as a whole). The report is titled by the case's name, and cites each
   node of evidence as the canvas names it (§9.2), its id kept only as a data attribute; a cited

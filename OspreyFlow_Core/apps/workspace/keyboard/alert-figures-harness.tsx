@@ -9,7 +9,7 @@
 // `home=1` (a Reports Viewer's Home); `help=1` (the help page).
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { HomePage } from "../src/home/HomePage";
 import type { HomeSummary } from "../src/home/homeData";

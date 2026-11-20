@@ -4,7 +4,7 @@
 // transport; the node each pick would put on the canvas is exposed on `window.__EXPLORE__`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { ExplorePanel } from "../src/explore/ExplorePanel";

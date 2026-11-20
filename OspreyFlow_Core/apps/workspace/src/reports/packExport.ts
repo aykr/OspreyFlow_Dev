@@ -12,7 +12,7 @@ export function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (c) => ESCAPES[c] ?? c);
 }
 
-// The light-theme ramp of `design/tokens.css` (`[data-theme="light"]`), restated as `reportExport.ts`
+// The light-theme ramp of `packages/design/tokens.css` (`[data-theme="light"]`), restated as `reportExport.ts`
 // does: a standalone print document cannot link this repository's stylesheet.
 const STYLE = `
 :root { --n0:#ffffff; --n7:#a2a5a6; --n9:#66696a; --n11:#191b1c; }

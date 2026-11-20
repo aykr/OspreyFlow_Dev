@@ -6,7 +6,7 @@
 // `window.__PROPOSALS__`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { ModelProposals } from "../src/linktypes/ModelProposals";
 import { applyHarnessBrand } from "./brandHarness";

@@ -2,7 +2,7 @@
 // registry (`REPORTS_ACTIONS`). Every call is intercepted by `reports.spec.ts`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { ReportsPlace } from "../src/reports/ReportsPlace";
 

@@ -20,7 +20,7 @@ describe("the canvas grid", () => {
     expect(rules.map((r) => r.selector)).toEqual([".network-canvas"]);
     expect(rules[0]!.body).toMatch(/var\(--grid-line\) 1px/);
     expect(rules[0]!.body).toMatch(/background-size:\s*16px 16px/);
-    const tokens = readFileSync(join(__dirname, "tokens.css"), "utf-8");
+    const tokens = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");
     expect(tokens).toMatch(/--grid-line:\s*color-mix\(in oklab, var\(--border-subtle\) 40%, transparent\);/);
   });
 

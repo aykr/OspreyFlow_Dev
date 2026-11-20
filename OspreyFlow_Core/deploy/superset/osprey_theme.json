@@ -1,5 +1,5 @@
 {
-  "_generated": "by scripts/superset_theme.py from apps/workspace/src/design/tokens.css \u2014 do not edit; run `python -m scripts.superset_theme`",
+  "_generated": "by scripts/superset_theme.py from packages/design/tokens.css \u2014 do not edit; run `python -m scripts.superset_theme`",
   "default": {
     "algorithm": "default",
     "token": {

@@ -19,7 +19,7 @@ import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TOKENS = ROOT / "apps" / "workspace" / "src" / "design" / "tokens.css"
+TOKENS = ROOT / "packages" / "design" / "tokens.css"
 OUTPUT = ROOT / "deploy" / "superset" / "osprey_theme.json"
 
 #: The order the chart colours are dealt in: neighbours far apart in hue.
@@ -118,7 +118,7 @@ def _theme(t: dict[str, str], *, algorithm: str) -> dict[str, object]:
 def render(css: str) -> str:
     dark, light = token_sets(css)
     document = {
-        "_generated": "by scripts/superset_theme.py from apps/workspace/src/design/tokens.css — "
+        "_generated": "by scripts/superset_theme.py from packages/design/tokens.css — "
         "do not edit; run `python -m scripts.superset_theme`",
         "default": _theme(light, algorithm="default"),
         "dark": _theme(dark, algorithm="dark"),

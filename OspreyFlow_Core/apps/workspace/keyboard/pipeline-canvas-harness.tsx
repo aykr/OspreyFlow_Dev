@@ -2,7 +2,7 @@
 // migrated chain plus one branch, as `pipeline-canvas.spec.ts` walks it.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import type { PipelineGraph } from "../../../packages/schemas/generated";
 import { PipelineCanvas } from "../src/ingest/dag/PipelineCanvas";

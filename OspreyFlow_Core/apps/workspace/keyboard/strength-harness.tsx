@@ -12,7 +12,7 @@
 // client parity by its own override.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { StrengthPanel } from "../src/strength/StrengthPanel";

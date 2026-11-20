@@ -53,7 +53,7 @@ describe("GovukHeader", () => {
   });
 
   it("leaves no style for the band in tokens.css", () => {
-    const tokens = readFileSync(join(__dirname, "../../design/tokens.css"), "utf-8");
+    const tokens = readFileSync(join(__dirname, "../../../../../packages/design/tokens.css"), "utf-8");
     expect(tokens).not.toContain("govuk-service-navigation");
   });
 });

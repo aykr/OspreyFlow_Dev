@@ -2,7 +2,7 @@
 // `pipeline-studio.spec.ts` intercepts the routes at the transport.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { PipelineStudio } from "../src/ingest/dag/PipelineStudio";
 

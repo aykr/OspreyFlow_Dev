@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useStore } from "zustand/react";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { connectDeltaClient, type SocketLike } from "../src/workingset/deltaClient";
 import { createWorkingSet } from "../src/workingset/store";

@@ -6,7 +6,7 @@
 // open alert alone and `?show=trend` the trend alone. The names and numbers are invented (rule 9).
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import type { PackItem } from "../../../packages/schemas/generated";
 import { PackItemView } from "../src/reports/PackItemView";

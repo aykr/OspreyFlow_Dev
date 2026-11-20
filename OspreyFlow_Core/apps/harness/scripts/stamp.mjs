@@ -15,6 +15,7 @@ export const SOURCES = [
   "apps/harness/index.html",
   "apps/harness/package.json",
   "apps/workspace/src/design",
+  "packages/design",
   "apps/workspace/src/theme",
 ];
 

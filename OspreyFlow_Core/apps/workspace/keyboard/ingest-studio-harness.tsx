@@ -7,7 +7,7 @@
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { disclosuresOf } from "../src/ingest/dag/ExpertStepDrawer";

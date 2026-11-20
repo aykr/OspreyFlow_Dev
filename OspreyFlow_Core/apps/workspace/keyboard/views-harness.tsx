@@ -9,7 +9,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { Drawer } from "../src/design/primitives/Drawer";
 import { CaseList } from "../src/investigation/CaseList";

@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-const TOKENS = readFileSync(join(__dirname, "tokens.css"), "utf-8");
+const TOKENS = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");
 
 function faceOf(html: string, brand: string | null, selector = "body > *"): string {
   document.head.innerHTML = `<style>${TOKENS}</style>`;

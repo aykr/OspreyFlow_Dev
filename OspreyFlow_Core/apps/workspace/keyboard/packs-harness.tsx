@@ -3,7 +3,7 @@
 // document that would have been printed, on `window.__PRINTED__`.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { ReportsPlace } from "../src/reports/ReportsPlace";
 

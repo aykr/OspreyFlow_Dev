@@ -5,7 +5,7 @@
 // (one queue). Every call is intercepted by `watch-panels.spec.ts` at the transport.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { HotlistPanel } from "../src/watches/HotlistPanel";
 import { MonitorPanel } from "../src/watches/MonitorPanel";

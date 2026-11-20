@@ -108,7 +108,7 @@
           "enum": ["direct", "probabilistic"]
         },
         "colour": {
-          "description": "ADR-081: the line colour, one of the nine data-channel names in design/tokens.css (the same closed list an entity type's channel uses). Optional.",
+          "description": "ADR-081: the line colour, one of the nine data-channel names in packages/design/tokens.css (the same closed list an entity type's channel uses). Optional.",
           "type": "string",
           "enum": ["ochre", "rose", "plum", "violet", "indigo", "azure", "cyan", "jade", "moss"]
         },

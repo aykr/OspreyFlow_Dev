@@ -87,9 +87,10 @@ MUST_BE_INCLUDED: tuple[str, ...] = (
     "README.md",
     # Round 14a (Trigger A): `06_DECISIONS.md` moved to `spec/` as product spec, no longer a
     # private-tree marker; `tokens.css` moved out of `spec/design/` into the product tree
-    # entirely, so it is now ordinary product source needing no exception at all.
+    # entirely, so it is now ordinary product source needing no exception at all (and, since ADR-152, it
+    # is in `packages/design`, which no line excludes).
     "spec/06_DECISIONS.md",
-    "apps/workspace/src/design/tokens.css",
+    "packages/design/tokens.css",
 )
 
 

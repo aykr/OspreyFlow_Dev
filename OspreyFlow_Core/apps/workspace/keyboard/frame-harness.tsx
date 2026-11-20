@@ -10,7 +10,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../src/design/fonts";
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/shell/places.css";
 import { BrandFrame } from "../src/brand/BrandFrame";

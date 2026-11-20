@@ -4,7 +4,7 @@
 import { useRef } from "react";
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { MetricsPanel } from "../src/metrics/MetricsPanel";

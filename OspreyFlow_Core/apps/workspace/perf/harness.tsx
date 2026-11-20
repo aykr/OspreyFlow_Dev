@@ -6,7 +6,7 @@
 // page at directly.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { applyHarnessBrand } from "../keyboard/brandHarness";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";

@@ -1,1 +1,0 @@
-tests/glass_trees/test_design_tokens_location.py	OspreyFlow_Core/,OspreyFlow_Build/	walks `git ls-files` over the whole repository (OspreyFlow_Core and OspreyFlow_Build, with the repository root's own files) to show no tracked file names the old tokens path; the one test that walks the repository

@@ -7,7 +7,7 @@
 // Usage and limits (ADR-135 Amendment 3) are answered from the same in-memory record.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import "../src/admin/admin.css";
 import { Models } from "../src/admin/sections/Models";

@@ -3,7 +3,7 @@
 // static server; the glyphs are fulfilled from disk by the capture spec. Tier 1 data only.
 import { createRoot } from "react-dom/client";
 
-import "../src/design/tokens.css";
+import "../../../packages/design/tokens.css";
 import "../src/design/primitives.css";
 import { MapView } from "../src/map/MapView";
 import { createWorkingSet } from "../src/workingset/store";

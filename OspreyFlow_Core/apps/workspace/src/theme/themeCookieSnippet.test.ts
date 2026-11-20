@@ -114,7 +114,7 @@ describe("theme_cookie.js", () => {
 
   it("uses only tokens that exist (a misspelt token resolves to nothing, silently)", () => {
     const tokens = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "..", "design", "tokens.css"),
+      join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "packages", "design", "tokens.css"),
       "utf8",
     );
     const defined = new Set([...tokens.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
