@@ -378,20 +378,21 @@ PAGES_SESSION_SECRET_KEY = "OSPREY_PAGES_SESSION_SECRET"
 
 def pages_client(config: OspreyConfig) -> dict[str, Any]:
     """The page service signs people in on the server as a **confidential** client
-    (`06_DECISIONS.md` ADR-152 decision 4, ADR-050 Amendment 4): authorisation code with PKCE (S256),
-    the standard flow and no other, the client secret sent at the token endpoint (set after
+    (`06_DECISIONS.md` ADR-152 decision 4, ADR-050 Amendment 4): authorisation code with PKCE
+    (S256), the standard flow and no other, the client secret sent at the token endpoint (set after
     registration from `deployment.env`, never in this document), and a refresh token kept on the
     server, which the Glass's own client does not have (`use.refresh.tokens` is on here alone).
 
     Its one redirect is exact: `<origin>/session/callback`, the deployment's own origin. The same
-    claim mappers as the Glass's client, and the **audience mapper for the Conduit**: `_audience_mapper`'s
-    own docstring says every client whose tokens the Conduit accepts needs it, and the service forwards
-    this client's access token as the person's bearer.
+    claim mappers as the Glass's client, and the **audience mapper for the Conduit**:
+    `_audience_mapper`'s own docstring says every client whose tokens the Conduit accepts needs it,
+    and the service forwards this client's access token as the person's bearer.
 
     Deliberately **not** in `render_realm`: the realm every deployment imports is mounted into
-    Keycloak's container, so a new client there would change a file an existing deployment holds and
-    restart its identity provider. It is registered through the admin API instead
-    (`register_sign_in.ensure_identity`), as Superset's is, when `deployment.env` holds its secret."""
+    Keycloak's container, so a new client there would change a file an existing deployment holds
+    and restart its identity provider. It is registered through the admin API instead
+    (`register_sign_in.ensure_identity`), as Superset's is, when `deployment.env` holds its
+    secret."""
     origin = config.network.public_origin
     return {
         "clientId": PAGES_CLIENT_ID,
