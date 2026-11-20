@@ -954,7 +954,8 @@ against it, and the Classpath exception keeps a program run on it outside the GP
 program on a JVM. **Distributing the image distributes the runtime under GPL-2.0**, so a release
 that ships the Conduit's image carries, with it, the offer of its corresponding source (Temurin's
 published source at the image's tag, `jdk-21.0.13+9`, and the `jlink` line that derived it,
-`services/api/Dockerfile`), and its NOTICE names the runtime and its licence; a release step, not
+`services/api/Dockerfile`), and its NOTICE names the runtime and its licence. Both are carried in the image, at
+`/opt/java/NOTICE` (`notices/JAVA_NOTICE`; ADR-147 Amendment 6); the publication of the image is the release step, not
 this register's to perform. **Only that exception, only for a runtime recorded here, and only for
 GPL-2.0:** a plain GPL (any version), a GPL-3.0 with the exception, a GPL with any other exception,
 and AGPL still never pass. A runtime in an image is declared by a `LABEL
@@ -986,9 +987,10 @@ from the built image at `jdk-21.0.13+9`). All are permissive; a NOTICE shipping 
 | xwd 1.0.7 (`libawt_xawt`'s list, multiVis and wsutils files) | the Open Group's permission notice (X11-style) |
 | Eastman Kodak's colour management and imaging portions | a copyright notice (Eastman Kodak 1991–2003) |
 
-The NOTICE carries the whole `/opt/java/legal` tree (every module's notices, `java.desktop`'s above
-among them) beside the runtime's GPL-2.0 text and Classpath exception (`ASSEMBLY_EXCEPTION`); a
-release step, as the source offer is.
+The image carries the whole `/opt/java/legal` tree (every module's notices, `java.desktop`'s above
+among them) beside the runtime's GPL-2.0 text and Classpath exception (`ASSEMBLY_EXCEPTION`); the NOTICE
+the image carries (`/opt/java/NOTICE`, ADR-147 Amendment 6) names each library above and points to that tree in the
+same image.
 
 **Fetched at deployment, not shipped in the repository:** the basemap's label glyphs, Noto Sans
 Regular from the OpenMapTiles fonts release v2.0 (SIL-OFL-1.1), installed into the tiles folder by

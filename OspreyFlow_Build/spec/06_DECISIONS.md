@@ -33163,7 +33163,8 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   Maps* admits the administrator's own (`test_a_fresh_install_builds_from_admin_maps_alone`).
   Recorded, not changed: a tiles-only build, without a gazetteer, is the likely next step if the
   console must build first.
-- **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
+- **The image's source offer and NOTICE** for the Java runtime are carried in the image, at `/opt/java/NOTICE`; only the
+  publication of the image is a release step (ADR-147 Amendment 6).
 - **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
   inside its stream. Measured under the platform lane's lease on stack a, 9 November 2026 (the
   machine shared with other lanes' runs, load average 13 to 21; the lease covers the stack, not the
@@ -41566,3 +41567,40 @@ the five cases above); `tests/test_seed_internal_git_archive.py` (each synthetic
 it; paysim, enron and a public dataset are still refused in the old words; every dataset is placed on a side;
 `_is_checkout` on both layouts and on a bundle); `tests/test_seed_internal.py` (the refusal's cases, one per kind);
 `tests/cli/test_bootstrap.py` (the scripts record the folder on every run).
+
+### ADR-147, Amendment 6 (20 November 2026) — the Java runtime's NOTICE and source offer travel in the Conduit's image
+
+Status: accepted on the owner's word of 20 November 2026 ("the Java notice in the image, with a test"); written by
+slice PL2a of the v0.6.2 slice line. It amends the Amendment 2 sentence that called the image's source offer and
+NOTICE "a release step" (in its list of what it leaves) and `00_ARCHITECTURE.md` §7's two sentences that did the same
+("a release step, not this register's to perform"; "a release step, as the source offer is"). Everything else in
+Amendment 2 and in §7 stands.
+
+**Context.** The Conduit's image (`services/api/Dockerfile`) distributes a Temurin runtime under GPL-2.0 with the
+Classpath exception, so whoever receives the image must receive the offer of its corresponding source and a notice
+naming the runtime and its licence. Amendment 2 left both to the release; no file held them, so a release had
+nothing to attach.
+
+**Decision.**
+
+1. **The notice is in the image.** `notices/JAVA_NOTICE` is copied by one `COPY` in the Dockerfile's
+   `runtime-included` stage to `/opt/java/NOTICE`. The `runtime-omitted` stage (the cloud-platform build, which
+   carries no Java) and the final stage do not copy it, and no stage is added. The file is outside `services/`
+   on purpose: the builder stage copies `services/` whole and the final stage, which serves both builds, takes it
+   on, so a file under `services/` would reach the image with no Java.
+2. **What it holds**: the runtime's name (Eclipse Temurin, from the OpenJDK), its version and licence exactly as
+   the Dockerfile's `org.ospreyflow.runtime.java.version` and `.licence` labels give them; the offer of its
+   corresponding source, which is Temurin's published source at the tag `jdk-<version>` with the `jlink` line of the
+   Dockerfile verbatim; the bundled native libraries and their licences as `00_ARCHITECTURE.md` §7's table lists them;
+   and where the licence texts are: `/opt/java/legal` of the same image, which the `jlink` runtime carries and the
+   Dockerfile's whole copy of `/opt/jre` takes. The texts themselves are not copied into the repository.
+3. **What remains a release step** is the publication of the image itself. The notice holds no address for the
+   offer's contact: that is the owner's to give, and is not yet written.
+4. **Not touched**: the pulled vendor images with a JVM (ArcadeDB, OpenSearch) are third-party, and their notices are
+   the vendors'.
+
+Tests that would fail: `tests/test_conduit_image_java_notice.py` (the `COPY` deleted, or added to the omitted or the
+final stage, or reaching the final stage by a folder copy through the builder; the notice's version, licence,
+runtime name, source tag or `jlink` line differing from the Dockerfile's; a library of §7's table missing from it
+or given another library's licence; a client named; each planted in the real files, rule 15), and
+`tests/test_conduit_image_java_licence.py` (no Java in the final stage).
