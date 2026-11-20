@@ -44,7 +44,7 @@ GLASS_SRC = CORE / "apps" / "workspace" / "src"
 #: The design package (ADR-152 decision 6): `primitives.css` and its two imports; their `content:`
 #: strings are copy.
 DESIGN_PACKAGE = CORE / "packages" / "design"
-#: The shared package's source (PL4 slice C): the plain modules that moved out of the Glass hold copy too.
+#: The shared package's source (PL4 slice C): the plain modules that moved out of the Glass.
 SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
 
 #: The banned phrase, its words apart by whitespace, a hyphen, or JSX's `{" "}`. The words in its place

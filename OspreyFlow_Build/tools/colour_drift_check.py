@@ -27,8 +27,8 @@ from tools.layout import CORE, REPO
 GLASS_SRC = CORE / "apps" / "workspace" / "src"
 #: The design tokens' own folder (ADR-152 decision 6); `tokens.css` is exempt in it by name.
 DESIGN_PACKAGE = CORE / "packages" / "design"
-#: The shared package's source (ADR-152 decision 6): the plain leaves and stores that moved out of the Glass's own
-#: folder (PL4 slice C), so the check must read them where they are now.
+#: The shared package's source (ADR-152 decision 6): the plain leaves and stores that moved out of
+#: the Glass's own folder (PL4 slice C), so the check must read them where they are now.
 SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
 DESIGN_PATH = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 ALLOWLIST_PATH = REPO / "OspreyFlow_Build" / "tests" / "fixtures" / "colour_drift_allowlist.txt"

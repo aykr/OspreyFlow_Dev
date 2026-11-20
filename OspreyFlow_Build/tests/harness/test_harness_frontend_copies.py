@@ -1,16 +1,17 @@
 """The harness image builds its own frontend (`apps/harness`) from a build context that copies only
 named parts of `apps/workspace`, of `packages/design` and of `packages/glass-shared/src`
 (`harness/Dockerfile`'s `frontend-builder` stage). Every file of those folders the harness frontend
-reaches by import must be under one of those `COPY` lines, or the image stops building while every local build, which sees the whole tree,
-still passes. (`packages/design` joined the walk with PL4b, when `tokens.css` moved there: before, the
+reaches by import must be under one of those `COPY` lines, or the image stops building while every
+local build, which sees the whole tree, still passes. (`packages/design` joined the walk with PL4b, when `tokens.css` moved there: before, the
 walk followed imports into `apps/workspace` only, and a `COPY packages/design` removed from the stage
 would have passed. The three stylesheets that moved after it, PL4b2, joined it too: the walk
 follows a stylesheet's `@import`, so `primitives.css` reaches `scale.css` and `panelType.css`.
-`packages/glass-shared/src` joined it with PL4 slice C, when the keyboard registry and the working set's
-store moved there: the walk follows an import of `@ospreyflow/glass-shared`, a package name, into the
-package's `src/index.ts` and from there by relative imports, and it starts from `apps/harness/keyboard`
-as well as `apps/harness/src`, since `apps/harness/keyboard/actions.ts` is the harness file that imports
-the package. A `COPY packages/glass-shared/src` removed from the stage fails here.)
+`packages/glass-shared/src` joined it with PL4 slice C, when the keyboard registry and the working
+set's store moved there: the walk follows an import of `@ospreyflow/glass-shared`, a package name,
+into the package's `src/index.ts` and from there by relative imports, and it starts from
+`apps/harness/keyboard` as well as `apps/harness/src`, since `apps/harness/keyboard/actions.ts` is
+the harness file that imports the package. A `COPY packages/glass-shared/src` removed from the stage
+fails here.)
 
 It has happened twice: on 9 October 2026, when the admin console first imported the Glass's theme
 module, and on 31 October 2026, when that module began importing `src/brand/brand.ts` (ADR-132).
@@ -89,8 +90,8 @@ def _reached_workspace_files() -> set[Path]:
 
 
 def _copied_paths(dockerfile: str | None = None) -> list[Path]:
-    """The `apps/workspace/...`, `packages/design...` and `packages/glass-shared/src...` sources the frontend-builder
-    stage copies."""
+    """The `apps/workspace/...`, `packages/design...` and `packages/glass-shared/src...` sources the
+    frontend-builder stage copies."""
     text = dockerfile if dockerfile is not None else DOCKERFILE.read_text(encoding="utf-8")
     stage = text.split("AS frontend-builder", 1)[1].split("\nFROM ", 1)[0]
     return [
@@ -155,8 +156,9 @@ def test_the_walk_reaches_the_theme_module_the_admin_console_shares() -> None:
 
 
 def test_the_walk_reaches_the_package_the_harness_imports() -> None:
-    """The case below is only as good as its walk: `actions.ts` imports the registry by the package's name, and every
-    file the index exports, and anything they import by a relative path inside the package, is reached."""
+    """The case below is only as good as its walk: `actions.ts` imports the registry by the
+    package's name, and every file the index exports, and anything they import by a relative path
+    inside the package, is reached."""
     reached = {str(p.relative_to(CORE.resolve())) for p in _reached_workspace_files()}
     for name in (
         "packages/glass-shared/src/index.ts",
@@ -166,8 +168,9 @@ def test_the_walk_reaches_the_package_the_harness_imports() -> None:
 
 
 def test_the_stage_without_its_copy_of_the_shared_package_s_source_is_found() -> None:
-    """Red for the line this change adds (rule 15): the real stage with only that line taken out, the shape the
-    Dockerfile really has, is missing exactly the files of the package the harness reaches."""
+    """Red for the line this change adds (rule 15): the real stage with only that line taken out,
+    the shape the Dockerfile really has, is missing exactly the files of the package the harness
+    reaches."""
     real = DOCKERFILE.read_text(encoding="utf-8")
     line = "COPY packages/glass-shared/src ./packages/glass-shared/src\n"
     assert line in real, "harness/Dockerfile no longer copies packages/glass-shared/src"
