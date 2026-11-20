@@ -1,7 +1,7 @@
 {
   "what": "The build of apps/workspace before PL4 moved anything (ADR-152 R2, I11): what every later PL4 slice is compared against.",
-  "normaliser_version": 1,
-  "normalised_hash": "0e7f416d82da72e9b028f0d19dd9e928cfe9ae0aa8df900a8758c5f2cf89343d",
+  "normaliser_version": 2,
+  "normalised_hash": "dc0d436bba73a7af86b190b8b9688bd4838db82b37873250f803c2f6e9defdc1",
   "files": {
     "total": 60,
     "hashed": 44,

@@ -97,10 +97,10 @@ export default [
   // The shared package (ADR-152 decision 6): plain TypeScript, TypeScript's recommended rules, and the import ban above.
   ...tseslint.configs.recommended.map((config) => ({
     ...config,
-    files: ["packages/glass-shared/**/*.ts"],
+    files: ["packages/glass-shared/**/*.{ts,tsx,mts,cts}"],
   })),
   {
-    files: ["packages/glass-shared/**/*.ts"],
+    files: ["packages/glass-shared/**/*.{ts,tsx,mts,cts}"],
     languageOptions: { globals: { console: "readonly", process: "readonly" } },
     rules: {
       // TypeScript's own compiler catches an undefined identifier, as for the workspace.

@@ -21,18 +21,24 @@
 //   * the order of a JavaScript chunk's top-level statements and of its `var a = …, b = …` declarators (module
 //     order), and of the statements of a chunk that is one wrapping function (a bundled worker);
 //   * the names of bindings: a minifier names them by how often they are used, so they move when code does.
-//     Within one statement the bindings are compared as a pattern (the first binding named is `$0`, the next `$1`;
-//     eslint-scope says which name is which binding, so a parameter spelled like an outer variable is another one),
-//     so `f(a, b)` is not `f(a, a)`; a global (`Object`, `document`), a property (`x.length`) and a key keep their names.
+//     eslint-scope says which name is which binding, so a parameter spelled like an outer variable is another one.
+//     A binding inside a statement (a parameter, an inner variable) is written by the order the statement first names
+//     it (`$0`, `$1`), so `f(a, b)` is not `f(a, a)`. A binding the chunk declares at its top level is written by what it
+//     is: the label of what its declaration holds, how it is used and (for an import) what the other chunk exports under
+//     the name it imports, refined round by round until nothing splits further (as colours are refined on a graph).
+//     So `f(a)` that becomes `f(b)` is a different build, and so is `import{x as f}` that becomes `import{y as f}`,
+//     unless `a` and `b` are the same thing under two names. A global (`Object`, `document`), a property (`x.length`)
+//     and a key keep their names.
 //   * whitespace and comments in CSS.
-// What fails: a string, a number, an operator, a condition, a property name, a call's shape, a statement or
-// declarator added or removed, an import or export added or removed, a different CSS rule, a CSS rule moved (the
-// cascade reads in order), a file added, removed or changed that has no hash in its name (a file a page asks for by
-// name), and any asset whose bytes differ.
+// What fails: a string, a number, an operator, a condition, a property name, a call's shape, a reference or an import
+// pointed at another binding, a statement or declarator added or removed, an export added or removed, a different CSS
+// rule, a CSS rule moved (the cascade reads in order), a file added, removed or changed that has no hash in its name
+// (a file a page asks for by name), and any asset whose bytes differ.
 //
-// What it cannot see, said here so nobody takes it for more: which of two same-shaped names a statement refers to
-// (`f(a)` that becomes `f(b)`, with `a` and `b` different bindings), since names are not compared. The unit tests
-// and the browser gates are what stand behind that.
+// What it cannot see, said here so nobody takes it for more: two top-level bindings that no round can tell apart
+// (the same declaration and the same use at every depth) are one and the same to it, which they are, up to their names;
+// and a difference more than SETTLED_ROUNDS references away from the text that carries it, once every label is told apart,
+// may not reach it. The unit tests and the browser gates stand behind the rest.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
@@ -47,9 +53,12 @@ const { parseSync } = requireCore("rolldown/utils");
 const eslintScope = requireCore("eslint-scope");
 
 /** Changed whenever the way a build is normalised changes: a record made under another version is not comparable. */
-export const NORMALISER_VERSION = 1;
+export const NORMALISER_VERSION = 2;
 
-const REF = "\u0001";
+const REF = "\u0001"; // around the name of a hashed file, where a file's text names it
+const MARK = "\u0002"; // around the number of a top-level binding, where a unit's text names it
+const MARK_PATTERN = new RegExp(`${MARK}(\\d+)${MARK}`, "g");
+const REF_PATTERN = new RegExp(`${REF}([^${REF}]+)${REF}`, "g");
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 
 // ---------------------------------------------------------------------------------------------------- reading a build
@@ -113,28 +122,43 @@ function bindingsOf(program, sourceType) {
     const value = node.value?.type === "AssignmentPattern" ? node.value.left : node.value;
     if (value?.type === "Identifier") shorthand.set(value, node.key.name ?? node.key.value);
   });
-  return { occurrence, shorthand };
+  return { occurrence, shorthand, manager };
 }
 
-/** The text of `node` from `text`, each binding replaced by `$n`, numbered in the order the unit first names them. */
-function patterned(text, node, bindings) {
+/**
+ * The text of `node` from `text` with every binding named in it written without its name. A binding the program
+ * declares at the top level (of the chunk, or of the one wrapping function of a bundled worker) is written as a
+ * marker that holds its number in the file: `label()` later reads it as what the binding holds and how it is used, so
+ * a reference pointed at another binding changes the text. A binding that lives inside the unit (a parameter, an
+ * inner variable) is written `$n`, numbered in the order the unit first names it.
+ */
+function patterned(text, node, bindings, table) {
   const found = [];
   visit(node, null, null, (child) => {
     if (child.type === "Identifier" && bindings.occurrence.has(child)) found.push(child);
   });
   found.sort((a, b) => a.start - b.start);
-  const numbers = new Map();
+  const locals = new Map();
+  const refs = [];
   let out = "";
   let at = node.start;
   for (const identifier of found) {
     if (identifier.start < at) continue;
     const variable = bindings.occurrence.get(identifier);
-    if (!numbers.has(variable)) numbers.set(variable, numbers.size);
+    let written;
+    if (table.topLevel(variable)) {
+      const id = table.idOf(variable);
+      refs.push({ id, declares: variable.identifiers.includes(identifier) });
+      written = `${MARK}${id}${MARK}`;
+    } else {
+      if (!locals.has(variable)) locals.set(variable, locals.size);
+      written = `$${locals.get(variable)}`;
+    }
     const key = bindings.shorthand.get(identifier);
-    out += `${text.slice(at, identifier.start)}${key === undefined ? "" : `${key}:`}$${numbers.get(variable)}`;
+    out += `${text.slice(at, identifier.start)}${key === undefined ? "" : `${key}:`}${written}`;
     at = identifier.end;
   }
-  return out + text.slice(at, node.end);
+  return { text: out + text.slice(at, node.end), refs };
 }
 
 function unwrap(node) {
@@ -144,7 +168,7 @@ function unwrap(node) {
 }
 
 // `(function(){ … })()` and `(()=>{ … })()`: a chunk that is one function (a bundled worker) is compared by what is inside it.
-function iifeBody(statement) {
+function iifeOf(statement) {
   if (statement.type !== "ExpressionStatement") return null;
   let expression = unwrap(statement.expression);
   if (expression?.type === "UnaryExpression" && expression.operator === "!") expression = unwrap(expression.argument);
@@ -152,9 +176,12 @@ function iifeBody(statement) {
   const callee = unwrap(expression.callee);
   if (!callee || (callee.type !== "FunctionExpression" && callee.type !== "ArrowFunctionExpression")) return null;
   if (callee.body?.type !== "BlockStatement" || expression.arguments.length > 0 || callee.params.length > 0) return null;
-  return callee.body.body;
+  return { callee, body: callee.body.body };
 }
 
+const nameOf = (node) => node?.name ?? node?.value;
+
+/** An import's or re-export's shape without its names: those are looked up through the other chunk's own exports. */
 function importExportShape(text, statement) {
   const source = statement.source ? `from${text.slice(statement.source.start, statement.source.end)}` : "";
   const count = statement.specifiers?.length ?? 0;
@@ -163,7 +190,12 @@ function importExportShape(text, statement) {
   return `${kind}{*${count}}${source}`;
 }
 
-/** The comparable units of a chunk: one string for each top-level statement and each declarator, order forgotten. */
+/**
+ * What a chunk holds: its units (one for each top-level statement and each declarator, order forgotten), its bindings
+ * (every name it declares at its top level: where it is declared, where it is used, what it imports) and its exports
+ * by name. An export is the unit `export:<the binding>` and an imported name is looked up in the other chunk's exports
+ * (`label()`), so the names a minifier gives exports never matter, but what is exported and what is imported does.
+ */
 function jsUnits(path, text) {
   const body = text; // comments (the source map's among them) are not statements, so the parser leaves them out
   let sourceType = "module";
@@ -172,28 +204,120 @@ function jsUnits(path, text) {
     sourceType = "script";
     result = parseSync(path, body, { lang: "js", sourceType, preserveParens: false, range: true });
   }
-  if (result.errors.length) return { units: [`unparsed:${sha(body)}`], parsed: false };
-  const bindings = bindingsOf(result.program, sourceType);
-  const units = [];
-  const emit = (statements) => {
+  if (result.errors.length) return { units: [{ text: `unparsed:${sha(body)}`, refs: [] }], bindings: [], exports: new Map(), parsed: false };
+
+  // The statements that are units, and the one function a bundled worker is wrapped in.
+  const wrappers = new Set();
+  const plan = [];
+  const collect = (statements) => {
     for (const statement of statements) {
-      const inner = iifeBody(statement);
-      if (inner) {
-        units.push("iife");
-        emit(inner);
-      } else if (statement.type === "VariableDeclaration") {
-        for (const declarator of statement.declarations) units.push(`${statement.kind} ${patterned(body, declarator, bindings)}`);
-      } else if (statement.type === "ImportDeclaration" || statement.type === "ExportAllDeclaration" || (statement.type === "ExportNamedDeclaration" && !statement.declaration)) {
-        units.push(importExportShape(body, statement));
-      } else if (statement.type === "EmptyStatement" || statement.type === "Directive") {
-        // nothing to compare
+      const wrapped = iifeOf(statement);
+      if (wrapped) {
+        wrappers.add(wrapped.callee);
+        plan.push(null);
+        collect(wrapped.body);
       } else {
-        units.push(patterned(body, statement, bindings));
+        plan.push(statement);
       }
     }
   };
-  emit(result.program.body);
-  return { units, parsed: true };
+  collect(result.program.body);
+
+  const bindings = bindingsOf(result.program, sourceType);
+  const list = [];
+  const ids = new Map();
+  const table = {
+    topLevel: (variable) => variable.scope.type === "global" || variable.scope.type === "module" || wrappers.has(variable.scope.block),
+    idOf(variable) {
+      if (!ids.has(variable)) {
+        ids.set(variable, list.length);
+        list.push({ declUnits: [], uses: [], import: null });
+      }
+      return ids.get(variable);
+    },
+    pseudo(imported) {
+      list.push({ declUnits: [], uses: [], import: imported });
+      return list.length - 1;
+    },
+  };
+  const exportsByName = new Map();
+  const units = [];
+  const unit = (made) => units.push(made);
+  const declaredBy = (node) => bindings.manager.getDeclaredVariables(node).filter((variable) => table.topLevel(variable));
+  const exportUnit = (id) => unit({ text: `export:${MARK}${id}${MARK}`, refs: [{ id, declares: false }] });
+
+  const declaration = (node, exported) => {
+    if (node.type === "VariableDeclaration") {
+      for (const declarator of node.declarations) {
+        const made = patterned(body, declarator, bindings, table);
+        unit({ text: `${node.kind} ${made.text}`, refs: made.refs });
+      }
+    } else {
+      unit(patterned(body, node, bindings, table));
+    }
+    if (!exported) return;
+    const named = node.type === "VariableDeclaration" ? declaredBy(node) : declaredBy(node).filter((variable) => node.id && variable.identifiers.includes(node.id));
+    for (const variable of named) {
+      const id = table.idOf(variable);
+      exportsByName.set(variable.name, id);
+      exportUnit(id);
+    }
+  };
+
+  for (const statement of plan) {
+    if (statement === null) {
+      unit({ text: "iife", refs: [] });
+    } else if (statement.type === "VariableDeclaration") {
+      declaration(statement, false);
+    } else if (statement.type === "ImportDeclaration") {
+      unit({ text: importExportShape(body, statement), refs: [] });
+      const source = body.slice(statement.source.start, statement.source.end);
+      for (const specifier of statement.specifiers) {
+        const variable = bindings.occurrence.get(specifier.local);
+        if (!variable) continue;
+        list[table.idOf(variable)].import =
+          specifier.type === "ImportNamespaceSpecifier"
+            ? { namespace: true, source }
+            : { name: specifier.type === "ImportDefaultSpecifier" ? "default" : nameOf(specifier.imported), source };
+      }
+    } else if (statement.type === "ExportAllDeclaration") {
+      unit({ text: importExportShape(body, statement), refs: [] });
+    } else if (statement.type === "ExportNamedDeclaration" && statement.declaration) {
+      declaration(statement.declaration, true);
+    } else if (statement.type === "ExportNamedDeclaration") {
+      unit({ text: importExportShape(body, statement), refs: [] });
+      const source = statement.source ? body.slice(statement.source.start, statement.source.end) : null;
+      for (const specifier of statement.specifiers) {
+        const exported = nameOf(specifier.exported);
+        const variable = source ? null : bindings.occurrence.get(specifier.local);
+        if (source) {
+          const id = table.pseudo({ name: nameOf(specifier.local), source });
+          exportsByName.set(exported, id);
+          exportUnit(id);
+        } else if (variable && table.topLevel(variable)) {
+          const id = table.idOf(variable);
+          exportsByName.set(exported, id);
+          exportUnit(id);
+        } else {
+          unit({ text: `export:${nameOf(specifier.local)}`, refs: [] });
+        }
+      }
+    } else if (statement.type === "ExportDefaultDeclaration") {
+      unit(patterned(body, statement, bindings, table));
+      const inner = statement.declaration;
+      const named = ["FunctionDeclaration", "ClassDeclaration"].includes(inner?.type) && inner.id ? declaredBy(inner).find((variable) => variable.identifiers.includes(inner.id)) : null;
+      exportsByName.set("default", named ? table.idOf(named) : -1);
+    } else if (statement.type === "EmptyStatement" || statement.type === "Directive") {
+      // nothing to compare
+    } else {
+      unit(patterned(body, statement, bindings, table));
+    }
+  }
+
+  units.forEach((made, index) => {
+    for (const { id, declares } of made.refs) (declares ? list[id].declUnits : list[id].uses).push(index);
+  });
+  return { units, bindings: list, exports: exportsByName, parsed: true };
 }
 
 // ---------------------------------------------------------------------------------------------- canonical CSS and HTML
@@ -245,9 +369,11 @@ export function readBuild(dist) {
     const { hashed, stem, ext } = classify(rel);
     const file = { rel, hashed, stem, ext, size: bytes.length, name: rel.slice(rel.lastIndexOf("/") + 1) };
     if (ext === ".js" || ext === ".mjs") {
-      const { units, parsed } = jsUnits(rel, bytes.toString("utf8"));
+      const { units, bindings, exports, parsed } = jsUnits(rel, bytes.toString("utf8"));
       file.kind = "js";
-      file.units = units.map(mark);
+      file.units = units.map((made) => mark(made.text));
+      file.bindings = bindings.map((binding) => ({ ...binding, import: binding.import && { ...binding.import, source: mark(binding.import.source) } }));
+      file.exports = exports;
       file.ordered = false;
       file.parsed = parsed;
     } else if (ext === ".css") {
@@ -263,31 +389,110 @@ export function readBuild(dist) {
       file.units = [createHash("sha256").update(bytes).digest("hex")];
       file.ordered = true;
     }
+    file.bindings ??= [];
+    file.exports ??= new Map();
     return file;
   });
   return files;
 }
 
-/** A label for every file, from what it holds and (iterated three times) from the labels of the files it names. */
+const MOST_ROUNDS = 64;
+const SETTLED_ROUNDS = 6; // rounds after the last label splits: how far a difference travels along references once all labels are told apart
+
+/** The file a module specifier (`"./index-AbC123.js"`, quotes and marks included) names, or null. */
+function targetOf(files, byName, byRel, file, source) {
+  const named = [...source.matchAll(REF_PATTERN)].map((m) => m[1]);
+  if (named.length === 1 && byName.has(named[0])) return byName.get(named[0]);
+  const plain = /^"(\.{1,2}\/[^"]*)"$/.exec(source);
+  if (!plain || plain[1].includes(REF)) return null;
+  const parts = [...file.rel.split("/").slice(0, -1)];
+  for (const part of plain[1].split("/")) {
+    if (part === "..") parts.pop();
+    else if (part !== ".") parts.push(part);
+  }
+  return byRel.get(parts.join("/")) ?? null;
+}
+
+/**
+ * A label for every file and for every top-level binding of every JavaScript file, refined round by round until no
+ * label splits any further (the way colours are refined on a graph). A file's label is what it holds and the labels
+ * of the files it names; a binding's is what its declaration holds, how it is used, and (for an import) the label of
+ * the binding the other chunk exports under that name. Every name in the text is replaced by the label of what it names,
+ * so `f(a)` that becomes `f(b)` is a different unit unless `a` and `b` are the same thing under two names.
+ */
 function label(files) {
   const byName = new Map(files.filter((file) => file.hashed).map((file) => [file.name, file]));
-  let labels = new Map(files.map((file) => [file.rel, "0"]));
-  for (let round = 0; round < 3; round += 1) {
-    const next = new Map();
-    const resolveUnit = (unit) =>
-      unit.includes(REF)
-        ? unit.replace(new RegExp(`${REF}([^${REF}]+)${REF}`, "g"), (_, name) => `<${byName.has(name) ? labels.get(byName.get(name).rel) : "unknown"}>`)
-        : unit;
-    for (const file of files) {
-      file.resolved = file.units.map(resolveUnit);
-      file.base = file.units.map((unit) => unit.replace(new RegExp(`${REF}[^${REF}]+${REF}`, "g"), "<file>"));
-      const hashes = file.resolved.map(sha);
-      if (!file.ordered) hashes.sort();
-      next.set(file.rel, sha(`${file.kind}\n${hashes.join("\n")}`));
+  const byRel = new Map(files.map((file) => [file.rel, file]));
+  for (const file of files) {
+    file.label = "0";
+    for (const binding of file.bindings) {
+      binding.label = "0";
+      binding.target = binding.import ? targetOf(files, byName, byRel, file, binding.import.source) : null;
     }
-    labels = next;
   }
-  for (const file of files) file.label = labels.get(file.rel);
+  const render = (unit, file) =>
+    unit
+      .replace(REF_PATTERN, (_, name) => `<${byName.has(name) ? byName.get(name).label : "unknown"}>`)
+      .replace(MARK_PATTERN, (_, id) => `[${file.bindings[Number(id)].label}]`);
+  const importedLabel = (binding) => {
+    const { target } = binding;
+    const { name, namespace, source } = binding.import;
+    if (target && namespace) return `namespace:${target.label}`;
+    if (target && target.exports.has(name)) {
+      const id = target.exports.get(name);
+      return id === -1 ? `default:${target.label}` : `export:${target.bindings[id].label}`;
+    }
+    return `unresolved:${name ?? "*"}:${source.replace(REF_PATTERN, "<file>")}`;
+  };
+
+  // What a report shows for a name: what its declaration holds, and nothing else, so one edit shows as one edit.
+  const plain = (unit) => unit.replace(REF_PATTERN, "<file>").replace(MARK_PATTERN, "$");
+  const imports = [];
+  for (const file of files) {
+    for (const binding of file.bindings) {
+      if (binding.import) imports.push(binding);
+      else binding.short = sha(binding.declUnits.map((index) => plain(file.units[index])).sort().join("\n")).slice(0, 6);
+    }
+  }
+  for (let pass = 0; pass < 4; pass += 1) {
+    for (const binding of imports) {
+      const { target } = binding;
+      const id = target?.exports.get(binding.import.name);
+      binding.short = id !== undefined && id !== -1 ? (target.bindings[id].short ?? "0") : "import";
+    }
+  }
+
+  let distinct = 0;
+  let steady = 0;
+  for (let round = 0; round < MOST_ROUNDS; round += 1) {
+    for (const file of files) file.hashes = file.units.map((unit) => sha(render(unit, file)));
+    const nextBindings = new Map();
+    const nextFiles = new Map();
+    for (const file of files) {
+      for (const binding of file.bindings) {
+        const declared = binding.import ? importedLabel(binding) : binding.declUnits.map((index) => file.hashes[index]).sort().join(",");
+        const used = binding.uses.map((index) => file.hashes[index]).sort().join(",");
+        nextBindings.set(binding, sha(`${binding.label}|${declared}|${used}`));
+      }
+      const hashes = [...file.hashes];
+      if (!file.ordered) hashes.sort();
+      nextFiles.set(file, sha(`${file.label}|${file.kind}\n${hashes.join("\n")}`));
+    }
+    for (const [binding, next] of nextBindings) binding.label = next;
+    for (const [file, next] of nextFiles) file.label = next;
+    // No label splitting any further says the colouring is settled, not that what each label holds has reached every
+    // file that names it: a difference travels one reference a round. So it goes on for a margin of rounds after.
+    const count = new Set([...nextBindings.values(), ...nextFiles.values()]).size;
+    steady = count === distinct ? steady + 1 : 0;
+    distinct = count;
+    if (steady >= SETTLED_ROUNDS) break;
+  }
+  // The text a report shows: what the unit says, each name written as the short label of what it names.
+  for (const file of files) {
+    file.base = file.units.map((unit) =>
+      unit.replace(REF_PATTERN, "<file>").replace(MARK_PATTERN, (_, id) => `$${file.bindings[Number(id)].short}`),
+    );
+  }
   return files;
 }
 
