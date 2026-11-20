@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import "./design/fonts";
 import "../../../packages/design/tokens.css";
-import "./design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { App } from "./App";
 import { answerTheWindowThatAsked } from "./auth/callbackFrame";
 import { deploymentAppearance, loadDeploymentSettings } from "./auth/oidcConfig";

@@ -7,7 +7,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { Inspector } from "../src/inspector/Inspector";
 import type { Edge, EdgeTypeDef, Node } from "../../../packages/schemas/generated";
 

@@ -13,7 +13,7 @@ import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { AskPage } from "../src/questions/AskPage";
 import { useAskPage } from "../src/questions/useAskPage";
 import { openView } from "../src/views/viewsApi";

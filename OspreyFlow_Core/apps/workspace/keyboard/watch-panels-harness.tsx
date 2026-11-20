@@ -6,7 +6,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { HotlistPanel } from "../src/watches/HotlistPanel";
 import { MonitorPanel } from "../src/watches/MonitorPanel";
 import { RaiseAlert, SaveAsWatch, WatchForThis } from "../src/watches/GlassWatchActions";

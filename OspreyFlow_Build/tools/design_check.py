@@ -10,6 +10,9 @@ detector reads, beside the code it checks — differs from the contract in `spec
 - exception 4, the measurement grid on the graph canvas only: `codex-grid-background` inside the
   `.network-canvas` rule, and nowhere else.
 
+Scans the Glass's source and `packages/design` (where `primitives.css` is since ADR-152 decision 6;
+`tests/glass_trees/test_design_gates_reach.py` holds the reach).
+
 Non-vacuous: `tests/test_design_check.py` runs the real detector over a planted status stripe, and
 over the canvas grid beside the same grid on another surface.
 """
@@ -25,7 +28,10 @@ from typing import Any
 from tools.layout import CORE, REPO
 
 DESIGN_SOURCE = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
-SCANNED = [CORE / "apps" / "workspace" / "src"]
+#: The Glass's source, and the design package (ADR-152 decision 6) where `primitives.css` (which
+#: holds the one documented exception), `scale.css` and `panelType.css` live.
+#: `tests/glass_trees/test_design_gates_reach.py` holds the reach.
+SCANNED = [CORE / "apps" / "workspace" / "src", CORE / "packages" / "design"]
 
 #: (antipattern, the CSS rule it is excused in) — DESIGN.md §9.
 EXCEPTIONS = {("codex-grid-background", ".network-canvas")}

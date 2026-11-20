@@ -36,7 +36,8 @@ def _product(tmp_path: Path) -> Path:
         "apps/harness/index.html": "<div id=root></div>",
         "apps/harness/package.json": json.dumps({"name": "x"}),
         "packages/design/tokens.css": ":root{}",
-        "apps/workspace/src/design/primitives.css": ".btn{}",
+        "packages/design/primitives.css": ".btn{}",
+        "apps/workspace/src/design/primitives/Button.tsx": "export const Button = 1;\n",
         "apps/workspace/src/theme/theme.ts": "export const t = 1;\n",
         "apps/workspace/src/other/not-a-source.ts": "x",
     }.items():

@@ -4,7 +4,8 @@ stage). Every file of those two folders the harness frontend reaches by import m
 those `COPY` lines, or the image stops building while every local build, which sees the whole tree,
 still passes. (`packages/design` joined the walk with PL4b, when `tokens.css` moved there: before, the
 walk followed imports into `apps/workspace` only, and a `COPY packages/design` removed from the stage
-would have passed.)
+would have passed. The three stylesheets that moved after it, PL4b2, joined it too: the walk
+follows a stylesheet's `@import`, so `primitives.css` reaches `scale.css` and `panelType.css`.)
 
 It has happened twice: on 9 October 2026, when the admin console first imported the Glass's theme
 module, and on 31 October 2026, when that module began importing `src/brand/brand.ts` (ADR-132).
@@ -27,6 +28,7 @@ _IMPORT = re.compile(
     r"""^\s*(?:import|export)\b[^'"]*?from\s+['"]([^'"]+)['"]|^\s*import\s+['"]([^'"]+)['"]""",
     re.M,
 )
+_CSS_IMPORT = re.compile(r"""^\s*@import\s+(?:url\()?\s*['"]([^'"]+)['"]""", re.M)
 _SUFFIXES = ("", ".ts", ".tsx", ".css", "/index.ts", "/index.tsx")
 
 
@@ -56,10 +58,15 @@ def _reached_workspace_files() -> set[Path]:
         if current in seen:
             continue
         seen.add(current)
+        text = current.read_text(encoding="utf-8")
         if current.suffix == ".css":
-            continue
-        for match in _IMPORT.finditer(current.read_text(encoding="utf-8")):
-            target = _resolve(current, match.group(1) or match.group(2))
+            # A stylesheet reaches what it `@import`s (`primitives.css` pulls in `./scale.css`
+            # and `./panelType.css`).
+            specs = [m.group(1) for m in _CSS_IMPORT.finditer(text)]
+        else:
+            specs = [m.group(1) or m.group(2) for m in _IMPORT.finditer(text)]
+        for spec in specs:
+            target = _resolve(current, spec)
             if target is None:
                 continue
             if target.is_relative_to(WORKSPACE.resolve()) or target.is_relative_to(DESIGN.resolve()):
@@ -100,6 +107,16 @@ def test_the_walk_reaches_the_design_tokens_in_packages_design() -> None:
     assert "packages/design/tokens.css" in reached
 
 
+def test_the_walk_reaches_primitives_css_and_the_two_it_imports_in_packages_design() -> None:
+    """`primitives.css` moved to `packages/design` with `scale.css` and `panelType.css` (PL4b2): the
+    entrance imports the first, and the first imports the other two by `./`, so the walk follows
+    `@import` inside `packages/design` too."""
+    reached = {str(p.relative_to(CORE.resolve())) for p in _reached_workspace_files()}
+    for name in ("primitives.css", "scale.css", "panelType.css"):
+        assert f"packages/design/{name}" in reached, f"the walk does not reach {name}"
+        assert f"apps/workspace/src/design/{name}" not in reached
+
+
 def test_the_stage_without_its_copy_of_packages_design_is_found() -> None:
     """Red for the line this change adds (rule 15): the real stage, with only that line taken out, as
     the shape the Dockerfile really has, is missing exactly the tokens file."""
@@ -108,7 +125,10 @@ def test_the_stage_without_its_copy_of_packages_design_is_found() -> None:
     assert line in real, "harness/Dockerfile no longer copies packages/design"
     assert _missing(_copied_paths(real), _reached_workspace_files()) == []
     planted = real.replace(line, "", 1)
-    assert _missing(_copied_paths(planted), _reached_workspace_files()) == ["packages/design/tokens.css"]
+    assert _missing(_copied_paths(planted), _reached_workspace_files()) == sorted(
+        f"packages/design/{name}"
+        for name in ("panelType.css", "primitives.css", "scale.css", "tokens.css")
+    )
 
 
 def test_the_walk_reaches_the_theme_module_the_admin_console_shares() -> None:

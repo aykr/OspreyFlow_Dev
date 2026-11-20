@@ -1,2 +1,0 @@
-tests/glass_trees/test_design_css_location.py	OspreyFlow_Core/,OspreyFlow_Build/	walks `git ls-files` over the whole repository (OspreyFlow_Core and OspreyFlow_Build, with the repository root's own files) to show no tracked file names the three stylesheets' old paths
-tests/glass_trees/test_design_gates_reach.py	OspreyFlow_Core/apps/workspace/src/,OspreyFlow_Core/packages/design/	runs the design-check, UI-words and no-branches gates, which walk apps/workspace/src and packages/design, against planted copies; it walks no folder by git ls-files itself

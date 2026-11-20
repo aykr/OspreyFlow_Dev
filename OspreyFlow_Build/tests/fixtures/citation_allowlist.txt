@@ -82,3 +82,9 @@ tests/harness/test_complete_govuk_renders_no_workspace.py
 # Moved by PL4 slice B to `packages/design/tokens.css`: the decision-log entries and other records that name the old place
 # are history and stay as written.
 apps/workspace/src/design/tokens.css
+
+# Moved by PL4 slice B2 to `packages/design/`, beside `tokens.css`: `primitives.css`, `scale.css` and `panelType.css`. The
+# build record and the decision-log entries that name the old places are history and stay as written.
+apps/workspace/src/design/primitives.css
+apps/workspace/src/design/scale.css
+apps/workspace/src/design/panelType.css

@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { QueryBuilderPanel } from "../src/patterns/QueryBuilderPanel";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 

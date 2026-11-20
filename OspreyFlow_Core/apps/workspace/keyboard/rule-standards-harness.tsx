@@ -8,7 +8,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import BPMN from "../src/alerts/ruleStandards/fixtures/visits-to-listed-people.bpmn?raw";
 import { ShowAsBpmn } from "../src/alerts/ruleStandards/ShowAsBpmn";
 import { applyHarnessBrand } from "./brandHarness";

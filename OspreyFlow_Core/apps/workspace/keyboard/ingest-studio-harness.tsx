@@ -8,7 +8,7 @@ import { createRoot } from "react-dom/client";
 import { useState } from "react";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { disclosuresOf } from "../src/ingest/dag/ExpertStepDrawer";
 import { IngestStudio } from "../src/ingest/IngestStudio";

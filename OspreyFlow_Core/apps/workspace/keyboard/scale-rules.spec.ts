@@ -1,5 +1,5 @@
 // v0.6.0 #6's one scale, held at the cascade in the browser, with the real tokens.css and primitives.css (scale.css and
-// panelType.css imported first) as views-harness loads them, in the standard and GOV.UK looks:
+// panelType.css imported first; all in packages/design) as views-harness loads them, in the standard and GOV.UK looks:
 // - a bare heading takes the scale's size for its level;
 // - a heading drawn as a label stays the label's size, the page's body (the orchestrator's ruling of 15 November 2026, on case's finding), never
 //   above what it labels;

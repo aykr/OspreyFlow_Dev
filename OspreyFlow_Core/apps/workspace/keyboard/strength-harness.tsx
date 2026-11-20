@@ -13,7 +13,7 @@
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
-import "../src/design/primitives.css";
+import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { StrengthPanel } from "../src/strength/StrengthPanel";
 import type { EdgeTypeDef, EntityTypeDef } from "../../../packages/schemas/generated";
