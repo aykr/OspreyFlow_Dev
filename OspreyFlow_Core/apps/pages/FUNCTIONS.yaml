@@ -20,7 +20,7 @@
 #             with its slice's scenario passing on that tree (I8). A row with a route has a scenario
 #   status    planned | owner to rule | parity exception
 #
-# Checked by `OspreyFlow_Build/tests/glass_trees/test_functions_yaml.py`.
+# Checked by the developer repository's `tests/glass_trees/test_functions_yaml.py`.
 functions:
   - id: studio-model-text
     name: "Studio: Model step, domain model text"

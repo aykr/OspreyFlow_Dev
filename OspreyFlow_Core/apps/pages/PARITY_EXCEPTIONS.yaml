@@ -16,7 +16,7 @@
 # inventory are NOT here: they are functions in FUNCTIONS.yaml with the status "owner to rule", until the owner
 # rules. Panel frames (517) and the Studio dataset map (482) are functions with an empty route, not exceptions.
 #
-# Checked by `OspreyFlow_Build/tests/glass_trees/test_functions_yaml.py`.
+# Checked by the developer repository's `tests/glass_trees/test_functions_yaml.py`.
 exceptions:
   - id: govuk-frame
     reason: "The light/dark switch, one part of the GOV.UK frame row: the GOV.UK look is light only (ADR-132 decision 3, kept by ADR-152 decision 13), so a switch between light and dark means nothing on its pages. The rest of the row (header, footer, phase banner, skip link) stays a function."

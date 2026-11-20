@@ -20,7 +20,7 @@
 //      carries a React marker: `react/jsx-runtime`, `react/jsx-dev-runtime`, `react-dom`, or the element symbol
 //      (`Symbol.for("react.element")`, `Symbol.for("react.transitional.element")`).
 //
-// `OspreyFlow_Build/tests/glass_trees/test_no_react_check.py` plants each fault in the shape this check meets it.
+// the developer repository's `tests/glass_trees/test_no_react_check.py` plants each fault in the shape this check meets it.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

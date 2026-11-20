@@ -13,7 +13,7 @@
 //        builds `apps/workspace` (with --build), then compares its normalised hash with the record's.
 //
 // What is tolerated, because only a file's new path can cause it (each case is planted in
-// `OspreyFlow_Build/tests/glass_trees/test_dist_compare.py`, and was shown against real `vite build` output):
+// the developer repository's `tests/glass_trees/test_dist_compare.py`, and was shown against real `vite build` output):
 //   * file names that carry a content hash (`assets/<name>-<hash>.<ext>`): a chunk or asset is identified by what
 //     it holds, never by its name or its hash, and a reference from one file to another is read as the content of
 //     the file it names (iterated, so a cycle of chunks settles);

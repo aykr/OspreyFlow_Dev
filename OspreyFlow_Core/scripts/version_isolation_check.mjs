@@ -16,7 +16,7 @@
 // What this cannot see: a bundler drops an import used only as a type (`import type { Map } from "maplibre-gl"`),
 // so a type-only import never reaches the bundle. That half is the `no-restricted-imports` block for
 // `packages/glass-shared/**` in `eslint.config.js` (`allowTypeImports: false`), shown red in
-// `OspreyFlow_Build/tests/glass_trees/test_version_isolation_check.py`.
+// the developer repository's `tests/glass_trees/test_version_isolation_check.py`.
 //
 // Exit 0 and "PASS", or exit 1 and "FAIL" with one line for each finding. A tree whose entry is missing fails: a
 // check with nothing to bundle must not pass.
