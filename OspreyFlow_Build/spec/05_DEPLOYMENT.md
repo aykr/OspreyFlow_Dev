@@ -401,7 +401,7 @@ attributes in the realm and restores the account's attributes if it was created 
 `osprey-admin` role travels as one, and Keycloak discards it silently when they are off).
 
 **The sign-in page's look.** Keycloak's own sign-in page is restyled with the design system
-(`apps/workspace/src/design/tokens.css`) so the journey from launcher to workspace does not change
+(`packages/design/tokens.css`) so the journey from launcher to workspace does not change
 character in the middle. `apply` writes a Keycloak login theme beside the compose file
 (`keycloak-theme/osprey/`, from `harness/keycloak_theme.py`); compose mounts it into Keycloak
 beside, not over, Keycloak's own themes, and the realm names it (`loginTheme`) and calls itself

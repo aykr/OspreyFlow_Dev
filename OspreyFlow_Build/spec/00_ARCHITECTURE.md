@@ -123,7 +123,7 @@ result is a fully working map and geocoder with no account, no key, no network a
 procurement conversation. That matters beyond convenience: the demo, the acceptance scenarios and
 CI all run on tier 1, so the platform's tests never depend on someone's entitlement.
 
-Two MapLibre styles ship with it, dark and light, built against `design/tokens.css` rather than
+Two MapLibre styles ship with it, dark and light, built against `packages/design/tokens.css` rather than
 against a vendor's default palette. A basemap that fights the data palette is worse than no
 basemap — the nine entity channels have to stay the most saturated thing on screen, so the
 shipped styles are deliberately desaturated and sit on the neutral ramp.
@@ -884,7 +884,7 @@ OspreyFlow_Core/
 │   ├── investigation/          #   the case picker, switcher, datasets and Share panel (ADR-052)
 │   ├── rights/                 #   what the rail and views show for the caller's rights (ADR-112)
 │   ├── ingest/                 #   the Ingest Studio: dag/ (pipelines home and canvas), map/, verify/, publish/
-│   └── design/                 #   tokens.css, primitives
+│   └── design/                 #   the primitives (tokens.css is in packages/design, ADR-152)
 ├── services/
 │   ├── api/                    # The Conduit. FastAPI; the rule gate, held rows, screening, KYC, sweep
 │   ├── ingest/                 # Connectors, the engine, the pipeline runner, Knowledge Adapters
@@ -901,6 +901,7 @@ OspreyFlow_Core/
 │   │                           # recognise_spacy, recognise_transformers, media_objectstore
 │   ├── ontology/               # Schema definition (default.yaml, v16), packs, validation
 │   ├── schemas/                # Shared Pydantic + generated TypeScript types
+│   ├── design/                 # tokens.css, read by the React workspace and the pages (ADR-152)
 │   └── demo_fixtures/          # Synthetic fixtures (rule 9), e.g. Operation Ledger
 ├── connectors/ providers/      # Connector and map-provider profiles (YAML)
 ├── recipes/                    # Published ingest recipes — the repository is the record

@@ -28,11 +28,12 @@ same file with the new path clean.
 
 from __future__ import annotations
 
+import difflib
 import re
 import shutil
 import subprocess
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import pytest
@@ -234,6 +235,28 @@ def _move_commit() -> str | None:
     return out or None
 
 
+def more_than_the_path(paths: Iterable[str], was: Callable[[str], str], now: Callable[[str], str]) -> list[str]:
+    """The stamped files, of those named, that differ in more than the lines naming `tokens.css`."""
+    problems = []
+    for path in paths:
+        changes = [d for d in difflib.ndiff(was(path).splitlines(), now(path).splitlines()) if d[:2] in {"- ", "+ "}]
+        removed = sum(d[:2] == "- " for d in changes)
+        if not changes or removed * 2 != len(changes) or not all("tokens.css" in d for d in changes):
+            problems.append(f"{path}: {[d for d in changes if 'tokens.css' not in d] or 'lines added or removed'}")
+    return problems
+
+
+def test_a_stamped_file_changed_in_more_than_the_tokens_path_is_found() -> None:
+    """Red for the comparison above (rule 15): the entrance's real import line moved, once alone and once with a second
+    line changed beside it."""
+    old = 'import "../../../apps/workspace/src/design/tokens.css";\nimport "./app.css";\n'
+    moved = 'import "../../../packages/design/tokens.css";\nimport "./app.css";\n'
+    moved_and_more = 'import "../../../packages/design/tokens.css";\nimport "./other.css";\n'
+    assert more_than_the_path(["main.tsx"], lambda _: old, lambda _: moved) == []
+    assert len(more_than_the_path(["main.tsx"], lambda _: old, lambda _: moved_and_more)) == 1
+    assert len(more_than_the_path(["main.tsx"], lambda _: old, lambda _: old + "x\n")) == 1  # a line added
+
+
 def test_the_move_changed_no_stamped_byte_but_the_paths() -> None:
     """The stamp hashes each stamped file's path and its bytes. The owner accepts the new stamp on one condition: that
     the files stamped before the move and after it hold the same bytes, and only their paths differ. This lists both by
@@ -249,12 +272,17 @@ def test_the_move_changed_no_stamped_byte_but_the_paths() -> None:
     assert before[old_in_stamp] == after[new_in_stamp], "the tokens file's bytes changed in the move"
     gone, came = Counter(before.values()) - Counter(after.values()), Counter(after.values()) - Counter(before.values())
     differing = sorted({p for p, blob in before.items() if gone[blob]} | {p for p, blob in after.items() if came[blob]})
-    # The one stamped file whose bytes had to change is the harness entrance, by the one line that imports the tokens.
-    assert differing == ["apps/harness/src/main.tsx"], f"stamped files other than the entrance changed: {differing}"
-    was = _git("show", f"{commit}^:{_PRODUCT}apps/harness/src/main.tsx")
-    now = _git("show", f"{commit}:{_PRODUCT}apps/harness/src/main.tsx")
-    assert was.replace("../../../apps/workspace/src/design/tokens.css", "../../../packages/design/tokens.css") == now
-    assert Counter(p for p in after if p not in before) == Counter({new_in_stamp: 1}), "a stamped file other than the tokens appeared"
+    # A stamped file whose bytes had to change is one that names the tokens file: the harness entrance, and the Vitest
+    # readers in the stamped folders. In each, only the lines that name `tokens.css` differ, the same number each side.
+    assert "apps/harness/src/main.tsx" in differing, f"the harness entrance is not among the changed files: {differing}"
+    problems = more_than_the_path(
+        differing,
+        lambda path: _git("show", f"{commit}^:{_PRODUCT}{path}"),
+        lambda path: _git("show", f"{commit}:{_PRODUCT}{path}"),
+    )
+    assert problems == [], problems
+    assert set(after) - set(before) == {new_in_stamp}, "a stamped file other than the tokens appeared"
+    assert set(before) - set(after) == {old_in_stamp}, "a stamped file other than the tokens went"
 
 
 # The colour-drift check walked `apps/workspace/src` and left `design/tokens.css` out by name. With the file gone from
