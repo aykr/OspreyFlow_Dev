@@ -34,8 +34,8 @@ SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
 DESIGN_PATH = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 ALLOWLIST_PATH = REPO / "OspreyFlow_Build" / "tests" / "fixtures" / "colour_drift_allowlist.txt"
 
-#: Files that restate the tokens for the canvas, held to `tokens.css` by their own tests, by name relative to
-#: `SHARED_SRC` (where they moved from the Glass's own folder, PL4 slice D1).
+#: Files that restate the tokens for the canvas, held to `tokens.css` by their own tests, by name
+#: relative to `SHARED_SRC` (where they moved from the Glass's own folder, PL4 slice D1).
 MIRRORS = frozenset({"color/tokens.ts", "color/palette.ts"})
 #: The tokens themselves, by name relative to `DESIGN_PACKAGE`.
 TOKENS_FILES = frozenset({"tokens.css"})

@@ -90,9 +90,10 @@ def test_a_changed_source_makes_the_page_stale(tmp_path: Path) -> None:
 
 
 def test_a_changed_theme_module_in_the_shared_package_makes_the_page_stale(tmp_path: Path) -> None:
-    """The install page imports the theme, the brand and the statement from `packages/glass-shared/src` (PL4 slice D1:
-    they were under `apps/workspace/src`, and the theme's folder is still stamped). A page built before an edit to
-    one of them is not current; with that folder left out of the stamp, it would be."""
+    """The install page imports the theme, the brand and the statement from the shared package
+    (`packages/glass-shared/src`; PL4 slice D1: they were under `apps/workspace/src`, and the
+    theme's folder is still stamped). A page built before an edit to one of them is not current;
+    with that folder left out of the stamp, it would be."""
     root = _product(tmp_path)
     _built(root)
     assert page.is_current(root)
