@@ -448,7 +448,12 @@ function call(
   port: number,
   options: { method?: string; path: string; headers?: Record<string, string>; body?: Buffer | string },
 ): Promise<Reply> {
-  const c = open(port, options);
+  // Node's client sends a body with no length as chunked only for some methods; a whole body here has its length.
+  const headers = { ...options.headers };
+  if (options.body !== undefined && !Object.keys(headers).some((h) => h.toLowerCase() === "content-length")) {
+    headers["Content-Length"] = String(Buffer.byteLength(options.body));
+  }
+  const c = open(port, { ...options, headers });
   if (options.body !== undefined) c.req.write(options.body);
   c.end();
   return c.reply;
@@ -1109,9 +1114,10 @@ describe("a raw upload streams, and is capped as it goes", () => {
     const res = await c.reply;
     expect(res.status).toBe(413);
     expect(res.json()).toEqual({ detail: REFUSED_FILE });
-    await until("the Conduit's request to end", () => fake.last.aborted || fake.last.complete);
-    expect(fake.last.complete).toBe(false);
-    expect(fake.last.received).toBeLessThanOrEqual(1000);
+    // Cut at once, the Conduit may not even have been asked; if it was, it did not get a whole upload past the cap.
+    await sleep(150);
+    expect(fake.seen.some((s) => s.complete)).toBe(false);
+    expect(fake.seen.every((s) => s.received <= 1000)).toBe(true);
     // At the cap exactly, it is served.
     const exact = await call(pages.port, {
       method: "POST",
