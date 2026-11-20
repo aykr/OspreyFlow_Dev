@@ -41,6 +41,7 @@ import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadConfig } from "../../server/config.js";
+import { refusedTarget } from "../../server/forward.js";
 import type { IdentityProvider } from "../../server/identity.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { main } from "../../server/start.js";
@@ -99,6 +100,8 @@ interface Seen {
   rawHeaders: string[];
   received: number;
   sha256?: string;
+  /** The body, kept only while it is small (64 KiB), so a test can read what was sent on. */
+  bodyText: string;
   /** The whole body arrived. */
   complete: boolean;
   /** The connection went before the body or the response was finished. */
@@ -172,7 +175,7 @@ class FakeConduit {
 
   /** The whole of what the fake received, as one string to search. */
   everythingSeen(): string {
-    return JSON.stringify(this.seen.map((s) => ({ url: s.url, headers: s.headers })));
+    return JSON.stringify(this.seen.map((s) => ({ url: s.url, headers: s.headers, body: s.bodyText })));
   }
 
   private json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
@@ -193,6 +196,7 @@ class FakeConduit {
       headers: req.headers,
       rawHeaders: req.rawHeaders,
       received: 0,
+      bodyText: "",
       complete: false,
       aborted: false,
       clientGone: false,
@@ -239,6 +243,7 @@ class FakeConduit {
 
     req.on("data", (chunk: Buffer) => {
       seen.received += chunk.length;
+      if (seen.received <= 64 * 1024) seen.bodyText += chunk.toString("latin1");
       hash.update(chunk);
       if (raw && seen.received > this.uploadCap) answer(413, { detail: REFUSED_FILE });
     });
@@ -830,14 +835,30 @@ describe("anti-forgery on /v1", () => {
         body: "{}",
       });
       expect(wrong.status, method).toBe(403);
-      // The token in a urlencoded form field is for page forms; on /v1 only the header counts.
+      // A urlencoded form carries the token as `_csrf`; a wrong one is refused like a wrong header.
       const inForm = await call(pages.port, {
         method,
         path: "/v1/ok",
         headers: pages.browser(person, { "Content-Type": "application/x-www-form-urlencoded" }),
-        body: `_csrf=${encodeURIComponent(person.csrf)}`,
+        body: `_csrf=${encodeURIComponent(generateSecret(43))}`,
       });
       expect(inForm.status, method).toBe(403);
+      // No token at all in a form is refused too.
+      const bare = await call(pages.port, {
+        method,
+        path: "/v1/ok",
+        headers: pages.browser(person, { "Content-Type": "application/x-www-form-urlencoded" }),
+        body: "a=1",
+      });
+      expect(bare.status, method).toBe(403);
+      // A wrong header is not rescued by a right form field.
+      const mixed = await call(pages.port, {
+        method,
+        path: "/v1/ok",
+        headers: pages.browser(person, { "Content-Type": "application/x-www-form-urlencoded", "X-CSRF-Token": generateSecret(43) }),
+        body: `_csrf=${encodeURIComponent(person.csrf)}`,
+      });
+      expect(mixed.status, method).toBe(403);
     }
     expect(fake.tcp).toBe(0);
     // The page routes keep their own HTML refusal.
@@ -870,25 +891,118 @@ describe("anti-forgery on /v1", () => {
     expect(echoed.text).not.toContain(person.csrf);
   });
 
-  it("a multipart post carries the token in the header only: the form field cannot be read from a multipart body", async () => {
+  it("a multipart post carries the token as its first part, or in the header", async () => {
+    const { fake, pages, person } = await started();
+    const route = "/v1/investigations/inv-1/documents";
+    const parts = (first: Part[]): Part[] => [
+      ...first,
+      { name: "classification", value: "OFFICIAL" },
+      { name: "legal_basis", value: "synthetic" },
+      { name: "file", filename: "a.txt", data: Buffer.from("hello"), contentType: "text/plain" },
+    ];
+    const post = (form: { contentType: string; body: Buffer }, csrf: boolean) =>
+      call(pages.port, { method: "POST", path: route, headers: pages.browser(person, { "Content-Type": form.contentType }, csrf), body: form.body });
+
+    // The first part, no header: the way a scripts-off form can send it.
+    const inField = multipart(parts([{ name: "_csrf", value: person.csrf }]));
+    expect((await post(inField, false)).status).toBe(201);
+    expect(fake.tcp).toBe(1);
+    // The header, no field.
+    expect((await post(multipart(parts([])), true)).status).toBe(201);
+    expect(fake.tcp).toBe(2);
+    // Neither, a wrong field, a field that is not the first part, and a wrong header with a right field: all 403, the Conduit untouched.
+    const refused: Array<[string, { contentType: string; body: Buffer }, boolean]> = [
+      ["no token", multipart(parts([])), false],
+      ["a wrong token", multipart(parts([{ name: "_csrf", value: generateSecret(43) }])), false],
+      ["an empty token", multipart(parts([{ name: "_csrf", value: "" }])), false],
+      ["the token as the second part", multipart([{ name: "classification", value: "OFFICIAL" }, { name: "_csrf", value: person.csrf }, ...parts([]).slice(1)]), false],
+      ["the token after the file", multipart([...parts([]).slice(1), { name: "_csrf", value: person.csrf }]), false],
+    ];
+    for (const [what, form, csrf] of refused) {
+      const res = await post(form, csrf);
+      expect(res.status, what).toBe(403);
+      expect(typeof res.json()["detail"], what).toBe("string");
+    }
+    const wrongHeader = await call(pages.port, {
+      method: "POST",
+      path: route,
+      headers: pages.browser(person, { "Content-Type": inField.contentType, "X-CSRF-Token": generateSecret(43) }),
+      body: inField.body,
+    });
+    expect(wrongHeader.status).toBe(403);
+    expect(fake.tcp).toBe(2);
+  });
+
+  it("a multipart post with a wrong or missing token is refused before any byte of the file is read", async () => {
+    const { fake, pages, person } = await started();
+    const headOf = (form: { body: Buffer }): Buffer =>
+      form.body.subarray(0, form.body.indexOf(Buffer.from("\r\n\r\n", "latin1"), form.body.indexOf("filename=")) + 4);
+    const file = { name: "file", filename: "big.bin", data: randomBytes(4096) };
+    // The control: with the right token as the first part, the call goes on and waits for the file's bytes.
+    const good = multipart([{ name: "_csrf", value: person.csrf }, file]);
+    const waiting = open(pages.port, { method: "POST", path: RAW_ROUTES[3].path, headers: pages.browser(person, { "Content-Type": good.contentType }) });
+    await waiting.write(headOf(good));
+    await until("the call to be begun at the Conduit", () => fake.seen.length === 1);
+    waiting.req.destroy();
+
+    for (const first of [{ name: "_csrf", value: generateSecret(43) }, { name: "classification", value: "OFFICIAL" }]) {
+      const form = multipart([first, file]);
+      const c = open(pages.port, { method: "POST", path: RAW_ROUTES[3].path, headers: pages.browser(person, { "Content-Type": form.contentType }) });
+      // Everything up to the file's first byte is sent; the file's bytes and the end of the form never are.
+      await c.write(headOf(form));
+      expect((await c.reply).status).toBe(403);
+    }
+    expect(fake.seen).toHaveLength(1);
+  });
+
+  it("a urlencoded form: `_csrf` is the token, and it is removed from what is forwarded; the rest of the body is unchanged", async () => {
+    const { fake, pages, person } = await started();
+    const rest = "a=1&b=%C3%A9+x&empty=&a=2";
+    const bodies = [
+      `_csrf=${encodeURIComponent(person.csrf)}&${rest}`,
+      `a=1&b=%C3%A9+x&_csrf=${encodeURIComponent(person.csrf)}&empty=&a=2`,
+      `${rest}&%5Fcsrf=${encodeURIComponent(person.csrf)}`,
+    ];
+    for (const body of bodies) {
+      for (const csrf of [false, true]) {
+        const res = await call(pages.port, {
+          method: "POST",
+          path: "/v1/echo/form",
+          headers: pages.browser(person, { "Content-Type": "application/x-www-form-urlencoded" }, csrf),
+          body,
+        });
+        expect(res.status, body).toBe(200);
+        expect(fake.last.bodyText, body).toBe(rest);
+        expect(fake.last.headers["content-length"], body).toBe(String(rest.length));
+        expect(fake.everythingSeen(), body).not.toContain(person.csrf);
+        expect(fake.everythingSeen(), body).not.toContain(encodeURIComponent(person.csrf));
+      }
+    }
+  });
+
+  it("the token is never forwarded: not in a header, a body, or the query, whichever way it arrived", async () => {
     const { fake, pages, person } = await started();
     const form = multipart([
       { name: "_csrf", value: person.csrf },
       { name: "classification", value: "OFFICIAL" },
-      { name: "legal_basis", value: "synthetic" },
-      { name: "file", filename: "a.txt", data: Buffer.from("hello"), contentType: "text/plain" },
+      { name: "file", filename: "a.txt", data: Buffer.from("hello") },
     ]);
-    const route = "/v1/investigations/inv-1/documents";
-    const inField = await call(pages.port, { method: "POST", path: route, headers: pages.browser(person, { "Content-Type": form.contentType }), body: form.body });
-    expect(inField.status).toBe(403);
-    expect(fake.tcp).toBe(0);
-    const inHeader = await call(pages.port, { method: "POST", path: route, headers: pages.browser(person, { "Content-Type": form.contentType }, true), body: form.body });
-    expect(inHeader.status).toBe(201);
-    expect(fake.tcp).toBe(1);
+    for (const csrf of [false, true]) {
+      const res = await call(pages.port, { method: "POST", path: RAW_ROUTES[3].path, headers: pages.browser(person, { "Content-Type": form.contentType }, csrf), body: form.body });
+      expect(res.status).toBe(201);
+      const params = new URLSearchParams(fake.last.query);
+      expect([...params.keys()].sort()).toEqual(["classification", "name"]);
+      expect(fake.last.bodyText).toBe("hello");
+    }
+    // A header, on a JSON call.
+    await call(pages.port, { method: "POST", path: "/v1/echo/json", headers: pages.browser(person, JSON_HEADERS, true), body: "{}" });
+    expect(fake.everythingSeen()).not.toContain(person.csrf);
+    expect(fake.everythingSeen()).not.toContain(encodeURIComponent(person.csrf));
+    expect(fake.seen.every((s) => s.headers["x-csrf-token"] === undefined)).toBe(true);
   });
 });
 
-describe("path hygiene: the raw path is matched before anything decodes or tidies it", () => {
+describe("path hygiene: the path is decoded once, made canonical, checked, and forwarded as checked", () => {
   const refused = [
     ["an encoded dot segment", "/v1/investigations/%2e%2e/x"],
     ["an encoded dot segment in capitals", "/v1/investigations/%2E%2E/x"],
@@ -901,7 +1015,28 @@ describe("path hygiene: the raw path is matched before anything decodes or tidie
     ["a single dot segment", "/v1/investigations/./x"],
     ["a double slash", "/v1/investigations//x"],
     ["an encoded NUL", "/v1/investigations/a%00b"],
-    ["an encoded NUL in the query", "/v1/ok?name=a%00b"],
+    ["an encoded CR", "/v1/investigations/a%0db"],
+    ["an encoded LF", "/v1/investigations/a%0Ab"],
+    ["a path parameter", "/v1/investigations/a;b/x"],
+    ["a path parameter at the end", "/v1/ok;jsessionid=1"],
+    ["an encoded path parameter", "/v1/investigations/a%3Bb/x"],
+    ["a letter encoded in the ticket route's name", "/v1/ws-t%69cket"],
+    ["a letter encoded in the ticket route, with a trailing slash", "/v1/ws-t%69cket/"],
+    ["a capital encoded in the ticket route's name", "/v1/ws-%54icket"],
+    ["a double-encoded letter in the ticket route", "/v1/ws-t%2569cket"],
+    ["a double-encoded letter anywhere", "/v1/echo/%2569"],
+    ["a double-encoded percent", "/v1/echo/%2541"],
+    ["a letter encoded in the stream's path", "/v1/investigations/inv-1/str%65am"],
+    ["a letter encoded in /v1 under the stream's id", "/v1/investigations/%69nv-1/stream/"],
+    ["the ticket route in mixed case", "/v1/Ws-Ticket"],
+    ["the ticket route in capitals with a trailing slash", "/v1/WS-TICKET/"],
+    ["the stream's path in capitals", "/v1/investigations/inv-1/STREAM"],
+    ["the stream's path in mixed case with a trailing slash", "/v1/Investigations/inv-1/Stream/"],
+    ["a malformed escape", "/v1/echo/%zz"],
+    ["a malformed escape at the end", "/v1/echo/a%"],
+    ["a byte sequence that is not UTF-8", "/v1/echo/%ff%fe"],
+    ["a path parameter after the stream's name", "/v1/investigations/inv-1/stream;x=1"],
+    ["a dot segment, encoded, in the ticket route", "/v1/%2e/ws-ticket"],
     ["the stream's path, which CO3 owns", "/v1/investigations/inv-1/stream"],
     ["the stream's path with a trailing slash", "/v1/investigations/inv-1/stream/"],
     ["the ticket route, pointless once the page service holds the bearer", "/v1/ws-ticket"],
@@ -939,6 +1074,54 @@ describe("path hygiene: the raw path is matched before anything decodes or tidie
     expect(res.status).toBe(404);
     expect(res.headers["content-type"]).toMatch(/application\/json/);
     expect(String(res.json()["detail"]).length).toBeGreaterThan(10);
+  });
+
+  it("hex in any case is decoded once: what is checked is what the Conduit is sent", async () => {
+    const { fake, pages, person } = await started();
+    const cases: Array<[string, string]> = [
+      ["/v1/echo/f%6Fo", "/v1/echo/foo"],
+      ["/v1/echo/f%6fo", "/v1/echo/foo"],
+      ["/v1/echo/%41", "/v1/echo/A"],
+      ["/v1/echo/a%20b", "/v1/echo/a%20b"],
+      ["/v1/echo/caf%C3%A9", "/v1/echo/caf%C3%A9"],
+      ["/v1/echo/caf%c3%a9", "/v1/echo/caf%C3%A9"],
+      ["/v1/echo/50%25", "/v1/echo/50%25"],
+      ["/v1/echo/a%3Fb%23c", "/v1/echo/a%3Fb%23c"],
+      ["/v1/echo/a%3ab%40c", "/v1/echo/a:b@c"],
+      ["/v1/echo/", "/v1/echo/"],
+      ["/v1/ws-ticket-not", "/v1/ws-ticket-not"],
+      ["/v1/investigations/inv-1/streams", "/v1/investigations/inv-1/streams"],
+    ];
+    for (const [sent, expected] of cases) {
+      const res = await call(pages.port, { path: sent, headers: pages.browser(person) });
+      expect(res.status, sent).toBe(200);
+      expect(fake.last.path, sent).toBe(expected);
+    }
+    // The control for the refusals above: only the encoded spelling of a deny-listed name was refused, not the name's neighbours.
+    expect(fake.seen).toHaveLength(cases.length);
+  });
+
+  it("the query string is not path: it arrives as sent, an encoded slash, dot, backslash or NUL included", async () => {
+    const { fake, pages, person } = await started();
+    const sent = "/v1/investigations/inv-1/documents?name=a.txt&classification=OFFICIAL&legal_basis=IPA%202016%20s.61%2F62";
+    const res = await call(pages.port, { method: "POST", path: sent, headers: pages.browser(person, { "Content-Type": "application/octet-stream" }, true), body: "hello" });
+    expect(res.status).toBe(201);
+    expect(fake.last.url).toBe(sent);
+    expect(new URLSearchParams(fake.last.query).get("legal_basis")).toBe("IPA 2016 s.61/62");
+    for (const query of ["who=a%5Cb", "dir=%2e%2e%2fx", "p=%2E", "x=a%00b", "y=%252f"]) {
+      const got = await call(pages.port, { path: `/v1/echo/q?${query}`, headers: pages.browser(person) });
+      expect(got.status, query).toBe(200);
+      expect(fake.last.url, query).toBe(`/v1/echo/q?${query}`);
+    }
+  });
+
+  it("refuses a raw NUL, CR or LF in the query, and nothing else of it (the function, since Node's parser stops these first)", () => {
+    for (const bad of ["a\0b", "a\rb", "a\nb"]) {
+      expect(refusedTarget(`/v1/ok?x=${bad}`), JSON.stringify(bad)).toBeDefined();
+    }
+    expect(refusedTarget("/v1/ok?x=a%2Fb%5Cc%2e%00")).toBeUndefined();
+    expect(refusedTarget("/v1/ok?")).toBeUndefined();
+    expect(refusedTarget("/v1/ok?x=1?y=2")).toBeUndefined();
   });
 
   it("answers 405 for a method it does not carry, and never contacts the Conduit", async () => {
@@ -1376,7 +1559,7 @@ describe("the token, the cookie and the session id are in no response, no header
       const b = await pages.signIn("b");
       const [cookieValue = ""] = a.cookie.slice(a.cookie.indexOf("=") + 1).split(";");
       const sessionId = decodeURIComponent(cookieValue).slice(2).split(".")[0] ?? "";
-      secrets = [a.accessToken, b.accessToken, cookieValue, decodeURIComponent(cookieValue), sessionId, TEST_SESSION_SECRET];
+      secrets = [a.accessToken, b.accessToken, a.csrf, cookieValue, decodeURIComponent(cookieValue), sessionId, TEST_SESSION_SECRET];
       expect(sessionId).toHaveLength(43);
 
       // The session cookie the service itself re-issues on a response (a rolling session, PL3) is the one thing
@@ -1406,6 +1589,16 @@ describe("the token, the cookie and the session id are in no response, no header
       note(await call(pages.port, { method: "POST", path: `${RAW_ROUTES[3].path}?name=a.txt`, headers: as(a, true), body: Buffer.alloc(100) }));
       const form = multipart([{ name: "file", filename: "a.txt", data: Buffer.from("x") }]);
       note(await call(pages.port, { method: "POST", path: "/v1/investigations/inv-1/sites", headers: { ...as(a, true), "Content-Type": form.contentType }, body: form.body }));
+      // The anti-forgery token as a form carries it: a urlencoded field, a multipart first part, right and wrong.
+      const urlencoded = { ...as(a), "Content-Type": "application/x-www-form-urlencoded" };
+      note(await call(pages.port, { method: "POST", path: "/v1/ok", headers: urlencoded, body: `_csrf=${encodeURIComponent(a.csrf)}&k=1` }));
+      note(await call(pages.port, { method: "POST", path: "/v1/ok", headers: urlencoded, body: `_csrf=${encodeURIComponent(b.csrf)}&k=1` }));
+      const tokenForm = (token: string) =>
+        multipart([{ name: "_csrf", value: token }, { name: "file", filename: "a.txt", data: Buffer.from("x") }]);
+      for (const token of [a.csrf, b.csrf]) {
+        const f = tokenForm(token);
+        note(await call(pages.port, { method: "POST", path: RAW_ROUTES[3].path, headers: { ...as(a), "Content-Type": f.contentType }, body: f.body }));
+      }
       await fake.stop();
       fakes.splice(fakes.indexOf(fake), 1);
       note(await call(pages.port, { path: "/v1/ok", headers: as(a) }));
@@ -1414,7 +1607,7 @@ describe("the token, the cookie and the session id are in no response, no header
       captured.restore();
     }
     const everything = `${seen.join("\n")}\n${captured.text()}\n${(pagesIo?.logs ?? []).join("\n")}\n${(pagesIo?.errors ?? []).join("\n")}`;
-    expect(seen.length).toBeGreaterThanOrEqual(12);
+    expect(seen.length).toBeGreaterThanOrEqual(16);
     const found: string[] = [];
     for (const secret of secrets) {
       for (const form of [secret, encodeURIComponent(secret), Buffer.from(secret).toString("base64"), Buffer.from(secret).toString("base64url")]) {
@@ -1457,6 +1650,18 @@ describe("the settings, and the service that refuses to start in words", () => {
     }
     // At 1 it starts.
     const ok = await startRefused({ OSPREY_PAGES_CONDUIT_URL: "http://api:8000", OSPREY_PAGES_PUBLIC_ORIGIN: ORIGIN, [name]: "1" });
+    expect(ok.exits).toEqual([]);
+    expect(ok.result).toBeDefined();
+  });
+
+  it("with the Conduit's address set and no public origin the service refuses to start, in words (CO3's refusal stays; the forwarder itself reads no origin)", async () => {
+    const said = await startRefused({ OSPREY_PAGES_CONDUIT_URL: "http://api:9" });
+    expect(said.result).toBeUndefined();
+    expect(said.exits).toEqual([1]);
+    expect(said.errors.join("\n")).toContain("OSPREY_PAGES_PUBLIC_ORIGIN");
+    expect(said.logs.join("\n")).not.toMatch(/listening/);
+    // With the address unset the origin is not asked for.
+    const ok = await startRefused({});
     expect(ok.exits).toEqual([]);
     expect(ok.result).toBeDefined();
   });
