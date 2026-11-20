@@ -336,3 +336,10 @@ The owner's word, 18 November 2026, on the verifier's findings for BL6 round 2:
 - **Deferred:** GG2's scope and the I12 thresholds, until GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go to the owner then.
 - **Slice A of PL4 may start** (Amendment 1 is on main, 2bcee28); its baseline is taken on main as it is after GG6 with nothing else running at that moment.
   `FUNCTIONS.yaml` follows the owner's rulings of 20 November, not any older text (row 517 is a function, PL8).
+
+## 20 November 2026, AD1a rounds 7 to 9 and the virtual-key listing (the owner)
+
+- **Row 36:** start-up never lists or reads the gateway's credentials (the listing returns the first and last two characters of each key). A key is never shown back, to a person or to the product. Instead a note of intent is saved before any credential is deleted or stored and cleared when the change is complete; start-up marks unavailable every engine with a note outstanding. The specification was corrected to this (ADR-135 Amendment 14 point 9).
+- **Rounds 7 and 8** closed rows 28, 40, 36, 41, 21. **Round 8 stopped** with two audit-name rows open (42: the edit path's failed rotation has no `key_rotated` row; 43: `set_key` on an engine marked unavailable names its failure `key_set`). No key is at risk on either. **Round 9 (one round)** on those two rows; if either is open afterwards AD1a stops and goes to the owner, who then decides between a further round and accepting it with the two rows named in the release notes.
+- **N4:** yes. Start-up may keep the gateway's listing of its own virtual keys (`GET /key/list`), because it holds hashed tokens and no key material. The specification says so beside the row-36 ruling, and a test shows nothing from that listing reaches a log, an answer or the audit.
+- AD1a stays unmerged until AD1b is verified, in any case.
