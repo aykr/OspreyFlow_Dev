@@ -8,7 +8,7 @@
 // decision 13).
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { LinkTypeError, type ProposalStatus } from "./linkTypesApi";
 import { decideModelProposal, listModelProposals, type ModelProposal } from "./modelProposalsApi";
 

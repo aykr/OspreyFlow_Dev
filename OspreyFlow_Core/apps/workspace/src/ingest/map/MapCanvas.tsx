@@ -14,8 +14,7 @@ import Sigma from "sigma";
 import { useEffect, useRef, useState } from "react";
 
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
-import { activePalette } from "../../color/palette";
-import { onThemeChange } from "../../theme/theme";
+import { activePalette, onThemeChange } from "@ospreyflow/glass-shared";
 import { mapCanvasColours } from "./mapCanvasColours";
 import { syncTemplateGraph } from "./mapGraphSync";
 

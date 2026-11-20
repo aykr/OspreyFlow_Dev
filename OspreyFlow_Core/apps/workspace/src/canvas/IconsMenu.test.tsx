@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EntityTypeDef } from "../../../../packages/schemas/generated";
-import { GLYPH_NAMES } from "../color/nodeGlyphs";
+import { GLYPH_NAMES } from "@ospreyflow/glass-shared";
 import { ICON_CHOICES_KEY, forgetIconChoicesForTest, getIconChoices } from "./iconChoices";
 import { IconsMenu } from "./IconsMenu";
 

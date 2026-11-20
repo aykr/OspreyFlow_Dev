@@ -5,7 +5,7 @@
 // no crown, no Crown copyright and no Open Government Licence line, and on the workspace's own screens
 // (`slim`) the footer is one line of the same words and links. On gov.uk it is the full footer as
 // before, wherever it is drawn.
-import { currentBrand } from "../brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 
 function SupportLinks() {
   return (

@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { applyTheme, currentTheme, readStoredTheme } from "./theme";
+import { applyTheme, currentTheme, readStoredTheme } from "@ospreyflow/glass-shared";
 import { ThemeToggle } from "./ThemeToggle";
 
 beforeEach(() => {

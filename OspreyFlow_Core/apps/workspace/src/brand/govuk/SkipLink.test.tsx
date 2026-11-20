@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyBrand, type Brand } from "../brand";
+import { applyBrand, type Brand } from "@ospreyflow/glass-shared";
 import { SkipLink } from "./SkipLink";
 
 afterEach(() => {

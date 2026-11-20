@@ -131,8 +131,16 @@ import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
 import { JudgementBadgeOverlay, type NodeBadge } from "./JudgementBadgeOverlay";
 import { AlertBadgeOverlay } from "../reports/alertBadges";
-import { activePalette } from "../color/palette";
-import { onThemeChange } from "../theme/theme";
+import {
+  activePalette,
+  onThemeChange,
+  outcomeDeltas,
+  type ClusterExplanation,
+  type ExpansionOutcome,
+  type LimitExceeded,
+  type ResolutionOutcome,
+  type WorkingSetDelta,
+} from "@ospreyflow/glass-shared";
 import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
 import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
@@ -172,7 +180,6 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import { outcomeDeltas, type ClusterExplanation, type ExpansionOutcome, type LimitExceeded, type ResolutionOutcome, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,

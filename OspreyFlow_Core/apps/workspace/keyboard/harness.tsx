@@ -12,7 +12,7 @@ import { createRef, StrictMode, useEffect, useState } from "react";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import { applyTheme } from "../src/theme/theme";
+import { applyTheme, createWorkingSet } from "@ospreyflow/glass-shared";
 import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { SelectionList } from "../src/inspector/SelectionList";
@@ -26,7 +26,6 @@ import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 import { AskPage } from "../src/questions/AskPage";
 import { useAskPage } from "../src/questions/useAskPage";
 import { Timeline } from "../src/timeline/Timeline";
-import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
 import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
 import { loadLookFaces } from "./lookFaces";

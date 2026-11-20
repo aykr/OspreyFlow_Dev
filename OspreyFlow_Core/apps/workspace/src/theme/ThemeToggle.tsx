@@ -1,8 +1,14 @@
 import { useEffect, useState } from "react";
 
-import { currentBrand } from "../brand/brand";
+import {
+  currentBrand,
+  applyTheme,
+  currentTheme,
+  onThemeChange,
+  storeTheme,
+  type Theme,
+} from "@ospreyflow/glass-shared";
 import { IconButton } from "../design/primitives/IconButton";
-import { applyTheme, currentTheme, onThemeChange, storeTheme, type Theme } from "./theme";
 
 /** The light / dark switch (ADR-070, ADR-073): an icon of its own in every top bar (ADR-115
  * Amendment 1, which moved it out of the account menu), and a worded button where there is no bar. One worded button, drawn like its neighbours. Its words name the

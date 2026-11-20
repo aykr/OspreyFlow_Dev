@@ -5,8 +5,7 @@
 // canvas it is painted on, in either theme.
 import { describe, expect, it } from "vitest";
 
-import { oklabLightness } from "../../color/oklab";
-import { paletteFor } from "../../color/palette";
+import { oklabLightness, paletteFor } from "@ospreyflow/glass-shared";
 import { mapCanvasColours, mapNodeColour } from "./mapCanvasColours";
 
 const VISUAL = { channel: "ochre" };

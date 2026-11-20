@@ -38,7 +38,8 @@ def _product(tmp_path: Path) -> Path:
         "packages/design/tokens.css": ":root{}",
         "packages/design/primitives.css": ".btn{}",
         "apps/workspace/src/design/primitives/Button.tsx": "export const Button = 1;\n",
-        "apps/workspace/src/theme/theme.ts": "export const t = 1;\n",
+        "apps/workspace/src/theme/ThemeToggle.tsx": "export const t = 1;\n",
+        "packages/glass-shared/src/theme/theme.ts": "export const t = 1;\n",
         "apps/workspace/src/other/not-a-source.ts": "x",
     }.items():
         target = root / path
@@ -85,6 +86,20 @@ def test_a_changed_source_makes_the_page_stale(tmp_path: Path) -> None:
     root = _product(tmp_path)
     _built(root)
     (root / "packages/design/tokens.css").write_text(":root{--x:1}", encoding="utf-8")
+    assert not page.is_current(root)
+
+
+def test_a_changed_theme_module_in_the_shared_package_makes_the_page_stale(tmp_path: Path) -> None:
+    """The install page imports the theme, the brand and the statement from the shared package
+    (`packages/glass-shared/src`; PL4 slice D1: they were under `apps/workspace/src`, and the
+    theme's folder is still stamped). A page built before an edit to one of them is not current;
+    with that folder left out of the stamp, it would be."""
+    root = _product(tmp_path)
+    _built(root)
+    assert page.is_current(root)
+    (root / "packages/glass-shared/src/theme/theme.ts").write_text(
+        "export const t = 2;\n", encoding="utf-8"
+    )
     assert not page.is_current(root)
 
 

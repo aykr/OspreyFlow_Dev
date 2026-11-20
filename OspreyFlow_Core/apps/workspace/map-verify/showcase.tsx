@@ -17,12 +17,10 @@ import type { BackgroundLayerSpecification, FillLayerSpecification, LineLayerSpe
 
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
-import { activePalette } from "../src/color/palette";
-import { contrastRatio as contrast } from "@ospreyflow/glass-shared";
+import { activePalette, applyTheme, contrastRatio as contrast } from "@ospreyflow/glass-shared";
 import { BasemapSwitch, PlaceSearch } from "../src/map/MapControls";
 import { overlayColours } from "../src/map/overlayColours";
 import { buildBundledDarkStyle } from "../src/map/style";
-import { applyTheme } from "../src/theme/theme";
 import type { PublicMapProvider } from "../../../packages/schemas/generated";
 import { applyHarnessBrand } from "../keyboard/brandHarness";
 

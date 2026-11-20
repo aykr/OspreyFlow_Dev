@@ -1,32 +1,14 @@
-// The right panel's mode, shared (ADR-115 E4): the panel's own buttons and the canvas toolbar's
-// *Details* toggle change the same thing. At a viewport of 1200px or wider it starts docked and open;
-// below, it starts closed and opens as an overlay (DESIGN.md v0.3 §5a). Kept for the page only.
+// The hooks over the right panel's mode (ADR-115 E4) and over whether the viewport is wide enough to dock it. The mode,
+// its setters and `isWide` are plain TypeScript in `packages/glass-shared` (`layout/sidePanelState.ts`, since ADR-152
+// decision 6), so a page that is not React shares them.
 import { useSyncExternalStore } from "react";
 
-export type SidePanelMode = "normal" | "collapsed" | "full";
-export const DOCK_BREAKPOINT = 1200;
-
-const listeners = new Set<() => void>();
-let mode: SidePanelMode | null = null;
-
-export function isWide(): boolean {
-  return typeof window === "undefined" || window.innerWidth >= DOCK_BREAKPOINT;
-}
-
-function current(initial: SidePanelMode): SidePanelMode {
-  if (mode === null) mode = isWide() ? initial : "collapsed";
-  return mode;
-}
-
-export function setSidePanelMode(next: SidePanelMode): void {
-  if (mode === next) return;
-  mode = next;
-  listeners.forEach((listener) => listener());
-}
-
-export function toggleSidePanel(): void {
-  setSidePanelMode(current("normal") === "collapsed" ? "normal" : "collapsed");
-}
+import {
+  currentSidePanelMode as current,
+  isWide,
+  sidePanelListeners as listeners,
+  type SidePanelMode,
+} from "@ospreyflow/glass-shared";
 
 export function useSidePanelMode(initial: SidePanelMode = "normal"): SidePanelMode {
   return useSyncExternalStore(
@@ -47,10 +29,4 @@ export function useWide(): boolean {
     },
     isWide,
   );
-}
-
-/** For tests: forget the mode, so the next panel starts afresh for the viewport. */
-export function forgetSidePanelForTest(): void {
-  mode = null;
-  listeners.forEach((listener) => listener());
 }

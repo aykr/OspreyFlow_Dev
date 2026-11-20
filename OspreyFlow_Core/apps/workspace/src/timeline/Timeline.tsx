@@ -32,7 +32,14 @@ import {
 import { CanvasRenderer } from "echarts/renderers";
 import { useEffect, useRef, useState } from "react";
 
-import { getLayoutSizes, setTimelineHeight } from "../layout/layoutSizes";
+import {
+  getLayoutSizes,
+  setTimelineHeight,
+  activePalette,
+  currentTheme,
+  onThemeChange,
+  type Theme,
+} from "@ospreyflow/glass-shared";
 
 import type {
   Histogram,
@@ -41,8 +48,6 @@ import type {
 import { fetchCaseEvents, fetchHistogram } from "../analytics/api";
 import { publishTimelineSummary } from "./timelineSummary";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
-import { activePalette } from "../color/palette";
-import { currentTheme, onThemeChange, type Theme } from "../theme/theme";
 import { buildEventFilter, type CrossFilterStore, type WeekdayHourCell } from "../crossfilter/store";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";

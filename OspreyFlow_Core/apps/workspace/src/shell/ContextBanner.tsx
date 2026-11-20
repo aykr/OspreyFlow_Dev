@@ -18,7 +18,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { CaseStateItems, SavedViewDetails, type CaseState } from "../views/SavedViewOnTheLine";
 import { caseDatasets, caseLabel, listCases } from "../investigation/cases";
 import { PLACE_NAME, type PlaceId } from "./places";

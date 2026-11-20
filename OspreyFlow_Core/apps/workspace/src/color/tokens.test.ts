@@ -15,7 +15,8 @@ import {
   SURFACE_SUNKEN_DARK_HEX,
   TEXT_PRIMARY_DARK_HEX,
   TEXT_SECONDARY_DARK_HEX,
-} from "./tokens";
+  paletteFor,
+} from "@ospreyflow/glass-shared";
 
 // Parses `tokens.css` directly — this is the enforcement half of
 // `tokens.ts`'s "kept in sync by hand, cross-checked here" contract.
@@ -89,7 +90,6 @@ describe("CHANNEL_HEX matches spec/design/tokens.css (dark theme)", () => {
 
 // Light theme (ADR-070): the palette the canvas and the charts use when the page is light must be
 // the light block of tokens.css, not a copy that drifts.
-import { paletteFor } from "./palette";
 
 function lightBlock(css: string): string {
   const start = css.indexOf('[data-theme="light"]');

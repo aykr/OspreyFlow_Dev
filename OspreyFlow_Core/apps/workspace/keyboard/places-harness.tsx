@@ -22,7 +22,7 @@ import { applyHarnessBrand } from "./brandHarness";
 import { loadLookFaces } from "./lookFaces";
 import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
-import { PLAIN_APPEARANCE } from "../src/brand/brand";
+import { PLAIN_APPEARANCE } from "@ospreyflow/glass-shared";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { ContextBanner, crossLinkFor } from "../src/shell/ContextBanner";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";

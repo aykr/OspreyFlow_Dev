@@ -14,8 +14,17 @@
 // to move a panel to the top must not throw their focus away as its own result.
 import { useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 
-import { MIN_PANEL_HEIGHT, resetPanelHeight, setPanelHeight, useLayoutSizes } from "./layoutSizes";
-import { moveSidePanel, moveSidePanelTo, SIDE_PANEL_IDS, useSidePanelOrder, type SidePanelId } from "./panelOrder";
+import {
+  MIN_PANEL_HEIGHT,
+  resetPanelHeight,
+  setPanelHeight,
+  moveSidePanel,
+  moveSidePanelTo,
+  SIDE_PANEL_IDS,
+  type SidePanelId,
+} from "@ospreyflow/glass-shared";
+import { useLayoutSizes } from "./layoutSizes";
+import { useSidePanelOrder } from "./panelOrder";
 import { Sash } from "./Sash";
 
 export interface SidePanelSlot {

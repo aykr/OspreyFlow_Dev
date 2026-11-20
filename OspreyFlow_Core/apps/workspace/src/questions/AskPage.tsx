@@ -6,7 +6,7 @@
 // question typed, the engine chosen and its answers go with it, and the scroll is kept on the item at its top.
 import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { useTopUnderTheChrome } from "../design/primitives/Drawer";
 import type { AskForm } from "./useAskPage";
 import "./askPage.css";

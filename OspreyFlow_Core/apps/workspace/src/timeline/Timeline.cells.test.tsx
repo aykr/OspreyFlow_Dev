@@ -151,7 +151,7 @@ describe("the weekly view's Choose cells control", () => {
 // the analyst has made taller.
 describe("the weekly view's height", () => {
   it("grows a timeline too short for the grid, and leaves a taller one as it is", async () => {
-    const { getLayoutSizes, setTimelineHeight } = await import("../layout/layoutSizes");
+    const { getLayoutSizes, setTimelineHeight } = await import("@ospreyflow/glass-shared");
     const { CYCLICAL_TIMELINE_HEIGHT } = await import("./Timeline");
     setTimelineHeight(130);
     mount();

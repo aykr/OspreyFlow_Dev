@@ -2,8 +2,8 @@
 
 `theme_cookie.js`, beside this file, is one small script. The launcher's welcome page carries it in
 its head and Keycloak's sign-in theme ships it as a file; the Glass and the setup harness do the
-same job in `apps/workspace/src/theme/theme.ts`. All of them read and write one cookie, which is how
-a choice made on one page (they are on different ports of one host) reaches the others.
+same job in `packages/glass-shared/src/theme/theme.ts`. All of them read and write one cookie, which
+is how a choice made on one page (they are on different ports of one host) reaches the others.
 """
 
 from __future__ import annotations

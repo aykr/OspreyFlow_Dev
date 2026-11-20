@@ -7,7 +7,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyBrand, type Brand } from "../brand/brand";
+import { applyBrand, type Brand } from "@ospreyflow/glass-shared";
 import { StartBar } from "./StartPage";
 import { TopBar } from "./TopBar";
 

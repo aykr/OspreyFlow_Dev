@@ -12,7 +12,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type { EmbeddedDashboard } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives/Button";
-import { currentTheme, onThemeChange, type Theme } from "../theme/theme";
+import { currentTheme, onThemeChange, type Theme } from "@ospreyflow/glass-shared";
 import { type DashboardsApi, dashboardGuestToken, listEmbeddedDashboards } from "./dashboards";
 
 /** Superset's name for each of the Glass's modes: its light theme is `default`. */
