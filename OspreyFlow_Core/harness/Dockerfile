@@ -93,6 +93,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/harness/package.json apps/harness/package.json
 COPY apps/workspace/package.json apps/workspace/package.json
+COPY packages/glass-shared/package.json packages/glass-shared/package.json
 RUN npm ci
 COPY apps/harness ./apps/harness
 # Only the one design-token source this app's own CSS imports reach (`apps/harness/src/main.tsx`,

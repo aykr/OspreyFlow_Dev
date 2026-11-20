@@ -35,6 +35,9 @@
     "apps/harness/keyboard/**/*.ts",
     "apps/harness/keyboard/**/*.tsx",
     "apps/pages/server/**/*.ts",
-    "apps/pages/test/**/*.ts"
+    "apps/pages/test/**/*.ts",
+    // The shared package (ADR-152 decision 6): plain TypeScript, kept once for both front ends.
+    "packages/glass-shared/src/**/*.ts",
+    "packages/glass-shared/vitest.config.ts"
   ]
 }

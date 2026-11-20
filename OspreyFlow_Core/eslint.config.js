@@ -2,6 +2,27 @@ import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
+// What `packages/glass-shared` must never name (ADR-152 I1 and I13, D46): no React, so `pages` can use it, and no drawing library,
+// so each front end binds its own. Value or type: `allowTypeImports: false`, because a bundler drops a type-only import and
+// `scripts/version_isolation_check.mjs` therefore cannot see one; this rule is the only thing that does.
+const SHARED_BANNED_NAMES = [
+  ["react", "no React in the shared package (I1)"],
+  ["react-dom", "no React in the shared package (I1)"],
+  ["sigma", "the shared package imports no drawing library (I13, D46)"],
+  ["maplibre-gl", "the shared package imports no drawing library (I13, D46)"],
+];
+const SHARED_BANNED_PATTERNS = [
+  ["react/*", "no React in the shared package (I1)"],
+  ["react-dom/*", "no React in the shared package (I1)"],
+  ["sigma/*", "the shared package imports no drawing library (I13, D46)"],
+  ["@sigma/*", "the shared package imports no drawing library (I13, D46)"],
+  ["maplibre-gl/*", "the shared package imports no drawing library (I13, D46)"],
+];
+// `import("sigma").Map` in a type position, and `import("sigma")` as an expression, are not import statements, so the rule
+// above does not see them.
+// The slash is escaped because the selector's own regular expression ends at the first plain one.
+const SHARED_BANNED_MODULE = "^(react|react-dom|sigma|maplibre-gl|@sigma)($|\\/)";
+
 export default [
   js.configs.recommended,
   {
@@ -14,6 +35,7 @@ export default [
       "apps/workspace/map-build/dist/**",
       "apps/harness/dist/**",
       "apps/pages/dist/**",
+      "packages/glass-shared/dist/**",
       "deploy/generated/**", // a deployment's rendered files, copies of what is linted at its source
       "process/prototypes/**", // the Build folder's, when linted from there (ADR-054)
     ],
@@ -70,6 +92,40 @@ export default [
     rules: {
       "no-undef": "off",
       ...reactHooks.configs.recommended.rules,
+    },
+  },
+  // The shared package (ADR-152 decision 6): plain TypeScript, TypeScript's recommended rules, and the import ban above.
+  ...tseslint.configs.recommended.map((config) => ({
+    ...config,
+    files: ["packages/glass-shared/**/*.ts"],
+  })),
+  {
+    files: ["packages/glass-shared/**/*.ts"],
+    languageOptions: { globals: { console: "readonly", process: "readonly" } },
+    rules: {
+      // TypeScript's own compiler catches an undefined identifier, as for the workspace.
+      "no-undef": "off",
+      // The core rule cannot tell a type import from a value import; the TypeScript one can, and is told to
+      // refuse both.
+      "no-restricted-imports": "off",
+      "@typescript-eslint/no-restricted-imports": [
+        "error",
+        {
+          paths: SHARED_BANNED_NAMES.map(([name, message]) => ({ name, message, allowTypeImports: false })),
+          patterns: SHARED_BANNED_PATTERNS.map(([group, message]) => ({ group: [group], message, allowTypeImports: false })),
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: `TSImportType Literal[value=/${SHARED_BANNED_MODULE}/]`,
+          message: "The shared package names no React and no drawing library, not even in a type (I1, I13).",
+        },
+        {
+          selector: `ImportExpression > Literal[value=/${SHARED_BANNED_MODULE}/]`,
+          message: "The shared package imports no React and no drawing library (I1, I13), not even by a dynamic import.",
+        },
+      ],
     },
   },
 ];
