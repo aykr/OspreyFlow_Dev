@@ -245,9 +245,14 @@ _glass = os.environ.get("SUPERSET_GLASS_ORIGIN", "http://ospreyflow.localhost")
 # chart that needs a Mapbox key or a tile server will not load its tiles, and a map key with its
 # address is an administrator feature to be added later by a setting of its own, never a default.
 # The only name that is not 'self' is the Glass's origin, as a permitted framer. The pinned image
-# has no setting that switches the tracking off (no `SCARF_ANALYTICS` is read anywhere in 6.1.0):
-# the browser refusing the pixel by `img-src` is what stops it.
-# `test_superset_no_outside_address.py` holds this policy to that, in both dictionaries. ---
+# has no setting that switches the tracking off (no `SCARF_ANALYTICS` is read at run time anywhere
+# in 6.1.0: the pixel is drawn unconditionally by the navigation bar): the browser refusing the
+# pixel by `img-src` is what stops it, so the policy must be sent, and `TALISMAN_ENABLED` is
+# pinned on below.
+# `test_superset_no_outside_address.py` holds this policy to that, in both dictionaries, and holds
+# the pin. ---
+# The shipped file reads the environment's TALISMAN_ENABLED; this value ignores it.
+TALISMAN_ENABLED = True
 _POLICY_SHARED = {
     "base-uri": ["'self'"],
     "default-src": ["'self'"],

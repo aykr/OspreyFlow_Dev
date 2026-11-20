@@ -37,11 +37,12 @@ written, because Superset 6.1.0 has no runtime switch. Measured on the image the
   reads no `process.env` at all. The variable the documentation names is read by the `@scarf/scarf`
   npm package while Superset is *built* (`package.json` carries its `scarfSettings`), not by the
   running server.
-- The pixel is component `A` in `static/assets/8085.4bc9b7059e85ba458bcb.entry.js`:
-  `let A=({version:e,sha:a,build:t})=>{let l=`https://apachesuperset.gateway.scarf.sh/pixel/<id>/${e}/${a}/${t}`;
-  return(0,n.Y)("img",{referrerPolicy:"no-referrer-when-downgrade",src:l,width:0,height:0,alt:""})}`,
-  drawn with no condition after the navigation bar's "Login" link: `...,(0,n.Y)(A,{version:t.version_string,
-  sha:t.version_sha,build:t.build_number})]})`.
+- The pixel is component `A` in `static/assets/8085.4bc9b7059e85ba458bcb.entry.js`, in full:
+  `let A=({version:e,sha:a,build:t})=>{let l=` followed by the address
+  `https://apachesuperset.gateway.scarf.sh/pixel/<id>/${e}/${a}/${t}` and
+  `return(0,n.Y)("img",{referrerPolicy:"no-referrer-when-downgrade",src:l,width:0,height:0,alt:""})}`.
+  It is drawn with no condition after the navigation bar's "Login" link:
+  `(0,n.Y)(A,{version:t.version_string,sha:t.version_sha,build:t.build_number})]})`.
 
 So the only thing that stops that request is the policy's `img-src`, which this slice made name no
 outside host: the browser refuses the image before any request leaves, and says so with a
@@ -210,7 +211,7 @@ def test_the_policy_is_sent_talisman_is_on(config: Any) -> None:
 def test_the_environment_cannot_turn_the_policy_off(
     monkeypatch: pytest.MonkeyPatch, rendered: list[str], value: str
 ) -> None:
-    """The shipped file reads `TALISMAN_ENABLED` from the environment; this file's own value wins."""
+    """The shipped file reads `TALISMAN_ENABLED` from the environment; this file's value wins."""
     loaded = _superset(monkeypatch, {**_env(rendered), "TALISMAN_ENABLED": value})
     assert talisman_is_on(loaded)
 
