@@ -1343,10 +1343,16 @@ class ModelAdmin:
                     # be sent to the old address from the moment it is the credential. They go
                     # first, so the engine is briefly unavailable and never served by the wrong key.
                     await self._withdraw_entries(current, name)
-                await self._put_key(current, name, key)
-                keys = {**proposed.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
-                proposed = proposed.model_copy(update={"keys": keys}, deep=True)
             try:
+                if key is not None:
+                    # From here the key may be the engine's credential, and the code cannot always
+                    # tell: a read timeout after the gateway wrote it reads as "not stored". Any
+                    # failure from this call on is taken as "held" (deleting a credential that was
+                    # never stored is safe, the gateway answers 404), so the safe answer is the
+                    # assumed one.
+                    await self._put_key(current, name, key)
+                    keys = {**proposed.keys, name: KeyRecord(set_at=self._now(), set_by=by)}
+                    proposed = proposed.model_copy(update={"keys": keys}, deep=True)
                 await self._reconcile(proposed, rebuilt=frozenset({name}))
                 self._save(proposed)
             except (ModelAdminRefused, OSError):
@@ -1371,16 +1377,11 @@ class ModelAdmin:
 
     async def _withdraw_entries(self, current: ModelSettings, name: str) -> None:
         """Every entry the gateway holds for engine `name` deleted, those of the engines beside it
-        left alone (an engine's name may begin another's: `gemini`, `gemini-pro`). `_change` puts
-        them back as the file says if the edit then fails."""
-        beside = {
-            entry_id(p.name, m)
-            for p in current.providers
-            if p.name != name
-            for m in p.roles.values()
-        }
+        left alone. An entry is `osprey-<name>-<model>` and an engine's name has no hyphen (the
+        schema's rule, held by a test), so `osprey-<name>-` is that engine's own and `gemini_pro`'s
+        entries are not `gemini`'s. `_change` puts them back as the file says if the edit fails."""
         for model_id in sorted(await self._gateway.stored_entries()):
-            if model_id.startswith(f"osprey-{name}-") and model_id not in beside:
+            if model_id.startswith(f"osprey-{name}-"):
                 await self._gateway.delete_entry(model_id)
 
     async def _drop_the_moved_key(self, current: ModelSettings, name: str) -> None:
