@@ -397,4 +397,10 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   the Glass's `userManager.ts` says section 7 is its allowlist; (6) the stale fixed text "move-between-the-four-places" in the Studio keyboard registry (five
   tabs); (7) keyboard specs are missing for the Releases tab, Connect, Profile, Deduplicate, the source page and the Runs grid (rule 13); (8) CO2 is still not on
   main, and the Entra half of PL9b waits for it.
+- **Small slice after PL10 merges (the owner's ruling, 20 Nov): decouple the page service's public origin from the Conduit address.** Today
+  `config.ts` ties them (`streamSettings` throws when `OSPREY_PAGES_CONDUIT_URL` is set and `OSPREY_PAGES_PUBLIC_ORIGIN` is not: CO3's start refusal), so the HTTP
+  forwarder (PL10) needs a setting it does not use. Change: the forwarder needs only the Conduit address; the stream proxy needs the public origin and is **absent**
+  without it (every upgrade 404, in a log line in words); CO3's refusal test changes with it (`apps/pages/test/server/stream.test.ts`: "the service refuses to start in words
+  with the Conduit address set and no public origin" becomes "with no public origin the stream is absent and the forwarder still serves"). Red first on both halves. After PL10; not
+  in its round 2.
 - **AD1 is released for scouting, not building:** the proposed cut is `slices/AD1_PROPOSAL.md`. PL4 and AD5 stay held.
