@@ -1,6 +1,6 @@
 /**
  * A real loopback identity provider that can say no, for the page service's sign-in tests: the
- * TypeScript twin of `OspreyFlow_Build/tests/harness/fake_idp.py`, with the same rules.
+ * TypeScript twin of `tests/harness/fake_idp.py` in the Build folder's tests, with the same rules.
  *
  * `CLAUDE.md` rule 15: a fake that only grants proves the code agrees with our hopes, so this one
  * refuses what a real Keycloak refuses. It is an actual HTTP server, which the code under test reaches
