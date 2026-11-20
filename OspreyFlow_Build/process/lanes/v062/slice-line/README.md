@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (302 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (228 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (306 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (231 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -106,6 +106,10 @@ without a tool call; the line's own cap is 6 red stops.
    prints "merged, accepted narrower: N findings" and `status.js` keeps the findings (`accepted_findings`) for the
    conductor's next report.
 5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
+
+## The merge gate's findings, retries and temp folders
+
+The gate's findings (`gate_findings`) leave out every run in the red-before tree (`slice-<ID>-before-*`): its red is the acceptance command's expected result, never a failed test of the slice (BL6's "2 tests" of 19 November 2026 were one real failure and the expected collection error). A log with only that red gives no finding.
 
 ## The scans a slice's checks include
 

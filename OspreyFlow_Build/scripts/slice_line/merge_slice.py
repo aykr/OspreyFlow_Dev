@@ -452,9 +452,30 @@ WHY_LINE = re.compile(r"^E\s{2,}\S|^\s*(?:Error|AssertionError|expect\()|^make(?
 MAX_WHY = 12
 
 
+#: A run's header in the merge log, as run() writes it, and the tree the red-before run is made in (temp_tree's
+#: `slice-<ID>-before-*`): that run is meant to be red, so nothing it prints is a finding (1c: BL6's collection error).
+RUN_HEADER = re.compile(r"^\$ .*\(in (\S+)\)\s*$")
+RED_BEFORE_TREE = re.compile(r"/slice-[^/]+-before-[^/]+(?:/|$)")
+
+
+def gate_part(log_text: str) -> list[str]:
+    """The merge log's lines, less every run in the red-before tree (its expected red)."""
+    out, skip = [], False
+    for ln in log_text.splitlines():
+        m = RUN_HEADER.match(ln)
+        if m:
+            skip = bool(RED_BEFORE_TREE.search(m.group(1)))
+        if not skip:
+            out.append(ln)
+    return out
+
+
 def gate_findings(log_text: str) -> tuple[list[str], list[dict]]:
-    """The failing tests the gate's log names, and one finding each with its failing lines (not the whole log)."""
-    lines = log_text.splitlines()
+    """The failing tests the gate's log names, and one finding each with its failing lines (not the whole log). The
+    red-before run's output is left out: its red is the expected result. A log with nothing else gives none."""
+    lines = gate_part(log_text)
+    if not any(ln.strip() for ln in lines):
+        return [], []
     names: list[str] = []
     for ln in lines:
         m = FAILED_TEST.match(ln)

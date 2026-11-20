@@ -1,0 +1,48 @@
+
+$ /opt/uv/bin/uv sync --frozen   (in /var/folders/xx/T/slice-BL6-before-k2j9x1aa/OspreyFlow_Core)
+Resolved 212 packages in 3ms
+Installed 198 packages in 1.92s
+
+$ cd OspreyFlow_Core && .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -q ../OspreyFlow_Build/tests/test_client_name_check.py   (in /var/folders/xx/T/slice-BL6-before-k2j9x1aa)
+
+==================================== ERRORS ====================================
+_______ ERROR collecting ../OspreyFlow_Build/tests/test_client_name_check.py _______
+ImportError while importing test module '/var/folders/xx/T/slice-BL6-before-k2j9x1aa/OspreyFlow_Build/tests/test_client_name_check.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+../OspreyFlow_Build/tests/test_client_name_check.py:9: in <module>
+    from tools import client_name_check
+E   ImportError: cannot import name 'client_name_check' from 'tools' (/var/folders/xx/T/slice-BL6-before-k2j9x1aa/OspreyFlow_Build/tools/__init__.py)
+=========================== short test summary info ============================
+ERROR ../OspreyFlow_Build/tests/test_client_name_check.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!!
+1 error in 0.38s
+
+$ /opt/uv/bin/uv sync --frozen   (in /var/folders/xx/T/slice-BL6-merge-p0q8w2bb/OspreyFlow_Core)
+Installed 198 packages in 1.88s
+
+$ cd OspreyFlow_Core && .venv/bin/python -m pytest -c ../OspreyFlow_Build/pytest.ini -q ../OspreyFlow_Build/tests/test_client_name_check.py   (in /var/folders/xx/T/slice-BL6-merge-p0q8w2bb)
+........                                                                 [100%]
+8 passed in 1.02s
+
+$ make -k ci   (in /var/folders/xx/T/slice-BL6-merge-p0q8w2bb/OspreyFlow_Build)
+OspreyFlow_Build/scripts/slice_line/tests/run.sh
+........................................................................ [ 29%]
+..............F......................................................... [ 59%]
+=================================== FAILURES ===================================
+___________ test_the_real_scan_map_names_every_pure_walker_and_nothing_stale ___________
+
+    def test_the_real_scan_map_names_every_pure_walker_and_nothing_stale():
+        build = SRC.parents[1]
+        table = scan_select.entries(SRC / "scan_map.tsv")
+>       assert scan_select.unmapped(build, table) == []
+E       AssertionError: assert ['tests/test_client_name_check.py', 'tests/test_client_name_check_compressed.py', 'tests/test_client_name_check_parallel.py', 'tests/test_client_name_check_paths.py'] == []
+E         Left contains 4 more items, first extra item: 'tests/test_client_name_check.py'
+
+test_scans.py:120: AssertionError
+=========================== short test summary info ============================
+FAILED test_scans.py::test_the_real_scan_map_names_every_pure_walker_and_nothing_stale - AssertionError: assert ['tests/test_client_name_check.py', ...
+1 failed, 243 passed in 81.20s (0:01:21)
+make: *** [slice-line-check] Error 1
+
+make -k ci: exit 2 in 912 s

@@ -183,6 +183,10 @@ M = [
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
  ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ # 1c: the acceptance command's expected red on the base is never a finding
+ ("merge_slice.py", '            skip = bool(RED_BEFORE_TREE.search(m.group(1)))', '            skip = False', "gate_findings"),
+ ("merge_slice.py", '    if not any(ln.strip() for ln in lines):\n        return [], []\n', '', "only_the_expected_red_are_none"),
+ ("merge_slice.py", '    lines = gate_part(log_text)\n', '    lines = log_text.splitlines()\n', "counts_one_test_not_two"),
  # 1b: a slice's scan rows wait on main and the merge applies them; main is never red in between
  ("merge_slice.py", '    if missing:\n', '    if False:\n', "pure_walker_with_no_row_is_refused"),
  ("scan_select.py", ' or (only is not None and rel not in only):', ' or only is not None:', "pure_walker_with_no_row_is_refused"),
