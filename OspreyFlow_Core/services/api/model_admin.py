@@ -1204,6 +1204,7 @@ class ModelAdmin:
             self._fresh()
             current = self.settings
             began = self._gateway.writes
+            unnamed_failure = False
             try:
                 result = await work(current)
             except asyncio.CancelledError:
@@ -1229,16 +1230,22 @@ class ModelAdmin:
                     "a change to the model engines failed part-way: %s", type(unnamed).__name__
                 )
                 failed = ModelAdminRefused(
-                    "The change failed part-way and was not saved; the model gateway was put back "
-                    "as the saved settings say.",
-                    status=500,
+                    "The change failed part-way and was not saved.", status=500
                 )
+                unnamed_failure = True
             else:
                 return result
             restored = await self._undone(current, rebuilt)
             if not restored and self._gateway.writes != began:
                 self._mark_unavailable(engine)
                 failed = ModelAdminRefused(_not_put_back(failed.words), status=failed.status)
+            elif unnamed_failure:
+                # Said only once it is so: before the undo ran, this sentence would have claimed
+                # what had not yet happened, and contradicted the one above when the undo failed.
+                failed = ModelAdminRefused(
+                    f"{failed.words} The model gateway was put back as the saved settings say.",
+                    status=failed.status,
+                )
             raise await self._refusing(by, action, engine, failed) from None
 
     def _mark_unavailable(self, engine: str | None) -> None:

@@ -28,6 +28,12 @@ at run time (the owner's rules for keys): none is written in this file.
 - part 2, an undo that fails is said in words, the engine is marked unavailable, and the audit says
   so without the key, and a key entered again repairs it:
   `test_an_undo_that_fails_is_said_in_words_marks_the_engine_and_is_audited`;
+  the words never say the gateway was put back and was not (an exception nobody named, with the
+  undo failing): `test_an_exception_nobody_named_says_one_thing_about_the_gateway`; an interrupted
+  change whose undo fails, where only the audit and the engine's state tell it:
+  `test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_audited`; and the
+  engine's connection test says it is unavailable, not that its key is lost:
+  `test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable`;
 - part 3, start-up compares every entry's address with the record, covering the process having
   died mid-change, a deployment the fault already reached, an entry for an engine the record does
   not hold (with and without a models file), and a withdrawal that cannot be made:
@@ -431,6 +437,114 @@ def test_an_undo_that_fails_is_said_in_words_marks_the_engine_and_is_audited(
     assert scene.admin.routes().engines["gemini"].key_present is True
     assert asyncio.run(scene.call()) == 200
     assert scene.addresses_reached_by(scene.second) == {OLD}
+
+
+@pytest.mark.parametrize("undone", [True, False], ids=["undone", "the undo fails too"])
+def test_an_exception_nobody_named_says_one_thing_about_the_gateway(
+    scene: Scene, routed: TestClient, monkeypatch: pytest.MonkeyPatch, undone: bool
+) -> None:
+    """The answer and the audit never say both that the gateway was put back and that it was not:
+    "put back" is said only once the undo has succeeded. Planted at the call site the route uses:
+    the engine's key update raises something nobody named, after the new entries were made, and
+    (where the undo fails) the gateway's database then refuses every removal."""
+    asyncio.run(scene.set_up())
+    gateway = scene.admin._gateway
+    real = gateway.put_engine_key
+    raised: list[bool] = []
+
+    async def garbled(p: ModelProviderConfig, limits: Any) -> None:
+        if not raised:
+            raised.append(True)
+            raise RuntimeError("a garbled answer")
+        await real(p, limits)
+
+    monkeypatch.setattr(gateway, "put_engine_key", garbled)
+    if not undone:
+        scene.faults.refuse.append(lambda r: bool(raised) and r.url.path == "/model/delete")
+    answer = routed.put(f"{ENGINES}/gemini", json={"provider": {**ENGINE, "api_base": NEW}})
+    assert answer.status_code == 500, answer.text
+    words = answer.json()["detail"]["detail"].lower()
+    audited = scene.audit.entries[-1].outcome.lower()
+    for said in (words, audited):
+        assert "was not saved" in said
+        if undone:
+            assert "was put back as the saved settings say" in said
+            assert "unavailable" not in said
+        else:
+            assert "unavailable" in said and "restart" in said
+            assert "was put back as the saved settings say" not in said, (
+                f"told the gateway was put back and that it could not be: {said}"
+            )
+    assert ("gemini" in scene.admin._unavailable) is not undone
+
+
+async def test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_audited(
+    scene: Scene, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No answer goes back to anyone when the change is interrupted, so the audit record and the
+    engine's own state are the whole of the telling: the engine is marked unavailable (its test
+    says so, in words), the audit says the gateway was not put back and names no key; and a key
+    entered again repairs it."""
+    await scene.set_up()
+    gateway = scene.admin._gateway
+    reached = asyncio.Event()
+
+    async def hangs(p: ModelProviderConfig, limits: Any) -> None:
+        reached.set()  # the new entries are made by now
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(gateway, "put_engine_key", hangs)
+    scene.faults.refuse.append(lambda r: reached.is_set() and r.url.path == "/model/delete")
+    task = asyncio.ensure_future(scene.admin.edit_engine("admin-1", "gemini", provider(NEW)))
+    await asyncio.wait_for(reached.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    monkeypatch.undo()
+
+    last = scene.audit.entries[-1]
+    assert (last.action, last.engine) == ("engine_edited", "gemini")
+    assert last.outcome.startswith("interrupted") and "not put back" in last.outcome, last.outcome
+    assert "unavailable" in last.outcome
+    recorded = json.dumps([e.model_dump(mode="json") for e in scene.audit.entries])
+    assert scene.first not in recorded and scene.second not in recorded
+    assert "gemini" in scene.admin._unavailable, "the engine is marked"
+    tested = await scene.admin.test("admin-1", "gemini")
+    assert (tested.outcome, tested.ok) == ("not_routed", False)
+    assert "unavailable" in tested.words
+
+    scene.faults.refuse.clear()
+    await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
+    assert "gemini" not in scene.admin._unavailable
+    await scene.call()
+    assert scene.addresses_reached_by(scene.second) == {OLD}
+
+
+@pytest.mark.parametrize("moved", [True, False], ids=["the address moved", "the address kept"])
+async def test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable(
+    scene: Scene, moved: bool
+) -> None:
+    """The engine's key is recorded (address kept), so without its own branch the test would read
+    the recorded key as lost and advise entering it again, where the gateway cannot be reached.
+    The words are those of the unavailable engine, nothing is sent to the gateway for it, and the
+    test is audited."""
+    await scene.set_up()
+    scene.faults.refuse.append(on("/model/new"))
+    with pytest.raises(ModelAdminRefused):
+        await scene.admin.edit_engine(
+            "admin-1", "gemini", provider(NEW if moved else OLD, label="Changed")
+        )
+    assert "gemini" in scene.admin._unavailable
+    scene.gateway.sent.clear()
+
+    tested = await scene.admin.test("admin-1", "gemini")
+
+    assert (tested.engine, tested.outcome, tested.ok) == ("gemini", "not_routed", False)
+    assert "unavailable" in tested.words and "repaired" in tested.words
+    assert "Enter it again first" not in tested.words
+    assert not scene.gateway.sent, "no call was made to the engine"
+    assert scene.audit.entries[-1].action == "connection_tested"
+    assert scene.audit.entries[-1].outcome == "not_routed"
 
 
 # --- part 3: start-up compares every entry with the record -------------------------------------
