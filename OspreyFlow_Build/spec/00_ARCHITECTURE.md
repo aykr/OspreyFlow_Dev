@@ -1088,6 +1088,21 @@ signs the released images keyless in the user repository's `release.yml` and ver
 `ghcr.io/sigstore/cosign/cosign:v2.4.1`, pinned by digest, as OpenTofu does; an offline bundle carries
 that image (Amendment 34). Nothing of it is in a deployment's images.
 
+**ADR-152 decision 6 addition (20 November 2026; PL4 slice C) — two npm dependencies gained by a second workspace,
+`packages/glass-shared`.** The register is by licence, not by package, and `make licence-check`'s Node half reads
+`license-checker`'s metadata against the allowlist above, so a package already installed for another workspace is
+already checked; this entry records why the shared package declares them (the register has no per-package table for npm,
+so a dependency a workspace gains is entered here, in prose, as the entries above are):
+
+| Package | Range | Licence (as its metadata gives it) | Why | Workspace |
+| --- | --- | --- | --- | --- |
+| `graphology` | `^0.26.0` | MIT | the working set's graph, which `workingset/store.ts` builds and `apps/workspace` and the pages both read | `packages/glass-shared`, already used by `apps/workspace` at the same range |
+| `zustand` | `^5.0.2` | MIT | the working set's store; **only `zustand/vanilla` is imported** (the package's main entry imports React, and the shared package imports none: I1) | `packages/glass-shared`, already used by `apps/workspace` at the same range |
+
+Neither brings React into the shared package or the `pages` image: `zustand`'s React binding is a separate entry the
+package never names (the lint block for `packages/glass-shared` in `eslint.config.js` refuses it, type imports included),
+and `scripts/no_react_check.mjs` and `tests/glass_trees/test_pages_image_carries_no_react.py` run over the result.
+
 **PaySim (ADR-055 Amendment, ADR-114 decision 5, 11 October 2026) — data, CC BY-SA 4.0**, verified
 from Kaggle's metadata for `ealaxi/paysim1` (Edgar Lopez-Rojas). Redistributable as a downloadable demo
 pack, never in a repository, with its attribution and licence text; anything derived from it and
