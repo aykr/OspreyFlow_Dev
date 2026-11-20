@@ -625,6 +625,10 @@ export type SearchHeapGib = number | null;
  */
 export type PostgresSharedBuffersGib = number | null;
 /**
+ * Overrides PostgreSQL's max_connections: the connections its services may hold at once. Default: none — the computed number (660), from the pools the product's services open. Not less than 420, the same sum with one Conduit. Lite, and Small with every store in a container; a cluster's or a cloud platform's database is set where it is run.
+ */
+export type PostgresMaxConnections = number | null;
+/**
  * Default: none — the local engine runs on the CPU. nvidia: the ollama service reserves every NVIDIA GPU, and the extraction model is qwen2.5:14b-instruct unless models.extraction names one. The NVIDIA driver and Container Toolkit are the administrator's to install.
  */
 export type Gpu = "none" | "nvidia";
@@ -1142,5 +1146,6 @@ export interface ResourcesConfig {
   graph_heap_gib?: GraphHeapGib;
   search_heap_gib?: SearchHeapGib;
   postgres_shared_buffers_gib?: PostgresSharedBuffersGib;
+  postgres_max_connections?: PostgresMaxConnections;
   gpu?: Gpu;
 }

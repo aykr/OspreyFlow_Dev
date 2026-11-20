@@ -57,6 +57,7 @@ CLUSTER: dict[str, Any] = {
     "profile": "cluster",
     "network": {"public_origin": "https://osprey.example.org"},
     "cluster": {"shared_storage_class": "efs-sc"},
+    "components": {"analytics_engine": "clickhouse"},  # a cluster's Conduits share ClickHouse
     "external": {
         "postgres": {"host": "osprey.cluster-x.eu-west-2.rds.amazonaws.com"},
         "valkey": {"host": "osprey.x.cache.amazonaws.com", "tls": True},
@@ -168,7 +169,9 @@ def test_the_floor_itself_is_accepted_on_lite_and_small() -> None:
 def test_the_function_a_refresh_uses_takes_the_setting() -> None:
     """A file holding 660 is out of date against 900, and then holds 900; one holding 900 is
     current, and is not corrected back to 660 by the function's default."""
-    old: dict[str, Any] = {"postgres": {"command": ["postgres", "-c", f"max_connections={DEFAULT}"]}}
+    old: dict[str, Any] = {
+        "postgres": {"command": ["postgres", "-c", f"max_connections={DEFAULT}"]}
+    }
     assert profiles.postgres_connections_up_to_date(old, 900) is True
     assert old["postgres"]["command"] == ["postgres", "-c", "max_connections=900"]
     assert profiles.postgres_connections_up_to_date(old, 900) is False
@@ -249,8 +252,9 @@ def test_no_reader_of_the_computed_number_is_left_beside_the_setting() -> None:
         and "POSTGRES_MAX_CONNECTIONS" in path.read_text(encoding="utf-8")
         and "cloud_platform" not in path.parts
     }
-    # `profiles.py` defines it; `refresh.py` and `render.py` take the setting beside it.
-    assert readers == {"harness/profiles.py"}, readers
+    # `profiles.py` defines it; the schema names it in the refusal's words (the computed number);
+    # `refresh.py` and `render.py` take the setting beside it, and never the constant.
+    assert readers == {"harness/profiles.py", "packages/schemas/deployment.py"}, readers
     callers = {
         path.relative_to(CORE).as_posix()
         for path in CORE.rglob("*.py")
@@ -285,7 +289,8 @@ def test_a_value_below_the_floor_is_refused_in_words(value: int) -> None:
 
 @pytest.mark.parametrize(
     "value", [0, -1, -660, 900.5, 900.0, "900", "many", True, [900]],
-    ids=["zero", "negative", "large-negative", "fraction", "float", "string", "words", "bool", "list"],
+    ids=["zero", "negative", "large-negative", "fraction", "float", "string", "words", "bool",
+         "list"],
 )  # fmt: skip
 def test_what_is_not_a_whole_number_above_zero_is_refused_in_words(value: Any) -> None:
     said = _refusal(_with(LITE, postgres_max_connections=value))
@@ -373,7 +378,9 @@ def test_the_setting_is_documented_in_appendix_a_of_both_guides(guide: Path) -> 
     text = guide.read_text(encoding="utf-8")
     appendix = text[text.index("<!-- options:begin -->") : text.index("<!-- options:end -->")]
     row = next(
-        line for line in appendix.splitlines() if line.startswith("| `resources.postgres_max_connections`")
+        line
+        for line in appendix.splitlines()
+        if line.startswith("| `resources.postgres_max_connections`")
     )
     assert "int or none" in row and "none" in row
     assert str(FLOOR) in row and str(DEFAULT) in row
@@ -401,7 +408,9 @@ def test_the_amendment_is_written_and_reserved() -> None:
                   "cloud-platform"):  # fmt: skip
         assert words in body, words
     reservations = (BUILD / "spec" / "ADR_RESERVATIONS.md").read_text(encoding="utf-8")
-    row = next(line for line in reservations.splitlines() if line.startswith("| ADR-114 Amendment 49 |"))
+    row = next(
+        line for line in reservations.splitlines() if line.startswith("| ADR-114 Amendment 49 |")
+    )
     assert "v062 PL2b" in row and row.rstrip().endswith("| written |")
     deployment = (BUILD / "spec" / "05_DEPLOYMENT.md").read_text(encoding="utf-8")
     assert "resources.postgres_max_connections" in deployment

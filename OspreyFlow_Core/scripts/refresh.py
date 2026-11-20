@@ -675,14 +675,22 @@ def _stores_named(directory: Path) -> bool:
 
 
 def _postgres_connections_named(directory: Path) -> bool:
-    """ADR-114 Amendment 43: PostgreSQL's `max_connections` and Keycloak's pool, as the render
-    gives them (`harness.profiles.postgres_connections_up_to_date`), on a deployment rendered
-    before them. Says whether anything changed."""
+    """ADR-114 Amendments 43 and 49: PostgreSQL's `max_connections` (the deployment's
+    `resources.postgres_max_connections`, else the computed number) and Keycloak's pool, as the
+    render gives them (`harness.profiles.postgres_connections_up_to_date`), on a deployment
+    rendered before them. Says whether anything changed."""
     compose_path = directory / "compose.yaml"
     text = compose_path.read_text(encoding="utf-8")
     header_end = text.find("\nname:") + 1
     document = yaml.safe_load(text) or {}
-    if not postgres_connections_up_to_date(document.get("services") or {}):
+    # Amendment 49: the setting the deployment's own `osprey.yaml` holds, else the computed number.
+    config_path = directory / "osprey.yaml"
+    setting = (
+        load_config(config_path).resources.postgres_max_connections
+        if config_path.is_file()
+        else None
+    )
+    if not postgres_connections_up_to_date(document.get("services") or {}, setting):
         return False
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     compose_path.write_text(text[:header_end] + body, encoding="utf-8")

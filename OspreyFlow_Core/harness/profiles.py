@@ -222,12 +222,28 @@ POSTGRES_MAX_CONNECTIONS = (
     + SUPERSET_AND_REPORT_SYNC_MAX
     + OPERATOR_RESERVE
 )
+#: ADR-114 Amendment 49: the least `resources.postgres_max_connections` may be set to, 420: the same
+#: sum with **one** Conduit at its ceiling instead of `CONDUITS_ALLOWED`. Below it a single Conduit,
+#: with the other clients and the reserve, cannot all be connected at once. Computed from the
+#: constants above, so a change to a pool changes the floor (the setting's refusal and its words
+#: read this name, `schemas/deployment.py`).
+POSTGRES_MAX_CONNECTIONS_FLOOR = (
+    1 * (CONDUIT_POOL_CEILING + RUNNING_LOADS_ALLOWED)
+    + KEYCLOAK_POOL_MAX
+    + GATEWAY_POOL_MAX
+    + SUPERSET_AND_REPORT_SYNC_MAX
+    + OPERATOR_RESERVE
+)
 
 
-def postgres_command(memory: StoreMemory | None = None) -> list[str]:
-    """PostgreSQL's server command: `max_connections` always (ADR-114 Amendment 43), with the sized
+def postgres_command(
+    memory: StoreMemory | None = None, max_connections: int | None = None
+) -> list[str]:
+    """PostgreSQL's server command: `max_connections` always (ADR-114 Amendment 43; the number
+    `resources.postgres_max_connections` sets, else the computed one, Amendment 49), with the sized
     memory settings when the deployment is sized (Amendment 33 decision 6)."""
-    command = ["postgres", "-c", f"max_connections={POSTGRES_MAX_CONNECTIONS}"]
+    wanted = POSTGRES_MAX_CONNECTIONS if max_connections is None else max_connections
+    command = ["postgres", "-c", f"max_connections={wanted}"]
     if memory is None or memory.postgres_shared_buffers_mib is None:
         return command
     return [
@@ -239,16 +255,21 @@ def postgres_command(memory: StoreMemory | None = None) -> list[str]:
     ]
 
 
-def postgres_connections_up_to_date(services: dict[str, Any]) -> bool:
+def postgres_connections_up_to_date(
+    services: dict[str, Any], max_connections: int | None = None
+) -> bool:
     """ADR-114 Amendment 43 on a deployment rendered before it (`scripts/refresh.py`, run by
     `ospreyflow update` and `start --build`, which keep an existing compose file rather than render
-    it again): PostgreSQL's `max_connections` set to the product's number, the sized settings and
-    anything else on its command kept; Keycloak's pool named. Says whether anything changed."""
+    it again): PostgreSQL's `max_connections` set to the number the deployment's
+    `resources.postgres_max_connections` names, else the product's (Amendment 49: a set value is
+    kept, never corrected back to the computed one), the sized settings and anything else on its
+    command kept; Keycloak's pool named. Says whether anything changed."""
     changed = False
     postgres = services.get("postgres")
     if isinstance(postgres, dict):
         command = [str(part) for part in postgres.get("command") or ["postgres"]]
-        setting = f"max_connections={POSTGRES_MAX_CONNECTIONS}"
+        wanted_number = POSTGRES_MAX_CONNECTIONS if max_connections is None else max_connections
+        setting = f"max_connections={wanted_number}"
         kept = [
             part
             for i, part in enumerate(command)
