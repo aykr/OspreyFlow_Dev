@@ -34,6 +34,9 @@ at run time (the owner's rules for keys): none is written in this file.
   `test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_audited`; and the
   engine's connection test says it is unavailable, not that its key is lost:
   `test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable`;
+- an engine that signs in by the gateway's role (no key) is offered to no analyst while it is marked
+  unavailable, though its key state is "iam_role" either way (so only the route's own condition
+  withholds it): `test_a_keyless_engine_marked_unavailable_is_offered_to_no_analyst`;
 - part 3, start-up compares every entry's address with the record, covering the process having
   died mid-change, a deployment the fault already reached, an entry for an engine the record does
   not hold (with and without a models file), and a withdrawal that cannot be made:
@@ -169,7 +172,13 @@ class Scene:
         self.faults = Faults(self.gateway.transport())
         self.admin = self.process()
 
-    def process(self, *, faulty: bool = True, retry_seconds: float = 30.0) -> ModelAdmin:
+    def process(
+        self,
+        *,
+        faulty: bool = True,
+        retry_seconds: float = 30.0,
+        declared: list[ModelProviderConfig] | None = None,
+    ) -> ModelAdmin:
         http = httpx.AsyncClient(
             base_url="http://litellm:4000",
             transport=self.faults if faulty else self.gateway.transport(),
@@ -177,7 +186,7 @@ class Scene:
         )
         return ModelAdmin(
             installed=Installed(
-                providers=[],
+                providers=declared or [],
                 defaults={},
                 key_present={},
                 local_only=False,
@@ -549,6 +558,30 @@ async def test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailab
     assert not scene.gateway.sent, "no call was made to the engine"
     assert scene.audit.entries[-1].action == "connection_tested"
     assert scene.audit.entries[-1].outcome == "not_routed"
+
+
+async def test_a_keyless_engine_marked_unavailable_is_offered_to_no_analyst(
+    scene: Scene, caplog: pytest.LogCaptureFixture
+) -> None:
+    """For a keyed engine the key state turns "set" into "lost" while it is marked, so the route's
+    own condition is redundant there. For an engine that signs in by the gateway's role `key_state`
+    says "iam_role" marked or not: the route's condition is the only guard, and the one this test
+    fails without. Planted at the call site start-up uses: the engine (declared, as an
+    IAM-role engine is) has entries at another address and the gateway refuses every removal."""
+    keyless = provider(OLD, auth="iam_role")
+    agreeing = scene.process(faulty=False, declared=[keyless])
+    await agreeing.start()
+    assert agreeing.routes().engines["gemini"].key_present is True, "offered while it agrees"
+
+    await scene.plant_entries_at(NEW)  # the entries are at an address the record does not give
+    scene.faults.refuse.append(on("/model/delete"))
+    restarted = scene.process(retry_seconds=3600, declared=[keyless])
+    with caplog.at_level(logging.WARNING):
+        await restarted.start()
+    assert "gemini" in restarted._unavailable, "the engine is marked"  # noqa: SLF001
+    assert restarted.key_state("gemini") == "iam_role", "the key state does not tell it"
+    assert restarted.routes().engines["gemini"].key_present is False, "so the route withholds it"
+    await restarted.close()
 
 
 # --- part 3: start-up compares every entry with the record -------------------------------------
