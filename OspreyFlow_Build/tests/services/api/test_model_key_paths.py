@@ -1516,28 +1516,31 @@ async def an_engine_marked_unavailable_whose_record_says_set(world: Scene) -> No
     assert world.admin.key_state("gemini") == "lost", "the plant: and it is offered to no one"
 
 
+@pytest.mark.parametrize("caller", ["set_key", "an edit that keeps its address"])
 @pytest.mark.parametrize("ends", ["fails", "succeeds"])
 async def test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43(
-    world: Scene, ends: str
+    world: Scene, ends: str, caller: str
 ) -> None:
     """Row 43. The failure's audit name was chosen from `key_state`, which says "lost" for an
     engine the record says is set but this process marked unavailable, so a rotation that replaced
     a held key and failed was audited as `key_set` and, succeeding, as `key_rotated`. Both ends read
     the saved record (`_recorded_key_state`), so the change is `key_rotated` however it ends.
-    Fails if either end names it `key_set`."""
+    Fails if either end names it `key_set`, for `set_key` and for an edit that keeps its address
+    and carries a key (which names its key action the same way)."""
+    how = "set_key" if caller == "set_key" else "edit"
     await world.set_up()
     await an_engine_marked_unavailable_whose_record_says_set(world)
     sets_before = len(audited(world, "key_set"))
     if ends == "fails":
         faults(world).refuse.append(live("/key/update"))
         with pytest.raises(ModelAdminRefused):
-            await rotate(world, "set_key")
+            await rotate(world, how)
         faults(world).refuse.clear()
         failed = audited(world, "key_rotated")
         assert failed and failed[-1].startswith("refused"), failed
         assert "key was removed" in failed[-1].lower(), failed
     else:
-        await rotate(world, "set_key")
+        await rotate(world, how)
         done = audited(world, "key_rotated")
         assert done and done[-1] == "done", done
     assert len(audited(world, "key_set")) == sets_before, "named as a first key: it replaced one"
@@ -1604,4 +1607,5 @@ async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audite
         ]
     )
     for secret in (token, stale):
-        assert secret not in what_was_shown, "the virtual-key listing reached what a person reads"
+        if secret in what_was_shown:  # never `assert`: a failure must not print what it found
+            pytest.fail("the virtual-key listing reached a log, an answer or the audit")
