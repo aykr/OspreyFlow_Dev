@@ -34,6 +34,10 @@ jobs:
       - run: npm ci
       - run: uv run ruff check .
       - run: npm run lint
+      # ADR-152 I1 and I13: no React in `pages` or the shared package, and no drawing library in the shared package.
+      # (I13's type half is the lint rule for `packages/glass-shared/**`, run by the line above.)
+      - run: node scripts/no_react_check.mjs
+      - run: node scripts/version_isolation_check.mjs
 
   typecheck:
     runs-on: ubuntu-latest
@@ -1260,6 +1264,8 @@ jobs:
       # The setup harness's own fast unit tier — `Stage 2 §6` part A
       # (`registryCoverage.test.ts`, the same shape the Glass's own already covers above).
       - run: npm test --workspace apps/harness
+      # The shared package's own unit tests (ADR-152 decision 6).
+      - run: npm test --workspace packages/glass-shared
 
   # `process/07_BUILD_PLAN.md` Phase 4's exit criterion, the parts "not
   # asserted in prose": the §5 performance budget, the §6 contrast floor,
