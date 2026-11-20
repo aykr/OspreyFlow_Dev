@@ -49,6 +49,12 @@ as for a moved one (`..._says_what_became_of_the_key_round_8`, with its completi
 `..._leaves_nothing_round_8`); a lapsed check's credential under a note (`..._round_8_n1`); the
 words for an engine whose key was already lost (`..._round_8_n2`); rows 29 and 30 planted at the real
 call sites (N5); the probe with no models file needs no note (`..._row_21`, start removes it).
+
+Round 9: row 42, an edit that keeps its address fails after the new key is stored and audits a
+`key_rotated` row (`..._row_42`; `failure_rows` reads that action for both callers); row 43, one
+key change has one name however it ends, read from the saved record and not from `key_state`, for
+`set_key` and the edit (`..._row_43`); N4, nothing from the gateway's virtual-key listing reaches a
+log, an answer or the audit (`..._n4`).
 """
 
 from __future__ import annotations

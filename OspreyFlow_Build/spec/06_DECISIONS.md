@@ -41586,7 +41586,17 @@ the guide's lines that were not updated then.
    with part of each key (the first and last two characters), and a key is never shown back, to a person or to
    the product. An earlier text of this point read "start reads the record, never a credential" as a decision
    the builder took; it is the owner's ruling, given on 20 November 2026, and the note of intent is its
-   design. (It leaves one case it does not claim: a credential that vanishes for a reason no code of the
+   design. **The two listings are not the same and are not to be confused (the owner, 20 November 2026):** the
+   credential listing (`GET /credentials`) returns the first and last two characters of each key and is never
+   used; the gateway's listing of its own **virtual keys** (`GET /key/list`, which start-up and every reconcile
+   read in `revoke_stale_engine_keys` to find a key an old master key derived) holds only each key's SHA-256
+   token and no key material, so it is kept. Nothing from it reaches a log, an answer or the audit (held by
+   `test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4`). A change's failure is
+   audited under **one key-action name however it ends**, read from the saved record and never from
+   `key_state` (which says "lost" for an engine this process marked unavailable): a key change on an engine
+   whose record says a key is set is `key_rotated` whether it succeeds or fails, on `set_key` and on an edit
+   that keeps its address and carries a key, which writes its `key_rotated` row beside its `engine_edited`
+   row, naming the key action and never carrying a key. (It leaves one case it does not claim: a credential that vanishes for a reason no code of the
    Conduit wrote, with no note, is not found by start; the next key set or an entry made again repairs it.)
    A check's probe credential is removed at every start, with a models file or none (with none there is
    nowhere to write a note without taking `osprey.yaml`'s place). Whatever stops a change takes one road out, the

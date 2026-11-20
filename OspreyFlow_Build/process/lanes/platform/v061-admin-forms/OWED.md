@@ -118,3 +118,12 @@ the words and a `key_removed` audit. N1: a lapsed check's credential (`_expired`
 gateway's list of entries raising or waited on, the first removal refused with HTTP 500). The probe with **no models file** has no note (a note
 cannot be written without taking `osprey.yaml`'s place; start removes every probe credential, file or none, and `..._row_21` shows it). Held by
 `test_model_key_paths.py`, red first on `4b9147a` (`plants_key_paths_run.txt`, "Round 8").
+
+**Round 9 (20 November 2026): the two audit rows and the N4 text.** Row 42: an edit that keeps its address, carries a key and fails after the
+new key is stored now writes a `key_rotated` row (outcome refused or interrupted, the key's removal said, no key in it) beside its `engine_edited`
+row and the `key_removed` row; `_change` takes a `key_action` for it. Row 43: `set_key` and the edit name the key action from the saved record
+(`_recorded_key_state`), never `key_state`, and `_change` reads the name when the change stops, so one change has one name however it ends (an
+engine the record says is set and this process marked unavailable is `key_rotated` failing and succeeding). N4: the specification says the
+virtual-key listing (`GET /key/list`, SHA-256 tokens only) is kept and the credential listing is never used, and a test shows nothing from the
+virtual-key listing reaches a log, an answer or the audit. Held by `test_model_key_paths.py`, red first on `e547a9f` (`plants_key_paths_run.txt`,
+"Round 9"). **Still owed:** the live, measured run on the real gateway (the key review's question 2): the live step is off.

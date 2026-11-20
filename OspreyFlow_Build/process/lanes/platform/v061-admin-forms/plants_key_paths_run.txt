@@ -148,3 +148,25 @@ Q4 a failed rotation is audited as a first key (the action is named from the ini
     test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[the key list is garbled-set_key]
     test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[a cancellation after the store-set_key]
     test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[the key update is refused and so is the undo's-set_key]
+
+-- Round 9 (20 November 2026) -----------------------------------------------------------------------------
+Red on e547a9f's model_admin.py (the tip of round 8), the key-paths file as committed in 4e27bbb: 7 failed.
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8: 4 (an edit that keeps its address; the helper now
+        reads the key_rotated rows for both callers, so it can no longer hide row 42): the failure wrote no key_rotated row
+    test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42: 2 (the key update refused; a cancellation after the store)
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails]: 1 (set_key on an engine the record says is set and this process
+        marked unavailable: the failure was audited as key_set)
+Green on e547a9f (held, not red-first): row 43's succeeding end; the N4 test (nothing from the virtual-key listing is shown; its plant is below).
+-- PLANTS: each piece of round 9's code put back in turn; every plant goes red (rule 15) --
+
+P42  the edit passes no key_action to _change (the failure writes no key_rotated row): 6 red
+    test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42 (both) and the edit's four cases of the round-8 rotation test
+P43a set_key's name read from key_state when the change is made, and passed as a value (the round-8 code): 1 red
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails-set_key]
+P43b the name `work` settles inside set_key read from key_state (the success end): 2 red
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails-set_key], [succeeds-set_key]
+P43c the edit names its key action from key_state: 2 red
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails-an edit...], [succeeds-an edit...]
+PN4  the stale virtual key's token added to the log line at the real call site in revoke_stale_engine_keys: 1 red
+    test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4
+Green now: all 60 cases of test_model_key_paths.py.
