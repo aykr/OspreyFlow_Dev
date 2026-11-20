@@ -35,6 +35,45 @@ def sh(cmd, cwd, env=None, check=True, input=None):
 
 # ------------------------------------------------------------------ fixtures
 
+GREEN_RUN = '[{"databaseId": 44000000001, "conclusion": "success", "status": "completed", "url": "https://github.invalid/r/1"}]'
+GH = r"""#!/bin/sh
+# a stand-in for gh: `gh run list --branch main [--status completed] --limit 1 --json <fields>` only
+[ -n "${FAKE_GH_EXIT:-}" ] && { echo "error connecting to api.github.com" >&2; exit "$FAKE_GH_EXIT"; }
+green='@GREEN@'
+completed="${FAKE_GH_COMPLETED:-$green}"
+latest="${FAKE_GH_LATEST:-$completed}"
+[ "$1 $2" = "run list" ] || { echo "unknown command \"$1 $2\" for gh" >&2; exit 1; }
+case " $* " in *" --branch main "*) ;; *) echo "this stand-in answers only for main" >&2; exit 1;; esac
+case " $* " in *" --json "*) ;; *) echo "this stand-in answers only --json" >&2; exit 1;; esac
+case " $* " in *" --limit 1 "*) ;; *) echo "this stand-in answers only --limit 1" >&2; exit 1;; esac
+case " $* " in
+  *" --status completed "*) printf '%s\n' "$completed";;
+  *" --status "*) echo "[]";;
+  *) printf '%s\n' "$latest";;
+esac
+""".replace("@GREEN@", GREEN_RUN)
+
+#: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
+#: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
+#: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
+#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them.
+STAND_IN_GATE = """def _stand_in_gate(t, b, l):
+    Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
+    l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
+    if os.environ.get('TEST_GATE_LOG'):
+        l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())
+    if os.environ.get('TEST_GATE_RETRIES'):
+        l.with_suffix('.retries.json').write_text(os.environ['TEST_GATE_RETRIES'])
+    if os.environ.get('TEST_LIVE_NOTE'):
+        l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE'])
+    if os.environ.get('TEST_GATE_SEES'):
+        have = [n for n in ('.venv', 'node_modules') if (t / 'OspreyFlow_Core' / n).exists()]
+        Path(os.environ['TEST_GATE_SEES']).write_text(' '.join(have) or 'clean')
+    return int(os.environ.get('TEST_GATE', '0'))
+
+
+FULL_GATE = _stand_in_gate"""
+
 
 @pytest.fixture
 def world(tmp_path):
@@ -43,16 +82,24 @@ def world(tmp_path):
     data = home / ".ospreyflow" / "slice-line"
     (data / "bin").mkdir(parents=True)
     (data / "records").mkdir()
-    for f in ("guard.py", "stop_check.py", "usage_hook.py"):
-        shutil.copy(SRC / f, data / "bin" / f)
+    for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv"):
+        if (SRC / f).exists():
+            shutil.copy(SRC / f, data / "bin" / f)
     (data / "emails.sha256").write_text(hashlib.sha256(OWNER.encode()).hexdigest() + "\n")
+    # gh, as merge_slice.py and board.py call it (run list on main, --json fields); a call in another shape is refused
+    # as the real gh refuses an unknown flag. FAKE_GH_COMPLETED: the latest completed run's JSON list; FAKE_GH_LATEST:
+    # the newest run of any status; FAKE_GH_EXIT: a failing gh (signed out, offline).
+    ghbin = tmp_path / "ghbin"
+    ghbin.mkdir()
+    (ghbin / "gh").write_text(GH)
+    (ghbin / "gh").chmod(0o755)
     fake_claude = tmp_path / "claude"
     fake_claude.write_text('#!/bin/sh\necho \'{"loggedIn": true}\'\n')
     fake_claude.chmod(0o755)
     env = {**os.environ, "HOME": str(home), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "t",
            "GIT_AUTHOR_EMAIL": "t@t.invalid", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.invalid",
            "OSPREY_PUSH_NO_CI_CHECK": "1", "OSPREY_CLAUDE_BIN": str(fake_claude),
-           "OSPREY_SLICE_WT_ROOT": str(tmp_path / "wt")}
+           "OSPREY_SLICE_WT_ROOT": str(tmp_path / "wt"), "PATH": f"{ghbin}{os.pathsep}{os.environ.get('PATH', '')}"}
     for k in ("OSPREY_SLICE_HOME", "OSPREY_SEAT", "OSPREY_SLICE", "OSPREY_SLICE_WORKTREE", "OSPREY_STATUS_FILE"):
         env.pop(k, None)
     origin = tmp_path / "origin.git"
@@ -61,10 +108,7 @@ def world(tmp_path):
     lines = repo / "OspreyFlow_Build/scripts/slice_line"
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
-    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate",
-                                             "FULL_GATE = lambda t, b, l: (os.environ.get('TEST_LIVE_NOTE') and "
-                                             "l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE']) and 0) "
-                                             "or int(os.environ.get('TEST_GATE', '0'))"))
+    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE))
     v062 = repo / "OspreyFlow_Build/process/lanes/v062"
     v062.mkdir(parents=True)
     real = SRC.parents[1] / "process/lanes/v062"
@@ -350,8 +394,8 @@ def built(w, accept="test -f feature.txt", feature=True, extra=None):
     return wt, sh("git rev-parse HEAD", wt).stdout.strip()
 
 
-def merge(w, gate="0", live_note=""):
-    env = {**w["env"], "TEST_GATE": gate, "TEST_LIVE_NOTE": live_note}
+def merge(w, gate="0", live_note="", gate_log=""):
+    env = {**w["env"], "TEST_GATE": gate, "TEST_LIVE_NOTE": live_note, "TEST_GATE_LOG": gate_log}
     p = sh([w["py"], str(w["lines"] / "merge_slice.py"), "merge", "S1"], w["repo"], env, check=False)
     return p
 
@@ -640,7 +684,8 @@ def test_a_seat_refuses_to_start_without_the_guard(world):
     out = sh(run, w["repo"], w["env"], check=False)  # nothing installed: no manifest
     assert out.returncode == 3 and "the guard is not installed" in out.stderr
     data = w["data"]
-    m = {f: hashlib.sha256((data / "bin" / f).read_bytes()).hexdigest() for f in ("guard.py", "stop_check.py", "usage_hook.py")}
+    m = {f: hashlib.sha256((data / "bin" / f).read_bytes()).hexdigest()
+         for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")}
     (data / "manifest.json").write_text(json.dumps(m))
     (data / "bin/guard.py").write_text("import sys; sys.exit(0)\n")  # a guard that refuses nothing
     out = sh(run, w["repo"], w["env"], check=False)

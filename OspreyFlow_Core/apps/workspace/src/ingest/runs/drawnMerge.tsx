@@ -92,6 +92,8 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
   const [choices, setChoices] = useState<Record<string, Choice>>({});
   const [dry, setDry] = useState<DrawnMergeDryRun | null>(null);
   const [sent, setSent] = useState<Promotion | null>(null);
+  // Counts the times a sheet has been drawn by Map and match; a Match re-read does not count.
+  const [opened, setOpened] = useState(0);
   const [problem, setProblem] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   // The latest Match read asked for: an older reply arriving after it is dropped (the fourth
@@ -108,9 +110,13 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
     void reload();
   }, [reload]);
 
+  // Focus goes to the sheet's heading on exactly two occasions: when the sheet is drawn (`opened`) and
+  // when the merge is sent (`sent`). Not on every Match re-read, which replaces `sheet` after each
+  // "goes in as" or "goes into" choice: that would take a keyboard user off the control they just
+  // changed (WCAG 3.2.2, On Input). The heading is mounted only while a sheet is, so a close is a no-op.
   useEffect(() => {
-    if (sheet) heading.current?.focus();
-  }, [sheet, sent]);
+    heading.current?.focus();
+  }, [opened, sent]);
 
   if (!targets) return null;
 
@@ -124,6 +130,7 @@ export function DrawnMerge({ apiBaseUrl, bearerToken, datasetId, onChanged }: Dr
       return;
     }
     setSheet(answer.value);
+    setOpened((n) => n + 1);
     setTicked(startingTicks(answer.value.items ?? []));
     setPairs(new Set());
     setChoices(

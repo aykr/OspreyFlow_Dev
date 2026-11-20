@@ -33,6 +33,9 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       if (path === "dashboards") return json(200, []);
       if (path === "/v1/handling-scheme")
         return json(200, { classification: ["OFFICIAL", "SECRET"], handling_codes: { P: {}, C: {} } });
+      // The invite form is drawn once the inviter's own details have arrived (AD2): this one holds SECRET, P and C.
+      if (path === "/v1/me")
+        return json(200, { id: "adm-1", clearance: "SECRET", org_unit: "verify", roles: ["osprey-admin"], receivable_handling_codes: ["P", "C"] });
       if (path === "system") return json(200, { version: "1.2", components: [{ name: "Graph store", ok: false, millis: 5000, detail: "unreachable" }] });
       return json(404, {});
     }),

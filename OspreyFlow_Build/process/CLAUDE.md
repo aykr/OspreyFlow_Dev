@@ -1,7 +1,7 @@
 # OspreyFlow
 
 Open-source intelligence analysis and network discovery platform. Three tiers — the Glass
-(React workspace), the Conduit (FastAPI orchestration), the Vault (graph store, analytics,
+(a React workspace, and server-rendered pages from the `pages` service: ADR-152), the Conduit (FastAPI orchestration), the Vault (graph store, analytics,
 models) — separated by four typed ports.
 
 ## The specification is in `spec/` and it is binding
@@ -21,7 +21,7 @@ current task needs; do not read all of it every session.
 | `process/07_BUILD_PLAN.md` | Phase scope and exit criteria |
 | `spec/08_ACCEPTANCE_SCENARIOS.md` | The functional definition of done |
 | `spec/09_INGEST_STUDIO.md` | Ingest, connectors, mapping, review queue |
-| `apps/workspace/src/design/tokens.css` | Any styling. Authoritative — no colour outside these tokens (it moved here from `spec/design/` in Round 14a; `spec/design/` now holds only the brand foundations) |
+| `packages/design/tokens.css` (until ADR-152's move lands: `apps/workspace/src/design/tokens.css`) | Any styling. Authoritative — no colour outside these tokens (it moved here from `spec/design/` in Round 14a; `spec/design/` now holds only the brand foundations) |
 
 All decision records in `spec/06_DECISIONS.md` are accepted. If you believe one is wrong, say so
 and stop — do not implement an alternative and explain afterwards.
@@ -160,7 +160,9 @@ outside the stated scope of the change — a correction to one section must not 
 
 - Python 3.12, FastAPI, async throughout. Pydantic models in `packages/schemas` are the source
   of truth; TypeScript types are generated from them and drift is a build failure.
-- TypeScript strict. React 19 + Vite. Zustand for the working set.
+- TypeScript strict. React 19 + Vite in `apps/workspace`. Node, Express, Nunjucks and esbuild in `apps/pages`,
+  with no React. Plain TypeScript shared in `packages/glass-shared`, which imports no React and no drawing
+  library. Zustand for the working set.
 - Ports are `Protocol` classes in `packages/ports`. Adapters live in `packages/adapters/<name>`.
 - British English in code comments, documentation and all user-facing copy.
 - Conventional Commits.

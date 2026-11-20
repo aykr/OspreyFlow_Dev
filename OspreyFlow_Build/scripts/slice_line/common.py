@@ -152,6 +152,33 @@ def account_stop(account: str) -> dict | None:
     return json.loads(f.read_text()) if f.exists() else None
 
 
+def known_accounts() -> set[str]:
+    """Every account name the owner's accounts.yaml gives a seat or a track."""
+    acc = load_accounts() or {}
+    return {str(v) for part in ("seats", "tracks") for v in (acc.get(part) or {}).values() if v}
+
+
+def pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def running_seats(slice_id: str) -> list[dict]:
+    """The seats of a slice whose run_seat.py is running now (its running-<seat>.json, for a process that is alive). A
+    record left by a process that has ended holds nothing."""
+    out = []
+    for f in sorted(rec_dir(slice_id).glob("running-*.json")):
+        r = read_json(f) or {}
+        if isinstance(r.get("pid"), int) and pid_alive(r["pid"]):
+            out.append(r)
+    return out
+
+
 def near_limit(account: str) -> str | None:
     st = account_state(account)
     for window, info in (st.get("windows") or {}).items():
@@ -194,3 +221,179 @@ def set_state(slice_id: str, **kw) -> dict:
 
 def frozen_matches(frozen: dict, row: dict) -> bool:
     return all((frozen.get(k) or "") == (row.get(k) or "") for k in FROZEN_KEYS)
+
+
+def refreeze(slice_id: str, by: str) -> dict:
+    """Take the slice's frozen columns from main's backlog file, keeping the previous ones in the record's history."""
+    f = rec_dir(slice_id) / "frozen.json"
+    frozen = read_json(f) or {}
+    if not frozen:
+        raise SystemExit(f"{slice_id} has not started.")
+    row = slice_row(slice_id)
+    frozen.setdefault("history", []).append({k: frozen.get(k) for k in (*FROZEN_KEYS, "frozen_at")})
+    frozen.update({k: row[k] for k in FROZEN_KEYS})
+    frozen["frozen_at"] = now()
+    frozen["refrozen_by"] = by
+    write_json(f, frozen)
+    return frozen
+
+
+#: The owner's rulings reach a slice's worktree, which is a snapshot from the slice's start, as an untracked copy of
+#: main's RULINGS.md at a path every checkout's .gitignore keeps out of git (`Claude outputs/`), never as a commit on
+#: the slice's branch: a copy committed there conflicts with main the next time main's rulings change (BL6, 18
+#: November 2026). run_seat.py writes it before every builder and verifier session and names it in the prompt.
+RULINGS_REL = f"{V062_REL}/RULINGS.md"
+RULINGS_COPY_REL = "Claude outputs/slice-line/RULINGS.md"
+
+
+def deliver_rulings(tree: Path) -> str | None:
+    """Main's RULINGS.md, copied into `tree` where git ignores it; the copy's path, or None when it cannot be."""
+    try:
+        text = git(["show", f"main:{RULINGS_REL}"], REPO)
+    except RuntimeError:
+        return None
+    if subprocess.run(["git", "-C", str(tree), "check-ignore", "-q", RULINGS_COPY_REL]).returncode != 0:
+        return None
+    dest = Path(tree) / RULINGS_COPY_REL
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text + "\n")
+    return str(dest)
+
+
+#: The owner's written word for resume.py (README, "Resuming a slice"): lines `<slice> <action> <YYYY-MM-DD>`, one use
+#: each. Only the owner writes it (the guard's OWNER_ONLY); every use is logged in the data folder.
+RESUME_FILE = REPO / V062_REL / "resume.tsv"
+OWNER_CHANGES = DATA / "owner-changes.tsv"
+
+
+#: The owner's standing accept (ACCEPT_STEP_BRIEF.md, "The standing mode"; RULINGS.md, 19 November 2026, ruling 5): one
+#: line in standing.tsv, beside resume.tsv and like it the owner's alone (the guard's OWNER_ONLY), never committed.
+STANDING_FILE = REPO / V062_REL / "standing.tsv"
+STANDING_RULE = "accept-test-gaps"
+#: The floor the owner's ruling names ("from a slice's third round on"): a line naming a lower round is not taken.
+STANDING_FLOOR = 3
+
+
+def standing_rule() -> tuple[dict | None, str]:
+    """The owner's standing line, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N at least 3), or None with why
+    not. Missing, unreadable, more than one line, or anything else: no standing accept, never guessed."""
+    try:
+        text = STANDING_FILE.read_text()
+    except OSError:
+        return None, f"{STANDING_FILE.name} is not there (the standing accept is off)"
+    lines = [ln.split() for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    want = f"one line '{STANDING_RULE} from-round <{STANDING_FLOOR} or more> <YYYY-MM-DD>'"
+    if len(lines) != 1:
+        return None, f"{STANDING_FILE.name} holds {len(lines)} lines, not {want}"
+    parts = lines[0]
+    ok = (len(parts) == 4 and parts[0] == STANDING_RULE and parts[1] == "from-round" and parts[2].isdigit()
+          and int(parts[2]) >= STANDING_FLOOR and re.fullmatch(r"\d{4}-\d{2}-\d{2}", parts[3]))
+    if ok:
+        try:
+            datetime.strptime(parts[3], "%Y-%m-%d")
+        except ValueError:
+            ok = False
+    if not ok:
+        return None, f"{STANDING_FILE.name} says {' '.join(parts)!r}, not {want}"
+    return {"from_round": int(parts[2]), "given": parts[3], "line": " ".join(parts)}, "on"
+
+
+def log_owner_change(slice_id: str, action: str, detail: str) -> None:
+    OWNER_CHANGES.parent.mkdir(parents=True, exist_ok=True)
+    if not OWNER_CHANGES.exists():
+        OWNER_CHANGES.write_text("at\tslice\taction\tdetail\n")
+    with OWNER_CHANGES.open("a") as fh:
+        fh.write("\t".join([now(), slice_id, action, detail.replace("\t", " ").replace("\n", " ")]) + "\n")
+
+
+def owner_changes() -> list[dict]:
+    if not OWNER_CHANGES.exists():
+        return []
+    rows = [ln.split("\t") for ln in OWNER_CHANGES.read_text().splitlines()[1:] if ln.strip()]
+    return [dict(zip(("at", "slice", "action", "detail"), r + [""] * (4 - len(r)))) for r in rows]
+
+
+#: A slice's Playwright port slot (F8): its own, from SLOT_FIRST up, clear of every lane's in scripts/lane_ports.tsv, of
+#: every unmerged slice's (its recorded slot, or one its frozen commands export), and with every port it moves
+#: (OspreyFlow_Core/apps' lanePort(<base>) + 100 x slot) clear of the test stacks' ports (scripts/lane_stacks.tsv), the
+#: owner's deployment's and every other slot's: the rules tests/test_lane_ports.py holds the lanes' table to.
+SLOT_FIRST = 16
+SLOT_STEP = 100
+OWNER_PORTS = {2480, 5432, 80, 8000, 8080, 8081, 5173}
+
+
+def _tsv_rows(path: Path) -> list[list[str]]:
+    if not path.is_file():
+        return []
+    return [ln.split("\t") for ln in path.read_text().splitlines() if ln.strip() and not ln.startswith("#")]
+
+
+def taken_slots(but: str = "") -> set[int]:
+    taken = {int(r[1]) for r in _tsv_rows(REPO / "OspreyFlow_Build/scripts/lane_ports.tsv")
+             if len(r) >= 2 and r[1].strip().isdigit()}
+    if RECORDS.exists():
+        for d in RECORDS.iterdir():
+            if d.name == but or (d / "merged.json").exists():
+                continue
+            st = read_json(d / "state.json") or {}
+            if isinstance(st.get("slot"), int):
+                taken.add(st["slot"])
+            fz = read_json(d / "frozen.json") or {}
+            for k in FROZEN_KEYS:
+                taken |= {int(n) for n in re.findall(r"OSPREY_PORTS_SLOT=(\d+)", fz.get(k) or "")}
+    return taken
+
+
+def allocate_slot(slice_id: str) -> int:
+    bases: set[int] = set()
+    apps = REPO / "OspreyFlow_Core/apps"
+    if apps.is_dir():
+        for p in apps.rglob("*.ts"):
+            if "node_modules" not in p.parts:
+                bases |= {int(n) for n in re.findall(r"lanePort\((\d+)\)", p.read_text(errors="replace"))}
+    stacks = {int(r[3]) for r in _tsv_rows(REPO / "OspreyFlow_Build/scripts/lane_stacks.tsv")
+              if len(r) >= 4 and r[3].strip().isdigit()}
+    taken = taken_slots(but=slice_id)
+    spoken = stacks | OWNER_PORTS | {b + SLOT_STEP * s for s in taken | {0} for b in bases}
+    for slot in range(SLOT_FIRST, 600):
+        ports = {b + SLOT_STEP * slot for b in bases}
+        if slot not in taken and all(p < 65536 for p in ports) and not ports & spoken:
+            return slot
+    raise SystemExit("No Playwright port slot is free for a new slice: the owner frees one (a merged or removed slice).")
+
+
+#: main's GitHub run (F2): the latest completed run on main, read with gh. Never taken as green unless it says success.
+GH_FIELDS = "databaseId,conclusion,status,url"
+
+
+def _gh_runs(*args: str) -> list[dict]:
+    p = subprocess.run(["gh", "run", "list", "--branch", "main", *args, "--limit", "1", "--json", GH_FIELDS],
+                       cwd=str(REPO), capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise ValueError(f"gh exit {p.returncode}: {(p.stderr or p.stdout).strip()[:200]}")
+    runs = json.loads(p.stdout)
+    if not isinstance(runs, list):
+        raise ValueError("gh's answer is not a list of runs")
+    return runs
+
+
+def main_ci() -> dict:
+    """{state: green | red | unknown, run, url, why}: red for a failed run, or a cancelled one with nothing newer;
+    unknown when gh cannot be read or no run has completed (refused like red, never taken as green)."""
+    try:
+        done = _gh_runs("--status", "completed")
+        if not done:
+            return {"state": "unknown", "run": None, "url": "", "why": "no run on main has completed"}
+        last = done[0]
+        run, url, concl = last.get("databaseId"), last.get("url", ""), last.get("conclusion")
+        if concl == "success":
+            return {"state": "green", "run": run, "url": url, "why": "success"}
+        if concl == "cancelled":
+            newest = _gh_runs()
+            if newest and newest[0].get("databaseId") != run:
+                return {"state": "green", "run": run, "url": url,
+                        "why": f"cancelled, with a newer run {newest[0].get('databaseId')} ({newest[0].get('status')})"}
+            return {"state": "red", "run": run, "url": url, "why": "cancelled, with nothing newer"}
+        return {"state": "red", "run": run, "url": url, "why": str(concl)}
+    except (OSError, ValueError, subprocess.TimeoutExpired) as e:
+        return {"state": "unknown", "run": None, "url": "", "why": f"gh could not be read ({e})"}

@@ -3,7 +3,7 @@
 - **Build id:** GG1
 - **Dial setting:** balanced
 - **Rounds limit:** 2
-- **After:** AD2 (same track, one at a time; both are in the workspace)
+- **After:** nothing (unhooked by the owner, 19 November 2026: it ran after AD2 only for ordering; both change the workspace, so a conflicting merge is refused by the merge script and is then the second slice's to redo)
 - **Status of this brief:** APPROVED by the owner, 18 November 2026.
 
 ## What
@@ -21,15 +21,26 @@ the heading takes focus after each choice. That spec changes with the fix.
 
 ## Acceptance test
 
-Edit `apps/workspace/keyboard/drawn-merge.spec.ts` (rule 13): changing a "goes in as" select leaves focus on that select
-(and on a Match box after toggling it); the heading takes focus when the sheet is first drawn and again when it is sent.
-New vitest case in `src/ingest/runs/drawnMerge.test.tsx` for the same two moments (it has no focus assertion today).
-Red today: focus lands on the heading after the select change, the very line the old spec asserts.
+Two new files carry the new cases, because the existing spec asserts the fault and passes today (so an acceptance that ran
+only the existing files would not be red on main): the keyboard spec OspreyFlow_Core/apps/workspace/keyboard/drawn-merge-focus.spec.ts (rule 13:
+changing a "goes in as" select leaves focus on that select, and on a Match box after toggling it; the heading takes focus
+when the sheet is first drawn and again when it is sent), and the vitest file
+OspreyFlow_Core/apps/workspace/src/ingest/runs/drawnMergeFocus.test.tsx for the same two moments (the existing vitest file has no focus
+assertion). Red today: focus lands on the heading after the select change. The existing keyboard spec, drawn-merge.spec.ts
+(lines 88-91 and 100), asserts that the heading takes focus after each choice: the slice changes those assertions to
+match the fix (it stays in the checks, which run every drawn-merge keyboard spec).
 
 ## Checks
 
 `src/ingest/runs` vitest; `keyboard/drawn-merge.spec.ts`; `keyboard/promotions` specs that share the sheet
 (`promotions.test.tsx:162, :178`).
+
+## First step, from the conductor (19 November 2026)
+
+Your branch was cut from main before the owner's commit c7fda31, which allows the 25 paths ADR-152 names. Until your branch
+has it, the citations scan (test_the_repository_itself_is_clean) is red for files you did not touch, and no change of yours
+can fix that. Before anything else, merge main into your branch (git merge main in your worktree), then run the checks. Do
+not change any citation, allowlist or spec file.
 
 ## Out of scope
 

@@ -14,8 +14,10 @@ is denied, never prompted. Scouts are not launched here: they are the conductor'
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import time
@@ -25,19 +27,50 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 
-HOOKS = ("guard.py", "stop_check.py", "usage_hook.py")
+HOOKS = ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv")
+#: The seat shim (seat_shim.sh, installed under bin/shim/ by install.sh): every seat's `claude`, first on its PATH.
+SHIM_NAMES = ("claude", "claude-sol", "claude-ayan")
 TOOLS = {
     "builder": "Read,Grep,Glob,Edit,Write,Bash",
     "verifier": "Read,Grep,Glob,Bash(git diff *),Bash(git log *),Bash(git show *),Bash(git status *)",
 }
+#: A finding's kind (the owner's rulings 4 and 5 of 19 November 2026; ACCEPT_STEP_BRIEF.md, "The standing mode"): a
+#: fault in the code's behaviour, or a gap in a test (the behaviour may be right, but no test would fail if it were
+#: wrong). Kept verbatim in the verifier's record; a finding without one of these two exact values has no kind, which
+#: counts as a fault: nothing accepts it on the standing word.
+FAULT, GAP = "fault", "test_gap"
+KINDS = (FAULT, GAP)
+#: Before the field existed, the extra rounds' briefs asked the verifier to begin each finding's text with one of these
+#: (RULINGS.md, 19 November, ruling 5). Read as the kind only in a record written before the field (no `kinds` in it),
+#: and nowhere else.
+LEGACY_PREFIXES = (("FAULT IN BEHAVIOUR:", FAULT), ("GAP IN A TEST:", GAP))
+
+
+def kind_of(finding: dict, legacy: bool = False) -> str | None:
+    """A finding's kind: its field, or, in a record written before the field existed, its text's prefix; else None."""
+    if not isinstance(finding, dict):
+        return None
+    if finding.get("kind") in KINDS:
+        return finding["kind"]
+    if legacy and "kind" not in finding:
+        text = str(finding.get("what") or "").lstrip()
+        for prefix, kind in LEGACY_PREFIXES:
+            if text.startswith(prefix):
+                return kind
+    return None
+
+
+def is_legacy(record: dict) -> bool:
+    """A verifier record written before the kind field: it has no `kinds` count."""
+    return "kinds" not in (record or {})
 VERDICT_SCHEMA = {
     "type": "object",
     "properties": {
         "verdict": {"enum": ["pass", "findings"]},
         "commit": {"type": "string"},
         "findings": {"type": "array", "items": {"type": "object", "properties": {
-            "what": {"type": "string"}, "evidence": {"type": "string"},
-            "file": {"type": "string"}, "line": {"type": "integer"}}, "required": ["what", "evidence"]}},
+            "what": {"type": "string"}, "evidence": {"type": "string"}, "kind": {"enum": list(KINDS)},
+            "file": {"type": "string"}, "line": {"type": "integer"}}, "required": ["what", "evidence", "kind"]}},
     },
     "required": ["verdict", "commit", "findings"],
 }
@@ -49,6 +82,21 @@ PASS_FOCUS = {
     "accessibility": "Check the slice for accessibility faults only: keyboard reach (rule 13), labels, focus, "
                      "contrast from tokens.css, and screen-reader words.",
 }
+
+
+def kinds_of(findings: list[dict], legacy: bool = False) -> dict:
+    """How many findings are of each kind; any other value, or none, is counted as "no kind"."""
+    out = {FAULT: 0, GAP: 0, "no kind": 0}
+    for f in findings or []:
+        k = kind_of(f, legacy)
+        out[k if k in KINDS else "no kind"] += 1
+    return out
+
+
+def kinds_said(kinds: dict) -> str:
+    n_f, n_g, n_n = kinds.get(FAULT, 0), kinds.get(GAP, 0), kinds.get("no kind", 0)
+    return (f"{n_f} {'fault' if n_f == 1 else 'faults'} in behaviour, {n_g} {'gap' if n_g == 1 else 'gaps'} in a test"
+            + (f", {n_n} with no kind" if n_n else ""))
 
 
 class NotLoaded(SystemExit):
@@ -76,6 +124,12 @@ def preflight(account: str, cwd: Path) -> dict:
               c.REPO / ".claude/settings.local.json", cwd / ".claude/settings.json", cwd / ".claude/settings.local.json"):
         if f.is_file() and "disableAllHooks" in f.read_text():
             raise NotLoaded(f"REFUSED TO START: {f} turns hooks off (disableAllHooks).")
+    shim = c.BIN / "bin/shim"
+    for name in SHIM_NAMES:
+        p = shim / name
+        if not p.is_file() or not manifest.get("shim/claude") or sha(p) != manifest.get("shim/claude"):
+            raise NotLoaded(f"REFUSED TO START: the seat shim ({p}) is missing or differs from the install manifest: "
+                            "run install.sh.")
     if c.account_stop(account):
         raise NotLoaded(f"STOPPED: account {account} is stopped ({c.account_stop(account)['error']}); the owner decides.")
     if not c.signed_in(account):
@@ -107,15 +161,29 @@ def append_usage(slice_id: str, build: str, seat: str, account: str, model: str,
         fh.write("\t".join(str(x) for x in row) + "\n")
 
 
+def seat_command(seat: str, account: str, model: str, effort: str, env_extra: dict, token: str,
+                 session: str = "") -> tuple[list[str], dict]:
+    """The seat's command and environment: started through the seat shim with a one-time launch token (F1, layer 3),
+    the shim's folder first on the seat's PATH, so every `claude` the seat itself runs meets the shim's refusal."""
+    shim = c.BIN / "bin/shim"
+    launch_token = uuid.uuid4().hex
+    (c.DATA / "launch").mkdir(parents=True, exist_ok=True)
+    (c.DATA / "launch" / launch_token).write_text(f"{seat} {env_extra.get('OSPREY_SLICE', '')} {c.now()}\n")
+    env = c.claude_env(account)
+    env.update({"OSPREY_SEAT": seat, "OSPREY_SEAT_TOKEN": token, "OSPREY_ACCOUNT": account,
+                "OSPREY_SLICE_HOME": str(c.DATA), "OSPREY_CLAUDE_BIN": c.CLAUDE, "OSPREY_LAUNCH_TOKEN": launch_token,
+                **env_extra})
+    env["PATH"] = os.pathsep.join([str(shim), *[p for p in env.get("PATH", "").split(os.pathsep) if p and p != str(shim)]])
+    args = [str(shim / "claude"), "--agent", f"slice-{seat}", "--settings", str(c.BIN / "settings.json"),
+            "--session-id", session or str(uuid.uuid4()), "--model", model, "--effort", effort]
+    return args, env
+
+
 def launch(seat: str, account: str, cwd: Path, prompt: str, model: str, effort: str, env_extra: dict,
            log: Path, extra: list[str] | None = None, interactive: bool = False) -> dict:
     manifest = preflight(account, cwd)
     token, session = uuid.uuid4().hex, str(uuid.uuid4())
-    env = c.claude_env(account)
-    env.update({"OSPREY_SEAT": seat, "OSPREY_SEAT_TOKEN": token, "OSPREY_ACCOUNT": account,
-                "OSPREY_SLICE_HOME": str(c.DATA), **env_extra})
-    args = [c.CLAUDE, "--agent", f"slice-{seat}", "--settings", str(c.BIN / "settings.json"),
-            "--session-id", session, "--model", model, "--effort", effort]
+    args, env = seat_command(seat, account, model, effort, env_extra, token, session)
     if not interactive:
         args += ["-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
                  "--permission-mode", "dontAsk", "--allowedTools", TOOLS[seat]]
@@ -177,6 +245,125 @@ def brief_text(slice_id: str) -> str:
         return "(no brief file on main)"
 
 
+def last_findings(slice_id: str) -> str:
+    """The newest findings record (a verifier's, or the merge gate's verify-gate-*), for the builder's prompt."""
+    last = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
+    if last:
+        v = c.read_json(last[-1]) or {}
+        if v.get("verdict") != "pass":
+            return "\n\nThe findings from the last round, to fix:\n" + json.dumps(v.get("findings"), indent=1)
+    return ""
+
+
+def rulings_note(tree: Path) -> str:
+    """Main's RULINGS.md, brought into the seat's checkout (a snapshot from the slice's start) as an ignored copy."""
+    copy = c.deliver_rulings(tree)
+    if not copy:
+        return "\n\nThe owner's rulings as on main today could not be copied into your checkout: read RULINGS.md there."
+    return (f"\n\nThe owner's rulings as on main today are in {copy} (your checkout's own RULINGS.md is from the "
+            "slice's start and may be older): read them before you begin; they bind this slice.")
+
+
+@contextlib.contextmanager
+def seat_running(slice_id: str, seat: str, account: str):
+    """A running record for the slice's seat while this process runs it (running-<seat>.json, with its pid):
+    resume.py move-seat refuses while one is alive."""
+    f = c.rec_dir(slice_id) / f"running-{seat}.json"
+    c.write_json(f, {"slice": slice_id, "seat": seat, "account": account, "pid": os.getpid(), "at": c.now()})
+    try:
+        yield
+    finally:
+        f.unlink(missing_ok=True)
+
+
+#: A seat failure (LINE_FIXES_3_BRIEF.md, 1f): a session whose call was refused analysed nothing, so it is never a
+#: verdict, a finding, a round or a red stop. CO2's verifier on 19 November 2026 came back in 332 ms with is_error,
+#: api_error_status 403, api_error_code oauth_not_allowed_for_organization, and was written as a finding.
+REFUSED_STATUSES = (401, 403, 408, 429)  # and every 5xx
+SEAT_TRIES = 3
+SEAT_PAUSES = (60, 300, 0)  # seconds before the second and the third try: growing
+
+
+class SeatFailed(Exception):
+    pass
+
+
+def verdict_of(res: dict) -> dict:
+    """The verifier's structured verdict in a session's result line, or {}."""
+    out = res.get("structured_output")
+    if isinstance(out, dict):
+        return out
+    try:
+        out = json.loads(res.get("result") or "{}")
+    except ValueError:
+        return {}
+    return out if isinstance(out, dict) else {}
+
+
+def refusal_words(res: dict) -> str:
+    head = " ".join(str(x) for x in (res.get("api_error_status"), res.get("api_error_code")) if x not in (None, ""))
+    text = str(res.get("result") or "").strip()[:300]
+    return (head + (": " if head and text else "") + text) or f"is_error with subtype {res.get('subtype')}"
+
+
+def seat_failure(res: dict, wants_verdict: bool) -> str | None:
+    """Why a session's result is a seat failure (its call refused, nothing analysed), or None for a real result.
+
+    A refused status (401, 403, 408, 429, 5xx); is_error from a session that ran no more than the refused turn (a
+    session that ran out of turns has analysed something, and is the seat's own result); no result line at all; or,
+    for a verifier, no structured verdict and no turns of analysis."""
+    if not res or res.get("type") != "result":
+        return "the session ended with no result line"
+    status = res.get("api_error_status")
+    refused = isinstance(status, int) and (status in REFUSED_STATUSES or 500 <= status <= 599)
+    if refused or (res.get("is_error") is True and (status is not None or (res.get("num_turns") or 0) <= 1)):
+        return refusal_words(res)
+    if wants_verdict and not verdict_of(res) and not res.get("num_turns"):
+        return "no verdict and no turns of analysis"
+    return None
+
+
+def launch_seat(slice_id: str, seat: str, label: str, account: str, tip: str, call, usage,
+                wants_verdict: bool = False) -> dict:
+    """A seat's session (`call`), tried up to SEAT_TRIES times while its call is refused, the pause growing. Each refused
+    try is a record of kind seat_failure (seat-failure-*.json: no board verdict, merge, standing accept or builder
+    prompt reads it). When the tries are used, or the account is stopped meanwhile (the StopFailure hook stops it at
+    the first refusal, and then a retry would be refused at the account check), the account is recorded stopped, the
+    slice's state names the failure and the account, its phase and round untouched, and SeatFailed is raised."""
+    why, attempt = "", 0
+    for attempt in range(1, SEAT_TRIES + 1):
+        with seat_running(slice_id, seat, account):
+            res = call()
+        usage(res)
+        why = seat_failure(res, wants_verdict)
+        if not why:
+            st = c.state(slice_id)
+            if "seat_failure" in st:
+                st.pop("seat_failure")
+                c.write_json(c.rec_dir(slice_id) / "state.json", st)
+            return res
+        c.write_json(c.rec_dir(slice_id) / f"seat-failure-{seat}-{uuid.uuid4().hex[:8]}.json",
+                     {"kind": "seat_failure", "slice": slice_id, "seat": seat, "pass": label, "account": account,
+                      "tip": tip, "try": attempt, "of": SEAT_TRIES, "error": why, "result": res, "at": c.now(),
+                      "note": "a refused call, not a verdict: no finding, no round, no red stop"})
+        print(f"{slice_id}: the {seat}'s call on account {account} was refused (try {attempt} of {SEAT_TRIES}): {why}")
+        if c.account_stop(account):
+            break
+        if attempt < SEAT_TRIES:
+            time.sleep(SEAT_PAUSES[attempt - 1])
+    if not c.account_stop(account):
+        c.write_json(c.DATA / "accounts" / f"{account}.stopped.json",
+                     {"account": account, "error": f"seat failure after {attempt} tries: {why}", "at": c.now(),
+                      "seat": seat, "slice": slice_id, "message": why})
+    c.set_state(slice_id, seat_failure={"seat": seat, "account": account, "error": why, "tries": attempt,
+                                        "at": c.now()})
+    raise SeatFailed(f"SEAT FAILURE {slice_id}: the {seat}'s call on account {account} was refused {attempt} "
+                     f"time(s); the slice stays where it was and account {account} is stopped "
+                     f"({(c.account_stop(account) or {}).get('error')}). Tell the owner at once, in its words: {why}. "
+                     f"The owner clears the account (clear_account.py {account}, on a resume.tsv line) or moves the "
+                     "seat (resume.py move-seat).")
+
+
 def stop_slice(slice_id: str, note: str) -> None:
     c.set_state(slice_id, phase="stopped", note=note)
     board()
@@ -188,25 +375,30 @@ def builder(slice_id: str) -> int:
     if not frozen or st.get("phase") != "building":
         raise SystemExit(f"{slice_id} is not in the building phase ({st.get('phase')}): slice_start.py first.")
     seat = c.seat_settings("builder", st["setting"])
-    findings = ""
-    last = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
-    if last:
-        v = c.read_json(last[-1]) or {}
-        if v.get("verdict") != "pass":
-            findings = "\n\nThe verifier's findings from the last round, to fix:\n" + json.dumps(v.get("findings"), indent=1)
+    findings = last_findings(slice_id)
     prompt = (f"You are the builder for slice {slice_id} (build {frozen['build']}), round {st['round']} of "
               f"{st['rounds_limit']}. Your worktree is {frozen['worktree']}, on branch {frozen['branch']}.\n\n"
               f"The brief:\n{brief_text(slice_id)}\n\nFrozen for this slice (you cannot change them):\n"
               f"- acceptance files: {frozen['acceptance_files']}\n- acceptance: {frozen['acceptance']}\n"
               f"- checks: {frozen['checks']}{findings}")
     wt = Path(frozen["worktree"])
-    log = c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"
-    res = launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
-                 {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt)}, log)
+    prompt += rulings_note(wt)
+    tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    try:
+        res = launch_seat(
+            slice_id, "builder", f"round {st['round']}", st["account"], tip0,
+            lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
+                           {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                            **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})},
+                           c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"),
+            lambda r: append_usage(slice_id, frozen["build"], "builder", st["account"], seat["model"], seat["effort"], r))
+    except SeatFailed as e:
+        board()
+        print(e)
+        return 2
     sess = c.read_json(c.rec_dir(slice_id) / "sessions.json") or {"builder": [], "verifier": []}
     sess["builder"].append(res.get("session_id"))
     c.write_json(c.rec_dir(slice_id) / "sessions.json", sess)
-    append_usage(slice_id, frozen["build"], "builder", st["account"], seat["model"], seat["effort"], res)
     red = c.read_json(c.rec_dir(slice_id) / "red_stop.json")
     tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
     if c.account_stop(st["account"]):
@@ -244,6 +436,7 @@ def verifier(slice_id: str) -> int:
     else:
         c.git(["worktree", "add", "--detach", str(vt), tip], c.REPO)
     base = frozen["base"]
+    rulings = rulings_note(vt)
     diffstat = c.git(["diff", "--stat", f"{base}...{tip}"], c.REPO)
     passes = []
     for focus in seat.get("passes", ["acceptance"]):
@@ -253,18 +446,25 @@ def verifier(slice_id: str) -> int:
                   f"{frozen['acceptance_files']}\nAcceptance: {frozen['acceptance']}\nChecks: {frozen['checks']}\n"
                   f"The builder's test record (green):\n{json.dumps(tests, indent=1)}\n\nWhat changed:\n{diffstat}\n\n"
                   f"Use git diff {base}...{tip} and Read. Return verdict 'pass', or 'findings' with evidence (file, "
-                  f"line, what is wrong and how you know). Put the commit {tip} in your answer.")
-        log = c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl"
-        res = launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
-                     {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)}, log,
-                     ["--json-schema", json.dumps(VERDICT_SCHEMA)])
-        append_usage(slice_id, frozen["build"], f"verifier:{focus}", account, seat["model"], seat["effort"], res)
-        out = res.get("structured_output")
-        if not isinstance(out, dict):
-            try:
-                out = json.loads(res.get("result") or "{}")
-            except ValueError:
-                out = {}
+                  f"line, what is wrong and how you know). Give each finding its kind: '{FAULT}' (a fault in behaviour) "
+                  f"when the code does the wrong thing, '{GAP}' (a gap in a test) when the code may be right but no "
+                  f"test would fail if it were wrong; a finding without a kind counts as a fault. Put "
+                  f"the commit {tip} in your answer.{rulings}")
+        try:
+            res = launch_seat(
+                slice_id, "verifier", focus, account, tip,
+                lambda: launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
+                               {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)},
+                               c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl",
+                               ["--json-schema", json.dumps(VERDICT_SCHEMA)]),
+                lambda r: append_usage(slice_id, frozen["build"], f"verifier:{focus}", account, seat["model"],
+                                       seat["effort"], r),
+                wants_verdict=True)
+        except SeatFailed as e:  # no verifier record: the passes so far are run again with the rest
+            board()
+            print(e)
+            return 2
+        out = verdict_of(res)
         sid = res.get("session_id", "")
         passes.append({"pass": focus, "verdict": out.get("verdict", "findings"), "commit": out.get("commit", ""),
                        "findings": out.get("findings") or ([] if out else [{"what": "no verdict returned",
@@ -277,16 +477,19 @@ def verifier(slice_id: str) -> int:
     ok = all(p["verdict"] == "pass" and p["commit"] == tip for p in passes)
     record = {"slice": slice_id, "commit": tip, "verdict": "pass" if ok else "findings", "passes": passes,
               "findings": [f for p in passes for f in p["findings"]], "builder_sessions": sess["builder"], "at": c.now()}
+    record["kinds"] = kinds_of(record["findings"])
     c.write_json(c.rec_dir(slice_id) / f"verify-{tip}.json", record)
     if ok:
         c.set_state(slice_id, phase="verified", tip=tip)
         board()
         print(f"{slice_id}: the verifier passed {tip[:10]}. The conductor runs merge_slice.py merge {slice_id}.")
         return 0
+    if standing_accept(slice_id):
+        return 0
     if st["round"] >= st["rounds_limit"]:
         first = record["findings"][0]["what"] if record["findings"] else "no verdict"
-        stop_slice(slice_id, f"findings after {st['round']} round(s) (first: {first[:90]}): accept a narrower slice, "
-                             "or allow another round?")
+        stop_slice(slice_id, f"findings after {st['round']} round(s) ({kinds_said(record['kinds'])}; first: "
+                             f"{first[:90]}): accept a narrower slice, or allow another round?")
         return 1
     c.set_state(slice_id, phase="building", round=st["round"] + 1)
     board()
@@ -294,10 +497,40 @@ def verifier(slice_id: str) -> int:
     return 1
 
 
+def standing_accept(slice_id: str) -> bool:
+    """The owner's standing accept (standing.tsv; resume.py accept), tried after a verifier record with findings; it
+    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit)."""
+    import resume  # here, not at the top: resume.py imports this module
+    try:
+        said = resume.act(slice_id, "accept", standing_only=True)
+    except (resume.Refused, resume.ms.Refused) as e:
+        print(f"{slice_id}: not accepted on the standing word: {e}")
+        return False
+    board()
+    print("\n".join(said))
+    return True
+
+
+def conductor_usage(session: str, account: str) -> None:
+    """The conductor's own row (one per session, its scouts' with it), when its SessionEnd hook wrote none: none had
+    appeared by 18 November 2026. Never a second row for a session."""
+    f = c.DATA / "usage.tsv"
+    if f.exists() and any(ln.split("\t")[7:8] == [session] for ln in f.read_text().splitlines()[1:]):
+        return
+    tp = transcript_of(account, session)
+    if not tp:
+        return
+    import usage_hook
+    usage_hook.DATA = c.DATA
+    usage_hook.conductor_row(Path(tp), session, account)
+
+
 def conductor() -> int:
     seat = c.seat_settings("conductor")
-    launch("conductor", c.account_for("conductor"), c.REPO, "", seat["model"], seat["effort"], {},
-           c.DATA / "conductor" / f"{c.now()}.log", interactive=True)
+    account = c.account_for("conductor")
+    res = launch("conductor", account, c.REPO, "", seat["model"], seat["effort"], {},
+                 c.DATA / "conductor" / f"{c.now()}.log", interactive=True)
+    conductor_usage(res["session_id"], account)
     return 0
 
 

@@ -26,6 +26,9 @@ from schemas.domain import Principal
 
 DASHBOARD_PREFIX = "osprey-dashboard-"
 EMBEDDER = "osprey-embedder"
+#: The most dashboards Superset gives in one page of its list (its `FAB_API_MAX_PAGE_SIZE`
+#: default); a longer list is read a page at a time, to the count Superset reports.
+PAGE_SIZE = 100
 
 
 class SupersetRefused(Exception):
@@ -142,15 +145,43 @@ class SupersetEmbedder:
         }
 
     async def dashboards(self) -> list[tuple[int, str, str]]:
-        """Every Superset dashboard with a slug: (id, slug, title)."""
+        """Every Superset dashboard with a slug: (id, slug, title). The pages are read to the count
+        Superset reports (rule 2): never one page taken for the whole list. Superset's list gives
+        at most `PAGE_SIZE` a page, so a list it will not give whole (a count it does not reach, a
+        page that adds nothing) is refused in words rather than answered short."""
         headers = await self._session()
-        listed = await self._http.get(
-            "/api/v1/dashboard/", params={"q": "(page_size:100)"}, headers=headers
-        )
-        if listed.status_code != 200:
-            raise SupersetRefused(f"Superset refused the dashboard list ({listed.status_code})")
+        seen: dict[int, dict[str, Any]] = {}
+        page = 0
+        while True:
+            listed = await self._http.get(
+                "/api/v1/dashboard/",
+                params={"q": f"(page:{page},page_size:{PAGE_SIZE})"},
+                headers=headers,
+            )
+            if listed.status_code != 200:
+                raise SupersetRefused(f"Superset refused the dashboard list ({listed.status_code})")
+            body = listed.json()
+            rows: list[dict[str, Any]] = body.get("result", [])
+            count = body.get("count")
+            total = count if isinstance(count, int) and not isinstance(count, bool) else None
+            fresh = [d for d in rows if int(d["id"]) not in seen]
+            seen.update({int(d["id"]): d for d in fresh})
+            if total is None:
+                # A reply with no count can only be the whole list if its page was not full.
+                if len(rows) < PAGE_SIZE:
+                    break
+            elif len(seen) >= total:
+                break
+            if not fresh:
+                held = f"{total} dashboards" if total is not None else "a full page of dashboards"
+                raise SupersetRefused(
+                    f"Superset reports {held} but gave only {len(seen)} of them, so the list of "
+                    "boards cannot be shown whole; check Superset's dashboard list, or ask the "
+                    "administrator to reduce the number of dashboards it holds"
+                )
+            page += 1
         return [(int(d["id"]), str(d["slug"]), str(d["dashboard_title"]))
-                for d in listed.json().get("result", []) if d.get("slug")]  # fmt: skip
+                for d in seen.values() if d.get("slug")]  # fmt: skip
 
     async def embeddable(
         self, identities: Sequence[DashboardIdentity]

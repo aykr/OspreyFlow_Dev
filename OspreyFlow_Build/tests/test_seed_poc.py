@@ -44,6 +44,7 @@ def recorded(monkeypatch) -> dict[str, Any]:  # type: ignore[no-untyped-def]
     monkeypatch.setattr(seed_poc, "_seed_main", lambda module: seed(module))
     monkeypatch.setattr(seed_poc, "_unit", unit)
     monkeypatch.delenv("OSPREY_HIGHEST_MARKING", raising=False)
+    monkeypatch.delenv("OSPREY_PROFILE", raising=False)
     monkeypatch.delenv("OSPREY_ORG_UNIT", raising=False)
     return seen
 
@@ -173,6 +174,24 @@ def test_a_ceiling_below_the_seeds_is_refused_before_anything_is_written(
         and recorded["seeds"] == []
         and "unit_of" not in recorded
     )
+
+
+def test_an_unset_ceiling_on_the_cloud_platform_profile_refuses_the_seeds(
+    recorded, monkeypatch, capsys
+) -> None:  # type: ignore[no-untyped-def]
+    """A hand-started POC seed with the profile named and no ceiling: the profile's own
+    OFFICIAL-SENSITIVE applies, not the scheme's highest (ADR-148 Amendment 5). Rule 15: with no
+    profile the same run seeds, so it is the profile that refuses."""
+    monkeypatch.setenv("OSPREY_PROFILE", "cloud-platform")
+    assert seed_poc.main(["--author", ADMIN]) == 1
+    said = capsys.readouterr().err
+    assert "OFFICIAL-SENSITIVE" in said and "SECRET" in said and "nothing was seeded" in said
+    assert recorded["cases"] == [] and recorded["seeds"] == []
+    monkeypatch.delenv("OSPREY_PROFILE")
+    assert seed_poc.main(["--author", ADMIN]) == 0
+    monkeypatch.setenv("OSPREY_PROFILE", "cloud-platform")
+    monkeypatch.setenv("OSPREY_HIGHEST_MARKING", "SECRET")
+    assert seed_poc.main(["--author", ADMIN]) == 0
 
 
 def test_the_ceiling_s_refusal_says_what_the_client_would_declare(

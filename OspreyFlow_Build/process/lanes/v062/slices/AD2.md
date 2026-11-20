@@ -40,3 +40,30 @@ green); the keyboard spec for admin.
 ## Out of scope
 
 The server check; the model form (AD1); PL4's shared-package move (this slice is merged before it starts).
+
+## Round instruction from the owner (18 November 2026)
+
+To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
+
+To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.
+
+## Owner's design rule for the next round (19 November 2026)
+
+The invite form is drawn only once the inviter's details (the answer to GET /v1/me) have arrived, so no choice can be
+made before them. This replaces any handling of a choice made before the details arrive: nothing is chosen early, so
+nothing is filtered, reset or hidden afterwards. Add a test that fails if the form can be used before the details
+arrive (the clearance select, the handling-code boxes and the Invite button are not there or not usable until then).
+What the form shows while it waits, and what it says in words if the details cannot be had, is the builder's to settle;
+a test shows each. The test gap on a clearance outside the scheme is fixed in the same round. Nothing else changes.
+
+## Owner's general design rule for the last round (19 November 2026, replaces the design rule above)
+
+The invite form is drawn only when everything it depends on has loaded: the inviter's details (the answer to GET /v1/me),
+the handling scheme (the answer to GET /v1/handling-scheme), and anything else the form reads before it offers a choice.
+Until then it shows a loading message, or an error message if a load has failed, and never a choice and never a
+statement about what the inviter can give or hold. Add tests, for each thing the form depends on, for a late answer and
+for a failed answer: in both, no select, box or Invite button is usable and no sentence about what the inviter can give
+is shown; when a late answer arrives the form is drawn once, correctly; a later failure after the form is drawn does not
+replace it. The two earlier test gaps are fixed in the same round: the test for a clearance outside the scheme fills the
+name and the unit, and shows that nothing can be sent; and a token change keeps a drawn form, while a change in the
+details draws a fresh one. Nothing else changes.

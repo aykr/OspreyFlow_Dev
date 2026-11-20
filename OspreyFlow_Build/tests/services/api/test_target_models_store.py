@@ -26,6 +26,7 @@ from schemas.dataset_model import ModelExtension, TargetModelDraftInput
 from schemas.domain import Principal
 
 ENGINEER = Principal(id="d.engineer", clearance="OFFICIAL", org_unit="unit-1")
+SECOND = Principal(id="d.second", clearance="OFFICIAL", org_unit="unit-1")
 
 
 @pytest.fixture
@@ -89,7 +90,37 @@ async def test_the_versions_on_postgres(store: PostgresTargetModelStore) -> None
     assert states == [(1, "previous"), (2, "live"), (3, "draft")]
     (one,) = [m for m in await store.versions(dataset) if m.version == 1]
     assert one.packs == {"fibo": 3} and one.extensions == [_vessel(1)]
-    await store.discard_draft(dataset)
+    await store.discard_draft(dataset, ENGINEER)
+    assert await store.draft(dataset) is None
+
+
+async def test_only_the_creator_saves_into_or_discards_a_draft_on_postgres(
+    store: PostgresTargetModelStore,
+) -> None:
+    """C186 (OWED: needs the dev stack, not run in the slice that wrote it; the in-memory twin is
+    `test_target_model_draft_owner.py`). A second principal's save or discard is refused under the
+    lock, naming who holds the draft, and the stored row is unchanged; the creator's own save is
+    confirmed against the version."""
+    dataset = new_id()
+    first = await store.open_draft(dataset, ENGINEER)
+    mine = await store.save_draft(
+        dataset, TargetModelDraftInput(packs={"fibo": 3}, extensions=[_vessel(1)]), ENGINEER
+    )
+    for confirmed in (None, first.version):
+        with pytest.raises(TargetModelRefused, match="d.engineer"):
+            await store.save_draft(
+                dataset, TargetModelDraftInput(packs={"stix": 1}), SECOND,
+                expected_version=confirmed,
+            )  # fmt: skip
+        with pytest.raises(TargetModelRefused, match="d.engineer"):
+            await store.discard_draft(dataset, SECOND, expected_version=confirmed)
+    assert await store.draft(dataset) == mine
+    with pytest.raises(TargetModelRefused, match="version 1"):
+        await store.save_draft(
+            dataset, TargetModelDraftInput(packs={"stix": 1}), ENGINEER, expected_version=7
+        )
+    assert await store.draft(dataset) == mine
+    await store.discard_draft(dataset, ENGINEER, expected_version=first.version)
     assert await store.draft(dataset) is None
 
 

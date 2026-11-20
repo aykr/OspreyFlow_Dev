@@ -3,6 +3,60 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 19 November 2026 (night): the owner is away until morning; the standing word for the night
+
+The owner's word, 19 November 2026 (evening). Standing until he says otherwise; he is away until the morning.
+
+1. **Start anything that becomes ready, without asking, up to four builders.** In this order when there is a choice: CO3 as soon
+   as PL3 merges, then BL7, PL2, PL1, BL2.
+2. **Verify and merge whatever passes, one at a time. Push when GitHub is green** (the 18 November ruling on GitHub failures
+   still applies).
+3. **Do not start** PL4 (needs the owner's word, and AD1), AD1 (needs the key-handling review) or AD5 (needs PL4). **Do not touch**
+   CO2, GG6 or BL6: they wait for the line fixes (the third line-fixes session).
+4. **Stop starting new work, and finish only what is running, if any of these happens:** either account passes 70% of its
+   weekly allowance; a call to `sol` is refused again; a merge runs longer than 60 minutes; two slices stop for the same
+   environment cause.
+5. **Anything that needs a decision that is the owner's: leave it stopped and list it.** Do not wait on him for anything else.
+6. **In the morning, one table:** what merged, what is running, what stopped and why, and usage per account.
+
+## 19 November 2026 (later): four standing rulings on rounds, tracks, builders and starting
+
+The owner's word, 19 November 2026 (about 06:00 UTC). Standing: they apply to every slice, without asking per slice.
+
+5. **From a slice's third round on, a gap in a test never blocks.** If the verifier finds no fault in behaviour, the
+   slice merges, and each remaining test gap becomes a backlog row, without asking the owner. A fault in behaviour still
+   sends the slice round again. (Findings are marked "FAULT IN BEHAVIOUR:" or "GAP IN A TEST:" by the verifier.)
+   **This takes effect once the accept-step session's work (the owner started it on 19 November) is in the line**;
+   until then GG6 and BL6 wait for it, with no more rounds (the owner, 19 November, answer (a)).
+6. **A stopped slice frees its track.** When a slice stops for the owner, the next ready slice on that track starts at
+   once. GG1 does not wait for AD2, and BL7 does not wait for BL6.
+7. **Four builders.** The owner has set balanced to four builders and four rounds in the dial, by day and by night, and
+   tracks 3 and 4 are on sol in the accounts file. (The line counts only slices in the building or verifying phase against
+   the builder limit, so a stopped slice already frees its place.)
+8. **Start everything that is ready**, under the standing approval: SE2, SE3, SE4, BL7 and GG1, as the builder limit allows
+   and the account windows (under 90%) permit; the rest start as places free up.
+
+## 19 November 2026: rounds, accepting a slice narrower, and the invite form's design rule (AD2, BL6, GG6, SE4)
+
+The owner's word, 19 November 2026 (early morning UTC):
+
+1. **AD2: a general design rule replaces the earlier one.** The invite form is drawn only when everything it depends on
+   has loaded. Until then it shows a loading or error message, never a choice and never a statement about what the
+   inviter can give. Tests cover a late and a failed load of each thing it depends on. One more round (round 5 of 5).
+   **If AD2 stops again it is set aside, the owner is told, and GG1 is freed to start without it.**
+2. **GG6 is accepted narrower, on the owner's word, and merged as it is.** The ADR-014 Amendment 2 sentence ("Still not
+   checked": the production-build tile test sits outside every gate) is added later, with the gate wiring it describes;
+   the backlog row stays. No round.
+3. **BL6 is accepted narrower, on the owner's word, and merged.** The test that pins the printed line with the client's
+   word replaced in a path becomes a backlog row. No round.
+4. **Verifier findings are reported split** as "fault in behaviour" and "gap in a test" (18 November, in the briefs of the
+   extra rounds).
+5. **SE4 is split.** SE4 holds C016, C164 and the board list cut at 100; `cases_pulled`, C170, C246 and L09 wait for their
+   own build ids and rulings.
+6. **Not yet possible:** the slice line has no step that merges a slice whose last verdict is findings (the merge
+   script requires a verifier pass at the tip; `resume.py` has no accept action). Items 2 and 3 wait for one, which only
+   the owner's hand can add to the line.
+
 ## 18 November 2026: MapLibre 6 now, Sigma 4 first in the GOV.UK modules (GG6, GG2, GG5)
 
 The owner's word, 18 November 2026 (about 14:15 UTC), on the evidence in `slices/GG6.md`:

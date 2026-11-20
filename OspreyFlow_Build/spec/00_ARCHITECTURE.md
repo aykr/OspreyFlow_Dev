@@ -5,7 +5,7 @@
 ```
                           THE GLASS  (stateless, horizontally scaled)
    ┌──────────────────────────────────────────────────────────────────────────┐   ┌────────────────────┐
-   │  React + TypeScript workspace                                            │   │ IDENTITY PROVIDER  │
+   │  React workspace (default theme) · `pages` service: server-rendered      │   │ IDENTITY PROVIDER  │
    │  Views: Graph (Sigma) · Map (MapLibre) · Timeline · Reports               │   │ Keycloak realm     │
    │  Places: Cases · Watches · Alerts · Ownership · History · Explore ·       │◄─►│ people, roles,     │
    │          Questions · Ingest Studio · Admin area                           │   │ dashboard          │
@@ -874,7 +874,9 @@ test suites beside it rather than inside it, and local data outside version cont
 
 ```
 OspreyFlow_Core/
-├── apps/workspace/             # The Glass. React + TS + Vite; src/ holds, among others:
+├── apps/pages/                 # The Glass's server-rendered pages (ADR-152): server/, modules/, tree-default/,
+│                               #   tree-govuk/, test/. Node, Express, Nunjucks, esbuild; no React
+├── apps/workspace/             # The Glass's React workspace, default theme (ADR-152). React + TS + Vite; src/ holds, among others:
 │   ├── canvas/ timeline/ map/  #   the five views' renderers and the working set (workingset/)
 │   ├── inspector/ metrics/     #   the right-hand panels (patterns/ is the Query builder)
 │   ├── alerts/ ownership/      #   the Alerts and Ownership places (ADR-109)
@@ -1152,6 +1154,26 @@ restricts GDS Transport to services on GOV.UK domains, and the package's README 
 code is MIT "unless stated otherwise". `appearance.brand: govuk` is defined to mean a service on a
 gov.uk domain (ADR-132), which is the only use the font is put to. The files are self-hosted from the
 deployment's own origin (`/assets/govuk/`), never a CDN, and fetched only by a GOV.UK-brand page.
+
+**ADR-152 addition (19 November 2026; slice PL3, R1) — the `pages` service (`apps/pages`), one npm workspace.**
+Run time, in its image: `express` 5.3.0 (MIT), `express-session` 1.19.0 (MIT; ADR-152 decision 2 names it; its
+own dependencies, `cookie` 0.7.2, `cookie-signature`, `debug`, `depd`, `on-headers`, `parseurl`, `safe-buffer`,
+`uid-safe` and `random-bytes`, are all MIT), `nunjucks` 3.2.4 (BSD-2-Clause), `helmet` 8.3.0 (MIT) and `ioredis`
+6.0.0 (MIT, already a development dependency of `apps/workspace`), each with the dependencies the lockfile
+resolves, all on the allowlist. The Valkey store for `express-session` is this service's own (a `Store` over
+its key-value store, which refuses a write with no TTL and a key outside its prefix), so no store package
+(`connect-redis`) is added. Development only: `supertest` 7.3.2 (MIT) and the type packages `@types/express`,
+`@types/express-session`, `@types/nunjucks`, `@types/supertest` (all MIT). `openid-client` is not added here: the
+real sign-in is a later slice, and its licence is read at install (ADR-152 decision 2). Nothing is fetched from
+another address by the service or its pages.
+
+**ADR-152 addition (19 November 2026; slice CO3, X2) — live updates through the `pages` service.** Run time:
+`ws` 8.22.0 (MIT; no dependencies of its own at run time), which carries the delta WebSocket through the service
+(ADR-152 decision 5): the browser's socket ends at the service, and the service opens its own to the Conduit with
+the person's bearer. `ws` was already a development dependency of `apps/workspace` (its integration tests); it is
+now also a run-time dependency of `apps/pages`, so it is in the service's image. No proxy package
+(`http-proxy`, `express-http-proxy`) is added: the proxy is this service's own, in one file over `ws`.
+Development only: `@types/ws` 8.18.2 (MIT, already a development dependency of `apps/workspace`).
 
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the

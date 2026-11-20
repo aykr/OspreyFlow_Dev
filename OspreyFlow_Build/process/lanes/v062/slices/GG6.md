@@ -111,3 +111,37 @@ Stop and ask rather than answer:
 - a browser regression on 6.x;
 - a licence the checker refuses among 6.x's new dependencies;
 - zustand moving in a way that changes the working set's own tests.
+
+## Round instruction from the owner (18 November 2026)
+
+To the builder: the findings in your prompt are every finding from the last verifier. Fix those and nothing else: no other change, no tidy-up, no new scope.
+
+To the verifier on this round: list every remaining finding in one pass, not the first few. Begin the "what" of each finding with "FAULT IN BEHAVIOUR:" when the shipped code does the wrong thing, or "GAP IN A TEST:" when the code may be right but no test would fail if it were wrong. The conductor reports the split to the owner.
+
+## Owner's ruling for the next round (19 November 2026)
+
+The one open finding is that the production-bundle test runs in no gate once this merges. The fix in this slice is the
+sentence only: the ADR-014 Amendment 2 "Still not checked" paragraph says that the production-build run (the map-build
+folder's own Playwright configuration) sits outside every gate, so deleting the setWorkerUrl call from the map view would
+pass make ci and GitHub's CI, and that it is run only by this slice's acceptance command at its merge. Do not edit the
+Makefile or the CI workflow: the owner takes that diff himself (a backlog row records it). Change nothing else.
+
+## Owner's ruling for round 5, the last (19 November 2026; it replaces the section above)
+
+The owner accepted this slice without the "Still not checked" sentence: do not add it now (it goes in later, with the
+gate's wiring). The merge gate refused the slice on six tests in OspreyFlow_Build/tests/test_adr_reservations.py: your
+ADR-014 amendment's heading, "### Amendment 2 — the revisit trigger is met: ..." in OspreyFlow_Build/spec/06_DECISIONS.md,
+is not in the form the reservation check wants, "### ADR-n, Amendment m", so the count of off-form amendment headings
+went from the baseline of 15 to 16. The one fix: retitle that heading in that form and, if the check asks for it, add its
+reservation row (read OspreyFlow_Build/tests/test_adr_reservations.py for the form and the table). Change nothing else:
+no other line of the spec, no code, no test. Run test_adr_reservations.py and the slice's checks before you stop.
+
+## Owner's ruling for round 6 (19 November 2026; it replaces the section above)
+
+Round 5 is done and verified (496d7b92ce). The merge then refused the branch: "lane/slice-GG6 does not merge cleanly onto
+main: the builder rebases it." The one conflict is in OspreyFlow_Build/spec/ADR_RESERVATIONS.md: your ADR-014 Amendment 2
+row and the rows main has added both sit at the end of the table. One task only: merge main into your branch (git merge
+main in your worktree), keep both sides' rows in the reservations table (yours and every row main has), and change nothing
+else: no other line of the spec, no code, no test, no other file. Do not rewrite or rebase history. Then run
+test_adr_reservations.py and the slice's checks, and stop. Check that git merge-tree of main and your branch reports no
+conflict before you stop.

@@ -31,20 +31,35 @@ class BadEntry(Exception):
 
 
 def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
-          account: str = "", merged: dict | None = None, verify: dict | None = None) -> dict:
+          account: str = "", merged: dict | None = None, verify: dict | None = None,
+          accepted: dict | None = None) -> dict:
     """One build's entry for status.js. Refuses an entry the dashboard must not show."""
     if state not in STATES:
         raise BadEntry(f"unknown state {state!r}")
     if state == "done":
         if not (merged and merged.get("merge") and merged.get("acceptance_run")):
             raise BadEntry("done needs the acceptance test green on main: no merge record with its test run")
-        if not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):
-            raise BadEntry("done needs a verifier's pass record for the merged commit")
+        if accepted_narrower(merged, verify, accepted):
+            pass  # the owner's acceptance of the verifier's findings for that tip stands in for the pass
+        elif not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):
+            raise BadEntry("done needs a verifier's pass record for the merged commit, or the owner's acceptance of "
+                           "its findings")
         if not evidence or merged["merge"][:7] not in evidence or merged["acceptance_run"] not in evidence:
             raise BadEntry("done needs evidence naming the commit and the test run")
     if state == "stopped" and not note:
         raise BadEntry("stopped needs, in note, the one decision the owner must make")
-    return {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
+    out = {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
+    if state == "done" and accepted_narrower(merged, verify, accepted):
+        out["accepted_findings"] = merged["accepted_findings"]["findings"]
+    return out
+
+
+def accepted_narrower(merged: dict | None, verify: dict | None, accepted: dict | None) -> bool:
+    """Merged on the owner's acceptance: the merge record names its findings, and the acceptance and the verifier's
+    findings record are both for the merged tip."""
+    tip = (merged or {}).get("tip")
+    return bool(tip and (merged or {}).get("accepted_findings") and accepted and accepted.get("tip") == tip
+                and verify and verify.get("verdict") == "findings" and verify.get("commit") == tip)
 
 
 def branch_exists(b: str) -> bool:
@@ -104,19 +119,31 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     builds_entry = None
     if merged:
         verify_m = record(rec / f"verify-{merged.get('tip', '')}.json", problems, sid) if merged.get("tip") else None
+        accepted_m = record(rec / f"accepted-{merged.get('tip', '')}.json", problems, sid) if merged.get("tip") else None
         state = "done"
         evidence = f"commit {str(merged.get('merge', ''))[:7]} on main; test run {merged.get('acceptance_run', '')}"
         source = "merge record + verifier pass"
+        if accepted_narrower(merged, verify_m, accepted_m):
+            af = merged["accepted_findings"]
+            note = f"merged, accepted narrower: {af.get('count', 0)} findings"
+            if af.get("standing"):
+                note += f" (standing accept: {len(af.get('backlog_rows') or [])} gaps in a test for the backlog)"
+            source = "merge record + owner's acceptance"
         try:
-            builds_entry = entry("done", evidence=evidence, merged=merged, verify=verify_m, **kw)
+            builds_entry = entry("done", note=note, evidence=evidence, merged=merged, verify=verify_m,
+                                 accepted=accepted_m, **kw)
         except BadEntry as e:
             # skipped and reported; the slice is shown from its other records, as if there were no merge record
             problems.append(f"{sid}: merge record skipped, not shown as done: {e}")
-            state, evidence, source, builds_entry = None, "", "", None
+            state, note, evidence, source, builds_entry = None, "", "", "", None
     if state == "done":
         pass  # the merge record and the verifier's pass speak for it
     elif st.get("phase") == "stopped":
         state, note, source = "stopped", st.get("note", ""), "stop record"
+    elif st.get("phase") == "refused":  # the dashboard knows four states: a refused slice waits as a stopped one
+        state, source = "stopped", "merge refusal"
+        note = (f"refused by the gate: {st.get('refused_tests', 0)} tests" if st.get("refused_for") == "gate"
+                else st.get("note") or "refused by the merge script") + "; resume.py send-back returns it to the builder"
     elif tip and verify and verify.get("verdict") == "pass":
         state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
     elif tip and tests and tests.get("green"):
@@ -125,6 +152,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         state, source = "building", "branch exists, not green yet"
         if st.get("round", 1) > 1:
             note = f"round {st['round']} after the verifier's findings"
+    sf = st.get("seat_failure")
+    if isinstance(sf, dict) and state in ("building", "verifying"):  # a refused call: no verdict, never findings
+        note = (f"seat failed: the {sf.get('seat')}'s call on {sf.get('account')} was refused "
+                f"({str(sf.get('error', ''))[:80]}); the owner clears the account or moves the seat")
+        source = "seat failure record"
     if state and state != "done":
         try:
             builds_entry = entry(state, note=note, evidence=evidence, **kw)
@@ -135,8 +167,14 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
     elif state and builds_entry:
         builds[build] = builds_entry
-    if state == "stopped":
+    if st.get("phase") == "refused" and state == "stopped":
+        shown = note.split(";")[0][:60]
+    elif state == "stopped":
         shown = f"stopped: {note[:60]}"
+    elif state == "done" and note:
+        shown = note
+    elif state and isinstance(sf, dict) and note.startswith("seat failed"):
+        shown = f"{state}: seat failed on {sf.get('account')}"
     elif state:
         shown = state
     else:
@@ -155,7 +193,7 @@ def owed_list(problems: list[str]) -> list[dict]:
     return [{"test": t, **o} for t, o in sorted(owed.items())]
 
 
-def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None) -> Path:
+def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
     try:
@@ -165,7 +203,8 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
     for k, v in builds.items():
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
-    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or []}
+    body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
+            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"}}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -177,19 +216,46 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
 
 
 def usage() -> None:
+    """Usage per slice, account and seat, then totals per slice and per account with the account's windows beside them.
+    cost_usd is Claude Code's own list-price figure for each session: an estimate, never a bill."""
     f = c.DATA / "usage.tsv"
     if not f.exists():
         print("No usage recorded yet.")
         return
+    cols = ("input", "cache_create", "cache_read", "output")
     tot: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    per_slice: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
+    per_account: dict = defaultdict(lambda: [0, 0, 0, 0, 0.0])
     for r in csv.DictReader(f.open(), delimiter="\t"):
-        k = (r["slice"], r["account"], r["seat"])
-        for i, col in enumerate(("input", "cache_create", "cache_read", "output")):
-            tot[k][i] += int(r[col] or 0)
-        tot[k][4] += float(r["cost_usd"] or 0)
-    print(f"{'slice':8} {'account':8} {'seat':18} {'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}")
+        for key, table in (((r["slice"], r["account"], r["seat"]), tot), (r["slice"], per_slice), (r["account"], per_account)):
+            for i, col in enumerate(cols):
+                table[key][i] += int(r[col] or 0)
+            table[key][4] += float(r["cost_usd"] or 0)
+    print("Usage. Cost is a list-price estimate, not a bill (Claude Code's own figure for each session).")
+    head = f"{'input':>9} {'cache+':>10} {'cache read':>11} {'output':>9} {'list $':>8}"
+    line = lambda v: f"{v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}"
+    print(f"\nper slice, account and seat\n{'slice':8} {'account':8} {'seat':20} {head}")
     for (s, a, seat), v in sorted(tot.items()):
-        print(f"{s:8} {a:8} {seat:18} {v[0]:9d} {v[1]:10d} {v[2]:11d} {v[3]:9d} {v[4]:8.2f}")
+        print(f"{s:8} {a:8} {seat:20} {line(v)}")
+    print(f"\nper slice\n{'slice':8} {head}")
+    for s, v in sorted(per_slice.items()):
+        print(f"{s:8} {line(v)}")
+    print(f"\nper account (windows as the account's last session reported them)\n{'account':8} {head}  windows")
+    for a, v in sorted(per_account.items()):
+        print(f"{a:8} {line(v)}  {windows_of(a)}")
+
+
+def windows_of(account: str) -> str:
+    wins = (c.account_state(account).get("windows") or {})
+    out = []
+    for name in ("five_hour", "seven_day"):
+        info = wins.get(name) or {}
+        shown = name.replace("_", "-")
+        if info.get("utilization") is None:
+            out.append(f"{shown}: not reported by its sessions' stream")
+        else:
+            out.append(f"{shown} {info['utilization']:.0%}")
+    return "; ".join(out)
 
 
 def main() -> int:
@@ -207,9 +273,14 @@ def main() -> int:
         slices = []
     rows, builds, problems = compute(slices)
     owed = owed_list(problems)
-    path = write_status(builds, owed=owed)
+    ci = c.main_ci()
+    path = write_status(builds, owed=owed, ci=ci)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
+        if ci["state"] == "red":
+            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: no merge until it is green")
+        elif ci["state"] != "green":
+            print(f"main's GitHub run cannot be read ({ci['why']}): no merge until it can")
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
@@ -221,6 +292,9 @@ def main() -> int:
             print(f"live tests owed: {len(owed)} (merged with the live step off; a release is refused until each has run)")
             for o in owed:
                 print(f"  {o['test']}   slice {o['slice']}, merge {o['merge'][:10]}")
+        fixed = [r for r in c.owner_changes() if r["action"] == "correct-command"]
+        for r in fixed:
+            print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         pending = c.DATA / "push.pending"
         if pending.exists():
             print(f"push pending: {pending.read_text().strip()[:10]} waits for main's CI run to finish")

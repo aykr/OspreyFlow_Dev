@@ -74,8 +74,9 @@ _HANDLING = {
 class _Models:
     """The model store's calls an export and an import make, with the real store's refusals for
     them, raised as the real store raises them (`TargetModelRefused`, which the route answers 409):
-    one draft at a time (`_refuse_a_second_draft`), a save needs an open draft and is judged by the
-    real `_checked`, and each dataset holds its own draft (the orchestrator's review, item 6)."""
+    one draft at a time (`_refuse_a_second_draft`), a save needs an open draft, is its creator's
+    and of the version given (`refuse_a_write_to_a_draft`), and is judged by the real `_checked`,
+    and each dataset holds its own draft (the orchestrator's review, item 6)."""
 
     def __init__(self) -> None:
         self.live_model: TargetModel | None = TargetModel(
@@ -114,13 +115,25 @@ class _Models:
         return self.drafts[dataset_id]
 
     async def save_draft(
-        self, dataset_id: str, given: TargetModelDraftInput, principal: Principal
+        self,
+        dataset_id: str,
+        given: TargetModelDraftInput,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
     ) -> TargetModel:
-        from services.api.target_models import TargetModelRefused, _checked, core_types_of
+        from services.api.target_models import (
+            TargetModelRefused,
+            _checked,
+            core_types_of,
+            refuse_a_write_to_a_draft,
+        )
 
         draft = self.drafts.get(dataset_id)
         if draft is None:
             raise TargetModelRefused("there is no draft to save: open one first")
+        # As the real store refuses (C186): another person's draft, or a version not the one given.
+        refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
         _checked(await self.live(dataset_id), draft, given, core_types_of([], []))
         self.saved.append(given)
         self.drafts[dataset_id] = draft.model_copy(update=given.model_dump())
@@ -621,3 +634,52 @@ def test_a_draft_opened_in_the_open_draft_window_is_refused_by_the_store_before_
     assert world.models.saved == [] and world.recipes.create_calls == []
     assert world.models.draft_model is not None
     assert world.models.draft_model.created_by == "analyst-7"
+
+
+def test_a_draft_taken_over_between_the_read_and_the_save_is_refused_by_the_store(
+    store: Path, ingest: Path
+) -> None:
+    """C186: the import's own save passes the version it planned, and the store checks the draft's
+    creator, so a draft another person opened in the instant after the import's last read of it is
+    refused at the save, in words naming them, with the model, pipelines and lists unwritten. Red
+    before: the double (as the real store did) saved over it."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    world.recipes.create_calls.clear()
+    real_save = world.models.save_draft
+
+    async def taken_first(*args: object, **kwargs: object) -> TargetModel:
+        _held_by(world, "analyst-7")
+        return await real_save(*args, **kwargs)  # type: ignore[arg-type]
+
+    world.models.save_draft = taken_first  # type: ignore[method-assign]
+    answer = _import(client, files)
+    assert answer.status_code == 409, answer.text
+    assert answer.json()["error"] == "model_refused" and "analyst-7" in answer.json()["detail"]
+    assert world.models.saved == [] and world.recipes.create_calls == []
+    assert world.models.draft_model is not None
+    assert world.models.draft_model.created_by == "analyst-7"
+
+
+def test_the_import_passes_the_version_it_planned_to_the_save(store: Path, ingest: Path) -> None:
+    """The own draft is replaced on the confirmation of version 3, and the save is given 3: a
+    draft opened again at version 4 after the last read is refused as stale, not overwritten."""
+    world = _World(ingest)
+    client = world.install(ENGINEER)
+    files = _export(client)
+    _held_by(world, ENGINEER.id)
+    world.recipes.create_calls.clear()
+    real_save = world.models.save_draft
+    given: list[int | None] = []
+
+    async def watched(*args: object, **kwargs: object) -> TargetModel:
+        given.append(kwargs.get("expected_version"))  # type: ignore[arg-type]
+        world.models.draft_model = world.models.draft_model.model_copy(update={"version": 4})  # type: ignore[union-attr]
+        return await real_save(*args, **kwargs)  # type: ignore[arg-type]
+
+    world.models.save_draft = watched  # type: ignore[method-assign]
+    answer = _import(client, files, replace_own_draft=3)
+    assert given == [3]
+    assert answer.status_code == 409 and "version 4" in answer.json()["detail"]
+    assert world.models.saved == [] and world.recipes.create_calls == []

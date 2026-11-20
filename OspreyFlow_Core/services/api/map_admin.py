@@ -62,6 +62,7 @@ from schemas.map_admin import (
     PrefetchSchedule,
 )
 from schemas.mapconfig import MapConfig, MapProvider
+from schemas.sources import address_is_inside
 
 from .model_admin import _Exclusive
 
@@ -409,6 +410,12 @@ def _literal_ip(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | No
 
 
 def _is_inside(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Inside as the connector reads judge it (`schemas.sources.address_is_inside`: shared space
+    (100.64.0.0/10), NAT64 and 6to4 addresses judged by the IPv4 address they carry, and so on),
+    and also as this check has always judged it, so that no address it refused before is taken
+    now: an address carrying a public IPv4 one (NAT64, 6to4) stays refused, failing closed."""
+    if address_is_inside(ip):
+        return True
     if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped is not None:
         ip = ip.ipv4_mapped
     return any((ip.is_loopback, ip.is_link_local, ip.is_private, ip.is_reserved,

@@ -32010,6 +32010,24 @@ is the right default (fail closed), but nothing let a person say what such a tab
    approver's clearance is theirs neither to change nor to clear (either changes how rows they may not read are
    marked), refused in words naming the clearance needed. Otherwise clearing it is allowed: the table is then
    unmarked again. Refusals are answered in words and not audited, as a refused governance edit is not.
+   **4a. The governance edit judges its marking the same way** (SE2, C187, 19 November 2026). `PATCH
+   .../governance` judges the `classification` its handling carries by the three checks above, in one shared
+   function (`services/api/sources.py`: `marking_problems`), before anything is written: refused in words
+   (422 `governance_marking_refused`, the same `problems` list) when it is not one of the scheme's
+   classifications, is above the editor's clearance, is above the deployment's highest marking (naming it), or is
+   below the source's current marking (an edit never lowers a marking). Only a marking the request
+   changes is judged: an edit that leaves the marking as it is is not newly refused, so a source marked above a
+   ceiling set later stays editable in its other declarations. An edit's handling replaces the source's whole
+   handling, so one that carries no `classification` (left out, or null) on a marked source erases its marking: it is
+   refused as a lowering ("the marking is left out, which is below the source's current marking, ..."). The words differ from the default
+   route's only where they name the marking ("the marking", "the source's current marking").
+   **Two edits at once.** "The source's current marking" is the one the write replaces, not the one read a moment
+   earlier: the store's update carries the classification the edit was judged against as a condition of the same
+   `UPDATE` (`edit_governance`'s `if_marking`), so it writes nothing if another edit has moved it. The route then reads
+   and judges again against what is stored (a raise that is now no raise is accepted; a marking another editor
+   raised is not put back lower, refused as a lowering), up to three times, then answers 409 `source_changed` ("try
+   again"), nothing written. The audit's `handling_before` is the handling of the attempt that wrote. The default-marking
+   route's own read-then-write is not changed by this slice.
 5. **Audited, a new version.** A request naming the default it already has writes nothing: no version, audit
    entry, flag or draft following; the answer is the source as it is. Each change records who, when, from and to
    (`set_dataset_source_default_marking`; *from* as the store's update replaced it, under the row's lock),
@@ -35796,7 +35814,15 @@ the LimitRange a default CPU limit. Until then the standard shape names no CPU l
 17. **The ceiling has one source**, `harness.site.highest_marking`, which holds each profile's own
     default (`PROFILE_CEILINGS`, OFFICIAL-SENSITIVE for this profile) and refuses one the handling
     scheme does not hold. The render reads it for the deployment as it is. The change to
-    `harness/site.py`, studio-b's file, was made at the orchestrator's word.
+    `harness/site.py`, studio-b's file, was made at the orchestrator's word. **"Unset" means the
+    same wherever the ceiling is read** (SE4, C164): `OSPREY_HIGHEST_MARKING` unset or blank is the
+    profile's own ceiling (`PROFILE_CEILINGS`, read from `OSPREY_PROFILE`) and only then the scheme's
+    highest, so a Conduit or script run without the rendered ceiling on the cloud-platform profile is
+    held to OFFICIAL-SENSITIVE, not SECRET. The table sits in `packages/schemas/deployment.py`
+    beside `Profile`, which `harness.site` and `services.ingest.ceiling` both import, since services
+    do not import from the harness
+    (`test_the_cloud_platform_profile_with_no_ceiling_set_is_official_sensitive`, red first at
+    SECRET).
 18. **A render removes what its last render wrote and this one does not**, by the manifest it
     leaves (`.rendered`), and never a file it did not write, so a standard shape's
     `terraform/opensearch.tf` does not survive a poc render to be applied.
@@ -40818,3 +40844,541 @@ bus. Built and shown red-then-green on `lane/slice-line-setup`, merged on 18 Nov
 632 s, `make test` 410 s) and for main's own gate to be green: while main is red, every merge is refused. While the
 live step is off, live tests are owed rather than run, and a release waits for them. Shell commands are judged by
 their text, so the merge script's diff check, not the guard, is the backstop for a computed path.
+
+## ADR-152 — The Glass in two trees: server-rendered pages from a Node service beside the React workspace; the GOV.UK theme with no React and no Superset; supersedes ADR-132 — Accepted by the owner, 19 November 2026
+
+Status: **Accepted by the owner, 19 November 2026**, with his answers to the draft's questions, which this
+text carries. Drafted from
+the owner's rulings F1 to F7 of 17 November 2026 as refined by his decisions of 17 and 18 November (A1, A6, D7
+to D10, D12 to D14, D16, D41 to D43, D46, D47; `Claude outputs/ospreyflow_build_plan_2026-11-17/DECISIONS_2026-11-17.md`
+and `DECISIONS_2026-11-18.md`) and by his answers of 19 November, and from the evidence read from the code on `main` at `528d475` and `3007048`
+(`Claude outputs/ospreyflow_evidence_2026-11-18/FRONT_END_ANSWERS.md`, `STUDIO_ANSWERS.md`;
+`Claude outputs/ospreyflow_maplibre_sigma_2026-11-18/ANSWERS.md`). Checked again against `main` at `4aeed8d`
+where a line below cites the tree. **Not built.** The owner's acceptance of this record, with the layout in
+decision 6, is his word that the standing constraint against restructuring the tree (`process/FDE_HANDOVER.md`
+§2) is lifted for this layout and no other, as ADR-054 was.
+
+**Supersedes ADR-132** ("the GOV.UK look as a switch, not a fork"). What of ADR-132 survives is listed in
+decision 13. ADR-132 Amendment 9 records the supersession in that record.
+
+### Context
+
+A UK public-sector client builds its front ends as server-rendered pages: Node, Nunjucks, GOV.UK Frontend, one
+esbuild bundle, a strict content security policy. Its developers do not work in React and its architecture
+board would need a "no alternative" case to accept a React application. The owner expects other departments
+to say the same.
+
+Today the Glass is one React 19 application (`apps/workspace`, served by nginx; `spec/02` §1) and both looks
+live in it: ADR-132 made the GOV.UK look a deployment setting (`appearance.brand`) applied as `data-brand`
+inside that one application, and its ruling 4 refused a GOV.UK Frontend component set. Measured on `528d475`:
+252 files and 57,920 lines of the Glass depend on React; 191 files and 19,543 lines are React-free all the way
+down (`FRONT_END_ANSWERS.md` Q1). The graph, map and chart libraries do not depend on React. Node runs today
+only as a build stage (`apps/workspace/Dockerfile:18`); no deployment shape runs it.
+
+A test page (17 November) drew Sigma.js 3.0.3 and graphology on a server-rendered GOV.UK Frontend 6.6.0 page
+under a strict policy, with no React and no violations, in one 234 kB esbuild bundle. It did not show feel,
+the performance budget, more than 26 entities, MapLibre or dashboards under the policy, or a department's own
+template and sign-in.
+
+### The owner's rulings, as refined (F1 to F7 of 17 November, with A1 and A6, D41 to D47 of 18 November, and his answers of 19 November)
+
+| # | Ruling |
+|---|---|
+| F1 | The Conduit and the Vault do not change for the front end, apart from the exceptions in decision 11, each with its access-control test. |
+| F2 | The Glass gains a second way of building screens: pages built on the server by a Node service, with interactive parts as plain TypeScript modules. No React in it, anywhere. |
+| F3 + A1 | The Ingest Studio moves to it entirely, **for both themes**. The Studio is built once. So **every deployment runs the Node service**, default theme included. |
+| F4 | For the GOV.UK theme, every function is built this way, Admin included. |
+| F5 | The default theme keeps the React workspace for analysis, service and Admin, and keeps its embedded Superset dashboards. |
+| F6 | GOV.UK theme pages are stored in a parallel tree in the product repository, separate from the default theme pages. |
+| F7 | Nothing is removed from the React workspace without the owner's word. |
+| A6 | The default theme's server-rendered pages are made of the product's own components as Nunjucks markup, on the product's tokens. |
+| D46 | The new graph and map modules start on Sigma 4. R4's first step proves the performance budget on Sigma 4 and falls back to Sigma 3 if it cannot. The shared package imports no `sigma`, `@sigma/*` or `maplibre-gl`, with a check that fails if it does. |
+| D47, as answered 19 Nov | Both front ends use the same Sigma and MapLibre versions. The React workspace moves to Sigma 4 as soon as the new graph module has proved the budget on Sigma 4, If the budget is not met, both stay on Sigma 3. Two versions side by side is a short window, never an open-ended state. |
+| Correction, 19 Nov | The release freeze stays, with the window kept short. R4's budget proof and WS4 come first, and no other page that draws with Sigma 4 merges until WS4 is in, the Studio's graph preview included. |
+| Q2, 19 Nov | The GOV.UK theme alone does not show the crown, the GOV.UK logotype or the GOV.UK typeface. A separate switch, off by default, does. It is offered in an Admin Themes menu beside the department's name and logo, and is a deployment setting until that menu is built. |
+| D41 + D42 | On the GOV.UK theme the dashboards are viewed in the product: server-rendered pages with the product's own charts, read through the Conduit. No frame, no exception to the security policy, no React for viewers. A GOV.UK theme deployment has no Superset: no frame and no "Build a report" link. |
+| D43 | "Build a report" on the GOV.UK theme is Trends and Packs, which exist, plus one new page: a board where a person arranges their saved trends to view together. No new kinds of figure. |
+| D7 to D9, D16, Q18 | The whole dataset is the unit of an outside load: one load, in the order set on the dataset map, started inside OspreyFlow or by an outside scheduler through one neutral exported job file that any scheduler calls through the run route; no generated Airflow job. A failure stops only what depends on it; the load says which ran, failed and were not run. A single pipeline still runs on its own inside the Studio. A scheduled load keeps running under a named cover when its owner is away. |
+| D10 | Each rebuilt screen's acceptance scenario is written first, run against today's React screen, then the page is built to pass it. |
+
+### Decision
+
+1. **Two ways of building the Glass.** The React workspace (`apps/workspace`) stays as it is for the default
+   theme's analysis, service and Admin (F5). A Node service, **`pages`** (`apps/pages`), serves server-rendered
+   pages: the Ingest Studio for both themes (F3, A1) and, for the GOV.UK theme, every function (F4). Pages are
+   complete when sent: with scripts off each still does its basic job, lists as tables and actions as links
+   and forms. Interactive parts are plain TypeScript modules, each a script and a page element, taking its
+   data from a JSON block in the page and its words from the markup. No React is served by `pages`, imported
+   by it, or bundled by it (F2).
+
+2. **The server stack.** Node (the current LTS line), Express, Nunjucks, `govuk-frontend` (GOV.UK tree only),
+   esbuild for the browser bundles (one bundle per page family, targeting ES2018), `openid-client` for
+   sign-in, `helmet` for headers, `express-session` with a Valkey store. **Tests stay on the repository's
+   runners**: Vitest for units and Playwright for pages; Jest is not added (the owner's answer 3). Every package passes
+   `make licence-check` and enters `00_ARCHITECTURE.md` §7 before it is used; the licences in
+   `FRONT_END_ANSWERS.md` Q8 marked "from memory" are verified at install, not here.
+
+3. **One pattern for an interactive panel** (`FRONT_END_ANSWERS.md` Q11), written once in
+   `packages/glass-shared` and used by every module: a `zustand/vanilla` store per panel; transitions as pure
+   functions; redraw by `store.subscribe`; mount as `attach…(element, deps) => detach`; one delegated listener
+   on the panel's root reading `data-action` and `data-id`; a latest-answer-wins guard on every request; DOM
+   built with `textContent`, never `innerHTML`; focus put back by `data-id` after a redraw. No inline `style`
+   attribute; a CSSOM write is allowed only through a named helper the pattern note lists.
+
+4. **Sign-in and session.** `pages` signs people in on the server as a **confidential** OIDC client
+   (authorization code with PKCE): `osprey-pages` in the Keycloak realm, with the claim mappers and the
+   Conduit audience mapper the Glass's client has (`harness/realm.py:240-268`); on Entra ID its own app
+   registration with a `pages_client_id` in `ClaimMapping` (decision 11, X1; answer 6). The tokens stay on the server, in a session in the deployment's Valkey,
+   under its own database number and key prefix, **every key with a time limit** (Valkey runs `noeviction`,
+   `harness/render.py:855-864`). The browser holds only an opaque, `HttpOnly`, `Secure`, `SameSite=Lax`
+   session cookie. `pages` renews its token with a refresh token kept on the server only, `use.refresh.tokens`
+   being on for `osprey-pages` alone (answer 4). A person signed in to the React workspace reaches the Studio
+   without signing in again, through the identity provider's own session (no prompt). Sign-out in either ends
+   both: back-channel logout on Keycloak, the front-channel logout URL on Entra ID (answer 5).
+   ADR-050's rules for the browser are unchanged; ADR-050 Amendment 4 states the server's.
+
+5. **The Conduit is reached through `pages`, as a backend-for-frontend.** A page's module calls `/v1` routes
+   on its own origin; `pages` forwards them, and the delta WebSocket's upgrade, to the Conduit, adding the
+   person's bearer token on the server (the Conduit already accepts a header on the socket,
+   `services/api/app.py:21232-21236`). Because a cookie now authenticates the browser's calls, `pages`
+   refuses a state-changing request without a valid anti-forgery token and refuses a WebSocket upgrade whose
+   `Origin` is not the deployment's. The proxy's idle timeout matches nginx's hour. No page filters after
+   retrieval and none shows a count the person may not see: access control stays in the adapters (rule 3).
+
+6. **The layout** (F6; the owner's word on this table is the lifting of the restructuring constraint):
+
+   ```
+   OspreyFlow_Core/
+     apps/
+       workspace/              # the React workspace, default theme: analysis, service, Admin (F5). Sigma 4 once
+                               #   slice WS4 lands (decision 9), maplibre-gl 6 from GG6. Otherwise unchanged
+                               #   except where the owner removes something (F7)
+       pages/                  # the Node service (one npm workspace). The same sigma, @sigma/*, maplibre-gl and
+                               #   graphology versions as workspace/ at every release (I20)
+         server/               #   kept once: Express app, sign-in, session, security headers and nonce,
+                               #   the /v1 and WebSocket proxy, health, route handlers that build a view model
+                               #   and render the chosen tree's template
+         modules/              #   kept once: interactive modules that bind a drawing library — graph canvas,
+                               #   dataset map, pipeline canvas, timeline, drawing board, map — and their bundles
+         tree-default/         #   default theme: Nunjucks layouts, pages, partials, the product's components
+                               #   as macros (A6), stylesheets on the tokens. Holds the Studio (A1)
+         tree-govuk/           #   GOV.UK theme, every function (F4): Nunjucks with govuk-frontend's macros,
+                               #   GOV.UK stylesheets and assets
+         test/                 #   page-level gates, one folder per tree: keyboard/, a11y/, perf/, scripts-off/,
+                               #   csp/
+     packages/
+       glass-shared/           # plain TypeScript, kept once: logic, stores, the panel pattern, the Conduit
+                               #   client over packages/schemas/generated, the keyboard action registry, the
+                               #   contrast probe, structural types for the map and graph; their unit tests.
+                               #   No React, no sigma, no @sigma/*, no maplibre-gl (D46)
+       design/                 # moved from apps/workspace/src/design/: tokens.css, primitives.css, fonts;
+                               #   read by the React workspace and tree-default alike (answer 7)
+   ```
+
+   The version window file, `apps/pages/VERSION_WINDOW.yaml`, is empty except while slice WS4 is open
+   (decision 9).
+
+   | Kind of file | Kept | Where |
+   |---|---|---|
+   | Graph, layout, grouping, colour, export and store logic; the Conduit client | Once | `packages/glass-shared` |
+   | Interactive modules that draw (graph, map, dataset map, pipeline canvas, timeline, board) | Once for both page trees | `apps/pages/modules` |
+   | The React workspace's own canvas (`GlassCanvas.tsx`) and its version-bound files (`dottedEdgePrograms.ts`, `labelStyle.ts`, `communityLinkLayer.ts`, `sigmaMaplibreLayer.ts`, `chartExport.ts`) | Per workspace, on the same versions as `pages` | `apps/workspace` (ported to Sigma 4 in WS4) |
+   | Templates, layouts, partials, components, stylesheets | Per tree | `tree-default`, `tree-govuk` |
+   | Page-level, keyboard, accessibility, scripts-off and security-policy tests | Per tree | `apps/pages/test/<tree>/` |
+   | The server: session, sign-in, headers, proxy | Once | `apps/pages/server` |
+
+   A drawing module is "once" across the two page trees, not across the two workspaces: the React workspace
+   keeps its own canvas, a React component, but on the same library versions as `pages`, so both draw the same
+   picture (decision 9, I20). Whether the version-bound helpers are later kept once for both workspaces, in a
+   package of their own, is not decided here (question 24). `packages/glass-shared` is moved into in one
+   behaviour-preserving change on its own (R2), with the React workspace's whole suite and its budget as the
+   gate (I11). Nothing in `apps/workspace` is deleted by that move; a file is moved and re-imported.
+
+7. **How a deployment chooses its tree.** `appearance.brand` stays the one setting. The renderer passes it to
+   `pages` (`OSPREY_PAGES_TREE=default|govuk`), which loads that tree's templates at start: one tree per
+   deployment, never per viewer. Today's switch inside the React application (`data-brand`, the
+   `[data-brand="govuk"]` block in `tokens.css`, `brand/govuk/*.tsx`) stays as it is until the GOV.UK tree
+   passes the same acceptance (decision 13, F7). The front proxy sends a path to `pages` or to the workspace
+   by a route table the harness renders for the deployment's brand: on the default theme, the Studio's paths
+   (`/studio/…`) and `pages`' own (`/session/…`, `/assets/pages/…`) go to `pages`; on the GOV.UK theme, each
+   function's path goes to `pages` once its tree has it, and every path does when the tree is complete. Same
+   origin throughout, so the Conduit's CORS list does not change.
+
+8. **The security policy, on every page `pages` sends**, both trees: `default-src 'self'`; scripts and styles
+   from `'self'` or the request's nonce; `img-src 'self' data:` (and `blob:` on map pages only, if the browser
+   run shows MapLibre needs it); `worker-src 'self'` (MapLibre 6's worker file served from the page's own
+   address and named by `setWorkerUrl`); `connect-src 'self'`; `frame-src 'none'`; `frame-ancestors 'none'`;
+   `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`. No `unsafe-inline`, no `unsafe-eval`, no
+   inline `style` attribute. Nothing is fetched from another address. Since no page frames Superset (decision
+   10), the policy has no exception for it.
+
+9. **Sigma and MapLibre: one version in both front ends** (D46; D47 as the owner answered it on 19 November).
+   - **The new modules start on Sigma 4.** The graph and map modules in `pages` use Sigma 4.0.x, with
+     `@sigma/layer-maplibre` 4.0.1 and `maplibre-gl` `>=6.4.1 <7`, written against the version 4 interfaces
+     from the start (styles, built-in dashed and curved links), not ported program by program.
+   - **R4's first step decides it for both.** It is a page that mounts the graph module on `perf/fixture.ts`'s
+     50k/250k set, with a Sigma 4 readiness signal (Sigma 4 has no `canvas.sigma-nodes`) shown red on a
+     planted wrong selector, then measured against `spec/02` §5.
+   - **If it meets the budget**, the React workspace moves to Sigma 4 at once, as its own slice, **WS4**. WS4
+     is held to the React workspace's own whole suite, its budget and the canvas-look comparison. WS4 ports
+     `GlassCanvas.tsx` and the version-bound files of decision 6 to Sigma 4.
+   - **R4's budget proof and WS4 come first.** No other page that draws with Sigma 4 merges until WS4 is in,
+     the Studio's graph preview included. The rest of R4 may be written meanwhile, but it waits to merge.
+   - **If it does not**, `pages` falls back to Sigma 3. Both front ends stay on Sigma 3, and the owner is told
+     before R4 goes on.
+   - **MapLibre never differs.** `pages`' map module is not merged until GG6 has moved the React workspace to
+     the same `maplibre-gl` line (not checked: whether GG6 has landed).
+   - **The window is short, and the release freeze stays.** From R4's first step passing until WS4 merges,
+     the two front ends may resolve different Sigma versions, and only R4's budget page draws with Sigma 4. The difference is written in
+     `apps/pages/VERSION_WINDOW.yaml` with the day it opened. I20's check accepts a difference only while it
+     is written there, and a release is not cut while that file lists anything. People are never served two
+     versions of one renderer.
+   - **Parity exceptions carry no version difference.** `apps/pages/PARITY_EXCEPTIONS.yaml` lists only a
+     function one tree lacks (I6). The canvas-look comparison, run on the React canvas and the `pages` graph
+     module once both are on one version, has no accepted-differences list beyond its pixel tolerance.
+
+   ADR-002 Amendment 1 records this.
+
+10. **Dashboards and reports** (D41 to D43; ADR-111 Amendment 9, ADR-148 Amendment 23).
+    - **Default theme:** unchanged. The React workspace keeps Superset embedded as ADR-111 Amendment 3 built
+      it, with "Build a report" where it is today.
+    - **GOV.UK theme:** no Superset. The renderer does not render `superset` or its `bi.` route, the
+      Superset realm client or Entra registration, or the dashboards' entry in the security policy, whatever
+      `reporting.superset` says; `ospreyflow` refuses `reporting.superset: true` with `appearance.brand: govuk`
+      in words. The dashboard the product ships, *Alert monitoring*, is a server-rendered page drawn with the
+      product's own charts from `GET /v1/investigations/{id}/reports`, the case report the Conduit already
+      computes **with the reader's own access** (`services/api/reports.py:4-9`; the Glass draws it today,
+      `apps/workspace/src/reports/AlertMonitoringBoard.tsx:1-8,21`). **No new Conduit route** (the owner's answer
+      12). Superset boards that people built by hand are not carried over: none is a product file
+      (`docs/administration-guide.md:3069`: "none ships as a file"). No new kinds of figure. `report-sync` and
+      the mart may still run on a GOV.UK deployment, for a department's own BI tool (answer 13).
+    - **"Build a report" on the GOV.UK theme** is Trends and Packs as pages, and one new page, the **board**:
+      a person arranges saved trends to view together. A board is a pack of trend items shown together on one
+      page (a pack item can already name a saved trend, `services/api/app.py:19494`; packs already order,
+      withhold and refuse items), so it needs **no new Conduit route** (answer 14). No new kinds of figure.
+
+11. **Exceptions to "the Conduit and the Vault do not change"** (F1). Each is built with its access-control
+    test first (rule 4), shown red before it is relied on (rule 15). X1 and X2 come from the front end; X3 to
+    X7 from the Ingest Studio's own specification (16 and 18 November); X8 from the owner's answer 2. They are
+    listed here so that one place holds every change below the Glass that this work brings. The earlier
+    draft's dashboards-figures and board exceptions are withdrawn: the owner's answers 12 and 14 add no Conduit
+    route, and their tests are now I15 and I21.
+
+    | # | Change | Tier | Access-control test, written first |
+    |---|---|---|---|
+    | X1 | **Token checking.** Keycloak: none in the Conduit (any realm client with the audience mapper passes, `packages/principal_auth/__init__.py:952-1010`). Entra ID: `ClaimMapping` gains `pages_client_id`, validated as `superset_client_id` is (`:283-293`) and admitted at `:973-979`. | Conduit | `test_a_token_from_a_realm_client_without_the_audience_mapper_is_refused`; `test_a_token_issued_to_the_pages_client_is_the_person_on_every_route`; `test_without_the_pages_client_named_its_token_is_refused`; `test_a_third_client_is_still_refused` (each modelled on `tests/services/api/test_auth_entra_superset.py`, the fixture refusing what Entra refuses, rule 15). |
+    | X2 | **Live updates.** No Conduit change: `pages` forwards the upgrade with the bearer on the server (decision 5). | `pages` | `test_the_stream_through_pages_carries_only_what_the_person_may_read` (the existing `test_websocket_auth.py` cases, run through the proxy); `test_an_upgrade_from_another_origin_is_refused_by_pages`; `test_a_bearer_in_the_url_is_still_refused_through_pages`. |
+    | X3 | **The whole-dataset load** (S16, S17, S21; ADR-141 Amendment 2): the run order stored with the dataset, versioned and carried in a release export (answer 16); a person's route to start a dataset's load and read its report; the run API extended to a dataset (beside `POST /v1/runs`, ADR-141 Amendment 1 point 3); a load's report of which pipelines ran, failed and were not run. | Conduit | `test_a_dataset_load_not_the_callers_to_start_answers_as_one_that_does_not_exist`; `test_a_service_identity_starts_only_the_dataset_load_it_was_granted`; `test_the_job_file_holds_no_credential`; `test_the_job_file_names_a_dataset_and_the_run_route_and_nothing_else` (red on a file naming a pipeline); `test_a_load_acts_only_with_the_rights_the_deployment_gives_it`; `test_a_dataset_loads_report_withholds_counts_the_reader_may_not_see`. |
+    | X4 | **"Use it only"** (S12): a third `on_match` value; a miss holds the row in the held-rows store with its reason, creating nothing. | Conduit (ingest engine) | `test_a_held_row_shows_nothing_its_reader_may_not_read`; `test_a_miss_under_use_it_only_creates_no_node` (red on today's match-or-create, `services/ingest/engine.py:1588-1611`). |
+    | X5 | **The model draft's owner and version** (C186, SE3): save, replace and delete check the draft's creator and an expected version. | Conduit | `test_a_second_person_cannot_save_into_replace_or_delete_another_persons_draft`; `test_a_stale_version_is_refused_in_words`. |
+    | X6 | **The Model step's routes** (slice B): a list of the model's versions; a reference list created without a Make live (S20). | Conduit | `test_versions_are_listed_only_to_a_reader_of_the_dataset`; `test_a_reference_list_is_created_only_by_a_holder_of_edit_target_model`. |
+    | X7 | **A type per dataset** (S10, S11, slice C): the ontology composed per dataset wherever it is read, a type record with its class, identifiers and matching rule; the adapter's refusal of an unknown type (`adapter.py:353`) reads the composed ontology. | Conduit and Vault | `test_a_type_added_to_one_dataset_is_not_seen_from_another`; the leak test over a world with a dataset-only type; `test_search_never_finds_a_node_of_another_datasets_type`. |
+    | X8 | **Admin › Themes** (the owner's answer 2), when that menu is built, not before: an appearance file in the Conduit's own volume, written through Admin behind `administer_system`; `GET /v1/appearance`, read before sign-in, carrying the presentational settings only; the logo served from the deployment's own origin. `appearance.brand` is not among them (decision 14). | Conduit | `test_only_a_holder_of_administer_system_changes_the_appearance` (red with the route's `require_right` removed); `test_the_public_appearance_read_carries_only_the_presentational_settings` (the response's keys against a fixed list; red with the whole file returned); `test_the_brand_cannot_be_changed_through_the_themes_route`; `test_a_logo_that_is_not_png_or_svg_or_is_over_the_limit_is_refused_in_words`; `test_the_logo_is_served_with_nosniff_and_a_policy_of_its_own`; `test_every_appearance_change_is_audited_with_who_made_it`. |
+
+    No other change below the Glass is made under this record. Anything else found needed comes back to the
+    owner as an amendment.
+
+12. **Acceptance, slice by slice** (D10). Each slice writes its scenario first, runs it against today's React
+    screen (where one exists), then builds the page to pass it. A scenario says which tree it runs on. A
+    function with no scenario in `spec/08` gets one before its page is built (`FRONT_END_ANSWERS.md` part B
+    §2 item 15 lists them).
+
+13. **What of ADR-132 stands, and what does not.**
+    - Stands: `appearance.brand` (`ospreyflow` | `govuk`) as a deployment setting, never per viewer (decision 1
+      of ADR-132); `service_name`, `organisation`, `phase`, `banner_text`; GOV.UK light only (3); `tokens.css`
+      the one colour authority for the default theme, with no data token redefined by a brand (4); assets
+      served from the deployment's own origin (7); the skip link and phase banner (8); the sign-in page
+      following the brand (Amendment 2); ADR-132's amendments 1, 3, 5 to 8 for the React workspace while its
+      GOV.UK look remains.
+    - Replaced: "a switch, not a fork" — the GOV.UK theme becomes a parallel tree of pages; ruling 4's "no
+      GOV.UK Frontend component set" — the GOV.UK tree uses GOV.UK Frontend's own components and macros;
+      decision 9's frame as React components — in the GOV.UK tree the frame is GOV.UK Frontend's template;
+      decision 9's crown and GDS Transport whenever `appearance.brand` is `govuk` — they now follow the GOV.UK
+      identity switch of decision 14, in the React workspace's GOV.UK look as well as in the GOV.UK tree.
+    - Left for the owner, not decided here: retiring the React workspace's GOV.UK look (F7); a department's
+      own sign-in, audit client, header or template, which belong in an adapter outside the repository.
+
+14. **The GOV.UK identity switch, and where the theme's settings are kept** (the owner's answer 2).
+    - **The switch.** `appearance.govuk_identity`, a yes or no, **off by default**. Under `appearance.brand:
+      govuk` with it off, no page shows the crown, the GOV.UK logotype or the GOV.UK typeface. The header carries
+      the department's name and logo with the service name, and the type is GOV.UK Frontend's fallback stack
+      with `$govuk-include-default-font-face: false` (not checked against Frontend 6.6.0 in a browser). With it
+      on, they show as ADR-132 decision 9 draws them today. ADR-132 Amendment 7's rule still holds on top: the
+      crown, Crown copyright and the Open Government Licence only on a gov.uk address (`isGovUkHost`,
+      `apps/workspace/src/brand/brand.ts`). The switch means nothing under `ospreyflow`: the default tree never
+      carries any of them (I9). It reaches both GOV.UK frames: the React workspace's GOV.UK look while it remains
+      (`brand/govuk/GovukHeader.tsx:25`, the `--ui` line at `design/tokens.css:189`, the sign-in page's
+      `harness/govuk_chrome.js`), and the GOV.UK tree.
+    - **The logo.** No logo setting exists today: none was found in `packages/schemas/deployment.py`, the
+      harness, the Conduit, the command line or the workspace. This record adds `appearance.logo`, a PNG or
+      SVG file, shown only as an image and served from the deployment's own origin, so the security policy
+      does not change.
+    - **Until Admin › Themes is built**, all of these are **deployment settings**. They sit in `osprey.yaml`'s
+      `appearance:` section (`AppearanceConfig`, `packages/schemas/deployment.py:1656`), beside `brand`,
+      `service_name`, `organisation`, `phase` and `banner_text`, with the logo file in the deployment folder.
+      The harness renders them into `/deployment.json` (`harness/site.py`, `render_glass_settings`; mounted
+      at `harness/render.py:1045`) and into `pages`' environment. They change with a re-render and a restart,
+      by whoever runs the deployment. There is no right in the product, and **no exception**: the Conduit is
+      not involved, as it is not today.
+    - **When Admin › Themes is built**, the menu offers the department's name, its logo, the service name,
+      the phase, the banner's words and the GOV.UK identity switch.
+      - Who may change them: `administer_system` (A1, `packages/schemas/rights.py:94`); no other right.
+      - Where they are kept: on the pattern ADR-147 set for *Admin › Maps*. `osprey.yaml`'s `appearance:` is
+        where a deployment starts. The first change made in Admin writes the **appearance file**
+        (`appearance.yaml`, `600`, in the Conduit's own settings volume), which from then on replaces those
+        keys of `osprey.yaml` whole. The logo sits beside it, one change at a time under a lock, each change
+        audited with who made it.
+      - Who reads them: every page, before sign-in as well as after, through `GET /v1/appearance`. `pages`
+        and the React workspace both read that route, in place of `/deployment.json`'s `appearance` section.
+      - **`appearance.brand` is not in the menu.** It chooses the tree and whether Superset is rendered, so it
+        stays a deployment setting changed only by a re-render.
+      - This is **exception X8** (decision 11), built with its access-control tests first. The `AppearanceConfig`
+        docstring already anticipates "the Admin console's Appearance tab".
+      - Not checked: how the Keycloak sign-in page, rendered at install, would pick up a change made in Admin
+        (question 25).
+
+### Invariants, each with the test that fails if it is broken (rule 12)
+
+Each test is new unless named as existing, and each is shown red with a planted fault before it is wired into
+`make ci` (rule 15), the fault in the shape the code really emits.
+
+| # | Invariant | Test that fails | Planted fault that shows it red |
+|---|---|---|---|
+| I1 | No React in `pages` or `packages/glass-shared` | `scripts/no_react_check.mjs` (`tests/glass_trees/test_no_react_check.py` drives it): no `react`, `react-dom` or `react/jsx-runtime` in either workspace's resolved dependency tree, ignoring optional peers (zustand declares `react` as one, `FRONT_END_ANSWERS.md` Q1), and no React marker in any bundle `pages` serves | an `import { createElement } from "react"` in a module, bundled |
+| I2 | Every page is sent with the policy of decision 8 and none breaches it | `apps/pages/test/<tree>/csp/every-page.spec.ts`: each route in the tree's route list, Chromium and WebKit, fails on any `securitypolicyviolation` and on a missing or weaker header | an inline `style=` on one template; a header without `frame-ancestors` |
+| I3 | Nothing is fetched from another address | the same run fails on any request whose origin is not the page's | a module that fetches a font from a CDN |
+| I4 | Every page does its job with scripts off | `apps/pages/test/<tree>/scripts-off/every-page.spec.ts`: content present and the main action completes by form | a page whose list is drawn only by its module |
+| I5 | Neither tree imports from the other; both import only `glass-shared`, `modules` and their own files; the React workspace never imports from `pages` | an import-boundary lint (`no-restricted-imports` per folder) and `tests/glass_trees/test_import_boundaries.py` over the source | `tree-govuk` including a `tree-default` partial; `apps/workspace` importing `apps/pages/modules` |
+| I6 | The two trees offer the same functions, apart from an owner-agreed list of functions (never a version or look difference: decision 9) | `tests/glass_trees/test_tree_parity.py`: each tree's route and action list against the other's and `apps/pages/PARITY_EXCEPTIONS.yaml` | a route added to one tree only |
+| I7 | Everything done by dragging has a keyboard route (rule 13) | a registry per module in `glass-shared`'s action registry, with `assertAllCovered` per tree's keyboard folder; `registryCoverage.test.ts` pointed at each folder | an action registered with no step |
+| I8 | Both themes pass the same acceptance (D10) | each slice's scenario runs on each tree it names | a scenario step that only the default tree can pass |
+| I9 | The default tree never shows the crown, the GOV.UK logotype or the GOV.UK typeface. The GOV.UK tree and the React workspace's GOV.UK look show them only with `govuk_identity` on, and the crown only on a gov.uk address | `tests/glass_trees/test_default_tree_carries_no_govuk_assets.py` over the built `tree-default` assets and CSS; `apps/pages/test/govuk/identity.spec.ts` (switch off: no `.govuk-header__logotype`, no crown, no `GDS Transport` in any computed font; switch on, on a gov.uk host: all three); `test_govuk_identity_is_off_by_default` in `tests/harness/`; a case in `apps/workspace/src/brand/brand.test.tsx` with the switch off | `GDS Transport` named in a default stylesheet; the GOV.UK header template drawing the logotype whatever the switch says; `GovukHeader.tsx` keyed on the brand alone |
+| I10 | Access control is unchanged | the leak test and every access-control test pass against the Conduit through `pages` (`test_the_leak_test_through_pages`) | a proxy that strips the bearer and adds a service token |
+| I11 | Moving code into `glass-shared` changes nothing | the React workspace's whole suite and its performance budget, before and after R2, on the same machine | none: this is a before-and-after equality, run once on the move |
+| I12 | A module meets the budget its React counterpart meets | `apps/pages/test/perf/graph.spec.ts` at 50k/250k, the thresholds of `spec/02` §5 unchanged, with a Sigma 4 readiness signal | a readiness selector that never matches (never ready, red) |
+| I13 | `glass-shared` imports no `sigma`, `@sigma/*` or `maplibre-gl`, as a value or a type | `scripts/version_isolation_check.mjs` (built and shown red in `ospreyflow_maplibre_sigma_2026-11-18/evidence/`) and the `no-restricted-imports` rule with `allowTypeImports: false` | `import Sigma from "sigma"`; `import type { Map } from "maplibre-gl"` |
+| I14 | A GOV.UK theme deployment renders no Superset | `tests/harness/test_govuk_renders_no_superset.py`: compose, cluster and cloud-platform renders under `govuk` with `reporting.superset: true` refused in words, and with it unset contain no `superset` service, no `bi.` route, no Superset client | a render that keeps the `bi.` route under `govuk` |
+| I15 | A dashboard's figures are counted with the reader's access, never a total | the existing route, run through `pages`: `test_the_alert_monitoring_page_shows_only_the_readers_own_counts` (two readers of different clearance over the leak test's worlds get different counts; rule 7); `test_the_dashboard_page_refuses_a_reader_without_read_reports_as_the_route_does` | a page handler that fetches the report once with a service token and shows it to everyone |
+| I16 | Sessions never fill Valkey | `tests/glass_trees/test_session_keys_expire.py`: every key `pages` writes has a TTL | a session store configured without `ttl` |
+| I17 | A cookie alone cannot change anything | `apps/pages/test/server/csrf.test.ts`: a state-changing `/v1` call or form post without the anti-forgery token is refused | the check removed from one route |
+| I18 | The tree served is the deployment's brand | `tests/harness/test_pages_tree_follows_the_brand.py` over every shape | `OSPREY_PAGES_TREE` hard-coded |
+| I19 | A whole-dataset load does not run what depends on a failed pipeline, and runs the rest | `tests/ingest/test_dataset_load_order.py` (spec revision §4 items 11 and 12) | a runner that continues after a failure |
+| I20 | Both front ends resolve the same versions of `sigma`, `@sigma/*`, `maplibre-gl` and `graphology`, except a difference written in `VERSION_WINDOW.yaml`, and no release is cut while that file lists anything | `scripts/same_drawing_versions_check.mjs` over both workspaces' resolved trees in `package-lock.json` (`tests/glass_trees/test_same_drawing_versions.py` drives it); the release gate reads `VERSION_WINDOW.yaml`; `tests/glass_trees/test_no_sigma_page_merges_in_the_window.py`: while the window file lists anything, no route in either tree mounts a Sigma module except R4's budget page | `apps/pages` pinning `maplibre-gl` 6.5 while `apps/workspace` resolves 6.4, with nothing in the window file; a release cut with one line in it; the Studio's graph preview route added while the window is open |
+| I21 | A board never shows a trend its viewer can no longer read, and says it is withheld rather than empty | `test_a_board_shows_a_trend_its_viewer_can_no_longer_read_as_withheld_not_as_missing_data`, beside the existing pack tests | a board page that draws an empty chart for a withheld item |
+
+### Consequences
+
+- **Every deployment gains a service.** `pages` is an owned image built and scanned like the others, with a
+  stanza in `compose_services` (`harness/render.py:616`), a front-proxy route (`harness/site.py:63`), a
+  service-inventory entry, a realm client or Entra registration, a Valkey database, and on cloud-platform a
+  workload, an Ingress door in `profile.yaml` and the egress for sign-in. Its memory on local-lite is not
+  measured; R1 measures it and brings it to the owner if it moves the 16 GB floor (answer 10).
+- **Two front ends can drift.** I5, I6 and I20 hold them together; logic lives in `glass-shared`, not in pages.
+- **One renderer version, after a short window.** R4's budget proof and WS4 come first. Until WS4 merges, no
+  release is cut and no other Sigma 4 page merges, the Studio's graph preview included (I20). The window costs
+  calendar time, not two pictures in front of people. If R4's first step fails, nothing moves: both stay on
+  Sigma 3.
+- **The GOV.UK look changes for deployments that have it today.** With the identity switch off by default, a
+  GOV.UK deployment that upgrades loses the crown and GDS Transport until its administrator turns the switch on.
+  Release notes say so in words.
+- **The GOV.UK theme cannot build a new dashboard.** Analysts view the ones the product ships, and build with
+  Trends, Packs and the board. A wider builder would be its own release.
+- **What can be said to the client's architecture board changes:** no React and no Superset in a GOV.UK
+  deployment; one Node service on the department's own stack. The client session is to be told (D41's note).
+- **Gates.** The performance, keyboard, accessibility and contrast gates run today only against React
+  harnesses served by Vite (`FRONT_END_ANSWERS.md` Q6). Each gets a copy per tree, each copy shown red first.
+- **Cost.** R1 to R8 of the parallel front-end specification, sized by the build session; this record does
+  not size them.
+
+### Spec amendments made with this decision (as diffs for the owner, not applied)
+
+`02_GLASS_FRONTEND.md` §1, §2, §4, §5, §8; `05_DEPLOYMENT.md` §1, §2.6.1, §2.7, §3b, §7;
+`09_INGEST_STUDIO.md` §0; `00_ARCHITECTURE.md` §1 and §6; `process/CLAUDE.md` (the Glass's description, the
+conventions, the tokens path); `process/FDE_HANDOVER.md` §2 (the lifting for this layout). Amendments in this
+log: ADR-002 Amendment 1, ADR-050 Amendment 4, ADR-070 Amendment 1, ADR-111 Amendment 9, ADR-132 Amendment 9,
+ADR-140 Amendment 22, ADR-141 Amendment 2, ADR-148 Amendment 23.
+
+### Not decided here
+
+Retiring the React workspace's GOV.UK look; site plans' rotation and pitch (D48, a backlog row owned by GG5);
+a department's own sign-in, audit or header; when Admin › Themes is built; questions 24 and 25 of
+`ASSUMPTIONS_AND_QUESTIONS.md`; C023 (set aside with the demo items).
+
+### ADR-132, Amendment 9 (19 November 2026) — superseded by ADR-152 — Accepted by the owner, 19 November 2026
+
+ADR-152 supersedes this record. The GOV.UK theme becomes a parallel tree of server-rendered pages served by
+the `pages` service, built with GOV.UK Frontend's own components; "a switch, not a fork" and ruling 4 ("no
+GOV.UK Frontend component set") no longer hold for it. `appearance.brand` stays the one setting and now also
+chooses the tree (ADR-152 decision 7). Decisions 1, 3, 4, 7 and 8, ruling 2 and Amendments 1 to 8 stand for
+the React workspace's own GOV.UK look, which stays until the GOV.UK tree passes the same acceptance; retiring
+it is the owner's separate decision (ADR-152 decision 13, F7). One part of decision 9 changes even there: the
+crown, the GOV.UK logotype and GDS Transport follow the GOV.UK identity switch (`appearance.govuk_identity`, off
+by default; ADR-152 decision 14), not the brand alone. Amendment 7's gov.uk-address rule for the crown, Crown
+copyright and the Open Government Licence stays on top of the switch. Tests that would fail if this were broken: the
+ones this record names stay in force for the React workspace; `tests/harness/test_pages_tree_follows_the_brand.py`
+(ADR-152 I18) holds the brand to the tree; ADR-152 I9 holds the identity to the switch.
+
+### ADR-002, Amendment 1 (19 November 2026) — one renderer, one version in both front ends, after a short window — Accepted by the owner, 19 November 2026
+
+Sigma.js stays the only renderer, and both front ends use **the same version of it**, and of `@sigma/*`,
+`maplibre-gl` and `graphology`. This is the owner's answer of 19 November to D47, under ADR-152 decision 9.
+
+1. The `pages` service's graph and map modules start on Sigma 4.0.x with `@sigma/layer-maplibre` 4.0.1.
+2. **R4's first step** measures the graph module on Sigma 4 against `spec/02` §5. If it meets the budget, the
+   React workspace moves to Sigma 4 at once, in slice WS4. If it does not, `pages` falls back to Sigma 3 and
+   both stay on Sigma 3. **R4's budget proof and WS4 come first:** no other page that draws with Sigma 4
+   merges until WS4 is in, the Studio's graph preview included.
+3. From R4's first step passing until WS4 merges, the two front ends may resolve different Sigma versions. That
+   difference is written in `apps/pages/VERSION_WINDOW.yaml` with the day it opened. **The release freeze
+   stays:** no release is cut while that file lists anything, and the window is kept short. People are never served two versions of the renderer.
+4. MapLibre never differs: `pages`' map module merges only once the React workspace is on the same `maplibre-gl`
+   line (GG6).
+5. The record's warning against two pictures is met by one version, not by an accepted-differences list. The
+   canvas-look comparison runs on both front ends with no exceptions beyond its pixel tolerance, and
+   `PARITY_EXCEPTIONS.yaml` lists functions only.
+6. `packages/glass-shared` imports no `sigma`, `@sigma/*` or `maplibre-gl` (D46), so a version is pinned in one
+   place per workspace and held equal by the check.
+
+Tests that would fail: `scripts/same_drawing_versions_check.mjs` (ADR-152 I20). Red: `apps/pages` resolving a
+different `maplibre-gl` from `apps/workspace` with nothing in the window file, and a release cut with a line in
+it; `tests/glass_trees/test_no_sigma_page_merges_in_the_window.py`, red with the Studio's graph preview route
+added while the window is open. `scripts/version_isolation_check.mjs` (ADR-152 I13) was shown red in
+`Claude outputs/ospreyflow_maplibre_sigma_2026-11-18/evidence/isolation_check_red_green.txt` and is rerun red in
+the repository before it is wired in. The React workspace's own performance gate runs on Sigma 4 in WS4,
+with a Sigma 4 readiness signal shown red first.
+
+### ADR-050, Amendment 4 (19 November 2026) — the `pages` service signs in on the server — Accepted by the owner, 19 November 2026
+
+This record governs the Glass in the browser and is unchanged there: a public client, the access token in
+memory only, no refresh token in the browser. ADR-152's `pages` service is a different case, which this record
+did not address:
+
+1. `pages` is a **confidential** client (`osprey-pages` in the realm; its own registration on Entra ID, ADR-148
+   Amendment 23), authorization code with PKCE, its secret kept in `deployment.env` across re-renders
+   (`keep_existing_secrets`).
+2. Its tokens are kept **on the server only**, in a session in the deployment's Valkey, under its own
+   database number and key prefix, every key with a time limit no longer than the identity provider's
+   session. The browser holds an opaque `HttpOnly`, `Secure`, `SameSite=Lax` cookie and nothing else.
+3. Renewal: `pages` holds a refresh token on the server only, the `osprey-pages` realm client alone having
+   `use.refresh.tokens` on; the browser's public client is unchanged (the owner's answer 4).
+4. Single sign-on rides the identity provider's own session, as the Glass's silent renewal does. Sign-out in
+   either the Glass or `pages` ends the identity provider's session; `pages` ends its own session on a
+   back-channel logout (Keycloak) or front-channel logout URL (Entra ID) (answer 5).
+5. The distinction of ADR-044 carries: "cannot reach the identity provider" is never told as "access revoked".
+
+Tests that would fail: `apps/pages/test/server/session.test.ts` (no token in any response body, header or
+cookie but the opaque id; red with the access token placed in the cookie);
+`apps/pages/test/server/refresh.test.ts` (an expired access token is renewed with no redirect in the middle of a
+form post; the refresh token never leaves the server; red with the refresh token written to the cookie);
+`tests/glass_trees/test_session_keys_expire.py` (ADR-152 I16); `tests/harness/test_realm_pages_client.py`
+(`osprey-pages` is confidential, standard flow on, the audience mapper present, its redirect URI the
+deployment's own origin; red with `publicClient: True`); a sign-out case in `apps/pages/test/<tree>/keyboard/`.
+
+### ADR-070, Amendment 1 (19 November 2026) — light and dark on server-rendered pages — Accepted by the owner, 19 November 2026
+
+The light and dark choice (decision 4, as ADR-072 and ADR-073 changed it) reaches the `pages` service's
+default-tree pages: the server reads the `ospreyflow_theme` cookie and writes `data-theme` into the page it
+sends, so there is no flash and no script is needed; the page's own theme button sets the same cookie, through
+a form post when scripts are off. The cookie still holds only `light` or `dark`, is never used for anything
+else, and the server reading it decides nothing but the attribute. On the GOV.UK tree the page is light only
+and has no theme button (ADR-132 decision 3, kept by ADR-152). Tests that would fail:
+`apps/pages/test/default/theme.spec.ts` (a `dark` cookie gives `data-theme="dark"` in the first byte of HTML;
+the button works with scripts off; red with the server ignoring the cookie);
+`apps/pages/test/govuk/theme.spec.ts` (a `dark` cookie still gives a light page and no button).
+
+### ADR-111, Amendment 9 (19 November 2026) — on the GOV.UK theme the dashboards are the product's own pages, and there is no Superset — Accepted by the owner, 19 November 2026
+
+The owner's rulings D41 to D43 (18 November 2026), under ADR-152 decision 10:
+
+1. **Default theme: unchanged.** Amendment 3's embedded Superset and its "Build a report" stay.
+2. **GOV.UK theme:** the one dashboard the product ships, *Alert monitoring* (ADR-145 Amendment 4 decision 9),
+   is a server-rendered page drawn with the product's own charts from `GET /v1/investigations/{id}/reports`,
+   which already counts as the reader, with **no new Conduit route** (the owner's answer 12; ADR-152 I15). No Superset board ships as a product file
+   (`docs/administration-guide.md:3069`), so none is carried over. No new kinds of figure; the build slice is
+   GR3. No frame, no guest token, no exception to the security policy.
+3. **Superset is not rendered** in a GOV.UK theme deployment, in any shape (ADR-148 Amendment 23 for
+   cloud-platform). The guest-token routes answer as they do today when Superset is not configured.
+4. **"Build a report"** on the GOV.UK theme is Trends and Packs as pages, and the board: a pack of trend items
+   shown together on one page, with **no new Conduit route** (answer 14; ADR-152 I21).
+5. `report-sync` and the mart may still run on a GOV.UK deployment, for a department's own BI tool (answer 13).
+   D42 names Superset, not the feed.
+
+Tests that would fail: ADR-152 I14, I15 and I21.
+
+### ADR-140, Amendment 22 (19 November 2026) — the Studio as server-rendered pages; one view, not two modes; the 16 and 18 November rulings S1 to S21 — Accepted by the owner, 19 November 2026
+
+1. **Where it is built** (ADR-152, F3 and A1): the Studio is server-rendered pages from the `pages` service, in
+   both trees, with its canvases (the dataset map, the pipeline canvas) as plain TypeScript modules. Today's
+   React Studio stays until the owner's word removes it (F7; slice IS5 stops for it).
+2. **One view** (S2): decision 3's guided and expert modes, and the switch between them, are withdrawn. What
+   a person may do depends on their rights; "Edit as SQL" and the expert-only steps are offered to holders of
+   `write_sql_transforms` and to no one else. `studioMode.ts`'s preference is not carried into the pages.
+   Database commands are read-only and folded away (S3).
+3. **Classes** (S11): decision 4's "one of the four POLE classes" is corrected to the five the code has
+   (`packages/schemas/domain.py:56-66`: person, object, location, event, organisation). A type record carries
+   its class, its identifiers and its rule for when two records are the same; the Glass's display is chosen
+   automatically by default.
+4. **A type belongs to its dataset** (S10), layered on the core and the packs, seen by no other dataset;
+   adding one needs `edit_target_model` alone (S19). Reference lists are managed on the Model step and created
+   without a Make live (S20).
+5. **The staging container is dropped** (S14). Complex multi-stage transformation is done outside OspreyFlow.
+6. **"Use it only"** (S12): a target item may refer only to existing items; a row whose reference finds
+   nothing is held for a person, with its reason, and nothing is created (ADR-152 X4). It goes to the held-rows store that rules already use (ADR-133), is
+   released by a person and is re-run on release (answer 19).
+7. **"Load now" is "Deploy and run now"** (S13). There is no load of an undeployed pipeline. A single
+   pipeline is still deployed and run on its own (S18). The whole-dataset load is ADR-141 Amendment 2.
+8. **"Runs after"** is set by a person on the dataset map, with a suggestion worked out from which pipelines
+   create the types another refers to (S15).
+
+Tests that would fail: the acceptance of `SPEC_INGEST_STUDIO.md` §9 and its revision §4, written first per
+slice (D10); `test_a_person_without_write_sql_transforms_is_not_offered_edit_as_sql`;
+`test_no_studio_page_offers_a_mode_switch`; X4 to X7 of ADR-152.
+
+### ADR-141, Amendment 2 (19 November 2026) — the whole-dataset load — Accepted by the owner, 19 November 2026
+
+The owner's D7 to D9 and D16 (18 November 2026; S16, S17, S18, S21):
+
+1. **The unit an outside tool starts is the whole dataset.** One load runs the dataset's deployed pipelines in
+   the order a person set on the dataset map. It is started inside OspreyFlow, by a person, or by an outside
+   scheduler through the run API, extended beside `POST /v1/runs` to name a dataset rather than a pipeline.
+   Outside tools are given only the whole-dataset job; a single pipeline is run on its own only inside the
+   Studio (S18).
+2. **A failure stops only what depends on it.** When a pipeline fails, those set to run after it, directly or
+   through another, are not run; the rest carry on. The load's report says which ran, which failed and which
+   were not run, each in words, its counts withheld where the reader may not see them (decision 7).
+   "Depends on" is the order a person set; the Studio's suggestion from the types is shown, not enforced
+   (answer 17).
+3. **The job file** (the owner's answer 18). The Studio exports **one neutral file** for the dataset: a small
+   YAML document with a published schema, naming the deployment's address, the dataset and the run route, and
+   nothing else. Any scheduler calls the run route from it, with its own plain HTTP step, then reads the load's
+   report until it ends. **No generated Airflow job**, and no scheduler-specific client is part of this record.
+   The file holds no credential: the scheduler gives the call a service identity through the deployment's OIDC
+   (client credentials, decision 10). The load acts as the dataset load's named owner, exactly as decision 10
+   and Amendment 1 point 3 say for a pipeline.
+4. **No job loads without OspreyFlow.** Matching, markings, access, held rows and the audit stay in the engine.
+5. **A scheduled whole-dataset load keeps running when its owner is away**, under a named cover; the detail is
+   decided with slice IS6 (D16, S21).
+6. **The run order is stored with the dataset**, versioned, and carried in a release export, so an imported
+   dataset loads in the same order (answer 16).
+
+Tests that would fail: ADR-152 X3's tests and I19; `tests/ingest/test_job_file_schema.py` (the exported
+file validates against its schema and names a dataset, never a pipeline; red on a file that names one); spec revision §4's acceptance items 11 to 13; the
+fake identity provider refusing what Keycloak refuses (rule 15, as decision 10's tests already require).
+
+### ADR-148, Amendment 23 (19 November 2026) — the `pages` service on cloud-platform, and no Superset under the GOV.UK theme — Accepted by the owner, 19 November 2026
+
+1. **`pages` on cloud-platform** (ADR-152): a workload, an Ingress door beside the Glass's in `profile.yaml`,
+   the Valkey secret mounted, the egress to the identity provider. On Entra ID `pages` has its own app
+   registration (Web platform, with a secret) and `ClaimMapping` gains `pages_client_id`, validated as
+   `superset_client_id` is and admitted beside the Glass's client at `_verified_parts` (the owner's answer 6). Roles still come from Admin › People (decision 9 unchanged); no right is granted by default.
+2. **Superset and the report sync** (Amendments 9 to 11, 21): rendered on cloud-platform only when
+   `appearance.brand` is `ospreyflow`. Under `govuk` the render has no `superset` workload, no `bi.` door, no
+   Superset registration and no `superset_client_id` (ADR-111 Amendment 9; ADR-152 I14).
+3. **The GOV.UK identity switch and the logo** (ADR-152 decision 14) are rendered on cloud-platform as on every
+   shape: from `appearance:` until Admin › Themes is built. After that, the appearance file needs the same
+   kind of persistent volume as *Admin › Maps*' maps file. Not checked: how cloud-platform keeps the maps file
+   today.
+
+Tests that would fail: ADR-152 X1's four tests; `tests/harness/test_govuk_renders_no_superset.py` for the
+cloud-platform and poc shapes; the poc manifest held to the render both ways (Amendment 12's test) with the
+`pages` workload added.

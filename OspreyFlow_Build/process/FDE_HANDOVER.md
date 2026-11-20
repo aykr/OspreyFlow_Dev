@@ -41,6 +41,10 @@ evidence and this file is wrong; say so and fix the file.
 > Never admit a real dataset, push anywhere public, create a public repository, claim the reserved name,
 > restructure the tree, or touch the airbyte container on port 8000.
 
+The owner lifted "restructure the tree" once more, for one layout only: ADR-152 decision 6 (`apps/pages`,
+`packages/glass-shared`, `packages/design`), on accepting that record. Any other restructuring still needs his
+word.
+
 `origin` (`aykr/OspreyFlow_Dev`) is public, and the owner confirmed on 6 November 2026 that this is
 intended ("Public is intended", ADR-142 P4): pushing to `origin` under ADR-142 decision 6 is not a push
 "anywhere public" in this sense. No other remote is pushed to.
