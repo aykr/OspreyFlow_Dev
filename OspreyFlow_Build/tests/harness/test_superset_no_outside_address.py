@@ -26,15 +26,30 @@ scan of the inputs cannot see a request made by code the inputs import. The requ
 signed-in browser that records every request and every `securitypolicyviolation` event on every
 page a person can reach) is SE6b's, under `apps/workspace/live`.
 
-**What this slice did not do, and why (the pinned image).** Superset 6.1.0 has no runtime setting
-that switches its usage tracking off. The image carries no `SCARF_ANALYTICS` anywhere; the tracking
-is a pixel (`<img src="https://apachesuperset.gateway.scarf.sh/pixel/.../<version>/<sha>/<build>">`)
-that the front end draws unconditionally in the navigation bar's right-hand menu (component `A` in
-`static/assets/8085.*.entry.js`, drawn after the "Login" link). The only thing that stops its
-request is the policy's `img-src`, which this slice has made name no outside host: the browser
-refuses the image before any request leaves, and says so with a `securitypolicyviolation` event.
-That is why the rendered environment carries no "switch-off" line: a variable the image never reads
-would claim a protection the product does not have.
+**What this slice did not do, and why (the pinned image): a decision owed.** Brief item 1 (set the
+usage-tracking switch-off in both profiles' rendered environment, and test it) cannot be done as
+written, because Superset 6.1.0 has no runtime switch. Measured on the image the Dockerfile pins
+(`apache/superset@sha256:16b50bbe...`, the same digest), 20 November 2026:
+
+- `grep -rn scarf -i /app/superset --include=*.py --include=*.html` finds only the two policy hosts
+  in `superset/config.py` (lines 2127 to 2128 and 2167 to 2168); `SCARF_ANALYTICS` is in no Python
+  file, no shell file and no bundle (`grep -c SCARF_ANALYTICS` on the bundle: 0), and the bundle
+  reads no `process.env` at all. The variable the documentation names is read by the `@scarf/scarf`
+  npm package while Superset is *built* (`package.json` carries its `scarfSettings`), not by the
+  running server.
+- The pixel is component `A` in `static/assets/8085.4bc9b7059e85ba458bcb.entry.js`:
+  `let A=({version:e,sha:a,build:t})=>{let l=`https://apachesuperset.gateway.scarf.sh/pixel/<id>/${e}/${a}/${t}`;
+  return(0,n.Y)("img",{referrerPolicy:"no-referrer-when-downgrade",src:l,width:0,height:0,alt:""})}`,
+  drawn with no condition after the navigation bar's "Login" link: `...,(0,n.Y)(A,{version:t.version_string,
+  sha:t.version_sha,build:t.build_number})]})`.
+
+So the only thing that stops that request is the policy's `img-src`, which this slice made name no
+outside host: the browser refuses the image before any request leaves, and says so with a
+`securitypolicyviolation` event. **That makes the policy the whole protection, so the policy being
+sent is tested here** (`TALISMAN_ENABLED` pinned on in the file, so the environment cannot turn it
+off, and absent from both renders). No switch-off line is rendered: a variable the image never reads
+would claim a protection the product does not have. Whether this stands in place of item 1 is the
+conductor's or the owner's to rule, not this test's.
 
 The planted violations take the shape the code under test receives at its real call site (rule 15):
 the real loaded policy with one source appended, never a hand-written dictionary; the real
@@ -174,6 +189,48 @@ def test_the_policy_does_not_depend_on_which_dictionary_superset_picks(config: A
     dev = copy.deepcopy(config.TALISMAN_DEV_CONFIG["content_security_policy"])
     live.pop("script-src"), dev.pop("script-src")
     assert live == dev
+
+
+# --- the policy is sent ------------------------------------------------------------------------
+# The policy is the only thing that stops Superset's tracking pixel (see the header), and Flask-
+# Talisman sends no policy header at all when `TALISMAN_ENABLED` is false. Both dictionaries above
+# are unchanged when it is, so none of the tests above would notice.
+
+
+def talisman_is_on(config: Any) -> bool:
+    """What Superset reads (`superset/initialization/__init__.py`: `config["TALISMAN_ENABLED"]`)."""
+    return config.TALISMAN_ENABLED is True
+
+
+def test_the_policy_is_sent_talisman_is_on(config: Any) -> None:
+    assert talisman_is_on(config)
+
+
+@pytest.mark.parametrize("value", ["false", "False", "0", "no"])
+def test_the_environment_cannot_turn_the_policy_off(
+    monkeypatch: pytest.MonkeyPatch, rendered: list[str], value: str
+) -> None:
+    """The shipped file reads `TALISMAN_ENABLED` from the environment; this file's own value wins."""
+    loaded = _superset(monkeypatch, {**_env(rendered), "TALISMAN_ENABLED": value})
+    assert talisman_is_on(loaded)
+
+
+def test_the_check_is_red_when_the_policy_is_switched_off(config: Any) -> None:
+    """Planted at the call site: the real loaded config with the one attribute changed."""
+    assert talisman_is_on(config)
+    config.TALISMAN_ENABLED = False
+    assert not talisman_is_on(config)
+    del config.TALISMAN_ENABLED
+    with pytest.raises(AttributeError):  # a file that stops pinning it is red, not skipped
+        talisman_is_on(config)
+
+
+def test_neither_profiles_render_switches_the_policy_off(rendered: list[str]) -> None:
+    assert "TALISMAN_ENABLED" not in _env(rendered)
+    cloud = _cloud_values(_cloud_config())["environment"]
+    assert "TALISMAN_ENABLED" not in cloud
+    # The check can fail: the same lookups on a render that sets one.
+    assert "TALISMAN_ENABLED" in _env([*rendered, "TALISMAN_ENABLED=false"])
 
 
 @pytest.mark.parametrize(
