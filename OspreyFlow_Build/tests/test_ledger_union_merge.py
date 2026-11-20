@@ -297,10 +297,14 @@ def test_merge_tree_write_tree_honours_the_union_attribute(tmp_path: Path) -> No
         assert (done.returncode == 0) is clean, done.stdout
 
 
-def test_a_builders_first_merge_of_main_bounces_if_the_attribute_is_not_in_its_own_tree(
-    tmp_path: Path,
-) -> None:
-    """The commit that brings `.gitattributes` to a branch: the builder's plain `git merge main`."""
+def test_a_builders_first_merge_of_main_bounces_once_and_not_again(tmp_path: Path) -> None:
+    """The commit that brings `.gitattributes` to a branch, met by the builder's plain `git merge main`.
+
+    The attributes are read from the tree being merged into, which does not hold the file yet, so that
+    one merge bounces; resolved once, the next merge of main (the file now in the builder's tree) is
+    clean. The orchestrator's direction is not affected: it merges in a checkout of main, and `merge-tree`
+    run there sees the file whichever side it names first (run in the builder's checkout it does not).
+    """
     repo = _new_repo(tmp_path, "")
     _branch(repo, "builder", **_appends(15, "The builder's row", block=False))
     _write(repo, ".gitattributes", _real_attributes())
@@ -308,6 +312,25 @@ def test_a_builders_first_merge_of_main_bounces_if_the_attribute_is_not_in_its_o
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "main gains the attributes and a row")
 
+    for first, second in (("main", "builder"), ("builder", "main")):
+        assert _git(repo, "merge-tree", "--write-tree", first, second, check=False).returncode == 0
+
     _git(repo, "checkout", "-q", "builder")
-    clean, conflicted = _merge(repo, "main")
-    assert (clean, conflicted) == (True, []), "the first merge of the commit that brings the file"
+    # `merge-tree` reads the attributes from the checkout it is run in, not from the trees it names.
+    assert _git(repo, "merge-tree", "--write-tree", "main", "builder", check=False).returncode == 1
+    assert _merge(repo, "main") == (False, [LEDGER])
+    resolved = _read(repo, LEDGER)
+    for row in (_row(15, "The builder's row"), _row(16, "Main's row")):
+        assert row in resolved
+    _write(repo, LEDGER, "".join(line for line in resolved.splitlines(keepends=True)
+                                 if not line.startswith(("<<<<<<<", "=======", ">>>>>>>"))))
+    _git(repo, "add", LEDGER)
+    _git(repo, "commit", "-q", "--no-edit")
+
+    _git(repo, "checkout", "-q", "main")
+    _write(repo, LEDGER, _read(repo, LEDGER) + _row(17, "Main's next row"))
+    _git(repo, "commit", "-q", "-am", "main appends again")
+    _git(repo, "checkout", "-q", "builder")
+    _write(repo, LEDGER, _read(repo, LEDGER) + _row(18, "The builder's next row"))
+    _git(repo, "commit", "-q", "-am", "builder appends again")
+    assert _merge(repo, "main") == (True, [])
