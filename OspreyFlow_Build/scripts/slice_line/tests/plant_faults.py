@@ -183,6 +183,14 @@ M = [
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
  ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ # 1a: any merge conflict is recorded, and its send-back is free
+ ("merge_slice.py", '            if files:  # any other conflict: recorded', '            if False:  # any other conflict: recorded', "conflict_outside_the_records_folder_is_recorded"),
+ ("merge_slice.py", '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []', '    return ["x"] if p.returncode == 1 else []', "conflict_outside_the_records_folder_is_recorded"),
+ ("merge_slice.py", '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []', '    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] or ["(none named)"]', "fails_with_no_file_named_by_merge_tree"),
+ ("resume.py", '            if st.get("refused_for") == "conflict":', '            if False:', "conflict_send_back_works_at_the_rounds_limit"),
+ ("resume.py", '                said = back_to_building(slice_id, wt)\n                c.log_owner_change(slice_id, action, f"standing: a merge conflict', '                said = back_to_building(slice_id, wt, round=rnd + 1)\n                c.log_owner_change(slice_id, action, f"standing: a merge conflict', "conflict_send_back_works_at_the_rounds_limit"),
+ ("merge_slice.py", '                    0, "conflict")', '                    0, "records")', "conflict_outside_the_records_folder_is_recorded"),
+ ("merge_slice.py", '    return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []', '    return []', "records_only_conflict_keeps_its_own_kind"),
  # 1f: a refused call is a seat failure, retried; CO2's round given back; the owner clears a stopped account
  ("run_seat.py", '    if refused or (res.get("is_error") is True and', '    if (res.get("is_error") is True and', "every_refusal_shape"),
  ("run_seat.py", '    if refused or (res.get("is_error") is True and (status is not None or (res.get("num_turns") or 0) <= 1)):', '    if refused:', "every_refusal_shape"),

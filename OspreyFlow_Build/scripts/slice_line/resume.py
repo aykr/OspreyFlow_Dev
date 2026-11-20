@@ -521,6 +521,14 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
                 said = back_to_building(slice_id, wt)
                 c.log_owner_change(slice_id, action, "standing: a records-only conflict; main merged in; round unchanged")
                 return [f"{slice_id}: back to building (round {rnd} of {limit}), main merged in.", *said]
+            if st.get("refused_for") == "conflict":  # main moved under a verified slice: no round, no line (1a)
+                gate = c.read_json(rec / f"verify-gate-{st.get('tip') or ''}.json") or {}
+                files = ((gate.get("findings") or [{}])[0]).get("file") or "see the gate's finding"
+                said = back_to_building(slice_id, wt)
+                c.log_owner_change(slice_id, action, f"standing: a merge conflict with main ({files}); the builder merges "
+                                                     "main in; round unchanged")
+                return [f"{slice_id}: back to the builder to merge main in (a conflict in {files}), round {rnd} of "
+                        f"{limit}, no round spent.", *said]
             if rnd < limit:
                 said = back_to_building(slice_id, wt, round=rnd + 1)
                 c.log_owner_change(slice_id, action, f"standing (within the rounds limit): round {rnd} -> {rnd + 1}")

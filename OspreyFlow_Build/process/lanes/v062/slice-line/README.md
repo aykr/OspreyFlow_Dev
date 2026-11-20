@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (291 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (211 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (295 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (218 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -99,7 +99,7 @@ without a tool call; the line's own cap is 6 red stops.
    in `owner-changes.tsv`); a tip that moved after the acceptance has neither. Then the acceptance (red before) and the checks and scans (green after) run in an
    environment built as CI builds it, its venv outside the tree, with the slice's slot; `node_modules` is removed
    before the full gate, which builds its own. Then main fast-forwarded to the tested merge commit, then `push_main.sh`. A red full gate
-   (or a merge refused for a conflict in the records folder alone) leaves the slice `refused`: the failing tests and
+   (or a merge refused for a conflict with main: kind `records` in the records folder alone, kind `conflict` for any other, with the files `git merge-tree` names; a merge that fails with no file named is refused in words and not recorded) leaves the slice `refused`: the failing tests and
    their failing lines (not the whole log) are written as a findings record (`verify-gate-<tip>.json`), the board
    shows "refused by the gate: N tests", and `resume.py <ID> send-back` returns it to the builder with those findings.
    A slice merged on an acceptance has `accepted_findings` (the count, the text, the split) in `merged.json`; the board
@@ -135,7 +135,7 @@ main's records, and sends the slice for a fresh check.
 | `refreeze` | commits `slices.tsv`, changed in that slice's frozen columns only, and refreezes them (history kept) | a line in `resume.tsv` |
 | `add-round` | a slice stopped at its rounds limit: round and limit each +1 | a line in `resume.tsv` |
 | `clear-stop` | a slice stopped on red checks: `red_stop.json` and `red_stops` removed | a line in `resume.tsv` |
-| `send-back` | a slice the merge gate refused: back to the builder with the gate's findings, its round advanced | none within the rounds limit; past it, the owner's `add-round` line as well |
+| `send-back` | a slice the merge gate refused: back to the builder with the gate's findings, its round advanced; for a conflict with main (kind `records` or `conflict`) no round is spent, at the rounds limit too, and the builder's one task is to merge main in, keeping both sides of an append-only change | none within the rounds limit, or for a conflict; past it, the owner's `add-round` line as well |
 | `correct-command` | a slice stopped **only** by the conductor's own malformed command (ruling 3) | none: the limits are in the code |
 | `accept` | a slice stopped at its rounds limit (or refused by the gate at it) whose tip has the Stop hook's green test record and a verifier's `findings` record for that same tip: writes `accepted-<tip>.json` (the owner's line, the date, every finding verbatim, split into faults in behaviour, gaps in a test and findings with no kind), phase `verified`, `accepted: true`; changes no finding and no verifier record. A last verdict of `pass` is refused (nothing to accept) | a line in `resume.tsv` |
 | `accept`, standing | with no `resume.tsv` line for the slice: the owner's one standing line in `standing.tsv`, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N 3 or more: ruling 5, "from a slice's third round on"), accepts a slice at round N or later whose newest findings record is the verifier's for its exact tip, every finding in it a gap in a test (`kind: test_gap`; in a record written before the field, the text's prefix "GAP IN A TEST:"). One fault in behaviour, or one finding with no kind, and it is refused in words; the slice goes round again or stops as before. The record is marked `by: standing`, with the rule's text; `run_seat.py verifier` tries it after each record with findings, and the conductor may run `resume.py <ID> accept` for a slice already stopped. The merge reads the line again (gone or no longer met: refused); its record lists each gap (`accepted_findings.backlog_rows`) for the conductor's backlog row, and the board adds "(standing accept: N gaps in a test for the backlog)". The conductor tells the owner afterwards | none per slice: the owner's line in `standing.tsv` (no file, or anything else in it: off) |

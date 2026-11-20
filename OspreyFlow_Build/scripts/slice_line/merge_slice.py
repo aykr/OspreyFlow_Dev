@@ -491,11 +491,16 @@ def refuse_to_builder(slice_id: str, tip: str, why: str, findings: list[dict], t
                 note=f"refused by the gate: {tests} tests" if refused_for == "gate" else why)
 
 
-def records_only_conflict(base: str, tip: str) -> list[str]:
-    """The files the tip conflicts with main in, when every one is in the records folder; [] otherwise."""
+def merge_conflicts(base: str, tip: str) -> list[str]:
+    """The files the tip conflicts with main in, as git merge-tree names them; [] when it names none."""
     p = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, tip], cwd=c.REPO,
                        capture_output=True, text=True)
-    files = [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []
+    return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []
+
+
+def records_only_conflict(base: str, tip: str) -> list[str]:
+    """The files the tip conflicts with main in, when every one is in the records folder; [] otherwise."""
+    files = merge_conflicts(base, tip)
     return files if files and all(f.startswith(c.V062_REL + "/") for f in files) else []
 
 
@@ -564,7 +569,24 @@ def merge(slice_id: str) -> dict:
                     "evidence": "git merge-tree on main and the tip"}], 0, "records")
                 raise Refused(f"{branch} does not merge cleanly onto main, in the records folder alone ("
                               + ", ".join(files) + "): resume.py send-back merges main into it.")
-            raise Refused(f"{branch} does not merge cleanly onto main: the builder rebases it.")
+            files = merge_conflicts(base, tip)
+            if files:  # any other conflict: recorded, so send-back returns it to the builder (no round: 1a)
+                named = ", ".join(files)
+                refuse_to_builder(slice_id, tip, "a merge conflict with main", [{
+                    "file": files[0],
+                    "what": f"The branch conflicts with main in {named}. Your one task: merge main into this branch "
+                            "(git merge main) and resolve each conflict keeping both sides of an append-only change "
+                            "(both rows of a table, both entries of a list: main's first, then yours); change nothing "
+                            "else, then run the checks and the acceptance command. A conflict that is not such an "
+                            "append is not yours to settle alone: say so in your final message.",
+                    "evidence": f"git merge-tree --write-tree --name-only on main and the tip names {named}"}],
+                    0, "conflict")
+                raise Refused(f"{branch} does not merge cleanly onto main: it conflicts with main in {named}. Recorded: "
+                              f"resume.py {slice_id} send-back returns it to the builder to merge main in (no round "
+                              "spent).")
+            raise Refused(f"{branch} does not merge cleanly onto main, and git merge-tree names no conflicting file: not "
+                          "recorded as the slice's fault, and the slice is left where it was; the conductor looks at the "
+                          f"merge (a hook, a lock, the tree). See {log}")
         merged = c.git(["rev-parse", "HEAD"], after)
         try:
             env_after = slice_env(after, log, slot, envs / "after")
