@@ -1,18 +1,24 @@
 """The Conduit image carries the Java runtime's NOTICE and source offer (slice PL2a; `spec/06_DECISIONS.md`
 ADR-147 Amendment 6, which brings `spec/00_ARCHITECTURE.md` §7's "a release step" to the image).
 
-`services/api/Dockerfile`'s `runtime-included` stage copies `services/api/JAVA_NOTICE` to `/opt/java/NOTICE`,
+`services/api/Dockerfile`'s `runtime-included` stage copies `notices/JAVA_NOTICE` to `/opt/java/NOTICE`,
 beside the `legal` tree the `jlink` runtime carries: the runtime's name, version and licence, the offer of its
 corresponding source, and the native libraries the runtime bundles. The build that omits Java, and the final
-stage, carry none of it.
+stage, carry none of it, by any route: the file lives in `notices/`, a folder the builder stage does not copy,
+because a file under `services/` would be copied whole by the builder's `COPY services ./services` and again by
+the final stage's `COPY --from=builder /app/services ./services`, into the image that has no Java (round 2's fault).
 
 **Which test would fail if the notice were dropped from the image (rule 12):**
 `test_the_included_stage_copies_the_notice_to_opt_java_notice` (the `COPY` line deleted from the real
 Dockerfile), and `test_the_real_dockerfile_and_notice_are_clean` (it reads the real Dockerfile). Dropped from the
 file instead: `test_a_notice_missing_or_drifting_is_flagged` (every field, the tag, the `jlink` line and each
 library of the specification's table, each shown red). The omitted build and the final stage are held by
-`test_no_other_stage_copies_the_notice` (and, for Java in the final stage, by
-`tests/test_conduit_image_java_licence.py`).
+`test_no_other_stage_copies_the_notice` (a `COPY` of the file itself) and
+`test_no_route_carries_the_notice_into_the_omitted_image` (a folder copy that contains it, and the final stage's
+`COPY --from=builder` that brings it in: the real Dockerfile with the notice put back under `services/`, and with
+a `notices` folder copied through); for Java in the final stage, `tests/test_conduit_image_java_licence.py`.
+Each library is tied to its own licence by `test_the_licence_of_each_library_is_the_tables_wording`, one row at a
+time.
 
 Every case plants its violation in the shape the code meets at its real call site (rule 15): the real
 Dockerfile with one line removed or changed, the real notice with one line changed, the real specification with
@@ -22,6 +28,7 @@ that missed its target fails the case instead of passing it.
 
 from __future__ import annotations
 
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -37,7 +44,7 @@ sys.path.insert(0, str(MARKETING))
 import client_hashes  # noqa: E402
 
 DOCKERFILE_PATH = CORE / "services" / "api" / "Dockerfile"
-NOTICE_PATH = CORE / "services" / "api" / "JAVA_NOTICE"
+NOTICE_PATH = CORE / "notices" / "JAVA_NOTICE"
 SPEC_00 = BUILD / "spec" / "00_ARCHITECTURE.md"
 NOTICE_DESTINATION = "/opt/java/NOTICE"
 VERSION_LABEL = "org.ospreyflow.runtime.java.version"
@@ -46,7 +53,7 @@ LICENCE_LABEL = "org.ospreyflow.runtime.java.licence"
 DOCKERFILE = DOCKERFILE_PATH.read_text(encoding="utf-8")
 SPEC = SPEC_00.read_text(encoding="utf-8")
 #: The one line `COPY` makes, as the real Dockerfile writes it (the build context is the product folder).
-COPY_LINE = f"COPY services/api/JAVA_NOTICE {NOTICE_DESTINATION}"
+COPY_LINE = f"COPY notices/JAVA_NOTICE {NOTICE_DESTINATION}"
 SYNTHETIC_CLIENT = "Example Shire Constabulary"
 
 
@@ -69,27 +76,62 @@ def _words(text: str) -> str:
     return " ".join(text.split())
 
 
-def _copies(stage: str) -> list[tuple[list[str], str]]:
-    """Each `COPY` of the stage that does not take from another stage: its sources and its destination."""
+def _copies(stage: str) -> list[tuple[list[str], str, str | None]]:
+    """Each `COPY` of the stage: its sources, its destination, and the stage it takes from (None: the context)."""
     found = []
     for instruction in _instructions(stage):
         word, _, rest = instruction.partition(" ")
         if word.upper() != "COPY":
             continue
-        tokens = [t for t in rest.split() if not t.startswith("--")]
-        if any(t.startswith("--from=") for t in rest.split()):
-            continue
-        found.append((tokens[:-1], tokens[-1]))
+        tokens = rest.split()
+        origin = next((t.removeprefix("--from=") for t in tokens if t.startswith("--from=")), None)
+        tokens = [t for t in tokens if not t.startswith("--")]
+        found.append((tokens[:-1], tokens[-1], origin))
     return found
 
 
-def _copies_of_the_notice(stage: str) -> list[str]:
-    """The destinations of the stage's `COPY`s whose source is the notice file."""
+def _holds(source: str, notice_path: Path) -> bool:
+    """Whether a build-context source (a file, a folder or a pattern) is the notice or contains it."""
+    wild = any(c in source for c in "*?[")
+    candidates = list(CORE.glob(source)) if wild else [CORE / source]
+    n = notice_path.resolve()
+    return any(c.resolve() == n or c.resolve() in n.parents for c in candidates)
+
+
+def _copies_of_the_notice(stage: str, notice_path: Path = NOTICE_PATH) -> list[str]:
+    """The destinations of the stage's context `COPY`s whose source is the notice file or a folder holding it."""
     return [
         destination
-        for sources, destination in _copies(stage)
-        if any((CORE / source).resolve() == NOTICE_PATH.resolve() for source in sources)
+        for sources, destination, origin in _copies(stage)
+        if origin is None and any(_holds(source, notice_path) for source in sources)
     ]
+
+
+def _landings_in_the_builder(dockerfile: str, notice_path: Path) -> list[str]:
+    """Where in the builder stage's image the notice lands (its `WORKDIR` is /app, read from the stage)."""
+    builder = _stage(dockerfile, "builder")
+    workdir = next(i.split(None, 1)[1] for i in _instructions(builder) if i.startswith("WORKDIR "))
+    landings = []
+    for sources, destination, origin in _copies(builder):
+        for source in sources:
+            if origin is None and _holds(source, notice_path):
+                into = posixpath.normpath(posixpath.join(workdir, destination))
+                held = (CORE / source).resolve()
+                rest = "" if held == notice_path.resolve() else notice_path.resolve().relative_to(held).as_posix()
+                landings.append(posixpath.join(into, rest) if rest else into)
+    return landings
+
+
+def _brought_from_the_builder(stage: str, landings: list[str]) -> list[str]:
+    """The landings of the notice that the stage's `COPY --from=builder` carry on into it."""
+    carried = []
+    for sources, _destination, origin in _copies(stage):
+        if origin != "builder":
+            continue
+        for source in sources:
+            root = posixpath.normpath(source)
+            carried += [land for land in landings if land == root or land.startswith(root.rstrip("/") + "/")]
+    return carried
 
 
 def _labels(dockerfile: str) -> dict[str, str]:
@@ -130,15 +172,20 @@ def bundled_libraries(spec: str) -> list[tuple[str, str]]:
     return rows
 
 
-def dockerfile_problems(dockerfile: str) -> list[str]:
+def dockerfile_problems(dockerfile: str, notice_path: Path = NOTICE_PATH) -> list[str]:
     problems = []
-    included = _copies_of_the_notice(_stage(dockerfile, "runtime-included"))
+    included = _copies_of_the_notice(_stage(dockerfile, "runtime-included"), notice_path)
     if included != [NOTICE_DESTINATION]:
         problems.append(f"the runtime-included stage must copy the notice once, to {NOTICE_DESTINATION}: {included}")
-    if _copies_of_the_notice(_stage(dockerfile, "runtime-omitted")):
+    if _copies_of_the_notice(_stage(dockerfile, "runtime-omitted"), notice_path):
         problems.append("the runtime-omitted stage copies the notice")
-    if _copies_of_the_notice(_final(dockerfile)):
+    final = _final(dockerfile)
+    if _copies_of_the_notice(final, notice_path):
         problems.append("the final stage copies the notice")
+    # The final stage serves both builds, so what it takes from the builder reaches the image with no Java.
+    landings = _landings_in_the_builder(dockerfile, notice_path)
+    if brought := _brought_from_the_builder(final, landings):
+        problems.append(f"the final stage brings the notice in from the builder, into the image without Java: {brought}")
     # The notice says the licence texts are in /opt/java/legal: true only while the whole runtime is copied.
     whole = [
         i for i in _instructions(_stage(dockerfile, "runtime-included")) if i == "COPY --from=java /opt/jre /opt/java"
@@ -178,9 +225,12 @@ def notice_problems(
         problems.append("the notice does not say where the licence texts are (/opt/java/legal)")
 
     flat = _words(notice)
+    lines = [_words(line) for line in notice.splitlines()]
     for library, library_licence in bundled_libraries(spec):
-        if library not in flat or library_licence not in flat:
-            problems.append(f"library: {library} / {library_licence} is not in the notice")
+        # Each library with its own licence, as one `Library: licence` line: a licence found elsewhere in the
+        # notice (four rows share MIT) does not stand for this library's.
+        if f"{library}: {library_licence}" not in lines:
+            problems.append(f"library: {library} / {library_licence} is not in the notice, on one line")
 
     for holder in holders:
         if holder in flat:
@@ -239,7 +289,7 @@ def test_the_included_stage_copies_the_notice_to_opt_java_notice() -> None:
     twice = _plant(DOCKERFILE, COPY_LINE + "\n", COPY_LINE + "\n" + COPY_LINE + "\n")
     assert any("must copy the notice once" in p for p in dockerfile_problems(twice))
     # Plant: to another place.
-    elsewhere = _plant(DOCKERFILE, COPY_LINE, "COPY services/api/JAVA_NOTICE /opt/NOTICE")
+    elsewhere = _plant(DOCKERFILE, COPY_LINE, "COPY notices/JAVA_NOTICE /opt/NOTICE")
     assert any("must copy the notice once" in p for p in dockerfile_problems(elsewhere))
 
 
@@ -249,6 +299,44 @@ def test_no_other_stage_copies_the_notice() -> None:
     assert dockerfile_problems(in_omitted) == ["the runtime-omitted stage copies the notice"]
     in_final = _plant(DOCKERFILE, "USER 10001:10001", COPY_LINE + "\nUSER 10001:10001")
     assert dockerfile_problems(in_final) == ["the final stage copies the notice"]
+
+
+OLD_PLACE = CORE / "services" / "api" / "JAVA_NOTICE"
+
+
+def test_no_route_carries_the_notice_into_the_omitted_image() -> None:
+    """The final stage serves both builds. A folder copy that holds the notice, taken on by the final stage's
+    `COPY --from=builder`, puts it into the image that has no Java, though no line names the file."""
+    builder_copy = "COPY services ./services"
+    final_copy = "COPY --from=builder /app/services ./services"
+    assert builder_copy in DOCKERFILE and final_copy in DOCKERFILE, "the real Dockerfile's lines are not the shape planted"
+    # The real Dockerfile as it stands: the notice is outside every folder the builder copies.
+    assert _landings_in_the_builder(DOCKERFILE, NOTICE_PATH) == []
+    # Plant 1 (round 2's fault, exactly): the notice back under services/, the real Dockerfile's included-stage line
+    # pointing at it; the builder's `COPY services ./services` and the final stage's copy of it now carry it.
+    back = _plant(DOCKERFILE, COPY_LINE, "COPY services/api/JAVA_NOTICE /opt/java/NOTICE")
+    assert _landings_in_the_builder(back, OLD_PLACE) == ["/app/services/api/JAVA_NOTICE"]
+    problems = dockerfile_problems(back, OLD_PLACE)
+    assert len(problems) == 1 and "brings the notice in from the builder" in problems[0], problems
+    # Plant 2: the notice's own folder copied by the builder and taken on by the final stage.
+    through = _plant(DOCKERFILE, builder_copy, builder_copy + "\nCOPY notices ./notices")
+    through = _plant(through, final_copy, final_copy + "\nCOPY --from=builder /app/notices ./notices")
+    problems = dockerfile_problems(through)
+    assert len(problems) == 1 and "brings the notice in from the builder" in problems[0], problems
+    # Plant 3: the whole of /app taken on, which holds the folder the builder copied.
+    whole = _plant(through, "COPY --from=builder /app/notices ./notices", "COPY --from=builder /app ./")
+    assert any("brings the notice in" in p for p in dockerfile_problems(whole))
+    # Plant 4: a folder copy that holds the notice, straight from the context, in each of the other stages.
+    omitted_last = 'LABEL org.ospreyflow.runtime.java.included="omitted"'
+    assert dockerfile_problems(_plant(DOCKERFILE, omitted_last, omitted_last + "\nCOPY notices /x")) == [
+        "the runtime-omitted stage copies the notice"
+    ]
+    assert dockerfile_problems(_plant(DOCKERFILE, "USER 10001:10001", "COPY notices /x\nUSER 10001:10001")) == [
+        "the final stage copies the notice"
+    ]
+    # Not over-flagged: a builder that copies the folder, with the final stage taking nothing of it, ships nothing.
+    only_builder = _plant(DOCKERFILE, builder_copy, builder_copy + "\nCOPY notices ./notices")
+    assert dockerfile_problems(only_builder) == []
 
 
 def test_the_legal_tree_travels_only_while_the_whole_runtime_is_copied() -> None:
@@ -305,10 +393,24 @@ def test_every_library_in_the_specification_s_table_is_named() -> None:
 
 
 def test_the_licence_of_each_library_is_the_tables_wording() -> None:
+    """Each row, one at a time: only that row's line changes, so a licence that other rows share (four are MIT)
+    cannot stand in for it."""
     notice = _read_notice()
-    library, licence = bundled_libraries(SPEC)[1]
-    planted = _plant(notice, licence, "a licence")
-    assert any(f"library: {library} " in p for p in notice_problems(planted, DOCKERFILE, SPEC, _holders(), None))
+    for library, licence in bundled_libraries(SPEC):
+        line = f"{library}: {licence}"
+        assert line in notice.splitlines(), f"the notice has no line {line!r}"
+        planted = _plant(notice, line, f"{library}: a licence")
+        problems = notice_problems(planted, DOCKERFILE, SPEC, _holders(), None)
+        assert [p for p in problems if p.startswith("library:")] == [
+            f"library: {library} / {licence} is not in the notice, on one line"
+        ], (library, problems)
+    # The case the finding named, in the real notice: GIFLIB given another licence, the other MIT lines untouched.
+    giflib = _plant(notice, "GIFLIB 6.1.3: MIT", "GIFLIB 6.1.3: BSD-3-Clause")
+    assert notice.count("MIT") > 1 and "MIT" in giflib
+    assert any("library: GIFLIB 6.1.3" in p for p in notice_problems(giflib, DOCKERFILE, SPEC, _holders(), None))
+    # A licence moved to another library's line (swapped): each line still holds the other's text somewhere.
+    swapped = _plant(notice, "GIFLIB 6.1.3: MIT", "GIFLIB 6.1.3: the IJG licence")
+    assert any("library: GIFLIB 6.1.3" in p for p in notice_problems(swapped, DOCKERFILE, SPEC, _holders(), None))
 
 
 def test_the_notice_names_no_client() -> None:
