@@ -9,7 +9,7 @@
 // every result is deterministic.
 import { expect, test, type Page } from "@playwright/test";
 
-import { assertAllCovered, EXPORT_PANEL_ACTIONS, registerCovered } from "./actionRegistry";
+import { assertAllCovered, EXPORT_PANEL_ACTIONS, registerCovered } from "@ospreyflow/glass-shared";
 
 async function tabToButtonNamed(page: Page, name: string, maxTabs = 40): Promise<void> {
   for (let i = 0; i < maxTabs; i++) {

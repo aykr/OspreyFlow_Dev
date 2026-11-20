@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import {
   AddFromListError,
   addIdentifiers,

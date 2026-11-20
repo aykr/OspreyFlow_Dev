@@ -3,7 +3,7 @@
 // `.click()`; each proves its call reached the server.
 import { expect, test, type Page } from "@playwright/test";
 
-import { ADMIN_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { ADMIN_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "ADMIN_ACTIONS";
 const PERSON = { id: "u1", username: "osprey-demo-analyst", name: "Demo Analyst", enabled: true, roles: ["analyst"],

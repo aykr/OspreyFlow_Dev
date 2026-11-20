@@ -3,7 +3,7 @@
 // request that went out can be read back. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { ADD_FILES_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { ADD_FILES_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 declare global {
   interface Window {

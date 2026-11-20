@@ -1,6 +1,6 @@
 // The delta client — `spec/03_CONDUIT_MIDDLEWARE.md` §3.2's wire protocol,
 // Drives `WorkingSetDelta` messages off a
-// `/v1/investigations/{id}/stream` WebSocket into `workingset/store.ts`'s
+// `/v1/investigations/{id}/stream` WebSocket into `packages/glass-shared/src/workingset/store.ts`'s
 // `applyDelta`.
 //
 // **Transport auth is not solved here.** `services/api/app.py`'s
@@ -23,7 +23,7 @@
 // checks that invariant on every non-snapshot delta and, on a violation,
 // drops the out-of-order delta and requests an explicit resync over the
 // same socket rather than applying something it cannot place correctly.
-import type { DeltaViewOverCap, LimitExceeded, WorkingSetDelta } from "./models";
+import type { DeltaViewOverCap, LimitExceeded, WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const DELTA_OPS = new Set(["add", "remove", "replace_edge", "reproject", "snapshot"]);
 

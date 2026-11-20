@@ -6,7 +6,7 @@
 // action proves its effect reached the server. The data is synthetic (rule 9).
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { MONITORING_STAGE_D_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { MONITORING_STAGE_D_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "MONITORING_STAGE_D_ACTIONS";
 

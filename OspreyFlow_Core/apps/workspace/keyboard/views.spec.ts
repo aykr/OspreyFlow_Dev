@@ -9,7 +9,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { checkUndecidedContrast } from "../a11y/undecidedContrast";
 
-import { VIEW_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { VIEW_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 async function open(page: Page, query = ""): Promise<void> {
   await page.goto(`/keyboard/views-harness.html${query}`);

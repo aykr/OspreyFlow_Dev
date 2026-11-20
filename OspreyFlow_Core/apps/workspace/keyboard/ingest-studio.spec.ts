@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { INGEST_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 import { REPORTS_HANDLING_COLUMNS, REPORTS_MAP, buildEntity, buildLink, choose, declareTheMarkingColumns, mapTheReports, meaning, type MapEdge, type MapEntity } from "./reportsMap";
 
 const REGISTRY = "INGEST_STUDIO_ACTIONS";

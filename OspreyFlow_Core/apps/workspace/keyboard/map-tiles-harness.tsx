@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { MapView } from "../src/map/MapView";
-import type { WorkingSetGraph } from "../src/workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 import type { PublicMapProvider } from "../../../packages/schemas/generated";
 import { applyHarnessBrand } from "./brandHarness";
 import { FIXTURE_BEARER_TOKEN } from "./mapTilesToken";

@@ -11,7 +11,7 @@
 // directory already uses.
 import { expect, test, type Page } from "@playwright/test";
 
-import { assertAllCovered, registerCovered, WATCH_PANEL_ACTIONS } from "./actionRegistry";
+import { assertAllCovered, registerCovered, WATCH_PANEL_ACTIONS } from "@ospreyflow/glass-shared";
 import { chooseByTyping } from "./chooseByTyping";
 
 declare global {

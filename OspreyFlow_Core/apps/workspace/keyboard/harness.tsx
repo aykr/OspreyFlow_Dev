@@ -26,7 +26,7 @@ import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 import { AskPage } from "../src/questions/AskPage";
 import { useAskPage } from "../src/questions/useAskPage";
 import { Timeline } from "../src/timeline/Timeline";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
 import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
 import { loadLookFaces } from "./lookFaces";

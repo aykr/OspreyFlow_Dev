@@ -11,7 +11,7 @@ import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
 import { eventsNoun } from "../inspector/linkEventsApi";
 import { AddFromList } from "../search/AddFromList";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import {
   loadBusiestDays,
   loadBusiestLinks,

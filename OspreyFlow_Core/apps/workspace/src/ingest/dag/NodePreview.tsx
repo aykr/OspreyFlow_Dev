@@ -19,7 +19,7 @@ import type {
 import { GlassCanvas } from "../../canvas/GlassCanvas";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { OntologyRegistry } from "../../ontology/schema";
-import type { WorkingSet } from "../../workingset/store";
+import type { WorkingSet } from "@ospreyflow/glass-shared";
 import { workingSetOfDryRun } from "../verify/VerifyScreen";
 import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "../api";
 import { RightButton } from "../studio/rightsGate";

@@ -6,7 +6,7 @@
 // Node shape/fill/provenance is `@sigma/node-image` (a generated SVG per
 // distinct combination, `color/nodeVisual.ts`); the interaction-state ring
 // is a composed `@sigma/node-border` layer. Both plugins read their own
-// attributes directly off the graphology node (`workingset/store.ts`'s
+// attributes directly off the graphology node (`packages/glass-shared/src/workingset/store.ts`'s
 // `WorkingSetNodeAttributes`) — `canvas/nodeAttributes.ts`'s module
 // docstring explains why that is not the `nodeReducer`'s job.
 //
@@ -65,7 +65,7 @@ import type {
   WorkingSetGraph,
   WorkingSetNodeAttributes,
   WorkingSetStoreState,
-} from "../workingset/store";
+} from "@ospreyflow/glass-shared";
 import {
   computeClusterGraphAttributes,
   computeEdgeAttributes,
@@ -172,7 +172,7 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import { outcomeDeltas, type ClusterExplanation, type ExpansionOutcome, type LimitExceeded, type ResolutionOutcome, type WorkingSetDelta } from "../workingset/models";
+import { outcomeDeltas, type ClusterExplanation, type ExpansionOutcome, type LimitExceeded, type ResolutionOutcome, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,

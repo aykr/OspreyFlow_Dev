@@ -8,7 +8,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { FIXTURE_EDGE_COUNT, FIXTURE_NODE_COUNT, generateFixture } from "../../perf/fixture";
-import { createWorkingSet } from "../workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { MatrixView } from "./MatrixView";
 import { PAGE_SIZE } from "./matrixRows";
 

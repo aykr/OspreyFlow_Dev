@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { LimitExceeded } from "./models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 import { ViewOverCapDialog } from "./ViewOverCapDialog";
 
 afterEach(() => {

@@ -3,7 +3,7 @@
 // editor — no `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { PIPELINE_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { PIPELINE_STUDIO_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "PIPELINE_STUDIO_ACTIONS";
 

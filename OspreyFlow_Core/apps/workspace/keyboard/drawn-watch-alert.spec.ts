@@ -4,7 +4,7 @@
 // harness (`window.__DRAWN_WATCH__`), not a control merely focused.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { DRAWN_WATCH_ALERT_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { DRAWN_WATCH_ALERT_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 async function press(page: Page, target: Locator): Promise<void> {
   await target.focus();

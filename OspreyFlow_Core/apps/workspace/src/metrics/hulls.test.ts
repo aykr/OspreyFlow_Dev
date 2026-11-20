@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeNode } from "../testing/fixtures";
-import { createWorkingSet } from "../workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { computeCommunityHulls } from "./hulls";
 
 function graphWithPositions(positions: Record<string, [number, number]>) {

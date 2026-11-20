@@ -9,7 +9,7 @@
 // own routes (App.tsx's `beside`) and are not this case's.
 import { expect, test, type Page } from "@playwright/test";
 
-import { HELP_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { HELP_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 import { API, fakeIdentityProvider } from "./fakeIdentityProvider";
 
 const REGISTRY = "HELP_ACTIONS";

@@ -7,7 +7,7 @@ import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { makeEdge, makeNode } from "../testing/fixtures";
-import { createWorkingSet, type WorkingSet } from "../workingset/store";
+import { createWorkingSet, type WorkingSet } from "@ospreyflow/glass-shared";
 import { MatrixView, type MatrixViewProps } from "./MatrixView";
 
 afterEach(cleanup);

@@ -3,8 +3,7 @@ import { useStore } from "zustand/react";
 import type { StoreApi } from "zustand/vanilla";
 
 import type { CaseViewOpened } from "../views/viewsApi";
-import type { WorkingSetDelta } from "./models";
-import type { WorkingSetStoreState } from "./store";
+import type { WorkingSetDelta, WorkingSetStoreState } from "@ospreyflow/glass-shared";
 import { ViewOverCapDialog } from "./ViewOverCapDialog";
 
 export interface ViewOverCapGateProps {

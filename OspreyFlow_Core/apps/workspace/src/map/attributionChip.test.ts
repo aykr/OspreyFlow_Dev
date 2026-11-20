@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
-import { contrastRatio } from "./contrast";
+import { contrastRatio } from "@ospreyflow/glass-shared";
 
 /**
  * The map's attribution chip (`MapView.tsx`, CARRIES row 91): its words sat on a translucent

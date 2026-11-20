@@ -445,7 +445,7 @@ truth. Found 8 October 2026: the canvas did, so the deployed Glass never asked f
 link counts and never offered links among the view or adding files, while every test, run with a
 non-empty address, passed; and the map attached the token to its own Conduit reads only under a
 non-empty address. Which of MapLibre's reads carry the token is decided by resolving the address
-against the page's origin and matching that origin's `/v1/` (`map/conduitRequest.ts`), so a tile
+against the page's origin and matching that origin's `/v1/` (`packages/glass-shared/src/map/conduitRequest.ts`), so a tile
 server's URL never receives it. The keyboard harness runs the canvas in both shapes
 (`?api=same-origin`).
 
@@ -905,6 +905,15 @@ external:
 - **`resources.memory_gib`** (drop 2): `server.memory_gib: auto` reads the memory Docker reports,
   once, at install, and writes it to `osprey.yaml`; the graph store's heap, OpenSearch's heap and
   PostgreSQL's shared buffers are sized from it, and a resize starts only those three again.
+- **`resources.postgres_max_connections`** (`06_DECISIONS.md` ADR-114 Amendment 49): what the
+  deployment's own PostgreSQL allows at once. Unset, the computed 660 of Amendment 43 (two Conduits,
+  Keycloak, the gateway, Superset and the report sync, and an operator reserve), as before. Set, a
+  whole number from 420 to 262121 (420 is the same sum with one Conduit; 262121 is PostgreSQL 16's own limit on server processes, less its other 22; outside them, refused in words), and
+  `apply` renders it as PostgreSQL's `max_connections`, and `update` and `start --build` bring an
+  existing compose file to it. It sizes no memory, so it is not one of the stores' sizing. For Lite
+  and for a Small with every store in a container; under `cluster` and `cloud-platform`, whose
+  databases OspreyFlow does not render, and for a Small on a managed database, it is refused in
+  words: set `max_connections` where the database is run.
 - **`resources.gpu`** (`06_DECISIONS.md` ADR-135 Amendment 1): `none` (the default) or `nvidia`, set
   by the answers' `server.gpu`; Lite on a Linux computer may set it in `osprey.yaml` (it sizes
   nothing, so unlike the stores' sizing it is not Small's alone). Refused by the schema for
@@ -912,7 +921,16 @@ external:
   service alone a device reservation — `deploy.resources.reservations.devices`: driver
   `nvidia`, count `all`, capabilities `[gpu]` — and nothing else changes: the same pinned Ollama
   image, which carries CUDA, the same weights and the same gateway. `ollama-models` only downloads,
-  so it reserves none. Vision and embeddings run in the same Ollama and so use the GPU too; the
+  so it reserves none. **A start needs no network once the weights are installed** (NW1): each model
+  is pulled only when `ollama list`, which asks the local server alone, does not hold it at the
+  recorded id, and the speech model only when the volume does not hold all of it (the offline
+  download check finds the cached snapshot, and each file the speech library requires is there and
+  not empty, with no half-written blob: a first download cut short is fetched again, not taken as
+  installed. The fetch clears the half-written blobs and uses `--force-download`, because the plain
+  tool returns a file that exists, even at zero length, without fetching it again); a weight that is absent, or partly there, while the network is refused fails the
+  start in words (what is missing, that the network is needed once, to connect and start again). The test that fails if this is violated is
+  `tests/harness/test_start_needs_no_network.py`, which runs both jobs as rendered with every pull
+  refused. Vision and embeddings run in the same Ollama and so use the GPU too; the
   `whisper` and `ner` containers stay on the CPU. The extraction model is `qwen2.5:14b-instruct`
   unless `models.extraction` is in `osprey.yaml` (`OspreyConfig.extraction_model`). `doctor`,
   `install` and `apply` check, before anything starts, a Linux host, `nvidia-smi` answering, and

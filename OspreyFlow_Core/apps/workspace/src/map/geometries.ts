@@ -10,7 +10,7 @@ import type {
   OntologySchema,
 } from "../../../../packages/schemas/generated";
 import { fetchGeometries } from "../analytics/api";
-import type { WorkingSetGraph } from "../workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 
 /** `node.properties.geometry_ref` is untyped JSON on the wire
  * (`Node.ts`'s `Properties` is an index signature) — narrowed here once,

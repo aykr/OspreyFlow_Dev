@@ -6,7 +6,7 @@ import * as api from "../analytics/api";
 import type {
   WorkingSetGraph,
   WorkingSetNodeAttributes,
-} from "../workingset/store";
+} from "@ospreyflow/glass-shared";
 import {
   locationGeometryRefs,
   placeableTypes,

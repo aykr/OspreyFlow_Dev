@@ -9,7 +9,7 @@
 import type { ProvenanceState } from "../../../../packages/schemas/generated/Node";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkTypeName, type NamedType } from "../canvas/linkLabel";
-import type { WorkingSetGraph } from "../workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 
 /** How many rows a page of the Matrix shows. A longer view is paged, and says which rows are shown
  * (rule 2: never a silent cut). Small enough that a page draws well inside §5's budget at 50k. */

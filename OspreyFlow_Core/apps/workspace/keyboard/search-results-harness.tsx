@@ -15,7 +15,7 @@ import type { Node } from "../../../packages/schemas/generated";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { GlobalSearch } from "../src/search/GlobalSearch";
 import { SearchResults } from "../src/search/SearchResults";
 import { useSearchResultsOverlay } from "../src/search/useSearchResultsOverlay";

@@ -2,7 +2,7 @@
 // selection, the search, widening by one degree, a route put on the canvas and its marks cleared.
 import { expect, test, type Page } from "@playwright/test";
 
-import { CONNECTIONS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { CONNECTIONS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "CONNECTIONS_ACTIONS";
 

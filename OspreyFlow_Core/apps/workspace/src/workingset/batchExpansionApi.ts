@@ -18,7 +18,7 @@ import type {
   BatchRefusal,
 } from "../../../../packages/schemas/generated";
 import type { CaseView } from "../views/viewsApi";
-import type { LimitExceeded } from "./models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 
 /** What the canvas hands over when the reader chooses "Run as a batch job" on an expansion the cap
  * refused (case's `onRunExpansionAsBatch`). */

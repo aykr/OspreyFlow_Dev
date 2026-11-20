@@ -1,5 +1,5 @@
 import { Popover } from "../design/primitives/Popover";
-import type { LimitExceeded } from "../workingset/models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 import { figure as capFigure } from "../workingset/ViewOverCapDialog";
 import type { NarrowingOption } from "./expansionGate";
 import type { NamedType } from "./linkLabel";

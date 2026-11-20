@@ -13,7 +13,7 @@
 // uses for a `fetch`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { assertAllCovered, registerCovered, SIGN_IN_ACTIONS } from "./actionRegistry";
+import { assertAllCovered, registerCovered, SIGN_IN_ACTIONS } from "@ospreyflow/glass-shared";
 
 // `src/auth/oidcConfig.ts`'s own default derivation: this harness's origin is
 // `http://localhost:<this run's port>` (`playwright.config.ts`'s `webServer`; 5185 on main), so

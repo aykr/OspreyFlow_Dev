@@ -3,7 +3,7 @@
 // finding's Accept, and Escape closes it. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { READER_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { READER_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 const REGISTRY = "READER_ACTIONS";
 

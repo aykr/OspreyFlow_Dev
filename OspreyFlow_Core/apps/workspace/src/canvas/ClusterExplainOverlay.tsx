@@ -1,8 +1,7 @@
 import { Popover } from "../design/primitives/Popover";
 import { Table, type TableColumn } from "../design/primitives/Table";
 import { explanationBasis, visiblePairs } from "../resolution/explainView";
-import type { ClusterExplanation, PairwiseExplanation } from "../workingset/models";
-import type { WorkingSetGraph } from "../workingset/store";
+import type { ClusterExplanation, PairwiseExplanation, WorkingSetGraph } from "@ospreyflow/glass-shared";
 import { nodeLabel } from "./nodeAttributes";
 
 export interface ClusterExplainOverlayProps {

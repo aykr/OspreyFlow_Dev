@@ -11,7 +11,7 @@ import type {
   CaseViewOpened,
   ViewFilter,
 } from "../../../../packages/schemas/generated";
-import type { LimitExceeded } from "../workingset/models";
+import type { LimitExceeded } from "@ospreyflow/glass-shared";
 
 export type { CaseView, CaseViewOpened, ViewFilter };
 

@@ -7,7 +7,7 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import { FRAUD_EDGES, FRAUD_NODES, FRAUD_SCHEMA } from "./fraudFixture";
 
 declare global {

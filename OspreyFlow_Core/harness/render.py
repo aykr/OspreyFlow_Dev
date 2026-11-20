@@ -130,6 +130,12 @@ RECIPE_REPO_DIRNAME = "recipes"
 #: into running different weights — `test_the_rendered_model_pull_matches_the_developer_stacks`
 #: compares them and is what fails if they do.
 #:
+#: **A start needs no network once installed (NW1, 20 November 2026).** A model is pulled only when
+#: `ollama list`, which asks the local server alone, does not hold it at the recorded id: measured
+#: on `ollama/ollama:0.18.2` with the network off, `ollama pull` of a model that is already present
+#: still asks the registry for its manifest and fails. A refused pull says in words what is
+#: missing and what to do; the digest check after a pull that happens is unchanged.
+#:
 #: Assembled from three pieces rather than written as one literal only because the `FATAL` line
 #: is 191 characters and must not be wrapped: wrapping it would change the script's bytes, and
 #: byte-identity with `dev.yaml` is the property the test above checks.
@@ -139,13 +145,22 @@ _OLLAMA_PULL_SCRIPT = (
     "until ollama list >/dev/null 2>&1; do sleep 1; done\n"
     "pull_and_verify() {\n"
     '  model="$$1"; expected="$$2"\n'
-    '  ollama pull "$$model"\n'
     '  actual="$$(ollama list | awk -v m="$$model" \'$$1 == m {print $$2}\')"\n'
     '  if [ "$$actual" != "$$expected" ]; then\n'
-    '    echo "FATAL: $$model resolved to manifest $$actual, expected $$expected '
+    '    ollama pull "$$model" || {\n'
+    '      echo "FATAL: $$model is not on this machine at the recorded version, and it could '
+    "not be fetched. A first start needs the network once, to fetch the model weights: "
+    "connect this machine to the network, then start again. The weights are kept, so later "
+    'starts need no network." >&2\n'
+    "      exit 1\n"
+    "    }\n"
+    '    actual="$$(ollama list | awk -v m="$$model" \'$$1 == m {print $$2}\')"\n'
+    '    if [ "$$actual" != "$$expected" ]; then\n'
+    '      echo "FATAL: $$model resolved to manifest $$actual, expected $$expected '
     "(spec/06_DECISIONS.md ADR-020) \u2014 the tag moved upstream; update the ADR "
     'deliberately, do not proceed silently." >&2\n'
-    "    exit 1\n"
+    "      exit 1\n"
+    "    fi\n"
     "  fi\n"
     "}\n"
     "pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701\n"
@@ -1173,10 +1188,13 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                     "OPENSEARCH_JAVA_OPTS": sized.search_java_opts,
                 }
             else:
-                service["command"] = postgres_command(sized)
+                service["command"] = postgres_command(
+                    sized, config.resources.postgres_max_connections
+                )
         elif entry.service == "postgres":
-            # ADR-114 Amendment 43: the connections the product's services may hold, every profile.
-            service["command"] = postgres_command()
+            # ADR-114 Amendment 43: the connections the product's services may hold, every profile;
+            # Amendment 49: the number `resources.postgres_max_connections` sets, when it does.
+            service["command"] = postgres_command(None, config.resources.postgres_max_connections)
         if entry.service == "keycloak":
             # ADR-114 Amendment 4 decision 4: one issuer, whichever door a token came through —
             # the browser's, by name through the proxy, or the services' inside the network.
@@ -1246,10 +1264,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
                 str(service["image"]),
                 volume=f"whisper-models:{_HF_CACHE}",
                 entrypoint=["/bin/sh", "-c"],
-                command=[
-                    f"huggingface-cli download {config.models.transcription} "
-                    f"&& chown -R 1000:1000 {_HF_CACHE}"
-                ],
+                command=[_whisper_download_script(config.models.transcription)],
                 user="0",
             )
         services[entry.service] = service
@@ -1359,6 +1374,61 @@ POSTGRES_IMAGE = "postgres:16.4"
 
 #: Where the speech server keeps its downloaded models (measured: speaches runs as uid 1000).
 _HF_CACHE = "/home/ubuntu/.cache/huggingface"
+
+
+def _whisper_download_script(model: str) -> str:
+    """`whisper-models`' script (NW1, 20 November 2026): the speech model is fetched only when the
+    volume does not already hold all of it, so a start with the model installed needs no network.
+
+    The download tool's own offline mode finds the cached snapshot's folder (with `HF_HUB_OFFLINE=1`
+    it never touches the network; measured in the pinned image with the network off). That alone is
+    not a check that the model is complete: the tool writes the snapshot's folder and its ref
+    before the weights arrive, so a first download cut short leaves a folder the offline mode still
+    returns (measured: a ref and an empty snapshot folder exit 0). So the job also checks, with no
+    network, for the files the speech library itself requires (`faster_whisper.utils`:
+    `config.json`, `model.bin`, `tokenizer.json`, `vocabulary.*`), each present and not empty, and
+    for no half-written blob (`*.incomplete`) beside them.
+
+    Anything less is fetched again online, and the plain tool would not do it: read in the pinned
+    image (`huggingface_hub` 0.33.4, `file_download.py`), a snapshot file or a blob that already
+    exists, even at zero length, is returned as it is and never fetched again, and a half-written
+    blob is cleared only when the same file is being fetched again. So the job first removes the
+    half-written blobs, and then fetches with `--force-download`, which replaces what is there. (The
+    model is about 75 MB, and this path runs only when the model is not whole.) If that fails the
+    job says so in words, rather than leaving a traceback, and exits non-zero so the start fails
+    loudly. `tests/harness/test_start_needs_no_network.py` runs this script against stubs that do
+    not repair what the real tool does not."""
+    blobs = f"{_HF_CACHE}/hub/models--{model.replace('/', '--')}/blobs"
+    return (
+        "model_is_complete() {\n"
+        f'  snapshot="$$(HF_HUB_OFFLINE=1 huggingface-cli download {model} 2>/dev/null'
+        ' | tail -n 1)"\n'
+        '  [ -d "$$snapshot" ] || return 1\n'
+        "  for file in config.json model.bin tokenizer.json; do\n"
+        '    [ -s "$$snapshot/$$file" ] || return 1\n'
+        "  done\n"
+        '  set -- "$$snapshot"/vocabulary.*\n'
+        '  [ -s "$$1" ] || return 1\n'
+        '  set -- "$$snapshot"/../../blobs/*.incomplete\n'
+        '  [ ! -e "$$1" ] || return 1\n'
+        "}\n"
+        "if model_is_complete; then\n"
+        f"  echo '{model} is already on this machine; nothing to fetch.'\n"
+        "else\n"
+        # With the hub unreachable the tool falls back to whatever the cache holds and exits 0
+        # (measured), so its exit status is not the answer: the completeness check is, run again.
+        f"  rm -f {blobs}/*.incomplete\n"
+        f"  huggingface-cli download --force-download {model} || true\n"
+        "  model_is_complete || {\n"
+        f"    echo 'FATAL: the speech model {model} is not on this machine, or not all of it, "
+        "and it could not be fetched. A first start needs the network once, to fetch the "
+        "model weights: connect this machine to the network, then start again. The weights are "
+        "kept, so later starts need no network.' >&2\n"
+        "    exit 1\n"
+        "  }\n"
+        "fi\n"
+        f"chown -R 1000:1000 {_HF_CACHE}\n"
+    )
 
 
 def _model_download_step(

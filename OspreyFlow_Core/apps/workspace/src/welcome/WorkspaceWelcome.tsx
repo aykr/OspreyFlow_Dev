@@ -6,7 +6,7 @@ import { GUIDE_FOR_PLACE } from "../home/guides";
 import { useEffect, useRef, useState } from "react";
 
 import { whenLabel } from "../home/homeData";
-import type { HistoryStepSummary, WorkingSetDelta } from "../workingset/models";
+import type { HistoryStepSummary, WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const KEY = (subject: string) => `ospreyflow.welcome-closed.${subject}`;
 

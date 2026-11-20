@@ -1,7 +1,7 @@
 // Timeline playback / cross-case-overlay keyboard harness — a new surface needing its own
 // equivalent for a new surface": Stage 4f's own two new interactive controls (Play/Pause, the
 // cross-case-overlay investigation input) are the seventh keyboard-driven surface
-// (`keyboard/actionRegistry.ts`'s own `TIMELINE_PLAYBACK_ACTIONS` docstring has the full
+// (`packages/glass-shared/src/keyboard/actionRegistry.ts`'s own `TIMELINE_PLAYBACK_ACTIONS` docstring has the full
 // reasoning), so they get their own harness rather than folding into `keyboard.spec.ts`'s own
 // canvas-focused suite.
 //

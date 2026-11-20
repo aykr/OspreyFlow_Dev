@@ -1,7 +1,7 @@
 // Semantic zoom — `spec/02_GLASS_FRONTEND.md` §1.1, `spec/06_DECISIONS.md`
 // ADR-002's own acceptance condition.
 //
-// **This module must never import `workingset/store.ts`.** That is not a
+// **This module must never import `packages/glass-shared/src/workingset/store.ts`.** That is not a
 // style preference — it is the structural half of "zoom never changes
 // what exists, only what is drawn": a `nodeReducer`/`edgeReducer` that
 // cannot reach the store's mutation API cannot accidentally call it,

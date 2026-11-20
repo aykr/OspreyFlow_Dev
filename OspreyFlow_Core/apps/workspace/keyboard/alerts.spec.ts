@@ -14,7 +14,7 @@ const BPMN_FILE = readFileSync(
   "utf8",
 );
 
-import { ALERTS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { ALERTS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 import { chooseByTyping } from "./chooseByTyping";
 
 const REGISTRY = "ALERTS_ACTIONS";

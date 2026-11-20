@@ -27,7 +27,7 @@ import { MapView } from "../src/map/MapView";
 import type { GazetteerControls } from "../src/map/MapControls";
 import { GazetteersFailed, type GazetteerPanelState } from "../src/map/gazetteers";
 import { PlaceSearchFailed } from "../src/map/places";
-import type { WorkingSetGraph } from "../src/workingset/store";
+import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 import type { MapPlace, PublicMapProvider } from "../../../packages/schemas/generated";
 import { applyHarnessBrand } from "./brandHarness";
 

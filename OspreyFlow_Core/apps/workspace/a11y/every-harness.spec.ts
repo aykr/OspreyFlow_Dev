@@ -20,7 +20,7 @@ import { expect, test } from "@playwright/test";
 import { readdirSync, readFileSync } from "node:fs";
 
 import { checkUndecidedContrast, type ListedFindings } from "./undecidedContrast";
-import { readFindings } from "../src/color/textContrast";
+import { readFindings } from "@ospreyflow/glass-shared";
 
 const KEYBOARD = new URL("../keyboard/", import.meta.url);
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];

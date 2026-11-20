@@ -19,7 +19,7 @@ import { Histogram } from "../src/design/primitives/Histogram";
 import { IconButton } from "../src/design/primitives/IconButton";
 import { Input } from "../src/design/primitives/Input";
 import { explanationBasis } from "../src/resolution/explainView";
-import type { PairwiseExplanation } from "../src/workingset/models";
+import type { PairwiseExplanation } from "@ospreyflow/glass-shared";
 import { HighlightedMessage } from "../src/dossier/HighlightedMessage";
 import type { DocumentView } from "../src/dossier/models";
 import { OntologyRegistry } from "../src/ontology/schema";

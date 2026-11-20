@@ -33163,7 +33163,8 @@ held by the recipe's `unit-1`, so a case of any other unit could not add it.
   Maps* admits the administrator's own (`test_a_fresh_install_builds_from_admin_maps_alone`).
   Recorded, not changed: a tiles-only build, without a gazetteer, is the likely next step if the
   console must build first.
-- **The image's source offer and NOTICE** for the Java runtime are a release step (`spec/00` §7).
+- **The image's source offer and NOTICE** for the Java runtime are carried in the image, at `/opt/java/NOTICE`; only the
+  publication of the image is a release step (ADR-147 Amendment 6).
 - **The copy is made in the request**, a page at a time; each re-build refreshes every recorded dataset
   inside its stream. Measured under the platform lane's lease on stack a, 9 November 2026 (the
   machine shared with other lanes' runs, load average 13 to 21; the lease covers the stack, not the
@@ -37279,7 +37280,8 @@ Conduit's pools are not changed.**
    after it where the server is sized, Amendment 33 decision 6): in the store's own definition, never in
    `deployment.env`. A `-c` on the command line wins over `ALTER SYSTEM` and `postgresql.conf`, so an operator who
    raised `max_connections` by hand finds it set to 660 after `apply`; there is no `osprey.yaml` setting for it yet
-   (as `resources.postgres_shared_buffers_gib` is for the buffers), which is the way to change it if 660 is wrong.
+   (as `resources.postgres_shared_buffers_gib` is for the buffers), which is the way to change it if 660 is wrong
+   (*superseded by Amendment 49, which is that setting*).
 3. **Why the pools are left as they are.** Bounding their minimum (`min_size=0`) moves only what one Conduit holds at
    rest (about 50); what two Conduits may grow to is unchanged by it, and that is what the server must allow. It was
    not measured how often the pools reach their maximum, nor what `min_size=0` would cost (a connection's set-up on the
@@ -37405,6 +37407,75 @@ the tag HEAD sits on). So a copy of newer code named itself v0.5.0. The source t
 `dev-<commit>`; changed code is VERSION's `-dev`; on a `-dev` checkout untracked files leave the commit believed;
 no `.git` is VERSION; no VERSION is `.git`'s answer; a malformed VERSION is never shown.
 `tests/test_version_file.py`: a malformed VERSION is flagged; the repository's own is well formed.
+
+### ADR-114, Amendment 49 (20 November 2026) — `resources.postgres_max_connections`: a deployment's own PostgreSQL allows what `osprey.yaml` says, above a floor
+
+**Supersedes** Amendment 43 decision 2's sentence "there is no `osprey.yaml` setting for it yet … which is the way to
+change it if 660 is wrong". This is that setting. Nothing else in Amendment 43 changes: the number, its parts and the
+pools stay as they are.
+
+**The finding** (the scout of 20 November 2026; the owner's word of the same day, "the setting with the computed
+default and a refusal below a floor"; the backlog's L10): an operator whose server cannot hold 660 server processes, or
+whose deployment needs more, had no way to say so: a `-c max_connections` on the command line wins over
+`postgresql.conf` and `ALTER SYSTEM`, and `apply` and `update` put 660 back over a hand edit. The owner gave no floor, no
+profile scope and no word on the pools; the choices below are the conductor's, derived from numbers already in the code,
+and the owner is told afterwards. Changing the floor later is one constant.
+
+**Decisions.**
+
+1. **The field**: `resources.postgres_max_connections`, an optional whole number in `ResourcesConfig`
+   (`packages/schemas/deployment.py`), beside `resources.postgres_shared_buffers_gib`, whose shape it copies. **Unset
+   (`null`, the default), the computed value exactly as today: 660.** No deployment that does not set it changes by a
+   byte (a test on every profile's whole output, with the field absent and named `null`, and on the rendered command).
+   It sizes no memory, so it is not one of `ResourcesConfig.any`'s settings: Lite takes it, and it does not turn the
+   stores' sizing on.
+2. **The floor: 420** (`harness/profiles.py`, `POSTGRES_MAX_CONNECTIONS_FLOOR`), derived and not new: the same sum as
+   Amendment 43's number with **one** Conduit instead of `CONDUITS_ALLOWED`:
+   1 × (220 + 20) + 100 + 10 + 50 + 20, that is one Conduit at its pool ceiling and its running loads (240), Keycloak's
+   pool (100), the gateway's (10), Superset and the report sync (50) and the operator reserve (20). It is computed from
+   the same named constants, so a change to a pool changes the floor, and the schema reads the constant at the moment of
+   the check (never a copy of 420). A value below it is refused in words that give the value, the floor, what it is
+   made of and the computed default (660), and say how to fix it: set it to the floor or more, or remove it. A value
+   that is not a whole number (a fraction, `900.0`, a string, `true`), or is zero or negative, is refused in words too.
+   **The ceiling: 262121** (`POSTGRES_MAX_CONNECTIONS_CEILING`), what the real PostgreSQL refuses above (found by the
+   verifier's round-1 finding, rule 15: the real dependency's refusals, not only its grants). PostgreSQL 16 counts
+   `max_connections` plus its other server processes (autovacuum workers 3 and their launcher 1, `max_worker_processes` 8,
+   `max_wal_senders` 10: 22, at the defaults the rendered command leaves alone) against `MAX_BACKENDS`, 0x3FFFF (262143),
+   and stops at start-up past it ("too many server processes configured"; `max_connections` alone outside 1..262143 is
+   refused the same way). So 262143 − 22 = 262121, a named constant computed from `POSTGRES_MAX_BACKENDS` and
+   `POSTGRES_OTHER_SERVER_PROCESSES`, and a value above it is refused in words that give the value, the ceiling, what it
+   is made of and the computed default. It is the server's range, not a promise that a host's memory holds a number near
+   it, and no set value is proved against a real server by a pure test (`test_postgres_connections_live.py` runs the
+   computed number).
+3. **Scope: the deployment's own PostgreSQL, rendered in compose**: Lite, and Small with every store in a container.
+   Under `cluster` (whose database is the operator's, `external.postgres`) and `cloud-platform` (whose RDS is set at
+   creation to the owner's 1000, `harness/cloud_platform/connections.py`, Amendment 46) the field is **refused in
+   words** ("this profile's database is not rendered by OspreyFlow: set max_connections where the database is run"),
+   never silently ignored; a Small on a managed database (`external.postgres`) has none of its own and is refused the
+   same way. The cloud-platform's Terraform, manifest and runbooks do not change (a test pins the 1000).
+4. **The pools are not settings**: Keycloak's, the gateway's and the Conduit's `create_pool` figures stay constants, and
+   so the sum's inputs do. (Amendment 45, reserved, is the Conduit's pools from settings; it is not this.)
+5. **It reaches the file**: `postgres_command` takes the setting, so `apply` renders it (sized or not, the memory
+   settings after it as before). `postgres_connections_up_to_date` and `scripts/refresh.py`'s `_postgres_connections_named`
+   take it too, read from the deployment's own `osprey.yaml` beside the compose file, so `update` and `start --build` on
+   an existing deployment apply a changed value, and do not correct a set value back to 660; with the setting taken away,
+   the computed number comes back, as a hand-set value did before. The readers of the old number are `harness/render.py`
+   and `scripts/refresh.py` alone (a test scans the product for another, and for a caller of either function that does
+   not read the setting).
+
+**Not changed**: the cloud-platform's RDS, Terraform and runbooks; the installer page and the `ospreyflow` CLI's answers;
+the lane stacks' 400 (`stack_lease.sh`); the live proof that PostgreSQL accepts the number
+(`test_postgres_connections_live.py` stays as Amendment 43 left it: it runs the computed number).
+
+**Tests**, red first, `tests/harness/test_postgres_connections_setting.py` (pure: nothing started): unset is 660 exactly
+as before on every profile; 900 reaches the rendered command (Lite, Small, Small sized) and a refresh of a file holding
+660 brings it to 900 and leaves it, while a file holding 900 is current; 420 accepted, 419 refused in words that name 420
+and 660; zero, negative, a fraction, a float, a string, `true` refused in words; 262122 and above refused in words that name
+262121 and 262143, 262121 accepted; the field refused under `cluster`,
+`cloud-platform` and on a managed Small; the floor follows a raised `KEYCLOAK_POOL_MAX` in the test's own copy of
+`profiles.py`, and the schema follows the constant, not a literal; both guides' Appendix A and the generated TypeScript
+carry the field. `tests/harness/test_postgres_connections.py`, `test_render_memory.py` and `test_cloud_platform_poc.py`
+stay as they were.
 
 ### ADR-148, Amendment 10 (13 November 2026) — Dashboard identities and the report sync on Entra ID
 
@@ -41805,3 +41876,86 @@ the five cases above); `tests/test_seed_internal_git_archive.py` (each synthetic
 it; paysim, enron and a public dataset are still refused in the old words; every dataset is placed on a side;
 `_is_checkout` on both layouts and on a bundle); `tests/test_seed_internal.py` (the refusal's cases, one per kind);
 `tests/cli/test_bootstrap.py` (the scripts record the folder on every run).
+
+### ADR-147, Amendment 6 (20 November 2026) — the Java runtime's NOTICE and source offer travel in the Conduit's image
+
+Status: accepted on the owner's word of 20 November 2026 ("the Java notice in the image, with a test"); written by
+slice PL2a of the v0.6.2 slice line. It amends the Amendment 2 sentence that called the image's source offer and
+NOTICE "a release step" (in its list of what it leaves) and `00_ARCHITECTURE.md` §7's two sentences that did the same
+("a release step, not this register's to perform"; "a release step, as the source offer is"). Everything else in
+Amendment 2 and in §7 stands.
+
+**Context.** The Conduit's image (`services/api/Dockerfile`) distributes a Temurin runtime under GPL-2.0 with the
+Classpath exception, so whoever receives the image must receive the offer of its corresponding source and a notice
+naming the runtime and its licence. Amendment 2 left both to the release; no file held them, so a release had
+nothing to attach.
+
+**Decision.**
+
+1. **The notice is in the image.** `notices/JAVA_NOTICE` is copied by one `COPY` in the Dockerfile's
+   `runtime-included` stage to `/opt/java/NOTICE`. The `runtime-omitted` stage (the cloud-platform build, which
+   carries no Java) and the final stage do not copy it, and no stage is added. The file is outside `services/`
+   on purpose: the builder stage copies `services/` whole and the final stage, which serves both builds, takes it
+   on, so a file under `services/` would reach the image with no Java.
+2. **What it holds**: the runtime's name (Eclipse Temurin, from the OpenJDK), its version and licence exactly as
+   the Dockerfile's `org.ospreyflow.runtime.java.version` and `.licence` labels give them; the offer of its
+   corresponding source, which is Temurin's published source at the tag `jdk-<version>` with the `jlink` line of the
+   Dockerfile verbatim; the bundled native libraries and their licences as `00_ARCHITECTURE.md` §7's table lists them;
+   and where the licence texts are: `/opt/java/legal` of the same image, which the `jlink` runtime carries and the
+   Dockerfile's whole copy of `/opt/jre` takes. The texts themselves are not copied into the repository.
+3. **What remains a release step** is the publication of the image itself. The notice holds no address for the
+   offer's contact: that is the owner's to give, and is not yet written.
+4. **Not touched**: the pulled vendor images with a JVM (ArcadeDB, OpenSearch) are third-party, and their notices are
+   the vendors'.
+
+Tests that would fail: `tests/test_conduit_image_java_notice.py` (the `COPY` deleted, or added to the omitted or the
+final stage, or reaching the final stage by a folder copy through the builder; the notice's version, licence,
+runtime name, source tag or `jlink` line differing from the Dockerfile's; a library of §7's table missing from it
+or given another library's licence; a client named; each planted in the real files, rule 15), and
+`tests/test_conduit_image_java_licence.py` (no Java in the final stage).
+
+### ADR-152, Amendment 2 (20 November 2026) — the fonts are listed once in `packages/design/fonts.json`, and a test fails if either front end loads a font the list does not name — Accepted by the owner, 20 November 2026
+
+Status: **Accepted by the owner, 20 November 2026**, in his ruling on "the rest of the design folder" (item 3). Built in slice PL4b3. This
+amendment adds to decision 6, whose "tokens.css, primitives.css, fonts; read by the React workspace and tree-default alike" is met for
+`tokens.css` by slice PL4b and for `primitives.css`, `scale.css` and `panelType.css` by slice PL4b2; this is the fonts.
+
+1. **One list.** Which families and weights are used is stated once, in `OspreyFlow_Core/packages/design/fonts.json`: one entry per family, with
+   its CSS name, its role (`ui`, `mono` or `govuk`), its source (`@fontsource/<package>`, or `govuk-frontend`), its weights and its licence.
+   The list states what the code ships; no weight, subset or file changed with it. Atkinson Hyperlegible Next (400, 600, 700) and IBM Plex Mono
+   (400, 600) are SIL OFL 1.1. There is no `subsets` field: narrowing the imports would change the built bytes.
+2. **Both front ends load from it, each its own way.** `apps/workspace/src/design/fonts.ts` stays where it is, because it imports the
+   `@fontsource` stylesheets for the Vite bundle; `fonts.test.ts` derives its list from `fonts.json` rather than restating it. The `pages`
+   service loads no font today; the page build that first loads one (PL7) adds `@fontsource` to its `package.json` and loads only a listed
+   face, and may not change the lockfile before then.
+3. **GDS Transport is listed with its two conditions, written as fields a test reads.** `only_when: appearance.govuk_identity` and
+   `only_on: gov.uk`. The two fields record the rule the list holds the face to: shown only when the GOV.UK identity switch is on (the
+   switch ADR-152 decision 14 decides), and only on a gov.uk address. The gov.uk condition comes from the face's licence, which restricts it
+   to services on GOV.UK domains (`spec/00_ARCHITECTURE.md`, the GDS Transport paragraph of the ADR-132 addition), and from the owner's
+   ruling of 20 November 2026 that the list carry it; it does not come from ADR-132 Amendment 7, which limits only the crown, the copyright
+   line and the Open Government Licence line to gov.uk. **The code enforces neither condition yet.** The switch is not built: nothing but
+   `fonts.json` names `appearance.govuk_identity`. The face follows the brand, not the switch or the host: `tokens.css` sets `--ui` to GDS
+   Transport inside the GOV.UK brand block, which follows `data-brand` on `<html>` on any host (`brand.ts`), and `isGovUkHost` gates only
+   the crown and the footer. The build that adds the default tree's assets (PL7) owns the proof pieces ADR-152 names for I9
+   (`test_default_tree_carries_no_govuk_assets.py`, `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case), and
+   those are the tests that will enforce the two conditions as behaviour; until they land nothing fails if GDS Transport is drawn with the
+   switch off or off a gov.uk address. The entry's source is `govuk-frontend`, self-hosted under `/assets/govuk/` (so the weights, 400
+   and 700, match the generated stylesheet's `@font-face` rules), and its licence is that restriction, not OFL. No other entry carries
+   either condition. A family on the list is not thereby on every page: the `pages` tree loads no font today, and this amendment's test
+   fails if it comes to carry GDS Transport (I9, its font half).
+4. **A test fails if either loads a font the list does not name.** It reads `apps/workspace`, `apps/harness`, `packages/design` and
+   `apps/pages`, and looks for an `@fontsource` import or package, an `@font-face`, a font file, and a font URL, and requires each family
+   and weight to be on the list (a font file's weight and style are read from its name, `<package>-<subset>-<weight>-<style>`; a file at a
+   weight the list does not name, or in italic, fails as an unlisted `@font-face` weight does); every listed `@fontsource` weight must be imported, and its package declared. For `apps/pages` it also fails
+   on GDS Transport, or on a path under `/assets/govuk/`, anywhere. The invariants I9 names as proof pieces (the default tree's assets test,
+   `identity.spec.ts`, `test_govuk_identity_is_off_by_default`, the brand case) are not built here; this amendment holds only the font half.
+5. **The weights text.** `spec/design/DESIGN.md` §2 says Atkinson 200 to 800 and Plex 400, 500 and 600; the code ships 400, 600 and 700 and
+   400 and 600. The owner applies a diff to the text; the code does not change.
+
+Tests that would fail (rule 12; each shown red against a planted fault in the shape the code writes it, rule 15):
+`tests/glass_trees/test_fonts_list.py` (the list's shape, and GDS Transport's two conditions checked as written in the list, not as
+behaviour of the product, which PL7's I9 tests will check; an unlisted `@fontsource` import in `fonts.ts`, at an
+unlisted weight, bare, from the variable scope or in a package.json; a listed weight nothing imports; an unlisted `@font-face` or font file in the
+workspace, the generated GOV.UK stylesheet or its fonts folder, a pages view or the pages' built output; GDS Transport in a pages stylesheet,
+as a listed `@font-face`, or by its assets path); `apps/workspace/src/design/fonts.test.ts` (the imports against the list, the families against
+`tokens.css`, and the package's own face and weight against the list).

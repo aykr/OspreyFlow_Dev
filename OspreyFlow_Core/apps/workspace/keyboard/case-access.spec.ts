@@ -2,7 +2,7 @@
 // and takes one away. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { CASE_ACCESS_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { CASE_ACCESS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 async function serve(page: Page) {
   const sent: { method: string; url: string; body: unknown }[] = [];

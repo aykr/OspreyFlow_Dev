@@ -3,7 +3,7 @@
 // four counts and, once the analyst confirms, the delta to draw. It is never given an identifier
 // back, a source-system identifier least of all (rule 7), and what it says of a refusal carries the
 // figure and says nothing was added (rule 2).
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 /** The most identifiers one request reads; the Conduit refuses more by name. */
 export const MAX_IDENTIFIERS = 5000;

@@ -38,8 +38,8 @@ vi.mock("./timeline/Timeline", () => ({ Timeline: () => null }));
 
 // The working set the App makes, already holding three people and two links — as if the stream had
 // delivered them. Only this case's reader's view: nothing withheld is in it, and nothing else is.
-vi.mock("./workingset/store", async () => {
-  const actual = await vi.importActual<typeof import("./workingset/store")>("./workingset/store");
+vi.mock("@ospreyflow/glass-shared", async () => {
+  const actual = await vi.importActual<typeof import("@ospreyflow/glass-shared")>("@ospreyflow/glass-shared");
   const { makeEdge, makeNode } = await import("./testing/fixtures");
   return {
     ...actual,

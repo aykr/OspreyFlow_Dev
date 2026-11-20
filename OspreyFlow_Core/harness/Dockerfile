@@ -101,6 +101,10 @@ COPY apps/harness ./apps/harness
 # of `apps/workspace`, which this build does not need and should not pull into this image's own build
 # context. `tests/harness/test_harness_frontend_copies.py` follows the imports into that folder too.
 COPY packages/design ./packages/design
+# The shared package's source (PL4 slice C): `apps/harness/keyboard/actions.ts` imports the keyboard registry by
+# `@ospreyflow/glass-shared`, and the walk in `tests/harness/test_harness_frontend_copies.py` follows that import
+# into the package, so a file it reaches that is not copied here fails that test, not this image's build.
+COPY packages/glass-shared/src ./packages/glass-shared/src
 # The workspace's design folder, for the primitives' stylesheet (`apps/harness/src/main.tsx` imports it).
 COPY apps/workspace/src/design ./apps/workspace/src/design
 # The theme module the admin console shares with the Glass (`apps/harness/src/main.tsx` imports

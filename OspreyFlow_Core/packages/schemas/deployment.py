@@ -1940,6 +1940,18 @@ class ResourcesConfig(BaseModel):
         default=None, ge=0.125,
         description="Overrides PostgreSQL's shared_buffers, in GiB.",
     )  # fmt: skip
+    #: ADR-114 Amendment 49: what a deployment's own PostgreSQL allows at once. A whole number from
+    #: the floor (`harness.profiles.POSTGRES_MAX_CONNECTIONS_FLOOR`) to the ceiling
+    #: (`POSTGRES_MAX_CONNECTIONS_CEILING`, what PostgreSQL 16 itself allows); it sizes no memory,
+    #: so it is not one of `any`'s settings. Checked below, in words (not the validator's own).
+    postgres_max_connections: int | None = Field(
+        default=None,
+        description="Overrides PostgreSQL's max_connections: the connections its services may hold "
+        "at once. Default: none — the computed number (660), from the pools the product's services "
+        "open. Not less than 420, the same sum with one Conduit, and not more than 262121, "
+        "PostgreSQL's own limit. Lite, and Small with every store in a container; a cluster's "
+        "or a cloud platform's database is set where it is run.",
+    )
     #: ADR-135 Amendment 1: the local engine on the server's NVIDIA GPU. It sizes nothing, so it is
     #: not one of `any`'s settings, and Lite on a Linux computer may set it too.
     gpu: Literal["none", "nvidia"] = Field(
@@ -1958,6 +1970,58 @@ class ResourcesConfig(BaseModel):
             for value in (self.memory_gib, self.graph_heap_gib, self.search_heap_gib,
                           self.postgres_shared_buffers_gib)
         )  # fmt: skip
+
+    @field_validator("postgres_max_connections", mode="before")
+    @classmethod
+    def _a_whole_number_of_connections_from_the_floor_up(cls, value: Any) -> Any:
+        """ADR-114 Amendment 49: a whole number (YAML's `900`, not `900.0`, `"900"` or `true`),
+        above zero, not below the floor and not above the ceiling, refused in words that give the
+        value, the floor, what the floor is made of and the computed default. The floor and the
+        ceiling are read from the harness's constants at the moment of the check (imported here:
+        the harness imports this module, and only a deployment that sets the field needs it), so a
+        change to a pool changes the floor."""
+        if value is None:
+            return None
+        name = "resources.postgres_max_connections"
+        if isinstance(value, bool) or not isinstance(value, int):
+            raise ValueError(
+                f"{name} must be a whole number of connections, written without a fraction or "
+                f"quotes (for example 900), not {value!r}; remove it to take the computed number"
+            )
+        from harness import profiles
+
+        floor = profiles.POSTGRES_MAX_CONNECTIONS_FLOOR
+        if value <= 0:
+            raise ValueError(
+                f"{name} must be a whole number of connections above zero, not {value}; the least "
+                f"it may be is {floor}, and remove it to take the computed number "
+                f"({profiles.POSTGRES_MAX_CONNECTIONS})"
+            )
+        if value < floor:
+            conduit = profiles.CONDUIT_POOL_CEILING + profiles.RUNNING_LOADS_ALLOWED
+            raise ValueError(
+                f"{name} is {value}, below {floor}, the floor: what one Conduit "
+                f"({profiles.CONDUIT_POOL_CEILING} pool connections at their ceiling and "
+                f"{profiles.RUNNING_LOADS_ALLOWED} for running loads, {conduit}), Keycloak's pool "
+                f"({profiles.KEYCLOAK_POOL_MAX}), the gateway's ({profiles.GATEWAY_POOL_MAX}), "
+                f"Superset and the report sync ({profiles.SUPERSET_AND_REPORT_SYNC_MAX}) and the "
+                f"operator reserve ({profiles.OPERATOR_RESERVE}) may hold at once. The computed "
+                f"number, used when this is not set, is {profiles.POSTGRES_MAX_CONNECTIONS} (two "
+                f"Conduits). Set it to {floor} or more, or remove it to take "
+                f"{profiles.POSTGRES_MAX_CONNECTIONS}"
+            )
+        ceiling = profiles.POSTGRES_MAX_CONNECTIONS_CEILING
+        if value > ceiling:
+            raise ValueError(
+                f"{name} is {value}, above {ceiling}, the ceiling: PostgreSQL 16 stops at "
+                f"start-up when its connections and its other server processes "
+                f"({profiles.POSTGRES_OTHER_SERVER_PROCESSES}) pass "
+                f"{profiles.POSTGRES_MAX_BACKENDS}. "
+                f"Set it to {ceiling} or less (a deployment needs far fewer: the computed number "
+                f"is {profiles.POSTGRES_MAX_CONNECTIONS}), or remove it to take "
+                f"{profiles.POSTGRES_MAX_CONNECTIONS}"
+            )
+        return value
 
     @model_validator(mode="after")
     def _the_stores_fit_the_server(self) -> ResourcesConfig:
@@ -2282,6 +2346,26 @@ class OspreyConfig(BaseModel):
                 f"your own, every store in a container, not {where}"
             )
         return self
+
+    @model_validator(mode="after")
+    def _the_connection_limit_is_for_a_database_we_render(self) -> OspreyConfig:
+        """ADR-114 Amendment 49 decision 3: `resources.postgres_max_connections` is the deployment's
+        own PostgreSQL's, which Lite and a Small with every store in a container render. A cluster's
+        is the operator's (`external.postgres`), a cloud platform's RDS is set at creation, and a
+        Small on a managed database has none of its own: the field there would be ignored in
+        silence, so it is refused in words."""
+        if self.resources.postgres_max_connections is None:
+            return self
+        if self.profile in (Profile.CLUSTER, Profile.CLOUD_PLATFORM):
+            where = f"profile: {self.profile.value}"
+        elif self.external.postgres is not None:
+            where = "a Small on a managed database (external.postgres)"
+        else:
+            return self
+        raise ValueError(
+            f"resources.postgres_max_connections is not for {where}: this profile's database is "
+            "not rendered by OspreyFlow: set max_connections where the database is run"
+        )
 
     @model_validator(mode="after")
     def _a_gpu_is_not_a_clouds(self) -> OspreyConfig:

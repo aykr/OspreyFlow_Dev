@@ -5,7 +5,7 @@
 // link `ln0`. Writes are intercepted at the transport so the request that went out can be read back.
 import { expect, test, type Page } from "@playwright/test";
 
-import { LINK_MENU_ACTIONS, assertAllCovered, registerCovered } from "./actionRegistry";
+import { LINK_MENU_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
 
 declare global {
   interface Window {

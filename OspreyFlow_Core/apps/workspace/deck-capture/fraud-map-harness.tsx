@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { MapView } from "../src/map/MapView";
-import { createWorkingSet } from "../src/workingset/store";
+import { createWorkingSet } from "@ospreyflow/glass-shared";
 import type { PublicMapProvider } from "../../../packages/schemas/generated";
 import { COORDINATES, FRAUD_EDGES, FRAUD_NODES } from "./fraudFixture";
 

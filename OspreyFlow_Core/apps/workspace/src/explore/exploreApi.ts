@@ -10,7 +10,7 @@ import type {
   TypeCounts,
   WhatsNew,
 } from "../../../../packages/schemas/generated";
-import type { WorkingSetDelta } from "../workingset/models";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 export type {
   Bridge,

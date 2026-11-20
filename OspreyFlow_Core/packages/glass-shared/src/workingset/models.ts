@@ -12,7 +12,7 @@
 // WebSocket route, which is what actually proves the two sides still
 // agree — not a hope that no one edits one side alone.
 
-import type { Edge, Node } from "../../../../packages/schemas/generated";
+import type { Edge, Node } from "../../../schemas/generated";
 
 // `NodeId`/`EdgeId` are plain `string` aliases in the generated Pydantic
 // output too (`Node.ts`/`Edge.ts`) and aren't re-exported from the

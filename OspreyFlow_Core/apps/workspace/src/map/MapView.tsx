@@ -46,9 +46,8 @@ import type {
 } from "../../../../packages/schemas/generated";
 import { activePalette } from "../color/palette";
 import { currentTheme, onThemeChange } from "../theme/theme";
-import type { WorkingSetGraph } from "../workingset/store";
+import { conduitRequest, type WorkingSetGraph } from "@ospreyflow/glass-shared";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
-import { conduitRequest } from "./conduitRequest";
 import { selfHostMaplibreWorker } from "./maplibreWorker";
 import {
   BasemapSwitch,
