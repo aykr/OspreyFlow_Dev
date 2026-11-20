@@ -29,7 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from tools.adr_reservations_check import find_unreserved
+from tools.adr_reservations_check import find_ledger_edits, find_unreserved
 from tools.layout import ROOT
 
 LEDGER = "OspreyFlow_Build/spec/ADR_RESERVATIONS.md"
@@ -61,6 +61,8 @@ Amendment headings in another form at the baseline: 0
 | ADR-114 | 36 |
 | ADR-146 Amendment 6 | The rule editor as built | case | 2026-11-12 | written |
 """
+
+LAST_HELD = "| ADR-110 Amendment 18 | The last held row | slice-y | 2026-11-20 | reserved |\n"
 
 BASE_LOG = """\
 ## ADR-110 — The Admin area — ACCEPTED
@@ -118,14 +120,14 @@ def _read(repo: Path, rel: str) -> str:
     return (repo / rel).read_text(encoding="utf-8")
 
 
-def _new_repo(tmp_path: Path, attributes: str) -> Path:
+def _new_repo(tmp_path: Path, attributes: str, ledger: str = BASE_LEDGER) -> Path:
     """A base commit on `main` holding the attributes (if any) and small copies of the two files."""
     repo = tmp_path / "repo"
     repo.mkdir(parents=True)
     _git(repo, "init", "-q", "-b", "main")
     if attributes:
         _write(repo, ".gitattributes", attributes)
-    _write(repo, LEDGER, BASE_LEDGER)
+    _write(repo, LEDGER, ledger)
     _write(repo, LOG, BASE_LOG)
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
@@ -263,6 +265,48 @@ def test_a_status_flip_edited_two_ways_leaves_a_doubled_row_that_the_check_repor
     assert "ADR-110 Amendment 17 is reserved 2 times" in find_unreserved(BASE_LOG, ledger)
 
 
+_FLIPPED = LAST_HELD.replace("reserved", "written")
+
+
+def _held_last_in_table() -> str:
+    """BASE_LEDGER with the held row as the last row of the Reservations table (above Baseline)."""
+    return BASE_LEDGER.replace("\n## Baseline", LAST_HELD + "\n## Baseline", 1)
+
+
+@pytest.mark.parametrize("order", [("flip", "append"), ("append", "flip")])
+@pytest.mark.parametrize("where", ["end of the file", "end of the table"])
+def test_a_flip_of_the_last_row_with_a_row_appended_straight_after_it_leaves_the_number_twice(
+    tmp_path: Path, order: tuple[str, str], where: str
+) -> None:
+    """The commonest shape, measured with a real `git merge` (not reasoned from git's merge rules):
+    the orchestrator reserves a row, the slice flips it to `written`, another slice appends the
+    next row straight after it. The two changes touch adjacent lines, so git does not combine them;
+    the union driver settles it without markers by keeping both sides, and the result is the row
+    twice (once `reserved`, once `written`) beside the new row. The merge is clean and **not**
+    right: the number is held twice, which is what the checks report (the merge is bounced by
+    them, not silently wrong). Which of the two comes first depends on the order of the merges."""
+    base = BASE_LEDGER + LAST_HELD if where == "end of the file" else _held_last_in_table()
+    repo = _new_repo(tmp_path, _real_attributes(), base)
+    _branch(repo, "flip", ledger=lambda t: t.replace(LAST_HELD, _FLIPPED))
+    new_row = _row(19, "Appended straight after it")
+    if where == "end of the file":
+        _branch(repo, "append", ledger=lambda t: t + new_row)
+    else:
+        _branch(repo, "append", ledger=lambda t: t.replace(LAST_HELD, LAST_HELD + new_row))
+
+    for branch in order:
+        assert _merge(repo, branch) == (True, [])
+
+    merged = _read(repo, LEDGER)
+    assert merged.count("| ADR-110 Amendment 18 |") == 2, "union kept both sides of the row"
+    assert LAST_HELD in merged and _FLIPPED in merged and new_row in merged
+    # The existing duplicate check reports it ...
+    assert "ADR-110 Amendment 18 is reserved 2 times" in find_unreserved(BASE_LOG, merged)
+    # ... and so does the comparison with the base (a second row for a number the base holds).
+    problems = find_ledger_edits(base, merged)
+    assert any("ADR-110 Amendment 18" in p and "duplicates a row of the base" in p for p in problems)
+
+
 def test_an_edit_to_an_existing_row_merges_clean_and_the_edit_check_is_red(tmp_path: Path) -> None:
     edited = "| ADR-110 Amendment 14 | The Admin area becomes a place of its own | orchestrator |"
     repo = _new_repo(tmp_path, _real_attributes())
@@ -282,8 +326,6 @@ def test_an_edit_to_an_existing_row_merges_clean_and_the_edit_check_is_red(tmp_p
     merged = _read(repo, LEDGER)
     assert edited in merged and _row(16, "Second appended") in merged
     assert find_unreserved(BASE_LOG, merged) == [], "the reservation check alone cannot see it"
-    from tools.adr_reservations_check import find_ledger_edits
-
     [problem] = find_ledger_edits(base, merged)
     assert "ADR-110 Amendment 14" in problem
 

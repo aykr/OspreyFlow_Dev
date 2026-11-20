@@ -183,9 +183,49 @@ def test_the_real_file_compared_with_itself_has_no_edit() -> None:
     assert find_ledger_edits(RESERVATIONS, RESERVATIONS) == []
 
 
-def test_appended_rows_are_allowed() -> None:
-    appended = RESERVATIONS + "| ADR-199 | A planted record | studio | 2026-11-20 | reserved |\n"
-    assert find_ledger_edits(RESERVATIONS, appended) == []
+_PLANTED = "| ADR-199 | A planted record | studio | 2026-11-20 | reserved |"
+
+
+def _end_of_table(extra: str) -> str:
+    """The real file with `extra` as the last row of the Reservations table, above `## Baseline`."""
+    return RESERVATIONS.replace("\n## Baseline", extra + "\n\n## Baseline", 1)
+
+
+def test_the_real_file_has_its_baseline_heading_once() -> None:
+    assert RESERVATIONS.count("\n## Baseline\n") == 1
+
+
+def test_a_row_added_at_the_end_of_the_reservations_table_is_allowed() -> None:
+    """Where slice GG6 put its row (`496d7b9`): above `## Baseline`, not at the end of the file."""
+    assert find_ledger_edits(RESERVATIONS, _end_of_table("\n" + _PLANTED)) == []
+
+
+def test_a_row_added_in_the_middle_of_the_reservations_table_is_allowed() -> None:
+    first_row = _rows("written")[0]
+    inserted = RESERVATIONS.replace(first_row, first_row + "\n" + _PLANTED, 1)
+    assert inserted != RESERVATIONS
+    assert find_ledger_edits(RESERVATIONS, inserted) == []
+
+
+def test_a_row_added_below_the_baseline_heading_is_reported() -> None:
+    [problem] = find_ledger_edits(RESERVATIONS, RESERVATIONS + _PLANTED + "\n")
+    assert problem.startswith("a row was added below '## Baseline'")
+    assert "ADR-199" in problem
+
+
+def test_a_row_added_inside_the_baseline_section_is_reported() -> None:
+    marker = "Last ADR at the baseline"
+    inserted = RESERVATIONS.replace(marker, _PLANTED + "\n" + marker, 1)
+    [problem] = find_ledger_edits(RESERVATIONS, inserted)
+    assert problem.startswith("a row was added below '## Baseline'")
+
+
+def test_a_row_that_duplicates_a_row_of_the_base_is_reported() -> None:
+    """The same number again in the table (what a union merge leaves of a row edited two ways)."""
+    row = _rows("written")[0]
+    number = row.split("|")[1].strip()
+    [problem] = find_ledger_edits(RESERVATIONS, _end_of_table("\n" + row.replace("written", "reserved")))
+    assert "duplicates a row of the base" in problem and number in problem
 
 
 def test_a_row_flipped_from_reserved_to_written_is_allowed() -> None:
@@ -258,11 +298,3 @@ def test_an_appended_row_with_an_unknown_status_is_reported() -> None:
     row = "| ADR-199 | A planted record | studio | 2026-11-20 | pending |\n"
     [problem] = find_ledger_edits(RESERVATIONS, RESERVATIONS + row)
     assert problem.startswith("a line that is not a reservation row was added")
-
-
-def test_a_row_inserted_above_the_end_is_reported() -> None:
-    first_row = _rows("written")[0]
-    row = "| ADR-199 | A planted record | studio | 2026-11-20 | reserved |"
-    inserted = RESERVATIONS.replace(first_row, first_row + "\n" + row, 1)
-    [problem] = find_ledger_edits(RESERVATIONS, inserted)
-    assert problem.startswith("a row was inserted above the end, not appended")
