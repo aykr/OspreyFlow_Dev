@@ -914,9 +914,11 @@ external:
   image, which carries CUDA, the same weights and the same gateway. `ollama-models` only downloads,
   so it reserves none. **A start needs no network once the weights are installed** (NW1): each model
   is pulled only when `ollama list`, which asks the local server alone, does not hold it at the
-  recorded id, and the speech model only when the offline download check finds no cached copy; a
-  weight that is absent while the network is refused fails the start in words (what is missing, that
-  the network is needed once, to connect and start again). The test that fails if this is violated is
+  recorded id, and the speech model only when the volume does not hold all of it (the offline
+  download check finds the cached snapshot, and each file the speech library requires is there and
+  not empty, with no half-written blob: a first download cut short is fetched again, not taken as
+  installed); a weight that is absent, or partly there, while the network is refused fails the
+  start in words (what is missing, that the network is needed once, to connect and start again). The test that fails if this is violated is
   `tests/harness/test_start_needs_no_network.py`, which runs both jobs as rendered with every pull
   refused. Vision and embeddings run in the same Ollama and so use the GPU too; the
   `whisper` and `ner` containers stay on the CPU. The extraction model is `qwen2.5:14b-instruct`

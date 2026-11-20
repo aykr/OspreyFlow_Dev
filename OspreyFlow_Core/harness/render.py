@@ -1375,23 +1375,44 @@ _HF_CACHE = "/home/ubuntu/.cache/huggingface"
 
 def _whisper_download_script(model: str) -> str:
     """`whisper-models`' script (NW1, 20 November 2026): the speech model is fetched only when the
-    volume does not already hold it, so a start with the model installed needs no network.
+    volume does not already hold all of it, so a start with the model installed needs no network.
 
-    The check is the download tool's own, run offline: with `HF_HUB_OFFLINE=1` it never touches the
-    network and exits 0 only for a cached snapshot (measured in the pinned image with the network
-    off). Without the flag the same tool tries the hub first and, with it unreachable, falls back to
-    the cache only after the attempt, which waits out a slow network on every start. Only when the
-    model is absent is the download run online; if that fails the job says so in words, rather than
-    leaving a traceback, and exits non-zero so the start fails loudly."""
+    The download tool's own offline mode finds the cached snapshot's folder (with `HF_HUB_OFFLINE=1`
+    it never touches the network; measured in the pinned image with the network off). That alone is
+    not a check that the model is complete: the tool writes the snapshot's folder and its ref
+    before the weights arrive, so a first download cut short leaves a folder the offline mode still
+    returns (measured: a ref and an empty snapshot folder exit 0). So the job also checks, with no
+    network, for the files the speech library itself requires (`faster_whisper.utils`:
+    `config.json`, `model.bin`, `tokenizer.json`, `vocabulary.*`), each present and not empty, and
+    for no half-written blob (`*.incomplete`) beside them. Anything less is fetched online, which
+    completes what the cache lacks. If that fails the job says so in words, rather than leaving a
+    traceback, and exits non-zero so the start fails loudly."""
     return (
-        f"if HF_HUB_OFFLINE=1 huggingface-cli download {model} >/dev/null 2>&1; then\n"
+        "model_is_complete() {\n"
+        f'  snapshot="$$(HF_HUB_OFFLINE=1 huggingface-cli download {model} 2>/dev/null'
+        ' | tail -n 1)"\n'
+        '  [ -d "$$snapshot" ] || return 1\n'
+        "  for file in config.json model.bin tokenizer.json; do\n"
+        '    [ -s "$$snapshot/$$file" ] || return 1\n'
+        "  done\n"
+        '  set -- "$$snapshot"/vocabulary.*\n'
+        '  [ -s "$$1" ] || return 1\n'
+        '  set -- "$$snapshot"/../../blobs/*.incomplete\n'
+        '  [ ! -e "$$1" ] || return 1\n'
+        "}\n"
+        "if model_is_complete; then\n"
         f"  echo '{model} is already on this machine; nothing to fetch.'\n"
-        f"elif ! huggingface-cli download {model}; then\n"
-        f"  echo 'FATAL: the speech model {model} is not on this machine, and it could not be "
-        "fetched. A first start needs the network once, to fetch the model weights: connect "
-        "this machine to the network, then start again. The weights are kept, so later starts "
-        "need no network.' >&2\n"
-        "  exit 1\n"
+        "else\n"
+        # With the hub unreachable the tool falls back to whatever the cache holds and exits 0
+        # (measured), so its exit status is not the answer: the completeness check is, run again.
+        f"  huggingface-cli download {model} || true\n"
+        "  model_is_complete || {\n"
+        f"    echo 'FATAL: the speech model {model} is not on this machine, or not all of it, "
+        "and it could not be fetched. A first start needs the network once, to fetch the "
+        "model weights: connect this machine to the network, then start again. The weights are "
+        "kept, so later starts need no network.' >&2\n"
+        "    exit 1\n"
+        "  }\n"
         "fi\n"
         f"chown -R 1000:1000 {_HF_CACHE}\n"
     )
