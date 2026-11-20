@@ -288,6 +288,35 @@ def test_a_bundle_holding_a_react_marker_is_refused(tmp_path: Path, line: str) -
     assert [f.where for f in findings] == ["app/apps/pages/dist/public/bundle.js"]
 
 
+# One line per marker that no other marker's pattern matches, so each pattern is shown to be needed
+# on its own: a minified bundle that aliases `Symbol.for` leaves React 19's element marker without the
+# `Symbol.for(` prefix, which only its own pattern catches (rule 15: no broader rule may cover for it).
+ISOLATED_MARKERS = {
+    "react/jsx-runtime": 'var j = require("react/jsx-runtime");',
+    "react/jsx-dev-runtime": 'var d = require("react/jsx-dev-runtime");',
+    "react.element": 'var e = { $$typeof: "react.element" };',
+    "react.transitional.element": 'var s = Symbol.for; var E = s("react.transitional.element");',
+    'Symbol.for("react.': 'var P = Symbol.for("react.portal");',
+}
+
+
+def test_the_isolated_marker_lines_are_each_caught_by_one_pattern_alone() -> None:
+    assert set(ISOLATED_MARKERS) == {label for label, _ in scan._MARKERS}
+    for label, line in ISOLATED_MARKERS.items():
+        matching = [lab for lab, pattern in scan._MARKERS if pattern.search(line.encode())]
+        assert matching == [label], (label, matching)
+
+
+@pytest.mark.parametrize("label", ISOLATED_MARKERS)
+def test_each_marker_is_named_by_its_own_pattern(tmp_path: Path, label: str) -> None:
+    tree = make_tree(
+        tmp_path / "fs", {"app/apps/pages/dist/public/bundle.js": ISOLATED_MARKERS[label] + "\n"}
+    )
+    (finding,) = scan.tree_findings(tree)
+    assert finding.kind == "react-marker"
+    assert finding.detail == f"holds {label}"
+
+
 def test_a_marker_in_a_dependency_or_a_binary_file_is_refused(tmp_path: Path) -> None:
     tree = make_tree(tmp_path / "fs")
     deep = tree / "app/node_modules/express/lib/deep/view.js"
