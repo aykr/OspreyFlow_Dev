@@ -1196,10 +1196,11 @@ class ModelAdmin:
     ) -> Any:
         """One change, held exclusively against the file read afresh: `work` changes the gateway
         and returns what to save. **Whatever stops it**, a refusal, a file that cannot be written,
-        an exception nobody named or a cancellation, puts the gateway back as the file still says,
-        and is audited. **If the gateway cannot be put back after the change had begun to alter
-        it**, that is said in words in the answer, the engine is marked unavailable (offered to no
-        analyst, its test says so) and the audit says so: never a log line alone."""
+        an exception nobody named or a cancellation, is audited, and when it had sent the gateway
+        a write it puts the gateway back as the file still says (when it had sent none there is
+        nothing to put back, and no undo is sent). **If the gateway cannot be put back**, that is
+        said in words in the answer, the engine is marked unavailable (offered to no analyst, its
+        test says so) and the audit says so: never a log line alone."""
         async with self._exclusive:
             self._fresh()
             current = self.settings
@@ -1208,16 +1209,17 @@ class ModelAdmin:
             try:
                 result = await work(current)
             except asyncio.CancelledError:
-                # Read before the undo: the undo's own writes are not the change's.
+                # No write sent, nothing to put back: an undo would only be writes of its own.
                 touched = self._gateway.writes != began
-                restored = await self._undone(current, rebuilt)
+                restored = await self._undone(current, rebuilt) if touched else True
                 if touched and not restored:
                     self._mark_unavailable(engine)
                 await self._audited(
                     by, action, engine if engine and _NAMEABLE.fullmatch(engine) else None,
-                    outcome="interrupted: the gateway was "
-                    + ("put back as the saved settings say" if restored or not touched
-                       else "not put back; " + UNAVAILABLE_WORDS),
+                    outcome="interrupted: " + (
+                        "nothing had been changed at the gateway" if not touched
+                        else "the gateway was put back as the saved settings say" if restored
+                        else "the gateway was not put back; " + UNAVAILABLE_WORDS),
                 )  # fmt: skip
                 raise
             except ModelAdminRefused as refused:
@@ -1236,18 +1238,21 @@ class ModelAdmin:
                 unnamed_failure = True
             else:
                 return result
-            touched = self._gateway.writes != began  # read before the undo's own writes
-            restored = await self._undone(current, rebuilt)
-            if not restored and touched:
+            # **No undo unless the change sent a write**: with none sent the gateway is as it was,
+            # and an undo is only writes of its own that could fail half-way and break the engine.
+            touched = self._gateway.writes != began
+            restored = await self._undone(current, rebuilt) if touched else True
+            if not restored:
                 self._mark_unavailable(engine)
                 failed = ModelAdminRefused(_not_put_back(failed.words), status=failed.status)
             elif unnamed_failure:
                 # Said only once it is so: before the undo ran, this sentence would have claimed
                 # what had not yet happened, and contradicted the one above when the undo failed.
-                failed = ModelAdminRefused(
-                    f"{failed.words} The model gateway was put back as the saved settings say.",
-                    status=failed.status,
+                said = (
+                    "The model gateway was put back as the saved settings say."
+                    if touched else "Nothing had been changed at the model gateway."
                 )
+                failed = ModelAdminRefused(f"{failed.words} {said}", status=failed.status)
             raise await self._refusing(by, action, engine, failed) from None
 
     def _mark_unavailable(self, engine: str | None) -> None:

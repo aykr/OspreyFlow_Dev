@@ -34,9 +34,12 @@ at run time (the owner's rules for keys): none is written in this file.
   `test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_audited`; and the
   engine's connection test says it is unavailable, not that its key is lost:
   `test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailable`;
-- a change refused, or interrupted, before it wrote anything to the gateway is not called "unaltered
-  and not put back" because the undo's own writes failed (the counter is read before the undo; the
-  engine is neither marked nor withdrawn from analysts):
+- a change refused, or interrupted, before it wrote anything to the gateway sends no undo (there is
+  nothing to put back, and an undo that deleted the engine's entries and then failed would break an
+  engine nobody was told about), is not called "unaltered and not put back", and does not say
+  the gateway was put back: the engine is neither marked nor withdrawn from analysts:
+  `test_an_edit_that_wrote_nothing_is_not_undone_so_an_undo_cannot_break_the_engine` (an edit
+  refused, and an edit interrupted, with a gateway that refuses to make an entry),
   `test_a_change_refused_before_it_wrote_anything_is_not_called_unaltered_by_a_failing_undo` and
   `test_an_interruption_before_the_change_wrote_anything_leaves_the_engine_available`;
 - an engine that signs in by the gateway's role (no key) is offered to no analyst while it is marked
