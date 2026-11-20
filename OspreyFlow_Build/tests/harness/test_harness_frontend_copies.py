@@ -2,7 +2,8 @@
 named parts of `apps/workspace`, of `packages/design` and of `packages/glass-shared/src`
 (`harness/Dockerfile`'s `frontend-builder` stage). Every file of those folders the harness frontend
 reaches by import must be under one of those `COPY` lines, or the image stops building while every
-local build, which sees the whole tree, still passes. (`packages/design` joined the walk with PL4b, when `tokens.css` moved there: before, the
+local build, which sees the whole tree, still passes. (`packages/design` joined the walk with PL4b,
+when `tokens.css` moved there: before, the
 walk followed imports into `apps/workspace` only, and a `COPY packages/design` removed from the stage
 would have passed. The three stylesheets that moved after it, PL4b2, joined it too: the walk
 follows a stylesheet's `@import`, so `primitives.css` reaches `scale.css` and `panelType.css`.
