@@ -60,7 +60,9 @@ def runtime_install_problems(dockerfile: str) -> list[str]:
         if word.upper() == "FROM":
             in_stage = rest.lower().split()[-2:] == ["as", "runtime-deps"]
         elif in_stage and word.upper() == "RUN":
-            installs += [part.strip() for part in rest.split("&&") if part.strip().startswith("npm ci")]
+            installs += [
+                part.strip() for part in rest.split("&&") if part.strip().startswith("npm ci")
+            ]
     if not installs:
         return ["the runtime-deps stage runs no `npm ci`"]
     problems = []
@@ -71,7 +73,9 @@ def runtime_install_problems(dockerfile: str) -> list[str]:
         if "dev" not in omits:
             problems.append(f"`{install}` does not omit dev dependencies")
         if scopes != ["apps/pages"]:
-            problems.append(f"`{install}` is scoped to {scopes or 'no workspace'}, not apps/pages alone")
+            problems.append(
+                f"`{install}` is scoped to {scopes or 'no workspace'}, not apps/pages alone"
+            )
     return problems
 
 
@@ -98,7 +102,9 @@ def _component(name: str, version: str, group: str | None = None) -> dict[str, o
     return component
 
 
-def make_sbom(*npm: tuple[str, str], extra: list[dict[str, object]] | None = None) -> dict[str, object]:
+def make_sbom(
+    *npm: tuple[str, str], extra: list[dict[str, object]] | None = None
+) -> dict[str, object]:
     os_package = {
         "bom-ref": "pkg:deb/debian/bash@5.2.15-2?distro=debian-12.8",
         "type": "library",
@@ -116,17 +122,28 @@ def make_sbom(*npm: tuple[str, str], extra: list[dict[str, object]] | None = Non
         "version": 1,
         "metadata": {
             "timestamp": "2026-11-20T09:00:00+00:00",
-            "tools": {"components": [{"type": "application", "group": "aquasecurity", "name": "trivy"}]},
+            "tools": {
+                "components": [{"type": "application", "group": "aquasecurity", "name": "trivy"}]
+            },
             # the subject is the image itself: a container named by its tag, never a library
-            "component": {"bom-ref": "pkg:oci/pages", "type": "container", "name": "ospreyflow/pages:ci"},
+            "component": {
+                "bom-ref": "pkg:oci/pages",
+                "type": "container",
+                "name": "ospreyflow/pages:ci",
+            },
         },
         "components": components,
-        "dependencies": [{"ref": c["bom-ref"], "dependsOn": []} for c in components],
+        "dependencies": [{"ref": c.get("bom-ref", "none"), "dependsOn": []} for c in components],
         "vulnerabilities": [],
     }
 
 
-CLEAN = (("express", "4.21.2"), ("nunjucks", "3.2.4"), ("helmet", "8.0.0"), ("express-session", "1.18.1"))
+CLEAN = (
+    ("express", "4.21.2"),
+    ("nunjucks", "3.2.4"),
+    ("helmet", "8.0.0"),
+    ("express-session", "1.18.1"),
+)
 # What `npm ci --omit=dev` without `--workspace` brings in (evidence: all three appear).
 UNSCOPED = (*CLEAN, ("react", "19.1.0"), ("react-dom", "19.1.0"), ("scheduler", "0.26.0"))
 
@@ -165,7 +182,9 @@ def kinds(findings: list[scan.Finding]) -> set[str]:
 
 def test_the_clean_sbom_and_tree_pass(tmp_path: Path) -> None:
     sbom = make_sbom(*CLEAN)
-    assert {"express", "nunjucks"} <= scan.sbom_package_names(sbom)  # the control: the positives are present
+    assert {"express", "nunjucks"} <= scan.sbom_package_names(
+        sbom
+    )  # the control: the positives are present
     assert scan.scan(sbom, make_tree(tmp_path / "fs")) == []
 
 
@@ -212,15 +231,27 @@ def test_the_runtime_install_losing_its_scope_is_refused() -> None:
     [
         lambda t: t.replace("--workspace apps/pages && npm cache", "&& npm cache"),
         lambda t: t.replace("--workspace apps/pages", "--workspace apps/workspace"),
-        lambda t: t.replace("--workspace apps/pages", "--workspace apps/pages --workspace apps/workspace"),
+        lambda t: t.replace(
+            "--workspace apps/pages", "--workspace apps/pages --workspace apps/workspace"
+        ),
         lambda t: t.replace("--workspace apps/pages", "-w apps/workspace"),
         lambda t: t.replace("--omit=dev ", ""),
         lambda t: t.replace("npm ci --omit=dev --workspace apps/pages", "npm install --omit=dev"),
         lambda t: t.replace("AS runtime-deps", "AS something-else"),
     ],
-    ids=["unscoped", "wrong-workspace", "extra-workspace", "short-flag-wrong", "with-dev", "not-ci", "no-stage"],
+    ids=[
+        "unscoped",
+        "wrong-workspace",
+        "extra-workspace",
+        "short-flag-wrong",
+        "with-dev",
+        "not-ci",
+        "no-stage",
+    ],
 )
-def test_other_ways_the_runtime_install_can_lose_its_scope_are_refused(plant: Callable[[str], str]) -> None:
+def test_other_ways_the_runtime_install_can_lose_its_scope_are_refused(
+    plant: Callable[[str], str],
+) -> None:
     planted = plant(DOCKERFILE)
     assert planted != DOCKERFILE
     assert runtime_install_problems(planted) != []
@@ -261,13 +292,19 @@ def test_a_marker_in_a_dependency_or_a_binary_file_is_refused(tmp_path: Path) ->
     deep = tree / "app/node_modules/express/lib/deep/view.js"
     deep.parent.mkdir(parents=True)
     deep.write_bytes(b"\x00\x01binary" + b'require("react/jsx-runtime")' + b"\xff\xfe")
-    assert [f.where for f in scan.tree_findings(tree)] == ["app/node_modules/express/lib/deep/view.js"]
+    assert [f.where for f in scan.tree_findings(tree)] == [
+        "app/node_modules/express/lib/deep/view.js"
+    ]
 
 
 def test_the_scan_stays_under_app_and_does_not_follow_links(tmp_path: Path) -> None:
-    tree = make_tree(tmp_path / "fs", {"usr/lib/node_modules/react/index.js": 'Symbol.for("react.element")'})
+    tree = make_tree(
+        tmp_path / "fs", {"usr/lib/node_modules/react/index.js": 'Symbol.for("react.element")'}
+    )
     assert (tree / "usr/lib/node_modules/react/index.js").is_file()
-    (tree / "app/escape").symlink_to("../usr/lib/node_modules/react")  # a link out of /app is not followed
+    (tree / "app/escape").symlink_to(
+        "../usr/lib/node_modules/react"
+    )  # a link out of /app is not followed
     assert scan.tree_findings(tree) == []
 
 
@@ -275,7 +312,9 @@ def test_a_finding_never_prints_the_line_it_came_from(tmp_path: Path) -> None:
     token = secrets.token_hex(16)  # generated now; nothing in the repository looks like a secret
     tree = make_tree(
         tmp_path / "fs",
-        {"app/apps/pages/dist/server/config.js": f'const k = "{token}"; require("react/jsx-runtime");\n'},
+        {
+            "app/apps/pages/dist/server/config.js": f'const k = "{token}"; require("react/jsx-runtime");\n'
+        },
     )
     (finding,) = scan.tree_findings(tree)
     assert token not in repr(finding) and token not in finding.render()
@@ -303,9 +342,29 @@ def test_a_finding_never_prints_the_line_it_came_from(tmp_path: Path) -> None:
          "no-express", "near-names", "a-list", "a-string", "null"],
 )  # fmt: skip
 def test_an_empty_or_wrong_sbom_is_refused_not_passed(tmp_path: Path, sbom: object) -> None:
-    findings = scan.scan(sbom, make_tree(tmp_path / "fs"))  # a perfectly clean tree: the SBOM alone fails it
+    findings = scan.scan(
+        sbom, make_tree(tmp_path / "fs")
+    )  # a perfectly clean tree: the SBOM alone fails it
     assert findings != []
     assert kinds(findings) <= {"missing-package", "bad-sbom"}
+
+
+@pytest.mark.parametrize(
+    "sbom",
+    [{}, {"components": []}, {"specVersion": "1.6"}, {"components": None}, [], "components", None],
+    ids=[
+        "empty-object",
+        "no-components",
+        "missing-components",
+        "null-components",
+        "a-list",
+        "a-string",
+        "null",
+    ],
+)
+def test_an_sbom_with_no_component_list_is_named_as_such(sbom: object) -> None:
+    # not left to the missing-package findings: an SBOM that is not a component list says so itself
+    assert "bad-sbom" in kinds(scan.sbom_findings(sbom))
 
 
 def test_the_missing_packages_are_named() -> None:
@@ -380,7 +439,11 @@ def test_extraction_keeps_only_app_and_survives_the_systems_own_links(tmp_path: 
                 _link("app/node_modules/@ospreyflow/pages", "../../apps/pages"),
                 _file("application/not-app.txt"),
             ],
-            {"etc/passwd": b"root", "app/apps/pages/dist/server/main.js": b"x", "application/not-app.txt": b"y"},
+            {
+                "etc/passwd": b"root",
+                "app/apps/pages/dist/server/main.js": b"x",
+                "application/not-app.txt": b"y",
+            },
         )
     )
     dest = tmp_path / "out"
@@ -388,15 +451,25 @@ def test_extraction_keeps_only_app_and_survives_the_systems_own_links(tmp_path: 
     scan.extract_app(tar, dest)
     assert (dest / "app/apps/pages/dist/server/main.js").read_bytes() == b"x"
     assert (dest / "app/node_modules/@ospreyflow/pages").is_symlink()
-    assert not (dest / "etc").exists() and not (dest / "bin").exists() and not (dest / "application").exists()
+    assert (
+        not (dest / "etc").exists()
+        and not (dest / "bin").exists()
+        and not (dest / "application").exists()
+    )
 
 
 @pytest.mark.parametrize(
     "bad",
-    [_link("app/out", "../../../escape"), _link("app/abs", "/etc/passwd"), _file("app/../../escape.txt")],
+    [
+        _link("app/out", "../../../escape"),
+        _link("app/abs", "/etc/passwd"),
+        _file("app/../../escape.txt"),
+    ],
     ids=["link-out", "absolute-link", "dot-dot-name"],
 )
-def test_extraction_refuses_a_member_that_would_escape(tmp_path: Path, bad: tarfile.TarInfo) -> None:
+def test_extraction_refuses_a_member_that_would_escape(
+    tmp_path: Path, bad: tarfile.TarInfo
+) -> None:
     tar = tmp_path / "fs.tar"
     tar.write_bytes(_tar([bad], {bad.name: b"z"} if bad.isfile() else None))
     dest = tmp_path / "out"
@@ -429,34 +502,59 @@ def test_main_passes_a_clean_image(tmp_path: Path, capsys: pytest.CaptureFixture
     assert "no react" in capsys.readouterr().out.lower()
 
 
-def test_main_names_each_finding_and_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_main_names_each_finding_and_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     token = secrets.token_hex(16)
     code = scan.main(
-        ["--image", "ospreyflow/pages:ci", "--sbom", str(_sbom_file(tmp_path, make_sbom(*UNSCOPED)))],
-        export=_export_of({"app/apps/pages/dist/public/bundle.js": f'{token}\nrequire("react/jsx-runtime")\n'}),
+        [
+            "--image",
+            "ospreyflow/pages:ci",
+            "--sbom",
+            str(_sbom_file(tmp_path, make_sbom(*UNSCOPED))),
+        ],
+        export=_export_of(
+            {"app/apps/pages/dist/public/bundle.js": f'{token}\nrequire("react/jsx-runtime")\n'}
+        ),
     )
     out = capsys.readouterr()
     text = out.out + out.err
     assert code == 1
-    for named in ("react-package", "react-dom", "scheduler", "react-marker", "app/apps/pages/dist/public/bundle.js"):
+    for named in (
+        "react-package",
+        "react-dom",
+        "scheduler",
+        "react-marker",
+        "app/apps/pages/dist/public/bundle.js",
+    ):
         assert named in text
     assert token not in text
 
 
-@pytest.mark.parametrize("content", ["", "not json", "[]", "{}"], ids=["empty-file", "not-json", "list", "object"])
+@pytest.mark.parametrize(
+    "content", ["", "not json", "[]", "{}"], ids=["empty-file", "not-json", "list", "object"]
+)
 def test_main_fails_on_an_sbom_that_is_empty_or_unreadable(
     tmp_path: Path, content: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     path = tmp_path / "pages.cdx.json"
     path.write_text(content, encoding="utf-8")
-    assert scan.main(["--image", "ospreyflow/pages:ci", "--sbom", str(path)], export=_export_of(None)) == 1
+    assert (
+        scan.main(["--image", "ospreyflow/pages:ci", "--sbom", str(path)], export=_export_of(None))
+        == 1
+    )
     out = capsys.readouterr()
     assert "sbom" in (out.out + out.err).lower()
 
 
 def test_main_fails_when_the_sbom_file_is_missing(tmp_path: Path) -> None:
     missing = tmp_path / "absent.cdx.json"
-    assert scan.main(["--image", "ospreyflow/pages:ci", "--sbom", str(missing)], export=_export_of(None)) == 1
+    assert (
+        scan.main(
+            ["--image", "ospreyflow/pages:ci", "--sbom", str(missing)], export=_export_of(None)
+        )
+        == 1
+    )
 
 
 def test_main_refuses_an_image_that_is_an_option(tmp_path: Path) -> None:
@@ -496,8 +594,12 @@ class FakeDocker:
         if verb == "export":
             if self.export_fails:
                 raise subprocess.CalledProcessError(1, args, stderr="export failed")
-            out = Path(args[args.index("-o") + 1] if "-o" in args else args[args.index("--output") + 1])
-            out.write_bytes(_tar([_file("app/apps/pages/package.json")], {"app/apps/pages/package.json": b"{}"}))
+            out = Path(
+                args[args.index("-o") + 1] if "-o" in args else args[args.index("--output") + 1]
+            )
+            out.write_bytes(
+                _tar([_file("app/apps/pages/package.json")], {"app/apps/pages/package.json": b"{}"})
+            )
         if verb == "rm":
             self.containers.discard(args[-1])
         return subprocess.CompletedProcess(args, 0, "", "")
