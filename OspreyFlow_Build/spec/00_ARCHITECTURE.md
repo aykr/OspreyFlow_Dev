@@ -1201,6 +1201,22 @@ signature (it relies on the token having come straight from the token endpoint),
 the realm's key set, which is `jose`'s own `createRemoteJWKSet` and `jwtVerify`. No flow is hand-written. The service
 calls no address but the identity provider's own (`OSPREY_PAGES_OIDC_ISSUER`).
 
+**The Glass's sign-in library, named (20 November 2026; slice LR1).** `oidc-client-ts` has been a run-time
+dependency of `apps/workspace` since the sign-in was built, and `apps/workspace/src/auth/userManager.ts` has said
+since then that this section is its allowlist for what it relies on rather than hand-rolls; this section had no
+entry naming it. The register is by licence and `make licence-check` already read it (Apache-2.0 is on the
+allowlist at the head of this section), so nothing changes in what the gate allows; this entry names it, in the shape of the
+table above, with the licence as the package's own metadata and licence file give it (version 3.5.0, `license`
+in its `package.json` and in `package-lock.json`; the `LICENSE` file is the Apache License, Version 2.0):
+
+| Package | Range | Licence (as its metadata gives it) | Why | Workspace |
+| --- | --- | --- | --- | --- |
+| `oidc-client-ts` | `^3.5.0` | Apache-2.0 | the Glass's OpenID Connect sign-in (the authorisation-code flow with PKCE, the user's session and its renewal), rather than a hand-written one: `apps/workspace/src/auth/userManager.ts` and `apps/workspace/src/auth/oidcConfig.ts`; named by the owner, 20 November 2026, because it ships in the product without a register entry | `apps/workspace`, in the workspace bundle (its one dependency, `jwt-decode`, MIT, is named under ADR-111 Amendment 3 above) |
+
+`tests/test_licence_register_names_oidc.py` fails if this row goes, its licence or range stops matching the lockfile's
+and the workspace's, or its reason stops naming the two sign-in files. The other run-time dependencies of
+`apps/workspace` that have no entry of their own are not named here; that is the owner's to decide.
+
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the
 data (`packages/demo_fixtures/public_datasets/`); the administrator downloads the file and adds it to
