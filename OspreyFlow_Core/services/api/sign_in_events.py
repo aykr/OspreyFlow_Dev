@@ -57,9 +57,15 @@ every audit write does (503 `audit_unavailable`, nothing recorded, the retry rec
 Valkey down it still writes the row (a duplicate is better than a missing sign-in) with
 `session: null`, there being no secret to key a reference with.
 
-**The route.** Reached by the page service's own report only: the page service's browser-facing
-`/v1` forwarder refuses this path (`forward.ts`), so no browser can write a row that carries the
-page service's channel. Authenticated by the person's own token (`get_principal`), so it records an
+**The route.** Open to the page service's own client alone, **checked at the route** (SE8c round 8):
+the token's own client claim (`azp`, `appid` on Entra ID v1.0) must name the page service's client
+(`pages_client_for`, `from_page_service`), and every other token (the workspace's, Superset's, any
+third client's, one that names none) is refused with one status and one body (403,
+`SESSION_EVENT_REFUSED`) whatever the reason, before the body is read, the rate window is counted or
+anything is written. The doors a request can come in by are not what refuses: the workspace's `/v1/`
+proxy and the front proxy carry the route to the Conduit from a browser holding a workspace token
+(the page service's own forwarder refuses the path as well, `forward.ts`, a second door shut and not
+the defence). Authenticated by the person's own token (`get_principal`), so it records an
 event for that token's person and no one else: the body is one field, `kind`, from a closed list of
 two, and any other field is refused (422), so a caller cannot name a person, a session or a
 channel. The page service's own client credential alone has no person in it and is refused as on
@@ -84,16 +90,18 @@ import asyncio
 import hashlib
 import hmac
 import logging
+import os
 import re
 import secrets
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Literal
 
 import jwt
 from pydantic import BaseModel, ConfigDict
 
 from conduit_common.valkey_compat import reply
+from principal_auth import ClaimMapping
 from schemas.domain import Principal
 
 from .audit import AuditWriteError, AuditWriter
@@ -121,6 +129,16 @@ STORE_TIMEOUT_SECONDS = 0.5
 LOCAL_MEMORY = 20_000
 #: At most one warning in this many seconds, with the running count of misses.
 WARN_EVERY_SECONDS = 60
+
+#: The page service's own client, as the page service itself names it
+#: (`apps/pages/server/config.ts`, `OSPREY_PAGES_CLIENT_ID`; `harness/realm.py`'s
+#: `PAGES_CLIENT_ID`): what the route is open to on Keycloak, where the resolver names no client.
+PAGES_CLIENT_ENV = "OSPREY_PAGES_CLIENT_ID"
+DEFAULT_PAGES_CLIENT = "osprey-pages"
+
+#: What a token that is not the page service's is told, whatever the reason: one status and one
+#: body, naming no claim, no client and no check.
+SESSION_EVENT_REFUSED = "this route is not open to this sign-in"
 
 _PREFIX = "sign-in-events:"
 _SECRET_KEY = f"{_PREFIX}secret"
@@ -151,6 +169,33 @@ def claims_of(token: str) -> dict[str, Any]:
     except jwt.PyJWTError:
         return {}
     return claims if isinstance(claims, dict) else {}
+
+
+def pages_client_for(mapping: ClaimMapping, environ: Mapping[str, str] | None = None) -> str | None:
+    """The client the page service signs a person in as, which is the only client whose token may
+    report a sign-in or a sign-out; None where it cannot be known, and then no token is admitted.
+
+    On Entra ID it is the mapping's own `pages_client_id` (an application id the resolver admits as
+    the page service's, CO2) and never the environment's: one that is not set is no client. On
+    Keycloak, where the resolver names no client, it is the page service's own
+    `OSPREY_PAGES_CLIENT_ID` and else its default, `osprey-pages`
+    (the realm's client, `harness/realm.py`)."""
+    if mapping.is_entra:
+        return mapping.pages_client_id
+    named = (os.environ if environ is None else environ).get(PAGES_CLIENT_ENV, "").strip()
+    return named or DEFAULT_PAGES_CLIENT
+
+
+def from_page_service(claims: dict[str, Any], pages_client: str | None) -> bool:
+    """Whether a token the resolver has accepted was issued to the page service's own client: the
+    token's own client claim, `azp` (`appid` on Entra ID v1.0), as the resolver reads it for the
+    Glass's, Superset's and the page service's registrations. Every one present must be that client,
+    exactly and as a string: a token naming another client in either claim, or none, is not
+    the page service's."""
+    if not pages_client:
+        return False
+    named = [claims[c] for c in ("azp", "appid") if c in claims]
+    return bool(named) and all(isinstance(c, str) and c == pages_client for c in named)
 
 
 def _session_claim(claims: dict[str, Any]) -> tuple[str, str] | None:

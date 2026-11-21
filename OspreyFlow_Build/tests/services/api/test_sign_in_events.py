@@ -1128,22 +1128,28 @@ def _function(tree: ast.Module, name: str) -> ast.AsyncFunctionDef:
     return next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == name)
 
 
-def test_the_one_gate_every_authenticated_request_passes_calls_the_watch() -> None:
-    """Read as a syntax tree: `get_principal` is what every route's principal comes through
-    (`app.py`'s own docstring), and it must call `note_seen` after the resolver accepts the token,
-    and not for a dashboard's app identity (no person's sign-in; a person's token limited to named
-    routes, Superset's, is one)."""
+def test_the_gates_that_accept_a_token_call_the_one_helper_that_calls_the_watch() -> None:
+    """Read as a syntax tree: `get_principal` (every HTTP route's principal) and the delta socket's
+    header bearer (`_authenticate_websocket`, which does not pass through it) each call
+    `_note_session_seen` after the resolver accepts the token; the helper calls `note_seen`, and not
+    for a dashboard's app identity (no person's sign-in; a person's token limited to named routes,
+    Superset's, is one). Round 8: this test read `get_principal` alone and so could not see the
+    socket; `test_sign_in_events_ingress.py` reads every function that calls the resolver."""
     tree = ast.parse((CORE / "services/api/app.py").read_text())
-    gate = _function(tree, "get_principal")
-    calls = [
-        n
-        for n in ast.walk(gate)
-        if isinstance(n, ast.Call)
-        and isinstance(n.func, ast.Attribute)
-        and n.func.attr in ("resolve_principal", "note_seen")
-    ]
-    assert [c.func.attr for c in calls] == ["resolve_principal", "note_seen"]  # type: ignore[attr-defined]
-    assert "is_application_identity" in ast.unparse(gate)
+    for name in ("get_principal", "_authenticate_websocket"):
+        gate = _function(tree, name)
+        calls = [
+            n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
+            for n in sorted(
+                (n for n in ast.walk(gate) if isinstance(n, ast.Call)),
+                key=lambda n: (n.lineno, n.col_offset),
+            )
+        ]
+        assert "_note_session_seen" in calls, name
+        assert calls.index("resolve_principal") < calls.index("_note_session_seen"), name
+    helper = _function(tree, "_note_session_seen")
+    assert "note_seen" in ast.unparse(helper)
+    assert "is_application_identity" in ast.unparse(helper)
 
 
 def test_the_session_events_route_is_the_one_that_writes_its_rows() -> None:

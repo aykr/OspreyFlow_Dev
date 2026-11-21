@@ -1,15 +1,15 @@
 """SE8c, round 8: the session-events route is the page service's own and nobody else's, and a
-session whose only authenticated use is a socket opened with a bearer header is still seen (rule 12; rules 3
-and 4; `RULINGS.md` SE8: an audit row anyone can forge is a fault).
+session whose only authenticated use is a socket opened with a bearer header is still seen (rule 12;
+rules 3 and 4; `RULINGS.md` SE8: an audit row anyone can forge is a fault).
 
 **The fault.** `POST /v1/session-events` writes a `sign_in` or `sign_out` row for the person of the
 token it is given. It was called "internal" and was not: the workspace's own `/v1/` proxy
 (`apps/workspace/nginx.conf.template`) and the front proxy's door to the Conduit carry it from a
 browser, which holds a workspace token, and the route took a token issued to any client. A person
 could write `sign_out` rows while still signed in. Round 7 shut the page service's own
-browser-facing forwarder only. **Closed at the route, not at each way in:** the route accepts a token only when it
-was issued to the page service's own client, and every other token is refused with one status
-and one body, whatever the reason, with nothing written.
+browser-facing forwarder only. **Closed at the route, not at each way in:** the route accepts a
+token only when it was issued to the page service's own client, and every other token is refused
+with one status and one body, whatever the reason, with nothing written.
 
 **The claim check, and why it is this one.** The Conduit already tells clients apart by the token's
 own client claim: `azp` (`appid` on Entra ID v1.0), as `PrincipalResolver` does for the Glass's,
@@ -232,7 +232,7 @@ def test_on_entra_the_page_services_client_is_the_mappings_and_nothing_else(mod:
 def test_where_the_page_services_client_cannot_be_known_every_token_is_refused(
     rig: Rig, mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(mod, "pages_client_for", lambda mapping, environ=None: None)
+    monkeypatch.setattr("services.api.app.pages_client_for", lambda mapping, environ=None: None)
     token = token_for(rig, CLIENT)
     answer = rig.event(token, "sign_in")
     assert (answer.status_code, answer.json()) == REFUSED
@@ -356,7 +356,7 @@ def test_every_function_that_accepts_a_token_from_the_resolver_notes_the_session
                 for c in ast.walk(f)
                 if isinstance(c, ast.Call)
             }
-            assert calls & {"note_seen", "note_session_seen"}, f.name
+            assert "_note_session_seen" in calls, f.name
 
 
 # --- a write that fails in any way leaves nothing marked (round 7's second fault) ---------

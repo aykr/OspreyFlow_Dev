@@ -1031,7 +1031,15 @@ from .service_identity import (
     ServiceIdentityVerifier,
     is_deployment_client,
 )
-from .sign_in_events import SessionEvent, SessionEventResponse, SignInWatch
+from .sign_in_events import (
+    SESSION_EVENT_REFUSED,
+    SessionEvent,
+    SessionEventResponse,
+    SignInWatch,
+    claims_of,
+    from_page_service,
+    pages_client_for,
+)
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -2209,6 +2217,20 @@ class SignInRefused(Exception):
         self.words, self.error = words, error
 
 
+async def _note_session_seen(app_: Any, token: str, identity: Principal) -> None:
+    """SE8c: a session this Conduit has not seen is recorded, once, after the resolver has accepted
+    its token (a refused token writes nothing). **Called by each place that accepts a token from the
+    resolver**: `get_principal` for every HTTP route, and the delta socket's header bearer
+    (`_authenticate_websocket`), which does not go through it; a test reads `app.py` and fails for a
+    new one that skips it. A dashboard identity (an application, admitted to its own routes alone)
+    is not a person signing in; a person's token limited to named routes (Superset's, ADR-148
+    Amendment 9) is one. `note_seen` never raises: a store fault is counted and logged, never a
+    refused request."""
+    watch: SignInWatch | None = getattr(app_.state, "sign_in_watch", None)
+    if watch is not None and not is_application_identity(identity):
+        await watch.note_seen(token, identity)
+
+
 async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
@@ -2259,14 +2281,7 @@ async def get_principal(
                     + ", ".join(sorted(identity.routes)),
                 },
             )
-    # SE8c: a session this Conduit has not seen is recorded, once, after the resolver has accepted
-    # its token (a refused token writes nothing). A dashboard identity (an application, admitted
-    # to its own routes alone) is not a person signing in; a person's token limited to named
-    # routes (Superset's, ADR-148 Amendment 9) is one. `note_seen` never raises: a store fault is
-    # counted and logged, never a refused request.
-    watch: SignInWatch | None = getattr(request.app.state, "sign_in_watch", None)
-    if watch is not None and not is_application_identity(identity):
-        await watch.note_seen(credentials.credentials, identity)
+    await _note_session_seen(request.app, credentials.credentials, identity)
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
@@ -20226,7 +20241,29 @@ async def me_route(principal: PrincipalDep) -> MeResponse:
     )
 
 
-@app.post("/v1/session-events", response_model=SessionEventResponse)
+async def page_service_only(
+    request: Request,
+    principal: PrincipalDep,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> None:
+    """SE8c: `POST /v1/session-events` is the page service's own report, and its claim check is
+    here, at the route, whichever door the request came in by (the workspace's `/v1/` proxy, the
+    front proxy, the Conduit's own port). The resolver has accepted the token (a refused one is the
+    401 it always was); this asks which client it was issued to (`from_page_service`: `azp`,
+    `appid` on Entra ID v1.0, against `pages_client_for`). Every token that is not the page
+    service's gets the same 403 and the same words, whatever the reason, and a route-level
+    dependency runs before the body is read, so a refused caller learns nothing of its shape,
+    counts no rate window and writes nothing."""
+    mapping = request.app.state.principal_resolver.claim_mapping
+    if not from_page_service(claims_of(credentials.credentials), pages_client_for(mapping)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SESSION_EVENT_REFUSED)
+
+
+@app.post(
+    "/v1/session-events",
+    response_model=SessionEventResponse,
+    dependencies=[Depends(page_service_only)],
+)
 async def record_session_event(
     body: SessionEvent,
     request: Request,
@@ -21355,7 +21392,10 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     if header.lower().startswith("bearer "):
         token = header[len("bearer ") :]
         resolver: PrincipalResolver = websocket.app.state.principal_resolver
-        return await resolver.resolve_principal(token)
+        identity = await resolver.resolve_principal(token)
+        # SE8c: a session whose only authenticated use is this socket is still a session seen.
+        await _note_session_seen(websocket.app, token, identity)
+        return identity
 
     ticket = websocket.query_params.get("ticket", "")
     if not ticket:
