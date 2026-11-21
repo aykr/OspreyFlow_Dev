@@ -378,6 +378,9 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
   the 16 "needs a run" rows are one run-sheet row, RS1, plus seven that need the client's environment or his definition
   (`backlog/BL2_RUN_SHEET_2026-11-21.md`); C023 stays set aside with the demo items, to be settled with PL5, and holds neither
   BL2 nor CO1.
+  **BL2 is marked done (the owner, file 009, 21 November), with these papers on main; CO1's row and brief are written
+  (`slices/CO1.md`).** The seven parked rows and the move of C150 and C131 to Later are in `RULINGS.md` (21 November). The
+  plan page's mark is the adviser's.
 - **PL3's fixed secret-shaped string** (`secretFiles.test.ts` about line 46): the owner's word is to fix it in the next slice that
   touches `apps/pages`, with the generator, and tests generate one at run time. That slice's brief must carry it.
 - **Line gap (BL6's first merge attempt, 20 Nov):** `tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines`

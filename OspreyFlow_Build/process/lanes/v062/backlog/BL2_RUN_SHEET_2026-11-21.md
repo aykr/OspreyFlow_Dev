@@ -36,4 +36,6 @@ Order and the run each needs, from the row's own text:
 | C172 | P9b: restore-graph's check (`CheckDatabase.java`) timed and its memory measured on a real-sized graph, on the client's install | Same: client's install. |
 | C178 | The live measurement against the client's development tenant (Amendment 6's list, and a v1.0 token's `aud`) | Same: the client's tenant. |
 
-**Recommendation for the seven: leave them in the backlog as "needs the client's environment", all marked Later (D19) already but C150 and C131 which are "in build"; move C150 and C131 to Later as well unless you say otherwise, since no build can close them without an environment this line does not have.** (A move of two placements is yours to confirm.)
+**Confirmed by the owner (file 009, 21 November): the seven stay parked under that reason, and C150 and C131 move from "in build" to Later** (they were the only two of the seven placed "in build"; no build can close them without an environment this line does not have). The placed table is the decision record's and is not edited; `RULINGS.md` records the move.
+
+**RS1 is confirmed too (file 009, answer 11): one evidence seat after the PL4 chain is clear, C043 and C068 first.** C043 and C068 are also CO1's own rows (`slices/CO1.md`), so RS1's first two steps are CO1's step 1.
