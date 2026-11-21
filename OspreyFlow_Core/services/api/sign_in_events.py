@@ -50,22 +50,26 @@ is bounded by `store_timeout`), or refuses a command, and an audit store that is
 the request answered, count the miss (`SignInWatch.misses`) and write a warning (the first, then at
 most one a minute, with the running count) that names the step and the kind of fault and never a
 token, a claim or the store's own words. A session whose row could not be written is forgotten
-again, so the next request writes it. `POST /v1/session-events` is the other half: its only purpose
-is the record, so it fails closed as every audit write does (503 `audit_unavailable`, nothing
-recorded, the retry recorded once); with Valkey down it still writes the row (a duplicate is better
-than a missing sign-in) with `session: null`, there being no secret to key a reference with.
+again, so the next request writes it, whatever ended the write: the writer's own `AuditWriteError`,
+but also what it does not wrap (a pool that is closing, a request cancelled in the middle).
+`POST /v1/session-events` is the other half: its only purpose is the record, so it fails closed as
+every audit write does (503 `audit_unavailable`, nothing recorded, the retry recorded once); with
+Valkey down it still writes the row (a duplicate is better than a missing sign-in) with
+`session: null`, there being no secret to key a reference with.
 
-**The route.** Authenticated by the person's own token (`get_principal`), so it records an event
-for that token's person and no one else: the body is one field, `kind`, from a closed list of two,
-and any other field is refused (422), so a caller cannot name a person, a session or a channel. The
-page service's own client credential alone has no person in it and is refused as on every other
-route. Idempotent for one report, not for one identity-provider session: the page service's
-sign-out ends its own session and not the provider's, so a second sign-in (and sign-out) of the
-same provider session carries the same `sid` and a token of its own, and is a row of its own.
-What can really repeat is one report, so a keyed hash of the token as sent (kept in the store for
-the token's remaining life and a minute, never the token or a part of it) answers a repeat of that
-report `recorded: false`; the design over-records and never under-records. Rate-limited per person
-(`RATE_LIMIT_PER_MINUTE`, a fixed window kept in Valkey: no other write route of the Conduit
+**The route.** Reached by the page service's own report only: the page service's browser-facing
+`/v1` forwarder refuses this path (`forward.ts`), so no browser can write a row that carries the
+page service's channel. Authenticated by the person's own token (`get_principal`), so it records an
+event for that token's person and no one else: the body is one field, `kind`, from a closed list of
+two, and any other field is refused (422), so a caller cannot name a person, a session or a
+channel. The page service's own client credential alone has no person in it and is refused as on
+every other route. Idempotent for one report, not for one identity-provider session: the page
+service's sign-out ends its own session and not the provider's, so a second sign-in (and sign-out)
+of the same provider session carries the same `sid` and a token of its own, and is a row of its
+own. What can really repeat is one report, so a keyed hash of the token as sent (kept in the store
+for the token's remaining life and a minute, never the token or a part of it) answers a repeat of
+that report `recorded: false`; the design over-records and never under-records. Rate-limited per
+person (`RATE_LIMIT_PER_MINUTE`, a fixed window kept in Valkey: no other write route of the Conduit
 has a limit, so this one is its own).
 
 **Not recorded here: a refused sign-in.** A refusal never reaches the Conduit (the identity provider
@@ -293,11 +297,16 @@ class SignInWatch:
             return
         ttl = self._ttl(claims, session[0])
         key = f"{_PREFIX}seen:{reference}"
-        first = await self._store(self._valkey.set(key, "1", nx=True, ex=ttl))
-        self._remember(reference, ttl)
-        if not first:
-            return
+        # What this call has done to the store, for the clean-up below: None while a `SET` is in
+        # flight (it may have been made, whatever happens to its answer), then whether it won.
+        won: bool | None = None
         try:
+            first = await self._store(self._valkey.set(key, "1", nx=True, ex=ttl))
+            self._remember(reference, ttl)
+            if not first:
+                won = False
+                return
+            won = True
             await self._audit.record(
                 principal=principal,
                 action="sign_in_seen",
@@ -308,8 +317,13 @@ class SignInWatch:
                 },
                 result_cardinality=1,
             )
-        except AuditWriteError:
-            await self._forget(key, reference)
+        except BaseException:
+            # Whatever ended the write: `AuditWriteError`, but also what the writer does not wrap (a
+            # pool that is closing, a request cancelled in the middle). A mark left behind says
+            # "seen" for twelve hours with no row, on every replica: forget it, so the next request
+            # writes the row. A mark that another replica made (`won` False) is not ours to clear.
+            if won is not False:
+                await self._forget(key, reference)
             raise
 
     # --- the page service reports ---------------------------------------------------------------
@@ -365,6 +379,10 @@ class SignInWatch:
             if not await self._store(self._valkey.set(key, "1", nx=True, ex=ttl)):
                 return False
         except asyncio.CancelledError:
+            # Cancelled with the `SET` possibly made: the report is not recorded, so release it
+            # (a retry that is then recorded twice is better than one never recorded).
+            if key is not None:
+                await self._forget(key, None)
             raise
         except Exception as exc:  # noqa: BLE001 - a duplicate row is better than a missing one
             self._miss("tell whether an event was recorded", exc)
@@ -380,8 +398,15 @@ class SignInWatch:
                 },
                 result_cardinality=1,
             )
-        except AuditWriteError:
+        except BaseException as exc:
+            # Whatever ended the write releases the report, so a retry records it and is not taken
+            # for a repeat; a failure the writer does not wrap (a pool that is closing) is the
+            # route's 503 as every audit failure is, with none of the driver's words.
             if key is not None:
                 await self._forget(key, None)
+            if isinstance(exc, Exception) and not isinstance(exc, AuditWriteError):
+                raise AuditWriteError(
+                    f"audit write failed for action {kind!r}: {type(exc).__name__}"
+                ) from None
             raise
         return True

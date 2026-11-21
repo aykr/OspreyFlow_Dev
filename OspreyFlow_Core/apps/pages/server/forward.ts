@@ -88,8 +88,17 @@ const BODYLESS_METHODS = new Set(["GET", "HEAD"]);
 /** Headers copied back from the Conduit, and no others. */
 const COPIED_BACK = ["content-type", "content-disposition", "x-guide-version"] as const;
 
-/** The stream is `stream.ts`'s; a ticket is pointless once this service holds the bearer. Matched on the canonical path, in any case. */
-const DENIED = [/^\/v1\/investigations\/[^/]+\/stream\/?$/i, /^\/v1\/ws-ticket\/?$/i];
+/**
+ * The stream is `stream.ts`'s; a ticket is pointless once this service holds the bearer; and the session-events route is
+ * this service's own report of a sign-in or a sign-out (`sessionEvents.ts`, SE8c), which a browser must not be able to
+ * send: a row it wrote would carry this service's channel and read as the service's own. Matched on the canonical path,
+ * in any case.
+ */
+const DENIED = [
+  /^\/v1\/investigations\/[^/]+\/stream\/?$/i,
+  /^\/v1\/ws-ticket\/?$/i,
+  /^\/v1\/session-events\/?$/i,
+];
 
 /**
  * The raw-body upload routes of the Conduit (`services/api/app.py`): the body is the file's bytes and its name is in
