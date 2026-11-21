@@ -15,10 +15,14 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.29** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.33** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.33 | 2026-11-21 | §6a: the GOV.UK install sentences now follow the cloud-platform paragraph, introduced as being about the modes `ospreyflow install` does take, so they are not credited to ADR-148 and not read as advice for `cloud-platform`. PDF made again. |
+| 2.32 | 2026-11-21 | §1a, §4.1, §6a and the README's *Installing and running it* say one thing, in the same words: use the command line (`ospreyflow install`) where the installing computer must itself run no React either, and a GOV.UK install from the command line is headless; the guided page (`ospreyflow install --gui`) also installs a GOV.UK starter, runs only on the computer doing the installing and leaves nothing in the deployment (the owner's ruling of 21 November 2026; ADR-152 Amendment 1, decision 5, "headless from the command line", which is being corrected). The claims about the `apps/harness` application and the `pages` service's rule are dropped from §4.1. PDF made again. |
+| 2.31 | 2026-11-20 | §4.1: the sentence on a GOV.UK install no longer points to §1a, which shows the guided page's GOV.UK starter; it says only what ADR-152 Amendment 1, decision 5 says. |
+| 2.30 | 2026-11-20 | §4.1 and §6a (and the README's *Installing and running it*): a GOV.UK install is done from the command line, headless, with `ospreyflow install`; the guided page is the `apps/harness` React application, served only on the installing computer while an install runs and never rendered into a deployment (ADR-152 Amendment 1, decision 5; slice PL7a1). §6a: it said `ospreyflow install` does not run `cloud-platform`; it now says why, which is that the command has the modes `lite`, `small` and `enterprise` and no other. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
 | 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
 | 2.27 | 2026-11-20 | Appendix A: `cloud_platform.claims.pages_client_id`, the `pages` service's own app registration, whose delegated token the Conduit admits as the person on every route their rights allow, as the Glass's (ADR-152 decision 11, X1); the Conduit half only, the `pages` service and its render's refusal come later. Version set at merge. |
@@ -337,6 +341,8 @@ Mode, under **Starter (optional)**; a GOV.UK starter shows the service's name (f
 name above), organisation and phase there. The Demo packs screen then shows the starter's packs
 ticked, to change if you wish.
 
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.
+
 **In an answers file** (section 7): `starter: govuk-aml`, with `appearance.service_name`,
 `appearance.organisation` and `appearance.phase`.
 
@@ -576,6 +582,8 @@ Everything is worked on a draft copy of `osprey.yaml`; the page closes itself wh
 finishes, or after 30 idle minutes. On a release, the page is the release's own — fetched the first time,
 with its signature checked against the release; in a developer's checkout it is built with
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
+
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment. The command's answers are given as flags, or in an answers file (`--config install.yaml --yes`, section 7).
 
 ## 5. Installing Small
 
@@ -1024,8 +1032,11 @@ cluster; it gets a **namespace**, created and changed only by pull request to th
 environments repository, and its AWS resources (RDS, ElastiCache, OpenSearch, S3, ECR and IAM
 roles for its service accounts) are asked for the same way. The `cloud-platform` profile writes what
 those pull requests need. It creates no cluster, no VPC and no namespace, and **it installs
-nothing**: the set-up console does not offer it, and `ospreyflow install` does not run it. The
+nothing**: `ospreyflow install` takes `lite`, `small` or `enterprise` and has no `cloud-platform` mode, so
+neither the command nor the guided page runs it. (Section 4.1.) The
 decisions are ADR-148's.
+
+The next three sentences are about the modes `ospreyflow install` does take (`lite`, `small` and `enterprise`), not about `cloud-platform`. Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the
 backups and, for the proof-of-concept shape, the install and decommission runbooks. Nothing here
