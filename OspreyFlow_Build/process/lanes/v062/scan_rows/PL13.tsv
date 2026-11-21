@@ -1,1 +1,0 @@
-tests/test_pl13_gateway_scout.py	-	reads one spec file by its fixed path and plants in tmp_path; walks no folder (the scan map's pattern matches the words "ls-files" in its docstring)
