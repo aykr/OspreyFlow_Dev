@@ -138,6 +138,10 @@ NAMED = {
     # The declared-units test names each unit's source module by its place under the package or the workspace, as the declaration
     # does (`home/guides.ts`): a label on a row, never a path it reads.
     "OspreyFlow_Build/tests/glass_trees/test_pl4d3e_declared_units.py": "source-module labels of the declared units",
+    # A published guide: its sentence naming `help/roles.ts` (and its version row for 1.61) cannot change without a new version and
+    # a PDF printed by a person (ADR-114 Amendment 26, `tools/docs_pdf.py`), which this slice does not publish. It follows at the
+    # guide's next version; the specification's copy of the sentence already names the package path.
+    "OspreyFlow_Core/docs/administration-guide.md": "a published guide: a new version and its PDF are a person's step",
     # The declaration itself: each row's source-module column is a label (`home/guides.ts`), generated from the units, never a path.
     "OspreyFlow_Build/tests/fixtures/pl4d3e_declared_units.txt": "source-module labels of the declared units",
     # The citation allowlist names the old path of the roles' words on purpose: records that stay as written cite it, and it is
