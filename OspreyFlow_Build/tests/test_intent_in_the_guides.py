@@ -35,7 +35,13 @@ What the owner's text asks, and the case that fails if it is not so (rule 12):
   none says replaceable software holds a record hostage or "never" does anything, and the architecture guide says
   which stores are not behind a port —
   `test_no_file_states_the_licence_gate_or_replacement_without_its_limit`,
-  `test_the_architecture_passage_says_which_stores_are_behind_a_port`.
+  `test_the_architecture_passage_says_which_stores_are_behind_a_port`;
+- (round 6) the replacement claim is found in the shapes the text takes now (plurals, "all the stores", "any one of
+  them can be swapped", "replacing any store", with or without the word "port"), in all five files and both copies,
+  each planted back in each kind of file by `test_each_check_is_shown_red`; the two copies of the administration
+  guide agree on a passage when only a link's target differs (it differs: `spec/` is not `docs/`), and no passage
+  links to a file that is not there — `test_both_copies_of_the_administration_guide_agree_on_the_new_passages`,
+  `test_no_passage_links_to_a_file_that_is_not_there`.
 
 **Rule 15: each gate is shown red** at the shape the real text takes — the old section 9 table put back, the old
 bullet of section 6 put back in its list item, the old paragraph of `spec/03` section 6, a passage with the word
@@ -149,6 +155,18 @@ def passage(text: str) -> str | None:
     return body[: end.start()] if end else body
 
 
+def without_link_targets(text: str | None) -> str | None:
+    """A passage with each markdown link's target blanked, its text kept: the two copies of a guide sit in different
+    folders, so the same link needs a different path in each (round 6), but not a different word."""
+    return None if text is None else re.sub(r"\]\([^)\s]*\)", "](target)", text)
+
+
+def dead_links(text: str | None, folder: Path) -> list[str]:
+    """The relative links in a passage whose target is no file, read from the folder the file is in."""
+    found = re.findall(r"\]\(([^)\s#]+)(?:#[^)\s]*)?\)", text or "")
+    return [t for t in found if "://" not in t and not t.startswith("mailto:") and not (folder / t).is_file()]
+
+
 def section(text: str, number: str, next_number: str) -> str:
     text = "\n" + text
     start = text.index(f"\n## {number}. ") + 1
@@ -247,9 +265,20 @@ LICENCE_LIMIT = re.compile(
     r"|only\s+for\s+two",
     re.IGNORECASE,
 )
-#: "each store or engine sits behind a port": PostgreSQL, Valkey and OpenSearch are not behind one.
+#: "each store or engine sits behind a port": PostgreSQL, Valkey and OpenSearch are not behind one. Round 6: in the
+#: shapes the text takes now, not only the singular "behind a port": plurals ("behind ports"), "all the stores",
+#: "any one of them can be swapped" (the README's "four typed ports so any one of them can be swapped"), "are all
+#: replaceable", and "replacing any store", with or without the word "port".
+_QUANT = r"(?:each|every|all|any)(?:\s+one)?(?:\s+of)?(?:\s+the)?"
+_KIND = r"(?:stores?|engines?|components?|dependenc\w+|tiers?|layers?|parts?|them|these|those)"
 PORT_CLAIM = re.compile(
-    r"\b(?:each|every|all)\s+(?:of\s+the\s+)?(?:stores?|engines?|components?|dependenc\w+)\b[^.;]{0,80}\bbehind\s+a\s+port",
+    rf"\b{_QUANT}\s+{_KIND}\b[^.;]{{0,80}}\bbehind\s+(?:a\s+|the\s+|typed\s+|its\s+own\s+)*ports?\b"
+    rf"|\b{_QUANT}\s+{_KIND}\b[^.;]{{0,60}}\b(?:can|could|may|will|must)\s+(?:all\s+)?be\s+"
+    r"(?:swapped|replaced|exchanged|substituted)\b"
+    rf"|\b{_QUANT}\s+{_KIND}\b[^.;]{{0,40}}\b(?:is|are)\s+(?:all\s+)?(?:swappable|replaceable|interchangeable)\b"
+    rf"|\b(?:swapp?\w*|replac\w*|exchang\w*|substitut\w*)\s+(?:any|each|every|all)(?:\s+one)?(?:\s+of)?"
+    rf"(?:\s+the)?\s+{_KIND}\b"
+    rf"|\b{_KIND}\s+(?:all|each)\s+(?:sit|stand|are|live)\b[^.;]{{0,40}}\bbehind\b",
     re.IGNORECASE,
 )
 HOSTAGE = re.compile(r"hostage", re.IGNORECASE)
@@ -342,6 +371,15 @@ def test_the_passage_sits_after_the_opening_and_before_the_document_control() ->
             if later in text and text.index(later) < at:
                 problems.append(f"{name}: the passage is after {later.strip()!r}")
     assert problems == []
+
+
+def test_no_passage_links_to_a_file_that_is_not_there() -> None:
+    """Round 6: the specification's copy of the administration guide sits in `spec/`, where `architecture-guide.md`
+    is no file; its link has to be the path that resolves from there."""
+    problems = {
+        name: dead_links(passage(text), path.parent) for (name, path), text in zip(FILES.items(), _texts().values())
+    }
+    assert {n: d for n, d in problems.items() if d} == {}
 
 
 def test_the_architecture_guide_has_the_fullest_passage_and_the_others_link_to_it() -> None:
@@ -448,7 +486,8 @@ def test_section_9_does_not_say_every_avoided_component_has_an_alternative() -> 
 
 def test_both_copies_of_the_administration_guide_agree_on_the_new_passages() -> None:
     shipped, spec = (read(FILES[n]) for n in ADMIN)
-    assert passage(shipped) is not None and passage(shipped) == passage(spec)
+    assert passage(shipped) is not None
+    assert without_link_targets(passage(shipped)) == without_link_targets(passage(spec))
     for text in (shipped, spec):
         assert re.search(r"Mapbox", text)
     assert section(shipped, "12", "13").split("\n###")[0].replace("\n", " ").count("Mapbox") == section(
@@ -600,3 +639,55 @@ def test_each_check_is_shown_red() -> None:
     assert unlimited_claims("A gate reads every dependency's licence.\n") != []
     assert unlimited_claims("Every component sits behind a port.\n") != []
     assert unlimited_claims("A supplier's new terms can never hold you to ransom.\n") != []
+
+    # Round 6: the shapes the replacement claim takes now, planted in each kind of file (a list item as the guides and
+    # the README's passage have it; a paragraph as the README's "How it is built" has it), each found; the text is not.
+    readme_86 = (
+        "Three tiers, separated by four typed ports so any one of them can be swapped without touching the\n"
+        "others:\n"
+    )
+    planted = {
+        "README paragraph, 'any one of them can be swapped'": readme_86,
+        "developer guide item, 'behind ports'": (
+            "- **Software sovereignty.** Each store and engine sits behind ports, so an adapter is the unit of\n"
+            "  replacement.\n"
+        ),
+        "user guide item, 'all the stores'": (
+            "- **Software sovereignty.** All the stores sit behind ports, so you can replace any of them.\n"
+        ),
+        "administration guide item, no word 'port'": (
+            "- **Software sovereignty.** Every store and engine can be replaced with one adapter.\n"
+        ),
+        "architecture guide, 'replacing any store'": (
+            "**Software sovereignty.** Replacing any store is one adapter and one line of configuration.\n"
+        ),
+        "README, 'are all replaceable'": "The stores are all open source, and each of them is replaceable.\n",
+        "plural, 'the components all sit behind'": "The components all sit behind typed ports.\n",
+    }
+    for where, text in planted.items():
+        assert unlimited_claims(text) != [], where
+    for where, text in planted.items():  # the same sentence among the README's and the guides' own text
+        assert unlimited_claims("Opening words here.\n\n" + text + "\nMore words.\n") != [], where
+    for fine in (
+        "Three tiers, separated by four typed ports. Swapping the engine behind a port means one adapter.\n",
+        "The graph store, the analytics store, graph algorithms and the model engines sit behind ports, so for them\n"
+        "an adapter is the unit of replacement.\n",
+        "The graph store and the model engines sit behind ports (section 2), so for each of them replacing the engine\n"
+        "is one adapter. The search index is not behind a port, so replacing it is not an adapter's work.\n",
+    ):
+        assert unlimited_claims(fine) == [], fine
+
+    # Round 6: the two copies of a guide agree when only a link target differs, and not when a word does.
+    one = "Opening.\n\n" + HEADING + "\n\nSee the [guide](architecture-guide.md) now.\n\n<!-- document-control:begin -->\n"
+    other = one.replace("(architecture-guide.md)", "(../../OspreyFlow_Core/docs/architecture-guide.md)")
+    assert passage(one) != passage(other)
+    assert without_link_targets(passage(one)) == without_link_targets(passage(other))
+    changed = other.replace("now", "later")
+    assert without_link_targets(passage(one)) != without_link_targets(passage(changed))
+    assert without_link_targets(passage(one)) != without_link_targets(passage(one.replace("[guide]", "[the guide]")))
+    assert without_link_targets(None) is None
+    # A link to no file is found, one to a file is not (the folder is this test's own).
+    here = Path(__file__).parent
+    assert dead_links("See [it](no-such-guide.md).", here) == ["no-such-guide.md"]
+    assert dead_links("See [it](" + Path(__file__).name + ").", here) == []
+    assert dead_links("See [it](https://example.org/x.md) and [that](#top).", here) == []
