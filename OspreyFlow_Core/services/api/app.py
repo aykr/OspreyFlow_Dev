@@ -154,6 +154,7 @@ from principal_auth import (
     PrincipalLookupUnavailable,
     SigningKeysUnavailable,
     in_keys_thread,
+    is_application_identity,
 )
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
@@ -2259,11 +2260,12 @@ async def get_principal(
                 },
             )
     # SE8c: a session this Conduit has not seen is recorded, once, after the resolver has accepted
-    # its token (a refused token writes nothing). A dashboard identity admitted to named routes
-    # alone is an application, not a person signing in. `note_seen` never raises: a store fault
-    # is counted and logged, never a refused request.
+    # its token (a refused token writes nothing). A dashboard identity (an application, admitted
+    # to its own routes alone) is not a person signing in; a person's token limited to named
+    # routes (Superset's, ADR-148 Amendment 9) is one. `note_seen` never raises: a store fault is
+    # counted and logged, never a refused request.
     watch: SignInWatch | None = getattr(request.app.state, "sign_in_watch", None)
-    if watch is not None and identity.routes is None:
+    if watch is not None and not is_application_identity(identity):
         await watch.note_seen(credentials.credentials, identity)
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).

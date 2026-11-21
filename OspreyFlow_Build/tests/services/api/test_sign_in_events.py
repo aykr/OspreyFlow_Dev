@@ -559,7 +559,7 @@ def _entra_principals(keypair: Any, jwks_url: str) -> dict[str, Any]:
     return {"person": person, "dashboard": dashboard}
 
 
-def _sees(rig: Rig, principal: Any, path: str = "/v1/me") -> Any:
+def _sees(rig: Rig, principal: Any, path: str = "/v1/me", token: str | None = None) -> Any:
     """One request, as that principal, to a route it is admitted to (the gate's own refusal of any
     other route comes before the watch, so a request refused there says nothing about it)."""
 
@@ -567,7 +567,8 @@ def _sees(rig: Rig, principal: Any, path: str = "/v1/me") -> Any:
         return principal
 
     rig.resolver.resolve_principal = resolved  # type: ignore[method-assign]
-    return rig.http.get(path, headers={"Authorization": f"Bearer {rig.session().token()}"})
+    token = token or rig.session().token()
+    return rig.http.get(path, headers={"Authorization": f"Bearer {token}"})
 
 
 def test_a_dashboard_identity_admitted_to_named_routes_is_not_a_person_signing_in(
@@ -590,10 +591,11 @@ def test_a_person_signing_in_to_superset_is_a_session_the_conduit_sees(
     for that person (a gate that skips every principal with `routes` set fails here)."""
     person = _entra_principals(keypair, jwks_url)["person"]
     assert person.routes is not None  # the shape the resolver gives: named routes, and a person
-    assert _sees(rig, person).status_code == 200
+    token = rig.session().token()  # one session, seen twice
+    assert _sees(rig, person, token=token).status_code == 200
     rows = rig.pool.of("sign_in_seen")
     assert len(rows) == 1 and rows[0]["principal_id"] == person.id
-    _sees(rig, person)
+    _sees(rig, person, token=token)
     assert len(rig.pool.of("sign_in_seen")) == 1
 
 
