@@ -8,8 +8,8 @@ with one line added or changed — never a hand-written stand-in, and each is as
 fallthrough that refuses for another reason does not pass it.
 
 **The folders this test walks** (the conductor's scan-map row): under `OspreyFlow_Core`, `harness/`
-(its `*.py`), `services/` and `apps/` and `deploy/` (one `rglob` for `Dockerfile*`, `node_modules` and
-`.venv` left out), `providers/` (`*.yaml`); and these named files: `osprey.yaml`,
+(its `*.py`), `services/` and `apps/` and `deploy/` (one `rglob` for `Dockerfile*`, `node_modules`
+and `.venv` left out), `providers/` (`*.yaml`); and these named files: `osprey.yaml`,
 `packages/schemas/deployment.py`, `packages/design/fonts.json`, `apps/workspace/package.json`,
 `scripts/build_local_basemap.py`, `scripts/fetch_basemap_glyphs.py`, `services/ner/models.sha256`,
 `services/laurium/requirements.txt`, `packages/adapters/recognise_spacy/adapter.py`,
@@ -22,8 +22,6 @@ from __future__ import annotations
 import copy
 import importlib
 import json
-import re
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -180,7 +178,8 @@ def test_a_new_service_image_in_the_render_is_flagged(
     reg: Any, rows: list[dict[str, Any]], sources: dict[str, str]
 ) -> None:
     sources["harness/render.py"] += (
-        '\n\ndef _more(images):\n    images.append(ServiceImage("newthing", "example/newthing:1.0"))\n'
+        "\n\ndef _more(images):\n"
+        '    images.append(ServiceImage("newthing", "example/newthing:1.0"))\n'
     )
     found = _violations(reg, rows, sources)
     assert any("example/newthing" in v and "not in the register" in v for v in found), found
@@ -299,11 +298,30 @@ def test_a_changed_manifest_id_in_the_pull_script_is_a_pin_that_differs(
     reg: Any, rows: list[dict[str, Any]], sources: dict[str, str]
 ) -> None:
     text = sources["harness/render.py"]
-    changed = text.replace("pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db", "pull_and_verify all-minilm:22m-l6-v2-fp16 ffffffffffff")
+    old = "pull_and_verify qwen2.5:0.5b-instruct a8b0c5157701"
+    changed = text.replace(old, "pull_and_verify qwen2.5:0.5b-instruct ffffffffffff")
     assert changed != text
     sources["harness/render.py"] = changed
     found = _violations(reg, rows, sources)
-    assert any("all-minilm" in v and "pin differs" in v and "ffffffffffff" in v for v in found), found
+    assert any(
+        "0.5b-instruct" in v and "pin differs" in v and "ffffffffffff" in v for v in found
+    ), found
+
+
+def test_a_pull_script_and_a_closed_list_that_disagree_on_a_pin_are_flagged(
+    reg: Any, rows: list[dict[str, Any]], sources: dict[str, str]
+) -> None:
+    """The embeddings model is named twice (the pull script and `EMBEDDING_MODELS`): change one and
+    the code names two pins for it, and the register can hold only one of them."""
+    text = sources["harness/render.py"]
+    old = "pull_and_verify all-minilm:22m-l6-v2-fp16 1b226e2802db"
+    changed = text.replace(old, "pull_and_verify all-minilm:22m-l6-v2-fp16 ffffffffffff")
+    assert changed != text
+    sources["harness/render.py"] = changed
+    found = _violations(reg, rows, sources)
+    assert any(
+        "all-minilm" in v and "ffffffffffff" in v and "not in the register" in v for v in found
+    ), found
 
 
 def test_a_changed_stanza_model_pin_file_is_a_pin_that_differs(
@@ -379,7 +397,9 @@ def test_an_unconfirmed_row_may_not_state_a_licence_and_must_say_what_to_read(
     row = _row(broken, "qwen2.5:0.5b-instruct")
     row["status"] = "unconfirmed"
     found = _violations(reg, broken, sources)
-    assert any("qwen2.5:0.5b-instruct" in v and "unconfirmed" in v and "licence" in v for v in found)
+    assert any(
+        "qwen2.5:0.5b-instruct" in v and "unconfirmed" in v and "licence" in v for v in found
+    )
     assert any("qwen2.5:0.5b-instruct" in v and "must_read" in v for v in found)
 
 
@@ -389,7 +409,9 @@ def test_a_name_held_for_the_owner_that_is_also_registered_is_flagged(
     found = reg.find_register_violations(
         rows, reg.named_by_code(sources), held=frozenset({"valkey/valkey"})
     )
-    assert any("valkey/valkey" in v and "held for the owner" in v and "registered" in v for v in found)
+    assert any(
+        "valkey/valkey" in v and "held for the owner" in v and "registered" in v for v in found
+    )
 
 
 def test_a_held_name_the_code_names_is_not_a_missing_row_but_the_release_refuses(
@@ -404,9 +426,30 @@ def test_a_held_name_the_code_names_is_not_a_missing_row_but_the_release_refuses
     assert any("ghcr.io/berriai/litellm" in v and "not in the register" in v for v in found)
 
 
-def test_the_gate_leg_reaches_main_and_the_two_python_spellings_pass() -> None:
+def test_the_gate_leg_reaches_main_and_main_fails_naming_a_planted_image(
+    reg: Any, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`python -m tools.licence_check` is what `make licence-check` and ci.yml run: plant a new
+    `FROM` in the sources the leg reads and the run exits 1 and names it, where with the real
+    sources it exits 0 (the other legs are given no packages so only this one can fail)."""
     from tools import licence_check
 
-    text = (Path(licence_check.__file__)).read_text(encoding="utf-8")
-    assert "find_register_violations" in text and re.search(r"def main\(", text)
+    monkeypatch.setattr(licence_check, "run_pip_licenses", lambda extra: [])
+    monkeypatch.setattr("sys.argv", ["licence_check"])
+    assert licence_check.main() == 0
+    assert "the licence register agrees with the code" in capsys.readouterr().out
+
+    real = reg.read_sources()
+    planted = {
+        **real,
+        "services/ner/Dockerfile": real["services/ner/Dockerfile"] + "\nFROM alpine:3.21\n",
+    }
+    monkeypatch.setattr(reg, "read_sources", lambda *a, **k: planted)
+    assert licence_check.main() == 1
+    assert "alpine" in capsys.readouterr().err
+
+
+def test_the_python_allowlist_reads_the_two_spellings_the_specification_allows() -> None:
+    from tools import licence_check
+
     assert licence_check.is_allowed("OFL-1.1") and licence_check.is_allowed("Python-2.0")
