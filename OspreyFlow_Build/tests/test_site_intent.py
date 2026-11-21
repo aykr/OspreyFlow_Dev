@@ -228,6 +228,12 @@ OVERSTATED = [
     "decide what each person sees",
     "You see only what you are cleared for",
     "What each person sees is bounded by handling markings and case membership.",
+    # Round 5: the animated overview's audit scene (both Homes), a heading and a drawn row stronger than DC1a found true.
+    "Everything is on the record",
+    "Refused: a read above their clearance",
+    # Round 5: the traffic out of a deployment said to be the install's downloads and an opt-in engine alone.
+    "The install downloads images and models, and a hosted model engine is an opt-in",
+    "the install downloads images and models.",
 ]
 #: The shapes behind them, so a reworded return is found too.
 OVERSTATED_SHAPES = {
@@ -236,6 +242,8 @@ OVERSTATED_SHAPES = {
     "leaves no trace": re.compile(r"\bleaves? no trace\b", re.IGNORECASE),
     "append-only": re.compile(r"\bappend-only\b", re.IGNORECASE),
     "every read": re.compile(r"\bevery read\b", re.IGNORECASE),
+    "everything on the record": re.compile(r"\beverything\b[^.]{0,30}\bon the record\b", re.IGNORECASE),
+    "refused read above clearance": re.compile(r"\brefused\b[^.]{0,30}\b(?:read|reads)\b[^.]{0,30}\bclearance\b", re.IGNORECASE),
 }
 
 
@@ -246,6 +254,41 @@ def overstated(root: Path) -> list[str]:
         found += [f"{page.parent.name}/{page.name}: {s!r}" for s in OVERSTATED if _flat(s) in text]
         found += [f"{page.parent.name}/{page.name}: shape {n!r}: {m.group(0)!r}" for n, rx in OVERSTATED_SHAPES.items()
                   for m in rx.finditer(text)]  # fmt: skip
+    return found
+
+
+#: The files that write the pages' words; the old phrases are searched in them too, as written in the source (adjacent
+#: string literals joined), so a constant that is not drawn today cannot bring one back.
+SOURCES = ("build.py", "overview.py", "govanim.py")
+
+
+def _source_text(path: Path) -> str:
+    source = path.read_text(encoding="utf-8")
+    return _flat(re.sub(r"""(['"])\s*\n\s*\1""", "", source))
+
+
+def overstated_in_sources(folder: Path = SITES) -> list[str]:
+    found = []
+    for name in SOURCES:
+        text = _source_text(folder / name)
+        found += [f"{name}: {s!r}" for s in OVERSTATED if _flat(s) in text]
+        found += [f"{name}: shape {n!r}: {m.group(0)!r}" for n, rx in OVERSTATED_SHAPES.items() for m in rx.finditer(text)]
+    return found
+
+
+#: Wherever a page says what the install downloads, it goes on to say what a start fetches and what an https address
+#: fetches (DC1a, constraint 2): the downloads are not the only traffic out. Found by the words, not by the lines known.
+DOWNLOADS = re.compile(r"\bdownloads (?:its )?images and models\b", re.IGNORECASE)
+SAID_NEXT = ("each start", "certificate")
+
+
+def downloads_without_the_rest(root: Path) -> list[str]:
+    found = []
+    for page in pages(root):
+        text = _flat(page_text(page))
+        for m in DOWNLOADS.finditer(text):
+            following = text[m.end():m.end() + 400]
+            found += [f"{page.parent.name}/{page.name}: the downloads are named without {w!r} after them" for w in SAID_NEXT if w not in following]
     return found
 
 
@@ -293,9 +336,9 @@ def wording_violations(root: Path) -> list[str]:
     who = _card(root, "org/public-sector.html", "Who can see what?")
     found += [f"the access card on org/public-sector.html lacks {w!r}" for w in ("known read-side gaps", "penetration test") if w not in who]
     net = _card(root, "net/index.html", "Inside your boundary") + " " + _card(root, "net/index.html", "Need-to-know by design")
-    found += [f"the net Home's boundary panels lack {w!r}" for w in ("only the front proxy", "downloads", "opt-in", "known gaps", "conformance suites") if w not in net]
+    found += [f"the net Home's boundary panels lack {w!r}" for w in ("only the front proxy", "downloads", "each start", "certificate", "usage image", "next release", "opt-in", "known gaps", "conformance suites") if w not in net]
     governance = _flat(_strip(_section(root / "org" / "governance.html", PRINCIPLES)))
-    found += [f"the governance principles lack {w!r}" for w in ("only the front proxy", "downloads", "known read-side gaps") if w not in governance]
+    found += [f"the governance principles lack {w!r}" for w in ("only the front proxy", "downloads", "each start", "certificate", "usage image", "next release", "known read-side gaps") if w not in governance]
     found += [f"the licence statement on org/public-sector.html lacks {w!r}" for w in ("model weights", "map data", "fonts", "base images", "coming") if w not in public]
     return found
 
@@ -327,6 +370,14 @@ def test_the_five_constraints_are_named_with_a_link_each_and_on_the_governance_p
 
 def test_no_sentence_dc1a_found_too_strong_remains() -> None:
     assert overstated(SITES) == []
+
+
+def test_no_overstated_phrase_remains_in_the_sources() -> None:
+    assert overstated_in_sources() == []
+
+
+def test_wherever_the_downloads_are_named_the_rest_of_the_traffic_out_is_too() -> None:
+    assert downloads_without_the_rest(SITES) == []
 
 
 def test_no_guarantee_outside_the_paragraph() -> None:
@@ -465,10 +516,38 @@ def test_each_overstated_sentence_is_flagged_when_planted_back(sites: Path, sent
     assert any(repr(sentence) in v for v in found), found
 
 
+@pytest.mark.parametrize("sentence", OVERSTATED)
+def test_each_overstated_sentence_is_flagged_when_planted_back_in_a_source(tmp_path: Path, sentence: str) -> None:
+    folder = tmp_path / "sites"
+    folder.mkdir()
+    for name in SOURCES:
+        shutil.copy(SITES / name, folder / name)
+    path = folder / "overview.py"
+    path.write_text(path.read_text(encoding="utf-8") + f"\nPLANTED = {sentence!r}\n", encoding="utf-8")
+    assert any(repr(sentence) in v for v in overstated_in_sources(folder))
+
+
+def test_the_overview_scenes_as_built_carry_the_corrected_audit_words(sites: Path) -> None:
+    """The audit scene is drawn on both Homes; its heading, its sub line and its drawn row are read from the built page."""
+    for name in HOMES.values():
+        text = _flat(page_text(sites / name))
+        assert "everything is on the record" not in text and "a read above their clearance" not in text, name
+        assert "a refused attempt to open a case" in text and "refused: an attempt to open a case" in text, name
+        assert "outside the audit" in text, name
+
+
+@pytest.mark.parametrize("old", ["The install downloads images and models, and a hosted model engine is an opt-in that an administrator enables for a dataset.",
+                                 "the install downloads images and models."])
+def test_the_downloads_named_alone_are_flagged_when_planted_back(sites: Path, old: str) -> None:
+    _plant(sites / "net" / "services.html", f"<p>{old}</p>")
+    assert any("services.html" in v and "'each start'" in v for v in downloads_without_the_rest(sites))
+
+
 @pytest.mark.parametrize("shape", sorted(OVERSTATED_SHAPES))
 def test_each_overstated_shape_is_flagged(sites: Path, shape: str) -> None:
     example = {"nothing leaves": "Nothing leaves the site.", "never leaves": "The data never leaves.", "leaves no trace": "A row leaves no trace.",
-               "append-only": "The table is append-only.", "every read": "Every read is kept."}[shape]
+               "append-only": "The table is append-only.", "every read": "Every read is kept.",
+               "everything on the record": "Everything is on the record.", "refused read above clearance": "Refused: a read above their clearance."}[shape]
     _plant(sites / "org" / "features.html", f"<p>{example}</p>")
     assert any(f"shape {shape!r}" in v for v in overstated(sites))
 
@@ -519,6 +598,12 @@ def test_a_hosted_engine_without_the_words_opt_in_is_flagged(sites: Path) -> Non
         ("net/index.html", "only the front proxy", "the net Home's boundary panels lack 'only the front proxy'"),
         ("net/index.html", "Known gaps", "the net Home's boundary panels lack 'known gaps'"),
         ("org/governance.html", "known read-side gaps", "the governance principles lack 'known read-side gaps'"),
+        ("net/index.html", "each start", "the net Home's boundary panels lack 'each start'"),
+        ("net/index.html", "certificate", "the net Home's boundary panels lack 'certificate'"),
+        ("net/index.html", "usage image", "the net Home's boundary panels lack 'usage image'"),
+        ("org/governance.html", "each start", "the governance principles lack 'each start'"),
+        ("org/governance.html", "certificate", "the governance principles lack 'certificate'"),
+        ("org/governance.html", "usage image", "the governance principles lack 'usage image'"),
     ],
 )
 def test_the_licence_attribution_and_tracking_checks_are_red_when_a_claim_is_dropped(sites: Path, page: str, out: str, fault: str) -> None:
