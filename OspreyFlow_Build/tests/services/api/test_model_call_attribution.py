@@ -46,7 +46,7 @@ import pathlib
 import secrets
 import shutil
 from collections.abc import Iterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -745,6 +745,151 @@ def test_a_failed_audit_write_fails_closed_and_no_answer_is_returned(name: str) 
     answer = run.post()
     assert answer.status_code == 503, answer.text
     assert PATHS[name].via not in run.actions()
+
+
+# --- the embed job: no route embeds today; the routing's own record of it is tested here ---------
+
+
+class _EmbedClient:
+    """The gateway client as the adapter calls it for an embedding: it keeps the model it was asked
+    for (the one the adapter was built with), and it fails as asked."""
+
+    def __init__(self) -> None:
+        self.asked_for: list[str] = []
+        self.failure: Exception | None = None
+        self.api_key = KEY
+        self.base_url = ADDRESS
+
+    async def embed(self, model: str, texts: Any) -> list[list[float]]:
+        self.asked_for.append(model)
+        if self.failure is not None:
+            raise self.failure
+        return [[0.0] for _ in texts]
+
+
+def _embedding_through_the_routing(embedding: str, *, hosted: bool = False) -> tuple[Any, Any]:
+    """`RoutedModel` over the real `ModelLiteLLMAdapter`, both built from one `DeploymentModels` as
+    `app.py` builds them (`embed_model=models.embedding`, `routes_from_env(models, …)`)."""
+    from services.api.config import DeploymentModels
+    from services.api.model_routing import routes_from_env
+
+    from adapters.model_litellm.adapter import ModelLiteLLMAdapter
+
+    models = DeploymentModels(
+        extraction="qwen-local", vision="vision-local", transcription="speech-local",
+        embedding=embedding,
+    )  # fmt: skip
+    client = _EmbedClient()
+    environ = {
+        "OSPREY_MODEL_ENGINES": '[{"name": "gemini", "label": "Gemini", "roles": '
+        '{"embedding": "gemini/embed"}, "privacy_contract": true}]',
+        "OSPREY_MODEL_DEFAULTS": '{"embedding": "gemini"}' if hosted else "{}",
+        "OSPREY_MODEL_KEY_PRESENT_GEMINI": "yes",
+    }
+    routed = RoutedModel(
+        ModelLiteLLMAdapter(client, embed_model=models.embedding),  # type: ignore[arg-type]
+        routes=routes_from_env(models, environ),
+    )
+    return routed, client
+
+
+async def _embed(routed: Any, pool: _Pool) -> list[list[float]]:
+    from services.api import model_calls
+
+    async with model_calls.attributed(
+        AuditWriter(pool),  # type: ignore[arg-type]
+        ACTING,
+        CASE,
+        job="ask",
+        via="ask_question",  # type: ignore[arg-type]
+    ):
+        return await routed.embed([f"text {PROMPT}"])
+
+
+def _embed_row(model: str, outcome: str) -> dict[str, Any]:
+    return {
+        "job": "embed", "engine": "local", "model": model, "outcome": outcome,
+        "via": "ask_question",
+    }  # fmt: skip
+
+
+@pytest.mark.parametrize("hosted", [False, True])
+async def test_an_embed_call_is_recorded_as_the_local_model_the_adapter_sent(hosted: bool) -> None:
+    """The embedding never leaves (`RoutedModel.embed`): even where the deployment's default for the
+    role names a hosted engine, the row names `local` and the model the adapter really sent, which
+    the client was asked for, not a name made up beside it."""
+    embedding = "embed-" + secrets.token_hex(4)
+    routed, client = _embedding_through_the_routing(embedding, hosted=hosted)
+    pool = _Pool()
+    assert await _embed(routed, pool) == [[0.0]]
+    assert client.asked_for == [embedding]
+    assert _calls(pool) == [_embed_row(embedding, "answered")]
+    assert _leaks(pool) == []
+
+
+@pytest.mark.parametrize(
+    ("failure", "outcome"),
+    [(_leaky(), "errored"), (ModelLimitReached("requests"), "refused"), (None, "interrupted")],
+)
+async def test_a_failed_refused_or_cancelled_embed_is_recorded_without_its_words(
+    failure: Exception | None, outcome: str
+) -> None:
+    routed, client = _embedding_through_the_routing("embed-local")
+    pool = _Pool()
+    if failure is None:  # the call is cancelled while it waits
+        started = asyncio.Event()
+
+        async def hang(model: str, texts: Any) -> list[list[float]]:
+            started.set()
+            await asyncio.Event().wait()
+            return []
+
+        client.embed = hang  # type: ignore[method-assign]
+        task = asyncio.create_task(_embed(routed, pool))
+        await started.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    else:
+        client.failure = failure
+        with pytest.raises(type(failure)):
+            await _embed(routed, pool)
+    assert _calls(pool) == [_embed_row("embed-local", outcome)]
+    assert _leaks(pool) == []
+
+
+def test_an_embed_that_is_not_noted_is_red(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The routing's wrapper at `embed` removed (the planted fault of the finding): the block
+    records nothing, so the check that the row is there fails."""
+
+    @contextmanager
+    def nothing(self: Any, *args: Any, **kwargs: Any) -> Any:
+        yield
+
+    monkeypatch.setattr(RoutedModel, "_noted", nothing)
+    routed, _ = _embedding_through_the_routing("embed-local")
+    pool = _Pool()
+    asyncio.run(_embed(routed, pool))
+    with pytest.raises(AssertionError):
+        assert _calls(pool) == [_embed_row("embed-local", "answered")]
+
+
+def test_an_embed_recorded_under_another_model_name_is_red(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The row's model taken from somewhere other than the model the adapter sent (here the
+    extraction model, a plausible slip in `routes.locals[…]`): the comparison with what the client
+    was asked for fails."""
+    real = RoutedModel._noted
+
+    def wrong(self: Any, job: str, engine: str, model: str | None) -> Any:
+        return real(self, job, engine, self.routes.locals.get("extraction"))
+
+    monkeypatch.setattr(RoutedModel, "_noted", wrong)
+    routed, client = _embedding_through_the_routing("embed-local")
+    pool = _Pool()
+    asyncio.run(_embed(routed, pool))
+    assert client.asked_for == ["embed-local"]
+    with pytest.raises(AssertionError):
+        assert _calls(pool) == [_embed_row(client.asked_for[0], "answered")]
 
 
 # --- the call that is cancelled ------------------------------------------------------------------
