@@ -142,6 +142,9 @@ NAMED = {
     # a PDF printed by a person (ADR-114 Amendment 26, `tools/docs_pdf.py`), which this slice does not publish. It follows at the
     # guide's next version; the specification's copy of the sentence already names the package path.
     "OspreyFlow_Core/docs/administration-guide.md": "a published guide: a new version and its PDF are a person's step",
+    # The specification's copy of that guide is held to it word for word from section 1 (`test_admin_guide_copies.py`), so it keeps the
+    # sentence as the guide has it until the guide's next version.
+    "OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md": "the copy of a published guide, kept in step with it",
     # The declaration itself: each row's source-module column is a label (`home/guides.ts`), generated from the units, never a path.
     "OspreyFlow_Build/tests/fixtures/pl4d3e_declared_units.txt": "source-module labels of the declared units",
     # The citation allowlist names the old path of the roles' words on purpose: records that stay as written cite it, and it is

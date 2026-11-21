@@ -2183,7 +2183,7 @@ repair-sign-in`" when the identity provider refuses the Conduit's own credential
 
 ### 9.2 Roles
 
-The words below are the Glass's own, copied from `packages/glass-shared/src/help/roles.ts`, the file the help page
+The words below are the Glass's own, copied from `help/roles.ts`, the file the help page
 *Roles, teams and Authors* reads them from; a test (`test_guide_role_words.py`) fails if a copy here
 says anything different.
 
