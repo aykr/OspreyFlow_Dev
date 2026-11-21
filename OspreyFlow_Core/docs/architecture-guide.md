@@ -28,38 +28,44 @@ its supplier. Software you can change lets you fix or adapt it on your own timet
 runs where your rules say it must, and software you can replace means a supplier's change of terms never
 holds your records hostage. Here that means every dependency is under an open-source licence, and each
 store or engine sits behind a port (section 2), so replacing one is one adapter and one line of
-configuration. What holds it: a licence gate runs on every change and checks every Python and Node
-package, the runtime each image carries and each demonstration dataset's licence; a package under the GPL
+configuration. What holds it: a licence gate runs on every change and reads the Python and Node package
+metadata of the build, the runtime each image carries and each demonstration dataset's licence (the Python
+packages inside an image are checked for two images only); a package under the GPL
 or AGPL never passes, and an LGPL one only with a recorded exception (section 9). The statement covers
 software dependencies. Model weights, map data, fonts and base images are outside the gate; a register and
 a gate for them are coming, and until they land their licences are not all stated in the repository.
 
 **Data sovereignty.** The aim is a deployment that runs on your own network, with nothing leaving it
 unless an administrator allows it. What holds it: every container sits on an internal network with no route out,
-only the front proxy is published, and a container is given a route out only when a feature an
-administrator has configured needs one (section 3 lists them). The models run inside the deployment.
+only the front proxy is published, and a container is given a route out only when what it does needs
+one: the model downloads and, on an https address, the proxy's certificate fetch (both on by default), and the
+features an administrator configures (section 3 lists them). The models run inside the deployment.
 A hosted model engine is an opt-in: it is off while `models.local_only` is true, which is the default,
 and when an administrator turns one on, what may be sent is bounded by each dataset's egress setting and
 its handling codes. What does not yet hold: a first install needs the internet (the command, the images and
 the model files are fetched on the way in), and a default install fetches its model files from outside on
 every start; an offline bundle serves updates (administration guide, section 14). Superset's navigation
-bar draws a small usage-tracking image from its maker's address, and it is the person's browser that asks
+bar draws a small usage-tracking image from an address outside the deployment, and it is the person's browser that asks
 for it, so the deployment's internal network does not stand in its way. Superset's content policy in
 v0.6.1 and earlier allowed that address, so a browser that could reach the internet could send the request
 (read in the image's code, not measured in a browser). The fix is in v0.6.2: a content policy for
-Superset that allows no outside address, so a browser refuses the image before it asks. The other stores
-and servers, apart from the model gateway and the speech server (each of which has a switch of its own),
-are kept in by the network, not by a setting of their own. No test yet proves that no page
+Superset that allows no outside address, so a browser refuses the image before it asks. A Small deployment on an https
+address fetches a certificate by default, unless the administrator gives it one. The model gateway's own
+cost-map fetch is switched off, and the speech server runs with its model hub offline, but its download step
+still reaches outside; the other stores and servers are kept in by the network, not by a setting of
+their own. No test yet proves that no page
 requests anything outside the deployment; a browser test that does is coming.
 
 **Privacy control.** What each person sees is bounded by handling markings and by case membership. This
 guide and the screens call it need-to-know, access control, clearance and *withheld*. What holds it:
 access is applied inside the store's own query, in the graph traversal and in the analytics query, and
-search has a filter of its own (section 6). A record a person may not see is absent, and so is any degree,
+search has a filter of its own (section 6). The aim is that a record a person may not see is absent, and so is any degree,
 path length, histogram bucket or figure that would reveal it. Each adapter's conformance suite, and a
-test that walks every GET route as a person with no role, hold it to that. What does not yet: an
-independent penetration test is planned, not done; the project's backlog lists known gaps on the read
-side; the reporting feed's access path has no clearance test of its own; and where Superset signs people
+test that walks every GET route as a person with no role, hold the store's queries to that. What does not
+yet: an independent penetration test is planned, not done; the project's backlog lists known gaps on the
+read side (for example, a pulls figure shown to an administrator who may not see those cases, and the
+search index's own fine-grained access setting, which is not yet set, so the index is reachable below the
+Conduit's filter); the reporting feed's access path has no clearance test of its own; and where Superset signs people
 in through Entra ID, a person who may build dashboards reads the whole reporting store in their own
 session, so that right is for people cleared for all of it (administration guide, section 6a.7).
 
@@ -89,10 +95,11 @@ its own.
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.8** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 1.9** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.9 | 2026-11-21 | *Why OspreyFlow is built this way*, corrected to the truth check (DC1c, verifier's findings): a container's route out is described as what the model downloads, the proxy's certificate fetch and the configured features need, not as configured alone; the speech server's download step and the certificate fetch are named among what does not yet hold; the licence gate is described as reading the build's package metadata, with the Python packages inside an image checked for two images only; Superset's tracking image is from "an address outside the deployment"; the privacy sentence is an aim held by the store's queries, with two named read-side gaps. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.8 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening: the intent and the five constraints (software sovereignty, data sovereignty, privacy control, security management, analytical accountability), each with what holds it today and what is "coming" (DC1c). §6: the audit sentence said to cover case data, with what is not audited by design, the export ledger's contents and the two records still to come, instead of "every read and write". §9: the licence rule and the allowlist in words, naming no product; the table of avoided components moved to the specification's licence register (the owner's ruling of 20 November 2026). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.7 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.6 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |

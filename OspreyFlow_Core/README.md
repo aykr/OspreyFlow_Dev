@@ -19,7 +19,7 @@ is "coming".
 
 - **Software sovereignty:** every software dependency is under an open-source licence, checked on every
   change. Model weights, map data, fonts and base images are outside that check for now.
-- **Data sovereignty:** the deployment's containers have no route out except the few that a configured
+- **Data sovereignty:** the deployment's containers have no route out except the few that an install or a configured
   feature needs, such as the model downloads. A hosted model engine is an opt-in that an administrator
   turns on. A first install needs the internet.
 - **Privacy control:** what a person sees is bounded by handling markings and case membership, applied
