@@ -392,7 +392,7 @@ def org_features():
            ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture')]
     b += '<nav class="toc wrap" aria-label="On this page"><ul>' + ''.join(f'<li><a href="#{i}">{t}</a></li>' for i, t in toc) + '</ul></nav>'
     b += sec('The Glass: analysis', split(ul([
-        '<strong>Search.</strong> Names found with typos, variants and sounds-like matches, full text with the passage highlighted, and suggestions as you type, with your access inside every query.',
+        '<strong>Search.</strong> Names found with typos, variants and sounds-like matches, full text with the passage highlighted, and suggestions as you type, with your access applied to each query; the search index below the application\'s filter is one of the known read-side gaps.',
         '<strong>Network.</strong> Radial, organic and clustered layouts; communities; ranking by betweenness and other measures; expand from any node.',
         '<strong>Find connections.</strong> The shortest routes between two people, each step backed by its records.',
         '<strong>Connection strength.</strong> How strongly a link is drawn rests on its count and its recency. How rare a shared value is is shown beside it, explained in the Inspector and usable in a rule.',
@@ -596,7 +596,7 @@ def org_governance():
         '<h3>The five constraints the platform is built to</h3><p><a href="index.html#constraints">The home page</a> sets each one out, '
         'with where the product shows it and what is still coming.</p>' + ul([
         '<strong>Software sovereignty.</strong> Software an organisation can read, change, host and replace.',
-        '<strong>Data sovereignty.</strong> A deployment on an internal network with only the front proxy published, and a hosted model engine as an opt-in; the install downloads images and models.',
+        '<strong>Data sovereignty.</strong> A deployment on an internal network with only the front proxy published, and a hosted model engine as an opt-in. The install downloads images and models, and each start of a deployment fetches the models again; a server on an https address fetches its own certificate; and the dashboards\' usage image, which a browser could request from outside, is stopped by a fix coming in the next release.',
         "<strong>Privacy control.</strong> Handling markings and case membership applied inside the store's own queries and tested; known read-side gaps are tracked.",
         '<strong>Security management.</strong> Case reads, changes and report, assessment and pack exports recorded against a person; model calls and sign-in events are coming.',
         '<strong>Analytical accountability.</strong> A judgement is written on a probability yardstick and carries its supporting evidence with it.']), ident='principles')
@@ -625,7 +625,7 @@ def net_index():
     b += sec('Why organisations choose it', cards([
         ('Defensible', 'Every link shows where it came from. A model\'s suggestion stays inferred until a person confirms it. A match can be undone.'),
         ('Yours', 'Apache-2.0 open source. You own the data, the deployment and the roadmap you ask of it. No per-seat licence.'),
-        ('Inside your boundary', 'Runs in your own cloud account or data centre, on an internal network with only the front proxy published. The install downloads images and models, and a hosted model engine is an opt-in that an administrator enables for a dataset.'),
+        ('Inside your boundary', 'Runs in your own cloud account or data centre, on an internal network with only the front proxy published. The install downloads images and models, and each start of a deployment fetches the models again; a server on an https address fetches its own certificate; and the dashboards\' usage image, which a browser could request from outside, is stopped by a fix coming in the next release. A hosted model engine is an opt-in that an administrator enables for a dataset.'),
         ('Need-to-know by design', "Handling markings and case membership are applied in the store's own queries, not afterwards, and conformance suites test it. Known gaps on the read side are tracked and not all closed.")], 4))
     b += intent_section('', '<p class="more">The five constraints, each with where the product shows it, are on '
                                 f'<a href="{ORG}/index.html#constraints">ospreyflow.org</a>.</p>')

@@ -337,13 +337,13 @@ def m3():
     rows = [('09:30', 'S. Lindqvist', 'Ran the pipeline Carrier call records: load 15'),
             ('09:42', 'R. Okafor', 'Promoted 6 drawn items into the dataset: load 14'),
             ('10:05', 'Administrator', "Changed a dataset's egress from none to contracted"),
-            ('10:20', 'T. Marsh', 'Refused: a read above their clearance'),
+            ('10:20', 'T. Marsh', 'Refused: an attempt to open a case'),
             ('10:31', 'Administrator', 'Disabled an account and transferred 3 items')]
     for i, (t, who, what) in enumerate(rows):
         y = 150 + i * 52; d = round(1.0 + i * .5, 2)
         o.append(f'<g class="a-rise" {st(d)}>' + rect(36, y, 1128, 42, K['raised'], K['bSub'], rx=6) + text(52, y + 27, t, 14, K['t2'], mono=True) + text(150, y + 27, who, 14, K['t1'], 600) + text(330, y + 27, what, 15, K['t1']) + '</g>')
     o.append(text(44, 446, "Where your own read of a record would not show its words, the entry says so. The database does not yet refuse a change to an entry.", 14, K['t2'], d=4.2))
-    return ('Everything is on the record', 'Who did what and when: loads and promotions, people and roles, datasets, and a refused attempt to open a case.',
+    return ('A record of who changed what', 'Who did what and when: loads and promotions, people and roles, datasets, and a refused attempt to open a case. Exports are in a ledger of their own, and reference reads are outside the audit.',
             svg('An audit log with five entries, each with a time, a person and an action', ''.join(o)))
 
 

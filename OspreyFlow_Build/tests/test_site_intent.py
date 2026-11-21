@@ -234,6 +234,8 @@ OVERSTATED = [
     # Round 5: the traffic out of a deployment said to be the install's downloads and an opt-in engine alone.
     "The install downloads images and models, and a hosted model engine is an opt-in",
     "the install downloads images and models.",
+    # Round 5, found by reading the built text once more: search said to carry the person's access inside every query.
+    "with your access inside every query",
 ]
 #: The shapes behind them, so a reworded return is found too.
 OVERSTATED_SHAPES = {
