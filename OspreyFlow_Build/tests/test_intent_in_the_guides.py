@@ -29,7 +29,13 @@ What the owner's text asks, and the case that fails if it is not so (rule 12):
   scoped, what is outside the licence gate said to be coming) —
   `test_the_passages_carry_the_limits_the_truth_check_found`;
 - section 9 does not say every avoided component has an alternative —
-  `test_section_9_does_not_say_every_avoided_component_has_an_alternative`.
+  `test_section_9_does_not_say_every_avoided_component_has_an_alternative`;
+- (round 5) no sentence in any of the five files says the licence gate covers every or all dependencies without
+  saying it does not yet reach every package inside the images, none says each store or engine sits behind a port,
+  none says replaceable software holds a record hostage or "never" does anything, and the architecture guide says
+  which stores are not behind a port —
+  `test_no_file_states_the_licence_gate_or_replacement_without_its_limit`,
+  `test_the_architecture_passage_says_which_stores_are_behind_a_port`.
 
 **Rule 15: each gate is shown red** at the shape the real text takes — the old section 9 table put back, the old
 bullet of section 6 put back in its list item, the old paragraph of `spec/03` section 6, a passage with the word
@@ -230,6 +236,50 @@ def bullet(body: str, name: str) -> str:
     return fold(found.group(1)) if found else ""
 
 
+#: A sentence that says "every"/"all" dependencies are covered by the licence check or are open source, in whatever
+#: words (round 5: the user guide said "every software dependency is under an open-source licence ... outside the
+#: check that holds that", with no "on every change" in it).
+LICENCE_CLAIM = re.compile(r"\b(?:every|all)\s+(?:the\s+)?(?:software\s+)?dependenc", re.IGNORECASE)
+LICENCE_NAMED = re.compile(r"licen[cs]e|\bgate\b|\bcheck\b", re.IGNORECASE)
+#: What limits it: the gate does not yet reach every package inside the images, or is for two images only.
+LICENCE_LIMIT = re.compile(
+    r"not\s+(?:yet\s+)?(?:reach|cover)|does\s+not\s+yet|two\s+images|inside\s+(?:an|the)\s+images?"
+    r"|only\s+for\s+two",
+    re.IGNORECASE,
+)
+#: "each store or engine sits behind a port": PostgreSQL, Valkey and OpenSearch are not behind one.
+PORT_CLAIM = re.compile(
+    r"\b(?:each|every|all)\b[^.;]{0,60}\b(?:stores?|engines?|components?|dependenc\w+)\b[^.;]{0,80}\bbehind\s+a\s+port"
+    r"|\b(?:each|every|all)\b[^.;]{0,40}\bbehind\s+a\s+port",
+    re.IGNORECASE,
+)
+HOSTAGE = re.compile(r"hostage", re.IGNORECASE)
+NEVER_OF_SUPPLIERS = re.compile(r"\bnever\b", re.IGNORECASE)
+
+
+def sentences(text: str) -> list[str]:
+    return [s.strip() for s in re.split(r"(?<=[.;])\s+", fold(text)) if s.strip()]
+
+
+def unlimited_claims(text: str) -> list[str]:
+    """Round 5's three claims, by sentence and in any words: the licence check said to cover every dependency
+    with no limit in the same or the next sentence; a port said to stand in front of each store or engine; and
+    replaceable software said to keep a record from being held hostage, or a supplier's terms "never" to."""
+    found: list[str] = []
+    parts = sentences(text)
+    for i, sentence in enumerate(parts):
+        near = sentence + " " + (parts[i + 1] if i + 1 < len(parts) else "")
+        if LICENCE_CLAIM.search(sentence) and LICENCE_NAMED.search(sentence) and not LICENCE_LIMIT.search(near):
+            found.append("the licence check is said to cover every dependency, with no limit: " + sentence[:70])
+        if PORT_CLAIM.search(sentence):
+            found.append("each store or engine is said to sit behind a port: " + sentence[:70])
+        if HOSTAGE.search(sentence):
+            found.append("a supplier is implied to hold records hostage: " + sentence[:70])
+        if NEVER_OF_SUPPLIERS.search(sentence) and re.search(r"suppliers?|vendors?", sentence, re.IGNORECASE):
+            found.append("an absolute 'never' about a supplier or its terms: " + sentence[:70])
+    return found
+
+
 def overstated_lines(body: str) -> list[str]:
     """What the truth check does not support in a passage (DOC1A_REPORT.md rows 1, 3 and 4): privacy stated as
     fact with no read-side gap named, a ledger said to hold exports without its scope, and a licence statement
@@ -255,6 +305,7 @@ def overstated_lines(body: str) -> list[str]:
         r"not (?:yet )?(?:reach|cover|check)|only|two images|inside an image|inside the images", licence
     ):
         problems.append("the licence gate is said to check every dependency on every change, unlimited")
+    problems += unlimited_claims(licence)
     return problems
 
 
@@ -423,6 +474,26 @@ def test_the_readme_does_not_say_the_deployment_never_calls_out() -> None:
     assert "nothing checks on its own" in readme.lower(), "the release check's line is corrected, not removed"
 
 
+def test_no_file_states_the_licence_gate_or_replacement_without_its_limit() -> None:
+    """Round 5: the whole of each file (less its version record), not only the passage, in any sentence shape."""
+    problems = {
+        name: unlimited_claims(without_control(text)) for name, text in _texts().items()
+    }  # fmt: skip
+    assert {n: p for n, p in problems.items() if p} == {}
+
+
+def test_the_architecture_passage_says_which_stores_are_behind_a_port() -> None:
+    """Section 2 puts four ports and three narrower ones in front of the graph store, the analytics store, graph
+    algorithms, the models, the media store, recognition and the index feed; PostgreSQL, Valkey and OpenSearch
+    are in front of none, so the passage must not claim replacement for them."""
+    bullet_text = bullet(passage(read(FILES[ARCHITECTURE])) or "", "Software sovereignty")
+    for store in ("PostgreSQL", "Valkey", "OpenSearch"):
+        assert store in bullet_text, f"the passage does not name {store} as outside the ports"
+    assert re.search(r"not behind a port|behind no port|no port", bullet_text)
+    for behind in ("graph store", "analytics store", "model"):
+        assert behind in bullet_text, f"the passage does not say the {behind} is behind a port"
+
+
 # ---------------------------------------------------------------- rule 15: each check shown red
 
 
@@ -456,15 +527,16 @@ def test_each_check_is_shown_red() -> None:
         "- **Privacy control:** what a person sees is bounded by handling markings and case membership.\n"
         "- **Security management:** case reads are audited, and exports go in a ledger.\n"
     )
-    assert len(overstated_lines(old)) == 4
+    assert len(overstated_lines(old)) == 5  # the licence line is found twice: no weights, and no limit
     # The shapes the passages actually took before this round: each is found for its own reason.
     real_licence = (
         "- **Software sovereignty:** every software dependency is under an open-source licence, checked on every\n"
         "  change. Model weights are outside that check; a register and a gate for them are coming.\n"
     )
-    assert overstated_lines(real_licence) == [
-        "the licence gate is said to check every dependency on every change, unlimited"
-    ]
+    found = overstated_lines(real_licence)
+    assert len(found) == 2
+    assert found[0] == "the licence gate is said to check every dependency on every change, unlimited"
+    assert found[1].startswith("the licence check is said to cover every dependency, with no limit: every software")
     real_privacy = (
         "- **Privacy control:** What you see is bounded by handling markings and case membership. A record you\n"
         "  may not see is left out, and the aim is that no count reveals it either; known gaps\n"
@@ -484,3 +556,45 @@ def test_each_check_is_shown_red() -> None:
     note = "**The avoided components, as the architecture guide's section 9 stated them (a).**\nWords.\n\n"
     assert GUARANTEE.search(moved_table_note(note + MOVED_HEADER + "\n") + "It guarantees.") is not None
     assert moved_table_note(note + MOVED_HEADER + "\n").startswith("**The avoided components")
+
+    # Round 5: each old sentence put back in the shape it took, in the file it was in, is found; the text now is not.
+    old_user = (
+        "- **Software sovereignty.** Your organisation can inspect, modify, host and replace the software you work\n"
+        "  in: every software dependency is under an open-source licence. Model weights, map data, fonts and base\n"
+        "  images are outside the check that holds that; a register and a gate for them are coming.\n"
+    )
+    found = overstated_lines(old_user)
+    assert len(found) == 1 and "with no limit" in found[0], found
+    assert unlimited_claims(old_user) != []
+    old_dev = (
+        "- **Software sovereignty.** You can inspect, modify, host and replace what you work with. Every software\n"
+        "  dependency is under an open-source licence. Model weights, map data, fonts and base images are outside the\n"
+        "  licence gate; a register and a gate for them are coming.\n"
+    )
+    assert unlimited_claims(old_dev) != []
+    old_arch = (
+        "**Software sovereignty.** You can inspect, modify, host and replace the software. Software you can\n"
+        "replace means a supplier's change of terms never holds your records hostage. Here that means every\n"
+        "dependency is under an open-source licence, and each store or engine sits behind a port (section 2), so\n"
+        "replacing one is one adapter and one line of configuration. Weights are outside the gate; a gate is coming.\n"
+    )
+    kinds = " | ".join(unlimited_claims(old_arch))
+    assert "implied to hold records hostage" in kinds
+    assert "absolute 'never'" in kinds
+    assert "behind a port" in kinds
+    assert "no limit" in kinds
+    # The wording that replaces them is not found.
+    for fine in (
+        "Your organisation can inspect, modify, host and replace the software. The software dependencies are under\n"
+        "open-source licences, and a gate checks the build's package list on every change; it does not yet reach\n"
+        "every package inside the images.\n",
+        "The graph store, the analytics store, graph algorithms and the models sit behind ports. PostgreSQL,\n"
+        "Valkey and OpenSearch are not behind a port.\n",
+        "A package under the GPL never passes the gate.\n",
+    ):
+        assert unlimited_claims(fine) == [], fine
+    # Other shapes the same claims take.
+    assert unlimited_claims("The licence check covers all dependencies.\n") != []
+    assert unlimited_claims("A gate reads every dependency's licence.\n") != []
+    assert unlimited_claims("Every component sits behind a port.\n") != []
+    assert unlimited_claims("A supplier's new terms can never hold you to ransom.\n") != []
