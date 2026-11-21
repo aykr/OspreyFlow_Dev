@@ -567,6 +567,44 @@ def test_the_deployment_secret_is_shared_by_replicas_and_survives_a_restart(rig:
     )
 
 
+def test_a_replica_that_held_the_secret_before_valkey_was_wiped_keys_a_session_as_the_others_do(
+    rig: Rig,
+) -> None:
+    """Valkey is given no persistence, so a restart of its container clears the secret and every
+    "seen" key. A replica that had read the old secret must not go on keying with it: after the wipe
+    the first replica to ask makes the new one, and every replica, the one that held the old secret
+    included, keys a session with it. A session is one row (not one per replica) and one reference
+    in all its rows (rule 12: this fails for a replica that holds the secret in memory for good)."""
+    old = rig.session()
+    assert rig.me(old.token()).status_code == 200  # this replica now holds the first secret
+    first_secret = rig.valkey.salt()
+    assert first_secret is not None
+    rig.valkey.data.clear()  # Valkey's container restarted, with nothing kept
+    later = rig.replica()  # a replica that starts after the wipe
+    new = rig.session()
+    rig.use(later)
+    assert rig.me(new.token()).status_code == 200  # makes the second secret
+    assert rig.valkey.salt() not in (None, first_secret)
+    before = len(rig.pool.of("sign_in_seen"))
+    rig.use(rig.watch)  # the replica that held the first secret meets the same session
+    assert rig.me(new.token()).status_code == 200
+    seen = [detail(r)["session"] for r in rig.pool.of("sign_in_seen")[1:]]
+    assert len(rig.pool.of("sign_in_seen")) == before and len(seen) == 1, (
+        "one session, one row, on whichever replica it reaches"
+    )
+    rig.event(new.token(), "sign_in")  # reported through the replica that held the first secret
+    assert detail(rig.pool.of("sign_in")[0])["session"] == seen[0], (
+        "one session, one reference, in every row, after a wipe"
+    )
+    # The session first seen by the older replica after the wipe is no one's second row either.
+    other = rig.session()
+    assert rig.me(other.token()).status_code == 200
+    rig.use(later)
+    assert rig.me(other.token()).status_code == 200
+    refs = [detail(r)["session"] for r in rig.pool.of("sign_in_seen")]
+    assert len(refs) == len(set(refs)) == 3, refs
+
+
 # --- 3: a refused or unknown token writes nothing and says nothing new
 # -------------------------------
 
