@@ -25,6 +25,11 @@ DATA = ROOT / "OspreyFlow_Data"
 #: The product folder.
 CORE = ROOT / "OspreyFlow_Core"
 
+#: The pages service's copy and styling, relative to `CORE` (ADR-152 decision 6; slice IS5a0): the Default tree's templates, the
+#: client modules, and the server's own views. The gates that read the Glass's words and styles read these three too
+#: (`tests/glass_trees/test_design_gates_reach.py` holds that none drops one).
+PAGES_COPY_ROOTS = ("apps/pages/tree-default", "apps/pages/modules", "apps/pages/server/views")
+
 #: First segments that live in the Build folder.
 BUILD_NAMES = frozenset(
     {

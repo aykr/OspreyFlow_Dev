@@ -9,11 +9,15 @@ import session from "express-session";
 import nunjucks from "nunjucks";
 import { fileURLToPath } from "node:url";
 
+import { ASSETS_PREFIX, assetUrl, assetsHandler } from "./assets.js";
+import type { AssetsSetting } from "./assets.js";
 import { DEFAULT_BODY_STALL_MS, pageBodyStall } from "./bodyStall.js";
 import type { ForwardSettings } from "./config.js";
 import { csrfProtection } from "./csrf.js";
 import { forwarder, v1Gate } from "./forward.js";
 import { PagesSessionStore } from "./expressStore.js";
+import { registerPages } from "./pages.js";
+import type { PageModule } from "./pages.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderRefused, IdentityProviderUnavailable } from "./identity.js";
 import type { CodeFlowProvider, IdentityProvider } from "./identity.js";
@@ -48,6 +52,17 @@ export interface AppDeps {
   clock?: () => number;
   /** Routes a later slice adds, after the core routes and behind the same session, headers and anti-forgery. */
   extraRoutes?: (router: Router) => void;
+  /**
+   * The built browser assets: the folder `/assets/pages/*` serves and the names the layout links to. Without it there is no
+   * asset route and the layout links no stylesheet (`start.ts` refuses to run a production service without it).
+   */
+  assets?: AssetsSetting;
+  /** Pages in the route-module convention (`pages.ts`): checked now, so a fault is a refusal to start, in words. */
+  pages?: readonly PageModule[];
+  /** The `FUNCTIONS.yaml` ids a page may name, when a test wants its own list instead of the file's. */
+  functionIds?: ReadonlySet<string>;
+  /** Template folders searched after the tree's own: a test's throw-away fixture page lives in one. */
+  viewDirs?: readonly string[];
   /** The `/v1` forwarder's settings (slice PL10). Absent: there is no forwarder, and every `/v1` path answers 404. */
   forward?: ForwardSettings;
   /** Where the forwarder says what went wrong: a fixed phrase and a status. */
@@ -56,7 +71,8 @@ export interface AppDeps {
   bodyStallMs?: number;
 }
 
-const VIEWS = fileURLToPath(new URL("./views", import.meta.url));
+/** The Default tree's templates (ADR-152 decisions 6 and 7: one tree per deployment, the default today). `dist/tree-default` in the build. */
+const TREE = fileURLToPath(new URL("../tree-default", import.meta.url));
 
 /** `Secure` and `HttpOnly` always, `SameSite=Lax`, no `Domain`: the cookie holds one signed, opaque identifier. */
 const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax", path: "/" } as const;
@@ -76,6 +92,8 @@ export function createApp(deps: AppDeps): Express {
     throw new Error(`the session secret must be at least ${MIN_SECRET_LENGTH} characters`);
   }
   const clock = deps.clock ?? Date.now;
+  // Checked before anything is built: two pages on one path, or an id that is no row of FUNCTIONS.yaml, stops the start.
+  const mountPages = deps.pages ? registerPages(deps.pages, deps.functionIds) : undefined;
   const app = express();
 
   app.disable("x-powered-by");
@@ -83,10 +101,21 @@ export function createApp(deps: AppDeps): Express {
   // The front proxy terminates TLS and says so in `X-Forwarded-Proto`; `express-session` sends a `Secure`
   // cookie only on a request it believes arrived over TLS. Only a hop on a private address is believed.
   app.set("trust proxy", "loopback, linklocal, uniquelocal");
-  nunjucks.configure(VIEWS, { autoescape: true, express: app, noCache: false });
+  nunjucks.configure([TREE, ...(deps.viewDirs ?? [])], { autoescape: true, express: app, noCache: false });
   app.set("view engine", "njk");
 
   app.use(securityHeaders());
+
+  // The built assets, with no session: a sign-in page needs its stylesheet, and an asset is the same for everyone. Mounted
+  // before the session middleware so that nothing reads the store, and after the headers so that each carries the policy.
+  if (deps.assets) app.use(ASSETS_PREFIX, assetsHandler(deps.assets.dir));
+  // What the layout links to and a page's template names: the stylesheet, and `asset('modules/<name>.ts')` for a script.
+  const manifest = deps.assets?.manifest;
+  app.use((_req, res, next) => {
+    res.locals["stylesheet"] = manifest?.["pages.css"] === undefined ? undefined : assetUrl(manifest, "pages.css");
+    res.locals["asset"] = (name: string): string => assetUrl(manifest, name);
+    next();
+  });
 
   // No session, no secret and no call to the store or the identity provider: a probe must answer
   // when either is down. It is mounted before the session middleware so that nothing reads the store.
@@ -263,8 +292,9 @@ export function createApp(deps: AppDeps): Express {
     res.redirect(303, "/");
   });
 
-  if (deps.extraRoutes || deps.forward) {
+  if (mountPages || deps.extraRoutes || deps.forward) {
     const router = express.Router();
+    mountPages?.(router);
     deps.extraRoutes?.(router);
     // Behind the same headers, session and anti-forgery as every page: nothing here is reached without them.
     if (deps.forward) router.use(forwarder({

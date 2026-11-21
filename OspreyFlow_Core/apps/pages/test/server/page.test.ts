@@ -71,7 +71,7 @@ describe("GET /", () => {
     expect(res.text).not.toMatch(/\sstyle\s*=/i);
     expect(res.text).not.toMatch(/<link\b[^>]*(?:href="https?:|href="\/\/)/i);
     expect(res.text).toMatch(/<form method="post" action="\/session\/sign-out">/);
-    expect(res.text).toMatch(/<button type="submit">/);
+    expect(res.text).toMatch(/<button type="submit"[^>]*>Sign out<\/button>/);
   });
 });
 

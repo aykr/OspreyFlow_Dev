@@ -182,7 +182,8 @@ def _govuk_face() -> str:
     if installed.is_file():
         for block in fonts.FONT_FACE.findall(installed.read_text(encoding="utf-8")):
             if "GDS Transport" in block and "bold" in block:
-                return "@font-face{" + block + "}"
+                # The package writes `/assets/fonts/`; this repository self-hosts the files under `/assets/govuk/fonts/`.
+                return "@font-face{" + block.replace("/assets/fonts/", "/assets/govuk/fonts/") + "}"
     return '@font-face{font-family:"GDS Transport";font-style:normal;font-weight:700;src:url("/assets/govuk/fonts/bold-b542beb274-v2.woff2") format("woff2")}'
 
 
@@ -566,6 +567,8 @@ def test_the_client_name_check_reads_the_pages_roots(
     path: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     rel = f"OspreyFlow_Core/{path}"
+    for name in ("clean", "planted"):
+        (tmp_path / name).mkdir()  # `_repo` makes `<folder>/repo` and expects the folder there
     clean = _repo(tmp_path / "clean", {rel: "<p>Nothing here.</p>\n"})
     assert (
         client_name_check.main(["--root", str(clean), "--hashes", str(_list(tmp_path / "clean"))])

@@ -3,8 +3,9 @@
 branch once L3.2 merges. A case is the only container and a view is a saved lens on it.
 
 It scans every source file under `apps/workspace/src`, `packages/design`,
-`packages/glass-shared/src`, `services/api` and `packages/schemas` (and its generated types) in
-`OspreyFlow_Core`
+`packages/glass-shared/src`, `services/api`, `packages/schemas` (and its generated types) and the
+pages service's `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views` (`.njk`
+templates too) in `OspreyFlow_Core`
 for the word *branch* in any case and any form (`branch`, `Branched`, `branchNodes`,
 `BRANCH_CASE`, `/branch-by-filter`), and names each line that holds one. Two other meanings stay,
 as the amendment's decision 4 says:
@@ -30,7 +31,7 @@ import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from tools.layout import CORE
+from tools.layout import CORE, PAGES_COPY_ROOTS
 
 #: The trees the amendment names, relative to `OspreyFlow_Core`.
 SCANNED = (
@@ -39,8 +40,10 @@ SCANNED = (
     "packages/glass-shared/src",
     "services/api",
     "packages/schemas",
+    # The pages service's templates and modules (slice IS5a0; `tools.layout.PAGES_COPY_ROOTS`).
+    *PAGES_COPY_ROOTS,
 )
-SUFFIXES = frozenset({".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".html", ".md"})
+SUFFIXES = frozenset({".py", ".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".html", ".md", ".njk"})
 
 #: Files where *branch* means a pipeline's branch in the Studio's DAG, each by name.
 PIPELINE_FILES: Mapping[str, str] = {
