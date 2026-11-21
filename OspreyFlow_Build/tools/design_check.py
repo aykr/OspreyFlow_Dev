@@ -11,9 +11,10 @@ detector reads, beside the code it checks — differs from the contract in `spec
   `.network-canvas` rule, and nowhere else.
 
 Scans the Glass's source and `packages/design` (where `primitives.css` is since ADR-152 decision 6;
-`tests/glass_trees/test_design_gates_reach.py` holds the reach), and the pages service's `tree-default`, `modules` and
-`server/views`, whose `.njk` templates the detector cannot read as they are (`detect` hands it each as an `.html` copy;
-`tests/glass_trees/test_pages_foundation.py` plants a side stripe in a template and shows it found).
+`tests/glass_trees/test_design_gates_reach.py` holds the reach), and the pages service's
+`tree-default`, `modules` and `server/views`, whose `.njk` templates the detector cannot read as
+they are (`detect` hands it each as an `.html` copy; `tests/glass_trees/test_pages_foundation.py`
+plants a side stripe in a template and shows it found).
 
 Non-vacuous: `tests/test_design_check.py` runs the real detector over a planted status stripe, and
 over the canvas grid beside the same grid on another surface.
@@ -30,7 +31,8 @@ from typing import Any
 
 from tools.layout import CORE, PAGES_COPY_ROOTS, REPO
 
-#: Where `impeccable` is installed (Core's `node_modules`): the detector runs from here, whatever folder a caller's `CORE` names.
+#: Where `impeccable` is installed (Core's `node_modules`): the detector runs from here, whatever
+#: folder a caller's `CORE` names.
 DETECTOR_DIR = CORE
 DESIGN_SOURCE = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 #: The Glass's source, and the design package (ADR-152 decision 6) where `primitives.css` (which
@@ -41,7 +43,8 @@ SCANNED = [
     CORE / "apps" / "workspace" / "src",
     CORE / "packages" / "design",
     CORE / "packages" / "glass-shared" / "src",
-    # The pages service's templates and modules (slice IS5a0). A folder that is not there yet is not run.
+    # The pages service's templates and modules (slice IS5a0). A folder that is not there yet is
+    # not run.
     *(CORE / name for name in PAGES_COPY_ROOTS),
 ]
 
@@ -64,20 +67,25 @@ def _run(paths: list[Path]) -> list[dict[str, Any]]:
 
 
 def _templates(paths: list[Path]) -> list[Path]:
-    """The Nunjucks templates under the paths: a `.njk` file is HTML with tags the detector does not read as a page."""
+    """The Nunjucks templates under the paths: a `.njk` file is HTML with tags the detector does
+    not read as a page."""
     found: list[Path] = []
     for path in paths:
-        found += sorted(path.rglob("*.njk")) if path.is_dir() else [path] if path.suffix == ".njk" else []
+        if path.is_dir():
+            found += sorted(path.rglob("*.njk"))
+        elif path.suffix == ".njk":
+            found.append(path)
     return found
 
 
 def detect(paths: list[Path]) -> list[dict[str, Any]]:
     """The detector's findings, as it reports them. It exits non-zero when it finds anything.
 
-    `impeccable` reads HTML, CSS and scripts, and not `.njk`. A template is HTML with `{% %}` tags in it, so each one under
-    the paths is handed to the detector as a copy named `.html`, and the template's own path is put back on what it finds
-    (the copies sit in folders numbered by template, so a finding is matched to its template by the folder, not the name).
-    A path that is not there (a pages folder with nothing in it yet) is not run."""
+    `impeccable` reads HTML, CSS and scripts, and not `.njk`. A template is HTML with `{% %}` tags
+    in it, so each one under the paths is handed to the detector as a copy named `.html`, and the
+    template's own path is put back on what it finds (the copies sit in folders numbered by
+    template, so a finding is matched to its template by the folder, not the name). A path that is
+    not there (a pages folder with nothing in it yet) is not run."""
     existing = [Path(p) for p in paths if Path(p).exists()]
     findings = _run(existing) if existing else []
     templates = _templates(existing)

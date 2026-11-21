@@ -31,7 +31,8 @@ DESIGN_PACKAGE = CORE / "packages" / "design"
 #: The shared package's source (ADR-152 decision 6): the plain leaves and stores that moved out of
 #: the Glass's own folder (PL4 slice C), so the check must read them where they are now.
 SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
-#: The pages service's templates and modules (slice IS5a0), none of them exempt: a colour there is a token's, never a literal.
+#: The pages service's templates and modules (slice IS5a0), none of them exempt: a colour there is
+#: a token's, never a literal.
 PAGES_ROOTS = tuple(CORE / name for name in PAGES_COPY_ROOTS)
 DESIGN_PATH = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 ALLOWLIST_PATH = REPO / "OspreyFlow_Build" / "tests" / "fixtures" / "colour_drift_allowlist.txt"

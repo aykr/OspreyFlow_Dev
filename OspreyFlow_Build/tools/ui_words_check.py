@@ -14,11 +14,12 @@ its own, and says "Edit target model": the lane review of L1.8). Words the Condu
 (none says it today) and `apps/harness` are outside the Glass's `src` and not scanned. Words joined at run
 time from two strings (`"target " + "model"`, `["target", "model"].join(" ")`) are not seen either: no
 copy in the Glass builds a sentence that way today, and a review is what holds it. Files scanned:
-`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.css` (a `content:` string), `.json`, `.html`, `.md` and `.njk` (a
-Nunjucks template, read as text), under the Glass's `src`, under `packages/design` and under the pages service's
-`tree-default`, `modules` and `server/views` (`tests/glass_trees/test_design_gates_reach.py` holds the second and the
-third, `tests/glass_trees/test_pages_foundation.py` shows a planted phrase found in each pages root; a Nunjucks
-`{# #}` comment is not blanked, which can only add findings).
+`.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.css` (a `content:` string), `.json`, `.html`, `.md` and
+`.njk` (a Nunjucks template, read as text), under the Glass's `src`, under `packages/design` and
+under the pages service's `tree-default`, `modules` and `server/views`
+(`tests/glass_trees/test_design_gates_reach.py` holds the second and the third,
+`tests/glass_trees/test_pages_foundation.py` shows a planted phrase found in each pages root; a
+Nunjucks `{# #}` comment is not blanked, which can only add findings).
 
 Tests (`*.test.*`, `*.spec.*`) and generated types are not on screen and are skipped.
 
@@ -48,7 +49,8 @@ GLASS_SRC = CORE / "apps" / "workspace" / "src"
 DESIGN_PACKAGE = CORE / "packages" / "design"
 #: The shared package's source (PL4 slice C): the plain modules that moved out of the Glass.
 SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
-#: The pages service's templates and modules (slice IS5a0), in the order of `tools.layout.PAGES_COPY_ROOTS`.
+#: The pages service's templates and modules (slice IS5a0), in the order of
+#: `tools.layout.PAGES_COPY_ROOTS`.
 PAGES_ROOTS = tuple(CORE / name for name in PAGES_COPY_ROOTS)
 
 #: The banned phrase, its words apart by whitespace, a hyphen, or JSX's `{" "}`. The words in its place
@@ -58,7 +60,9 @@ BANNED = re.compile(
     re.IGNORECASE,
 )
 
-SUFFIXES = frozenset({".ts", ".tsx", ".js", ".jsx", ".mjs", ".css", ".json", ".html", ".md", ".njk"})
+SUFFIXES = frozenset(
+    {".ts", ".tsx", ".js", ".jsx", ".mjs", ".css", ".json", ".html", ".md", ".njk"}
+)
 
 
 def strip_comments(text: str) -> str:
@@ -158,7 +162,11 @@ def main() -> int:
         find_banned(GLASS_SRC)
         + [(f"packages/design/{p}", n, w) for p, n, w in in_design]
         + [(f"packages/glass-shared/src/{p}", n, w) for p, n, w in in_shared]
-        + [(f"{name}/{p}", n, w) for name, root in zip(PAGES_COPY_ROOTS, PAGES_ROOTS) for p, n, w in find_banned(root)]
+        + [
+            (f"{name}/{p}", n, w)
+            for name, root in zip(PAGES_COPY_ROOTS, PAGES_ROOTS, strict=True)
+            for p, n, w in find_banned(root)
+        ]
     )
     for path, line, phrase in found:
         print(f"{path}:{line}: \"{phrase}\" on screen: the screens say \"domain model\" (ADR-140 Amendment 9)")

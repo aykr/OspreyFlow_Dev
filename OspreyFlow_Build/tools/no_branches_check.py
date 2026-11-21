@@ -4,8 +4,8 @@ branch once L3.2 merges. A case is the only container and a view is a saved lens
 
 It scans every source file under `apps/workspace/src`, `packages/design`,
 `packages/glass-shared/src`, `services/api`, `packages/schemas` (and its generated types) and the
-pages service's `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views` (`.njk`
-templates too) in `OspreyFlow_Core`
+pages service's `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views`
+(`.njk` templates too) in `OspreyFlow_Core`
 for the word *branch* in any case and any form (`branch`, `Branched`, `branchNodes`,
 `BRANCH_CASE`, `/branch-by-filter`), and names each line that holds one. Two other meanings stay,
 as the amendment's decision 4 says:
