@@ -23,12 +23,24 @@ inside the files, and resolves each name through the Dockerfile's own `COPY` (a 
 file that does not exist is a failure, and a file the install names but the Dockerfile never copies
 in is a failure (the guard could not have read what the build reads).
 
+**Round 3 (the install steps).** Reading the files was not enough: a second install of LiteLLM
+(`uv pip install "litellm[proxy]"`, no version, no override) reads no new file and brings the
+package back through the `proxy` extra. So every package-installing step (INSTALL_COMMAND: `pip`,
+`pip3`, `python -m pip`, `uv pip install`/`sync`, `uv sync`/`add`, `uv tool install`, in shell or
+exec form) must take an override file that carries the removal line (by `--override`, `UV_OVERRIDE=` in
+front of it, or its own stage's `ENV UV_OVERRIDE`), a `uv pip sync` names its files positionally
+(read like `-r`), and LiteLLM is installed in one step. **The tests that fail:** the
+`test_a_second_install_*`, `test_a_file_an_install_of_any_spelling_*` and
+`test_an_install_whose_override_*` cases; shown red by disabling `_install_step_problems` (19 red)
+and by narrowing INSTALL_COMMAND back to `pip install` (8 red).
+
 **Folders it walks:** `OspreyFlow_Core/deploy/litellm/` only (the Dockerfile and what it names);
 plants are made in a scratch copy of it under `tmp_path`.
 """
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 import shutil
@@ -53,35 +65,123 @@ FILE_OPTIONS = {
     "--build-constraint": "constraint", "--build-constraints": "constraint", "-b": "constraint",
 }  # fmt: skip
 ENV_VARIABLES = re.compile(
-    r"\bUV_(?:BUILD_)?(?:CONSTRAINT|OVERRIDE)\s*=\s*(\"[^\"]*\"|'[^']*'|\S+)"
+    r"\b(UV_(?:BUILD_)?(?:CONSTRAINT|OVERRIDE))\s*=\s*(\"[^\"]*\"|'[^']*'|\S+)"
 )
+#: The tools whose subcommands put packages in, in every spelling the guard knows: `pip install`,
+#: `pip3 install`, `python -m pip install`, `uv pip install`, `uv pip sync`, `uv sync`, `uv add`,
+#: `uv tool install`, `pipx install`, `poetry install`. A shape missing here is a shape no guard
+#: reads, so the list is wide and a step it names without a file the guard can read is refused.
+INSTALL_COMMAND = re.compile(
+    r"\b(?:pip3?|pipx|poetry)\s+(?:install|add)\b"
+    r"|\buv\s+(?:pip\s+(?:install|sync)|sync|add|tool\s+install)\b"
+    r"|\bpip3?\s+sync\b"
+)
+#: The options of an install that take a value which is not a file, so `uv pip sync` can tell its
+#: positional requirements files from an option's value.
+VALUE_OPTIONS = {
+    "--python", "-p", "--target", "--prefix", "--index-url", "-i", "--extra-index-url", "--index",
+    "--default-index", "-f", "--find-links", "--python-version", "--python-platform",
+    "--index-strategy", "--keyring-provider", "--config-file", "--exclude-newer", "--cache-dir",
+    "--link-mode", "--reinstall-package", "-P", "--upgrade-package", "--no-binary",
+    "--only-binary", "--resolution", "--prerelease", "-C", "--config-setting", "--extra",
+    "--group", "--color", "--directory", "--project", "--allow-insecure-host",
+}  # fmt: skip
+#: A requirement that asks for LiteLLM itself, with or without extras and a version (searched in the
+#: step's whole text, so `litellm [proxy] >= 1` is found); a path or a longer name is not.
+LITELLM_WORD = re.compile(r"(?<![\w./-])litellm(?![\w-])", re.I)
 #: What uv reads from the working directory with no flag at all.
 IMPLICIT_FILES = {"uv.toml", "pyproject.toml", ".python-version"}
 
 
-def _install_arguments(text: str) -> list[list[str]]:
-    """The arguments of each `pip install` in the Dockerfile's `RUN`s, one list per install."""
+def _instruction_body(instruction: str) -> str | None:
+    """The command of a `RUN`, in shell form or in exec form (`RUN ["uv", "pip", "install"]`)."""
+    word, _, rest = instruction.partition(" ")
+    if word.upper() != "RUN":
+        return None
+    rest = rest.strip()
+    if rest.startswith("["):
+        try:
+            parts = json.loads(rest)
+        except ValueError:
+            return rest
+        if isinstance(parts, list):
+            return " ".join(str(part) for part in parts)
+    return rest
+
+
+def _installs(text: str) -> list[tuple[list[str], list[str]]]:
+    """Each package-installing step of the Dockerfile's `RUN`s: `(its arguments, the override files
+    its stage's own `ENV UV_OVERRIDE=` names before it)`. Not only `pip install`: `pip3 install`,
+    `uv pip sync`, `uv sync` and the others of INSTALL_COMMAND."""
     found = []
+    env_overrides: list[str] = []
     for instruction in _instructions(text):
-        if instruction.split(None, 1)[0].upper() != "RUN":
+        word = instruction.split(None, 1)[0].upper()
+        if word == "FROM":
+            env_overrides = []
+        elif word == "ENV":
+            env_overrides += [
+                m.group(2).strip("\"'")
+                for m in ENV_VARIABLES.finditer(instruction)
+                if m.group(1).endswith("OVERRIDE")
+            ]
+        body = _instruction_body(instruction)
+        if body is None:
             continue
-        for segment in re.split(r"&&|\|\||;", instruction):
-            if not re.search(r"\bpip\s+install\b", segment):
+        for segment in re.split(r"&&|\|\||;|\n", body):
+            if not INSTALL_COMMAND.search(segment):
                 continue
             try:
-                found.append(shlex.split(segment))
+                arguments = shlex.split(segment)
             except ValueError:
-                found.append(segment.split())
+                arguments = segment.split()
+            found.append((arguments, list(env_overrides)))
     return found
 
 
-def _named_in_install(arguments: list[str]) -> list[str]:
+def _install_arguments(text: str) -> list[list[str]]:
+    """The arguments of each package-installing step in the Dockerfile's `RUN`s."""
+    return [arguments for arguments, _ in _installs(text)]
+
+
+def _sync_files(arguments: list[str]) -> list[str]:
+    """`uv pip sync a.txt b.txt`: the positional words after `sync` are requirements files."""
+    if "sync" not in arguments:
+        return []
+    names = []
+    iterator = iter(arguments[arguments.index("sync") + 1 :])
+    for word in iterator:
+        if word in VALUE_OPTIONS or word in FILE_OPTIONS:
+            next(iterator, None)
+        elif not word.startswith("-") and "=" not in word:
+            names.append(word)
+    return names
+
+
+def _named_in_install(arguments: list[str], kind: str | None = None) -> list[str]:
+    """The files one install names, of one kind (`override`, `constraint`, `requirement`) or all.
+    Every spelling: `--flag file`, `--flag=file`, `-rfile`, `UV_OVERRIDE=file uv pip install` and a
+    sync's positional files (which are requirements)."""
     names = []
     iterator = iter(arguments)
     for word in iterator:
         flag, equals, value = word.partition("=")
         if flag in FILE_OPTIONS:
-            names.append(value if equals else next(iterator, ""))
+            name = value if equals else next(iterator, "")
+            if kind in (None, FILE_OPTIONS[flag]):
+                names.append(name)
+        elif re.fullmatch(r"-[rcb].+", word) and not word.startswith("--"):
+            if kind in (None, FILE_OPTIONS[word[:2]]):
+                names.append(word[2:])
+        else:
+            match = ENV_VARIABLES.fullmatch(word)
+            if match and kind in (
+                None,
+                "override" if match.group(1).endswith("OVERRIDE") else "constraint",
+            ):
+                names.append(match.group(2).strip("\"'"))
+    if kind in (None, "requirement"):
+        names += _sync_files(arguments)
     return [n for n in names if n]
 
 
@@ -114,7 +214,8 @@ def install_inputs(text: str, folder: Path) -> tuple[list[Path], list[str]]:
     if not installs:
         return [], ["the Dockerfile has no `pip install` step the guard can read"]
     names = [n for arguments in installs for n in _named_in_install(arguments)]
-    names += [m.group(1).strip("\"'") for m in ENV_VARIABLES.finditer(text)]
+    names += [m.group(2).strip("\"'") for m in ENV_VARIABLES.finditer(text)]
+    names = list(dict.fromkeys(names))
     mapping, whole = _copy_map(text)
     for implicit in sorted(IMPLICIT_FILES & {Path(s).name for s in mapping.values()}):
         problems.append(f"copies {implicit} into the install's working folder, which uv reads")
@@ -160,10 +261,50 @@ def _line_problem(line: str) -> str | None:
     return None if removal else "asks for the commercial package, not for its removal"
 
 
+def _resolve(name: str, text: str, folder: Path) -> Path | None:
+    mapping, whole = _copy_map(text)
+    source = mapping.get(Path(name).name)
+    if source is None and not whole:
+        return None
+    path = folder / (source if source is not None else name)
+    return path if path.is_file() else None
+
+
+def _carries_removal(path: Path) -> bool:
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = re.sub(r"(^|\s)#.*$", "", raw).strip()
+        if re.search(r"enterprise", line, re.I) and _line_problem(line) is None:
+            return True
+    return False
+
+
+def _install_step_problems(text: str, folder: Path) -> list[str]:
+    """The steps that could bring the commercial package in even with every file clean: any
+    install that does not take an override file carrying the removal line (the `proxy` extra
+    brings the package whenever the override is absent), and a second install of LiteLLM itself."""
+    problems = []
+    litellm_installs = 0
+    for number, (arguments, env_overrides) in enumerate(_installs(text), 1):
+        shown = " ".join(arguments)[:80]
+        overrides = _named_in_install(arguments, "override") + env_overrides
+        paths = [p for n in overrides if (p := _resolve(n, text, folder)) is not None]
+        if not overrides:
+            problems.append(f"install {number} ({shown!r}) takes no override file")
+        elif not any(_carries_removal(p) for p in paths):
+            problems.append(
+                f"install {number} ({shown!r}) takes no override carrying the removal line"
+            )
+        if LITELLM_WORD.search(" ".join(arguments)):
+            litellm_installs += 1
+    if litellm_installs > 1:
+        problems.append(f"installs litellm in {litellm_installs} steps, not one")
+    return problems
+
+
 def install_problems(text: str, folder: Path) -> list[str]:
-    """Why an install could bring the commercial package in through a file it reads; empty when
-    no file it reads names the package other than as an override's removal line, and an override
-    does carry that line."""
+    """Why an install could bring the commercial package in: through a file it reads (none may
+    name the package other than as an override's removal line, and an override does carry that
+    line), or through a step that takes no such override. Empty when it cannot."""
     files, problems = install_inputs(text, folder)
     removals = 0
     for path in files:
@@ -178,7 +319,7 @@ def install_problems(text: str, folder: Path) -> list[str]:
                 removals += 1
     if files and not removals:
         problems.append("no file the install reads carries the removal line")
-    return problems
+    return [*problems, *_install_step_problems(text, folder)]
 
 
 def _scratch(tmp_path: Path) -> Path:
@@ -363,3 +504,137 @@ def test_a_dockerfile_with_no_install_is_refused(tmp_path: Path) -> None:
     text = re.sub(r"(?m)^RUN uv venv.*\n(?:\s+.*\n)+", "", _real_dockerfile())
     assert text != _real_dockerfile()
     assert any("no `pip install` step" in p for p in install_problems(text, _scratch(tmp_path)))
+
+
+# --- round 3: a second install step, and the spellings of an install the guard did not know ------
+
+#: Where a plant goes: the builder stage, after the real install and before the entrypoint scripts.
+ANCHOR = "COPY docker/ /app/docker/"
+PY = "--python /app/.venv/bin/python"
+
+
+def _with_step(text: str, *lines: str) -> str:
+    planted = text.replace(ANCHOR, "\n".join([*lines, ANCHOR]), 1)
+    assert planted != text
+    return planted
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        # The round-2 verifier's plant, in the shape the Dockerfile uses: the `proxy` extra with no
+        # version, no override, no constraint.
+        f'RUN uv pip install {PY} "litellm[proxy]"',
+        f"RUN uv pip install {PY} litellm[proxy]==1.101.0",
+        'RUN pip3 install "litellm[proxy]"',
+        'RUN python -m pip install "litellm[proxy]"',
+        f'RUN uv pip install {PY} "litellm [proxy] >= 1"',
+        'RUN ["uv", "pip", "install", "litellm[proxy]"]',
+        f'RUN echo ok && uv pip install {PY} "litellm[proxy]"',
+        f'RUN uv pip install {PY} "litellm @ git+https://example.invalid/litellm.git"',
+    ],
+    ids=["no-version", "with-version", "pip3", "python-m-pip", "spaced-specifier", "exec-form",
+         "after-and", "direct-url"],
+)  # fmt: skip
+def test_a_second_install_of_litellm_without_the_override_is_refused(
+    tmp_path: Path, step: str
+) -> None:
+    folder = _scratch(tmp_path)
+    assert install_problems(_real_dockerfile(), folder) == []
+    problems = install_problems(_with_step(_real_dockerfile(), step), folder)
+    assert any("takes no override file" in p for p in problems), problems
+    assert any("installs litellm in 2 steps" in p for p in problems), problems
+
+
+def test_a_second_install_of_litellm_that_takes_the_override_is_still_a_second_install(
+    tmp_path: Path,
+) -> None:
+    """The override keeps the package out, but the guard holds LiteLLM to the one step the
+    Dockerfile's own checks are written for; the two reasons are separate."""
+    folder = _scratch(tmp_path)
+    step = f'RUN uv pip install {PY} --override overrides.txt "litellm[proxy]"'
+    problems = install_problems(_with_step(_real_dockerfile(), step), folder)
+    assert problems == ["installs litellm in 2 steps, not one"], problems
+
+
+@pytest.mark.parametrize(
+    ("step", "name"),
+    [
+        ("RUN pip3 install -r extra.txt", "extra.txt"),
+        ("RUN pip3 install -rextra.txt", "extra.txt"),
+        ("RUN pip install --requirement=extra.txt", "extra.txt"),
+        ("RUN uv pip sync extra.txt", "extra.txt"),
+        (f"RUN uv pip sync {PY} extra.txt", "extra.txt"),
+        (f"RUN uv pip sync {PY} --constraint constraints.txt extra.txt", "extra.txt"),
+        ('RUN ["uv", "pip", "sync", "extra.txt"]', "extra.txt"),
+        ("RUN UV_CONSTRAINT=extra.txt uv pip install fastapi", "extra.txt"),
+    ],
+    ids=["pip3-r", "pip3-attached", "pip-equals", "sync", "sync-python", "sync-constraint",
+         "sync-exec", "inline-env"],
+)  # fmt: skip
+def test_a_file_an_install_of_any_spelling_names_is_read(
+    tmp_path: Path, step: str, name: str
+) -> None:
+    """A COPYed `extra.txt` naming the package, installed with a spelling the first guard's
+    `pip install` pattern missed: both the file and the missing override are reported."""
+    folder = _scratch(tmp_path)
+    text = _with_step(_real_dockerfile(), "COPY extra.txt ./", step)
+    (folder / "extra.txt").write_text("fastapi>=0.1\n", encoding="utf-8")
+    clean = install_problems(text, folder)
+    assert not any("extra.txt:" in p for p in clean), clean  # read, and clean
+    (folder / "extra.txt").write_text("litellm-enterprise==0.1.65\n", encoding="utf-8")
+    problems = install_problems(text, folder)
+    assert any("extra.txt:1" in p for p in problems), problems
+    assert any("takes no override file" in p for p in problems), problems
+
+
+def test_a_sync_naming_a_file_the_dockerfile_never_copies_is_refused(tmp_path: Path) -> None:
+    folder = _scratch(tmp_path)
+    (folder / "extra.txt").write_text("litellm-enterprise==0.1.65\n", encoding="utf-8")
+    problems = install_problems(_with_step(_real_dockerfile(), "RUN uv pip sync extra.txt"), folder)
+    assert any("extra.txt" in p and "never copies" in p for p in problems), problems
+
+
+def test_an_install_whose_override_file_lacks_the_removal_line_is_refused(tmp_path: Path) -> None:
+    folder = _scratch(tmp_path)
+    (folder / "inert.txt").write_text("fastapi==0.1\n", encoding="utf-8")
+    text = _with_step(
+        _real_dockerfile(),
+        "COPY inert.txt ./",
+        f"RUN uv pip install {PY} --override inert.txt fastapi",
+    )
+    problems = install_problems(text, folder)
+    assert any("no override carrying the removal line" in p for p in problems), problems
+
+
+def test_a_second_install_that_takes_the_override_and_asks_for_something_else_is_fine(
+    tmp_path: Path,
+) -> None:
+    """The red cases above are for the reason they claim: a step that takes the override and does
+    not install LiteLLM is accepted."""
+    folder = _scratch(tmp_path)
+    text = _with_step(
+        _real_dockerfile(), f"RUN uv pip install {PY} --override overrides.txt fastapi==0.1"
+    )
+    assert install_problems(text, folder) == []
+
+
+def test_an_override_named_by_the_stages_own_environment_covers_an_install_after_it(
+    tmp_path: Path,
+) -> None:
+    folder = _scratch(tmp_path)
+    text = _with_step(
+        _real_dockerfile(), "ENV UV_OVERRIDE=overrides.txt", f"RUN uv pip install {PY} fastapi==0.1"
+    )
+    assert install_problems(text, folder) == []
+
+
+def test_an_override_set_in_another_stage_does_not_cover_an_install_in_this_one(
+    tmp_path: Path,
+) -> None:
+    """`ENV UV_OVERRIDE` in the builder is not in the final stage's environment."""
+    folder = _scratch(tmp_path)
+    text = _with_step(_real_dockerfile(), "ENV UV_OVERRIDE=overrides.txt")
+    text += f'\nRUN uv pip install {PY} "litellm[proxy]"\n'
+    problems = install_problems(text, folder)
+    assert any("takes no override file" in p for p in problems), problems
