@@ -20,7 +20,7 @@ touches the page, and none imports React, a drawing library or a store. `emailDo
 `questions/graphFacts.ts`, which is plain (no import, no page), so it moved beside it; leaving it would have left the
 question client importing a workspace path, which the package may never do.
 
-**Three names were written twice, and the index says which is which.** `send` is the report clients' (`reports/caseHttp`),
+**Three names were written twice, and the index says which is which.** `send` is the report clients' (their case helper),
 the link types' (`linktypes/http`) and the promotions' (`boards/promotionsApi`); `rejectProposal` is the link types' and
 the questions'. Two `export *` of the same name is an error in TypeScript and silently dropped in the browser, so the
 index names the link types' `send` as `sendLinkType`, the promotions' as `sendPromotion` and the questions'
@@ -391,13 +391,13 @@ def test_an_index_that_drops_or_doubles_a_name_is_found() -> None:
     export that leaves a name out; a second module giving a name already given; a file left out; the rename lost."""
     sources = {
         "boards/promotionsApi.ts": "export type A = 1;\nexport async function send(): Promise<void> {}\nexport const promote = 1;\n",
-        "reports/caseHttp.ts": "export async function send(): Promise<void> {}\n",
+        "other/caseHttp.ts": "export async function send(): Promise<void> {}\n",
         "linktypes/http.ts": "export async function send(): Promise<void> {}\nexport class LinkTypeError {}\n",
         "linktypes/linkTypesApi.ts": 'export { LinkTypeError } from "./http";\nexport function rejectProposal(): void {}\n',
         "questions/questionsApi.ts": "export function rejectProposal(): void {}\nexport function askQuestion(): void {}\n",
     }
     index = (
-        'export * from "./reports/caseHttp";\n'
+        'export * from "./other/caseHttp";\n'
         'export { LinkTypeError, send as sendLinkType } from "./linktypes/http";\n'
         'export * from "./linktypes/linkTypesApi";\n'
         'export { askQuestion, rejectProposal as rejectQuestionProposal } from "./questions/questionsApi";\n'
@@ -413,8 +413,7 @@ def test_an_index_that_drops_or_doubles_a_name_is_found() -> None:
         "two modules, one name" in p for p in found(index.replace("send as sendPromotion", "send"))
     )
     assert any(
-        "not exported" in p
-        for p in found(index.replace('export * from "./reports/caseHttp";\n', ""))
+        "not exported" in p for p in found(index.replace('export * from "./other/caseHttp";\n', ""))
     )
     assert any(
         "rejectQuestionProposal" in p
