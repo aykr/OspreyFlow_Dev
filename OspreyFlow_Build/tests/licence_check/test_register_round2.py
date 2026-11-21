@@ -215,8 +215,7 @@ def _publish_check() -> str:
     """The register's check as the publish script runs it: the statement from the script's text."""
     text = PUBLISH.read_text()
     found = re.search(
-        r"^\(cd \"\$ROOT/ospreyflow/OspreyFlow_Build\" && python3 -m tools\.licence_register "
-        r"release-check\) \\\n\s*\|\| \{[^}]*exit 1; \}",
+        r"^\(cd [^\n]*licence_register release-check\) \\\n\s*\|\| \{[^}]*exit 1; \}",
         text,
         re.M,
     )
@@ -231,18 +230,59 @@ def test_the_publish_script_checks_the_register_before_it_exports_the_product() 
     assert "nothing was published" in check
 
 
+def test_the_publish_script_s_check_does_not_run_in_the_owner_s_bare_python3() -> None:
+    """The check reads a YAML file; the owner's `python3` is not the project's environment and has no
+    PyYAML to promise. The two checks beside it use only the standard library, this one cannot, so it
+    runs in Core's own environment, the one `make publish-user-repo` on the next line uses."""
+    check = _publish_check()
+    assert "python3" not in check
+    assert "OspreyFlow_Core" in check and ".venv/bin/python" in check
+
+
+def _a_root_with_a_python3_that_has_no_pyyaml(root: Path) -> dict[str, str]:
+    """`$ROOT` whose `ospreyflow` holds this checkout's Build and a Core with a `.venv/bin/python`
+    that is the interpreter running the tests (it has PyYAML: the project's environment), and a
+    `python3` first on the PATH that cannot import `yaml` (`-S`: no site-packages), as the owner's
+    may not."""
+    ospreyflow = root / "ospreyflow"
+    (ospreyflow / "OspreyFlow_Core" / ".venv" / "bin").mkdir(parents=True)
+    (ospreyflow / "OspreyFlow_Build").symlink_to(BUILD)
+    venv_python = ospreyflow / "OspreyFlow_Core" / ".venv" / "bin" / "python"
+    venv_python.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    venv_python.chmod(0o755)
+    (root / "bin").mkdir()
+    bare = root / "bin" / "python3"
+    bare.write_text(f'#!/bin/sh\nexec "{sys.executable}" -S "$@"\n')
+    bare.chmod(0o755)
+    return {**os.environ, "PATH": f"{root / 'bin'}:{os.environ['PATH']}"}
+
+
 def _run_the_script_s_check(root: Path) -> subprocess.CompletedProcess[str]:
-    """Run the script's own statement, with `$ROOT` a folder whose `ospreyflow` is this checkout and
-    `python3` the interpreter that runs the tests."""
-    (root / "ospreyflow").symlink_to(BUILD.parent)
-    statement = _publish_check().replace("python3", sys.executable)
+    """Run the script's own statement, unchanged, with `$ROOT` a folder laid out as the owner's is
+    and a `python3` on the PATH that has no PyYAML."""
+    env = _a_root_with_a_python3_that_has_no_pyyaml(root)
     return subprocess.run(
-        ["sh", "-c", f'ROOT="{root}"\n{statement}\necho went-on'],
+        ["sh", "-c", f'ROOT="{root}"\n{_publish_check()}\necho went-on'],
         capture_output=True,
         text=True,
         check=False,
-        env={**os.environ, "PYTHONPATH": str(BUILD)},
+        env=env,
     )
+
+
+def test_the_stand_in_python3_really_has_no_pyyaml(tmp_path: Path) -> None:
+    """The fault planted is the shape the owner's machine may have: `python3 -m tools.licence_register`
+    from Build ends in an import error, not in a refusal."""
+    env = _a_root_with_a_python3_that_has_no_pyyaml(tmp_path)
+    done = subprocess.run(
+        ["python3", "-m", "tools.licence_register", "release-check"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=BUILD,
+        env=env,
+    )
+    assert done.returncode == 1 and "ModuleNotFoundError" in done.stderr, done.stderr
 
 
 def test_the_publish_script_s_check_refuses_today_s_register_naming_what_is_left(
@@ -251,6 +291,7 @@ def test_the_publish_script_s_check_refuses_today_s_register_naming_what_is_left
     done = _run_the_script_s_check(tmp_path)
     assert done.returncode == 1 and "went-on" not in done.stdout
     assert "STOP" in done.stderr and "nothing was published" in done.stderr
+    assert "ModuleNotFoundError" not in done.stderr and "Traceback" not in done.stderr, done.stderr
     assert "not settled" in done.stderr
     for name in reg.HELD_FOR_OWNER:
         assert f"held for the owner: {name!r}" in done.stderr
