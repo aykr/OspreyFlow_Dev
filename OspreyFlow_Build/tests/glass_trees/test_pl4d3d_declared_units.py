@@ -81,6 +81,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import threading
 from pathlib import Path
 from typing import NamedTuple
 
@@ -274,8 +276,36 @@ def read_units(before: Path, after: Path) -> list[tuple[Unit, str]]:
     return rows
 
 
+def scratch_tree(parent: Path) -> Path:
+    """A private copy of `apps/workspace` (and links to what it reads) to build in; returns the copy's `apps/workspace`.
+
+    The real tree's `public/assets/govuk` is written by every build in it, so two builds in one tree at once collide
+    (`ENOTEMPTY`, the merge gate's round 8). Each build here gets its own tree: the source is copied (no `node_modules`,
+    `dist` or generated `govuk` folder); `node_modules` and `packages` (the design CSS, the glass-shared package, which a
+    build only reads) are links to the real ones. Its output is the same as the real tree's build, byte for byte."""
+    app = parent / "apps" / "workspace"
+    shutil.copytree(
+        CORE / "apps" / "workspace", app, symlinks=True,
+        ignore=lambda folder, names: [
+            name for name in names
+            if name in {"node_modules", "dist"} or (name == "govuk" and Path(folder).parts[-2:] == ("public", "assets"))
+        ],
+    )
+    (parent / "node_modules").symlink_to(CORE / "node_modules")
+    (parent / "packages").symlink_to(CORE / "packages")
+    return app
+
+
+def run_build(app: Path, directory: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["npm", "run", "build", "--", "--outDir", str(directory), "--emptyOutDir"],
+        cwd=app, capture_output=True, text=True, timeout=TIMEOUT, check=False,
+    )
+
+
 def build_to(directory: Path) -> Path:
-    """A fresh build of `apps/workspace` into `directory`, never into the tree's own `dist/`."""
+    """A fresh build of `apps/workspace` into `directory`: built in a private copy of the tree, never in the real one,
+    so no other build in the sweep (this file's, `test_workspace_bundle.py`'s, `test_render.py`'s) can race it."""
     done = subprocess.run(
         ["npm", "run", "build", "--workspace", "apps/workspace", "--", "--outDir", str(directory), "--emptyOutDir"],
         cwd=CORE, capture_output=True, text=True, timeout=TIMEOUT, check=False,
@@ -920,6 +950,85 @@ def test_the_docstring_names_the_conductors_flag_and_says_nothing_else_may_run_t
     assert "nothing else may run it against the real folder" in " ".join(doc.split()).lower()
     assert "Until the conductor has run it, this proof stays live on the Mac." not in doc
     assert "--conductor-merge" in SCRIPT.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------- no two builds share a tree (the merge gate's round 8)
+def build_is_possible() -> bool:
+    return (CORE / "node_modules" / "vite").is_dir() and (CORE / "apps" / "workspace" / "package.json").is_file()
+
+
+def test_a_build_runs_in_a_private_copy_of_the_tree_never_in_the_real_one(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """`build_to` is what every build of this file goes through, so it must not touch the real `apps/workspace`.
+
+    The real tree's `public/assets/govuk` is shared by every build in it (`sync_govuk_assets.mjs` removes and refills it):
+    two builds in one tree at once is the `ENOTEMPTY` the merge gate refused. Recorded: the working directory of the build
+    command is a copy outside the real tree, and what it builds is not the real folder."""
+    calls: list[tuple[list[str], Path]] = []
+    real_run = subprocess.run
+
+    def spy(command, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        calls.append((list(command), Path(kwargs["cwd"]).resolve()))
+        return real_run(["true"], *args, **{**kwargs, "cwd": tmp_path})
+
+    monkeypatch.setattr(subprocess, "run", spy)
+    build_to(tmp_path / "dist")
+    assert len(calls) == 1
+    command, cwd = calls[0]
+    assert "build" in command
+    assert CORE.resolve() not in [cwd, *cwd.parents], f"the build ran in the real tree: {cwd}"
+    assert "--workspace" not in command, "a workspace build runs from the real tree's root"
+
+
+def race(builders: list) -> list[subprocess.CompletedProcess[str]]:
+    """Every builder starts at the same moment (a barrier), so the builds overlap as two xdist workers' do."""
+    done: list = [None] * len(builders)
+    barrier = threading.Barrier(len(builders))
+
+    def go(index: int) -> None:
+        barrier.wait()
+        done[index] = builders[index]()
+
+    threads = [threading.Thread(target=go, args=(index,)) for index in range(len(builders))]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    return done
+
+
+@pytest.mark.skipif(not build_is_possible(), reason="needs the workspace's node_modules")
+def test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not(tmp_path: Path) -> None:
+    """The race planted in the shape the gate met (rule 15): two `npm run build`s at once in one tree.
+
+    Unlocked, in one copy of the tree (the real tree's shape, but a copy, so no other test's build is harmed):
+    one of the two fails in `sync_govuk_assets.mjs`'s `rmSync`/`cpSync` of the shared `public/assets/govuk`, as at the merge
+    (tried up to five times, since a race is not certain: it was six in six on an idle Mac). Then two `build_to`s at once,
+    each in its own copy: both succeed, every time. The two collide because they share a tree, and they do not once they
+    share none; no lock is needed, and none is taken."""
+    failures: list[str] = []
+    for attempt in range(5):
+        shared = scratch_tree(tmp_path / f"shared{attempt}")
+        results = race([
+            lambda out=tmp_path / f"s{attempt}a": run_build(shared, out),
+            lambda out=tmp_path / f"s{attempt}b": run_build(shared, out),
+        ])
+        failures = [r.stdout + r.stderr for r in results if r.returncode != 0]
+        if failures:
+            break
+    assert failures, "two builds in one tree never collided in five tries: the plant does not show the race"
+    assert re.search(r"ENOTEMPTY|ENOENT|EEXIST|sync_govuk_assets", failures[0]), failures[0][-1500:]
+
+    outcomes: list[object] = []
+
+    def private(name: str) -> object:
+        try:
+            return build_to(tmp_path / name / "dist")
+        except AssertionError as error:  # pragma: no cover - the failure is the finding
+            return error
+
+    outcomes = race([lambda: private("p1"), lambda: private("p2")])
+    assert all(isinstance(o, Path) for o in outcomes), outcomes
+    assert all((o / "index.html").is_file() for o in outcomes)
 
 
 if __name__ == "__main__":
