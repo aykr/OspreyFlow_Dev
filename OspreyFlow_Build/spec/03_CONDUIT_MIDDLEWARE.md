@@ -1650,7 +1650,7 @@ result cardinality, and — where the action crosses a handling boundary — the
 analyst supplied. Audit write failure fails the request; an unaudited read in this domain is
 worse than a refused one.
 
-**Scope of the audit (DC1c, 20 November 2026, from the truth check `process/lanes/v062/slices/DOC1A_REPORT.md`;
+**Scope of the audit (DC1c, 20 November 2026, from the DC1a truth check of that date;
 a note on the paragraph above, which it does not replace).** "Every read ... records" holds for reads and writes
 of case data, less what follows. *Unaudited by design:* deployment metadata (the ontology, map providers, ingest
 connectors, packs and transforms, the tile proxy); some reads on a case (link types, promotable items, link
