@@ -66,8 +66,11 @@ function plainSegments(rest: string): string[] | undefined {
   return segments;
 }
 
+/** A refusal is never cached: `send` sets the file's headers before it opens the file, so a failed read has them on already. */
 function notFound(res: Parameters<RequestHandler>[1]): void {
-  res.status(404).type("text/plain").send("Not found");
+  res.removeHeader("Content-Length");
+  res.removeHeader("ETag");
+  res.set("Cache-Control", "no-store").status(404).type("text/plain").send("Not found");
 }
 
 /** The handler for everything under `/assets/pages`, mounted with `app.use(ASSETS_PREFIX, ...)`. */
@@ -96,11 +99,24 @@ export function assetsHandler(dir: string): RequestHandler {
       notFound(res);
       return;
     }
-    // The page headers say `no-store` for a person's page; an asset is the opposite, so both are set here, whole.
-    res.set("Cache-Control", IMMUTABLE).type(type);
-    res.sendFile(real, { dotfiles: "deny", cacheControl: false, lastModified: false }, (error) => {
-      if (error && !res.headersSent) notFound(res);
-    });
+    // The page headers say `no-store` for a person's page; an asset is the opposite. The header goes out with the file
+    // (`headers`, set by `send` only when it is about to stream), so a refusal never carries "immutable" for a year.
+    // The folder is the `root`, so `send`'s dotfile rule reads only the path inside it: a checkout under `~/.something`
+    // or `node_modules/.cache` is served like any other. (`plainSegments` has already refused a dot-segment inside it.)
+    const inside = real.slice(root.length + 1).split(sep).join("/");
+    res.sendFile(
+      inside,
+      {
+        root,
+        dotfiles: "deny",
+        cacheControl: false,
+        lastModified: false,
+        headers: { "Cache-Control": IMMUTABLE, "Content-Type": type },
+      },
+      (error) => {
+        if (error && !res.headersSent) notFound(res);
+      },
+    );
   };
 }
 
