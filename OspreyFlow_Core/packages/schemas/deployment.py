@@ -1731,6 +1731,33 @@ class AppearanceConfig(BaseModel):
         return dumped
 
 
+class PagesConfig(BaseModel):
+    """Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the server-rendered pages
+    (`apps/pages`, the Ingest Studio's frame and Releases first). Off by default, and turned on for one deployment at a
+    time, by the owner, in that deployment's own `osprey.yaml`; nothing else turns it on (not a profile, a brand or a
+    release). Nothing reads the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are theirs,
+    and until they do a render is exactly what it was."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Default: false. Whether this deployment runs the page service, the server-rendered "
+            "pages. true or false, nothing else: it is turned on for one deployment at a time, "
+            "by the owner, in that deployment's own file."
+        ),
+    )
+
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def _true_or_false(cls, value: object) -> object:
+        # `yes`, `on`, a quoted "true" and 1 are not booleans here: a setting that turns a service on is not guessed at.
+        if not isinstance(value, bool):
+            raise ValueError("pages.enabled must be true or false")
+        return value
+
+
 class GradingConfig(BaseModel):
     """The deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6): the
     scheme every drawn node and link is graded in, chosen at install (`install.yaml`'s
@@ -2073,6 +2100,7 @@ class OspreyConfig(BaseModel):
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
     deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
     appearance: AppearanceConfig = Field(default_factory=AppearanceConfig)
+    pages: PagesConfig = Field(default_factory=PagesConfig)
     grading: GradingConfig = Field(default_factory=GradingConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
     resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
