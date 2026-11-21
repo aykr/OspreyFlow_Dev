@@ -537,6 +537,7 @@ from . import (
     alert_sources,
     case_gazetteers,
     map_places,
+    model_calls,
     raised_alerts,
     rule_editor,
     search_service,
@@ -6052,21 +6053,24 @@ async def run_extraction_route(
     extraction_candidates: ExtractionCandidatesDep,
     audit: AuditDep,
 ) -> list[ExtractionCandidateRecord]:
-    records = await review_module.run_extraction(
-        model,
-        ontology,
-        extraction_candidates,
-        document_id=body.document_id,
-        text=body.text,
-        profile=body.profile.to_profile(),
-        handling=body.handling,
-        principal=principal,
-        extraction_model=body.model,
-        # ADR-136: text extracted in a case is of the case's datasets.
-        datasets=principal.datasets,
-        # ADR-135 Amendment 9: the review queue's extraction, the one call Laurium serves.
-        laurium_may_read=True,
-    )
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="extract", via="run_extraction"
+    ):
+        records = await review_module.run_extraction(
+            model,
+            ontology,
+            extraction_candidates,
+            document_id=body.document_id,
+            text=body.text,
+            profile=body.profile.to_profile(),
+            handling=body.handling,
+            principal=principal,
+            extraction_model=body.model,
+            # ADR-136: text extracted in a case is of the case's datasets.
+            datasets=principal.datasets,
+            # ADR-135 Amendment 9: the review queue's extraction, the one call Laurium serves.
+            laurium_may_read=True,
+        )
     await audit.record(
         principal=principal,
         action="run_extraction",
@@ -7127,7 +7131,10 @@ async def ask_to_search_route(
     explanation and the preview's own count. Viewer, as the preview is: it writes nothing, and
     running the pattern is the existing run route's, counted first (rules 3 and 4)."""
     try:
-        proposal = await pattern_ask.ask(investigation.id, body, principal, ontology)
+        async with model_calls.attributed(
+            audit, principal, investigation.id, job="pattern_ask", via="patterns_ask"
+        ):
+            proposal = await pattern_ask.ask(investigation.id, body, principal, ontology)
     except CouldNotExpress as refused:
         await audit.record(
             principal=principal,
@@ -7694,9 +7701,12 @@ async def extract_email_route(
     linked to both addresses, both go into the working set, and the model's findings are stored
     pending for a person to accept. Only to someone who can see the link; Editor, since it
     writes."""
-    result = await email_extraction.extract(
-        investigation.id, edge_id, event_id, principal, model=body.model, using=body.using
-    )
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="email", via="extract_email"
+    ):
+        result = await email_extraction.extract(
+            investigation.id, edge_id, event_id, principal, model=body.model, using=body.using
+        )
     await publish_delta(valkey, investigation.id, result.delta)
     await audit.record(
         principal=principal,
@@ -8023,7 +8033,12 @@ async def extract_document_route(
     """Entities from a held Document by its kind (ADR-094): kept text as it is, an image described
     and its text read, a video transcribed. Findings are pending until a person accepts one."""
     using = body.using if body is not None else "recogniser"
-    result = await document_content.extract(investigation.id, document_id, principal, using=using)
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="extract", via="extract_document"
+    ):
+        result = await document_content.extract(
+            investigation.id, document_id, principal, using=using
+        )
     await audit.record(
         principal=principal,
         action="extract_document",
@@ -8148,19 +8163,23 @@ async def ask_question_route(
         if body.view_id is not None
         else None
     )
-    answer = await questions.ask(
-        investigation.id,
-        body.question,
-        principal,
-        selected_node_ids=body.selected_node_ids,
-        selected_link_ids=body.selected_link_ids,
-        window=body.window,
-        engine=body.engine,
-        view_id=body.view_id,
-        view_node_ids=in_view,
-        read_from=body.read_from,
-        case_search=_case_search(request, index, datasets, search_working_set),
-    )
+    # SE8a: the model call is recorded with the asker, the case, and the engine and model used.
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="ask", via="ask_question"
+    ):
+        answer = await questions.ask(
+            investigation.id,
+            body.question,
+            principal,
+            selected_node_ids=body.selected_node_ids,
+            selected_link_ids=body.selected_link_ids,
+            window=body.window,
+            engine=body.engine,
+            view_id=body.view_id,
+            view_node_ids=in_view,
+            read_from=body.read_from,
+            case_search=_case_search(request, index, datasets, search_working_set),
+        )
     await audit.record(
         principal=principal,
         action="ask_question",

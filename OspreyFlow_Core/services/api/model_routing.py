@@ -27,6 +27,10 @@ it under that engine and job, and a hosted engine's call goes with that engine's
 limits the gateway applies. A limit's refusal reaches the caller as `ModelLimitReached`, worded
 with the engine's label.
 
+Each call is also noted (`model_calls.note`) with the engine and model chosen for it and how it
+ended, for the route that asked to record (SE8a): names only, and `None` for both where the call was
+refused before an engine was chosen.
+
 This wraps the model adapter, so every call the Conduit makes goes through it. The Conduit is told
 the engines by `harness/render.py` (`OSPREY_MODEL_ENGINES`, `OSPREY_MODEL_DEFAULTS`,
 `OSPREY_SENDABLE_HANDLING_CODES`) and whether each key is present by Compose
@@ -35,8 +39,10 @@ the engines by `harness/render.py` (`OSPREY_MODEL_ENGINES`, `OSPREY_MODEL_DEFAUL
 
 from __future__ import annotations
 
+import asyncio
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Literal, Protocol, cast
 
@@ -55,6 +61,7 @@ from schemas.model import (
     VisionRequest,
 )
 
+from . import model_calls
 from .config import DeploymentModels
 from .datasets import Dataset
 
@@ -335,42 +342,96 @@ class RoutedModel:
             return hit.for_engine(LOCAL_LABEL)
         return hit.for_engine(named.label, named.budget_period)
 
-    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
-        choice = await self.decide("extraction", req.model, req.handling, req.engine, req.datasets)
+    async def _decided(
+        self,
+        job: str,
+        role: Role,
+        asked: str,
+        handling: Handling | None,
+        engine: str | None,
+        datasets: Sequence[str] | None,
+    ) -> Choice:
+        """`decide`, noting a call refused, failed or cancelled before an engine was chosen."""
         try:
-            with calling(choice.engine, "extraction"):
-                result = await self._inner.extract(req.model_copy(update={"model": choice.model}))
-        except ModelLimitReached as hit:
-            raise self._limit_words(hit, choice.engine) from None
-        except ModelEngineRefused as refused:
-            raise refused.for_engine(self._label(choice.engine)) from None
+            return await self.decide(role, asked, handling, engine, datasets)
+        except (EngineRefused, ModelEgressRefused):
+            model_calls.note(model_calls.ModelCall(job, None, None, "refused"))
+            raise
+        except asyncio.CancelledError:
+            model_calls.note(model_calls.ModelCall(job, None, None, "interrupted"))
+            raise
+        except Exception:
+            model_calls.note(model_calls.ModelCall(job, None, None, "errored"))
+            raise
+
+    @contextmanager
+    def _noted(self, job: str, engine: str, model: str | None) -> Iterator[None]:
+        """Notes the call made inside as `engine` and `model` (the routing's choice), and how it
+        ended: a refusal by the engine or its limit is `refused`, a cancel `interrupted`, any other
+        failure `errored`. Only the outcome's name is kept, never the failure's words."""
+        try:
+            yield
+        except (ModelLimitReached, ModelEngineRefused):
+            model_calls.note(model_calls.ModelCall(job, engine, model, "refused"))
+            raise
+        except asyncio.CancelledError:
+            model_calls.note(model_calls.ModelCall(job, engine, model, "interrupted"))
+            raise
+        except Exception:
+            model_calls.note(model_calls.ModelCall(job, engine, model, "errored"))
+            raise
+        model_calls.note(model_calls.ModelCall(job, engine, model, "answered"))
+
+    async def extract(self, req: ExtractionRequest) -> ExtractionResult:
+        choice = await self._decided(
+            model_calls.EXTRACT, "extraction", req.model, req.handling, req.engine, req.datasets
+        )
+        with self._noted(model_calls.EXTRACT, choice.engine, choice.model):
+            try:
+                with calling(choice.engine, "extraction"):
+                    result = await self._inner.extract(
+                        req.model_copy(update={"model": choice.model})
+                    )
+            except ModelLimitReached as hit:
+                raise self._limit_words(hit, choice.engine) from None
+            except ModelEngineRefused as refused:
+                raise refused.for_engine(self._label(choice.engine)) from None
         return result.model_copy(update={"engine": choice.engine})
 
     async def transcribe(self, req: TranscribeRequest) -> Transcript:
-        choice = await self.decide("transcription", req.model, req.handling, None, req.datasets)
-        try:
-            with calling(choice.engine, "transcription"):
-                return await self._inner.transcribe(req.model_copy(update={"model": choice.model}))
-        except ModelLimitReached as hit:
-            raise self._limit_words(hit, choice.engine) from None
+        choice = await self._decided(
+            "transcribe", "transcription", req.model, req.handling, None, req.datasets
+        )
+        with self._noted("transcribe", choice.engine, choice.model):
+            try:
+                with calling(choice.engine, "transcription"):
+                    return await self._inner.transcribe(
+                        req.model_copy(update={"model": choice.model})
+                    )
+            except ModelLimitReached as hit:
+                raise self._limit_words(hit, choice.engine) from None
 
     async def describe_image(self, req: VisionRequest) -> ImageAnalysis:
-        choice = await self.decide("vision", req.model, req.handling, None, req.datasets)
-        try:
-            with calling(choice.engine, "vision"):
-                return await self._inner.describe_image(
-                    req.model_copy(update={"model": choice.model})
-                )
-        except ModelLimitReached as hit:
-            raise self._limit_words(hit, choice.engine) from None
-        except ModelEngineRefused as refused:
-            raise refused.for_engine(self._label(choice.engine)) from None
+        choice = await self._decided(
+            "describe", "vision", req.model, req.handling, None, req.datasets
+        )
+        with self._noted("describe", choice.engine, choice.model):
+            try:
+                with calling(choice.engine, "vision"):
+                    return await self._inner.describe_image(
+                        req.model_copy(update={"model": choice.model})
+                    )
+            except ModelLimitReached as hit:
+                raise self._limit_words(hit, choice.engine) from None
+            except ModelEngineRefused as refused:
+                raise refused.for_engine(self._label(choice.engine)) from None
 
     async def embed(self, texts: Sequence[str]) -> list[Vector]:
         """Embeddings carry no handling here, so they never leave: always the local model (the
         adapter's own), whatever the provider names."""
-        with calling(LOCAL, "embedding"):
-            return await self._inner.embed(texts)
+        with self._noted("embed", LOCAL, self.routes.locals.get("embedding")):
+            with calling(LOCAL, "embedding"):
+                return await self._inner.embed(texts)
 
 
 def _json(environ: Mapping[str, str], name: str, empty: object) -> object:
