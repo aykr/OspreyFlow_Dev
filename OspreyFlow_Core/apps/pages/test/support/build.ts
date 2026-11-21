@@ -2,6 +2,7 @@ import type { Express, Router } from "express";
 
 import { createApp } from "../../server/app.js";
 import type { AssetManifest } from "../../server/assets.js";
+import type { ForwardSettings } from "../../server/config.js";
 import type { PageModule } from "../../server/pages.js";
 import type { CodeFlowProvider, IdentityProvider } from "../../server/identity.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
@@ -42,6 +43,10 @@ export interface BuildOptions {
   viewDirs?: readonly string[];
   /** The `FUNCTIONS.yaml` row ids a page may name, when a test wants its own list instead of the real file's. */
   functionIds?: ReadonlySet<string>;
+  /** The Conduit's address and limits (the `/v1` forwarder's settings, which the Studio pages' own calls use too). */
+  forward?: ForwardSettings;
+  /** Where the app says what went wrong: a test that reads the log passes a collector. */
+  log?: (message: string) => void;
 }
 
 /** The real app factory, with the in-memory store that refuses what Valkey refuses and a fake provider. */
@@ -58,6 +63,8 @@ export function build(options: BuildOptions = {}): Built {
     ...(options.pages ? { pages: options.pages } : {}),
     ...(options.viewDirs ? { viewDirs: options.viewDirs } : {}),
     ...(options.functionIds ? { functionIds: options.functionIds } : {}),
+    ...(options.forward ? { forward: options.forward } : {}),
+    ...(options.log ? { log: options.log } : {}),
     extraRoutes: (router) => {
       router.all("/_test/echo", (_req, res) => {
         res.status(200).type("text/plain").send("accepted");
