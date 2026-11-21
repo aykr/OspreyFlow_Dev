@@ -5,7 +5,8 @@ alert cites the customer and the list's own entry for the listed party (`kyc_rul
 gives it `listing` and `list_name`), joined by an inferred `SAME_AS`. The Glass now says which is
 the list's (`concernWords`, in the alert words of `packages/glass-shared`). The pack's stored
 alert item (`services/api/packs.py`'s `alert_item`, ADR-134 decision 1) is a frozen snapshot read
-long after, outside the Glass, so it must say so itself, or a published pack reads as one person matched twice.
+long after, outside the Glass, so it must say so itself, or a published pack reads as one person
+matched twice.
 
 What a mistake would do, and the case that catches it:
 - the list's entry stored by name and type alone, like the customer —
