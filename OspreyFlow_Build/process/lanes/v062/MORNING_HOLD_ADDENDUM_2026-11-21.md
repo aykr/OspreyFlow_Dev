@@ -29,6 +29,10 @@ The verifier held every changed sentence to DC1a's table. What is left:
 
 **Recommendation: one add-round line.** All concrete and small; round 5 fixes the three sentences and widens the test to the shape the text actually takes. DC1b's and DC1c's end state is the same: verified, held for your line, never merged without it. (The slice's deliverable folder, diff and rendered copy are written by me into `OspreyFlow_Build/process/lanes/v062/slices/DC1c_OUT/` when it is verified, because builders cannot write to `Claude outputs/`.)
 
+## 10. PL4d3c (slice D3c) is stopped before its first round: lines needed (`PL4d3c	clear-stop	<date>` and `PL4d3c	refreeze	<date>`)
+
+The builder could not get its own checks green in 6 tries. Cause (read from the red record, not a product fault): the checks include `tests/test_layout.py` (I added it to the D2 onward lists as a guard against a new root file), and `test_no_product_folder_is_left_at_the_root` fails in a slice's **worktree** because the line itself places a `Claude outputs` folder (the copy of the rulings) at the worktree root, which that test does not allow; in the clean merge tree there is no such folder, so the merges of D2, D3a and D3b passed. **The fault is mine (a check that cannot go green in a builder's worktree).** The fix is to take `test_layout.py` out of D3c's checks (the slice adds no root file) and re-freeze; changing a frozen check needs your line, so D3c waits. PL4 is held behind it: D3d (the files needing a split first) and E start when D3c merges. SE7b also has a `Claude outputs` folder in its worktree and its checks did not include `test_layout`, so it was unaffected. Once you add the two lines D3c builds again from round 1 and I take `test_layout.py` out of every later PL4 slice's checks.
+
 ## 8b. PL4d2 merged (`74a983e`), LR1 merged (`7479243`)
 
 No action needed from you.
