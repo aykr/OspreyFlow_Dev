@@ -102,6 +102,8 @@ interface FakeConduit {
   force: number | undefined;
   /** Never answers: a Conduit that is silent. */
   hang: boolean;
+  /** Answers with a redirect to this address: a Conduit that sends the caller elsewhere. */
+  redirectTo: string | undefined;
   stop(): Promise<void>;
 }
 
@@ -115,6 +117,7 @@ async function startConduit(accepts: (token: string) => boolean): Promise<FakeCo
     expired: new Set(),
     force: undefined,
     hang: false,
+    redirectTo: undefined,
     stop: () => new Promise((resolve) => server.close(() => resolve())),
   };
   const sockets = new Set<import("node:net").Socket>();
@@ -138,6 +141,12 @@ async function startConduit(accepts: (token: string) => boolean): Promise<FakeCo
         res.writeHead(status, { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(raw) });
         res.end(raw);
       };
+      if (fake.redirectTo !== undefined) {
+        record.status = 307;
+        res.writeHead(307, { Location: fake.redirectTo, "Content-Length": 0 });
+        res.end();
+        return;
+      }
       if (fake.force !== undefined) return answer(fake.force, { detail: "forced" });
       const header = req.headers.authorization;
       const token = typeof header === "string" && /^Bearer /i.test(header) ? header.slice(7) : undefined;
@@ -498,6 +507,19 @@ describe("the Conduit is down, silent or refusing: sign-in and sign-out go on", 
     const res = await signOut(r, signed);
     expect(res.status).toBe(303);
     await until("the second miss", () => r.misses() === 2);
+    expect(r.output()).not.toContain(signed.token);
+  });
+
+  it("a Conduit that redirects is a miss, and the bearer goes nowhere else", async () => {
+    const elsewhere = await startConduit(() => true);
+    cleanups.push(() => elsewhere.stop());
+    const r = await rig();
+    r.conduit.redirectTo = `${elsewhere.url}${ROUTE}`;
+    const signed = await signInOnce(r);
+    await until("the miss", () => r.misses() === 1);
+    expect(sessionKeys(r).length).toBe(1);
+    await sleep(100);
+    expect(elsewhere.seen).toEqual([]);
     expect(r.output()).not.toContain(signed.token);
   });
 

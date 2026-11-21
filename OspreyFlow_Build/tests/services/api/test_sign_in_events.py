@@ -510,17 +510,46 @@ def test_the_session_is_told_from_the_sid_else_the_auth_time_else_the_issue_time
 def test_the_reference_is_keyed_by_a_secret_the_deployment_holds(
     keypair: Any, jwks_url: str, mod: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The same person and the same `sid` in two deployments give two references, and the secret
-    is in
-    no row: a reference cannot be worked back to a `sid` by anyone who does not hold it (an unkeyed
-    hash of the `sid` is the same in both and fails here)."""
+    """The same person, the same issuer and the same `sid` in two deployments give two references,
+    and the secret is in no row: a reference cannot be worked back to a `sid`, or matched to a
+    token, by anyone who does not hold it (an unkeyed hash of the `sid` is the same in both and
+    fails here; the issuer is held the same in both so that it cannot be what tells them apart)."""
     refs = []
     for _ in range(2):
         r = Rig(keypair, jwks_url, mod, monkeypatch)
+        r.provider = "https://idp.example.test/realms/osprey"
         s = Session(r, "analyst-1", sid="fixed-sid-0001")
         r.me(s.token())
         refs.append(detail(r.pool.of("sign_in_seen")[0])["session"])
     assert refs[0] != refs[1]
+    # And inside one deployment the same inputs give the same reference, whichever replica asks.
+    again = Rig(keypair, jwks_url, mod, monkeypatch)
+    again.provider = "https://idp.example.test/realms/osprey"
+    first = Session(again, "analyst-1", sid="fixed-sid-0001")
+    again.me(first.token())
+    again.use(again.replica())
+    again.event(first.token(), "sign_in")
+    assert (
+        detail(again.pool.of("sign_in")[0])["session"]
+        == detail(again.pool.of("sign_in_seen")[0])["session"]
+    )
+
+
+def test_an_application_identity_admitted_to_named_routes_is_not_a_person_signing_in(
+    rig: Rig,
+) -> None:
+    """A dashboard's app identity (Entra ID) is admitted to named routes alone: it is no person's
+    sign-in, so its first sight writes nothing (it would write a row for every token it renews)."""
+    from schemas.domain import Principal
+
+    async def application(_: str) -> Principal:
+        return Principal(
+            id="dashboard-1", clearance="OFFICIAL", org_unit="unit-1", routes=["GET /v1/me"]
+        )
+
+    rig.resolver.resolve_principal = application  # type: ignore[method-assign]
+    assert rig.me(rig.session().token()).status_code == 200
+    assert rig.pool.rows == []
 
 
 def test_the_deployment_secret_is_shared_by_replicas_and_survives_a_restart(rig: Rig) -> None:
