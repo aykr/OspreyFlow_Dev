@@ -17,8 +17,11 @@ open-data licence, which covers ODbL and OGL. Each row says which of the four te
 `tests/licence_check/test_register.py`, planted at the shape the code reads): a weight, map dataset,
 font family or image the code names that has no row; a pin (revision, digest, tag or hash) that
 differs between the code and the row; a row nothing in the code names; a licence that does not pass
-the row's stated test, or a test that is not one of the four; a `confirmed` row with no "where
-read";
+the row's stated test, or a test that is not one of the four, or a test the row's kind may not
+claim (`TESTS_BY_KIND`: a weight passes by `osi-weights`, an image or a font by `osi-software`,
+map data by `open-data`, the map build's planetiler by `osi-software`; `restricted` for any); a
+file that names a row's thing in the code but is missing from its `named_in`; a `confirmed` row with
+no "where read";
 a `conditional` row with no owner ruling; a `restricted` row that is not conditional; an
 `unconfirmed` row that states a licence or does not say what must be read; a name that is both held
 for the owner and registered.
@@ -78,6 +81,29 @@ COLUMNS = (
     "status",
 )
 OS_SCANS = ("yes", "no", "partly")
+
+#: Which tests a row of each kind may claim (the owner's ruling 1, 21 November 2026: software and
+#: base images by OSI approval, weights by the same test on the weights' own licence, data by a
+#: recognised open-data licence). A font is software. `restricted` is open to every kind: it is how
+#: a row that fails the definition is registered, and only as a `conditional` row with an owner
+#: ruling.
+TESTS_BY_KIND = {
+    "weight": ("osi-weights", "restricted"),
+    "image": ("osi-software", "restricted"),
+    "font": ("osi-software", "restricted"),
+    "map-data": ("open-data", "restricted"),
+}
+#: The one map-data row that is a tool, not data: the map build's own planetiler, which passes as
+#: software. By name, so no dataset borrows the exception.
+MAP_BUILD_TOOLS = frozenset({"planetiler"})
+
+
+def tests_for(kind: str, name: str = "") -> tuple[str, ...]:
+    """The tests a row of `kind` called `name` may claim."""
+    if kind == "map-data" and name in MAP_BUILD_TOOLS:
+        return ("osi-software", "restricted")
+    return TESTS_BY_KIND.get(kind, ())
+
 
 #: Names the register could not take because the licence read does not pass the definition, put to
 #: the owner (the conductor takes each to him). A held name is **not** a row: the gate does not fail
@@ -510,7 +536,9 @@ def load_register(path: Path = REGISTER_PATH) -> list[dict[str, Any]]:
     return list(document["rows"])
 
 
-def _row_violations(row: dict[str, Any], core: Path) -> list[str]:
+def _row_violations(
+    row: dict[str, Any], core: Path, code_files: dict[tuple[str, str, str], set[str]] | None = None
+) -> list[str]:
     label = f"{row.get('id', '?')} {row.get('name', '?')!r}"
     out: list[str] = []
     test, status = row.get("test"), row.get("status")
@@ -520,6 +548,12 @@ def _row_violations(row: dict[str, Any], core: Path) -> list[str]:
         out.append(f"{label}: the status {status!r} is not one of {', '.join(STATUSES)}")
     if row.get("kind") not in KINDS:
         out.append(f"{label}: the kind {row.get('kind')!r} is not one of {', '.join(KINDS)}")
+    elif test in TESTS and test not in tests_for(row["kind"], str(row.get("name") or "")):
+        allowed = " or ".join(tests_for(row["kind"], str(row.get("name") or "")))
+        out.append(
+            f"{label}: a {row['kind']} row cannot pass by the test {test} "
+            f"(the owner's definition: {allowed})"
+        )
     for column in COLUMNS:
         if column not in row:
             out.append(f"{label}: no {column} column")
@@ -559,9 +593,13 @@ def _row_violations(row: dict[str, Any], core: Path) -> list[str]:
             out.append(
                 f"{label}: os_packages does not say how the operating-system packages are covered"
             )
-    for named_in in row.get("named_in") or []:
+    listed = row.get("named_in") or []
+    for named_in in listed:
         if not (core / named_in).exists():
             out.append(f"{label}: named_in {named_in!r} is not a file")
+    key = (str(row.get("kind")), str(row.get("name")), str(row.get("pin")))
+    for file in sorted((code_files or {}).get(key, set()) - set(listed)):
+        out.append(f"{label}: named_in leaves out {file!r}, which names it in the code")
     return out
 
 
@@ -575,8 +613,11 @@ def find_register_violations(
     out: list[str] = []
     ids = [r.get("id") for r in rows]
     out += [f"the row id {i!r} is used twice" for i in sorted({i for i in ids if ids.count(i) > 1})]
+    code_files: dict[tuple[str, str, str], set[str]] = {}
+    for item in named:
+        code_files.setdefault((item.kind, item.name, item.pin), set()).update(item.files)
     for row in rows:
-        out += _row_violations(row, core)
+        out += _row_violations(row, core, code_files)
 
     by_code: dict[tuple[str, str], list[Named]] = {}
     for item in named:

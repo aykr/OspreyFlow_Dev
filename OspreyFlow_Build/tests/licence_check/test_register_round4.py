@@ -1,14 +1,14 @@
-"""The register's gate, round 4 (PL11): a test must fit the row's kind, and `named_in` must hold every
-file that names the thing.
+"""The register's gate, round 4 (PL11): a test must fit the row's kind, and `named_in` must hold
+every file that names the thing.
 
 Two faults the verifier found in round 3, each shown red here before the code that answers it:
 
 1. **The gate let a row pick whichever test its licence passed, whatever its kind.** The owner's
    definition (21 November 2026, ruling 1) is per kind: software and base images by OSI approval,
    model weights by the same test on the weights' own licence, data by a recognised open-data
-   licence. A `weight` row at `CC-BY-4.0` / `open-data` / `confirmed` passed, though the OSI does not
-   approve CC-BY-4.0 and the definition refuses that weight. Each kind below is planted at a real
-   row's shape (the real row, with the licence and the test changed together).
+   licence. A `weight` row at `CC-BY-4.0` / `open-data` / `confirmed` passed, though the OSI does
+   not approve CC-BY-4.0 and the definition refuses that weight. Each kind below is planted at a
+   real row's shape (the real row, with the licence and the test changed together).
 2. **`named_in` was checked only for being a file.** Six files name `python:3.12-slim`; B13a listed
    three. The derivation already carries every naming file, so a row now fails when a file the code
    names it in is missing from its `named_in`.
@@ -56,10 +56,10 @@ def _first(rows: list[dict[str, Any]], kind: str) -> dict[str, Any]:
     return next(r for r in rows if r["kind"] == kind and r["name"] != "planetiler")
 
 
-# --- 1. the test must fit the kind -----------------------------------------------------------------
+# --- 1. the test must fit the kind ---------------------------------------------------------------
 
 #: `(kind, a licence that passes the data test but not the OSI's, the test the row claims)`. The
-#: image and the weight cases are the finding's own; the others close the same gap for the other kinds.
+#: image and the weight cases are the finding's own; the others close the gap for the other kinds.
 WRONG_TEST = [
     ("weight", "CC-BY-4.0", "open-data"),
     ("weight", "public-domain", "open-data"),
@@ -156,7 +156,7 @@ def test_every_real_row_uses_a_test_its_kind_may_use(real_rows: list[dict[str, A
         assert row["test"] in allowed, (row["id"], row["test"], allowed)
 
 
-# --- 2. named_in holds every file that names the thing -----------------------------------------------
+# --- 2. named_in holds every file that names the thing -------------------------------------------
 
 
 def test_b13a_lists_every_file_that_names_python_slim(

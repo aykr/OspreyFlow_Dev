@@ -11,7 +11,11 @@
 # open source when their licence is approved by the Open Source Initiative (which includes GPL-2.0
 # with the Classpath exception); model weights, by the same test on the weights' own licence; data,
 # by a recognised open-data licence, which covers ODbL and OGL. The `test` column says which test a
-# row passed: `osi-software`, `osi-weights`, `open-data`, or `restricted` (the name of failing).
+# row passed: `osi-software`, `osi-weights`, `open-data`, or `restricted` (the name of failing). The
+# test must fit the kind: a weight passes by `osi-weights`, an image or a font by `osi-software`, map
+# data by `open-data` (the map build's own tool, planetiler, by `osi-software`); `restricted` is open
+# to every kind. `named_in` must hold every file in which the code names the thing (the gate fails
+# when one is missing).
 #
 # COLUMNS: id; kind (weight | map-data | font | image); name (as the code writes it: the gate matches
 # on it); pin (the version, digest, revision or hash the code pins: the gate compares it to the
@@ -706,7 +710,13 @@ rows:
     ships: >-
       Default: the base of the api, ingest, worker, report-sync and ner images and of the harness (a
       moving tag: the release build passes `--pull`).
-    named_in: [services/api/Dockerfile, services/ingest/Dockerfile, harness/Dockerfile]
+    named_in:
+      - harness/Dockerfile
+      - services/api/Dockerfile
+      - services/ingest/Dockerfile
+      - services/ner/Dockerfile
+      - services/report_sync/Dockerfile
+      - services/worker/Dockerfile
     licence: PSF-2.0
     where_read: >-
       https://raw.githubusercontent.com/python/cpython/v3.12.16/LICENSE (`PYTHON_VERSION=3.12.16` in
