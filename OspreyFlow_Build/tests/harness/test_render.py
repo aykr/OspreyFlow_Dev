@@ -223,7 +223,9 @@ def test_pull_mode_renders_owned_images_with_no_build_stanza_and_a_locked_digest
         update={"components": config.components.model_copy(update={"source_path": None})}
     )
     owned_services = {i.service for i in service_images(pull_config) if i.owned}
-    assert owned_services == {"workspace", "api", "ingest", "ner"}  # ner: ADR-098 decision 2
+    # ner: ADR-098 decision 2; litellm: the model gateway, built from the publisher's MIT files
+    # alone (the owner's ruling of 21 November 2026).
+    assert owned_services == {"workspace", "api", "ingest", "ner", "litellm"}
 
     with pytest.raises(UnpinnedImagesError) as excinfo:
         render(pull_config, resolver=lambda _image: None)
@@ -726,10 +728,14 @@ def test_every_rendered_build_context_points_at_a_dockerfile_that_exists(
     rendered: RenderResult,
 ) -> None:
     compose = yaml.safe_load(rendered.artefacts["compose.yaml"])
+    # As compose reads it: the Dockerfile is relative to the context, which is relative to the
+    # compose file (rendered at `deploy/generated/<name>/`). An image built from a folder of its own
+    # (the model gateway's `deploy/litellm`) names its Dockerfile `Dockerfile` inside that folder.
+    output_folder = _REPO / "deploy" / "generated" / "local-lite"
     for name, spec in compose["services"].items():
         if "build" not in spec:
             continue
-        dockerfile = _REPO / spec["build"]["dockerfile"]
+        dockerfile = (output_folder / spec["build"]["context"] / spec["build"]["dockerfile"]).resolve()
         assert dockerfile.is_file(), f"{name} builds from {dockerfile}, which does not exist"
 
 
@@ -912,11 +918,15 @@ def test_the_build_context_resolves_to_the_repository_root_from_the_output_direc
         if "build" not in spec:
             continue
         context = (out / spec["build"]["context"]).resolve()
-        assert context == tmp_path.resolve(), (
-            f"{name}'s build context resolves to {context}, not the repository root — compose "
+        # An image built from a folder of its own (the model gateway: the root's `.dockerignore`
+        # leaves `deploy/` out) names that folder in the checkout, and its Dockerfile by name there.
+        own_folder = "/" not in spec["build"]["dockerfile"]
+        expected = (tmp_path / "deploy" / name).resolve() if own_folder else tmp_path.resolve()
+        assert context == expected, (
+            f"{name}'s build context resolves to {context}, not {expected} — compose "
             "resolves it relative to the compose file"
         )
-        owned = {"api", "ingest", "workspace", "ner"}
+        owned = {"api", "ingest", "workspace", "ner", "litellm"}
         assert (context / spec["build"]["dockerfile"]).parent.name in owned
 
 
@@ -1116,9 +1126,22 @@ def test_the_rendered_model_proxy_is_the_developer_stacks() -> None:
     added here fails the final assertion rather than being quietly unchecked.
     """
     developer = yaml.safe_load((_REPO / "deploy" / "compose" / "dev.yaml").read_text())["services"]
-    rendered = {i.service: i.image for i in service_images(OspreyConfig())}
+    images = {i.service: i for i in service_images(OspreyConfig())}
+    rendered = {service: image.image for service, image in images.items()}
+
+    # The gateway is OspreyFlow's own image (the owner's ruling of 21 November 2026), so there is no
+    # image string to hold equal: both stacks build the same folder, which is the one thing that can
+    # part. (The publisher's image they both pinned by digest is no longer named anywhere.)
+    gateway, dev_gateway = images["litellm"], developer["litellm"]
+    assert gateway.owned and gateway.own_folder == "deploy/litellm"
+    assert "berriai" not in str(dev_gateway.get("image", ""))
+    assert (_REPO / "deploy" / "compose" / dev_gateway["build"]["context"]).resolve() == (
+        _REPO / gateway.own_folder
+    ).resolve(), "the developer stack builds a different gateway from the deployment's"
 
     for rendered_service, developer_service in _MODEL_TIER.items():
+        if rendered_service == "litellm":
+            continue
         expected = developer[developer_service]["image"]
         assert rendered_service in rendered, f"no {rendered_service} image is rendered at all"
         assert rendered[rendered_service] == expected, (

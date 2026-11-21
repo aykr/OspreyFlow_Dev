@@ -1,8 +1,0 @@
-# The two overrides the publisher's own resolution applies (its pyproject.toml, [tool.uv]
-# override-dependencies, at litellm 1.101.0), kept so ours resolves as theirs did: langfuse 2.59.7
-# and others cap `packaging` below the 24.0 a2a-sdk 1.x needs, and the publisher holds cryptography
-# to the 50 series. The pinned image's venv carries the result (packaging 26.2); the constraints
-# file holds those exact versions. The one override that removes the proprietary package is
-# `overrides.txt`, a file of its own.
-packaging>=24.0
-cryptography>=50.0.0,<51.0

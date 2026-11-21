@@ -68,8 +68,12 @@ _OWNED_IMAGES: tuple[tuple[str, str], ...] = (
     ("osprey/ingest:local", "services/ingest/Dockerfile"),
     ("osprey/ner:local", "services/ner/Dockerfile"),
     ("osprey/workspace:local", "apps/workspace/Dockerfile"),
+    ("osprey/litellm:local", "deploy/litellm/Dockerfile"),
     ("osprey/harness:local", "harness/Dockerfile"),
 )
+#: An image built from a folder of its own, not from the checkout's root (the root's `.dockerignore`
+#: leaves `deploy/` out): the model gateway, as the render's compose file builds it.
+_OWN_FOLDERS = {"deploy/litellm/Dockerfile": "deploy/litellm"}
 
 
 def _owned_by_render() -> set[tuple[str, str]]:
@@ -126,7 +130,9 @@ def _build_the_owned_images() -> None:
     listed = {(tag, dockerfile) for tag, dockerfile in _OWNED_IMAGES if tag != HARNESS_IMAGE}
     assert listed == named, f"_OWNED_IMAGES is out of step with the render: {listed ^ named}"
     for tag, dockerfile in _OWNED_IMAGES:
-        built = _run(["docker", "build", "-f", dockerfile, "-t", tag, "."], timeout=1800)
+        folder = _OWN_FOLDERS.get(dockerfile)
+        argv = ["docker", "build", "-f", dockerfile, "-t", tag, folder or "."]
+        built = _run(argv, timeout=1800)
         assert built.returncode == 0, f"could not build {tag}: {built.stdout + built.stderr}"
 
 

@@ -31,8 +31,11 @@
 # `HELD_FOR_OWNER` (`tools/licence_register.py`).
 #
 # A NAME HELD FOR THE OWNER is not a row: its licence, read at the pin, does not pass the definition
-# and has not been ruled on. Today: ghcr.io/berriai/litellm (its image carries /app/enterprise under
-# the BerriAI Enterprise licence). See `HELD_FOR_OWNER`.
+# and has not been ruled on. None today. The one that was held until 21 November 2026,
+# ghcr.io/berriai/litellm (its image carried /app/enterprise under the BerriAI Enterprise licence),
+# left `HELD_FOR_OWNER` when the product stopped naming it: the gateway is now OspreyFlow's own image,
+# built from the publisher's MIT files alone (`deploy/litellm/Dockerfile`; rows B22 and B23 are its
+# bases). See `HELD_FOR_OWNER`.
 #
 # IMAGES: `os_packages.scan` says whether an existing scan covers the operating-system packages inside
 # the image (yes | no | partly) and `covered_by` says how. The row's licence is the PROJECT's own, read at
@@ -623,8 +626,8 @@ rows:
       The project's licence passes; the GPU libraries the image may carry are the open question the
       report names.
 
-  # `ghcr.io/berriai/litellm` has no row: it is in HELD_FOR_OWNER (tools/licence_register.py). The image
-  # the renderer pins carries /app/enterprise, licensed LicenseRef-Proprietary, beside MIT code.
+  # The publisher's `ghcr.io/berriai/litellm` has no row: the product no longer names it (the gateway is
+  # built from `deploy/litellm/Dockerfile`; its two bases are B22 and B23 below).
 
   - id: B9
     kind: image

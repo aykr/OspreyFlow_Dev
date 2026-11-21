@@ -27,11 +27,11 @@ RUN apk add --no-cache bash gcc python-3.13 python-3.13-dev rust openssl openssl
 COPY --from=uvbin /uv /usr/local/bin/uv
 ENV UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0 PATH="/app/.venv/bin:${PATH}"
 
-COPY constraints.txt overrides.txt publisher-overrides.txt ./
+COPY constraints.txt overrides.txt publisher-resolution.txt ./
 # The extras are the pinned image's own (trimming them is a later, measured choice).
 RUN uv venv /app/.venv --python python3.13 \
     && uv pip install --python /app/.venv/bin/python --constraint constraints.txt --override overrides.txt \
-        --override publisher-overrides.txt \
+        --override publisher-resolution.txt \
         "litellm[proxy,proxy-runtime,extra_proxy,semantic-router,saml,bedrock-realtime]==1.101.0" \
         "litellm-proxy-extras==0.4.94"
 
@@ -101,9 +101,8 @@ COPY licence_gate.py /tmp/licence_gate.py
 RUN rm -rf /app/.venv/lib/python3.13/site-packages/tornado/test \
     && test -x /opt/prisma/binaries/node_modules/.bin/prisma \
     && test -f /opt/prisma/binaries/node_modules/prisma/build/index.js \
-    && python -c "from prisma.client import BINARY_PATHS; paths = list(BINARY_PATHS.query_engine.values()); assert paths and all(p.startswith('/opt/prisma/') for p in paths), paths" \
-    && python /tmp/licence_gate.py /app/.venv/lib/python3.13/site-packages --app /app \
-    && rm /tmp/licence_gate.py
+    && python -c "from prisma.client import BINARY_PATHS; paths = list(BINARY_PATHS.query_engine.values()); assert paths and all(p.startswith('/opt/prisma/') for p in paths), paths"
+RUN python /tmp/licence_gate.py /app/.venv/lib/python3.13/site-packages --app /app && rm /tmp/licence_gate.py
 
 # ADR-148 decision 3: the one numeric UID all our images run as.
 RUN addgroup -g 10001 -S litellm && adduser -S -D -u 10001 -G litellm -h /home/litellm litellm

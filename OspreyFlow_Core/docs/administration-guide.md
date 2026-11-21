@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.33** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 2.34** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.34 | 2026-11-21 | §6a.1's tables: the model gateway (`litellm`) is OspreyFlow's own image, `ospreyflow/litellm`, built from `deploy/litellm/Dockerfile`, no longer a copy of the publisher's image (the owner's ruling of 21 November 2026: built from the publisher's MIT files alone, without its commercially licensed folder or package). PDF made again. |
 | 2.33 | 2026-11-21 | §6a: the GOV.UK install sentences now follow the cloud-platform paragraph, introduced as being about the modes `ospreyflow install` does take, so they are not credited to ADR-148 and not read as advice for `cloud-platform`. PDF made again. |
 | 2.32 | 2026-11-21 | §1a, §4.1, §6a and the README's *Installing and running it* say one thing, in the same words: use the command line (`ospreyflow install`) where the installing computer must itself run no React either, and a GOV.UK install from the command line is headless; the guided page (`ospreyflow install --gui`) also installs a GOV.UK starter, runs only on the computer doing the installing and leaves nothing in the deployment (the owner's ruling of 21 November 2026; ADR-152 Amendment 1, decision 5, "headless from the command line", which is being corrected). The claims about the `apps/harness` application and the `pages` service's rule are dropped from §4.1. PDF made again. |
 | 2.31 | 2026-11-20 | §4.1: the sentence on a GOV.UK install no longer points to §1a, which shows the guided page's GOV.UK starter; it says only what ADR-152 Amendment 1, decision 5 says. |
@@ -1317,7 +1318,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | worker | Deployment | 1 | `ospreyflow/worker` | 500m / 2 | 2Gi / 4Gi | none |
 | ner | Deployment | 1 | `ospreyflow/ner` | 250m / 1 | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
 | laurium | Deployment | 1 | `ospreyflow/laurium` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
-| litellm | Deployment | 1 | `berriai/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
+| litellm | Deployment | 1 | `ospreyflow/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
 | arcadedb | StatefulSet | 1 | `arcadedata/arcadedb` | 1 / 2 | 12Gi / 12Gi | http://127.0.0.1:2480/api/v1/ready |
 | clickhouse | StatefulSet | 1 | `clickhouse/clickhouse-server` | 1 / 2 | 8Gi / 8Gi | http://localhost:8123/ping |
 | superset | Deployment | 1 | `ospreyflow/superset` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8088/health |
@@ -1349,9 +1350,9 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | `ospreyflow/laurium` | ours | built from `services/laurium/Dockerfile` |
 | `ospreyflow/superset` | ours | built from `deploy/superset/Dockerfile` |
 | `ospreyflow/report-sync` | ours | built from `services/report_sync/Dockerfile` |
+| `ospreyflow/litellm` | ours | built from `deploy/litellm/Dockerfile` |
 | `arcadedata/arcadedb` | upstream | copied from `arcadedata/arcadedb:26.10.1` |
 | `clickhouse/clickhouse-server` | upstream | copied from `clickhouse/clickhouse-server:25.8.33.6` |
-| `berriai/litellm` | upstream | copied from `ghcr.io/berriai/litellm` |
 | `postgres` | upstream | copied from `postgres:16.4` |
 
 #### Managed services
