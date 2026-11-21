@@ -170,3 +170,23 @@ P43c the edit names its key action from key_state: 2 red
 PN4  the stale virtual key's token added to the log line at the real call site in revoke_stale_engine_keys: 1 red
     test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4
 Green now: all 60 cases of test_model_key_paths.py.
+
+-- Round 10 (21 November 2026): no key listing; the N4 search covers key_name ------------------------------------------------------
+Run from OspreyFlow_Core with ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9, `-k n4`. The plant scripts beside this file (`plants_n4_before_fix.py`,
+`plants_n4_after_fix.py`) patch services/api/model_admin.py, run the three N4 cases and put the file back. Every key is made at run time; the
+stand-in lists a `key_name` of the real shape (`sk-...` and four characters) for the stale key, which the test shows with its own call.
+Red on b7bcd8f's tests against round 9's model_admin.py (the listing still called):
+    test_start_up_asks_the_gateway_for_no_listing_n4: 1 red (the Conduit asked `GET /key/list`)
+    the search test and the route test were green (the finding: nothing searched for key_name)
+PLANTS on round 9's code (the search test's gap, closed):
+PN4k_before  key_name logged where the listing is read: test_start_up_asks_the_gateway_for_no_listing_n4 red, the search test red
+PN4s_before  the stale key's last four put into the words of a refusal: no-listing test red, the search test red
+Green on the fix: test_model_key_paths.py 62 passed; test_model_engine_keys.py green with the master-rotation sweep test replaced (the old one
+asserted the removed behaviour; its successor asserts no listing and keeps a strict xfail for N6).
+PLANTS on the fix (each put back after):
+PN4a  the listing put back in _reconcile, nothing read: no-listing test red; the search test green (it searches what is shown, and nothing is)
+PN4k  the listing put back and each key_name logged: no-listing test red, the search test red
+PN4s  the listing put back and the stale key's last four put into a refusal's words: no-listing test red, the search test red
+PN4r  the route skipped (remove_engine does not delete the engine's key): the route test red (and the search test errors on its own removal)
+The cases of rows 17 and round 8 that planted on the reconcile's `GET /key/list` now plant on the first `GET /v2/model/info` after the key is stored;
+the fault is shown to fire (without it the case fails with "DID NOT RAISE"), which is how the move of plant site was checked.

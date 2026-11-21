@@ -127,3 +127,18 @@ engine the record says is set and this process marked unavailable is `key_rotate
 virtual-key listing (`GET /key/list`, SHA-256 tokens only) is kept and the credential listing is never used, and a test shows nothing from the
 virtual-key listing reaches a log, an answer or the audit. Held by `test_model_key_paths.py`, red first on `e547a9f` (`plants_key_paths_run.txt`,
 "Round 9"). **Still owed:** the live, measured run on the real gateway (the key review's question 2): the live step is off.
+
+**Round 10 (21 November 2026, the owner's ruling on N4): the Conduit asks the gateway for no listing of keys.** Round 9 kept `GET /key/list` on the
+premise that it holds SHA-256 tokens only. Measured (`P3_RED_RECORD.md`, the pinned gateway), the full listing the code asked for also answers
+`key_name`, `sk-...` and the last four characters of every key; the short form answers hashes only but has no `metadata.osprey_engine`, so it cannot
+tell an engine's key from someone else's, and the one lookup that would (`/key/info`) has no recorded response. Outcome (b): `revoke_stale_engine_keys`
+and its call in `_reconcile` are removed. The route that clears a virtual key is the engine's removal (`delete_engine_key`, by derivation, before the
+record forgets the engine). The specification (ADR-135 Amendment 14 point 9) states what was measured; the N4 test searches for `key_name` and every
+part of it. **Open row N6: after the gateway's master key is changed, the old derived engine keys stay valid for whoever holds them, and nothing the
+Conduit holds names them.** To close it (the owner's choice): record each engine's key hash (SHA-256, no key material) in the models file and delete
+the recorded hash the new master does not derive (recommended); or a command run at the change that revokes under the old master. A strict `xfail`
+(`test_a_changed_master_key_revokes_the_old_engine_keys_n6`) goes red when a route lands. **Also open, put to the owner:** `laurium_at_start`
+(`adapters/extract_laurium/keys.py`, P12) reads the same full listing and so receives each `key_name`; it is not changed here. The cases that planted
+a fault on the reconcile's `GET /key/list` (rows 17, round 8's rotation) now plant it on the next answer read after the key is stored (the list of
+entries). Held by `test_model_key_paths.py` (`plants_key_paths_run.txt`, "Round 10"). **Still owed:** the live, measured run on the real gateway
+(question 2).

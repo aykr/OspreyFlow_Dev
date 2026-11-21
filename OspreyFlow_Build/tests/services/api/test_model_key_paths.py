@@ -140,6 +140,26 @@ def credential_of(method: str, engine: str = "gemini") -> Callable[[httpx.Reques
     )
 
 
+def first_entry_list_after_the_key_is_stored() -> Callable[[httpx.Request], bool]:
+    """The first read of the gateway's entries (`GET /v2/model/info`, parsed as JSON) after the
+    engine's own credential is stored: the reconcile's first step once the key is the credential.
+    (Until AD1a round 10 these cases planted the fault on `GET /key/list`, the listing the
+    reconcile then made; the Conduit asks for none now, so the same fault is planted at the next
+    real call that reads an answer after the store.)"""
+    stored: list[bool] = []
+    fired: list[bool] = []
+
+    def rule(r: httpx.Request) -> bool:
+        if credential_of("POST")(r):
+            stored.append(True)
+        elif stored and not fired and r.method == "GET" and r.url.path == "/v2/model/info":
+            fired.append(True)
+            return True
+        return False
+
+    return rule
+
+
 def live(path: str) -> Callable[[httpx.Request], bool]:
     return lambda r: r.url.path == path and b".check" not in r.content
 
@@ -353,19 +373,11 @@ async def test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17
             world, "engine_edited"
         )
     else:
-        once: list[bool] = []
-
-        def first(r: httpx.Request) -> bool:
-            if r.url.path == "/key/list" and not once:
-                once.append(True)
-                return True
-            return False
-
         if how == "a JSON error":
-            stop.garble.append(first)
+            stop.garble.append(first_entry_list_after_the_key_is_stored())
         else:
             stop.raw.append(
-                (first, asyncio.IncompleteReadError(b"", 10))
+                (first_entry_list_after_the_key_is_stored(), asyncio.IncompleteReadError(b"", 10))
             )  # a stream cut short: not an OSError
         with pytest.raises(ModelAdminRefused):
             await moved(world)
@@ -1215,7 +1227,7 @@ def edit_rows(scene: Scene) -> list[str]:
     "fault",
     [
         "the engine's key update is refused",
-        "the key list is garbled",
+        "the list of entries is garbled",
         "a cancellation after the store",
         "the key update is refused and so is the undo's",
     ],
@@ -1225,7 +1237,7 @@ async def test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_becam
 ) -> None:
     """Round 8, item 1 (the verifier's fault; the early clear the scout called N3). A rotation
     deletes the old key, stores the new one and used to **save "set" and clear its note of intent
-    inside `_put_key`**; a failure after (the engine's key update refused, the key list garbled, a
+    inside `_put_key`**; a failure after (the engine's key update refused, the list of entries garbled, a
     cancellation) then said "the change was not saved" and, for a cancellation or an exception nobody
     named, "put back as the saved settings say", though the old key was gone and the new key was the
     credential, and no audit said the key changed. The note is cleared only by the change's final
@@ -1248,16 +1260,8 @@ async def test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_becam
         stop.refuse.append(first_update)
     elif fault == "the key update is refused and so is the undo's":
         stop.refuse.append(live("/key/update"))
-    elif fault == "the key list is garbled":
-        seen: list[bool] = []
-
-        def first_list(r: httpx.Request) -> bool:
-            if r.url.path == "/key/list" and not seen:
-                seen.append(True)
-                return True
-            return False
-
-        stop.garble.append(first_list)
+    elif fault == "the list of entries is garbled":
+        stop.garble.append(first_entry_list_after_the_key_is_stored())
     if fault == "a cancellation after the store":
         reached = asyncio.Event()
         stop.hang_after.append(

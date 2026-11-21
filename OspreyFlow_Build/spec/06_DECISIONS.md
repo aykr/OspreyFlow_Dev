@@ -30225,7 +30225,9 @@ dashboard's "spend" is the tokens used.
 `process/lanes/platform/BRIEF.md` P3 items 1–6). Amendment 3 is otherwise unchanged; where this says so it
 replaces one of its "Left" entries.
 1. **Old engine keys are revoked at every reconcile** (replacing "A changed master key leaves the old engine
-   keys in the gateway"). `GatewayAdmin.revoke_stale_engine_keys` reads every page of `GET /key/list`
+   keys in the gateway"). **Superseded on 21 November 2026 (the owner, ADR-135 Amendment 14
+   point 9, AD1a round 10): the sweep is removed, because the listing it reads answers `key_name`, part of each key; a
+   changed master key leaves the old engine keys again, as an open row (N6).** What follows is the record of what was built. `GatewayAdmin.revoke_stale_engine_keys` reads every page of `GET /key/list`
    (measured: SHA-256 hashes, newest first, at most 100 a page, `total_pages` given) before deleting
    anything, and deletes by hash (`POST /key/delete`, measured: a hash is taken, an unknown one is 404,
    the deleted key's next call 401) each key tagged `metadata.osprey_engine` that the current master key
@@ -41586,12 +41588,39 @@ the guide's lines that were not updated then.
    with part of each key (the first and last two characters), and a key is never shown back, to a person or to
    the product. An earlier text of this point read "start reads the record, never a credential" as a decision
    the builder took; it is the owner's ruling, given on 20 November 2026, and the note of intent is its
-   design. **The two listings are not the same and are not to be confused (the owner, 20 November 2026):** the
-   credential listing (`GET /credentials`) returns the first and last two characters of each key and is never
-   used; the gateway's listing of its own **virtual keys** (`GET /key/list`, which start-up and every reconcile
-   read in `revoke_stale_engine_keys` to find a key an old master key derived) holds only each key's SHA-256
-   token and no key material, so it is kept. Nothing from it reaches a log, an answer or the audit (held by
-   `test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4`). A change's failure is
+   design. **Neither listing is used: the Conduit asks the gateway for no listing of keys (the owner, 21 November
+   2026, replacing his ruling of 20 November on N4, whose premise the measurement below did not support).**
+   *What was measured* (the pinned gateway, `ghcr.io/berriai/litellm@sha256:d295634e…`, a stand-in provider,
+   8 November 2026; `process/lanes/platform/P3_RED_RECORD.md` "Measured first", and as the stand-in models it,
+   `tests/adapters/model_litellm/test_stand_in_gateway_usage.py::test_the_key_list_is_hashes_newest_first_a_hundred_a_page_at_most`):
+   `GET /credentials` answers the first and last two characters of each key. `GET /key/list?return_full_object=true`
+   (what the code asked for) answers, for **every** virtual key on the gateway, its `token` (the SHA-256),
+   **`key_name` (`sk-...` and the key's last four characters)**, `key_alias`, `models` and `metadata`; so it is not
+   "SHA-256 tokens only", and round 9's text, which said it held no key material and kept it, stated as a fact
+   what the record contradicts. `GET /key/list` with no `return_full_object` (the short form) answers **a list of
+   SHA-256 hashes and nothing else**, newest first, at most 100 a page (422 above), with `total_pages`; but a bare
+   hash carries no `metadata.osprey_engine`, which is the only mark that a key is an engine's and not someone
+   else's (the Laurium key, another service's), so a sweep on hashes alone would delete keys that are not
+   OspreyFlow's. The one lookup that would return the mark for a hash (`GET /key/info`) has no recorded response
+   on the real gateway and is not assumed to leave out `key_name`. **So the short form is measured, returns no
+   key text, and cannot do the work; the work cannot be done on measured responses without a part of a key
+   reaching the product, and the listing is removed from start-up and from every reconcile
+   (`GatewayAdmin.revoke_stale_engine_keys` no longer exists).** *What clears a stale virtual key now:* an
+   engine's **removal** deletes its derived key (`delete_engine_key`, by derivation from the master key: no
+   listing, no key read) before the record forgets the engine, so no key outlives its record, and a refusal
+   leaves the engine and its key both, which agree; the note of intent covers the credential, which is another
+   thing. **What has no route (open row N6, in the release notes until closed):** after the gateway's master key is
+   changed, the engine keys derived under the old one stay valid for whoever holds them, because nothing the
+   Conduit holds names them (the old master is not kept, and no hash of an engine's key is recorded). The ways to
+   close it, for the owner: record each engine's key hash (a SHA-256, no key material) in the models file and
+   delete the recorded hash that the new master does not derive (recommended); or revoke under the old master
+   in a command run at the change. `laurium_at_start` (P12, `adapters/extract_laurium/keys.py`) reads the same
+   full listing for Laurium's own key and so receives each `key_name`: it is not changed here and is put to the
+   owner. Nothing from any listing reaches a log, an answer or the audit, and the Conduit asks for none (held
+   by `test_start_up_asks_the_gateway_for_no_listing_n4`, which searches too for `key_name` and every part of
+   it, the token and the key in what is logged, answered and audited
+   (`test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4`), and by
+   `test_an_engine_s_removal_clears_its_virtual_key_n4` for the route). A change's failure is
    audited under **one key-action name however it ends**, read from the saved record and never from
    `key_state` (which says "lost" for an engine this process marked unavailable): a key change on an engine
    whose record says a key is set is `key_rotated` whether it succeeds or fails, on `set_key` and on an edit

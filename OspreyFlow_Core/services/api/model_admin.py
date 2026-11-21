@@ -30,7 +30,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import fcntl
-import hashlib
 import json
 import logging
 import os
@@ -419,11 +418,6 @@ def key_limits(limits: EngineLimits) -> dict[str, object]:
     }
 
 
-#: `/key/list`'s page (measured: at most 100) and how many pages are read before refusing.
-_KEY_PAGE = 100
-_MAX_KEY_PAGES = 100
-
-
 @dataclass(frozen=True)
 class HeldEntry:
     """A model entry the gateway holds: whether it is priced a unit a token, and **the address it
@@ -626,45 +620,6 @@ class GatewayAdmin:
         resp = await self._call("POST", "/key/delete", {"keys": [self._engine_key(provider)]})
         if resp.status_code not in (200, 404):  # 404: none was held (measured)
             raise self._refused(resp, "the engine's limits' removal")
-
-    async def revoke_stale_engine_keys(self, engines: Sequence[str]) -> int:
-        """Every key the gateway holds tagged `metadata.osprey_engine` that the current master key
-        would not derive for one of `engines` is deleted (ADR-135 Amendment 3, "As built in P3"):
-        after a master-key rotation the old engine keys would otherwise stay valid for whoever
-        holds the old master key. Every page of `/key/list` is read before anything is deleted
-        (measured: at most 100 a page, newest first, so deleting while reading would skip keys),
-        and each stale key is named by its SHA-256 alone (measured: `/key/delete` takes it), so no
-        old key travels anywhere. A key without the tag is someone else's and is left alone."""
-        current = {hashlib.sha256(self._engine_key(e).encode()).hexdigest() for e in engines}
-        stale: list[str] = []
-        page, pages = 1, 1
-        while page <= pages:
-            if page > _MAX_KEY_PAGES:
-                raise ModelAdminRefused(
-                    f"The model gateway holds more than {_MAX_KEY_PAGES * _KEY_PAGE} keys, so the "
-                    "engines' old keys were not looked for. Run ospreyflow doctor.",
-                    status=502,
-                )
-            resp = await self._call(
-                "GET", f"/key/list?return_full_object=true&page={page}&size={_KEY_PAGE}"
-            )
-            if resp.status_code != 200:
-                raise self._refused(resp, "the list of keys")
-            body = resp.json()
-            pages = int(body.get("total_pages") or 1)
-            for row in body.get("keys") or []:
-                token = str(dict(row).get("token") or "")
-                tagged = dict(dict(row).get("metadata") or {}).get("osprey_engine")
-                if tagged is not None and token and token not in current:
-                    stale.append(token)
-            page += 1
-        for token in stale:
-            resp = await self._call("POST", "/key/delete", {"keys": [token]})
-            if resp.status_code not in (200, 404):
-                raise self._refused(resp, "an old engine key's removal")
-        if stale:
-            log.info("revoked %d engine keys the current master key does not derive", len(stale))
-        return len(stale)
 
 
 # --- the audit ----------------------------------------------------------------------------------
@@ -1399,7 +1354,9 @@ class ModelAdmin:
                     await self._gateway.add_entry(p, model)
             for p in live.providers:
                 await self._gateway.put_engine_key(p, settings.limits.get(p.name, EngineLimits()))
-            await self._gateway.revoke_stale_engine_keys([p.name for p in settings.providers])
+            # No listing of the gateway's keys is asked for here or anywhere in the Conduit
+            # (ADR-135 Amendment 14 point 9, the owner, 21 November 2026): it answers part of each
+            # key (`key_name`), and the short form carries no tag to tell an engine's key apart.
         except BaseException:
             # Part-way: an engine whose entries were being changed is not whole, so none is
             # offered until a later reconcile finishes (never a log line alone: row 37).
