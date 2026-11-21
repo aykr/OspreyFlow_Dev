@@ -539,21 +539,62 @@ def test_the_reference_is_keyed_by_a_secret_the_deployment_holds(
     )
 
 
-def test_an_application_identity_admitted_to_named_routes_is_not_a_person_signing_in(
-    rig: Rig,
-) -> None:
-    """A dashboard's app identity (Entra ID) is admitted to named routes alone: it is no person's
-    sign-in, so its first sight writes nothing (it would write a row for every token it renews)."""
-    from schemas.domain import Principal
+def _entra_principals(keypair: Any, jwks_url: str) -> dict[str, Any]:
+    """The two kinds of principal an Entra deployment admits to named routes alone, each built by
+    the real resolver from a token shaped as Entra issues it (rule 15: not a hand-made `routes`)."""
+    import asyncio
 
-    async def application(_: str) -> Principal:
-        return Principal(
-            id="dashboard-1", clearance="OFFICIAL", org_unit="unit-1", routes=["GET /v1/me"]
+    from tests.services.api.test_auth_entra_dashboards import FakeDashboards, app_only_claims
+    from tests.services.api.test_auth_entra_dashboards import _resolver as dashboard_resolver
+    from tests.services.api.test_auth_entra_superset import SUPERSET, _as
+    from tests.conftest import sign_token
+    from tests.services.api.test_auth_entra_claims import _GOOD, _key, entra_claims
+
+    person = _as(jwks_url, keypair, entra_claims(**_GOOD, azp=SUPERSET))
+    dashboard = asyncio.run(
+        dashboard_resolver(jwks_url, FakeDashboards()).resolve_principal(
+            sign_token(_key(keypair), app_only_claims())
         )
+    )
+    return {"person": person, "dashboard": dashboard}
 
-    rig.resolver.resolve_principal = application  # type: ignore[method-assign]
-    assert rig.me(rig.session().token()).status_code == 200
+
+def _sees(rig: Rig, principal: Any, path: str = "/v1/me") -> Any:
+    """One request, as that principal, to a route it is admitted to (the gate's own refusal of any
+    other route comes before the watch, so a request refused there says nothing about it)."""
+
+    async def resolved(_: str) -> Any:
+        return principal
+
+    rig.resolver.resolve_principal = resolved  # type: ignore[method-assign]
+    return rig.http.get(path, headers={"Authorization": f"Bearer {rig.session().token()}"})
+
+
+def test_a_dashboard_identity_admitted_to_named_routes_is_not_a_person_signing_in(
+    rig: Rig, keypair: Any, jwks_url: str
+) -> None:
+    """A dashboard's app identity (Entra ID, ADR-148 Amendment 10) is an application: its first
+    sight writes nothing (it would write a row for every token it renews)."""
+    principals = _entra_principals(keypair, jwks_url)
+    assert principals["dashboard"].roles == ["reports_viewer"]
+    answer = _sees(rig, principals["dashboard"], "/v1/investigations")
+    assert "route_not_admitted" not in answer.text, "the route is one the identity is admitted to"
     assert rig.pool.rows == []
+
+
+def test_a_person_signing_in_to_superset_is_a_session_the_conduit_sees(
+    rig: Rig, keypair: Any, jwks_url: str
+) -> None:
+    """Superset's delegated token carries the person's own identity (ADR-148 Amendment 9) and is
+    admitted to two routes alone; it is a person signing in, so its first sight is recorded, once,
+    for that person (a gate that skips every principal with `routes` set fails here)."""
+    person = _entra_principals(keypair, jwks_url)["person"]
+    assert person.routes is not None  # the shape the resolver gives: named routes, and a person
+    assert _sees(rig, person).status_code == 200
+    rows = rig.pool.of("sign_in_seen")
+    assert len(rows) == 1 and rows[0]["principal_id"] == person.id
+    _sees(rig, person)
+    assert len(rig.pool.of("sign_in_seen")) == 1
 
 
 def test_the_deployment_secret_is_shared_by_replicas_and_survives_a_restart(rig: Rig) -> None:
@@ -1088,8 +1129,8 @@ def _function(tree: ast.Module, name: str) -> ast.AsyncFunctionDef:
 def test_the_one_gate_every_authenticated_request_passes_calls_the_watch() -> None:
     """Read as a syntax tree: `get_principal` is what every route's principal comes through
     (`app.py`'s own docstring), and it must call `note_seen` after the resolver accepts the token,
-    and only for a principal admitted to every route (a dashboard's app identity is no person's
-    sign-in)."""
+    and not for a dashboard's app identity (no person's sign-in; a person's token limited to named
+    routes, Superset's, is one)."""
     tree = ast.parse((CORE / "services/api/app.py").read_text())
     gate = _function(tree, "get_principal")
     calls = [
@@ -1100,7 +1141,7 @@ def test_the_one_gate_every_authenticated_request_passes_calls_the_watch() -> No
         and n.func.attr in ("resolve_principal", "note_seen")
     ]
     assert [c.func.attr for c in calls] == ["resolve_principal", "note_seen"]  # type: ignore[attr-defined]
-    assert "routes is None" in ast.unparse(gate)
+    assert "is_application_identity" in ast.unparse(gate)
 
 
 def test_the_session_events_route_is_the_one_that_writes_its_rows() -> None:
