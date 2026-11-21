@@ -249,6 +249,54 @@ def test_a_unit_declared_twice_is_not_one_difference(
     assert len(found) == 1 and found[0].startswith("declared but not differing")
 
 
+# ------------------------------------------------------------------------------- where the proof runs (no build)
+def declared_for(folder: Path) -> str:
+    """A declaration written against `folder`, in the shape `write` makes."""
+    return f"against: {folder_hash(folder)}\n" + "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\tunit\n"
+
+
+def test_the_declaration_says_which_baseline_it_belongs_to() -> None:
+    first = DECLARED.read_text(encoding="utf-8").splitlines()[0]
+    assert re.fullmatch(r"against: [0-9a-f]{64}", first), f"the first line must be `against: <sha-256 of the folder>`: {first!r}"
+
+
+def test_a_missing_baseline_folder_skips_with_the_reason_and_never_errors(tmp_path: Path) -> None:
+    gone = tmp_path / "not-there"
+    reason = proof_gate(gone, declared_for(tmp_path))
+    assert reason is not None
+    assert "runs where `PL4_BASELINE_DIST` exists (the builder's and the verifier's Mac)" in reason
+
+
+def test_a_folder_that_exists_and_matches_does_not_skip(tmp_path: Path) -> None:
+    (tmp_path / "index.js").write_text("a", encoding="utf-8")
+    assert proof_gate(tmp_path, declared_for(tmp_path)) is None
+
+
+def test_a_declaration_for_an_earlier_baseline_skips_and_retires_the_proof(tmp_path: Path) -> None:
+    older, newer = tmp_path / "older", tmp_path / "newer"
+    for folder, content in ((older, "a"), (newer, "b")):
+        folder.mkdir()
+        (folder / "index.js").write_text(content, encoding="utf-8")
+    declared_older = declared_for(older)
+    assert proof_gate(older, declared_older) is None
+    reason = proof_gate(newer, declared_older)  # the re-record: the folder now holds the new build
+    assert reason is not None and "belongs to an earlier baseline" in reason
+
+
+def test_the_folder_hash_reads_names_and_bytes(tmp_path: Path) -> None:
+    (tmp_path / "a.js").write_text("x", encoding="utf-8")
+    first = folder_hash(tmp_path)
+    (tmp_path / "a.js").write_text("y", encoding="utf-8")
+    second = folder_hash(tmp_path)
+    (tmp_path / "a.js").rename(tmp_path / "b.js")
+    assert len({first, second, folder_hash(tmp_path)}) == 3
+
+
+def test_a_declaration_with_no_against_line_never_runs_the_proof(tmp_path: Path) -> None:
+    reason = proof_gate(tmp_path, "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\tunit\n")
+    assert reason is not None and "against" in reason
+
+
 def test_the_reasons_and_sources_are_well_formed() -> None:
     good = "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\tunit\n"
     assert [unit for unit, *_rest in parse_declared(good)] == [Unit("index.js", "only after", "a" * 12)]
