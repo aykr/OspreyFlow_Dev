@@ -81,7 +81,16 @@ def test_rel_gives_a_logical_name_under_the_repository_and_a_plain_one_under_any
 def test_no_product_folder_is_left_at_the_root() -> None:
     """Catches the half-finished move (ADR-054 step 5): a product folder or manifest still at the
     root beside the three folders, found by `layout.home` in the wrong place or by nobody."""
-    stayed = {"Makefile", ".git", ".gitignore", ".github", ".claude", "CLAUDE.md", ".trivyignore"}
+    stayed = {
+        "Makefile",
+        ".git",
+        ".gitignore",
+        ".gitattributes",
+        ".github",
+        ".claude",
+        "CLAUDE.md",
+        ".trivyignore",
+    }
     allowed = stayed | {"OspreyFlow_Core", "OspreyFlow_Build", "OspreyFlow_Data"}
     untracked_or_machine = {".venv", "data", "Icon\r", ".DS_Store", ".playwright-mcp"}
     left = {
