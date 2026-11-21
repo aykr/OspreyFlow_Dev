@@ -1,7 +1,7 @@
 /**
  * Slice IS5a0, round 3: the asset route's containment, probed with an outside file of the shape the route would serve.
  *
- * Round 2's probes in `foundation.test.ts` aim at `secret.txt` and `server/app.ts`: a name with no hash and a type nobody
+ * Round 2's probes in `foundation.test.ts` aim at `secret.txt` and `apps/pages/server/app.ts`: a name with no hash and a type nobody
  * serves, which the route's own type and hash filter refuses before containment is ever asked. Those probes pass whether or
  * not the `..` refusal (`plainSegments`) and the folder-prefix check hold (rule 15: they would be green with both deleted).
  * Here the planted files are named `outside-ABCD1234.css`, a hashed stylesheet, beside the served folder and in a sibling
@@ -10,7 +10,7 @@
  * Which test fails if the invariant is broken (rule 12): `the probe is red against a route that filters by type and hash
  * and nothing else` is the shape a first attempt takes once the filter is in; it leaks, so the probe can fail at this shape.
  * Then the real route is probed with the same paths and must not. Deleting both the dot-segment refusal and the prefix check
- * from `server/assets.ts` makes the real-route case fail (shown by hand in the round's report); the realpath layer, a link out
+ * from `apps/pages/server/assets.ts` makes the real-route case fail (shown by hand in the round's report); the realpath layer, a link out
  * of the folder, is `assets.test.ts`'s.
  */
 import { randomBytes } from "node:crypto";

@@ -1,6 +1,6 @@
 /**
  * Slice IS5a0, round 3: the bundle's "no drawing library" refusal (ADR-152 decision 9; the brief's item 4 says no React and
- * no drawing library in a pages bundle). `scripts/assets.mjs`'s rules plugin refuses `sigma`, `@sigma/*` and `maplibre-gl`
+ * no drawing library in a pages bundle). `apps/pages/scripts/assets.mjs`'s rules plugin refuses `sigma`, `@sigma/*` and `maplibre-gl`
  * until a slice that draws names the library in `ALLOWED_DRAWING`. `no_react_check.mjs` has no drawing rule, and the shared
  * package's own isolation check does not read `modules/`, so this is the only test that would fail if the refusal were removed.
  *
