@@ -73,9 +73,9 @@ def test_the_disk_probes_alpine_is_named_by_the_code_and_has_a_row() -> None:
 def test_removing_the_alpine_row_fails_the_gate_naming_the_file_that_runs_it() -> None:
     rows = [r for r in _real_rows() if r["name"] != "alpine"]
     found = _violations(rows, reg.read_sources())
-    assert any(
-        "'alpine'" in v and "not in the register" in v and CONTEXT in v for v in found
-    ), found
+    assert any("'alpine'" in v and "not in the register" in v and CONTEXT in v for v in found), (
+        found
+    )
 
 
 def test_a_different_image_in_the_disk_probe_is_flagged_not_registered() -> None:
@@ -167,9 +167,7 @@ def test_an_unknown_status_fails() -> None:
     row = _image_row(rows)
     row["status"] = "probably"
     found = _violations(rows, reg.read_sources())
-    assert any(
-        row["id"] in v and "the status 'probably' is not one of" in v for v in found
-    ), found
+    assert any(row["id"] in v and "the status 'probably' is not one of" in v for v in found), found
 
 
 def test_an_unknown_kind_fails() -> None:

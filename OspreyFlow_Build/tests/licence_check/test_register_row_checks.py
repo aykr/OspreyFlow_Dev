@@ -114,7 +114,9 @@ def test_a_status_outside_the_three_is_flagged(
 ) -> None:
     rows = _planted(real_rows, "W1", lambda r: r.update(status=status))
     found = _found(rows, named)
-    assert any("W1" in v and "is not one of confirmed, unconfirmed, conditional" in v for v in found)
+    assert any(
+        "W1" in v and "is not one of confirmed, unconfirmed, conditional" in v for v in found
+    )
 
 
 @pytest.mark.parametrize("kind", ["model", "Image", "", None])
