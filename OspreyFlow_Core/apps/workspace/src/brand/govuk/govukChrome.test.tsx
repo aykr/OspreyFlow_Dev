@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyBrand } from "../brand";
+import { applyBrand } from "@ospreyflow/glass-shared";
 import { GovukFooter } from "./GovukFooter";
 import { GovukHeader } from "./GovukHeader";
 

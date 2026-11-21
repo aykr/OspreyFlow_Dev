@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyBrand } from "../brand/brand";
+import { applyBrand } from "@ospreyflow/glass-shared";
 import { GovukHeader } from "../brand/govuk/GovukHeader";
 import { ContextBanner, crossLinkFor } from "./ContextBanner";
 import { PlaceSwitcher } from "./PlaceSwitcher";

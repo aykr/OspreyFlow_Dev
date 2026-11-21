@@ -13,7 +13,7 @@ import { Button } from "../../design/primitives/Button";
 import { Checkbox } from "../../design/primitives/Checkbox";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import { checkSql } from "../api";
+import { checkSql } from "@ospreyflow/glass-shared";
 import { FUZZY_BLOCKS, FUZZY_METHODS, STAGING_KIND_NAMES, tablesFor, type ExpertKind } from "./stagingSteps";
 
 type Rec = Record<string, unknown>;

@@ -7,15 +7,15 @@ import { EntityPicture, type EntityPictureProps } from "./EntityPicture";
 import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
 import { PairShared, StrengthExplained } from "./StrengthExplained";
 import { LinkChange } from "./LinkChange";
-import type { LinkChangeResult } from "./linkChangeApi";
+import type { LinkChangeResult } from "@ospreyflow/glass-shared";
 import { LinkHistory } from "./LinkHistory";
 import { LinkEvents } from "./LinkEvents";
-import { eventsNoun, nounWords } from "./linkEventsApi";
+import { eventsNoun, nounWords } from "@ospreyflow/glass-shared";
 import { locatorText, sourceName } from "./sourceLocator";
 import { displayValue } from "../search/searchOptions";
 import { LinkNotes } from "./LinkNotes";
 import { useEffect, useRef, useState } from "react";
-import type { DocumentReaderView } from "../reader/readerApi";
+import type { DocumentReaderView } from "@ospreyflow/glass-shared";
 import { linkTypeName } from "../canvas/linkLabel";
 import type { EntityVisual } from "../ontology/schema";
 import { SelectionList } from "./SelectionList";
@@ -28,7 +28,7 @@ import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
 import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import { endName } from "./LinkDetails";
 import { isInternalReference, propertyLabel } from "./propertyNames";
-import type { HandlingScheme } from "../ingest/api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { WatchForThis, type GlassApi } from "../watches/GlassWatchActions";
 
 function isResolutionLink(type: string): boolean {

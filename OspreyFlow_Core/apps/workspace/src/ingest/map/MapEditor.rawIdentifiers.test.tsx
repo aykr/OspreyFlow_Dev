@@ -10,7 +10,7 @@ import Graph from "graphology";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { paletteFor } from "../../color/palette";
+import { paletteFor } from "@ospreyflow/glass-shared";
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
 import { MapEditor } from "./MapEditor";
 import { STRIP } from "./mapEditorTestSupport";
@@ -39,8 +39,8 @@ const TEMPLATE: RowTemplate = {
   edges: [{ type: "HELD_AT", from: "prisoner", to: "cell", properties: {} }],
 } as unknown as RowTemplate;
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ospreyflow/glass-shared")>();
   return {
     ...actual,
     fetchDraft: vi.fn(async () => ({

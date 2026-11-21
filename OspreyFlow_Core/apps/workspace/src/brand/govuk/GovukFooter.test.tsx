@@ -2,7 +2,7 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyBrand } from "../brand";
+import { applyBrand } from "@ospreyflow/glass-shared";
 import { GovukFooter } from "./GovukFooter";
 
 afterEach(() => {

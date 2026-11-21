@@ -44,9 +44,13 @@ import type {
   PublicMapProvider,
   Sighting,
 } from "../../../../packages/schemas/generated";
-import { activePalette } from "../color/palette";
-import { currentTheme, onThemeChange } from "../theme/theme";
-import { conduitRequest, type WorkingSetGraph } from "@ospreyflow/glass-shared";
+import {
+  activePalette,
+  currentTheme,
+  onThemeChange,
+  conduitRequest,
+  type WorkingSetGraph,
+} from "@ospreyflow/glass-shared";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { selfHostMaplibreWorker } from "./maplibreWorker";
 import {

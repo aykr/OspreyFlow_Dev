@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { Models } from "./Models";
-import { readUsage } from "./ModelsApi";
+import { readUsage } from "@ospreyflow/glass-shared";
 import { ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
 
 afterEach(() => {

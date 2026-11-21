@@ -16,7 +16,8 @@ vi.mock("../canvas/entityPictures", () => ({
   removeEntityPicture: vi.fn(async () => ({})),
 }));
 
-vi.mock("../ingest/api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   fetchHandlingScheme: async () => ({ classification: ["OFFICIAL"] }),
 }));
 

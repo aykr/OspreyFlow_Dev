@@ -15,7 +15,7 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { BrandFrame } from "../src/brand/BrandFrame";
-import { PLAIN_APPEARANCE } from "../src/brand/brand";
+import { PLAIN_APPEARANCE } from "@ospreyflow/glass-shared";
 import { openAlertInItsCase, useAlertAtAddress } from "../src/alerts/address";
 import { RulesPlace } from "../src/alerts/RulesPlace";
 import { alertPath, navigate, useAddress } from "../src/shell/router";

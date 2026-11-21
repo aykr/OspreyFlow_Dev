@@ -21,7 +21,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type { EventFilter } from "../../../../packages/schemas/generated";
-import { fetchFirstSeen } from "../analytics/api";
+import { fetchFirstSeen } from "@ospreyflow/glass-shared";
 import { emergence, firstSeenFrom, type FirstSeen } from "./emergence";
 
 export interface TimeWindow {

@@ -2,7 +2,7 @@
 // §3.8b): find an organisation or account by what it is called, trace who ultimately owns or
 // controls it, and put its structure on the canvas. Shapes are the generated ones.
 import type { KycStatus, Node, OwnershipView } from "../../../../packages/schemas/generated";
-import type { CanvasOutcome } from "../alerts/api";
+import type { CanvasOutcome } from "@ospreyflow/glass-shared";
 
 export interface OwnershipApi {
   apiBaseUrl: string;

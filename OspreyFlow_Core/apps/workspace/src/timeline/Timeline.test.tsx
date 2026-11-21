@@ -18,7 +18,8 @@ vi.mock("echarts/core", () => ({
     getOption: () => ({}),
   }),
 }));
-vi.mock("../analytics/api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   fetchHistogram: async () => ({
     bucketing: "fixed_interval",
     buckets: [

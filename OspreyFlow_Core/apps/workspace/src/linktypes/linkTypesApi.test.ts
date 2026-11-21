@@ -9,7 +9,7 @@ import {
   rejectProposal,
   retireLinkType,
   withdrawProposal,
-} from "./linkTypesApi";
+} from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

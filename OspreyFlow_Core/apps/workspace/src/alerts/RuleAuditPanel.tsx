@@ -5,8 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { RuleAuditEntry } from "../../../../packages/schemas/generated";
 import { Button } from "../design/primitives";
-import { readRuleAudit, type AlertsApi } from "./api";
-import { when } from "./names";
+import { readRuleAudit, type AlertsApi, when } from "@ospreyflow/glass-shared";
 
 const PAGE = 50;
 

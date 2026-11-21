@@ -3,8 +3,20 @@
 // the PDF from the browser's own print dialogue. Every page carries THAT item's own marking, top
 // and bottom — never the pack's level — and every interpolated string is escaped.
 import type { PackExport, PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, alertEntityWords, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
-import { manifestSentence } from "../export/api";
+import {
+  KIND_LABEL,
+  alertEntityWords,
+  alertEvidence,
+  alertLine,
+  alertMatchSentence,
+  alertStatusSentence,
+  formatDay,
+  formatNumber,
+  periodKey,
+  periodsOf,
+  trendSentence,
+  manifestSentence,
+} from "@ospreyflow/glass-shared";
 
 const ESCAPES: Record<string, string> = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 

@@ -8,8 +8,7 @@
 import { useState } from "react";
 import type { Edge, KycStatus, Node, OwnershipView, OwnerTrace } from "../../../../packages/schemas/generated";
 import { Button, Input } from "../design/primitives";
-import { nodeName } from "../alerts/names";
-import type { CanvasOutcome } from "../alerts/api";
+import { nodeName, type CanvasOutcome } from "@ospreyflow/glass-shared";
 import { findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi } from "./api";
 
 export interface OwnershipPlaceProps {

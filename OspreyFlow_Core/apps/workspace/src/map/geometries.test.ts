@@ -2,7 +2,7 @@ import Graph from "graphology";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import * as api from "../analytics/api";
+import * as api from "@ospreyflow/glass-shared";
 import type {
   WorkingSetGraph,
   WorkingSetNodeAttributes,

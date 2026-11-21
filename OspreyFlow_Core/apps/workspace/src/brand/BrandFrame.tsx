@@ -16,7 +16,7 @@
 // owner's ruling, 15 November 2026).
 import { createContext, useContext, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { brandTitle, isGovUkHost, type Appearance } from "./brand";
+import { brandTitle, isGovUkHost, type Appearance } from "@ospreyflow/glass-shared";
 import { containInnerScroll } from "./containInnerScroll";
 import { GovukFooter } from "./govuk/GovukFooter";
 import { GovukHeader } from "./govuk/GovukHeader";

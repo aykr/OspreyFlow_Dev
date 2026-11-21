@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import * as api from "../analytics/api";
+import * as api from "@ospreyflow/glass-shared";
 import { buildEventFilter, createCrossFilterStore } from "./store";
 
 describe("buildEventFilter", () => {

@@ -6,7 +6,7 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { BrandFrame } from "../src/brand/BrandFrame";
-import { PLAIN_APPEARANCE } from "../src/brand/brand";
+import { PLAIN_APPEARANCE } from "@ospreyflow/glass-shared";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { TopBar } from "../src/shell/TopBar";
 import { Drawer } from "../src/design/primitives/Drawer";

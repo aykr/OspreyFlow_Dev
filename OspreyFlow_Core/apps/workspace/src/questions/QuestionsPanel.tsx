@@ -8,21 +8,21 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { AnsweredBy, EnginePicker, useEngineChoice } from "../models/engines";
-import { candidateLabel, candidateSource, type EmailCandidate } from "../inspector/linkEventsApi";
-import { currentBrand } from "../brand/brand";
+import { candidateLabel, candidateSource, type EmailCandidate } from "@ospreyflow/glass-shared";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { AnswerActions, type AnswerIds } from "./AnswerActions";
-import { sourceAsFact, splitAnswer, type AnswerPart, type GraphCitation, type SearchCitation } from "./graphFacts";
+import { sourceAsFact, splitAnswer, type AnswerPart, type GraphCitation, type SearchCitation } from "@ospreyflow/glass-shared";
 import {
   acceptProposal,
   askQuestion,
   listQuestions,
-  rejectProposal,
+  rejectQuestionProposal as rejectProposal,
   willRead,
   type QuestionAnswer,
   type ReadFrom,
   type ReadSummary,
   type WillRead,
-} from "./questionsApi";
+} from "@ospreyflow/glass-shared";
 
 export interface QuestionsPanelProps {
   apiBaseUrl: string;

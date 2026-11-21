@@ -12,7 +12,7 @@ import type {
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import { createDraft, fetchDraft, fetchRecipeRegistry, savePipeline } from "../api";
+import { createDraft, fetchDraft, fetchRecipeRegistry, savePipeline } from "@ospreyflow/glass-shared";
 import { MapEditor } from "../map/MapEditor";
 import { PublishScreen } from "../publish/PublishScreen";
 import { statusWords } from "../studio/vocabulary";

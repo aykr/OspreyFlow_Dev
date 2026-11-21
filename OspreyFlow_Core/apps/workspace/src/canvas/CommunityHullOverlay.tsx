@@ -1,8 +1,11 @@
 import { useEffect, useState, type RefObject } from "react";
 import type Sigma from "sigma";
 
-import { activePalette } from "../color/palette";
-import type { WorkingSetEdgeAttributes, WorkingSetNodeAttributes } from "@ospreyflow/glass-shared";
+import {
+  activePalette,
+  type WorkingSetEdgeAttributes,
+  type WorkingSetNodeAttributes,
+} from "@ospreyflow/glass-shared";
 
 export interface CommunityHullOverlayProps {
   sigmaRef: RefObject<Sigma<WorkingSetNodeAttributes, WorkingSetEdgeAttributes> | null>;

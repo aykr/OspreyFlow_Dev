@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AnswerActions, answerIds, answerViewName } from "./AnswerActions";
-import type { QuestionAnswer } from "./questionsApi";
+import type { QuestionAnswer } from "@ospreyflow/glass-shared";
 
 afterEach(() => cleanup());
 

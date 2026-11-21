@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PromoteSheet } from "./PromoteSheet";
-import type { PromotionSheet } from "./promotionsApi";
+import type { PromotionSheet } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

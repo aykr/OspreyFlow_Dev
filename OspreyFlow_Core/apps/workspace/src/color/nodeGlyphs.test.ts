@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { GLYPH_NAMES, glyphMarkup, hasGlyph } from "./nodeGlyphs";
+import { GLYPH_NAMES, glyphMarkup, hasGlyph } from "@ospreyflow/glass-shared";
 
 // ADR-079. The ontology's JSON Schema holds the closed list of icon names; the Glass holds the
 // drawings. These tests are the only thing that ties the two together, so a name added to one and

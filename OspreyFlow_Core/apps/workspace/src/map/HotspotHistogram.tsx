@@ -19,7 +19,7 @@
 import { useEffect, useState } from "react";
 
 import type { EdgeTypeDef, Histogram as HistogramResult } from "../../../../packages/schemas/generated";
-import { fetchCrossFilter } from "../analytics/api";
+import { fetchCrossFilter } from "@ospreyflow/glass-shared";
 import { buildEventFilter, type CrossFilterStore } from "../crossfilter/store";
 import { Histogram, type HistogramBucket as PanelBucket } from "../design/primitives/Histogram";
 

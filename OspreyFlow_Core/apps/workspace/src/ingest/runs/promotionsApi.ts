@@ -1,10 +1,10 @@
 // The Ingest Studio's calls for promotion (ADR-143 decisions 8 and 10; Amendment 2 decision 1;
 // `spec/03_CONDUIT_MIDDLEWARE.md` §3.1c, *Promotion*): its *Analyst promotions* and a removed case's
 // layer merged or deleted. The board's own calls, and the words both share, are in
-// `boards/promotionsApi.ts`. It decides nothing: each refusal comes back in words, shown as given.
+// `packages/glass-shared/src/boards/promotionsApi.ts`. It decides nothing: each refusal comes back in words, shown as given.
 import {
   answered,
-  send,
+  sendPromotion as send,
   type LayerDeleted,
   type LayerDryRun,
   type LayerMergeSheet,
@@ -12,7 +12,7 @@ import {
   type PromotionDetails,
   type Promotions,
   type RemovedCaseLayers,
-} from "../../boards/promotionsApi";
+} from "@ospreyflow/glass-shared";
 
 const dataset = (api: string, datasetId: string, tail: string) => `${api}/v1/datasets/${encodeURIComponent(datasetId)}/${tail}`;
 

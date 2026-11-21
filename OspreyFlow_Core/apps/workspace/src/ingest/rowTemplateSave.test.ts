@@ -2,7 +2,7 @@
 // named; the analyst is told those words, not a bare status.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RowTemplateSaveError, updateRowTemplate } from "./api";
+import { RowTemplateSaveError, updateRowTemplate } from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

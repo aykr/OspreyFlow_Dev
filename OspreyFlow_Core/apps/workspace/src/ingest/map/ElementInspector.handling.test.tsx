@@ -8,7 +8,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { OntologySchema, RecipeEdge, RecipeEntity } from "../../../../../packages/schemas/generated";
-import type { HandlingScheme } from "../api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { ElementInspector } from "./ElementInspector";
 
 afterEach(cleanup);

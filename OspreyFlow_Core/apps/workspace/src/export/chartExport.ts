@@ -28,7 +28,7 @@ import type { Attributes } from "graphology-types";
 import type Sigma from "sigma";
 
 import { embedPngTextChunks } from "./pngMark";
-import type { ExportMark } from "./api";
+import type { ExportMark } from "@ospreyflow/glass-shared";
 
 /** The mark's own fields, flattened to the string keyword/text pairs a PNG `tEXt` chunk can carry
  * — every `ExportMark` field, `resolution_threshold` stringified since PNG text chunks are text

@@ -17,7 +17,7 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { BrandFrame } from "../src/brand/BrandFrame";
-import { PLAIN_APPEARANCE } from "../src/brand/brand";
+import { PLAIN_APPEARANCE } from "@ospreyflow/glass-shared";
 import { AccordionSection } from "../src/design/primitives/AccordionSection";
 import { SidePanelStack } from "../src/layout/SidePanelStack";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";

@@ -26,11 +26,17 @@ import { Panel } from "../../design/primitives/Panel";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { rowNumber } from "../../inspector/sourceLocator";
 import { OntologyRegistry } from "../../ontology/schema";
-import { createWorkingSet, type WorkingSet } from "@ospreyflow/glass-shared";
+import {
+  createWorkingSet,
+  type WorkingSet,
+  ProfileError,
+  fetchDraft,
+  fetchOntologySchema,
+  runVerify,
+} from "@ospreyflow/glass-shared";
 import { alreadyLoadedWords } from "../alreadyLoaded";
 import { ExpertDisclosure } from "../dag/ExpertStepDrawer";
 import { WouldRaisePanel } from "./WouldRaisePanel";
-import { ProfileError, fetchDraft, fetchOntologySchema, runVerify } from "../api";
 import { RightButton } from "../studio/rightsGate";
 
 export interface VerifyScreenProps {

@@ -10,8 +10,7 @@
 // summary, statuses GOV.UK tags and the type choice radios (decision 13).
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
-import { currentBrand } from "../brand/brand";
-import { GLYPH_NAMES } from "../color/nodeGlyphs";
+import { currentBrand, GLYPH_NAMES } from "@ospreyflow/glass-shared";
 import {
   NO_GRADES,
   gradesOf,
@@ -47,7 +46,7 @@ import {
 import "./boards.css";
 import { BoardAlerts } from "./BoardAlerts";
 import { BoardPromotionsList, PromoteSheet } from "./PromoteSheet";
-import { boardPromotions, type Promotion } from "./promotionsApi";
+import { boardPromotions, type Promotion } from "@ospreyflow/glass-shared";
 
 export interface EntityTypeShape {
   name: string;

@@ -6,7 +6,7 @@
 import Graph from "graphology";
 import { describe, expect, it } from "vitest";
 
-import { paletteFor } from "../../color/palette";
+import { paletteFor } from "@ospreyflow/glass-shared";
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
 import { syncTemplateGraph } from "./mapGraphSync";
 

@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Node } from "../../../../packages/schemas/generated";
 import type { OntologyRegistry } from "../ontology/schema";
 import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
-import * as api from "./api";
+import * as api from "@ospreyflow/glass-shared";
 import { Dossier } from "./Dossier";
 
 afterEach(() => {

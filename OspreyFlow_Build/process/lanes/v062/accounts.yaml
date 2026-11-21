@@ -9,7 +9,7 @@ seats:
 tracks:
   "1": default
   "2": sol
-  "3": sol          # Sprint only
-  "4": sol              # Sprint only
+  "3": default          # Sprint only
+  "4": default              # Sprint only
   "5": default
   "6": default

@@ -19,7 +19,8 @@ vi.mock("echarts/core", () => ({
     getOption: () => ({}),
   }),
 }));
-vi.mock("../analytics/api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   fetchHistogram: async (_u: string, _t: string, request: { bucketing: string }) =>
     request.bucketing === "weekday_hour"
       ? { bucketing: "weekday_hour", buckets: [{ weekday: 5, hour: 9, count: 2 }], total: 2 }
@@ -151,7 +152,7 @@ describe("the weekly view's Choose cells control", () => {
 // the analyst has made taller.
 describe("the weekly view's height", () => {
   it("grows a timeline too short for the grid, and leaves a taller one as it is", async () => {
-    const { getLayoutSizes, setTimelineHeight } = await import("../layout/layoutSizes");
+    const { getLayoutSizes, setTimelineHeight } = await import("@ospreyflow/glass-shared");
     const { CYCLICAL_TIMELINE_HEIGHT } = await import("./Timeline");
     setTimelineHeight(130);
     mount();

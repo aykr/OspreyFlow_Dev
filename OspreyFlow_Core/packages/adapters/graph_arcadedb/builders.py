@@ -405,6 +405,24 @@ def render_get_nodes_gremlin(
     return f"g.V({rids}).{has_access}.elementMap()"
 
 
+def render_count_visible_gremlin(
+    record_ids: Sequence[str], access: AccessFilter, principal: Principal
+) -> str:
+    """`GraphPort.count_visible` (C045): `render_get_nodes_gremlin`'s read, counted in the store
+    instead of returned. The same vertices at `record_ids`, the same access step on the vertex
+    itself, so a hidden, superseded or reverted node is not counted; each node's `id` is taken and
+    deduplicated before the count, as `get_nodes` returns each node once. For no record ids the
+    query is still rendered (`g.V().limit(0)`), so an absent id costs the round trip a hidden one
+    does."""
+    has_access = access.gremlin_has_step(principal)
+    source = (
+        "g.V().limit(0)"
+        if not record_ids
+        else f"g.V({groovy_string_list_literal(list(record_ids))})"
+    )
+    return f"{source}.{has_access}.values('id').dedup().count()"
+
+
 def render_get_edges_gremlin(
     record_ids: Sequence[str], access: AccessFilter, principal: Principal
 ) -> str:

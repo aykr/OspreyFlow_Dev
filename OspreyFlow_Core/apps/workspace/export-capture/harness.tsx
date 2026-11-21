@@ -13,9 +13,8 @@ import { createRoot } from "react-dom/client";
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
-import type { ExportMark } from "../src/export/api";
 import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "@ospreyflow/glass-shared";
+import { createWorkingSet, type ExportMark } from "@ospreyflow/glass-shared";
 import type { Edge, Node, OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {

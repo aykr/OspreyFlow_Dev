@@ -905,6 +905,15 @@ external:
 - **`resources.memory_gib`** (drop 2): `server.memory_gib: auto` reads the memory Docker reports,
   once, at install, and writes it to `osprey.yaml`; the graph store's heap, OpenSearch's heap and
   PostgreSQL's shared buffers are sized from it, and a resize starts only those three again.
+- **`resources.postgres_max_connections`** (`06_DECISIONS.md` ADR-114 Amendment 49): what the
+  deployment's own PostgreSQL allows at once. Unset, the computed 660 of Amendment 43 (two Conduits,
+  Keycloak, the gateway, Superset and the report sync, and an operator reserve), as before. Set, a
+  whole number from 420 to 262121 (420 is the same sum with one Conduit; 262121 is PostgreSQL 16's own limit on server processes, less its other 22; outside them, refused in words), and
+  `apply` renders it as PostgreSQL's `max_connections`, and `update` and `start --build` bring an
+  existing compose file to it. It sizes no memory, so it is not one of the stores' sizing. For Lite
+  and for a Small with every store in a container; under `cluster` and `cloud-platform`, whose
+  databases OspreyFlow does not render, and for a Small on a managed database, it is refused in
+  words: set `max_connections` where the database is run.
 - **`resources.gpu`** (`06_DECISIONS.md` ADR-135 Amendment 1): `none` (the default) or `nvidia`, set
   by the answers' `server.gpu`; Lite on a Linux computer may set it in `osprey.yaml` (it sizes
   nothing, so unlike the stores' sizing it is not Small's alone). Refused by the schema for

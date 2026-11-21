@@ -7,7 +7,7 @@
 import type { SourceRefresh } from "../../../../../packages/schemas/generated";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import type { HandlingScheme } from "../api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 
 export interface Governance {
   classification: string;

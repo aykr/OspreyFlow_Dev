@@ -11,9 +11,8 @@
 import { useEffect, useState } from "react";
 
 import type { MonitoringFigures, QueuedAlert } from "../../../../packages/schemas/generated";
-import { typologyLabel } from "../alerts/names";
+import { typologyLabel, fetchNewestAlerts, type ReportsApi } from "@ospreyflow/glass-shared";
 import { Button } from "../design/primitives";
-import { fetchNewestAlerts, type ReportsApi } from "./api";
 import { AGE_BANDS, alertRuleGroup, groupKey, groupName, NUMBER, plural, Section, type RuleGroup } from "./figureParts";
 
 export const NEWEST_FEW = 5;

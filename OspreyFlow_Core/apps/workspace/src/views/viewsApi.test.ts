@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { deleteView, listViews, missingNote, openView, saveView, shareView, viewBody } from "./viewsApi";
+import { deleteView, listViews, missingNote, openView, saveView, shareView, viewBody } from "@ospreyflow/glass-shared";
 
 const API = "http://conduit";
 

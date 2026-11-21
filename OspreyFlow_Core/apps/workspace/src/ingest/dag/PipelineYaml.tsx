@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import type { StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
-import { fetchPipelineYaml, savePipelineYaml } from "../api";
+import { fetchPipelineYaml, savePipelineYaml } from "@ospreyflow/glass-shared";
 import type { StudioMode } from "./studioMode";
 
 export function PipelineYaml({

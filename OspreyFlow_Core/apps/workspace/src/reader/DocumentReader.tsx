@@ -16,7 +16,7 @@ import {
   type ExtractUsing,
   extractEmail,
   type EmailCandidate,
-} from "../inspector/linkEventsApi";
+} from "@ospreyflow/glass-shared";
 import type { OntologyRegistry } from "../ontology/schema";
 import { placeOf, selectionIn, type SelectedWords } from "./designation";
 import {
@@ -28,7 +28,7 @@ import {
   fetchDocumentFile,
   fetchDocumentReader,
   type DocumentReaderView,
-} from "./readerApi";
+} from "@ospreyflow/glass-shared";
 
 /** What words can be marked as by hand (the server's `DESIGNATABLE_TYPES`). */
 const MARK_TYPES = ["Person", "Organisation", "Location", "Endpoint"] as const;

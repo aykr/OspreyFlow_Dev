@@ -6,7 +6,7 @@ import {
   readBatchExpansion,
   type Started,
   startBatchExpansion,
-} from "./batchExpansionApi";
+} from "@ospreyflow/glass-shared";
 
 const COUNT = new Intl.NumberFormat("en-GB");
 /** Readings of the job's progress that fail in a row (a server error, no answer) before the panel

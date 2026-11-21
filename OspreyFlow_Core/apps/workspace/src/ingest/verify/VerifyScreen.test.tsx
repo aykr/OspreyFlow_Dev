@@ -12,7 +12,8 @@ vi.mock("../../canvas/GlassCanvas", () => ({
     return <div>preview canvas</div>;
   },
 }));
-vi.mock("../api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   ProfileError: class extends Error {},
   fetchDraft: vi.fn(async () => ({ name: "Onboarding" })),
   fetchOntologySchema: vi.fn(async () => ({ entity_types: [], edge_types: [] })),

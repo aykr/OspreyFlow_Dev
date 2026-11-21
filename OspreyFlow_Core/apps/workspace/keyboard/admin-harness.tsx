@@ -7,7 +7,7 @@ import "../../../packages/design/primitives.css";
 import "../src/shell/places.css";
 import { AdminPlace } from "../src/admin/AdminPlace";
 import { BrandFrame } from "../src/brand/BrandFrame";
-import { PLAIN_APPEARANCE } from "../src/brand/brand";
+import { PLAIN_APPEARANCE } from "@ospreyflow/glass-shared";
 import { AdminWithoutCase } from "../src/shell/AdminWithoutCase";
 import { applyHarnessBrand } from "./brandHarness";
 

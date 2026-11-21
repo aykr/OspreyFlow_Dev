@@ -20,7 +20,7 @@ import {
   setSideWidth,
   setTimelineHeight,
   MAX_SIDE_WIDTH,
-} from "./layoutSizes";
+} from "@ospreyflow/glass-shared";
 
 // ADR-086. The sizes an analyst drags the sashes to: the right-hand column's width, each stacked
 // panel's height and the timeline's height. Kept in this browser only, beside the panel order.

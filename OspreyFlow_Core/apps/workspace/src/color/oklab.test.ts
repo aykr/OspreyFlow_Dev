@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { mixOklab, oklabLightness, readableTextOn } from "./oklab";
+import { mixOklab, oklabLightness, readableTextOn } from "@ospreyflow/glass-shared";
 
 function lightnessGap(a: string, b: string): number {
   return Math.abs(oklabLightness(a) - oklabLightness(b));

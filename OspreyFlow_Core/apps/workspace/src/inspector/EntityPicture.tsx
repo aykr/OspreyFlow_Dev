@@ -12,7 +12,7 @@ import {
   type PictureApi,
 } from "../canvas/entityPictures";
 import { PICTURE_ACCEPT, checkPictureFile } from "../canvas/iconImage";
-import { fetchHandlingScheme } from "../ingest/api";
+import { fetchHandlingScheme } from "@ospreyflow/glass-shared";
 
 export interface EntityPictureProps extends PictureApi {
   /** The entity types a picture may depict (`DEPICTS`'s `to`); others have no *Picture*. */

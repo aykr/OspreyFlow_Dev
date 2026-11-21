@@ -15,7 +15,7 @@ import {
   THEME_STORAGE_KEY,
   themeCookieDomain,
   themeCookieWrites,
-} from "./theme";
+} from "@ospreyflow/glass-shared";
 
 function clearThemeCookie(): void {
   document.cookie = `${THEME_COOKIE_NAME}=; Path=/; Max-Age=0`;

@@ -9,8 +9,7 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchProfile } from "../api";
-import { listSources, sourceProfile } from "../sources/api";
+import { fetchProfile, listSources, sourceProfile } from "@ospreyflow/glass-shared";
 import { MapEditor } from "./MapEditor";
 import { STRIP } from "./mapEditorTestSupport";
 
@@ -28,8 +27,8 @@ const SOURCE = {
 let draft: Record<string, unknown> = DRAFT;
 let sources: unknown = [SOURCE];
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ospreyflow/glass-shared")>();
   return {
     ...actual,
     fetchDraft: vi.fn(async () => draft),
@@ -39,12 +38,6 @@ vi.mock("../api", async (importOriginal) => {
     fetchTransforms: vi.fn(async () => []),
     fetchHandlingScheme: vi.fn(async () => ({ classifications: [], handling_codes: [] })),
     fetchSampleRow: vi.fn(async () => null),
-  };
-});
-vi.mock("../sources/api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../sources/api")>();
-  return {
-    ...actual,
     listSources: vi.fn(async () => {
       if (sources instanceof Error) throw sources;
       return sources;

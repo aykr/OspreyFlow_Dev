@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyTheme } from "../theme/theme";
+import { applyTheme } from "@ospreyflow/glass-shared";
 import { EmbeddedDashboards, type Embed } from "./EmbeddedDashboards";
 import { ReportsPlace } from "./ReportsPlace";
 

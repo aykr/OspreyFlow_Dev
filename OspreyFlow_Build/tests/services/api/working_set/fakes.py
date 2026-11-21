@@ -304,6 +304,7 @@ class FakeGraphPort:
         self._hidden_edge_ids = hidden_edge_ids
         self._superseded_edge_ids = superseded_edge_ids
         self.get_nodes_requests: list[tuple[list[NodeId], Principal]] = []
+        self.count_visible_requests: list[tuple[list[NodeId], Principal]] = []
         self.get_edges_requests: list[tuple[list[EdgeId], Principal]] = []
         self.paths_at_length_requests: list[tuple[NodeId, NodeId, int, Principal]] = []
         self.expand_requests: list[ExpandRequest] = []
@@ -411,6 +412,17 @@ class FakeGraphPort:
             for i in sorted(set(node_ids))
             if i in world and self._node_readable(principal, world[i])
         ]
+
+    async def count_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
+        """`get_nodes`' count, judged by each node's own body for `principal` (C045): the ids the
+        fake holds and `principal` may read, each once. A fake that counted by the stored ids would
+        pass every case that never plants a hidden node (rule 12), so the count is the readable
+        subset's size, as the adapter's is."""
+        if isinstance(node_ids, str):
+            raise TypeError("ids must be a sequence of ids, not a single string")
+        self.count_visible_requests.append((list(node_ids), principal))
+        world = self._world_nodes()
+        return sum(1 for i in set(node_ids) if i in world and self._node_readable(principal, world[i]))
 
     async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
         """ADR-124's read by id: a link comes back only when it is held, it is readable by its own

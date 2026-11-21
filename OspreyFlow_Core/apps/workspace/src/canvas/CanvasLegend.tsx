@@ -23,7 +23,7 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import type { StrengthLegend } from "../../../../packages/schemas/generated";
-import { activePalette } from "../color/palette";
+import { activePalette } from "@ospreyflow/glass-shared";
 import { andList, compositionWords, influencerWords, layerWords } from "../strength/words";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import type { SchedulePreview } from "../../../../../packages/schemas/generated";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import { StudioActionError, previewSchedule } from "../api";
+import { StudioActionError, previewSchedule } from "@ospreyflow/glass-shared";
 import { cronOf, type ScheduleChoice } from "./scheduleChoice";
 
 export const DEFAULT_TIMEZONE = "Europe/London";

@@ -98,10 +98,12 @@ async function openThePanelInTheApp(page: Page, ending: Ending, look: "dark" | "
     sessionStorage.setItem("ospreyflow.investigationId", "case-1");
     sessionStorage.setItem("ospreyflow.place", "case");
     localStorage.setItem("ospreyflow.welcome-closed.analyst-1", "1");
-    // The reader's own choice of theme (`theme/theme.ts`), so the App applies it at load, canvas and all.
+    // The reader's own choice of theme (`packages/glass-shared/src/theme/theme.ts`), so the App applies it at load,
+    // canvas and all.
     if (light) localStorage.setItem("ospreyflow.theme", "light");
   }, look === "light");
-  // `?brand=govuk` is the development build's way to the GOV.UK look (`brand/brand.ts`'s `brandFromUrl`).
+  // `?brand=govuk` is the development build's way to the GOV.UK look (`brandFromUrl` in
+  // `packages/glass-shared/src/brand/brand.ts`).
   await page.goto(look === "govuk" ? "/?brand=govuk" : "/");
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await expect(canvas).toBeVisible({ timeout: 20_000 });

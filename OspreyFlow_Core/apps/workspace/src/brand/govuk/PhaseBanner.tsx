@@ -3,7 +3,7 @@
 // the same "Service phase" landmark. At `alpha` or `beta` it shows the phase's tag and its words; with
 // the deployment's own words (`appearance.banner_text`, ADR-132 Amendment 7) those replace "This is a
 // new service.", and at `live` or `none` they are shown alone. With neither, nothing is drawn.
-import { currentBrand, type Phase } from "../brand";
+import { currentBrand, type Phase } from "@ospreyflow/glass-shared";
 
 export function PhaseBanner({ phase, text }: { phase: Phase; text?: string }) {
   const words = text?.trim() ? text : null;

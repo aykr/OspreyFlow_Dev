@@ -4,7 +4,7 @@
 // brand it is a GOV.UK form (decision 7). Enter saves; Escape cancels.
 import { useEffect, useRef, useState } from "react";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import "./views.css";
 
 export interface SaveViewFormProps {

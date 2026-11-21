@@ -8,7 +8,7 @@
 // not part of the case: the same standing the light/dark theme has (ADR-070). The canvas cannot
 // read it from a component's state, so, like the theme, it is a small store the canvas listens to.
 import type { EntityTypeDef, Node } from "../../../../packages/schemas/generated";
-import { TYPOLOGY_LABELS } from "../alerts/names";
+import { TYPOLOGY_LABELS } from "@ospreyflow/glass-shared";
 
 export const LABEL_CHOICES_KEY = "ospreyflow.node-labels";
 

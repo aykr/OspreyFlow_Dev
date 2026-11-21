@@ -20,7 +20,7 @@ import {
   type Promotion,
   type PromotionDetails,
   type RemovedCaseLayers,
-} from "../../boards/promotionsApi";
+} from "@ospreyflow/glass-shared";
 import {
   cancelLayerMerge,
   datasetPromotions,
@@ -32,7 +32,7 @@ import {
   promotionDetails,
   removedCases,
 } from "./promotionsApi";
-import { currentBrand } from "../../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 
 const TAG: Record<Promotion["status"], string> = {
   awaiting_review: "govuk-tag--yellow",

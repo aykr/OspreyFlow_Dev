@@ -627,6 +627,7 @@ from .case_views import (
     ViewNotFound,
     first_item,
     open_view,
+    wired,
 )
 from .change_stream import touched_node_ids
 from .compute_routes import (
@@ -4702,8 +4703,12 @@ async def list_case_views(
 ) -> list[CaseView]:
     """The case's views this reader may see: their own, and those shared with the case. Each says
     its first item as this reader may see it (ADR-145 Amendment 17), never a hidden one."""
+    # `chosen` is how many of the view's chosen nodes this reader may see, counted in the store
+    # through the access step (C045): never the creator's stored count (rules 3 and 7).
     return [
-        v.wire().model_copy(update={"first_item": await first_item(graph, v, principal)})
+        (await wired(graph, v, principal)).model_copy(
+            update={"first_item": await first_item(graph, v, principal)}
+        )
         for v in await views.visible_in(investigation.id, principal.id)
     ]
 
@@ -4719,6 +4724,7 @@ async def save_case_view(
     principal: PrincipalDep,
     views: CaseViewsDep,
     audit: AuditDep,
+    graph: GraphDep,
 ) -> CaseView:
     """*Save what I see as a view* (ADR-144 decision 4): private to its creator until shared."""
     view = await views.save(investigation.id, body, principal.id)
@@ -4729,7 +4735,7 @@ async def save_case_view(
         resolved_query={"view_id": view.id},
         result_cardinality=1,
     )
-    return view.wire()
+    return await wired(graph, view, principal)
 
 
 # --- batch expansions (ADR-151; spec 03 §3.2) -------------------------------------------------
@@ -4772,9 +4778,10 @@ async def get_batch_expansion(
     principal: PrincipalDep,
     jobs: JobsDep,
     views: CaseViewsDep,
+    graph: GraphDep,
 ) -> BatchExpansion:
     """The job as its requester is told it; anyone else's is not found (ADR-151 decision 4)."""
-    return await read_batch_expansion(jobs, views, investigation.id, job_id, principal)
+    return await read_batch_expansion(jobs, views, graph, investigation.id, job_id, principal)
 
 
 @app.get("/v1/investigations/{investigation_id}/views/{view_id}")
@@ -4788,8 +4795,9 @@ async def open_case_view(
     working_set: WorkingSetDep,
     items: BoardItemsDep,
 ) -> CaseViewOpened:
-    """ADR-144 decision 2: the view re-read now, as this reader may see the case; `missing` counts
-    the chosen items it could not show and names none."""
+    """ADR-144 decision 2: the view re-read now, as this reader may see the case. `chosen` is how
+    many of its chosen items they may see; `missing` is 0 for everyone, the creator included, until
+    the store records deletions (C045; `missing_for`)."""
     view = await views.get(investigation.id, view_id, principal.id)
     opened = await open_view(
         view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach
@@ -4816,6 +4824,7 @@ async def share_case_view(
     principal: PrincipalDep,
     views: CaseViewsDep,
     audit: AuditDep,
+    graph: GraphDep,
 ) -> CaseView:
     """*Share with the case* (ADR-144 decision 3): every member then sees it at their own level."""
     view = await views.share(investigation.id, view_id, principal.id)
@@ -4826,7 +4835,7 @@ async def share_case_view(
         resolved_query={"view_id": view_id},
         result_cardinality=1,
     )
-    return view.wire()
+    return await wired(graph, view, principal)
 
 
 @app.delete(

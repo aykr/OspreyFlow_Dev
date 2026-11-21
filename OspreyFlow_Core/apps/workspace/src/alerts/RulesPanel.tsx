@@ -13,9 +13,16 @@ import type {
 } from "../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../design/primitives";
 import type { AccessLevel } from "../investigation/cases";
-import { listPatterns } from "../patterns/api";
-import { deployRule, listRules, retireRule, type AlertsApi } from "./api";
-import { money, ruleTypologyLabel, when } from "./names";
+import {
+  listPatterns,
+  deployRule,
+  listRules,
+  retireRule,
+  type AlertsApi,
+  money,
+  ruleTypologyLabel,
+  when,
+} from "@ospreyflow/glass-shared";
 import { RuleApproval, RuleHistory, RuleSchedule } from "./RuleChanges";
 import { RuleEditor } from "./RuleEditor";
 import { SentenceBuilder } from "./SentenceBuilder";

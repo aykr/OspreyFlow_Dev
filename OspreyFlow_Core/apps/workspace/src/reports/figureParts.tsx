@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { MonitoringFigures } from "../../../../packages/schemas/generated";
-import { typologyLabel } from "../alerts/names";
+import { typologyLabel } from "@ospreyflow/glass-shared";
 
 export const NUMBER = new Intl.NumberFormat("en-GB");
 

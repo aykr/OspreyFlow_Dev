@@ -5,9 +5,9 @@
 // change apart.
 import { useState } from "react";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { SaveViewForm } from "../views/SaveViewForm";
-import type { QuestionAnswer } from "./questionsApi";
+import type { QuestionAnswer } from "@ospreyflow/glass-shared";
 
 export interface AnswerIds {
   nodeIds: string[];

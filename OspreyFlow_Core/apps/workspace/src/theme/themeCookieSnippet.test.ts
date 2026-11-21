@@ -9,7 +9,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { readStoredTheme, storeTheme, THEME_COOKIE_NAME, themeCookieDomain, themeCookieWrites } from "./theme";
+import {
+  readStoredTheme,
+  storeTheme,
+  THEME_COOKIE_NAME,
+  themeCookieDomain,
+  themeCookieWrites,
+} from "@ospreyflow/glass-shared";
 
 const SCRIPT = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "..", "harness", "theme_cookie.js"),

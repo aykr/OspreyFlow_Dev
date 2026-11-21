@@ -29,7 +29,7 @@ import {
   verifyMaps,
   type MapProvider,
   type MapsApi,
-} from "./MapsApi";
+} from "@ospreyflow/glass-shared";
 
 const KEY_WORDS: Record<AdminMapProvider["key_state"], string> = {
   set: "Key set",

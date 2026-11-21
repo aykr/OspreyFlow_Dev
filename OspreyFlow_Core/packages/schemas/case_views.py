@@ -88,7 +88,9 @@ class CaseView(BaseModel):
     created_by: PrincipalId
     created_at: datetime
     shared: bool = False
-    #: How many nodes were chosen, for a view of chosen nodes; `None` for a filtered view.
+    #: How many of its chosen nodes *this reader* may see now, for a view of chosen nodes; `None`
+    #: for a filtered view. Never the count its creator stored: that would tell a reader how many
+    #: nodes a shared view holds above their clearance (C045; rules 3 and 7).
     chosen: int | None = Field(default=None, ge=0)
     #: ADR-145 Amendment 17: the first chosen node this reader may see now, as the canvas names it,
     #: so a view saved under the Glass's default name is told apart in the list; `None` when they
@@ -127,8 +129,9 @@ class ViewAnnotation(BaseModel):
 
 class CaseViewOpened(BaseModel):
     """A view opened now (decision 2): what the reader may see of it, live, and the saved positions
-    of those items alone. `missing` counts the chosen nodes it could not show, for whatever reason,
-    and names none of them."""
+    of those items alone. `missing` is 0 for every reader, the creator included, until the store
+    records deletions: it counts only what was lost after the view was placed, never what a marking
+    hides (the boards' rule, C045), and says nothing of the chosen nodes it could not show."""
 
     model_config = ConfigDict(extra="forbid")
 
