@@ -27,9 +27,10 @@ in is a failure (the guard could not have read what the build reads).
 (`uv pip install "litellm[proxy]"`, no version, no override) reads no new file and brings the
 package back through the `proxy` extra. So every package-installing step (INSTALL_COMMAND: `pip`,
 `pip3`, `python -m pip`, `uv pip install`/`sync`, `uv sync`/`add`, `uv tool install`, in shell or
-exec form) must take an override file that carries the removal line (by `--override`, `UV_OVERRIDE=` in
-front of it, or its own stage's `ENV UV_OVERRIDE`), a `uv pip sync` names its files positionally
-(read like `-r`), and LiteLLM is installed in one step. **The tests that fail:** the
+exec form) must take an override file that carries the removal line (by `--override`,
+`UV_OVERRIDE=` in front of it, or its own stage's `ENV UV_OVERRIDE`), a `uv pip sync` names its
+files positionally (read like `-r`), and LiteLLM is installed in one step. **The tests that
+fail:** the
 `test_a_second_install_*`, `test_a_file_an_install_of_any_spelling_*` and
 `test_an_install_whose_override_*` cases; shown red by disabling `_install_step_problems` (19 red)
 and by narrowing INSTALL_COMMAND back to `pip install` (8 red).
