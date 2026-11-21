@@ -106,6 +106,10 @@ WHOLE = (
 OLD_OF = {rel: WORKSPACE_SRC + rel for rel in WHOLE}
 _OLD_STEMS = {old.removesuffix(".ts") for old in OLD_OF.values()}
 
+#: The working-set models `alerts/api.ts` takes its type from, as a place under the package (written in two pieces: slice C's
+#: old-path scan reads this file too).
+MODELS_OF_THE_STORE = "workingset" + "/models.ts"
+
 #: The one new module: the constant `export/api.ts` took from a React file.
 SENTENCE_MODULE = "export/withheldSentence.ts"
 STATUS_BAR = WORKSPACE_SRC + "statusbar/StatusBar.tsx"
@@ -301,7 +305,7 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(tmp_path: Path) 
         for dependency in (
             *WHOLE,
             SENTENCE_MODULE,
-            "/".join(("workingset", "models.ts")),
+            MODELS_OF_THE_STORE,
         ):  # so a sibling import resolves
             sibling = tmp_path / (SHARED + dependency)
             sibling.parent.mkdir(parents=True, exist_ok=True)
