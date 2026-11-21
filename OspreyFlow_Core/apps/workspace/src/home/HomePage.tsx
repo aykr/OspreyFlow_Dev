@@ -7,14 +7,23 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 import { ROLES } from "../admin/AdminPlace";
-import { currentBrand } from "@ospreyflow/glass-shared";
+import {
+  type AttentionRow,
+  currentBrand,
+  type Fact,
+  GUIDE_FOR_PLACE,
+  type GuideId,
+  guideUrl,
+  type HomeSummary,
+  type Place,
+  whenLabel,
+  WORDS as GUIDE_WORDS,
+} from "@ospreyflow/glass-shared";
 import { MeshMark } from "../shell/BrandMark";
 import { ClassificationStrip } from "../shell/ClassificationStrip";
 import { PLACE_KEY, PLACE_NAME } from "../shell/places";
 import { startPlaces } from "../rights/visibility";
 import type { StartPlace } from "../rights/visibility";
-import { GUIDE_FOR_PLACE, WORDS as GUIDE_WORDS, guideUrl, type GuideId } from "./guides";
-import { whenLabel, type AttentionRow, type Fact, type HomeSummary, type Place } from "./homeData";
 import { TIPS, TipPicture } from "./tips";
 import { useFullFooter } from "../brand/BrandFrame";
 import "./home.css";

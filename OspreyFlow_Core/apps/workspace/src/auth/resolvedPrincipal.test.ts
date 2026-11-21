@@ -10,9 +10,11 @@ import {
   LINK_CLIENTS,
   movedClients,
   plantedCopy,
+  ADMIN_CLIENTS,
   CASE_CLIENTS,
   PLAIN_CLIENTS,
   plantedLinkClients,
+  plantedAdminClients,
   plantedCaseClients,
   plantedPlainClients,
   plantedReportClients,
@@ -166,6 +168,22 @@ describe("no token claim of role or access is read in the Glass", () => {
     const walked = sources(SHARED);
     for (const rel of CASE_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
     const planted = plantedCaseClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the roles', admin, Home, rule-group and entity-picture files that moved (PL4d3e), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of ADMIN_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedAdminClients(
       "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
     );
     try {

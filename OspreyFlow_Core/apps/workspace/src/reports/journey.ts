@@ -7,9 +7,8 @@
 // sign-in round trip, so the journey is noted in this tab's session storage beside the case, as a
 // case's view is (`rememberCaseView`), and taken once when that case is open. It grants nothing:
 // the Figures and the board are read from the Conduit as the reader, as any other time.
-import { caseOpenUrl as caseUrl } from "@ospreyflow/glass-shared";
+import { caseOpenUrl as caseUrl, type RuleGroup } from "@ospreyflow/glass-shared";
 import { INVESTIGATION_ID_SESSION_KEY } from "../investigation/investigationId";
-import type { RuleGroup } from "./figureParts";
 import { PERIODS } from "./ReportsView";
 
 export const JOURNEY_KEY = "ospreyflow.alertJourney";

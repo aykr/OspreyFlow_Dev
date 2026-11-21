@@ -6,8 +6,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyBrand } from "@ospreyflow/glass-shared";
-import type { HomeSummary } from "./homeData";
+import { applyBrand, type HomeSummary } from "@ospreyflow/glass-shared";
 import { HomePage } from "./HomePage";
 
 afterEach(cleanup);

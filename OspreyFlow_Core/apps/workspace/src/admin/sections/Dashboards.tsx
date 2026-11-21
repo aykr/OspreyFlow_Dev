@@ -4,7 +4,13 @@ import { useEffect, useState } from "react";
 
 import type { DashboardIdentity } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
-import { dashboardsSignInKind, listDashboards, registerDashboard, removeDashboard, type AdminApi } from "../api";
+import {
+  dashboardsSignInKind,
+  listDashboards,
+  registerDashboard,
+  removeDashboard,
+  type AdminApi,
+} from "@ospreyflow/glass-shared";
 
 const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
 

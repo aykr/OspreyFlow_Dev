@@ -3,9 +3,9 @@
 // its own, so it adds no access-control surface. A case or a service that could not be read is said,
 // never counted as nothing. Where no source exists yet (the last sign-in, a changelog, who granted
 // what) Home says nothing rather than invent it; the build plan's E3 row lists each.
-import { typologyLabel } from "@ospreyflow/glass-shared";
-import { alertRuleGroup } from "../reports/figureParts";
-import type { CaseListing } from "@ospreyflow/glass-shared";
+import { typologyLabel } from "../alerts/names";
+import type { CaseListing } from "../investigation/cases";
+import { alertRuleGroup } from "../reports/ruleGroup";
 
 export type Unreadable = "unreadable";
 export type Tone = "ok" | "warn" | "error" | "info";

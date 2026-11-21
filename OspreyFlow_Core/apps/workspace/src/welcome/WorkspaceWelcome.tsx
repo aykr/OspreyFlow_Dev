@@ -2,11 +2,9 @@
 // canvas's top left, what the canvas holds, the case's latest history steps to pick up from — each
 // restored as the History drawer restores one (spec 03 §3.1's route) — and the keys worth knowing,
 // each one the Glass has. It reopens with `?` or the rail's Help; closing it is remembered per person.
-import { GUIDE_FOR_PLACE } from "../home/guides";
+import { GUIDE_FOR_PLACE, type HistoryStepSummary, whenLabel, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 import { useEffect, useRef, useState } from "react";
 
-import { whenLabel } from "../home/homeData";
-import type { HistoryStepSummary, WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const KEY = (subject: string) => `ospreyflow.welcome-closed.${subject}`;
 

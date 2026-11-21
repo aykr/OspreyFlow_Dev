@@ -2,13 +2,21 @@
 // for the person signed in from what they may already see: their own rights (`/v1/me/rights`), their
 // own roles, their own cases (`/v1/investigations`, each with their level) and their own *Needs you*
 // (`/v1/me/needs-you`, gated in the Conduit). Home adds no read of its own, so nothing listed here is
-// beyond the reader. The words are `help/roles.ts`'s, the one source the tips and the help page use.
+// beyond the reader. The words are `packages/glass-shared/src/help/roles.ts`'s, the one source the tips and the help page use.
 // Where no source exists yet (a team's lead and cover, a watch's owner and expiry, a level given
 // through a team, which the case list does not carry) Home says nothing rather than invent it.
-import type { NeedsYou } from "@ospreyflow/glass-shared";
 import { RIGHT_GROUPS } from "../admin/sections/Roles";
-import { LEVEL_WORDS, PLACE_WORDS, ROLE_WORDS, rightName, rightSays, rolesHolding, type Right } from "../help/roles";
-import type { CaseListing } from "@ospreyflow/glass-shared";
+import {
+  type CaseListing,
+  LEVEL_WORDS,
+  type NeedsYou,
+  PLACE_WORDS,
+  type Right,
+  rightName,
+  rightSays,
+  ROLE_WORDS,
+  rolesHolding,
+} from "@ospreyflow/glass-shared";
 import { placesFor } from "../shell/places";
 
 export interface CanDo {

@@ -11,9 +11,15 @@
 import { useEffect, useState } from "react";
 
 import type { MonitoringFigures, QueuedAlert } from "../../../../packages/schemas/generated";
-import { typologyLabel, fetchNewestAlerts, type ReportsApi } from "@ospreyflow/glass-shared";
+import {
+  alertRuleGroup,
+  fetchNewestAlerts,
+  type ReportsApi,
+  type RuleGroup,
+  typologyLabel,
+} from "@ospreyflow/glass-shared";
 import { Button } from "../design/primitives";
-import { AGE_BANDS, alertRuleGroup, groupKey, groupName, NUMBER, plural, Section, type RuleGroup } from "./figureParts";
+import { AGE_BANDS, groupKey, groupName, NUMBER, plural, Section } from "./figureParts";
 
 export const NEWEST_FEW = 5;
 

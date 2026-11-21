@@ -10,7 +10,11 @@
 // is kept while that tab is open. Where it does not (`navigator.pdfViewerEnabled` false: headless
 // Chromium, or a browser set to download PDFs), no tab is opened and the PDF is saved under its own name
 // (`ospreyflow-user-guide.pdf`), since a tab sent to a blob would only download it under a random one.
-import type { PlaceId } from "../shell/places";
+import type { PLACE_WORDS } from "../help/roles";
+
+/** The four places: the keys of `PLACE_WORDS`, the same union as the workspace's `PlaceId` (`shell/places.ts`), which
+ * the package may not import. */
+type PlaceId = keyof typeof PLACE_WORDS;
 
 export type GuideId = "user" | "developer" | "administration";
 
@@ -49,25 +53,14 @@ export interface OpenGuideDeps {
   fetcher?: typeof fetch;
   /** Whether the browser shows PDFs itself (`navigator.pdfViewerEnabled`). */
   showsPdf?: boolean;
-  /** `window.open`, given so a test can stand a tab in for it. */
-  openTab?: () => Window | null;
-  /** Saves a blob under a name (an `<a download>` clicked), given so a test can stand in for it. */
-  save?: (url: string, name: string) => void;
+  /** Opens a blank tab: given by the browser's own code (the workspace's `home/guideDownloads.ts`). */
+  openTab: () => Window | null;
+  /** Saves a blob under a name (an `<a download>` clicked): given by the browser's own code, as above. */
+  save: (url: string, name: string) => void;
   createUrl?: (blob: Blob) => string;
   revokeUrl?: (url: string) => void;
   later?: (run: () => void, ms: number) => void;
   every?: (run: () => void, ms: number) => () => void;
-}
-
-function saveAs(url: string, name: string): void {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = name;
-  link.rel = "noopener";
-  link.style.display = "none";
-  document.body.append(link);
-  link.click();
-  link.remove();
 }
 
 async function refusalWords(response: Response): Promise<string> {
@@ -96,7 +89,7 @@ export async function openGuide(guide: GuideId, deps: OpenGuideDeps): Promise<st
       return () => clearInterval(id);
     });
   // The tab first, while the activation still counts as the person's; a blocked one is said at once.
-  const tab = showsPdf ? (deps.openTab ?? (() => window.open("", "_blank")))() : null;
+  const tab = showsPdf ? deps.openTab() : null;
   if (showsPdf && !tab) return WORDS.blocked;
   const fail = (words: string) => {
     if (tab && !tab.closed) tab.close();
@@ -119,7 +112,7 @@ export async function openGuide(guide: GuideId, deps: OpenGuideDeps): Promise<st
     if (type !== "application/pdf" && head !== "%PDF-") return fail(WORDS.notPdf);
     url = createUrl(new Blob([bytes], { type: "application/pdf" }));
     if (!tab) {
-      (deps.save ?? saveAs)(url, GUIDE_FILE[guide]);
+      deps.save(url, GUIDE_FILE[guide]);
       const saved = url;
       later(() => revokeUrl(saved), SAVED_KEPT_MS);
       return null;

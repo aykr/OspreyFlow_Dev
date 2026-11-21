@@ -7,8 +7,18 @@ import { useEffect, useState } from "react";
 
 import type { BuiltInRole, CustomRole, CustomRoleVersion, RolesCatalogue, Team } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
-import { changeRole, createRole, listRoles, makeTeam, roleVersions, setTeamCover, setTeamLead, type AdminApi } from "../api";
-import { rightName, rightSays } from "../../help/roles";
+import {
+  type AdminApi,
+  changeRole,
+  createRole,
+  listRoles,
+  makeTeam,
+  rightName,
+  rightSays,
+  roleVersions,
+  setTeamCover,
+  setTeamLead,
+} from "@ospreyflow/glass-shared";
 import { LEAD_TIP_ID, TEAM_TIP_ID, TIPS, Tip, roleName, roleTip, roleTipId } from "../tips";
 
 /** The rights grouped as the places they work in (decision 7); a right named in no group is still
@@ -40,7 +50,7 @@ export const RIGHT_GROUPS: { label: string; rights: string[] }[] = [
 ];
 
 /** A right's name in words: `review_promotions` reads "Review promotions" — from the one set of words
- * (`help/roles.ts`, ADR-145 Amendment 4 decision 12). */
+ * (`packages/glass-shared/src/help/roles.ts`, ADR-145 Amendment 4 decision 12). */
 export const rightWords = rightName;
 
 /** Every right offered, by group, with any the groups do not name under *Other*. */

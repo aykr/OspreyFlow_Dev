@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 
 import type { AuditSectionEntry, AuditSectionPage } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
-import { readAudit, type AdminApi, type AuditQuery } from "../api";
+import { readAudit, type AdminApi, type AuditQuery } from "@ospreyflow/glass-shared";
 
 const RECORDS: { value: AuditQuery["held_in"]; label: string }[] = [
   { value: "case_and_admin", label: "Cases, people, datasets and loads" },

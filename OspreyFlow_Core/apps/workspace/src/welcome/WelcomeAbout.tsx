@@ -1,7 +1,6 @@
 // The welcome page's About (ADR-115 decision 8; Amendment 4): what the product is for, with screens of
 // synthetic demonstration cases. Switched off by `welcome.about: false`.
-import { currentBrand, PRODUCT_STATEMENT } from "@ospreyflow/glass-shared";
-import { PLACE_WORDS } from "../help/roles";
+import { currentBrand, PLACE_WORDS, PRODUCT_STATEMENT } from "@ospreyflow/glass-shared";
 import { MeshMark } from "../shell/BrandMark";
 import amlDecision from "./assets/screen-aml-decision.jpg";
 import amlOwnership from "./assets/screen-aml-ownership.jpg";
@@ -61,7 +60,7 @@ const MONITORING = [
   { title: "Each alert explains itself", says: "An alert names its rule or hotlist entry, the entity it matched and its evidence. It is closed with a reason, and the reason stays on the record." },
 ]; // prettier-ignore
 
-// ADR-145 Amendment 4 decision 1: the four places, named as `help/roles.ts` names them. What each is for
+// ADR-145 Amendment 4 decision 1: the four places, named as `packages/glass-shared/src/help/roles.ts` names them. What each is for
 // is said as the guides say it (D2a): `PLACE_WORDS`' own sentences still name releases and one queue,
 // neither built yet, so they are not repeated here until they are.
 const PLACE_SAYS: Record<keyof typeof PLACE_WORDS, string> = {

@@ -19,11 +19,11 @@ import {
   datasetCases,
   deleteRemovedLayer,
   layerDryRun,
-  listDatasets,
+  listAdminDatasets as listDatasets,
   setDatasetEgress,
   setPromotionPolicy,
   type AdminApi,
-} from "../api";
+} from "@ospreyflow/glass-shared";
 
 const EGRESS: { value: AdminDataset["egress"]; label: string }[] = [
   { value: "none", label: "none — never sent to a hosted engine" },
