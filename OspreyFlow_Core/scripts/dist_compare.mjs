@@ -7,6 +7,15 @@
 //   node scripts/dist_compare.mjs units <before-dist> <after-dist>
 //        every differing unit, uncapped, one per line: `<file>\t<only before|only after>\t<sha-12 of the unit>\t<unit>`
 //        (a slice that splits code declares exactly these; `compare` shows five a side, this shows them all).
+//   node scripts/dist_compare.mjs rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>]
+//        the conductor's step at merge (PL4d3d, the owner's ruling of 21 November 2026), run from the merged commit:
+//        builds the workspace from the checked-out tree (or takes `--dist`), compares it with the baseline folder (default
+//        `$PL4_BASELINE_DIST`, else `~/dev/osprey-acceptance/PL4a-baseline/dist`), prints the old-against-new listing of
+//        differing units and EXITS NON-ZERO, touching nothing, if any differing unit is not in the declared file
+//        (`--declared`, required: the list of units a slice declares, a knock-on one included; this script lives in Core,
+//        which does not name where that list is kept) or if a declared unit does not differ.
+//        Otherwise it runs the workspace's unit tests, moves the old baseline folder aside (never deleted: a dated
+//        sibling, `<name>-before-<date>`), puts the new build in its place and writes `PL4_BASELINE.json`.
 //   node scripts/dist_compare.mjs normalise <dist>
 //        the normalised hash of one build, and what it was made from.
 //   node scripts/dist_compare.mjs record --dist <dist> --tests <npm-test-output> [--out <file>]
@@ -44,8 +53,9 @@
 // may not reach it. The unit tests and the browser gates stand behind the rest.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -715,6 +725,102 @@ export function makeRecord(dist, testOutput) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------- the rebaseline
+
+/** The raw copy of the build before PL4 moved anything: the folder `rebaseline` replaces. */
+export const DEFAULT_BASELINE = process.env.PL4_BASELINE_DIST ?? join(homedir(), "dev/osprey-acceptance/PL4a-baseline/dist");
+
+/** The declared units (`<file>\t<side>\t<sha>` of each row; comments and the `against:` line are not rows), as a multiset. */
+export function declaredKeys(text) {
+  const keys = new Map();
+  for (const line of text.split("\n")) {
+    if (!line.trim() || line.startsWith("#") || line.startsWith("against: ")) continue;
+    const [file, side, unitSha] = line.split("\t");
+    const key = `${file}\t${side}\t${unitSha}`;
+    keys.set(key, (keys.get(key) ?? 0) + 1);
+  }
+  return keys;
+}
+
+/** The differing rows (as `differingUnits` lists them) with whether each is declared; a declared row is used once. */
+export function checkAgainstDeclared(rows, declaredText) {
+  const left = declaredKeys(declaredText);
+  const checked = rows.map((row) => {
+    const key = `${row.file}\t${row.side}\t${row.sha}`;
+    const have = left.get(key) ?? 0;
+    if (have > 0) left.set(key, have - 1);
+    return { row, declared: have > 0 };
+  });
+  // A declared unit that does not differ is as wrong as an undeclared one that does.
+  const missing = [...left].flatMap(([key, count]) => Array(count).fill(key));
+  return { checked, missing };
+}
+
+function stamp() {
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
+}
+
+function rebaseline(rest) {
+  const baseline = resolve(flag(rest, "--baseline") ?? DEFAULT_BASELINE);
+  const declaredFlag = flag(rest, "--declared");
+  if (!declaredFlag) throw new Error("usage: rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>]");
+  const declaredPath = resolve(declaredFlag);
+  const out = resolve(flag(rest, "--out") ?? join(CORE, "apps/workspace/PL4_BASELINE.json"));
+  if (!existsSync(baseline)) throw new Error(`no baseline build at ${baseline}: nothing to replace (set PL4_BASELINE_DIST or pass --baseline)`);
+  if (!existsSync(declaredPath)) throw new Error(`no declared-units file at ${declaredPath}`);
+  const declaredText = readFileSync(declaredPath, "utf8");
+
+  let fresh = flag(rest, "--dist");
+  let scratch = null;
+  if (fresh) {
+    fresh = resolve(fresh);
+  } else {
+    scratch = `${baseline}.new-${stamp()}`;
+    const built = spawnSync("npm", ["run", "build", "--workspace", "apps/workspace", "--", "--outDir", scratch, "--emptyOutDir"], { cwd: CORE, stdio: "inherit" });
+    if (built.status !== 0) throw new Error("npm run build --workspace apps/workspace failed: the baseline is untouched");
+    fresh = scratch;
+  }
+  try {
+    const rows = differingUnits(compareBuilds(baseline, fresh).findings);
+    const { checked, missing } = checkAgainstDeclared(rows, declaredText);
+    console.log(`old baseline ${baseline}\nnew build ${fresh}\n${rows.length} differing unit${rows.length === 1 ? "" : "s"} (old against new):`);
+    for (const { row, declared } of checked) console.log(`${row.file}\t${row.side}\t${row.sha}\t${declared ? "declared" : "UNDECLARED"}\t${row.unit.slice(0, 100)}`);
+    const undeclared = checked.filter((c) => !c.declared);
+    for (const key of missing) console.log(`${key.replaceAll("\t", " ")}\tdeclared but not differing`);
+    if (undeclared.length > 0 || missing.length > 0) {
+      console.log(`REFUSED: ${undeclared.length} differing unit${undeclared.length === 1 ? " is" : "s are"} neither declared nor knock-on and ${missing.length} declared unit${missing.length === 1 ? "" : "s"} do${missing.length === 1 ? "es" : ""} not differ, in ${declaredPath}; the baseline folder and the record are untouched`);
+      return 1;
+    }
+
+    let testOutput;
+    const testsPath = flag(rest, "--tests");
+    if (testsPath) {
+      testOutput = readFileSync(testsPath, "utf8");
+    } else {
+      const ran = spawnSync("npm", ["test", "--workspace", "apps/workspace"], { cwd: CORE, encoding: "utf8", maxBuffer: 1 << 28 });
+      testOutput = `${ran.stdout}\n${ran.stderr}`;
+      if (ran.status !== 0) {
+        console.log("REFUSED: the workspace's unit tests do not pass on this commit (a timeout under load is a rerun); the baseline folder and the record are untouched");
+        return 1;
+      }
+    }
+    const record = makeRecord(fresh, testOutput);
+
+    const aside = `${baseline}-before-${stamp()}`;
+    renameSync(baseline, aside);
+    cpSync(fresh, baseline, { recursive: true });
+    const previous = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : null;
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
+    console.log(`the old baseline folder is kept at ${aside}`);
+    console.log(`the new build is in ${baseline}`);
+    console.log(`wrote ${out}: ${record.files.total} files, hash ${record.normalised_hash.slice(0, 16)} (was ${previous ? previous.normalised_hash.slice(0, 16) : "none"})`);
+    return 0;
+  } finally {
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 // -------------------------------------------------------------------------------------------------------- the CLI
 
 function flag(args, name) {
@@ -769,6 +875,8 @@ function main(args) {
       for (const row of differingUnits(compareBuilds(before, after).findings)) console.log(`${row.file}\t${row.side}\t${row.sha}\t${row.unit}`);
       return 0;
     }
+    case "rebaseline":
+      return rebaseline(rest);
     case "normalise": {
       const { hash, files } = normalise(rest[0]);
       console.log(JSON.stringify({ normalised_hash: hash, normaliser_version: NORMALISER_VERSION, files: fileCounts(files) }, null, 2));
@@ -818,7 +926,7 @@ function main(args) {
       return failed ? 1 : 0;
     }
     default:
-      throw new Error("usage: dist_compare.mjs compare|normalise|record|verify ...");
+      throw new Error("usage: dist_compare.mjs compare|units|rebaseline|normalise|record|verify ...");
   }
 }
 
