@@ -1,0 +1,19 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -41545,9 +41545,12 @@
+      the standard wording and the statement links join decision 14's list of Themes settings. X8's key-list
+      test (`test_the_public_appearance_read_carries_only_the_presentational_settings`) is written with the new
+      keys.
+-5. **A GOV.UK install is done from the command line** (the owner's answer 5): `ospreyflow install`, headless.
+-   - The guided page (`ospreyflow install --gui`) is the `apps/harness` React application. It is served only on
+-     the installing computer while an install runs, is never rendered into a deployment, and is outside I23.
++5. **A GOV.UK install is done from the command line, or from the guided page** (the owner's answer 5 of 20 November,
++   corrected by his ruling of 21 November 2026): both routes are allowed, and both guides say so plainly.
++   - `ospreyflow install` is headless: use it where the installing computer must itself run no React either.
++   - The guided page (`ospreyflow install --gui`) is the `apps/harness` React application. It also installs a
++     GOV.UK starter. It is served only on the installing computer while an install runs, leaves nothing in the
++     deployment, is never rendered into a deployment, and is outside I23.
+    - Both guides say this: the Installation and Administration Guide, `docs/administration-guide.md` (section
+      4.1, the guided page, and section 6a, `cloud-platform`), and the repository's front page, `README.md`
+      ("Installing and running it"). There is no separate install guide on `main`, and these two files are where

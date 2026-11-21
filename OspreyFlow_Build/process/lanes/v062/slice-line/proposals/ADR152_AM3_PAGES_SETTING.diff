@@ -1,0 +1,50 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -41720,3 +41720,35 @@
+ workspace, the generated GOV.UK stylesheet or its fonts folder, a pages view or the pages' built output; GDS Transport in a pages stylesheet,
+ as a listed `@font-face`, or by its assets path); `apps/workspace/src/design/fonts.test.ts` (the imports against the list, the families against
+ `tokens.css`, and the package's own face and weight against the list).
++
++### ADR-152, Amendment 3 (21 November 2026) — the page service in a deployment is a deployment setting, off by default, turned on per deployment by the owner; while it is off no deployment's rendered output changes — Accepted by the owner, 21 November 2026
++
++Status: **Accepted by the owner, 21 November 2026**, in his ruling on slice PL7a2 (the page service in deployments). This amendment adds to
++decision 7, whose route table and `OSPREY_PAGES_TREE` setting describe a deployment that renders `pages`; it says when a deployment does.
++
++1. **One setting, off by default.** The setting `pages.enabled` in `OspreyFlow_Core/osprey.yaml` is a boolean whose default is `false`. A
++   value that is not `true` or `false` is refused in words by the same settings validation that refuses an unknown `appearance.brand`. It is
++   turned on for one deployment at a time, by the owner, in that deployment's own `osprey.yaml`. Nothing else turns it on: not a profile, not
++   a brand, not a release.
++2. **Off means unchanged, byte for byte.** With the setting off or absent, every renderer produces exactly the files it produced before this
++   amendment, in each of the four shapes (local-lite, small, cluster, cloud-platform), under each brand: no `pages` service, no route to it
++   in the front proxy, no secret or `OSPREY_PAGES_*` variable for it, no value in the cloud-platform chart. A deployment that does not set
++   the setting therefore changes nothing at its next re-render, and the GOV.UK demonstration is not touched until the owner sets it for that
++   deployment.
++3. **On adds what decision 7 describes, and only that.** With the setting on, the renderers add the `pages` service, its route table for the
++   deployment's brand, its secrets and its `OSPREY_PAGES_*` variables (including `OSPREY_PAGES_TREE`, passed from `appearance.brand` as
++   decision 7 says), in all four shapes. Which paths go to `pages` is still decision 7's route table; this amendment does not change it.
++4. **The cutover needs the setting.** Invariant I22 (a GOV.UK deployment whose derived tree state is complete renders no workspace service
++   and no route to it) applies to a deployment with the setting on. A render of a GOV.UK deployment whose derived tree state is complete and
++   whose setting is off is **refused in words** ("the GOV.UK tree is complete, so the workspace would be removed, and the page service is not
++   enabled for this deployment"), rather than rendering a deployment with neither front end.
++5. **What does not change.** The default stays off in every release until the owner changes it in a later amendment; no migration is
++   needed; the release notes say that the setting exists and is off; the guides say it in one sentence where they name the page service.
++
++Tests that would fail (rule 12; each shown red against a planted fault in the shape the renderer writes it, rule 15): the reference render of
++the four shapes (slice PL7a2a: every file each shape renders today, byte for byte, with the setting absent) fails if any renderer's output
++differs while the setting is off or absent; a case per shape, planted with a `pages` service block in the compose file, a studio handle in the
++front proxy's configuration and a chart value, fails each when the setting is off; a case per shape fails if the setting is on and the `pages`
++service, its route or its variables are missing; the settings validation fails a value that is not a boolean; and the render of a complete
++GOV.UK tree with the setting off fails unless it is refused in the words above. The slice that makes the renderers read the setting (PL7a2b)
++writes them, and does not start before this amendment is applied.
+diff --git a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+--- a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
++++ b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+@@ -128,6 +128,7 @@
+ | ADR-141 Amendment 2 | The whole-dataset load: the dataset the unit an outside tool starts; a failure stops only what depends on it; one neutral job file, no generated Airflow job (D7-D9, D16, 19 Nov answer 18) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+ | ADR-148 Amendment 23 | The `pages` service on cloud-platform, no Superset under the GOV.UK theme, and the identity switch | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+ | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
++| ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
+ 
+ ## Baseline
+ 
