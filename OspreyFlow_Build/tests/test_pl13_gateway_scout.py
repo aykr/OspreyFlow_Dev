@@ -152,6 +152,36 @@ def test_the_other_verdict_form_is_accepted() -> None:
     assert problems(text) == []
 
 
+@pytest.mark.parametrize(
+    ("first", "second"),
+    [
+        ("VERDICT: clean cut", "VERDICT: not a clean cut"),
+        ("VERDICT: not a clean cut", "VERDICT: clean cut"),
+        ("VERDICT: clean cut", "VERDICT: clean cut"),
+    ],
+)
+def test_a_file_with_two_verdict_lines_is_refused(first: str, second: str) -> None:
+    # Each line is well formed on its own, so only the count can refuse the file: with the
+    # "more than one" branch gone, `verdicts[0]` alone would match and the file would pass.
+    text = _template().replace(
+        "VERDICT: clean cut — the open code runs without the folder.\n",
+        f"{first} — the open code runs without the folder.\n\n{second} — a route imports it.\n",
+    )
+    assert text.count("VERDICT") == 2
+    assert problems(text) == ["more than one verdict line"]
+
+
+def test_sk_with_exactly_eight_characters_is_refused_and_seven_is_not() -> None:
+    # The brief's threshold, at its edge on both sides: the repository's own scan wants 20, the
+    # brief says 8, and a pattern loosened to anything above 8 must fail here.
+    eight = "sk-" + secrets.token_hex(4)  # 3 + 8 characters, made at run time
+    seven = "sk-" + secrets.token_hex(4)[:7]
+    assert len(eight) == 11 and len(seven) == 10
+    refused = problems(_template().replace("an answer for 3", f"the key was {eight}"))
+    assert len(refused) == 1 and refused[0].startswith("a key-shaped string matches")
+    assert problems(_template().replace("an answer for 3", f"the key was {seven}")) == []
+
+
 def test_a_file_with_a_key_shaped_string_is_refused() -> None:
     planted = "sk-" + secrets.token_hex(12)  # made at run time, never written to the repository
     text = _template().replace("an answer for 3", f"the master key was {planted}")
