@@ -27,6 +27,11 @@
 //                             (PL4 slice D2: each calls `fetch` and takes the bearer token as an argument; `admin/api`
 //                             stays in the workspace for now, because it takes its words about a refusal from
 //                             `help/roles`, which reads a record the workspace holds)
+//   export/withheldSentence, export/api, alerts/api, alerts/names, alerts/closingReasons, patterns/api,
+//   models/modelDeadline, reports/api, caseHttp, dashboards, trendsApi, packsApi, packText
+//                             the Conduit clients of the export, the alert queue and rules, the patterns and the reports,
+//                             and the words they and the print document share (PL4 slice D3a: each calls `fetch` and takes
+//                             the bearer token as an argument; `WITHHELD_SENTENCE` came out of the status bar's React file)
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -60,3 +65,16 @@ export * from "./ingest/releases/releasesApi";
 export * from "./admin/sections/MapsApi";
 export * from "./admin/sections/ModelsApi";
 export * from "./admin/updateNotice";
+export * from "./export/withheldSentence";
+export * from "./export/api";
+export * from "./models/modelDeadline";
+export * from "./alerts/names";
+export * from "./alerts/closingReasons";
+export * from "./alerts/api";
+export * from "./patterns/api";
+export * from "./reports/api";
+export * from "./reports/caseHttp";
+export * from "./reports/dashboards";
+export * from "./reports/trendsApi";
+export * from "./reports/packText";
+export * from "./reports/packsApi";

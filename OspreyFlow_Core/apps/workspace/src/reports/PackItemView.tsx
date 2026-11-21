@@ -4,7 +4,16 @@
 import type { ReactNode } from "react";
 
 import type { PackItem } from "../../../../packages/schemas/generated";
-import { KIND_LABEL, alertEntityWords, alertEvidence, alertLine, alertMatchSentence, alertStatusSentence, formatDay, itemShortTitle } from "./packText";
+import {
+  KIND_LABEL,
+  alertEntityWords,
+  alertEvidence,
+  alertLine,
+  alertMatchSentence,
+  alertStatusSentence,
+  formatDay,
+  itemShortTitle,
+} from "@ospreyflow/glass-shared";
 import { TrendChart } from "./TrendChart";
 
 function Content({ item }: { item: PackItem }) {

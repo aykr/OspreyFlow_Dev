@@ -56,7 +56,6 @@ import type {
   Path as GraphPath,
   StrengthLegend,
 } from "../../../../packages/schemas/generated";
-import type { ExportMark } from "../export/api";
 import { captureChartImage } from "../export/chartExport";
 import { pointInPolygon } from "../map/geometry";
 import type { OntologyRegistry } from "../ontology/schema";
@@ -140,6 +139,7 @@ import {
   type LimitExceeded,
   type ResolutionOutcome,
   type WorkingSetDelta,
+  type ExportMark,
 } from "@ospreyflow/glass-shared";
 import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
 import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
@@ -2816,7 +2816,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // search did not complete at all, and folding the two together would tell the analyst
         // something the system does not actually know (`06_DECISIONS.md` ADR-033's own "FIRST"
         // reasoning: this searches the whole access-filtered corpus, a real claim worth getting
-        // right). Matches `patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
+        // right). Matches `packages/glass-shared/src/patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
         setPathError({
           x,
           y,

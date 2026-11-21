@@ -1,7 +1,7 @@
 // Superset dashboards inside the Glass (ADR-111 Amendment 3): the Conduit lists the boards this
 // person may open — only those whose every figure they could count themselves — and asks Superset
 // for a short-lived guest token for one. The Glass enforces nothing; it only asks.
-import type { DashboardGuestToken, EmbeddedDashboard } from "../../../../packages/schemas/generated";
+import type { DashboardGuestToken, EmbeddedDashboard } from "../../../schemas/generated";
 
 export interface DashboardsApi {
   apiBaseUrl: string;

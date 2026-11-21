@@ -1,6 +1,6 @@
 // The words a pack and a trend are described in, shared by the screens and the print document so
 // the two never say different things (ADR-113 stage 5). Pure: no DOM, no fetch.
-import type { AlertEntitySnapshot, AlertSnapshot, PackItem, TrendFigures } from "../../../../packages/schemas/generated";
+import type { AlertEntitySnapshot, AlertSnapshot, PackItem, TrendFigures } from "../../../schemas/generated";
 import { closingReasonLabel } from "../alerts/closingReasons";
 import { TYPOLOGY_LABELS } from "../alerts/names";
 

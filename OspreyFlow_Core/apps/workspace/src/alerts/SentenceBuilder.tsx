@@ -27,7 +27,7 @@ import {
   readSentence,
   saveRuleDraft,
   type AlertsApi,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import {
   MAX_CONDITIONS,
   OP_WORDS,

@@ -3,7 +3,7 @@
 // own conventions. Preview and run are asked of the case, since a case reads only its own datasets
 // (ADR-099); saved patterns are the analyst's, not a case's. `06_DECISIONS.md` ADR-032/036/040: save/load/list only —
 // no share endpoint exists, since ADR-040 (pattern sharing) is Proposed, not accepted.
-import type { PatternQuery, SavedPattern, Subgraph } from "../../../../packages/schemas/generated";
+import type { PatternQuery, SavedPattern, Subgraph } from "../../../schemas/generated";
 import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 export interface PatternPreview {

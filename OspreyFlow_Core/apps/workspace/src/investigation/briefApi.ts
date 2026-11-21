@@ -4,9 +4,7 @@
 // are written by hand: `case_brief.py` is not in `schemas-check`'s model list, which covers
 // `schemas.*` only, the same disclosed gap `cases.ts` names for the case listing.
 import { listJudgements } from "../assessment/api";
-import { listPatterns } from "../patterns/api";
-import { fieldOf, refusal, send, type Reply } from "../reports/caseHttp";
-import { listTrends } from "../reports/trendsApi";
+import { listPatterns, fieldOf, refusal, send, type Reply, listTrends } from "@ospreyflow/glass-shared";
 import { listCases } from "./cases";
 
 export type AttachmentKind = "trend" | "pattern" | "assessment" | "view";

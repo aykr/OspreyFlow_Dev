@@ -2,7 +2,7 @@ import Graph from "graphology";
 import { describe, expect, it } from "vitest";
 
 import { buildSubgraphArtefact, serialiseSubgraphArtefact } from "./subgraphExport";
-import type { ExportManifest, ExportMark } from "./api";
+import type { ExportManifest, ExportMark } from "@ospreyflow/glass-shared";
 
 const MARK: ExportMark = {
   osprey_mark: "OspreyFlow",

@@ -12,7 +12,7 @@ import type {
   PublishedPackSummary,
   QueuedAlert,
   ReportPack,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 import type { BlockedItem } from "../export/api";
 import type { ReportsApi } from "./api";
 import { fieldOf, refusal, send } from "./caseHttp";

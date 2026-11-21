@@ -10,7 +10,7 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import type { PackItem } from "../../../packages/schemas/generated";
 import { PackItemView } from "../src/reports/PackItemView";
-import { WITHHELD_ITEMS_SENTENCE } from "../src/reports/packText";
+import { WITHHELD_ITEMS_SENTENCE } from "@ospreyflow/glass-shared";
 import { applyHarnessBrand } from "./brandHarness";
 
 await applyHarnessBrand();

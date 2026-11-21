@@ -9,7 +9,7 @@
 // outside `packages/schemas/generate_ts.py`'s own `schemas.{analytics,compute,domain,ingest,
 // model,profile,provider_profile}` model list.
 
-import { WITHHELD_SENTENCE } from "../statusbar/StatusBar";
+import { WITHHELD_SENTENCE } from "./withheldSentence";
 
 export interface BlockedItem {
   id: string;

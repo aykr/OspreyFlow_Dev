@@ -10,12 +10,20 @@
 // Tests and generated types are not on screen and are skipped. Two roots are read: the workspace's source
 // and `packages/glass-shared/src`, where the Conduit clients now live (the copy kit's `ROOTS`).
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-import { movedClients, plantedCopy, shown, sourceFiles } from "./copyTextsTestKit";
+import {
+  movedClients,
+  plantedCopy,
+  plantedReportClients,
+  REPORT_CLIENTS,
+  shown,
+  SHARED_SRC,
+  sourceFiles,
+} from "./copyTextsTestKit";
 
 const WORD = /\brecipes?\b/i;
 const ROUTE = /^(GET|POST|PUT|PATCH|DELETE)\s+\/|\/v1\//;
@@ -72,6 +80,20 @@ describe("the Glass's copy says pipeline", () => {
         copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
       );
       expect(hits).toEqual([`${planted.file}: Recipe not checked yet`]);
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the report, export, alert and pattern clients that moved (PL4d3a), and finds a word planted in each (rule 15)", () => {
+    const walked = sourceFiles();
+    for (const rel of REPORT_CLIENTS) expect(walked, rel).toContain(join(SHARED_SRC, rel));
+    const planted = plantedReportClients('export const PLANTED = { headline: "Recipe not checked yet" };');
+    try {
+      const hits = sourceFiles([planted.root]).flatMap((path) =>
+        copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
+      );
+      expect(hits.sort()).toEqual(planted.files.map((file) => `${file}: Recipe not checked yet`).sort());
     } finally {
       planted.remove();
     }

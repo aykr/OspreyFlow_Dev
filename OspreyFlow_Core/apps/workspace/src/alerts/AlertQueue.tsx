@@ -3,7 +3,7 @@
 // hotlist and monitor — each with its severity, who may see it, who has it and its age; what fired,
 // on which entities, through which transactions — and the triage a member does: claim it, release
 // it, give a case alert to a member, put it on the canvas, close it as a true or false positive with
-// the reason — one of the owner's closed list (`closingReasons.ts`) and words. A true match confirms
+// the reason — one of the owner's closed list (the closing reasons, in `packages/glass-shared`) and words. A true match confirms
 // the alert's node (rule 5); the server says which. The kind,
 // severity and status filters are the server's: the Glass never hides a row it was sent.
 //
@@ -35,9 +35,15 @@ import {
   type QueueFilter,
   type QueueShow,
   type SeverityFilter,
-} from "./api";
-import { CLOSING_REASONS, closingReasonLabel, type ClosingReason } from "./closingReasons";
-import { concernWords, money, nodeName, typologyLabel, when } from "./names";
+  CLOSING_REASONS,
+  closingReasonLabel,
+  type ClosingReason,
+  concernWords,
+  money,
+  nodeName,
+  typologyLabel,
+  when,
+} from "@ospreyflow/glass-shared";
 
 export interface AlertQueueProps extends AlertsApi {
   level: AccessLevel | null;
