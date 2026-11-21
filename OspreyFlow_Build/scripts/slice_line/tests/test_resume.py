@@ -109,6 +109,7 @@ def test_resume_refuses_without_the_owners_line_for_that_slice_action_and_day_an
     wt = at_limit(w)
     if line is not None:
         owner_line(w, line.replace("@TODAY@", TODAY))
+    (wt / RULINGS_COPY).unlink()  # slice_start.py made the worktree as the builder has it (B): a refusal brings none
     before, head = snapshot(w), sh("git rev-parse HEAD", wt).stdout
     p = resume(w, "S1", "add-round")
     assert said_refused(p, "no line", "resume.tsv"), p.stdout + p.stderr

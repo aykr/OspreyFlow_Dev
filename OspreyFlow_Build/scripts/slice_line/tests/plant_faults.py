@@ -109,13 +109,13 @@ M = [
  ("dry_run.py", '        if body is not None:\n', '        if False:\n', "stands_in_the_slices_own"),
  ("common.py", '        if slot not in taken and all(p < 65536 for p in ports) and not ports & spoken:', '        if True:', "slot_clear_of_the_lanes"),
  ("stop_check.py", '        env["OSPREY_PORTS_SLOT"] = str(slot)  # the slice', '        pass  # the slice', "give_a_playwright_command"),
- ("slice_start.py", '    problems = dry_run.prove(row, slot=slot, log=log)', '    problems = dry_run.prove(row, slot=None, log=log)', "give_a_playwright_command"),
+ ("slice_start.py", '    problems = dry_run.checks_in_tree(row, wt, slot, log)', '    problems = dry_run.checks_in_tree(row, wt, None, log)', "give_a_playwright_command"),
  ("merge_slice.py", '    if slot not in (None, ""):\n        env["OSPREY_PORTS_SLOT"] = str(slot)', '    if False:\n        env["OSPREY_PORTS_SLOT"] = str(slot)', "ci_built_environment"),
  ("merge_slice.py", '        drop_env(after)  # the full gate builds its own, fresh\n', '', "ci_built_environment"),
  ("merge_slice.py", '        if venv:\n            env["UV_PROJECT_ENVIRONMENT"] = str(venv)', '        if False:\n            env["UV_PROJECT_ENVIRONMENT"] = str(venv)', "ci_built_environment"),
  ("slice_start.py", '    if row["env"] == "full":', '    if False:', "env_full_builds"),
  ("merge_slice.py", '        if scans and run(scan_select.command(', '        if False and run(scan_select.command(', "scans_of_the_touched_files"),
- ("slice_start.py", '    hashes = bring_client_hashes(wt)\n', '    hashes = "The hashed client-name list was copied"\n', "hashed_list_into_the_worktree"),
+ ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = "The hashed client-name list was copied"\n', "hashed_list_into_the_worktree"),
  ("slice_start.py", '    if subprocess.run(["git", "-C", str(wt), "check-ignore", "-q", ms.CLIENT_HASHES_REL]).returncode != 0:', '    if False:', "where_git_would_take_it"),
  ("slice_start.py", '    if not src.is_file() or not src.read_text().strip():\n        return (f"The main', '    if False:\n        return (f"The main', "no_hashed_list"),
  ("usage_hook.py", '        conductor_row(Path(event.get("transcript_path") or ""), event.get("session_id", ""), account)', '        pass', "session_end_hook_writes"),
@@ -318,6 +318,13 @@ M = [
  ("resume.py", '        c.log_self_clear(slice_id, stop, "a", what)\n', '', "log_lists_every_clearance"),
  ("board.py", '        for line in self_clear_lines():\n            print(line)\n', '', "board_prints_it"),
  ("run_seat.py", '        return 0 if self_clear(slice_id) else 1', '        return 1', "run_seat_tries_the_clearance"),
+ # LINE_FIXES_5_BRIEF.md, B: the checks proved in the slice's own worktree before it starts
+ ("slice_start.py", '    problems = dry_run.checks_in_tree(row, wt, slot, log)\n', '    problems = []\n', "fails_only_in_a_builders_worktree"),
+ ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "fails_only_in_a_builders_worktree"),
+ ("slice_start.py", '        c.git(["branch", "-D", branch], c.REPO, check=False)\n        raise SystemExit(f"NOT STARTED: {slice_id}\'s checks', '        raise SystemExit(f"NOT STARTED: {slice_id}\'s checks', "fails_only_in_a_builders_worktree"),
+ ("dry_run.py", '    written = stand_in(tree, acceptance_files(spec))\n', '    written = []\n', "acceptance_command_being_red"),
+ ("slice_start.py", '    if not problems and left:\n', '    if False:\n', "leave_files"),
+ ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "rulings_copy_is_in_the_worktree"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

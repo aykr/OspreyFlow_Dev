@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (376 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (298 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (381 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (304 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -79,10 +79,14 @@ without a tool call; the line's own cap is 6 red stops.
 
 1. The conductor writes `slices/<ID>.md` from `SLICE_BRIEF.template.md` and its row in `slices.tsv`, and commits
    them with `merge_slice.py records`. The build id must be one of the plan's (`dashboard/index.html`).
-2. `slice_start.py <ID>`: first a **dry run** of the slice's commands on main in a scratch worktree (`dry_run.py`):
-   the checks, with the slice's own new files stood in by placeholders, must exit 0 and reach the last step of their
-   `&&` chain (a red run names the step it did not reach); the acceptance must be red for a reason no
-   malformed-command signature matches. Otherwise nothing is created. Then worktree `~/dev/osprey-wt/slice-<ID>` on
+2. `slice_start.py <ID>`: first a **dry run** of the acceptance on main in a scratch worktree (`dry_run.py`): it
+   must be red for a reason no malformed-command signature matches. Then the checks **in the slice's own
+   worktree**, made as the builder will have it (the rulings copy at `Claude outputs/slice-line/`, the hashed
+   client names, env: full's environment) with nothing built, in the Stop hook's environment: every step of
+   the `&&` chain must be green there, the slice's own new files stood in by placeholders, and leave no file
+   git does not ignore (LINE_FIXES_5_BRIEF.md, B: `test_layout` failed on the rulings copy at the root, which
+   the scratch tree never had). A red run names the step and the failing tests, and the worktree and the
+   branch are removed: nothing is frozen. Then worktree `~/dev/osprey-wt/slice-<ID>` on
    `lane/slice-<ID>`; the acceptance and checks commands **frozen** (a change needs the owner's word: `resume.py`
    refreeze, or the conductor's own `correct-command`); account, track, dial setting, rounds fixed; and a
    **Playwright port slot** of the slice's own (from 16 up, clear of `scripts/lane_ports.tsv`'s lanes, of every

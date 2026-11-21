@@ -140,6 +140,29 @@ def builder_shaped(tree: Path) -> list[str]:
             slice_start.bring_client_hashes(tree)]
 
 
+def checks_in_tree(spec: dict, tree: Path, slot: int | str | None, log: Path | None) -> list[str]:
+    """The checks column run in `tree` as it stands, in the environment the builder's Stop hook gives it
+    (stop_check.seat_env), each of the slice's own new test files stood in: why it is not green (empty when it is).
+    A red run names the step it stopped at and the failing tests."""
+    if not spec.get("checks"):
+        return []
+    written = stand_in(tree, acceptance_files(spec))
+    try:
+        code, out, reached = run_marked(spec["checks"], tree, stop_check.seat_env(str(tree), slot), log)
+    finally:
+        for f in written:
+            (tree / f).unlink(missing_ok=True)
+    if code == 0:
+        return []
+    parts = steps(spec["checks"])
+    failing = failing_ids(out)
+    return [f"the checks are red in the slice's own worktree (exit {code}): step {reached + 1} of {len(parts)} "
+            f"cannot pass there: {parts[min(reached, len(parts) - 1)][:300]}"
+            + (f" and the chain never reached the last ({parts[-1][:120]})" if reached + 1 < len(parts) else "")
+            + (f"; failing: {', '.join(failing[:10])}" if failing else "")
+            + (f"; malformed: {malformed(out)}" if malformed(out) else "") + "\n" + tail(out)]
+
+
 def instrument(cmd: str, marks: Path) -> str:
     """The command with a mark written after each step of its `&&` chain (to a file, so no redirection hides it)."""
     out, last = [], 0
@@ -191,11 +214,13 @@ def acceptance_files(spec: dict) -> list[str]:
     return [f.strip() for f in (spec.get("acceptance_files") or "").split(",") if f.strip()]
 
 
-def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log: Path | None = None) -> list[str]:
+def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log: Path | None = None,
+          checks: bool = True) -> list[str]:
     """Why the slice's commands are not proved on main (empty when they are). `spec` holds acceptance_files,
     acceptance and checks; `slot` is the slice's Playwright slot; `tip`, the slice's branch tip, gives its acceptance
     files to the acceptance run. The runs get the environment the merge script's runs get (merge_slice.slice_env:
-    built as CI builds it, its venv outside the scratch tree, closed ports, the slot)."""
+    built as CI builds it, its venv outside the scratch tree, closed ports, the slot). `checks=False` leaves the checks
+    to slice_start.py, which runs them in the slice's own worktree (checks_in_tree)."""
     problems: list[str] = []
     tree = scratch_tree("main")
     venv = Path(tempfile.mkdtemp(prefix="slice-dryrun-venv-"))
@@ -210,7 +235,7 @@ def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log
             return [f"the environment for the commands could not be built on main: {e}"]
         files = acceptance_files(spec)
         new = [f for f in files if not (tree / f).exists()]
-        if spec.get("checks"):
+        if spec.get("checks") and checks:
             stood = stand_in(tree, new)
             code, out, reached = run_marked(spec["checks"], tree, env, log)
             parts = steps(spec["checks"])
