@@ -267,7 +267,7 @@ def test_the_files_are_where_they_should_be() -> None:
             re.M,
         ), f"packages/glass-shared/src/index.ts does not export {stem}"
     assert re.search(
-        rf"""^export\s+\{{\s*default\s+as\s+PLACES_BY_ROLE\s*\}}\s+from\s+["']\./{re.escape(RECORD)}["'];""",
+        rf"""^export\s+\{{\s*default\s+as\s+PLACES_BY_ROLE\s*\}}\s+from\s+["']\./{re.escape(RECORD)}["'](?:\s+with\s+\{{\s*type:\s*["']json["']\s*\}})?;""",
         index,
         re.M,
     ), "the index does not give the record as PLACES_BY_ROLE"

@@ -8,7 +8,7 @@
 //
 // Plain words, British English; what a role or right lets a person do, never how it is checked.
 import type { BuiltInRole } from "../../../schemas/generated";
-import BY_ROLE from "../shell/placesByRole.json";
+import BY_ROLE from "../shell/placesByRole.json" with { type: "json" };
 
 export type Right = BuiltInRole["rights"][number];
 

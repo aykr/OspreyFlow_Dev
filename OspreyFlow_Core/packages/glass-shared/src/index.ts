@@ -247,7 +247,7 @@ export * from "./ingest/studio/datasets";
 export * from "./ingest/studio/packs";
 export * from "./ingest/runs/externalOrchestrationApi";
 export * from "./help/roles";
-export { default as PLACES_BY_ROLE } from "./shell/placesByRole.json";
+export { default as PLACES_BY_ROLE } from "./shell/placesByRole.json" with { type: "json" };
 export {
   addPersonByObjectId,
   type AdminApi,
