@@ -26,6 +26,12 @@ What an absent file means, and why it can never read as "complete":
   * `PARITY_EXCEPTIONS.yaml` is absent: no line has been agreed, so every row is required (the
     stricter reading).
 
+Two rows may not give one route. The route list carries no function id, so a row's own `route` is the
+only link from a path to a function; two rows on one path would let one function's page count for the
+other, and the tree read "complete" early (and I22 would then drop the workspace from a GOV.UK
+deployment). That is `ValueError` naming both rows and the route, whatever else the files say (an
+empty route is no route, so unrouted rows are not duplicates of one another).
+
 A file that exists but cannot be read as its shape says (not YAML, `routes` not a list of strings, a
 row that is not a mapping) raises `ValueError`: a corrupt record is an error to see, never a quiet
 "complete" or a quiet "partial".
@@ -90,6 +96,21 @@ def _routes(path: Path) -> list[str] | None:
     return items
 
 
+def _check_unique_routes(rows: Sequence[dict[str, Any]]) -> None:
+    """Raise `ValueError` when two rows give the same (non-empty) GOV.UK route."""
+    owner: dict[str, Any] = {}
+    for row in rows:
+        route = row.get("route")
+        if not isinstance(route, str) or route == "":
+            continue
+        if route in owner:
+            raise ValueError(
+                f"FUNCTIONS.yaml: rows '{owner[route]}' and '{row.get('id')}' "
+                f"both give the route '{route}'; one route belongs to one function"
+            )
+        owner[route] = row.get("id")
+
+
 def _required_rows(
     rows: Sequence[dict[str, Any]], exceptions: Sequence[dict[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -120,6 +141,7 @@ def govuk_tree_state(
     rows = _mappings(functions, "functions")
     if not rows:
         return PARTIAL
+    _check_unique_routes(rows)
     routes = _routes(route_list)
     if routes is None:
         return PARTIAL
