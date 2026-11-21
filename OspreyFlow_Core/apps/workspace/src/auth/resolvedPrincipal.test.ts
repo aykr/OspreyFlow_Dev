@@ -10,8 +10,10 @@ import {
   LINK_CLIENTS,
   movedClients,
   plantedCopy,
+  CASE_CLIENTS,
   PLAIN_CLIENTS,
   plantedLinkClients,
+  plantedCaseClients,
   plantedPlainClients,
   plantedReportClients,
   REPORT_CLIENTS,
@@ -148,6 +150,22 @@ describe("no token claim of role or access is read in the Glass", () => {
     const walked = sources(SHARED);
     for (const rel of PLAIN_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
     const planted = plantedPlainClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the cases, moment, needs-you, dataset, pack and external-orchestration files that moved (PL4d3d), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of CASE_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedCaseClients(
       "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
     );
     try {

@@ -22,7 +22,7 @@ import { useState } from "react";
 import type { Node } from "../../../../packages/schemas/generated";
 import { listAssumptions, listGaps, listAssessmentJudgements as listJudgements, getYardstick } from "@ospreyflow/glass-shared";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { caseLabel, listCases } from "../investigation/cases";
+import { caseLabel, listCases } from "@ospreyflow/glass-shared";
 import { Button } from "../design/primitives/Button";
 import { Drawer } from "../design/primitives/Drawer";
 import { Input } from "../design/primitives/Input";

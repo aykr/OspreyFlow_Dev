@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import type { RuleDatasetOffer, RuleSentence, RuleTestResult, SavedPattern, TypologyRule } from "../../../../packages/schemas/generated";
 import { Button, Select } from "../design/primitives";
-import type { AccessLevel } from "../investigation/cases";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
 import {
   listRuleDatasets,
   makeRuleLive,

@@ -5,7 +5,7 @@
 // `schemas.*` only, the same disclosed gap `cases.ts` names for the case listing.
 import { listAssessmentJudgements as listJudgements } from "@ospreyflow/glass-shared";
 import { listPatterns, fieldOf, refusal, send, type Reply, listTrends } from "@ospreyflow/glass-shared";
-import { listCases } from "./cases";
+import { listCases } from "@ospreyflow/glass-shared";
 
 export type AttachmentKind = "trend" | "pattern" | "assessment" | "view";
 export type RequirementStatus = "open" | "answered";

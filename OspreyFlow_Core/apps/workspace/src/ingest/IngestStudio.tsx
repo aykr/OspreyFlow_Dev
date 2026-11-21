@@ -5,18 +5,18 @@
 // role and access check is the case's, exactly as before.
 import { useEffect, useState } from "react";
 
-import { NEEDS_YOU_WORDS, proposedIn, readNeedsYou, type NeedsYou } from "../admin/needsYou/needsYouApi";
+import { NEEDS_YOU_WORDS, proposedIn, readNeedsYou, type NeedsYou } from "@ospreyflow/glass-shared";
 import { onOpening, peekOpening, takeOpening } from "../admin/needsYou/openings";
 import { Button } from "../design/primitives/Button";
 import { Select } from "../design/primitives/Select";
 import { Tabs } from "../design/primitives/Tabs";
 import { HELP_TITLE } from "../help/roles";
 import { RolesHelpPage } from "../help/RolesHelpPage";
-import { type CaseListing, listCases } from "../investigation/cases";
+import { type CaseListing, listCases } from "@ospreyflow/glass-shared";
 import { PipelineStudio } from "./dag/PipelineStudio";
 import { ReleasesTab } from "./releases/ReleasesTab";
 import { RunsTab } from "./runs/RunsTab";
-import { caseForDataset, currentDataset, studioDatasets } from "./studio/datasets";
+import { caseForDataset, currentDataset, studioDatasets } from "@ospreyflow/glass-shared";
 import { ModelProposals } from "../linktypes/ModelProposals";
 import { ModelTab } from "./studio/ModelTab";
 import { ReadinessStrip } from "./studio/ReadinessStrip";

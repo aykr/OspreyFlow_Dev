@@ -1,6 +1,6 @@
 // An alert opened at its own address (ADR-146 decision 6): `/alerts/<id>` names no case, so the
 // Conduit says which case the alert is worked in (`GET /v1/alerts/{id}`), and the workspace opens
-// that case on the alert. Switching case reloads the page (`investigation/cases.ts`'s `openCase`),
+// that case on the alert. Switching case reloads the page (`investigation/caseNavigation.ts`'s `openCase`),
 // so the address goes with it, with the case in the query as every case switch carries it.
 import { useEffect, useState } from "react";
 

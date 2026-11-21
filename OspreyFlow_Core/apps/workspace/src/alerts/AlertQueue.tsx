@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Alert, AlertAssignee, AlertExplanation, QueuedAlert } from "../../../../packages/schemas/generated";
 import { Button, RadioGroup, Select } from "../design/primitives";
-import type { AccessLevel } from "../investigation/cases";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
 import {
   alertToCanvas,
   approveClose,

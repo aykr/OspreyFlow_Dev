@@ -19,7 +19,7 @@ import {
   fetchReport,
   type ReportsApi,
 } from "@ospreyflow/glass-shared";
-import { utcStampOf } from "../time/utcStamp";
+import { utcStampOf } from "@ospreyflow/glass-shared";
 import { Button, Select } from "../design/primitives";
 import { AlertsPanel } from "./AlertsPanel";
 import { Bars, channel, NUMBER, plural, Section } from "./figureParts";

@@ -4,7 +4,7 @@
 // and remove one. Adding copies its places into the case's own dataset; removing deletes nothing
 // and takes them out of the place search. Names only, never a count of places.
 import type { CaseGazetteer, CaseGazetteers } from "../../../../packages/schemas/generated";
-import type { Dataset } from "../investigation/cases";
+import type { Dataset } from "@ospreyflow/glass-shared";
 
 /** Refused or unreachable, in words the map shows; never the Conduit's own error text. */
 export class GazetteersFailed extends Error {}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { CaseListing } from "../../investigation/cases";
-import { caseForDataset, currentDataset, studioDatasets } from "./datasets";
+import type { CaseListing } from "@ospreyflow/glass-shared";
+import { caseForDataset, currentDataset, studioDatasets } from "@ospreyflow/glass-shared";
 
 function listing(id: string, ids: string[], extra: Partial<CaseListing> = {}): CaseListing {
   return {

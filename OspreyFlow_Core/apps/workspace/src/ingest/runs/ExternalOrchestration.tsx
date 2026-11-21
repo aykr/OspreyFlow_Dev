@@ -6,6 +6,12 @@
 // the map-to-graph and the load stay inside OspreyFlow (R11).
 import { useEffect, useState } from "react";
 
+import {
+  clearOwnedExternally,
+  markOwnedExternally,
+  readOwnedExternally,
+  readQuota,
+} from "@ospreyflow/glass-shared";
 import type { ExternallyOwnedInput, RunQuotaUse, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../../design/primitives";
 
@@ -31,15 +37,6 @@ export const ORCHESTRATION_WORDS = {
 
 function runs(n: number): string {
   return `${n} run${n === 1 ? "" : "s"}`;
-}
-
-function recipeUrl(apiBaseUrl: string, investigationId: string, recipeId: string): string {
-  return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/ingest/recipes/${encodeURIComponent(recipeId)}`;
-}
-
-async function words(response: Response, what: string): Promise<string> {
-  const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
-  return typeof body.detail === "string" ? body.detail : `${what} was refused (${response.status}).`;
 }
 
 /** The DAG an orchestrator runs: one task, the CLI's `run`, keyed by Airflow's own run id. A pinned
@@ -74,19 +71,15 @@ export function ExternalOrchestration(props: ExternalOrchestrationProps) {
   const [problem, setProblem] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
   const pipeline = deployed.find((p) => p.recipe_id === chosen) ?? deployed[0];
-  const headers = { Authorization: `Bearer ${bearerToken}` };
 
   useEffect(() => {
     if (!pipeline) return;
     let gone = false;
-    const url = recipeUrl(apiBaseUrl, investigationId, pipeline.recipe_id);
-    fetch(`${url}/quota`, { headers: { Authorization: `Bearer ${bearerToken}` } })
-      .then((r) => (r.ok ? (r.json() as Promise<RunQuotaUse>) : null))
+    readQuota(apiBaseUrl, bearerToken, investigationId, pipeline.recipe_id)
       .then((q) => !gone && setQuota(q))
       .catch(() => !gone && setQuota(null));
     if (canSchedule)
-      fetch(`${url}/owned-externally`, { headers: { Authorization: `Bearer ${bearerToken}` } })
-        .then((r) => (r.ok ? (r.json() as Promise<ExternallyOwnedInput | null>) : null))
+      readOwnedExternally(apiBaseUrl, bearerToken, investigationId, pipeline.recipe_id)
         .then((o) => !gone && setOwned(o))
         .catch(() => !gone && setOwned(null));
     return () => {
@@ -95,20 +88,14 @@ export function ExternalOrchestration(props: ExternalOrchestrationProps) {
   }, [apiBaseUrl, bearerToken, investigationId, pipeline, canSchedule]);
 
   if (!pipeline || !datasetId) return null;
-  const url = recipeUrl(apiBaseUrl, investigationId, pipeline.recipe_id);
   const limit = quota?.quota?.runs_per_day ?? null;
 
   const mark = () => {
     setProblem(null);
     setSaid(null);
-    fetch(`${url}/owned-externally`, {
-      method: "PUT",
-      headers: { ...headers, "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: client.trim() }),
-    })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(await words(r, "Marking it owned externally"));
-        setOwned((await r.json()) as ExternallyOwnedInput);
+    markOwnedExternally(apiBaseUrl, bearerToken, investigationId, pipeline.recipe_id, client)
+      .then((marked) => {
+        setOwned(marked);
         setSaid(`${pipeline.label} is owned externally: only ${client.trim()} may trigger it, and each run acts as you.`);
       })
       .catch((e: Error) => setProblem(e.message));
@@ -117,9 +104,8 @@ export function ExternalOrchestration(props: ExternalOrchestrationProps) {
   const clear = () => {
     setProblem(null);
     setSaid(null);
-    fetch(`${url}/owned-externally`, { method: "DELETE", headers })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(await words(r, "Taking it back"));
+    clearOwnedExternally(apiBaseUrl, bearerToken, investigationId, pipeline.recipe_id)
+      .then(() => {
         setOwned(null);
         setSaid(`${pipeline.label} is no longer owned externally.`);
       })
