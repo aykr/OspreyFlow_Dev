@@ -19,6 +19,16 @@ D2 (`74a983e`) moved the ingest, sources, releases clients. **`admin/api.ts` was
 - **GR2 to GR4 and RM1** need D3a (reports, export, alerts, patterns clients) and D3b (`analytics/api`); GR2's Home needs `home/homeData.ts` and `home/guides.ts`, which are mixed with React/the DOM and need a split first (D3c).
 **Question:** (a) **cut D3c to include moving `help/roles.ts` and `shell/placesByRole.json` and then `admin/api.ts`** (this touches AD1a's generated `placesByRole.json`, which your earlier ruling lets AD1a change once; I recommend D3c does it after AD1a is settled, so the two never edit it at once), or (b) leave `admin/api.ts` in the workspace and have the Admin pages import it from there until E. **D3 was cut three ways (D3a reports/alerts/patterns/export, D3b link/inspector/views/boards/others, D3c the files needing a split first, then the stray `export/api.ts.bak`) on the scout's measure: the rest of D3 is 2.5 times D2.** Nothing the ADR names is dropped.
 
-## 8. DC1c (the README and four guides) is in round 3 of 4 at the time of writing; PL4d2 in round 4 of 4; LR1 on its third merge attempt
+## 8. DC1c (the README and four guides) stopped at round 4 of 4: three faults and a gap, one line needed (`DC1c	add-round	<date>`)
 
-No action needed from you yet. If DC1c or PL4d2 stop at the limit they are added here.
+The verifier held every changed sentence to DC1a's table. What is left:
+1. `OspreyFlow_Core/docs/user-guide.md` line about 22: the Software sovereignty line says "every software dependency is under an open-source licence. Model weights, map data, fonts and base images are outside the check that holds that", which a reader takes to mean everything else is inside the gate; the README and administration guide were corrected in round 3, this one was missed.
+2. `OspreyFlow_Core/docs/architecture-guide.md` line about 29: "each store or engine sits behind a port (section 2), so replacing one is one adapter and one line of configuration" is untrue of PostgreSQL (the audit table and export ledger), Valkey (the working set) and OpenSearch, which are not behind a port.
+3. `architecture-guide.md` line about 28: "software you can replace means a supplier's change of terms never holds your records hostage" implies supplier software holds records hostage (your rule: do not characterise proprietary tools) and says "never".
+4. A test gap: the test flags an unlimited licence-gate claim only when the passage says "on every change"; the user guide's wording gets past it.
+
+**Recommendation: one add-round line.** All concrete and small; round 5 fixes the three sentences and widens the test to the shape the text actually takes. DC1b's and DC1c's end state is the same: verified, held for your line, never merged without it. (The slice's deliverable folder, diff and rendered copy are written by me into `OspreyFlow_Build/process/lanes/v062/slices/DC1c_OUT/` when it is verified, because builders cannot write to `Claude outputs/`.)
+
+## 8b. PL4d2 merged (`74a983e`), LR1 merged (`7479243`)
+
+No action needed from you.
