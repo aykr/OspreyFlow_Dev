@@ -231,9 +231,9 @@ def test_the_publish_script_checks_the_register_before_it_exports_the_product() 
 
 
 def test_the_publish_script_s_check_does_not_run_in_the_owner_s_bare_python3() -> None:
-    """The check reads a YAML file; the owner's `python3` is not the project's environment and has no
-    PyYAML to promise. The two checks beside it use only the standard library, this one cannot, so it
-    runs in Core's own environment, the one `make publish-user-repo` on the next line uses."""
+    """The check reads a YAML file; the owner's `python3` is not the project's environment and has
+    no PyYAML to promise. The two checks beside it use only the standard library, this one cannot,
+    so it runs in Core's own environment, the one `make publish-user-repo` on the next line uses."""
     check = _publish_check()
     assert "python3" not in check
     assert "OspreyFlow_Core" in check and ".venv/bin/python" in check
@@ -271,8 +271,8 @@ def _run_the_script_s_check(root: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_the_stand_in_python3_really_has_no_pyyaml(tmp_path: Path) -> None:
-    """The fault planted is the shape the owner's machine may have: `python3 -m tools.licence_register`
-    from Build ends in an import error, not in a refusal."""
+    """The fault planted is the shape the owner's machine may have: a bare `python3 -m
+    tools.licence_register` from Build ends in an import error, not in a refusal."""
     env = _a_root_with_a_python3_that_has_no_pyyaml(tmp_path)
     done = subprocess.run(
         ["python3", "-m", "tools.licence_register", "release-check"],

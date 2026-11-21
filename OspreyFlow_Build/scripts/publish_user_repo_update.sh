@@ -16,8 +16,9 @@ python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/owed.py" check \
 python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check "$(git -C "$ROOT/ospreyflow" rev-parse HEAD)" \
   || { echo "STOP: GitHub is not green on the commit published (above); nothing was published." >&2; exit 1; }
 # No release while the licence register is unsettled: a row unconfirmed, or a name held for the owner (the owner, 21 November 2026;
-# the same refusal as tools/release_local.py, which reads the same register).
-(cd "$ROOT/ospreyflow/OspreyFlow_Build" && python3 -m tools.licence_register release-check) \
+# the same refusal as tools/release_local.py, which reads the same register). It reads a YAML file, so it runs in Core's own
+# environment (as `make publish-user-repo` below does), not in the bare python3 the two checks above use: they are standard library only.
+(cd "$ROOT/ospreyflow/OspreyFlow_Core" && PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.licence_register release-check) \
   || { echo "STOP: the licence register is not settled (above); nothing was published." >&2; exit 1; }
 make -C "$ROOT/ospreyflow/OspreyFlow_Build" publish-user-repo COMMIT=HEAD OUT="$FRESH"
 

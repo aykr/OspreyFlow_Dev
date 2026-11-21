@@ -647,12 +647,14 @@ def release_refusal(
 
 
 def main(argv: list[str] | None = None) -> int:
-    """`python3 -m tools.licence_register release-check`: exit 1, saying why, while the register is
-    not settled. `OspreyFlow_Build/scripts/publish_user_repo_update.sh` runs it, as `tools/release_local.py` does the
-    same through `release_refusal`: both release paths refuse the same way."""
+    """`python -m tools.licence_register release-check`: exit 1, saying why, while the register is
+    not settled. It needs PyYAML, so it runs in Core's own environment, never a bare `python3`.
+    `OspreyFlow_Build/scripts/publish_user_repo_update.sh` runs it there, as
+    `tools/release_local.py` does the same through `release_refusal`: both release paths refuse the
+    same way."""
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments != ["release-check"]:
-        print("usage: python3 -m tools.licence_register release-check", file=sys.stderr)
+        print("usage: python -m tools.licence_register release-check", file=sys.stderr)
         return 2
     refusal = release_refusal(held=HELD_FOR_OWNER)
     if refusal:
