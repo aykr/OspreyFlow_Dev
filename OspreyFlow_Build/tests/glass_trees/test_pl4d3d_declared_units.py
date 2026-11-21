@@ -32,8 +32,12 @@ Where the comparison runs, and how it retires (the conductor's rounds 2 and 4):
   earlier baseline".
 * **The retirement is a scripted step, run by the conductor at merge, from the merged commit** (this file does not run it,
   and nothing here says the folder already holds the new build). From `OspreyFlow_Core`:
-  `node scripts/dist_compare.mjs rebaseline --declared ../OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt`
-  (`--declared` is required: `dist_compare.mjs` is Core's and does not name Build; `--baseline`, `--dist`, `--tests` and
+  `node scripts/dist_compare.mjs rebaseline --declared ../OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt --conductor-merge`
+  (`--conductor-merge` is the conductor's own flag: **without it the step refuses, in words and touching nothing, to run against the
+  default folder, the Mac's one real baseline**; the folder was swapped by hand six times in round 4, so the guard exists;
+  `test_the_rebaseline_step_refuses_the_default_folder_without_the_conductors_flag` plants it on a scratch `HOME`.
+  **Nothing else may run it against the real folder: not `rebaseline`, not `mv`, not `cp`**; every test here passes `--baseline <a
+  temporary copy>`. `--declared` is required: `dist_compare.mjs` is Core's and does not name Build; `--baseline`, `--dist`, `--tests` and
   `--out` are for a folder, a build, a test output or a record other than the defaults). It builds the workspace from the checked-out commit; prints the
   old-against-new listing of differing units; **exits non-zero, touching nothing, if any differing unit is neither
   declared nor knock-on, or if a declared unit does not differ** (`test_the_rebaseline_step_refuses_an_undeclared_difference`
@@ -42,7 +46,8 @@ Where the comparison runs, and how it retires (the conductor's rounds 2 and 4):
   `<name>-before-<date>`), puts the new build in its place and writes `apps/workspace/PL4_BASELINE.json`. After it
   runs, the folder's hash is no longer the declaration's `against:` value, so this proof skips as an earlier baseline
   and later slices (D3e, slice E, AD1b) compare with `dist_compare verify --build`, which reads the recorded hash.
-  Until the conductor has run it, this proof stays live on the Mac.
+  The real folder holds the pre-PL4 build until then, so this proof runs on the Mac (its hash is the declaration's `against:`
+  value); the conductor's step is what retires it.
 * Tests that need no build always run: the declaration's own form, the gate itself (`proof_gate`: planted a folder that
   does not exist, one that does, a declaration for an earlier baseline, and one with no `against` line), the knock-on
   rule, and the rebaseline step on small builds made in a scratch folder.
@@ -767,7 +772,7 @@ def test_the_rebaseline_step_replaces_the_folder_and_the_record_and_keeps_the_ol
 
 def test_the_rebaseline_step_is_the_one_this_file_names() -> None:
     doc = __doc__ or ""
-    assert "node scripts/dist_compare.mjs rebaseline --declared ../OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt" in doc
+    assert "node scripts/dist_compare.mjs rebaseline --declared ../OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt --conductor-merge" in doc
     assert "exits non-zero" in doc and "run by the conductor at merge" in doc
     assert '"rebaseline"' in SCRIPT.read_text(encoding="utf-8")
     assert "OspreyFlow_Build" not in SCRIPT.read_text(encoding="utf-8"), "Core's script must not name the Build folder"
@@ -880,7 +885,7 @@ def test_a_baseline_that_is_not_the_default_needs_no_flag(tmp_path: Path) -> Non
 def test_the_docstring_names_the_conductors_flag_and_says_nothing_else_may_run_the_step() -> None:
     doc = __doc__ or ""
     assert "--conductor-merge" in doc
-    assert "nothing else may run it against the real folder" in " ".join(doc.split())
+    assert "nothing else may run it against the real folder" in " ".join(doc.split()).lower()
     assert "Until the conductor has run it, this proof stays live on the Mac." not in doc
     assert "--conductor-merge" in SCRIPT.read_text(encoding="utf-8")
 

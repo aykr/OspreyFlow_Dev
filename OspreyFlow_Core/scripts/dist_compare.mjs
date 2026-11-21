@@ -7,7 +7,9 @@
 //   node scripts/dist_compare.mjs units <before-dist> <after-dist>
 //        every differing unit, uncapped, one per line: `<file>\t<only before|only after>\t<sha-12 of the unit>\t<unit>`
 //        (a slice that splits code declares exactly these; `compare` shows five a side, this shows them all).
-//   node scripts/dist_compare.mjs rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>]
+//   node scripts/dist_compare.mjs rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>] [--conductor-merge]
+//        REFUSES, in words and touching nothing, to run against the default (real) baseline folder unless `--conductor-merge`
+//        is given: only the conductor's merge passes it; everything else names a copy with `--baseline`.
 //        the conductor's step at merge (PL4d3d, the owner's ruling of 21 November 2026), run from the merged commit:
 //        builds the workspace from the checked-out tree (or takes `--dist`), compares it with the baseline folder (default
 //        `$PL4_BASELINE_DIST`, else `~/dev/osprey-acceptance/PL4a-baseline/dist`), prints the old-against-new listing of
@@ -762,6 +764,12 @@ function stamp() {
 
 function rebaseline(rest) {
   const baseline = resolve(flag(rest, "--baseline") ?? DEFAULT_BASELINE);
+  // The default folder is the Mac's one real baseline: only the conductor's merge replaces it (it was swapped by hand six
+  // times in PL4d3d). Anything else names its own folder with --baseline; the conductor adds --conductor-merge.
+  if (baseline === resolve(DEFAULT_BASELINE) && !rest.includes("--conductor-merge")) {
+    console.log(`REFUSED: ${baseline} is the real baseline folder, and only the conductor's merge replaces it: the conductor adds --conductor-merge; anything else passes --baseline <a copy>. Nothing was touched.`);
+    return 1;
+  }
   const declaredFlag = flag(rest, "--declared");
   if (!declaredFlag) throw new Error("usage: rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>]");
   const declaredPath = resolve(declaredFlag);
