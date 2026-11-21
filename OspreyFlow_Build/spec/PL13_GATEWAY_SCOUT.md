@@ -20,7 +20,7 @@ revision 18243cd7, arm64 layer read (the local copy).
 | 6 | Protected files a release of the new image would touch, as diffs that pass `git apply --check`. | **Five files, in two patches with different timing.** **Patch 1, safe to apply at any time** (before or after the build, and before or after the render switch): `harness/signatures.py`, `harness/bundle.py` and `harness/update.py`, below. **Patch 2, apply only once the build's `deploy/litellm/Dockerfile` is on main** (the build is a later round; the path is a proposal and no such file exists today): `release.yml` and the Core Makefile. Applied before that file exists, patch 2 turns `make ci` red for every merge (Core's `check` would run `docker build -f deploy/litellm/Dockerfile`, and Build's `ci` runs Core's `check` first) and fails the next tagged release's matrix job the same way. `OspreyFlow_Core/.github/workflows/release.yml` (patch 2): one new matrix entry after the superset line (about line 65); the scan (trivy at lines 87-94), the push, the keyless signing and the lock verification are all driven by the matrix, so they need no other change. `OspreyFlow_Core/Makefile` (patch 2): `trivy-image-litellm` added to the `.PHONY` line (1), to `check` (13), and as a target after `trivy-image-laurium` (92-94). **The signature check needs more than one line, because every lock to date names the publisher's gateway under the service name `litellm`** (`_render_versions_lock`, `harness/render.py` 1844-1855 writes `service: litellm`, `repository: ghcr.io/berriai/litellm`, a real digest). Adding `litellm` to `OPTIONAL_OWNED_SERVICES` alone (this file's first draft) would hand that image to `cosign verify` against OspreyFlow's release workflow, which it can never pass, so every older lock, every older bundle and main's own next release would be refused. Measured in memory with a fake cosign that refuses what is not ours: the one-line change refuses the older lock (5 images checked, the publisher's among them); main as it is, and the patch below, verify it (4 checked). **Patch 1:** `harness/signatures.py` adds `litellm` to `OPTIONAL_OWNED_SERVICES`, a `THIRD_PARTY_REPOSITORIES = ("ghcr.io/berriai/",)` and one predicate `is_signed_image(service, repository)` (a signed service **and** a repository not under a third party's) that `owned_references` now uses. `harness/bundle.py` line 320 (`entry.get("service") in SIGNED_SERVICES`, the offline check of a bundle) and `harness/update.py` lines 368-369 (`repository.endswith(f"/{s}")`, the check of what is running) each had their own name-only copy of the test and use the new rule too. **Patch 1 is safe in any order against the render switch:** before the build names our gateway no lock entry changes meaning; after it, `ghcr.io/<owner>/litellm` is checked and, unsigned, is refused (shown in memory). **The build that follows commits these tests with it, each shown red against the one-line change:** an older lock naming `ghcr.io/berriai/litellm` under `litellm` is not in `owned_references` and `verify_release` passes it with a cosign that refuses it; `make_bundle`'s offline check and `verify_running` skip it; a lock naming `ghcr.io/<owner>/litellm` unsigned is refused by name. Also protected: `.github/workflows/ci.yml` lines 980 and 1032 (the conformance jobs run the publisher's image; they move to ours once it exists): **no diff yet, it is written in the build, and it waits for our image to be on the registry**, so it has patch 2's timing, never earlier. The two patches are in the last section and each passes `git apply --check` against main on its own; the Dockerfile path patch 2 names, `deploy/litellm/Dockerfile`, is a proposal. **They touch the same lines PL7d's diffs will** (the matrix anchor, the `OPTIONAL_OWNED_SERVICES` line, the target block): the owner applies one and the other is rewritten against the new main. | Read: `release.yml` in full (187 lines), `signatures.py` in full, `bundle.py` 300-335, `update.py` 320-385, `images.py`, `release_lock.py`, `render.py` 1835-1865, the Makefile lines 1, 13 and 91-95, `tests/harness/test_signatures.py` (its `_lock` helper and the Superset case, which the new cases copy). Run: a script (a heredoc; no file written) took each file's text from `git show HEAD:<path>`, made the edits, built the diff with `difflib` and ran `git apply --check` on it (passed; base c71c727, and the five files' blobs are identical on main aad2df3); ran `ruff check` and `ruff format --check` on each patched file from stdin (check clean; `bundle.py` was not format-clean before and is no worse); split the patch by file into the two patches below and ran `git apply --check` on each alone and on both together (all pass, against this branch's tip and against main aad2df3, whose five files are the same blobs); and loaded the unpatched, the one-line and the patched `signatures.py` in memory to run `verify_release` on an older and on a new lock. **Not run:** the existing `test_bundle.py` and `test_update_apply.py` against the patch, and the edited lines of `bundle.py` and `update.py` end to end: the guard refused a scratch copy of the tests outside this worktree, so those two paths are read, not run, and the build that follows runs them. The pending `RELEASE_YML_MANIFEST.diff` was read: it edits other lines of `release.yml`. |
 | 7 | Your estimate of rounds, and whether it can merge beside PL4 and PL7d. | **Three build rounds, four if the first scan finds something.** The first of them builds the Dockerfile, the licence gate shown red, the constraints file, the renderer change (owned, no env file), `deploy/compose/dev.yaml`, the register rows, and the tests that name the pin (`tests/harness/test_render.py`, `test_cluster_render.py`, `tests/cli/test_images_verb.py`, the release-lock and signatures tests); the second is the verifier's findings and the live run on a lease (the live step is off, so each live test is owed and a release is refused until it has run: the key round trip and the usage test against the new image); a fourth only if trivy finds fixable HIGH or CRITICAL in what a fresh resolution installs. **Beside PL4:** yes, no shared file: PL4 is `apps/workspace` and `packages/design`, the build is `harness/`, `deploy/`, `tests/harness`, `tests/cli` and the register. **Beside PL7d:** it can be built beside it (different new files) but its merge order matters: both edit `harness/render.py`'s image list (different lines, 40 apart, which git merges) and both come with owner diffs to the same protected files (`release.yml`, `signatures.py`, the Core Makefile; the patch in row 6 also edits `bundle.py` and `update.py`, which PL7d's does not touch). **PL11 must merge first** for the register part (the register and `HELD_FOR_OWNER` exist only on its branch); if it has not, the build cannot remove the held name or add rows. | Read: `slices/PL7d.md` (its release.yml, signatures and Makefile diffs, its `pages` entry), `slices/PL4a.md` to `PL4d3e.md` headings (the workspace and design folders), PL11's branch (`git diff --stat` against main: the register tool `licence_register` (a module of PL11's branch, not on main), `tools/licence_check.py`, `harness/render.py`, `spec/LICENCE_REGISTER.yaml`). The estimate is mine, not measured. |
 | 8 | If the gateway cannot run without the folder: say so plainly. | **It can run without the folder, and without the package.** Nothing here is a case of "cannot run": see rows 1 to 3. The caveat is the opposite one: the folder is not the only commercial content (row 9), so removing the folder alone would not make an image free of it. | Run: the three scratch gateways (a), (b), (c) and the repository's live round trip against (a) and (c). |
-| 9 | Read the licence files inside the pinned image: the top-level LICENSE, the enterprise LICENSE, the directories the top-level file carves out, and any commercially licensed content elsewhere. | **The image has no `/app/LICENSE`.** The top-level file is `litellm-1.101.0.dist-info/licenses/LICENSE` inside the venv (identical text in `litellm-proxy-extras`). It says: "Portions of this software are licensed as follows: * All content that resides under the "enterprise/" directory of this repository, if that directory exists, is licensed under the license defined in "enterprise/LICENSE". * Content outside of the above mentioned directories or restrictions above is available under the MIT license as defined below." Then the MIT text, "Copyright (c) 2023 Berri AI". **It carves out one directory, `enterprise/`** (the "restrictions above" it also names are none: there is no second item). The carve-out names `enterprise/LICENSE`; the file is `enterprise/LICENSE.md`. `/app/enterprise/LICENSE.md` is the BerriAI Enterprise licence (full text below): production use only under the BerriAI Subscription Terms of Service or an enterprise licence "for the correct number of user seats", development and testing allowed without one, and "it is forbidden to copy, merge, publish, distribute, sublicense, and/or sell the Software". **Commercial content sits in three places, not one:** (1) `/app/enterprise/` (211 files: `litellm_enterprise/`, `enterprise_hooks/`, `enterprise_ui/`, `cloudformation_stack/`, and `dist/` holding 54 built archives of `litellm-enterprise` 0.1.1 to 0.1.32, 27 wheels and 27 sdists); (2) the installed package `/app/.venv/lib/python3.13/site-packages/litellm_enterprise/` (version 0.1.65, 142 Python files, its dist-info says `LicenseRef-Proprietary` and carries the same `LICENSE.md`); (3) nothing else of the publisher's. Searched the whole filesystem for the strings "BerriAI Enterprise", "Berrie AI", "LicenseRef-Proprietary" and the enterprise demo address: only those two trees and the MIT package's own upsell text and metadata. No vendored UI or proxy extra has a licence of its own: `litellm-proxy-extras` is MIT. Inside the MIT package, `litellm/proxy/enterprise_billing/billing_metrics.py` is code for a licensed deployment to push usage metrics to the publisher over mutual TLS; it is built only when `premium_user` is True and `LITELLM_BILLING_METRICS_ENDPOINT` and certificates are set (read, not run). 241 licence-named files in all; the Python packages declare MIT (74), Apache-2.0 (about 56), BSD (about 24), PSF, ISC, and **LGPL-3.0-only for `psycopg` and `psycopg-binary`**; three declare nothing in their metadata (`aurelio_sdk`, `google_crc32c`, `llm_sandbox`) and `detect-secrets` says UNKNOWN beside an Apache classifier; the 48 operating-system packages are MIT, BSD, Apache, MPL, PSF and GPL or LGPL (bash, busybox, glibc, libsndfile, libgcc, xz and others); none is commercial. The Prisma CLI inside is Apache-2.0. Full list by path below. | Read: the three licence files above in full, byte for byte (the two `LICENSE.md` copies are identical; checked with `diff`); every file in the exported filesystem whose name starts `LICENSE`, `COPYING`, `NOTICE` or `UNLICENSE` (241); every installed Python distribution's declared licence (110); the Wolfi package database (48 packages with their `L:` lines); a search of all text in the filesystem for the BerriAI strings above. The licence of the 48 operating-system packages and the three undeclared Python packages was **read from their metadata, not from their source**; whether those declarations are right is not checked. |
+| 9 | Read the licence files inside the pinned image: the top-level LICENSE, the enterprise LICENSE, the directories the top-level file carves out, and any commercially licensed content elsewhere. | **The image has no `/app/LICENSE`.** The top-level file is `litellm-1.101.0.dist-info/licenses/LICENSE` inside the venv (identical text in `litellm-proxy-extras`). It says: "Portions of this software are licensed as follows: * All content that resides under the "enterprise/" directory of this repository, if that directory exists, is licensed under the license defined in "enterprise/LICENSE". * Content outside of the above mentioned directories or restrictions above is available under the MIT license as defined below." Then the MIT text, "Copyright (c) 2023 Berri AI". **It carves out one directory, `enterprise/`** (the "restrictions above" it also names are none: there is no second item). The carve-out names `enterprise/LICENSE`; the file is `enterprise/LICENSE.md`. `/app/enterprise/LICENSE.md` is the BerriAI Enterprise licence (full text below): production use only under the BerriAI Subscription Terms of Service or an enterprise licence "for the correct number of user seats", development and testing allowed without one, and "it is forbidden to copy, merge, publish, distribute, sublicense, and/or sell the Software". **Commercial content sits in three places, not one:** (1) `/app/enterprise/` (211 files: `litellm_enterprise/`, `enterprise_hooks/`, `enterprise_ui/`, `cloudformation_stack/`, and `dist/` holding 54 built archives of `litellm-enterprise` 0.1.1 to 0.1.32, 27 wheels and 27 sdists); (2) the installed package `/app/.venv/lib/python3.13/site-packages/litellm_enterprise/` (version 0.1.65, 142 Python files, its dist-info says `LicenseRef-Proprietary` and carries the same `LICENSE.md`); (3) nothing else of the publisher's. Searched the whole filesystem for the strings "BerriAI Enterprise", "Berrie AI", "LicenseRef-Proprietary" and the enterprise demo address: only those two trees and the MIT package's own upsell text and metadata. No vendored UI or proxy extra has a licence of its own: `litellm-proxy-extras` is MIT. Inside the MIT package, `litellm/proxy/enterprise_billing/billing_metrics.py` is code for a licensed deployment to push usage metrics to the publisher over mutual TLS; it is built only when `premium_user` is True and `LITELLM_BILLING_METRICS_ENDPOINT` and certificates are set (read, not run). **242 licence-named files in all** (list 1 below, each with its path and its SPDX identifier or first line) and **193 installed Python distributions** (list 2, each with the licence its own metadata declares); the earlier drafts' "241" left out one `COPYRIGHT.txt` and their "110" distributions was a wrong count. What the lists show: **commercial, two files' worth: the two enterprise trees and nothing else**; **LGPL-3.0-only** for `psycopg` and `psycopg-binary` (copyleft, not commercial); `litellm-enterprise` is the one distribution declaring `LicenseRef-Proprietary`. **The three that declare nothing in their metadata each carry a licence file, read:** `aurelio_sdk` 0.0.19 (`LICENSE`, first line "MIT License"), `google_crc32c` 1.8.0 (`LICENSE`, "Apache License") and `llm_sandbox` 0.3.39 (`LICENSE`, "MIT License"). `detect-secrets` 1.5.0 has `UNKNOWN` in its licence field, the Apache classifier and a `LICENSE` that opens "Apache License". Two distributions have no licence file in the image (`opentelemetry-util-http` 0.49b0 and `tokenizers` 0.23.1) and declare Apache-2.0 / the Apache classifier in their metadata: that declaration is all there is, not checked against their source. **Text of every one of the 242 files was searched** for "enterprise license", "subscription terms", "proprietary", "may only be used in production", "valid ... licence", "Berri", "LiteLLM", "non-commercial", "trial" and "evaluation": the hits are the two enterprise `LICENSE.md` copies, the three MIT copies of the top-level file (the Berri AI copyright line), the `email_validator` public-domain dedication ("commercial or non-commercial") and the GPL text numpy quotes for a bundled component ("proprietary"); none restricts use. A broader search ("commercial", "all rights reserved", "not distributed") hit 134 files; the matched line of each was read: the two enterprise files, and otherwise only the Apache-2.0 disclaimer ("any and all other commercial damages"), BSD notices ("All rights reserved") and the MPL-2.0 header ("not distributed with this file"). The **48 operating-system packages** (list 3) declare MIT (16), LGPL-2.1-or-later (6), GPL-3.0-or-later (4 and others with it), MPL-2.0 with MIT (3), Apache-2.0 (3), BSD (several), GPL-2.0-only (2), PSF-2.0 (2) and a few other open licences (`blessing`, `CC-PDDC`): GPL or LGPL for bash, busybox, glibc, libgcc, xz and others; none is commercial. The Prisma CLI and engines (`/opt/prisma`) are Apache-2.0 files. **Not read:** the source of any package against its declared licence, and the operating-system packages' licence texts (only `opus` and `mpdecimal` carry a file; the other 46 are the database's word). | Run: `docker create` and `docker export` of the pinned image (by digest) into a scratch folder of its own, one container `pl13-scout-<id>`, removed; no container started. Read: the three licence files in full, byte for byte (the two `LICENSE.md` copies are identical, checked with `diff` in the first session); every file in the exported filesystem whose name is `LICENSE`, `LICENCE`, `COPYING`, `NOTICE`, `UNLICENSE` or `COPYRIGHT` with any extension or a `LICENSE-` / `LICENSE.` prefix (242, symbolic links not followed), each opened for its SPDX line or first line; the `METADATA` of all 193 installed Python distributions; the 48 `L:` lines of `/lib/apk/db/installed`; a text search of all 242 files with the two patterns above; a search of all text in the filesystem for the BerriAI strings (first session). The scan scripts were kept outside the exported folder and run with `python3 -I`. |
 
 VERDICT: clean cut — the gateway starts and serves every route the product uses, and passes the repository's own real-gateway round trip, with `/app/enterprise` and the `litellm-enterprise` package both absent, every feature it uses is MIT code, and PyPI's own MIT files plus one uv override line build it without either.
 
@@ -86,18 +86,511 @@ components are licensed under the original license provided by the owner of the
 applicable component.
 ```
 
-## Licence-named files that matter, by path
+## The whole-image licence list (question 9), as read in this round
 
-| Path (inside the image) | SPDX identifier or first line | Commercial? |
-| --- | --- | --- |
-| `/app/.venv/lib/python3.13/site-packages/litellm-1.101.0.dist-info/licenses/LICENSE` | "Portions of this software are licensed as follows:" then MIT, Berri AI 2023 | No: MIT, with the `enterprise/` carve-out |
-| `/app/litellm-proxy-extras/LICENSE` and the copy in `litellm_proxy_extras-0.4.94.dist-info/licenses/LICENSE` | Same text as above; the package declares `License-Expression: MIT` | No |
-| `/app/enterprise/LICENSE.md` | "The BerriAI Enterprise license (the "Enterprise License")" | **Yes** |
-| `/app/.venv/lib/python3.13/site-packages/litellm_enterprise-0.1.65.dist-info/licenses/LICENSE.md` | The same; the package declares `LicenseRef-Proprietary` | **Yes** |
-| `/opt/prisma/binaries/node_modules/prisma/LICENSE` and the engines' | Apache-2.0 (Prisma 5.4.2) | No |
-| `/usr/lib/python3.13/LICENSE.txt` | "A. HISTORY OF THE SOFTWARE" (PSF-2.0) | No |
-| psycopg 3.3.3 and psycopg-binary 3.3.3 dist-info | LGPL-3.0-only | No (copyleft, OSI-approved) |
-| the other 230-odd files | each package's own (MIT, Apache-2.0, BSD, MPL, PSF, ISC, zlib) | No |
+The image's filesystem was exported to a scratch folder and walked (`/proc`, `/sys` and `/dev` hold nothing in an export and were skipped). Three lists, each complete for what it names. In list 1, `$SP` stands for `/app/.venv/lib/python3.13/site-packages`; every other path is whole. Symbolic links were not followed or counted.
+
+### List 1: every file named `LICENSE`, `LICENCE`, `COPYING`, `NOTICE`, `UNLICENSE` or `COPYRIGHT` (with any extension, or a `LICENSE-` or `LICENSE.` prefix): 242 files, each with its path and its SPDX identifier (where the file carries one) or its first non-blank line
+
+```text
+$SP/a2a_sdk-1.1.0.dist-info/licenses/LICENSE | Apache License
+$SP/aiofiles-24.1.0.dist-info/licenses/LICENSE | Apache License
+$SP/aiofiles-24.1.0.dist-info/licenses/NOTICE | Asyncio support for files
+$SP/aiohappyeyeballs-2.6.1.dist-info/LICENSE | A. HISTORY OF THE SOFTWARE
+$SP/aiohttp-3.14.3.dist-info/licenses/LICENSE.txt | Apache License
+$SP/aiohttp-3.14.3.dist-info/licenses/vendor/llhttp/LICENSE | MIT License
+$SP/aiosignal-1.4.0.dist-info/licenses/LICENSE | Apache License
+$SP/annotated_doc-0.0.4.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/annotated_types-0.7.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/anthropic-0.84.0.dist-info/licenses/LICENSE | Copyright 2023 Anthropic, PBC.
+$SP/anyio-4.13.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/apscheduler-3.11.2.dist-info/licenses/LICENSE.txt | This is the MIT license: http://www.opensource.org/licenses/mit-license.php
+$SP/asgiref-3.11.1.dist-info/licenses/LICENSE | Copyright (c) Django Software Foundation and individual contributors.
+$SP/attrs-26.1.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/aurelio_sdk-0.0.19.dist-info/LICENSE | MIT License
+$SP/aws_sdk_bedrock_runtime-0.7.0.dist-info/licenses/LICENSE | Apache License
+$SP/aws_sdk_bedrock_runtime-0.7.0.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/aws_sdk_signers-0.3.0.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/awscrt-0.32.2.dist-info/licenses/LICENSE | Apache License
+$SP/awscrt-0.32.2.dist-info/licenses/NOTICE | SPDX Apache-2.0.
+$SP/azure_ai_contentsafety-1.0.0.dist-info/LICENSE | Copyright (c) Microsoft Corporation.
+$SP/azure_core-1.41.0.dist-info/licenses/LICENSE | Copyright (c) Microsoft Corporation.
+$SP/azure_identity-1.25.2.dist-info/licenses/LICENSE | Copyright (c) Microsoft Corporation.
+$SP/azure_keyvault_secrets-4.10.0.dist-info/LICENSE | Copyright (c) Microsoft Corporation.
+$SP/azure_storage_blob-12.28.0.dist-info/licenses/LICENSE | Copyright (c) Microsoft Corporation.
+$SP/azure_storage_file_datalake-12.20.0.dist-info/LICENSE | Copyright (c) Microsoft Corporation.
+$SP/backoff-2.2.1.dist-info/LICENSE | The MIT License (MIT)
+$SP/boto3-1.43.1.dist-info/LICENSE | Apache License
+$SP/boto3-1.43.1.dist-info/NOTICE | boto3
+$SP/botocore-1.43.6.dist-info/LICENSE.txt | Apache License
+$SP/botocore-1.43.6.dist-info/NOTICE | Botocore
+$SP/bytecode-0.17.0.dist-info/licenses/COPYING | The MIT License (MIT)
+$SP/certifi-2026.4.22.dist-info/licenses/LICENSE | This package contains a modified version of ca-bundle.crt:
+$SP/cffi-2.0.0.dist-info/licenses/LICENSE | Except when otherwise stated (look for LICENSE files in directories or
+$SP/charset_normalizer-3.4.7.dist-info/licenses/LICENSE | MIT License
+$SP/click-8.3.3.dist-info/licenses/LICENSE.txt | Copyright 2014 Pallets
+$SP/colorama-0.4.6.dist-info/licenses/LICENSE.txt | Copyright (c) 2010 Jonathan Hartley
+$SP/coloredlogs-15.0.1.dist-info/LICENSE.txt | Copyright (c) 2020 Peter Odding
+$SP/colorlog-6.10.1.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/croniter-6.2.2.dist-info/licenses/LICENSE | Copyright (C) 2010-2012 Matsumoto Taichi
+$SP/cryptography-50.0.0.dist-info/licenses/LICENSE | This software is made available under the terms of *either* of the licenses
+$SP/cryptography-50.0.0.dist-info/licenses/LICENSE.APACHE | Apache License
+$SP/cryptography-50.0.0.dist-info/licenses/LICENSE.BSD | Copyright (c) Individual contributors.
+$SP/ddtrace-4.11.0.dist-info/licenses/LICENSE | SPDX Apache-2.0 OR BSD-3-Clause`
+$SP/ddtrace-4.11.0.dist-info/licenses/LICENSE.Apache | Apache License
+$SP/ddtrace-4.11.0.dist-info/licenses/LICENSE.BSD3 | Copyright (c) 2016, Datadog <info@datadoghq.com>
+$SP/ddtrace-4.11.0.dist-info/licenses/NOTICE | Datadog dd-trace-py
+$SP/deprecated-1.3.1.dist-info/licenses/LICENSE.rst | The MIT License (MIT)
+$SP/detect_secrets-1.5.0.dist-info/LICENSE | Apache License
+$SP/distro-1.9.0.dist-info/LICENSE | Apache License
+$SP/dnspython-2.8.0.dist-info/licenses/LICENSE | ISC License
+$SP/docstring_parser-0.18.0.dist-info/licenses/LICENSE.md | The MIT License (MIT)
+$SP/email_validator-2.3.0.dist-info/licenses/LICENSE | This is free and unencumbered software released into the public
+$SP/envier-0.6.1.dist-info/licenses/LICENSE | MIT License
+$SP/expression-5.6.0.dist-info/LICENSE | MIT License
+$SP/fastapi-0.136.3.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/fastapi_sso-0.19.0.dist-info/licenses/LICENSE.md | # MIT License
+$SP/fastuuid-0.14.0.dist-info/licenses/LICENSE | Copyright (c) 2019, Omer Katz
+$SP/filelock-3.29.0.dist-info/licenses/LICENSE | MIT License
+$SP/frozenlist-1.8.0.dist-info/licenses/LICENSE | Apache License
+$SP/fsspec-2026.4.0.dist-info/licenses/LICENSE | BSD 3-Clause License
+$SP/google_api_core-2.30.3.dist-info/licenses/LICENSE | Apache License
+$SP/google_auth-2.52.0.dist-info/licenses/LICENSE | Apache License
+$SP/google_cloud_aiplatform-1.133.0.dist-info/licenses/LICENSE | Apache License
+$SP/google_cloud_bigquery-3.30.0.dist-info/LICENSE | Apache License
+$SP/google_cloud_core-2.6.0.dist-info/licenses/LICENSE | Apache License
+$SP/google_cloud_iam-2.19.1.dist-info/licenses/LICENSE | Apache License
+$SP/google_cloud_kms-2.24.2.dist-info/LICENSE | Apache License
+$SP/google_cloud_resource_manager-1.17.0.dist-info/licenses/LICENSE | Apache License
+$SP/google_cloud_storage-3.10.1.dist-info/licenses/LICENSE | Apache License
+$SP/google_crc32c-1.8.0.dist-info/licenses/LICENSE | Apache License
+$SP/google_genai-1.37.0.dist-info/licenses/LICENSE | Apache License
+$SP/google_resumable_media-2.9.0.dist-info/licenses/LICENSE | Apache License
+$SP/googleapis_common_protos-1.75.0.dist-info/licenses/LICENSE | Apache License
+$SP/granian-2.7.4.dist-info/licenses/LICENSE | Copyright 2021 Giovanni Barillari
+$SP/grpc_google_iam_v1-0.14.4.dist-info/licenses/LICENSE | Apache License
+$SP/grpcio-1.78.0.dist-info/licenses/LICENSE | Apache License
+$SP/grpcio_status-1.71.2.dist-info/LICENSE | Apache License
+$SP/gunicorn-23.0.0.dist-info/LICENSE | 2009-2024 (c) Benoît Chesneau <benoitc@gunicorn.org>
+$SP/h11-0.16.0.dist-info/licenses/LICENSE.txt | The MIT License (MIT)
+$SP/hf_xet-1.5.0.dist-info/licenses/LICENSE | Apache License
+$SP/hiredis-3.4.0.dist-info/licenses/LICENSE | MIT License
+$SP/httpcore-1.0.9.dist-info/licenses/LICENSE.md | Copyright © 2020, [Encode OSS Ltd](https://www.encode.io/).
+$SP/httpx-0.28.1.dist-info/licenses/LICENSE.md | Copyright © 2019, [Encode OSS Ltd](https://www.encode.io/).
+$SP/httpx_sse-0.4.3.dist-info/licenses/LICENSE | MIT License
+$SP/huggingface_hub-1.14.0.dist-info/licenses/LICENSE | Apache License
+$SP/humanfriendly-10.0.dist-info/LICENSE.txt | Copyright (c) 2021 Peter Odding
+$SP/idna-3.15.dist-info/licenses/LICENSE.md | BSD 3-Clause License
+$SP/ijson-3.5.1.dist-info/licenses/LICENSE.txt | ijson
+$SP/importlib_metadata-8.5.0.dist-info/LICENSE | Apache License
+$SP/inquirerpy-0.3.4.dist-info/LICENSE | MIT License
+$SP/isodate-0.7.2.dist-info/LICENSE | Copyright (c) 2021, Hugo van Kemenade and contributors
+$SP/jinja2-3.1.6.dist-info/licenses/LICENSE.txt | Copyright 2007 Pallets
+$SP/jiter-0.14.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/jmespath-1.1.0.dist-info/LICENSE | MIT License
+$SP/json_rpc-1.15.0.dist-info/LICENSE.txt | The MIT License (MIT)
+$SP/jsonschema-4.26.0.dist-info/licenses/COPYING | Copyright (c) 2013 Julian Berman
+$SP/jsonschema_specifications-2025.9.1.dist-info/licenses/COPYING | Copyright (c) 2022 Julian Berman
+$SP/langfuse-2.59.7.dist-info/LICENSE | MIT License
+$SP/litellm-1.101.0.dist-info/licenses/LICENSE | Portions of this software are licensed as follows:
+$SP/litellm_enterprise-0.1.65.dist-info/licenses/LICENSE.md | The BerriAI Enterprise license (the "Enterprise License")
+$SP/litellm_proxy_extras-0.4.94.dist-info/licenses/LICENSE | Portions of this software are licensed as follows:
+$SP/llm_sandbox-0.3.39.dist-info/licenses/LICENSE | MIT License
+$SP/lxml-6.1.1.dist-info/licenses/LICENSE.txt | BSD 3-Clause License
+$SP/mangum-0.17.0.dist-info/LICENSE | MIT License
+$SP/markdown_it_py-4.2.0.dist-info/licenses/LICENSE | MIT License
+$SP/markdown_it_py-4.2.0.dist-info/licenses/LICENSE.markdown-it | Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
+$SP/markupsafe-3.0.3.dist-info/licenses/LICENSE.txt | Copyright 2010 Pallets
+$SP/mcp-1.28.1.dist-info/licenses/LICENSE | MIT License
+$SP/mdurl-0.1.2.dist-info/LICENSE | Copyright (c) 2015 Vitaly Puzrin, Alex Kocharin.
+$SP/ml_dtypes-0.4.1.dist-info/LICENSE | Apache License
+$SP/ml_dtypes-0.4.1.dist-info/LICENSE.eigen | Mozilla Public License Version 2.0
+$SP/msal-1.37.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/msal_extensions-1.3.1.dist-info/LICENSE | MIT License
+$SP/multidict-6.7.1.dist-info/licenses/LICENSE | Copyright 2016 Andrew Svetlov and aio-libs contributors
+$SP/nodeenv-1.10.0.dist-info/licenses/LICENSE | Copyright (c) 2011, Eugene Kalinin.
+$SP/numpy-2.4.4.dist-info/licenses/LICENSE.txt | Copyright (c) 2005-2025, NumPy Developers.
+$SP/numpy-2.4.4.dist-info/licenses/numpy/_core/include/numpy/libdivide/LICENSE.txt | zlib License
+$SP/numpy-2.4.4.dist-info/licenses/numpy/_core/src/common/pythoncapi-compat/COPYING | BSD Zero Clause License
+$SP/numpy-2.4.4.dist-info/licenses/numpy/_core/src/highway/LICENSE | This project is primarily dual-licensed under your choice of either the Apache
+$SP/numpy-2.4.4.dist-info/licenses/numpy/_core/src/npysort/x86-simd-sort/LICENSE.md | BSD 3-Clause License
+$SP/numpy-2.4.4.dist-info/licenses/numpy/_core/src/umath/svml/LICENSE | Copyright (c) 2005-2021, NumPy Developers.
+$SP/numpy-2.4.4.dist-info/licenses/numpy/fft/pocketfft/LICENSE.md | Copyright (C) 2010-2018 Max-Planck-Society
+$SP/numpy-2.4.4.dist-info/licenses/numpy/linalg/lapack_lite/LICENSE.txt | Copyright (c) 1992-2013 The University of Tennessee and The University
+$SP/numpy-2.4.4.dist-info/licenses/numpy/ma/LICENSE | * Copyright (c) 2006, University of Georgia and Pierre G.F. Gerard-Marchant
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/LICENSE.md | **This software is dual-licensed under the The University of Illinois/NCSA
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/src/distributions/LICENSE.md | ## NumPy
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/src/mt19937/LICENSE.md | # MT19937
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/src/pcg64/LICENSE.md | # PCG64
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/src/philox/LICENSE.md | # PHILOX
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/src/sfc64/LICENSE.md | # SFC64
+$SP/numpy-2.4.4.dist-info/licenses/numpy/random/src/splitmix64/LICENSE.md | # SPLITMIX64
+$SP/numpy/_core/include/numpy/random/LICENSE.txt | zlib License
+$SP/numpy/ma/LICENSE | * Copyright (c) 2006, University of Georgia and Pierre G.F. Gerard-Marchant
+$SP/numpy/random/LICENSE.md | **This software is dual-licensed under the The University of Illinois/NCSA
+$SP/oauthlib-3.3.1.dist-info/licenses/LICENSE | Copyright (c) The OAuthlib Community
+$SP/openai-2.33.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_api-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_exporter_otlp-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_exporter_otlp_proto_common-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_exporter_otlp_proto_grpc-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_exporter_otlp_proto_http-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_instrumentation-0.49b0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_instrumentation_asgi-0.49b0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_instrumentation_fastapi-0.49b0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_proto-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_sdk-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/opentelemetry_semantic_conventions-0.49b0.dist-info/licenses/LICENSE | Apache License
+$SP/orjson-3.11.6.dist-info/licenses/LICENSE-APACHE | Apache License
+$SP/orjson-3.11.6.dist-info/licenses/LICENSE-MIT | Permission is hereby granted, free of charge, to any
+$SP/orjson-3.11.6.dist-info/licenses/LICENSE-MPL-2.0 | Mozilla Public License Version 2.0
+$SP/packaging-26.2.dist-info/licenses/LICENSE | This software is made available under the terms of *either* of the licenses
+$SP/packaging-26.2.dist-info/licenses/LICENSE.APACHE | Apache License
+$SP/packaging-26.2.dist-info/licenses/LICENSE.BSD | Copyright (c) Donald Stufft and individual contributors.
+$SP/pfzy-0.3.4.dist-info/LICENSE | MIT License
+$SP/polars-1.38.1.dist-info/licenses/LICENSE | Copyright (c) 2025 Ritchie Vink
+$SP/polars_runtime_32-1.38.1.dist-info/licenses/LICENSE | Copyright (c) 2025 Ritchie Vink
+$SP/prisma-0.11.0.dist-info/LICENSE | Apache License
+$SP/prometheus_client-0.20.0.dist-info/LICENSE | Apache License
+$SP/prometheus_client-0.20.0.dist-info/NOTICE | Prometheus instrumentation library for Python applications
+$SP/prompt_toolkit-3.0.52.dist-info/licenses/LICENSE | Copyright (c) 2014, Jonathan Slenders
+$SP/propcache-0.5.2.dist-info/licenses/LICENSE | Apache License
+$SP/propcache-0.5.2.dist-info/licenses/NOTICE | Copyright 2016-2021, Andrew Svetlov and aio-libs team
+$SP/proto_plus-1.28.0.dist-info/licenses/LICENSE | Apache License
+$SP/protobuf-5.29.6.dist-info/LICENSE | Copyright 2008 Google Inc.  All rights reserved.
+$SP/psycopg-3.3.3.dist-info/licenses/LICENSE.txt | GNU LESSER GENERAL PUBLIC LICENSE
+$SP/psycopg_binary-3.3.3.dist-info/licenses/LICENSE.txt | GNU LESSER GENERAL PUBLIC LICENSE
+$SP/pyasn1-0.6.4.dist-info/licenses/LICENSE.rst | Copyright (c) 2005-2020, Ilya Etingof <etingof@gmail.com>
+$SP/pyasn1_modules-0.4.2.dist-info/licenses/LICENSE.txt | Copyright (c) 2005-2020, Ilya Etingof <etingof@gmail.com>
+$SP/pycparser-3.0.dist-info/licenses/LICENSE | pycparser -- A C parser in Python
+$SP/pydantic-2.13.4.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/pydantic_core-2.46.4.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/pydantic_settings-2.14.2.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/pygments-2.20.0.dist-info/licenses/LICENSE | Copyright (c) 2006-2022 by the respective authors (see AUTHORS file).
+$SP/pyjwt-2.13.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/pynacl-1.6.2.dist-info/licenses/LICENSE | Apache License
+$SP/pynacl-1.6.2.dist-info/licenses/licenses/LICENSE.libsodium.txt | /*
+$SP/pypdf-6.16.2.dist-info/licenses/LICENSE | Copyright (c) 2006-2008, Mathieu Fenniak
+$SP/pyroscope_io-0.8.16.dist-info/licenses/LICENSE | Apache License
+$SP/python3_saml-1.16.0.dist-info/LICENSE | Copyright (c) 2010-2022 OneLogin, Inc.
+$SP/python_dateutil-2.9.0.post0.dist-info/LICENSE | Copyright 2017- Paul Ganssle <paul@ganssle.io>
+$SP/python_dotenv-1.2.2.dist-info/licenses/LICENSE | Copyright (c) 2014, Saurabh Kumar (python-dotenv), 2013, Ted Tieken (django-dotenv-rw), 2013, Jacob 
+$SP/python_multipart-0.0.32.dist-info/licenses/LICENSE.txt | Apache License
+$SP/python_ulid-3.1.0.dist-info/licenses/LICENSE | Copyright (c) 2017 Martin Domke
+$SP/pyyaml-6.0.3.dist-info/licenses/LICENSE | Copyright (c) 2017-2021 Ingy döt Net
+$SP/redis-5.3.1.dist-info/LICENSE | MIT License
+$SP/redisvl-0.4.1.dist-info/LICENSE | MIT License
+$SP/referencing-0.36.2.dist-info/licenses/COPYING | Copyright (c) 2022 Julian Berman
+$SP/regex-2026.5.9.dist-info/licenses/LICENSE.txt | This work was derived from the 're' module of CPython 2.6 and CPython 3.1,
+$SP/requests-2.34.0.dist-info/licenses/LICENSE | Apache License
+$SP/requests-2.34.0.dist-info/licenses/NOTICE | Requests
+$SP/requests_toolbelt-1.0.0.dist-info/LICENSE | Copyright 2014 Ian Cordasco, Cory Benfield
+$SP/resend-2.23.0.dist-info/LICENSE.md | Copyright (c) 2022 Derich Pacheco
+$SP/restrictedpython-8.5.dist-info/licenses/LICENSE.txt | Zope Public License (ZPL) Version 2.1
+$SP/rich-13.9.4.dist-info/LICENSE | Copyright (c) 2020 Will McGugan
+$SP/rpds_py-0.30.0.dist-info/licenses/LICENSE | Copyright (c) 2023 Julian Berman
+$SP/rq-2.7.0.dist-info/licenses/LICENSE | Copyright 2012 Vincent Driessen. All rights reserved.
+$SP/s3transfer-0.17.0.dist-info/LICENSE.txt | Apache License
+$SP/s3transfer-0.17.0.dist-info/NOTICE.txt | s3transfer
+$SP/semantic_router-0.1.15.dist-info/licenses/LICENSE | MIT License
+$SP/sentry_sdk-2.21.0.dist-info/LICENSE | MIT License
+$SP/shellingham-1.5.4.dist-info/LICENSE | Copyright (c) 2018, Tzu-ping Chung <uranusjr@gmail.com>
+$SP/six-1.17.0.dist-info/LICENSE | Copyright (c) 2010-2024 Benjamin Peterson
+$SP/smithy_aws_core-0.7.0.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/smithy_aws_event_stream-0.3.0.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/smithy_core-0.6.0.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/smithy_http-0.4.2.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/smithy_json-0.2.3.dist-info/licenses/NOTICE | Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+$SP/sniffio-1.3.1.dist-info/LICENSE | This software is made available under the terms of *either* of the
+$SP/sniffio-1.3.1.dist-info/LICENSE.APACHE2 | Apache License
+$SP/sniffio-1.3.1.dist-info/LICENSE.MIT | The MIT License (MIT)
+$SP/soundfile-0.12.1.dist-info/LICENSE | Copyright (c) 2013, Bastian Bechtold
+$SP/sse_starlette-3.4.4.dist-info/licenses/LICENSE | Copyright © 2020, [sysid](https://sysid.github.io/).
+$SP/starlette-1.3.1.dist-info/licenses/LICENSE.md | Copyright © 2018, [Encode OSS Ltd](https://www.encode.io/).
+$SP/tabulate-0.9.0.dist-info/LICENSE | Copyright (c) 2011-2020 Sergey Astanin and contributors
+$SP/tenacity-8.5.0.dist-info/LICENSE | Apache License
+$SP/tiktoken-0.12.0.dist-info/licenses/LICENSE | MIT License
+$SP/tomlkit-0.15.0.dist-info/licenses/LICENSE | Copyright (c) 2018 Sébastien Eustace
+$SP/tornado-6.5.8.dist-info/licenses/LICENSE | Apache License
+$SP/tqdm-4.67.3.dist-info/licenses/LICENCE | `tqdm` is a product of collaborative work.
+$SP/typer-0.25.1.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/typing_extensions-4.15.0.dist-info/licenses/LICENSE | A. HISTORY OF THE SOFTWARE
+$SP/typing_inspection-0.4.2.dist-info/licenses/LICENSE | MIT License
+$SP/tzlocal-5.3.1.dist-info/LICENSE.txt | Copyright 2011-2017 Lennart Regebro
+$SP/urllib3-2.7.0.dist-info/licenses/LICENSE.txt | MIT License
+$SP/uvicorn-0.51.0.dist-info/licenses/LICENSE.md | Copyright © 2017-present, [Encode OSS Ltd](https://www.encode.io/).
+$SP/uvloop-0.22.1.dist-info/licenses/LICENSE-APACHE | Copyright (C) 2016-present the uvloop authors and contributors.
+$SP/uvloop-0.22.1.dist-info/licenses/LICENSE-MIT | The MIT License
+$SP/wcwidth-0.7.0.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/websockets-15.0.1.dist-info/LICENSE | Copyright (c) Aymeric Augustin and contributors
+$SP/wrapt-1.17.3.dist-info/licenses/LICENSE | Copyright (c) 2013-2023, Graham Dumpleton
+$SP/xmlsec-1.3.17.dist-info/licenses/LICENSE | The MIT License (MIT)
+$SP/yarl-1.23.0.dist-info/licenses/LICENSE | Apache License
+$SP/yarl-1.23.0.dist-info/licenses/NOTICE | Copyright 2016-2021, Andrew Svetlov and aio-libs team
+$SP/zipp-3.23.1.dist-info/licenses/LICENSE | MIT License
+/app/enterprise/LICENSE.md | The BerriAI Enterprise license (the "Enterprise License")
+/app/litellm-proxy-extras/LICENSE | Portions of this software are licensed as follows:
+/opt/prisma/binaries/node_modules/@prisma/engines/LICENSE | Apache License
+/opt/prisma/binaries/node_modules/prisma/LICENSE | Apache License
+/usr/lib/python3.13/LICENSE.txt | A. HISTORY OF THE SOFTWARE
+/usr/share/doc/mpdecimal/COPYRIGHT.txt | SOURCE CODE LICENSE
+/usr/share/licenses/opus/LICENSE | Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic,
+```
+
+### List 2: every installed Python distribution (193) with the licence its own metadata declares
+
+Read from each `METADATA`: `License-Expression`, else `License`, else the `License ::` classifier. Several metadata files give a free-text or an informal name (`Apache 2.0`, `MIT License`) rather than an SPDX identifier; they are quoted as written. The two distributions with no licence file in the image (`opentelemetry-util-http`, `tokenizers`) declare Apache-2.0 and the Apache classifier; no file in the image gives the text, so that declaration is the only evidence.
+
+```text
+a2a-sdk 1.1.0 | Apache-2.0
+aiofiles 24.1.0 | Apache-2.0
+aiohappyeyeballs 2.6.1 | PSF-2.0
+aiohttp 3.14.3 | Apache-2.0 AND MIT
+aiosignal 1.4.0 | Apache 2.0
+annotated-doc 0.0.4 | MIT
+annotated-types 0.7.0 | MIT License
+anthropic 0.84.0 | MIT
+anyio 4.13.0 | MIT
+APScheduler 3.11.2 | MIT
+asgiref 3.11.1 | BSD-3-Clause
+attrs 26.1.0 | MIT
+aurelio-sdk 0.0.19 | none declared; licence file: MIT License
+aws-sdk-signers 0.3.0 | Apache License 2.0
+aws_sdk_bedrock_runtime 0.7.0 | Apache-2.0
+awscrt 0.32.2 | Apache-2.0
+azure-ai-contentsafety 1.0.0 | MIT License
+azure-core 1.41.0 | MIT
+azure-identity 1.25.2 | MIT
+azure-keyvault-secrets 4.10.0 | MIT License
+azure-storage-blob 12.28.0 | MIT License
+azure-storage-file-datalake 12.20.0 | MIT License
+backoff 2.2.1 | MIT
+boto3 1.43.1 | Apache-2.0
+botocore 1.43.6 | Apache-2.0
+bytecode 0.17.0 | The MIT License (MIT)
+certifi 2026.4.22 | MPL-2.0
+cffi 2.0.0 | MIT
+charset-normalizer 3.4.7 | MIT
+click 8.3.3 | BSD-3-Clause
+colorama 0.4.6 | BSD License
+coloredlogs 15.0.1 | MIT
+colorlog 6.10.1 | MIT License
+croniter 6.2.2 | MIT
+cryptography 50.0.0 | Apache-2.0 OR BSD-3-Clause
+ddtrace 4.11.0 | LICENSE.BSD3
+Deprecated 1.3.1 | MIT
+detect-secrets 1.5.0 | UNKNOWN in the licence field; classifier Apache Software License; licence file: Apache License
+distro 1.9.0 | Apache License, Version 2.0
+dnspython 2.8.0 | ISC
+docstring_parser 0.18.0 | MIT
+email-validator 2.3.0 | Unlicense
+envier 0.6.1 | MIT License
+Expression 5.6.0 | MIT
+fastapi 0.136.3 | MIT
+fastapi-sso 0.19.0 | MIT
+fastuuid 0.14.0 | BSD License
+filelock 3.29.0 | MIT
+frozenlist 1.8.0 | Apache-2.0
+fsspec 2026.4.0 | BSD-3-Clause
+google-api-core 2.30.3 | Apache 2.0
+google-auth 2.52.0 | Apache 2.0
+google-cloud-aiplatform 1.133.0 | Apache 2.0
+google-cloud-bigquery 3.30.0 | Apache 2.0
+google-cloud-core 2.6.0 | Apache 2.0
+google-cloud-iam 2.19.1 | Apache 2.0
+google-cloud-kms 2.24.2 | Apache 2.0
+google-cloud-resource-manager 1.17.0 | Apache 2.0
+google-cloud-storage 3.10.1 | Apache 2.0
+google-crc32c 1.8.0 | none declared; licence file: Apache License
+google-genai 1.37.0 | Apache-2.0
+google-resumable-media 2.9.0 | Apache 2.0
+googleapis-common-protos 1.75.0 | Apache 2.0
+granian 2.7.4 | BSD-3-Clause
+grpc-google-iam-v1 0.14.4 | Apache 2.0
+grpcio 1.78.0 | Apache-2.0
+grpcio-status 1.71.2 | Apache License 2.0
+gunicorn 23.0.0 | MIT
+h11 0.16.0 | MIT
+hf-xet 1.5.0 | Apache-2.0
+hiredis 3.4.0 | MIT
+httpcore 1.0.9 | BSD-3-Clause
+httpx 0.28.1 | BSD-3-Clause
+httpx-sse 0.4.3 | MIT
+huggingface_hub 1.14.0 | Apache-2.0
+humanfriendly 10.0 | MIT
+idna 3.15 | BSD-3-Clause
+ijson 3.5.1 | BSD-3-Clause AND ISC
+importlib_metadata 8.5.0 | Apache Software License
+inquirerpy 0.3.4 | MIT
+isodate 0.7.2 | Copyright (c) 2021, Hugo van Kemenade and contributors
+Jinja2 3.1.6 | BSD License
+jiter 0.14.0 | MIT
+jmespath 1.1.0 | MIT
+json-rpc 1.15.0 | MIT
+jsonschema 4.26.0 | MIT
+jsonschema-specifications 2025.9.1 | MIT
+langfuse 2.59.7 | MIT
+litellm 1.101.0 | MIT
+litellm-enterprise 0.1.65 | LicenseRef-Proprietary (COMMERCIAL: the BerriAI Enterprise licence)
+litellm-proxy-extras 0.4.94 | MIT
+llm-sandbox 0.3.39 | none declared; licence file: MIT License
+lxml 6.1.1 | BSD-3-Clause
+mangum 0.17.0 | MIT
+markdown-it-py 4.2.0 | MIT License
+MarkupSafe 3.0.3 | BSD-3-Clause
+mcp 1.28.1 | MIT
+mdurl 0.1.2 | MIT License
+ml-dtypes 0.4.1 | Apache License
+msal 1.37.0 | MIT
+msal-extensions 1.3.1 | MIT License
+multidict 6.7.1 | Apache License 2.0
+nodeenv 1.10.0 | BSD
+numpy 2.4.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0
+oauthlib 3.3.1 | BSD-3-Clause
+openai 2.33.0 | Apache-2.0
+opentelemetry-api 1.28.0 | Apache-2.0
+opentelemetry-exporter-otlp 1.28.0 | Apache-2.0
+opentelemetry-exporter-otlp-proto-common 1.28.0 | Apache-2.0
+opentelemetry-exporter-otlp-proto-grpc 1.28.0 | Apache-2.0
+opentelemetry-exporter-otlp-proto-http 1.28.0 | Apache-2.0
+opentelemetry-instrumentation 0.49b0 | Apache-2.0
+opentelemetry-instrumentation-asgi 0.49b0 | Apache-2.0
+opentelemetry-instrumentation-fastapi 0.49b0 | Apache-2.0
+opentelemetry-proto 1.28.0 | Apache-2.0
+opentelemetry-sdk 1.28.0 | Apache-2.0
+opentelemetry-semantic-conventions 0.49b0 | Apache-2.0
+opentelemetry-util-http 0.49b0 | Apache-2.0; no licence file in the image
+orjson 3.11.6 | MPL-2.0 AND (Apache-2.0 OR MIT)
+packaging 26.2 | Apache-2.0 OR BSD-2-Clause
+pfzy 0.3.4 | MIT
+polars 1.38.1 | Copyright (c) 2025 Ritchie Vink
+polars-runtime-32 1.38.1 | MIT License
+prisma 0.11.0 | APACHE
+prometheus_client 0.20.0 | Apache Software License 2.0
+prompt_toolkit 3.0.52 | BSD License
+propcache 0.5.2 | Apache-2.0
+proto-plus 1.28.0 | Apache 2.0
+protobuf 5.29.6 | 3-Clause BSD License
+psycopg 3.3.3 | LGPL-3.0-only
+psycopg-binary 3.3.3 | LGPL-3.0-only
+pyasn1 0.6.4 | BSD-2-Clause
+pyasn1_modules 0.4.2 | BSD
+pycparser 3.0 | BSD-3-Clause
+pydantic 2.13.4 | MIT
+pydantic-settings 2.14.2 | MIT
+pydantic_core 2.46.4 | MIT
+Pygments 2.20.0 | BSD-2-Clause
+PyJWT 2.13.0 | MIT
+PyNaCl 1.6.2 | Apache-2.0
+pypdf 6.16.2 | BSD-3-Clause
+pyroscope-io 0.8.16 | Apache 2.0
+python-dateutil 2.9.0.post0 | Dual License
+python-dotenv 1.2.2 | BSD-3-Clause
+python-multipart 0.0.32 | Apache-2.0
+python-ulid 3.1.0 | MIT
+python3-saml 1.16.0 | MIT
+PyYAML 6.0.3 | MIT
+redis 5.3.1 | MIT
+redisvl 0.4.1 | MIT
+referencing 0.36.2 | MIT
+regex 2026.5.9 | Apache-2.0 AND CNRI-Python
+requests 2.34.0 | Apache-2.0
+requests-toolbelt 1.0.0 | Apache 2.0
+resend 2.23.0 | MIT License
+RestrictedPython 8.5 | ZPL-2.1
+rich 13.9.4 | MIT
+rpds-py 0.30.0 | MIT
+rq 2.7.0 | BSD-2-Clause
+s3transfer 0.17.0 | Apache License 2.0
+semantic-router 0.1.15 | MIT
+sentry-sdk 2.21.0 | MIT
+shellingham 1.5.4 | ISC License
+six 1.17.0 | MIT
+smithy-aws-core 0.7.0 | Apache License 2.0
+smithy-aws-event-stream 0.3.0 | Apache License 2.0
+smithy-core 0.6.0 | Apache License 2.0
+smithy-http 0.4.2 | Apache License 2.0
+smithy-json 0.2.3 | Apache License 2.0
+sniffio 1.3.1 | MIT OR Apache-2.0
+soundfile 0.12.1 | BSD 3-Clause License
+sse-starlette 3.4.4 | BSD-3-Clause
+starlette 1.3.1 | BSD-3-Clause
+tabulate 0.9.0 | MIT
+tenacity 8.5.0 | Apache 2.0
+tiktoken 0.12.0 | MIT License
+tokenizers 0.23.1 | Apache Software License; no licence file in the image
+tomlkit 0.15.0 | MIT
+tornado 6.5.8 | Apache-2.0
+tqdm 4.67.3 | MPL-2.0 AND MIT
+typer 0.25.1 | MIT
+typing-inspection 0.4.2 | MIT
+typing_extensions 4.15.0 | PSF-2.0
+tzlocal 5.3.1 | MIT
+urllib3 2.7.0 | MIT
+uvicorn 0.51.0 | BSD-3-Clause
+uvloop 0.22.1 | MIT License
+wcwidth 0.7.0 | MIT
+websockets 15.0.1 | BSD-3-Clause
+wrapt 1.17.3 | BSD
+xmlsec 1.3.17 | MIT
+yarl 1.23.0 | Apache-2.0
+zipp 3.23.1 | MIT
+```
+
+### List 3: every operating-system package of the Wolfi base (48) with the licence its database record declares
+
+Read from `/lib/apk/db/installed` (the `L:` line of each record). The licence texts of these packages sit in a file for only two of them (`opus` and `mpdecimal`, list 1); the others carry their declaration in the database alone.
+
+```text
+alsa-lib 1.2.16.1-r2 | LGPL-2.1-or-later
+apk-tools 2.14.10-r13 | GPL-2.0-only
+bash 5.3-r13 | GPL-3.0-or-later
+busybox 1.38.0-r2 | GPL-2.0-only
+c-ares 1.34.8-r2 | MIT
+ca-certificates-bundle 20260611-r0 | MPL-2.0 AND MIT
+gdbm 1.26-r6 | GPL-3.0-or-later
+glibc-2.44 2.44-r1 | LGPL-2.1-or-later
+glibc-2.44-locale-posix 2.44-r1 | LGPL-2.1-or-later
+icu78-data-full 78.3-r3 | MIT
+ld-linux-2.44 2.44-r1 | LGPL-2.1-or-later
+libbrotlicommon1 1.2.0-r5 | MIT
+libbrotlidec1 1.2.0-r5 | MIT
+libbrotlienc1 1.2.0-r5 | MIT
+libbz2-1 1.0.8-r24 | MPL-2.0 AND MIT
+libcrypt1-2.44 2.44-r1 | LGPL-2.1-or-later
+libcrypto3 3.6.4-r0 | Apache-2.0
+libexpat1 2.8.4-r0 | MIT
+libffi 3.8.0-r1 | MIT
+libflac 1.5.0-r1 | BSD-3-Clause AND GPL-2.0-or-later
+libgcc 16.2.0-r1 | GPL-3.0-or-later WITH GCC-exception-3.1
+libicu78 78.3-r3 | MIT
+libnghttp2-14 1.70.0-r3 | MIT
+libogg-libs 1.3.6-r9 | BSD-3-Clause
+libsndfile 1.2.2-r5 | LGPL-2.1-or-later
+libssl3 3.6.4-r0 | Apache-2.0
+libstdc++ 16.2.0-r1 | GPL-3.0-or-later WITH GCC-exception-3.1
+libuuid 2.42.3-r3 | GPL-3.0-or-later AND GPL-2.0-or-later AND GPL-2.0-only AND GPL-1.0-only AND LGPL-2.1-or-later AND BSD-1-Clause AND BSD-2-Clause AND BSD-3-Clause AND BSD-4-Clause-UC AND MIT AND CC-PDDC
+libuv 1.52.1-r2 | MIT AND ISC
+libvorbis 1.3.7-r11 | BSD-3-Clause
+libxcrypt 4.5.2-r4 | GPL-2.0-or-later AND LGPL-2.1-or-later
+mpdecimal 4.0.1-r4 | BSD-2-Clause
+ncurses 6.6.20260912-r0 | MIT
+ncurses-terminfo-base 6.6.20260912-r0 | MIT
+nodejs-26 26.8.2-r1 | MIT
+openssl 3.6.4-r4 | Apache-2.0
+opus 1.6.1-r5 | BSD-3-Clause
+py3-pip-wheel 26.2.1-r1 | MIT
+python-3.13 3.13.15_git20260912-r0 | PSF-2.0
+python-3.13-base 3.13.15_git20260912-r0 | PSF-2.0
+readline 8.3-r3 | GPL-3.0-or-later
+sqlite-libs 3.53.4-r2 | blessing
+tzdata 2026d-r0 | CC-PDDC
+wolfi-base 1-r7 | MIT
+wolfi-baselayout 20230201-r29 | MIT
+wolfi-keys 1-r13 | MIT
+xz 5.8.4-r0 | GPL-3.0-or-later
+zlib 1.3.2-r5 | MPL-2.0 AND MIT
+```
 
 ## What I ran, exactly
 
@@ -109,6 +602,7 @@ Everything in `/tmp` and Docker, named `pl13-scout-<id>`; nothing in the reposit
 4. The repository's `test_model_gateway_live.py` through pytest against (a) and (c).
 5. `git archive` of `lane/slice-AD1a` into a scratch folder and pytest there; pytest on this worktree for the main-side files.
 6. `uv venv` and `uv pip install` into a scratch environment; PyPI's JSON, sdist and one wheel downloaded and hash-checked.
+7. Row 9's lists (this round): `docker create` (no start) and `docker export` of the pinned image by digest into a scratch folder, `docker rm`; a Python script kept outside that folder, run with `-I`, walked the export for licence-named files and read every `METADATA` and the Wolfi package database. No container ran, no port was opened, no network was used; the scratch folder is deleted afterwards.
 
 ## How this file was made
 
@@ -117,8 +611,10 @@ Everything in `/tmp` and Docker, named `pl13-scout-<id>`; nothing in the reposit
 service name `litellm`; its comment ("a lock from before names the publisher's image, a third party's, and none of it is checked") was wrong. Confirmed by reading
 `render.py` 1844-1855, `owned_references`, `bundle.py` 320 and `update.py` 368-369, and by running the one-line change in
 memory against an older lock (refused, red) and the replacement (verifies, green). The patch now checks the repository as well
-as the name, in all three places that used the name alone. Rows 1 to 5 and 7 to 9 are unchanged and stand on the earlier
+as the name, in all three places that used the name alone. Rows 1 to 5, 7 and 8 are unchanged and stand on the earlier
 sessions' runs.
+
+**Correction after the second verifier's finding (row 9).** Row 9 said "Full list by path below" and gave seven rows and a lump of "230-odd"; it also counted "110" distributions and called three packages that declare no licence "not commercial" without saying what licence file they carry. This round re-exported the pinned image's filesystem (one container created, never started, removed), walked it again and replaced the lump with the three complete lists at the end of the file's licence section: 242 licence-named files, 193 distributions, 48 operating-system packages. The three undeclared packages each carry a licence file (MIT, Apache, MIT), now read and named; the two with no licence file are said so. The earlier counts (241 files, 110 distributions) were wrong and are corrected in row 9.
 
 An earlier session of this slice drafted it in scratch and stopped before committing. This session re-read, from the
 pinned image's exported filesystem, the top-level `LICENSE`, the enterprise `LICENSE.md` (and checked the two copies are
