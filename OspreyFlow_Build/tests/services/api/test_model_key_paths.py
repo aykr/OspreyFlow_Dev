@@ -64,6 +64,7 @@ import hashlib
 import json
 import logging
 import re
+import secrets
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -75,6 +76,7 @@ from pydantic import SecretStr
 from services.api.model_admin import ModelAdmin, ModelAdminRefused
 
 from adapters.model_litellm.stand_in import _seal
+from adapters.model_litellm.usage import engine_key
 from tests.services.api.test_model_address_change_failure import (
     MODEL,
     NEW,
@@ -1553,23 +1555,31 @@ async def test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43(
     assert world.first not in recorded(world) and world.second not in recorded(world)
 
 
-# --- round 9, N4: start-up reads the gateway's virtual-key listing and shows none of it -----------
+# --- rounds 9 and 10, N4: the gateway's virtual-key listing is not used, and shows nothing --------
+#
+# Round 9 kept `GET /key/list` at start-up on the premise that it holds SHA-256 tokens and no key
+# material. Measured, it does not: the listing asked for with `return_full_object=true` also answers
+# `key_name`, `sk-...` and the last four characters of every virtual key (`P3_RED_RECORD.md`;
+# `test_stand_in_gateway_usage.py`). The short form answers hashes only but carries no
+# `metadata.osprey_engine`, so it cannot tell an engine's key from someone else's. **The owner's
+# ruling, 21 November 2026: no part of any key reaches the product, so start-up asks for no
+# listing.** A virtual key is cleared by its engine's removal (`delete_engine_key`, before the
+# record forgets the engine). The one case with no route is a master key changed: the old derived
+# key cannot be named (open row N6, `OWED.md`).
 
 
-async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4(
-    world: Scene, caplog: pytest.LogCaptureFixture
-) -> None:
-    """N4 (the owner, 20 November 2026): start-up may keep `GET /key/list` of the gateway's own
-    virtual keys, which holds SHA-256 tokens and no key material; **nothing from it reaches a log,
-    an answer or the audit**. A stale virtual key (tagged for an engine this master key does not
-    derive), whose token is made at run time, is listed and revoked by a start; the token appears
-    in no log record, in the settings, the routing, the audit, or the words of the refusal when
-    the revocation is refused. Plant: the token added to the log line at the real call site
-    (`revoke_stale_engine_keys`) goes red. (The credential listing, `GET /credentials`, stays
-    unused: `credential_reads` is 0.)"""
-    await world.set_up()
-    stale = a_key()
-    token = hashlib.sha256(stale.encode()).hexdigest()
+def a_listing_shaped_key() -> tuple[str, str]:
+    """A virtual key made now: its last four characters are `~` and three letters chosen at run
+    time, so the `key_name` the gateway answers (`sk-...~QXZ`) is found nowhere by chance."""
+    suffix = "~" + "".join(secrets.choice("QXZJVK") for _ in range(3))
+    return a_key() + suffix, suffix
+
+
+async def a_stale_virtual_key(world: Scene) -> tuple[str, str]:
+    """A virtual key tagged for an engine the record does not hold, as a master key rotated leaves
+    one. Asked for in full by this test's own call, the gateway answers a `key_name` of the shape
+    the real one measured, so a test cannot pass by the stand-in leaving it out."""
+    stale, suffix = a_listing_shaped_key()
     async with httpx.AsyncClient(
         base_url="http://litellm:4000",
         transport=world.gateway.transport(),
@@ -1579,11 +1589,53 @@ async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audite
             "/key/generate", json={"key": stale, "metadata": {"osprey_engine": "gone"}}
         )
         assert made.status_code == 200, made.text
-    listed = world.gateway.transport()
-    assert stale in set(world.gateway.virtual_keys()), "the plant: the stale key is held"
+        listed = await master.get("/key/list", params={"return_full_object": "true", "size": 100})
+    hashed = hashlib.sha256(stale.encode()).hexdigest()
+    rows = [r for r in listed.json()["keys"] if r["token"] == hashed]
+    assert rows
+    if rows[0]["key_name"] != "sk-..." + suffix:  # never print it: it is part of a key
+        pytest.fail("the plant: the stand-in does not list a key_name of the real shape")
+    return stale, suffix
 
+
+async def test_start_up_asks_the_gateway_for_no_listing_n4(world: Scene) -> None:
+    """N4 (the owner, 21 November 2026): the Conduit asks the gateway for **no listing of keys, of
+    either kind**: `GET /key/list` (full, it answers `key_name`, part of each key; short, it carries
+    no tag) and `GET /credentials` (the first and last two characters) are never sent, by a start,
+    a reconcile, the background retry or a change. Plant: the call put back in `_reconcile` goes
+    red."""
+    await world.set_up()
+    await a_stale_virtual_key(world)
+    mark = len(world.gateway.seen)
+    started = world.process(faulty=False, retry_seconds=0.01)
+    await started.start()
+    await started._reconcile(started.settings)
+    await asyncio.sleep(0.05)  # the background retry's turn
+    await started.remove_engine("admin-1", "gemini")
+    await started.close()
+    asked = [line.split(" ")[1] for line in world.gateway.seen[mark:] if line.startswith("GET ")]
+    assert asked, "the plant: the process did ask the gateway something"
+    for path in asked:
+        if path.startswith(("/key/list", "/credentials")):
+            pytest.fail("the Conduit asked the gateway for a listing of keys")
+    assert world.gateway.credential_reads == 0
+
+
+async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4(
+    world: Scene, caplog: pytest.LogCaptureFixture
+) -> None:
+    """N4 (the owner, 21 November 2026), the search: the stale virtual key's **`key_name` and every
+    part of it** (`sk-...` and the last four characters), its **token** and **the key itself**,
+    all made at run time, appear in no log record, no answer (the words of a refusal, the settings,
+    the routing) and no audit row, through a start and a refused and a landing change. The stand-in
+    answers a `key_name` of the real shape (`a_stale_virtual_key` shows it). Plants at the real
+    call site, red then green (`plants_key_paths_run.txt`): the `key_name` logged where a listing is
+    read; a key's last four put into an answer. (Never `assert` on what was found: a failure must
+    not print it.)"""
+    await world.set_up()
+    stale, suffix = await a_stale_virtual_key(world)
+    token = hashlib.sha256(stale.encode()).hexdigest()
     caplog.set_level(logging.DEBUG)
-    # refused first: the words of the refusal, then the revocation that lands
     refusing = Plants(world.gateway.transport())
     refusing.refuse.append(lambda r: r.url.path == "/key/delete")
     world.faults = refusing
@@ -1592,17 +1644,15 @@ async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audite
     try:
         await refused_start.start()
         await refused_start._reconcile(refused_start.settings)
+        await refused_start.remove_engine("admin-1", "gemini")
     except ModelAdminRefused as refused:
         words = refused.words
     await refused_start.close()
     refusing.refuse.clear()
     started = world.process(faulty=False, retry_seconds=3600)
     await started.start()
+    await started.remove_engine("admin-1", "gemini")
     await started.close()
-    assert stale not in set(world.gateway.virtual_keys()), "the plant: start revoked it"
-    assert world.gateway.credential_reads == 0
-    assert listed is not None
-
     what_was_shown = " ".join(
         [
             caplog.text,
@@ -1612,6 +1662,35 @@ async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audite
             repr(started.routes()),
         ]
     )
-    for secret in (token, stale):
-        if secret in what_was_shown:  # never `assert`: a failure must not print what it found
-            pytest.fail("the virtual-key listing reached a log, an answer or the audit")
+    for part in (token, stale, "sk-..." + suffix, "sk-...", suffix):
+        if part in what_was_shown:
+            pytest.fail(
+                "a virtual key's listing, or part of a key, reached a log, an answer or the audit"
+            )
+
+
+async def test_an_engine_s_removal_clears_its_virtual_key_n4(world: Scene) -> None:
+    """N4, the route that clears a virtual key now that start-up does not list them: **an engine's
+    removal deletes its own derived key** (`delete_engine_key`, by derivation: no listing, no key
+    read) **before the record forgets the engine**, so no key outlives its record. A removal the
+    gateway refuses leaves the engine and its key both (they agree), and the next removal clears
+    both. Plant: the delete skipped in `remove_engine` goes red."""
+    await world.set_up()
+    engine_held = engine_key(world.master, "gemini")
+    assert engine_held in world.gateway.virtual_keys(), "the plant: the engine's key is held"
+    refusing = Plants(world.gateway.transport())
+    refusing.refuse.append(lambda r: r.url.path == "/key/delete")
+    world.faults = refusing
+    refused = world.process(retry_seconds=3600)
+    with pytest.raises(ModelAdminRefused):
+        await refused.remove_engine("admin-1", "gemini")
+    await refused.close()
+    assert [p.name for p in refused.settings.providers] == ["gemini"], "the record kept it"
+    assert engine_held in world.gateway.virtual_keys(), "and so did the gateway"
+    refusing.refuse.clear()
+    again = world.process(faulty=False, retry_seconds=3600)
+    await again.start()
+    await again.remove_engine("admin-1", "gemini")
+    await again.close()
+    assert again.settings.providers == []
+    assert engine_held not in world.gateway.virtual_keys(), "the removal cleared its key"
