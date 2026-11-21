@@ -1,7 +1,7 @@
 // The reader's *Needs you* (ADR-145 decision 11, A2; L2.7): one read, `GET /v1/me/needs-you`, for the
 // top bar's *Needs you · n* and the Studio's *1 Model · n proposed*. What it lists is gated in the
 // Conduit, as the reader (`services/api/needs_you.py`), so nothing here filters.
-import type { NeedsYou } from "../../../../../packages/schemas/generated";
+import type { NeedsYou } from "../../../../schemas/generated";
 
 export type { NeedsYou };
 

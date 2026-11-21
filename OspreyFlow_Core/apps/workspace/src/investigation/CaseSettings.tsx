@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Rights } from "../rights/visibility";
 import { CaseDatasets } from "./CaseDatasets";
 import { CaseDomains } from "./CaseDomains";
-import { type CaseListing, listCases } from "./cases";
+import { type CaseListing, listCases } from "@ospreyflow/glass-shared";
 
 export interface CaseSettingsProps {
   apiBaseUrl: string;

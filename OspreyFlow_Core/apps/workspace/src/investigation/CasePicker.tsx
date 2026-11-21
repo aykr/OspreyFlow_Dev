@@ -5,7 +5,8 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
-import { type CaseListing, caseLabel, datasetLabel, listCases, orderCases, removeCase } from "./cases";
+import { type CaseListing, caseLabel, datasetLabel, listCases, orderCases } from "@ospreyflow/glass-shared";
+import { removeCase } from "./caseNavigation";
 import { NewCaseForm } from "./NewCaseForm";
 
 export interface CasePickerProps {

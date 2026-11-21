@@ -9,7 +9,7 @@
 import { useEffect, useState } from "react";
 
 import { type CaseView, listViews } from "@ospreyflow/glass-shared";
-import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
+import { type CaseListing, caseLabel, listCases, orderCases } from "@ospreyflow/glass-shared";
 
 export interface CaseListProps {
   apiBaseUrl: string;

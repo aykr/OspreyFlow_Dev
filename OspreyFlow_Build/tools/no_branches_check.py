@@ -13,7 +13,7 @@ as the amendment's decision 4 says:
 - **a pipeline's branch** in the Ingest Studio's DAG (one source's path through a pipeline): only
   in the files listed in `PIPELINE_FILES`, each named with why. A new file using the word in that
   sense is added here by name, so a case's branch can never hide in a folder the Studio owns
-  (`ingest/studio/datasets.ts` named a case's `branched_from` beside the DAG's files);
+  (`packages/glass-shared/src/ingest/studio/datasets.ts` named a case's `branched_from` beside the DAG's files);
 - **a git branch**: only the exact flags in `GIT_TOKENS`;
 - **history written before L3.2**: only the stored labels in `STORED_BEFORE_L3_2`, in the one
   file that relabels them.

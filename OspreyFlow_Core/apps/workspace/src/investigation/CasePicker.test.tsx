@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CasePicker } from "./CasePicker";
 import { CaseSwitcher } from "./CaseSwitcher";
-import { caseLabel, type CaseListing } from "./cases";
+import { caseLabel, type CaseListing } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

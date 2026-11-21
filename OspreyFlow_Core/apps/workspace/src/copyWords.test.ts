@@ -19,8 +19,10 @@ import {
   movedClients,
   plantedCopy,
   LINK_CLIENTS,
+  CASE_CLIENTS,
   PLAIN_CLIENTS,
   plantedLinkClients,
+  plantedCaseClients,
   plantedPlainClients,
   plantedReportClients,
   REPORT_CLIENTS,
@@ -121,6 +123,20 @@ describe("the Glass's copy says pipeline", () => {
     const walked = sourceFiles();
     for (const rel of PLAIN_CLIENTS) expect(walked, rel).toContain(join(SHARED_SRC, rel));
     const planted = plantedPlainClients('export const PLANTED = { headline: "Recipe not checked yet" };');
+    try {
+      const hits = sourceFiles([planted.root]).flatMap((path) =>
+        copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
+      );
+      expect(hits.sort()).toEqual(planted.files.map((file) => `${file}: Recipe not checked yet`).sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the cases, moment, needs-you, dataset, pack and external-orchestration files that moved (PL4d3d), and finds a word planted in each (rule 15)", () => {
+    const walked = sourceFiles();
+    for (const rel of CASE_CLIENTS) expect(walked, rel).toContain(join(SHARED_SRC, rel));
+    const planted = plantedCaseClients('export const PLANTED = { headline: "Recipe not checked yet" };');
     try {
       const hits = sourceFiles([planted.root]).flatMap((path) =>
         copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),

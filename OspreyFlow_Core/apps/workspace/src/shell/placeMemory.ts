@@ -1,7 +1,7 @@
 // ADR-145 decision 2: the cross-link back from the Studio "keeps the case they came from" and
 // returns to the Glass's view that was last open. The case is the open one (`investigation/
 // investigationId.ts`), which moving between the places never changes. Choosing another case in the
-// Studio reloads the page (`investigation/cases.ts`'s `openCase`), so the view to come back to is
+// Studio reloads the page (`investigation/caseNavigation.ts`'s `openCase`), so the view to come back to is
 // kept in this tab's `sessionStorage`, not only in memory: after the reload, *Back* still returns to
 // it. One hook, used by `App.tsx` and by the keyboard harness, so the case that proves it
 // (`keyboard/shell.spec.ts`) fails when the view is not kept.

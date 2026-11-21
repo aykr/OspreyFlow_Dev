@@ -14,7 +14,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { IngestStudio } from "../../ingest/IngestStudio";
-import { NEEDS_YOU_WORDS } from "./needsYouApi";
+import { NEEDS_YOU_WORDS } from "@ospreyflow/glass-shared";
 import { peekOpening, requestOpening, takeOpening } from "./openings";
 
 vi.mock("../../ingest/map/MapScreen", () => ({ MapScreen: () => null }));

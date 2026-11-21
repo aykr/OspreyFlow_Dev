@@ -14,7 +14,7 @@ import { runInWords, triggerInWords } from "../../admin/Schedules";
 import { HeldRowsPanel } from "../../alerts/HeldRowsPanel";
 import { Button } from "../../design/primitives/Button";
 import { Select } from "../../design/primitives/Select";
-import type { AccessLevel } from "../../investigation/cases";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
 import { PublishScreen } from "../publish/PublishScreen";
 import { isDeployed } from "../studio/useStudioData";
 import { statusWords } from "../studio/vocabulary";

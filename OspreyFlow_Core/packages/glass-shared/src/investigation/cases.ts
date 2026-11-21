@@ -1,10 +1,11 @@
 // The Glass's side of ADR-052 (owner, 29 September 2026: "I don't yet see any option for selecting
 // the dataset / case that I want to work on"). This lists the cases an account holds a level on
 // and creates a named one. It enforces nothing: the Conduit does (ADR-050), and answers a case the
-// account may not see with the same "not found" as one that does not exist.
+// account may not see with the same "not found" as one that does not exist. Plain TypeScript: nothing
+// here touches the page or the tab's storage, so a server-rendered page can use it as the Glass does.
+// What does (opening a case, which remembers it in the tab) is `investigation/caseNavigation.ts` in the
+// workspace.
 import { utcStamp } from "../time/utcStamp";
-import { rememberCaseView } from "../views/lensHandoff";
-import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
 
 export type AccessLevel = "viewer" | "editor" | "author";
 
@@ -221,8 +222,9 @@ async function refusalWords(response: Response, lead: string): Promise<string> {
 
 /** A soft remove: the case leaves every list and answers "not found", and nothing is deleted from
  * the database or the graph (ADR-052 Amendment 7). An Author may; so may an administrator of the
- * case's own unit. The Conduit decides; this only asks. */
-export async function removeCase(
+ * case's own unit. The Conduit decides; this only asks. It does not touch the tab: the Glass's
+ * `removeCase` (`investigation/caseNavigation.ts`) forgets the case in the tab after this succeeds. */
+export async function removeCaseOnServer(
   apiBaseUrl: string,
   bearerToken: string,
   id: string,
@@ -243,13 +245,6 @@ export async function removeCase(
   if (!response.ok) {
     throw new Error(`The case could not be removed (${response.status}).`);
   }
-  try {
-    if (sessionStorage.getItem(INVESTIGATION_ID_SESSION_KEY) === id) {
-      sessionStorage.removeItem(INVESTIGATION_ID_SESSION_KEY);
-    }
-  } catch {
-    /* a convenience about this tab: never worth failing a removal over */
-  }
 }
 
 /** The URL the Glass already reads on load (`initialInvestigationId`). */
@@ -260,30 +255,6 @@ export function caseUrl(id: string, view?: "ingest" | "questions", caseView?: st
   const withView = view ? `${base}&view=${view}` : base;
   // ADR-144: a case opened on one of its views (`case_view`), shown as a lens on it.
   return caseView ? `${withView}&case_view=${encodeURIComponent(caseView)}` : withView;
-}
-
-/** Switching case reloads the page on purpose: the working set, the cross-filter store and the
- * delta stream are each built once per case, so a full navigation is the one way to be sure none
- * of the previous case's state is left behind. */
-export function openCase(
-  id: string,
-  view?: "ingest" | "questions",
-  navigate: (url: string) => void = (url) => window.location.assign(url),
-): void {
-  sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, id);
-  navigate(caseUrl(id, view));
-}
-
-/** Opens a case on one of its views (ADR-144): the case is loaded as any switch loads it, and the
- * view is then opened over it as a lens. */
-export function openCaseView(
-  caseId: string,
-  viewId: string,
-  navigate: (url: string) => void = (url) => window.location.assign(url),
-): void {
-  sessionStorage.setItem(INVESTIGATION_ID_SESSION_KEY, caseId);
-  rememberCaseView(caseId, viewId);
-  navigate(caseUrl(caseId, undefined, viewId));
 }
 
 /** How a dataset is offered in a choice: its name, and for a composite how many it joins. */

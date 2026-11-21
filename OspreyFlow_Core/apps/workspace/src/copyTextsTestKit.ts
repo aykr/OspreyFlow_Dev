@@ -32,7 +32,7 @@ export function shown(path: string): string {
  * dossier's, views', working set's, boards' and analytics' (PL4d3b), and the assessment's, connections', explore's, map's,
  * metrics', ownership's, search's, site's, strength's and watches' (PL4d3c). One regular expression on one line, which
  * `test_glass_shared_report_clients.py`, `test_glass_shared_link_clients.py` and `test_glass_shared_plain_clients.py` read. */
-export const MOVED_FOLDERS = /\/(ingest|admin|reports|export|alerts|patterns|models|inspector|linktypes|questions|reader|dossier|views|workingset|boards|analytics|assessment|connections|explore|map|metrics|ownership|search|site|strength|watches)\//;
+export const MOVED_FOLDERS = /\/(ingest|admin|reports|export|alerts|patterns|models|inspector|linktypes|questions|reader|dossier|views|workingset|boards|analytics|assessment|connections|explore|map|metrics|ownership|search|site|strength|watches|investigation|time)\//;
 
 /** The twelve clients and words PL4d3a moved: a folder, then each file's stem. Never written as a path (the old-path scan in
  * `test_glass_shared_report_clients.py` reads this file too, and only the package's own place may name them). */
@@ -82,6 +82,19 @@ const PLAIN_STEMS: Record<string, readonly string[]> = {
 };
 /** Their places under the shared package, for the guards that plant in each of them. */
 export const PLAIN_CLIENTS: readonly string[] = Object.entries(PLAIN_STEMS).flatMap(([folder, stems]) =>
+  stems.map((stem) => `${folder}/${stem}.ts`),
+);
+
+/** The seven files PL4d3d added: a folder, then each file's stem. Never written as a path, as above. */
+const CASE_STEMS: Record<string, readonly string[]> = {
+  investigation: ["cases"],
+  time: ["utcStamp"],
+  "admin/needsYou": ["needsYouApi", "openings"],
+  "ingest/studio": ["datasets", "packs"],
+  "ingest/runs": ["externalOrchestrationApi"],
+};
+/** Their places under the shared package, for the guards that plant in each of them. */
+export const CASE_CLIENTS: readonly string[] = Object.entries(CASE_STEMS).flatMap(([folder, stems]) =>
   stems.map((stem) => `${folder}/${stem}.ts`),
 );
 
@@ -137,6 +150,18 @@ export function plantedPlainClients(line: string): { root: string; files: string
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
   return { root, files: [...PLAIN_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
+}
+
+/** A copy of the shared package with `line` appended to each of the seven case files; returns the folder, the files'
+ * paths relative to it (in `CASE_CLIENTS`' order), and a cleanup. The case guards' plants (rule 15): one in each. */
+export function plantedCaseClients(line: string): { root: string; files: string[]; remove: () => void } {
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
+  for (const file of CASE_CLIENTS) {
+    const target = join(root, file);
+    writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
+  }
+  return { root, files: [...CASE_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 function filesUnder(dir: string): string[] {

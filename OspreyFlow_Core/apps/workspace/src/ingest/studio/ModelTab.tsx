@@ -2,8 +2,8 @@
 // spec 01; ADR-140 Amendment 9 decision 1 names it on screen) is, for now, the case's packs
 // over the POLE core (ADR-126). Phase 5 makes it the dataset's own, versioned, with its extensions,
 // reference lists, and draft and live versions.
-import type { DomainPack } from "../../investigation/cases";
-import { modelInWords } from "./packs";
+import type { DomainPack } from "@ospreyflow/glass-shared";
+import { modelInWords } from "@ospreyflow/glass-shared";
 
 export function ModelTab({ datasetName, packs }: { datasetName: string; packs: readonly DomainPack[] | undefined }) {
   return (

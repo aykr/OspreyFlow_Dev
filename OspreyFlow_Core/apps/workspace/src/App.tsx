@@ -126,8 +126,9 @@ import { CaseSettings } from "./investigation/CaseSettings";
 import { CaseBrief } from "./investigation/CaseBrief";
 import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
-import { caseIsOpenable, listCases, openCase, openCaseView } from "./investigation/cases";
-import { caseForDataset } from "./ingest/studio/datasets";
+import { caseIsOpenable, listCases } from "@ospreyflow/glass-shared";
+import { openCase, openCaseView } from "./investigation/caseNavigation";
+import { caseForDataset } from "@ospreyflow/glass-shared";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import type { CaseState } from "./views/SavedViewOnTheLine";
@@ -1704,7 +1705,7 @@ export function App() {
   // ADR-145 decision 11 (A2), L2.7: *Needs you*, before the account wherever the account is shown. An
   // overdue promotion opens Admin › Operations for a reader who holds `operate_schedules`; proposed
   // link types open the Studio's Model tab on their dataset, through a case of the reader's that
-  // loads into it (`ingest/studio/datasets.ts`), as the Studio's own switcher does.
+  // loads into it (`packages/glass-shared/src/ingest/studio/datasets.ts`), as the Studio's own switcher does.
   const openModelFor = async (datasetId: string): Promise<void> => {
     requestOpening({ kind: "studio", tab: "model", datasetId });
     let cases;

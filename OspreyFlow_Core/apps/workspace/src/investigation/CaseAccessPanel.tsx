@@ -8,7 +8,7 @@ import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
 import { Select } from "../design/primitives/Select";
 import { type CaseAccess, LEVEL_NAMES, caseAccess, grantCaseAccess, removeCaseAccess } from "./access";
-import type { AccessLevel } from "./cases";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
 
 export interface CaseAccessPanelProps {
   apiBaseUrl: string;

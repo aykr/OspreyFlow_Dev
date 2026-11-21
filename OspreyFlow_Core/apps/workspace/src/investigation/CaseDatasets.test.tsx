@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CaseDatasets } from "./CaseDatasets";
-import { createCase } from "./cases";
+import { createCase } from "@ospreyflow/glass-shared";
 import { NewCaseForm } from "./NewCaseForm";
 
 afterEach(() => {
