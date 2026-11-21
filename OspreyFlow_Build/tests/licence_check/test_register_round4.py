@@ -203,3 +203,48 @@ def test_a_row_of_each_kind_loses_a_naming_file_and_is_flagged(
     rows = _planted(real_rows, row_id, lambda r: r["named_in"].remove(victim))
     found = _found(rows)
     assert any(row_id in v and victim in v and "named_in" in v for v in found), found
+
+
+# --- round 5: the two branches no test reached ---------------------------------------------------
+
+
+def test_a_conditional_row_whose_licence_fails_its_stated_test_is_flagged(
+    real_rows: list[dict[str, Any]],
+) -> None:
+    """The real F3 (GDS Transport): still `conditional` with its owner ruling and its restricted
+    licence text, but now claiming `osi-software`. The only licence check for a conditional row is
+    the one that runs the claimed test on the text, so this fails only if that branch is there."""
+    f3 = next(r for r in real_rows if r["id"] == "F3")
+    assert f3["status"] == "conditional" and f3["owner_ruling"]  # the real row's own shape
+    rows = _planted(real_rows, "F3", lambda r: r.update(test="osi-software"))
+    found = _found(rows)
+    assert any(
+        "F3" in v and "does not pass the test osi-software" in v and f3["licence"] in v
+        for v in found
+    ), found
+    assert not any("F3" in v for v in _found(real_rows)), "the real F3 must stay clean"
+
+
+def test_a_register_pin_the_code_no_longer_names_is_flagged_while_the_code_names_the_image(
+    real_rows: list[dict[str, Any]], sources: dict[str, str]
+) -> None:
+    """Laurium's `FROM` moves to another image, which gets its own row. `python` is still named by
+    B13a's six Dockerfiles and B13b's file still exists, so the only thing left to report B13b's
+    pin is the register-side check on a pin that no code names."""
+    b13b = next(r for r in real_rows if r["id"] == "B13b")
+    path = b13b["named_in"][0]
+    assert path == "services/laurium/Dockerfile"
+    text = sources[path]
+    moved = text.replace(f"FROM python:{b13b['pin']}", "FROM debian:12-slim")
+    assert moved != text
+    sources[path] = moved
+    new_row = copy.deepcopy(b13b)
+    new_row.update(id="B13c", name="debian", pin="12-slim")
+    new_row["named_in"] = [path]
+    found = reg.find_register_violations([*real_rows, new_row], reg.named_by_code(sources))
+    assert any(
+        "'python'" in v and repr(b13b["pin"]) in v and "no code names" in v for v in found
+    ), found
+    # the planted state is otherwise settled: nothing but that pin is reported
+    assert not any("debian" in v for v in found), found
+    assert not any("is not in the register" in v for v in found), found
