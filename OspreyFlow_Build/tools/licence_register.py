@@ -546,7 +546,12 @@ def find_register_violations(
                 f"the register {register_pin!r}"
             )
         for code_pin in loose_code[len(loose_register) :]:
-            out.append(f"{kind} {name!r}: the code pins {code_pin!r}, which is not in the register")
+            # The code names this one thing at two places (the pull script and a closed list) and
+            # they disagree, so the register's pin is still named and nothing pairs with this one.
+            out.append(
+                f"{kind} {name!r}: pin differs — the code pins {code_pin!r}, which is not in the "
+                f"register (it holds {', '.join(repr(p) for p in register_pins)})"
+            )
         for register_pin in loose_register[len(loose_code) :]:
             out.append(f"{kind} {name!r}: the register's pin {register_pin!r} is one no code names")
 
