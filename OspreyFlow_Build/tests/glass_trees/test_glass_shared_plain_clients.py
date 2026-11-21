@@ -1,33 +1,31 @@
 """The remaining plain Conduit clients live in `packages/glass-shared`, nothing names the place they came from, and the
-stray `export/api.ts.bak` is gone (ADR-152 decision 6, "the Conduit client"; slice PL4d3c, the eighth of the PL4 slices
-after A, B, B2, B3, C, D1, D2, D3a and D3b; the owner's rulings of 20 and 21 November 2026).
+stray backup of the export client is gone (ADR-152 decision 6, "the Conduit client"; slice PL4d3c, the eighth of the PL4
+slices after A, B, B2, B3, C, D1, D2, D3a and D3b; the owner's rulings of 20 and 21 November 2026).
 
 Twelve plain TypeScript files moved whole from `OspreyFlow_Core/apps/workspace/src/` to
 `OspreyFlow_Core/packages/glass-shared/src/`, at the same place under it, their bytes unchanged but for the import lines:
 
-* the case screens': `assessment/api.ts` (judgements, assumptions, gaps, the yardstick), `watches/api.ts` (monitors and
-  hotlists), `strength/api.ts` (connection strength and rarity), `metrics/api.ts` (the compute call);
-* the canvas's and the working set's: `connections/connectionsApi.ts`, `explore/exploreApi.ts`, `search/addFromListApi.ts`,
-  `ownership/api.ts`, `boards/boardsApi.ts`;
-* the map's: `map/providers.ts` (the basemap registry), `site/api.ts` and `site/bilinear.ts` (the site layer's calls and the
-  grid arithmetic they take their control points from).
+* the assessment's (`assessment/api.ts`: judgements, assumptions, gaps and the yardstick), the boards' (`boards/boardsApi.ts`),
+  the connections' (`connections/connectionsApi.ts`) and the exploring panel's (`explore/exploreApi.ts`);
+* the map's provider list (`map/providers.ts`), the metrics' call (`metrics/api.ts`) and the ownership place's
+  (`ownership/api.ts`);
+* the list-adding call (`search/addFromListApi.ts`), the site calibration's two (`site/api.ts` and its arithmetic,
+  `site/bilinear.ts`), the strength explainer's (`strength/api.ts`) and the watches' (`watches/api.ts`).
 
-Each calls `fetch` against the Conduit (or is plain arithmetic a client takes a type from) and takes the bearer token as an
-argument. None touches the page, and none imports React, a drawing library or a store. The four that took the working
-set's types, or the canvas outcome, from the package by its name (`connections`, `explore`, `search`, `ownership`) now
-import them from the sibling module, as a package file may not import itself by its name.
+Each calls `fetch` against the Conduit (or is the plain arithmetic one that does) and takes the bearer token as an
+argument. None touches the page, and none imports React, a drawing library or a store.
 
-**Two names were written twice, and the index says which is which.** `listJudgements` is the reports' packs client's and the
-assessment's (two functions with two signatures), and `Answer` is the promotions' and the boards' (one type written twice).
-Two `export *` of the same name is an error in TypeScript and silently dropped in the browser, so the index names the
-assessment's `listAssessmentJudgements` and the boards' `BoardAnswer`; every other name goes through as it was
-(`test_the_index_exports_every_name_of_every_moved_client`).
+**Two names were written twice, and the index says which is which.** `listJudgements` is the report clients' (their case
+helper) and the assessment's; `Answer` is the promotions' and the boards'. Two `export *` of the same
+name is an error in TypeScript and silently dropped in the browser, so the index names the assessment's as
+`listAssessmentJudgements` and the boards' as `BoardAnswer`; every other name goes through as it was
+(`test_the_index_exports_every_name_of_every_moved_client`). The importers that used the old name write
+`listAssessmentJudgements as listJudgements`, so only their import line changes.
 
 **The stray file.** `OspreyFlow_Core/apps/workspace/src/export/api.ts.bak` was a copy of the export client from before
-slice D3a moved the live one (it differed in one line, `withheld: boolean | null` against `withheld?: boolean | null`),
-imported by nothing, read by no gate, test, image or scan map, and holding no key, token, address or client name; the
-only thing that named it was slice D3a's own acceptance, which pinned it as "D3c's". It is deleted in a commit of its own
-(`test_the_stray_backup_is_gone`).
+D3a moved the live one, differing at one line, imported by nothing, and holding no key, token, address or client name.
+`test_the_stray_backup_is_gone` is red on a tree that still has it (and `test_a_backup_left_in_the_tree_is_found` shows the
+check can fail, on the shape `git ls-files` gives).
 
 Every importer followed (the workspace, its tests, the keyboard and accessibility harnesses outside `src/`). The tests
 stayed in the workspace, and a test that replaced a client with a double now replaces the package's export of it. This
@@ -39,8 +37,6 @@ Which test fails if the invariant is broken (rule 12):
   `test_the_twelve_clients_are_in_the_package_and_not_in_the_workspace`, and a name of one that the index leaves out
   (or two modules giving one name): `test_the_index_exports_every_name_of_every_moved_client`, with
   `test_an_index_that_drops_or_doubles_a_name_is_found`;
-* the stray backup in the tree, tracked or not: `test_the_stray_backup_is_gone`, with
-  `test_a_backup_put_back_is_found`;
 * a file of the package importing React or a drawing library, or a file of the workspace or the harness, or a schema
   import that no longer resolves: the D2 file's `test_the_package_s_clients_import_no_react_and_no_workspace_path` reads
   every file of the package, these twelve too; here `test_the_new_clients_are_among_the_files_that_check_reads` proves it
@@ -49,12 +45,10 @@ Which test fails if the invariant is broken (rule 12):
   it would leave behind): `test_no_moved_client_imports_the_package_by_its_name`, with a plant in each;
 * a client changed in more than its import lines at the commit that moved it:
   `test_the_move_changed_no_line_but_the_imports`;
-* a file of any kind naming an old path: `test_no_tracked_file_names_an_old_path`, with
-  `test_a_route_is_not_an_old_path` (the Conduit's address `/v1/map/providers` is a route, not a file);
+* a file of any kind naming an old path: `test_no_tracked_file_names_an_old_path`;
 * an importer that still reaches an old path, or reaches into the package's folder instead of its name:
   `test_every_import_of_a_moved_client_reaches_the_package`, with `test_an_old_path_put_back_in_one_importer_is_found`
-  (the lines the tree really held, among them a `vi.mock` of a client, the `importActual` that follows it, and the last line
-  of a many-line import);
+  (the lines the tree really held, among them nine `vi.mock` of the map's provider list and a sibling import by `./api`);
 * a spec, or a file one imports, naming a file that does not exist (what Playwright would meet at collection):
   `test_every_import_reached_from_a_spec_resolves`;
 * each of four gates that stops reading the moved files, or reads fewer files than before the move:
@@ -66,9 +60,10 @@ Which test fails if the invariant is broken (rule 12):
   `test_the_vitest_walkers_name_the_new_folders`, which reads the kit they share, whose own cases plant in a copy of each;
 * either image's `COPY` lines naming a path that moved, or missing what the harness needs:
   `test_no_image_copies_a_path_that_moved`, `test_the_harness_image_copies_what_the_clients_need`, each shown red by
-  `test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found`.
+  `test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found`;
+* the stray backup in the tree: `test_the_stray_backup_is_gone`, with `test_a_backup_left_in_the_tree_is_found`.
 
-**This file walks:** `git ls-files` over the whole repository (the old-path test, and the stray-file test); the tracked `.ts`,
+**This file walks:** `git ls-files` over the whole repository (the old-path test, the backup test); the tracked `.ts`,
 `.tsx`, `.mts`, `.mjs`, `.js` and `.jsx` files under `OspreyFlow_Core/apps/` (the import tests, the spec walk, which starts
 at every tracked `*.spec.ts` and `*.spec.tsx` in `apps/workspace` and `apps/harness` and follows their imports) and under
 `OspreyFlow_Core/packages/glass-shared/src` (the moved files, the index, the package's own imports);
@@ -96,6 +91,7 @@ from tools.layout import CORE, ROOT
 from tests import test_guide_navigation_words as navigation
 from tests import test_people_section_words as people
 from tests.glass_trees import test_glass_shared_clients as clients
+from tests.glass_trees import test_glass_shared_link_clients as link
 from tests.glass_trees import test_glass_shared_plain_logic as earlier
 from tests.harness import test_harness_frontend_copies as image
 
@@ -125,15 +121,16 @@ WHOLE = (
 OLD_OF = {rel: WORKSPACE_SRC + rel for rel in WHOLE}
 _OLD_STEMS = {old.removesuffix(".ts") for old in OLD_OF.values()}
 
-#: The stray file, as a place under the workspace: it must not be in the tree (tracked or not).
-BACKUP = WORKSPACE_SRC + "export/api.ts.bak"
-
-#: The names the index gives under another, because a moved file wrote a name that another module already gives:
-#: (file, the name it wrote, the name the package exports it as).
+#: The names the index gives under another, because a moved file wrote a name that an earlier module of the package
+#: already gives: (file, the name it wrote, the name the package exports it as).
 RENAMED_BY_THE_INDEX = (
     ("assessment/api.ts", "listJudgements", "listAssessmentJudgements"),
     ("boards/boardsApi.ts", "Answer", "BoardAnswer"),
 )
+
+#: The stray file, written in two pieces: this file is read by the old-path walks of the earlier moves, which look for
+#: the export client's name.
+STRAY = WORKSPACE_SRC + "export/api" + ".ts.bak"
 
 #: The places that may name an old path because they are a record of the past: the decision log, and the build record
 #: under `process/`. They are not rewritten.
@@ -161,17 +158,17 @@ _NAME_FORMS = (
     r"strength/api",
     r"watches/api",
 )
-#: Not a route (`/v1/map/providers` is the Conduit's address, not a file; a Playwright spec intercepts it by URL), and not
-#: `api.test.ts` or the like (the tests stayed in the workspace, beside where the file was).
+#: Not a route (`/v1/map/providers` is the Conduit's address, not a file), and not `connectionsApi.test.ts` or the like (the
+#: tests stayed in the workspace, beside where the file was).
 _TEXT_FORM = re.compile(
-    rf"(?<!glass-shared/src/)(?<!v1/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.(?:css|test\.|spec\.|py|bak|ts\.bak))"
+    rf"(?<!glass-shared/src/)(?<!v1/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.(?:css|test\.|spec\.|py|bak))"
 )
-#: A bare file name with its extension, as a guide writes it: `boardsApi.ts`. Not `api.ts` or `providers.ts`: other folders
-#: have files of those names that stay.
+#: A bare file name with its extension, as a guide writes it: `exploreApi.ts`. Not `api.ts` or `providers.ts`: other
+#: folders have files of those names.
 _FILE_FORM = re.compile(
     r"(?<![\w/.-])(?:boardsApi|connectionsApi|exploreApi|addFromListApi|bilinear)\.ts\b"
 )
-#: The segments of one written apart: `join(HERE, "..", "src", "strength", "api")`, Python's `/ "site" / "bilinear.ts"`.
+#: The segments of one written apart: `join(HERE, "..", "src", "site", "bilinear")`, Python's `/ "site" / "api.ts"`.
 _SEGMENT_FORM = re.compile(
     r"""["'](?:assessment["']\s*[,/]\s*["']api|boards["']\s*[,/]\s*["']boardsApi"""
     r"""|connections["']\s*[,/]\s*["']connectionsApi|explore["']\s*[,/]\s*["']exploreApi"""
@@ -195,7 +192,7 @@ def old_path_mentions(root: Path, rels: Iterable[str]) -> list[tuple[str, int, s
         for form in (_TEXT_FORM, _FILE_FORM, _SEGMENT_FORM):
             for hit in form.finditer(text):
                 if form is _SEGMENT_FORM and _PACKAGE_SEGMENTS.search(text[: hit.start()]):
-                    continue  # `"glass-shared", "src", "strength", "api"` is the new place written apart
+                    continue  # `"glass-shared", "src", "site", "api"` is the new place written apart
                 line = text.count("\n", 0, hit.start()) + 1
                 found.append((rel, line, text.splitlines()[line - 1].strip()))
     return sorted(set(found))
@@ -209,30 +206,13 @@ def _kept_out(rel: str) -> bool:
 
 # ----------------------------------------------------------------------------------------------------- the imports
 
-_DECLARED = re.compile(
-    r"^export\s+(?:async\s+)?(?:function|const|let|class|type|interface|enum)\s+(\w+)", re.M
-)
-_LISTED = re.compile(r"^export\s+(?:type\s+)?\{([^}]*)\}", re.M)
-_PACKAGE_IMPORT = re.compile(rf"""["']{re.escape(PACKAGE_NAME)}(/[^"']*)?["']""")
-
-
-def _exported_names(text: str) -> set[str]:
-    """Every name a file exports, by a declaration or in a list (`export type { A, B };`, `export { A as B } from`)."""
-    names = set(_DECLARED.findall(text))
-    for listed in _LISTED.findall(text):
-        for item in listed.split(","):
-            item = re.sub(r"^\s*type\s+", "", item.strip())
-            if item:
-                names.add(item.split(" as ")[-1].strip())
-    return names
-
 
 def _client_names(root: Path) -> set[str]:
     """Every name the twelve clients export, read from the package's copies (the old ones are gone)."""
     names: set[str] = set()
     for rel in WHOLE:
         try:
-            names |= _exported_names((root / (SHARED + rel)).read_text(encoding="utf-8"))
+            names |= link._exported_names((root / (SHARED + rel)).read_text(encoding="utf-8"))
         except OSError:
             continue
     return names
@@ -254,7 +234,7 @@ def imports_not_reaching(root: Path, rels: Iterable[str]) -> tuple[list[str], in
             text = (root / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):
             continue
-        for hit in _PACKAGE_IMPORT.finditer(text):
+        for hit in link._PACKAGE_IMPORT.finditer(text):
             if hit.group(1):
                 bad.append(
                     f"{rel}: {PACKAGE_NAME}{hit.group(1)} (the package is imported by its name)"
@@ -292,9 +272,6 @@ def package_copy(tmp_path: Path) -> Path:
 
 # ----------------------------------------------------------------------------------------------- the real tree: cases
 
-_STAR = re.compile(r"""^export\s+\*\s+from\s+["']([^"']+)["'];""", re.M)
-_BRACED = re.compile(r"""^export\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']([^"']+)["'];""", re.M)
-
 
 def index_problems(
     index: str, sources: dict[str, str], required: Iterable[str] | None = None
@@ -306,9 +283,9 @@ def index_problems(
     `required` the files that must be exported (by default all of them)."""
     problems = []
     required = list(sources) if required is None else list(required)
-    stars = {module.removeprefix("./") + ".ts" for module in _STAR.findall(index)}
+    stars = {module.removeprefix("./") + ".ts" for module in link._STAR.findall(index)}
     braced: dict[str, set[str]] = {}
-    for listed, module in _BRACED.findall(index):
+    for listed, module in link._BRACED.findall(index):
         given = braced.setdefault(module.removeprefix("./") + ".ts", set())
         for item in listed.split(","):
             item = re.sub(r"^\s*type\s+", "", item.strip())
@@ -317,7 +294,7 @@ def index_problems(
     gives: dict[str, list[str]] = {}
     for rel, text in sources.items():
         if rel in stars:
-            for name in _exported_names(text):
+            for name in link._exported_names(text):
                 gives.setdefault(name, []).append(rel)
         for name in braced.get(rel, ()):
             gives.setdefault(name, []).append(rel)
@@ -326,7 +303,7 @@ def index_problems(
         if rel not in stars and rel not in braced:
             problems.append(f"{rel} is not exported from the index")
             continue
-        for name in sorted(_exported_names(text)):
+        for name in sorted(link._exported_names(text)):
             if name in gives:
                 continue
             if rel in braced and name in {old for f, old, _ in RENAMED_BY_THE_INDEX if f == rel}:
@@ -369,32 +346,10 @@ def test_the_twelve_clients_are_in_the_package_and_not_in_the_workspace() -> Non
         ), f"packages/glass-shared/src/index.ts does not export {stem}"
 
 
-def stray_backups(root: Path, tracked: Iterable[str]) -> list[str]:
-    """The stray backup, if it is in the tree: tracked by git, or on disc (an untracked copy is as stray)."""
-    return [BACKUP] if BACKUP in set(tracked) or (root / BACKUP).exists() else []
-
-
-def test_the_stray_backup_is_gone() -> None:
-    """`export/api.ts.bak` (a copy of the export client from before it moved) is neither tracked nor on disc."""
-    assert stray_backups(ROOT, earlier.tracked()) == [], f"{BACKUP} is still in the tree"
-
-
-def test_a_backup_put_back_is_found(tmp_path: Path) -> None:
-    """Red for the check above (rule 15): the file on disc and not tracked, the file tracked (a listing that names it), and
-    neither. Any other `.bak` beside it is not this check's."""
-    assert stray_backups(tmp_path, ["OspreyFlow_Core/apps/workspace/src/export/api.ts"]) == []
-    (tmp_path / BACKUP).parent.mkdir(parents=True)
-    (tmp_path / BACKUP).write_text("// the old export client\n", encoding="utf-8")
-    assert stray_backups(tmp_path, []) == [BACKUP]
-    (tmp_path / BACKUP).unlink()
-    assert stray_backups(tmp_path, [BACKUP]) == [BACKUP]
-    assert stray_backups(tmp_path, [WORKSPACE_SRC + "export/other.ts.bak"]) == []
-
-
 def _modules_of(index: str, root: Path = SHARED_SRC) -> dict[str, str]:
     """Every module the index names (the twelve and the earlier slices'), keyed by its place under `src`."""
-    named = {f"{m.removeprefix('./')}.ts" for m in _STAR.findall(index)}
-    named |= {f"{m.removeprefix('./')}.ts" for _, m in _BRACED.findall(index)}
+    named = {f"{m.removeprefix('./')}.ts" for m in link._STAR.findall(index)}
+    named |= {f"{m.removeprefix('./')}.ts" for _, m in link._BRACED.findall(index)}
     named |= set(WHOLE)
     return {rel: (root / rel).read_text(encoding="utf-8") for rel in sorted(named)}
 
@@ -411,15 +366,15 @@ def test_an_index_that_drops_or_doubles_a_name_is_found() -> None:
     """Red for the check above (rule 15), on the shapes the move could leave: the index as the real one is, clean; a braced
     export that leaves a name out; a second module giving a name already given; a file left out; the rename lost."""
     sources = {
-        "reports/packsApi.ts": "export async function listJudgements(): Promise<void> {}\nexport const pack = 1;\n",
-        "assessment/api.ts": "export async function listJudgements(): Promise<void> {}\nexport const saveJudgement = 1;\n",
-        "boards/promotionsApi.ts": "export type Answer<T> = { ok: true; value: T };\nexport const promote = 1;\n",
+        "other/packs.ts": "export async function listJudgements(): Promise<void> {}\n",
+        "assessment/api.ts": "export async function listJudgements(): Promise<void> {}\nexport const getYardstick = 1;\n",
+        "other/promotions.ts": "export type Answer<T> = { ok: true; value: T };\nexport const promote = 1;\n",
         "boards/boardsApi.ts": "export type Answer<T> = { ok: true; value: T };\nexport const listBoards = 1;\n",
     }
     index = (
-        'export * from "./reports/packsApi";\n'
-        'export { listJudgements as listAssessmentJudgements, saveJudgement } from "./assessment/api";\n'
-        'export { type Answer, promote } from "./boards/promotionsApi";\n'
+        'export * from "./other/packs";\n'
+        'export { getYardstick, listJudgements as listAssessmentJudgements } from "./assessment/api";\n'
+        'export { type Answer, promote } from "./other/promotions";\n'
         'export { type Answer as BoardAnswer, listBoards } from "./boards/boardsApi";\n'
     )
 
@@ -427,18 +382,24 @@ def test_an_index_that_drops_or_doubles_a_name_is_found() -> None:
         return index_problems(text, files)
 
     assert found(index) == []
-    assert any("saveJudgement" in p for p in found(index.replace(", saveJudgement", "")))
+    assert any("getYardstick" in p for p in found(index.replace("getYardstick, ", "")))
     assert any(
         "two modules, one name" in p
-        for p in found(index.replace("listJudgements as listAssessmentJudgements", "listJudgements"))
+        for p in found(
+            index.replace("listJudgements as listAssessmentJudgements", "listJudgements")
+        )
     )
-    assert any("two modules, one name" in p for p in found(index.replace("Answer as BoardAnswer", "Answer")))
     assert any(
-        "not exported" in p for p in found(index.replace('export * from "./reports/packsApi";\n', ""))
+        "two modules, one name" in p
+        for p in found(index.replace("type Answer as BoardAnswer", "type Answer"))
     )
+    assert any(
+        "not exported" in p for p in found(index.replace('export * from "./other/packs";\n', ""))
+    )
+    assert any("BoardAnswer" in p for p in found(index.replace("type Answer as BoardAnswer, ", "")))
     assert any(
         "listAssessmentJudgements" in p
-        for p in found(index.replace("listJudgements as listAssessmentJudgements, ", ""))
+        for p in found(index.replace("listJudgements as listAssessmentJudgements", "getYardstick"))
     )
 
 
@@ -476,33 +437,27 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(package_copy: Pa
         target.write_text(real, encoding="utf-8")
 
 
-def self_imports(root: Path, rel: str) -> list[str]:
-    """The lines of one package file that import the package by its own name: a cycle through the index."""
-    text = (root / rel).read_text(encoding="utf-8")
-    return [f"{rel}: {hit.group(0)}" for hit in _PACKAGE_IMPORT.finditer(text)]
-
-
 def test_no_moved_client_imports_the_package_by_its_name() -> None:
-    """The workspace wrote `from "@ospreyflow/glass-shared"` for the working-set types and the canvas outcome; inside the
-    package they are the sibling modules, imported by their paths."""
-    found = [line for rel in WHOLE for line in self_imports(ROOT, SHARED + rel)]
+    """The workspace wrote `from "@ospreyflow/glass-shared"` for the working-set types, the expansion's outcome and the
+    canvas outcome; inside the package they are the sibling modules, imported by their paths."""
+    found = [line for rel in WHOLE for line in link.self_imports(ROOT, SHARED + rel)]
     assert found == [], f"{len(found)} moved client(s) import the package by its name: {found}"
 
 
 def test_a_self_import_in_a_moved_client_is_found(package_copy: Path) -> None:
-    """Red for the check above, at the shape the workspace wrote: a type from the working set, and a value from the working
-    set's models, each by the package's name. Clean first."""
+    """Red for the check above, at the shapes the workspace wrote: a type from the working set, and a value from the
+    expansion's outcome, each by the package's name. Clean first."""
     for rel in WHOLE:
         target = package_copy / (SHARED + rel)
         real = target.read_text(encoding="utf-8")
-        assert self_imports(package_copy, SHARED + rel) == []
+        assert link.self_imports(package_copy, SHARED + rel) == []
         for line in (
             'import type { WorkingSetDelta } from "@ospreyflow/glass-shared";\n',
             'import { outcomeDeltas, type ExpansionOutcome } from "@ospreyflow/glass-shared";\n',
             'import type { CanvasOutcome } from "@ospreyflow/glass-shared";\n',
         ):
             target.write_text(line + real, encoding="utf-8")
-            assert self_imports(package_copy, SHARED + rel), f"{line!r} is not found in {rel}"
+            assert link.self_imports(package_copy, SHARED + rel), f"{line!r} is not found in {rel}"
         target.write_text(real, encoding="utf-8")
 
 
@@ -540,21 +495,6 @@ def test_no_tracked_file_names_an_old_path() -> None:
     )
 
 
-def test_a_route_is_not_an_old_path(tmp_path: Path) -> None:
-    """The Conduit's addresses end as some of the old paths do (`/v1/map/providers`, which a Playwright spec intercepts by
-    URL): they are routes, not files, and are not found; the same words as a path are."""
-    rel = APPS + "workspace/keyboard/route.spec.ts"
-    (tmp_path / rel).parent.mkdir(parents=True)
-    (tmp_path / rel).write_text(
-        'await page.route("**/v1/map/providers", (route) => route.fulfill({ json: {} }));\n'
-        'await fetch(`${base}/v1/investigations/${id}/ownership/${node}/canvas`);\n',
-        encoding="utf-8",
-    )
-    assert old_path_mentions(tmp_path, [rel]) == []
-    (tmp_path / rel).write_text('import { fetchMapConfig } from "../src/map/providers";\n', encoding="utf-8")
-    assert [line for _, line, _ in old_path_mentions(tmp_path, [rel])] == [1]
-
-
 def test_every_named_exception_still_has_its_reason() -> None:
     """An exception outlives its reason when the file it excuses no longer names an old path: left in `NAMED` it keeps that
     file outside the walk, and an old path could be written back into it unseen (rule 12)."""
@@ -566,7 +506,7 @@ def test_every_named_exception_still_has_its_reason() -> None:
 
 def test_every_import_of_a_moved_client_reaches_the_package() -> None:
     bad, importers = imports_not_reaching(ROOT, earlier.tracked())
-    assert importers >= 25, (
+    assert importers >= 35, (
         f"only {importers} file(s) under OspreyFlow_Core import a client's name from {PACKAGE_NAME}: the walk found too few imports, or the importers were not repointed"
     )
     assert bad == [], f"{len(bad)} import(s) do not reach the package by its name: {bad[:10]}"
@@ -574,65 +514,55 @@ def test_every_import_of_a_moved_client_reaches_the_package() -> None:
 
 _PLANTED_IMPORTS = {
     # (path of the file that held the line, the line as the tree wrote it, the line it has now)
-    "the judgements' calls, from the app": (
+    "the assessment's judgements, from the app (a name the index gives apart)": (
         WORKSPACE_SRC + "App.tsx",
         'import { listJudgements } from "./assessment/api";',
         f'import {{ listAssessmentJudgements as listJudgements }} from "{PACKAGE_NAME}";',
     ),
-    "the judgements' calls, from the brief": (
-        WORKSPACE_SRC + "investigation/briefApi.ts",
-        'import { listJudgements } from "../assessment/api";',
-        f'import {{ listAssessmentJudgements as listJudgements }} from "{PACKAGE_NAME}";',
-    ),
-    "the seeding call, from the app": (
+    "the connections' seeding, from the app": (
         WORKSPACE_SRC + "App.tsx",
         'import { seedElements } from "./connections/connectionsApi";',
         f'import {{ seedElements }} from "{PACKAGE_NAME}";',
     ),
-    "the map's registry, from the app": (
+    "the strength call, from the app": (
+        WORKSPACE_SRC + "App.tsx",
+        'import { fetchCaseInfluencers } from "./strength/api";',
+        f'import {{ fetchCaseInfluencers }} from "{PACKAGE_NAME}";',
+    ),
+    "the map's provider list, from the app": (
         WORKSPACE_SRC + "App.tsx",
         'import { defaultProvider, fetchMapConfig, switchableProviders } from "./map/providers";',
         f'import {{ defaultProvider, fetchMapConfig, switchableProviders }} from "{PACKAGE_NAME}";',
     ),
-    "the explore types, from the app": (
+    "the explore panel's types, from the app": (
         WORKSPACE_SRC + "App.tsx",
         'import type { BusyDay, RankedLink } from "./explore/exploreApi";',
         f'import type {{ BusyDay, RankedLink }} from "{PACKAGE_NAME}";',
     ),
-    "a double of the registry, as a vi.mock": (
+    "a double of the map's provider list, as a vi.mock": (
         WORKSPACE_SRC + "App.test.tsx",
         'vi.mock("./map/providers", async () => {',
         f'vi.mock("{PACKAGE_NAME}", async () => {{',
     ),
-    "the actual registry the double spreads, as an importActual": (
+    "the real provider list under that double": (
         WORKSPACE_SRC + "App.test.tsx",
-        '  const actual = await vi.importActual<typeof import("./map/providers")>("./map/providers");',
-        f'  const actual = await vi.importActual<typeof import("{PACKAGE_NAME}")>("{PACKAGE_NAME}");',
+        'const actual = await vi.importActual<typeof import("./map/providers")>("./map/providers");',
+        f'const actual = await vi.importActual<typeof import("{PACKAGE_NAME}")>("{PACKAGE_NAME}");',
     ),
-    "the compute call, beside it": (
-        WORKSPACE_SRC + "metrics/MetricsPanel.tsx",
-        'import { fetchComputeMetric } from "./api";',
-        f'import {{ fetchComputeMetric }} from "{PACKAGE_NAME}";',
-    ),
-    "the strength calls, from a sibling folder": (
+    "the strength calls, from the metrics panel (a parent folder)": (
         WORKSPACE_SRC + "metrics/MetricsPanel.tsx",
         'import { fetchConnectionStrengths, fetchRarity, type RarityScope } from "../strength/api";',
         f'import {{ fetchConnectionStrengths, fetchRarity, type RarityScope }} from "{PACKAGE_NAME}";',
     ),
-    "the watches' calls, beside them": (
-        WORKSPACE_SRC + "watches/GlassWatchActions.tsx",
-        'import { createHotlist, createMonitor } from "./api";',
-        f'import {{ createHotlist, createMonitor }} from "{PACKAGE_NAME}";',
+    "the metrics call, beside it (a sibling named api)": (
+        WORKSPACE_SRC + "metrics/filters.ts",
+        'import type { ComputeMetricName } from "./api";',
+        f'import type {{ ComputeMetricName }} from "{PACKAGE_NAME}";',
     ),
-    "the control point's type, beside it": (
-        WORKSPACE_SRC + "site/SiteCalibrationWizard.tsx",
-        'import type { ControlPoint } from "./bilinear";',
-        f'import type {{ ControlPoint }} from "{PACKAGE_NAME}";',
-    ),
-    "the ownership calls, beside them": (
-        WORKSPACE_SRC + "ownership/OwnershipPlace.tsx",
-        'import { findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi } from "./api";',
-        f'import {{ findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi }} from "{PACKAGE_NAME}";',
+    "the watches' calls, beside them (a sibling named api)": (
+        WORKSPACE_SRC + "watches/MonitorPanel.tsx",
+        'import { createMonitor, listMonitors, setMonitorSchedule } from "./api";',
+        f'import {{ createMonitor, listMonitors, setMonitorSchedule }} from "{PACKAGE_NAME}";',
     ),
     "the boards' calls, beside them": (
         WORKSPACE_SRC + "boards/BoardsPlace.tsx",
@@ -644,35 +574,45 @@ _PLANTED_IMPORTS = {
         '} from "./boardsApi";',
         f'}} from "{PACKAGE_NAME}";',
     ),
-    "the last line of a many-line import of the add-from-list calls": (
+    "the list-adding call, beside it (the last line of a many-line import)": (
         WORKSPACE_SRC + "search/AddFromList.tsx",
         '} from "./addFromListApi";',
         f'}} from "{PACKAGE_NAME}";',
     ),
-    "the connections' context, from a sibling folder": (
-        WORKSPACE_SRC + "questions/showAnswer.ts",
-        'import { addByIds, type ConnectionsContext } from "../connections/connectionsApi";',
-        f'import {{ addByIds, type ConnectionsContext }} from "{PACKAGE_NAME}";',
+    "the site arithmetic, beside it": (
+        WORKSPACE_SRC + "site/siteLayer.ts",
+        'import type { ControlPoint } from "./bilinear";',
+        f'import type {{ ControlPoint }} from "{PACKAGE_NAME}";',
+    ),
+    "the ownership calls, beside them": (
+        WORKSPACE_SRC + "ownership/OwnershipPlace.tsx",
+        'import { findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi } from "./api";',
+        f'import {{ findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi }} from "{PACKAGE_NAME}";',
+    ),
+    "the assessment's type, from the report export (a parent folder)": (
+        WORKSPACE_SRC + "export/reportExport.ts",
+        'import type { Yardstick } from "../assessment/api";',
+        f'import type {{ Yardstick }} from "{PACKAGE_NAME}";',
     ),
     "a deep import into the package": (
-        WORKSPACE_SRC + "strength/StrengthPanel.tsx",
-        'import { fetchRarity } from "../../../../packages/glass-shared/src/strength/api";',
-        f'import {{ fetchRarity }} from "{PACKAGE_NAME}";',
+        WORKSPACE_SRC + "watches/HotlistPanel.tsx",
+        'import { listHotlists } from "../../../../packages/glass-shared/src/watches/api";',
+        f'import {{ listHotlists }} from "{PACKAGE_NAME}";',
     ),
     "a bare file name in a guide": (
         "OspreyFlow_Core/docs/administration-guide.md",
         "The boards' calls are in `boardsApi.ts` and nowhere else.",
         "The boards' calls are in the boards module and nowhere else.",
     ),
-    "an old path in the function record": (
-        "OspreyFlow_Core/apps/pages/FUNCTIONS.yaml",
-        '    where: "apps/workspace/src/watches/HotlistPanel.tsx, watches/api.ts"',
-        '    where: "apps/workspace/src/watches/HotlistPanel.tsx, packages/glass-shared/src/watches/api.ts"',
+    "an old path in a comment of the workspace": (
+        WORKSPACE_SRC + "map/MapView.tsx",
+        "   * only the site-image proxy route (`site/api.ts`'s `siteImageUrl`)",
+        "   * only the site-image proxy route (`packages/glass-shared/src/site/api.ts`'s `siteImageUrl`)",
     ),
-    "the strength calls, written in segments": (
+    "the site arithmetic, written in segments": (
         APPS + "workspace/a11y/plants/run.mjs",
-        'const strength = join(HERE, "..", "..", "src", "strength", "api");',
-        'const strength = join(HERE, "..", "..", "..", "..", "packages", "glass-shared", "src", "strength", "api");',
+        'const bilinear = join(HERE, "..", "..", "src", "site", "bilinear");',
+        'const bilinear = join(HERE, "..", "..", "..", "..", "packages", "glass-shared", "src", "site", "bilinear");',
     ),
 }
 
@@ -704,12 +644,11 @@ def test_a_file_that_names_no_client_is_not_counted_as_an_importer(package_copy:
         f'import {{ applyTheme }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
     )
     assert imports_not_reaching(package_copy, [rel]) == ([], 0)
-    for name in ("listWatches", "listAssessmentJudgements", "BoardAnswer", "fetchMapConfig"):
+    for name in ("listBoards", "listAssessmentJudgements", "BoardAnswer", "fetchMapConfig"):
         (package_copy / rel).write_text(
             f'import {{ {name} }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
         )
-        expected = 0 if name == "listWatches" else 1
-        assert imports_not_reaching(package_copy, [rel]) == ([], expected), name
+        assert imports_not_reaching(package_copy, [rel]) == ([], 1), name
 
 
 def test_every_import_reached_from_a_spec_resolves() -> None:
@@ -727,30 +666,30 @@ def test_every_import_reached_from_a_spec_resolves() -> None:
 def test_a_spec_that_imports_a_path_that_no_longer_exists_is_found(tmp_path: Path) -> None:
     """Red for the walk above, at the shapes the move could leave: a spec's harness still importing a client by the old path,
     and the index exporting a file that is not there."""
-    spec = APPS + "workspace/keyboard/map-basemap.spec.ts"
-    harness = APPS + "workspace/keyboard/map-basemap-harness.tsx"
+    spec = APPS + "workspace/keyboard/boards.spec.ts"
+    harness = APPS + "workspace/keyboard/boards-harness.tsx"
     files = {
-        spec: 'import { mount } from "./map-basemap-harness";\n',
-        harness: f'import {{ defaultProvider }} from "{PACKAGE_NAME}";\n',
-        SHARED + "index.ts": 'export * from "./map/providers";\n',
-        SHARED + "map/providers.ts": "export const defaultProvider = 1;\n",
+        spec: 'import { mount } from "./boards-harness";\n',
+        harness: f'import {{ listBoards }} from "{PACKAGE_NAME}";\n',
+        SHARED + "index.ts": 'export * from "./boards/boardsApi";\n',
+        SHARED + "boards/boardsApi.ts": "export const listBoards = 1;\n",
     }
     for rel, text in files.items():
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text, encoding="utf-8")
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == []
     (tmp_path / harness).write_text(
-        'import { defaultProvider } from "../src/map/providers";\n', encoding="utf-8"
+        'import { listBoards } from "../src/boards/boardsApi";\n', encoding="utf-8"
     )
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
-        f"{harness}: ../src/map/providers"
+        f"{harness}: ../src/boards/boardsApi"
     ]
     (tmp_path / harness).write_text(
-        f'import {{ defaultProvider }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+        f'import {{ listBoards }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
     )
-    (tmp_path / SHARED / "map" / "providers.ts").unlink()
+    (tmp_path / SHARED / "boards" / "boardsApi.ts").unlink()
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
-        f"{SHARED}index.ts: ./map/providers"
+        f"{SHARED}index.ts: ./boards/boardsApi"
     ]
 
 
@@ -808,7 +747,7 @@ def test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found() -> None:
     for rel in WHOLE:
         assert f"packages/glass-shared/src/{rel}" in missing, f"{rel} is not found missing"
 
-    for rel in ("assessment/api.ts", "strength/api.ts", "site/bilinear.ts"):
+    for rel in ("watches/api.ts", "strength/api.ts", "site/bilinear.ts"):
         line = f"COPY apps/workspace/src/{rel} ./apps/workspace/src/{rel}\n"
         stale = real.replace(shared, shared + line, 1)
         assert stale_copies(stale) == [f"apps/workspace/src/{rel}"]
@@ -823,16 +762,16 @@ def test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found() -> None:
     assert "packages/glass-shared/src" not in clients.copy_sources(
         workspace.replace(package_line, "", 1)
     )
-    assert stale_copies(workspace + "COPY apps/workspace/src/search/addFromListApi.ts ./x\n") == [
-        "apps/workspace/src/search/addFromListApi.ts"
+    assert stale_copies(workspace + "COPY apps/workspace/src/map/providers.ts ./x\n") == [
+        "apps/workspace/src/map/providers.ts"
     ]
 
 
 # --------------------------------------------------------------------------------------------------- the four gates
 
 #: The files each gate read on main before this move: the number each reported or, where it reports none, the files its own
-#: rules select (measured on 21 November 2026, on the tip PL4d3c started from, after PL4d3b). The twelve clients moved from a
-#: folder each gate reads to another it reads, so the numbers do not fall: none may.
+#: rules select (measured on 21 November 2026, on the tip PL4d3c started from, after PL4d3b). The twelve clients moved from
+#: a folder each gate reads to another it reads, so the numbers do not fall: none may.
 FILES_BEFORE = {"colour-drift": 489, "design-check": 898, "ui-words": 496, "no-branches": 1743}
 
 
@@ -883,16 +822,15 @@ def test_the_design_detector_reports_a_plant_in_a_moved_client(
     )
     earlier._append(
         shared_copy,
-        "boards/boardsApi.ts",
+        "strength/api.ts",
         "\nexport const TOAST_STYLE = {\n"
         '  background: "var(--surface-raised)", borderLeft: "3px solid var(--error)", borderRadius: "8px",\n'
         '  padding: "12px 16px", boxShadow: "var(--overlay-shadow)",\n'
         "};\n",
     )
     found = design_check.unexcused(design_check.detect(design_check.SCANNED))
-    assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [
-        ("boardsApi.ts", "side-tab")
-    ]
+    assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [("api.ts", "side-tab")]
+    assert "strength" in found[0]["file"]
 
 
 def test_the_ui_words_check_reports_a_plant_in_a_moved_client(
@@ -905,9 +843,9 @@ def test_the_ui_words_check_reports_a_plant_in_a_moved_client(
     monkeypatch.setattr(ui_words_check, "DESIGN_PACKAGE", empty)
     assert ui_words_check.main() == 0, "the clean copy of the package is already reported"
     capsys.readouterr()
-    earlier._append(shared_copy, "strength/api.ts", '\nexport const LABEL = "Target model";\n')
+    earlier._append(shared_copy, "ownership/api.ts", '\nexport const LABEL = "Target model";\n')
     assert ui_words_check.main() == 1
-    assert "packages/glass-shared/src/strength/api.ts:" in capsys.readouterr().out
+    assert "packages/glass-shared/src/ownership/api.ts:" in capsys.readouterr().out
 
 
 def test_the_no_branches_check_reports_a_plant_in_a_moved_client(
@@ -921,10 +859,10 @@ def test_the_no_branches_check_reports_a_plant_in_a_moved_client(
     assert no_branches_check.main() == 0, "the clean copy of the package is already reported"
     capsys.readouterr()
     earlier._append(
-        shared_copy, "explore/exploreApi.ts", '\nexport const BRANCH_CASE = "branch-by-filter";\n'
+        shared_copy, "metrics/api.ts", '\nexport const BRANCH_CASE = "branch-by-filter";\n'
     )
     assert no_branches_check.main() == 1
-    assert f"{top}/explore/exploreApi.ts:" in capsys.readouterr().out
+    assert f"{top}/metrics/api.ts:" in capsys.readouterr().out
 
 
 # -------------------------------------------------------------------------------------------------- the word-walkers
@@ -996,14 +934,14 @@ def test_a_moved_clients_place_held_by_both_roots_is_read_from_both(
     workspace and by the package at once: an old word in either is found, the second root's under `shared:`."""
     roots = (tmp_path / f"a{planted_in}", tmp_path / f"b{planted_in}")
     for n, root in enumerate(roots):
-        (root / "strength").mkdir(parents=True)
-        (root / "strength" / "api.ts").write_text(
+        (root / "site").mkdir(parents=True)
+        (root / "site" / "api.ts").write_text(
             'export const word = "Clear view";\n'
             if n == planted_in
             else "export const word = 1;\n",
             encoding="utf-8",
         )
-    expected = "strength/api.ts" if planted_in == 0 else "shared:strength/api.ts"
+    expected = "site/api.ts" if planted_in == 0 else "shared:site/api.ts"
     assert navigation.old_view_words_on_screen(navigation.glass_sources(roots)) == [
         f"{expected}: 'Clear view'"
     ]
@@ -1041,3 +979,34 @@ def test_the_vitest_walkers_name_the_new_folders() -> None:
         )
     # The selector is a real filter: a folder the clients are not in is not selected.
     assert not folders.search("/glass-shared/src/keyboard/actionRegistry.ts")
+
+
+# ------------------------------------------------------------------------------------------------- the stray backup
+
+
+def stray_backups(rels: Iterable[str]) -> list[str]:
+    """The files among `rels` (repository-relative, as `git ls-files` gives them) that are a backup copy of a source file
+    under the product's code: a `.bak` under `OspreyFlow_Core/apps/` or `OspreyFlow_Core/packages/`."""
+    return sorted(
+        rel
+        for rel in rels
+        if rel.endswith(".bak") and rel.startswith((APPS, "OspreyFlow_Core/packages/"))
+    )
+
+
+def test_the_stray_backup_is_gone() -> None:
+    """Red on a tree that still has the copy of the export client from before D3a moved the live one."""
+    names = earlier.tracked()
+    assert STRAY not in names, f"{STRAY} is still tracked"
+    assert not (ROOT / STRAY).exists(), f"{STRAY} is still in the tree"
+    assert stray_backups(names) == []
+
+
+def test_a_backup_left_in_the_tree_is_found() -> None:
+    """Red for the check above (rule 15), on the shape `git ls-files` gives: the stray file itself, another backup beside a
+    source file of the package, and a backup of a file that is not part of the product's code (not this check's business)."""
+    clean = [WORKSPACE_SRC + "export/ExportPanel.tsx", SHARED + "theme/theme.ts"]
+    assert stray_backups(clean) == []
+    assert stray_backups([*clean, STRAY]) == [STRAY]
+    assert stray_backups([*clean, SHARED + "theme/theme.ts.bak"]) == [SHARED + "theme/theme.ts.bak"]
+    assert stray_backups([*clean, "OspreyFlow_Build/tests/fixtures/old.csv.bak"]) == []
