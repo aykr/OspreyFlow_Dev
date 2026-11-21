@@ -13,6 +13,8 @@ DC1a's table in `process/lanes/v062/slices/DOC1A_REPORT.md`):
 - outside the paragraph neither site says "guarantee";
 - a hosted engine is described as an opt-in; the licence statement says what it covers and what is outside it; the
   attribution of model calls and sign-in events, and the fix for Superset's usage image, are said as coming, the fix as in the next release (the pages name no version but the latest);
+- wherever an export is tied to the export ledger or the audit (and wherever the ledger is named), the kinds are named: report,
+  assessment and pack exports (round 6); the audit scene's sub line is read from both Homes;
 - the older six-page site (`marketing_site/deploy`) does not carry the paragraph.
 
 Every check is a function of one folder, run on the committed pages and then on a copy with one violation planted in the
@@ -328,7 +330,10 @@ def export_scope_violations(root: Path) -> list[str]:
 def export_scope_violations_in_sources(folder: Path = SITES) -> list[str]:
     found = []
     for name in SOURCES:
-        found += export_scope_violations_in(_source_text(folder / name), name)
+        # Adjacent literals joined, then line by line, so a planted line cannot borrow the scope of a neighbour's sentence.
+        joined = re.sub(r"""(['"])\s*\n\s*\1""", "", (folder / name).read_text(encoding="utf-8"))
+        for line in joined.splitlines():
+            found += export_scope_violations_in(_flat(line), name)
     return found
 
 

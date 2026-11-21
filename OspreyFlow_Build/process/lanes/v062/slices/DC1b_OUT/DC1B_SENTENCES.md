@@ -1,4 +1,4 @@
-# DC1b: every sentence replaced on ospreyflow.org and ospreyflow.net (rounds 1 to 5)
+# DC1b: every sentence replaced on ospreyflow.org and ospreyflow.net (rounds 1 to 6)
 
 Source of the findings: `process/lanes/v062/slices/DOC1A_REPORT.md` (the table "Where introductory and positioning text is",
 "Constraint 2 in detail", "Constraint 4 in detail", gaps G2 to G6). All replacements are made through
@@ -17,7 +17,7 @@ shapes behind them) to be absent from every built page, from `build.py`, `overvi
 | 7 | Org Public sector, "Can a finding be traced?" | Every export and approval is in the audit. | Same. | Case reads and changes are in the audit, and report, assessment and pack exports are in an export ledger; recording model calls and sign-in events is coming. |
 | 8 | Org Features, models list | Every answer names the engine and model that produced it. | Constraint 4: ask does not record the engine; no per-person, per-case, per-engine record. | An answer shows the engine and model that produced it. Recording the engine against the person and the case in the audit is coming. |
 | 9 | Org Features, "Hosted engines, by permission" | Material leaves only when that [the dataset's egress setting] and its handling code both allow it. | A hosted engine is an opt-in and must be said to be one. | Hosted engines are an opt-in. An administrator enables one, each dataset has an egress setting, and material reaches a hosted engine only when that and its handling code both allow it. |
-| 10 | Overview (both Homes), audit scene sub line | Who did what and when: loads and promotions, people and roles, datasets, and every read that was refused. | Constraint 4: only refusals of case access are audited; "every read that was refused" is "too strong" in the report. | Who did what and when: loads and promotions, people and roles, datasets, and a refused attempt to open a case. Exports are in a ledger of their own, and reference reads are outside the audit. (rounds 1 and 5) |
+| 10 | Overview (both Homes), audit scene sub line | Who did what and when: loads and promotions, people and roles, datasets, and every read that was refused. | Constraint 4: only refusals of case access are audited; "every read that was refused" is "too strong" in the report. | Who did what and when: loads and promotions, people and roles, datasets, and a refused attempt to open a case. Report, assessment and pack exports are in an export ledger, and reference reads are outside the audit. (rounds 1, 5 and 6: round 5's "Exports are in a ledger of their own" was itself unscoped, see row 25) |
 | 11 | Overview (both Homes), audit scene footnote | The log is append-only. | The database does not yet refuse an UPDATE or DELETE from another role; no hash chain. | The database does not yet refuse a change to an entry. |
 | 12 | Overview (both Homes), audit scene heading (round 5) | Everything is on the record | Constraint 4: model calls and sign-in events not attributed; some exports write no ledger row; backup and object transfer write neither; some reads deliberately unaudited. | A record of who changed what |
 | 13 | Overview (both Homes), audit scene, drawn row (round 5) | Refused: a read above their clearance | Constraint 4 in detail: only refusals of case access are audited; records above a person's clearance are filtered in the store, not refused and recorded. | Refused: an attempt to open a case |
@@ -32,6 +32,7 @@ shapes behind them) to be absent from every built page, from `build.py`, `overvi
 | 22 | Org Features, "Search" (round 5, found by re-reading the built text) | ... with your access inside every query. | Constraint 3 and G5: the search index below the application's filter is a known read-side gap, so "inside every query" is stronger than true for search. | ... with your access applied to each query; the search index below the application's filter is one of the known read-side gaps. |
 | 23 | Net Home, "Inside your boundary" (round 5) | The install downloads images and models, and a hosted model engine is an opt-in that an administrator enables for a dataset. | Constraint 2: left out the model pull on every start, the certificate fetch and the v0.6.1 usage image. | See row 1 (the constraint card's sentence, copied in shape). |
 | 24 | Org Governance, "Principles the project holds to", Data sovereignty (round 5) | A deployment on an internal network with only the front proxy published, and a hosted model engine as an opt-in; the install downloads images and models. | Same. | A deployment on an internal network with only the front proxy published, and a hosted model engine as an opt-in. The install downloads images and models, and each start of a deployment fetches the models again; a server on an https address fetches its own certificate; and the dashboards' usage image, which a browser could request from outside, is stopped by a fix coming in the next release. |
+| 25 | Overview (both Homes), audit scene sub line (round 6) | Exports are in a ledger of their own, and reference reads are outside the audit. (written in round 5) | Constraint 4 in detail: only report and assessment exports, pack exports and the report feed write an export ledger row; a dataset release export, a rule file export and a source file read write an audit row only; a platform backup and an object transfer write neither. | Report, assessment and pack exports are in an export ledger, and reference reads are outside the audit. (The shape the Features "Audit" card and the Public sector card "Can a finding be traced?" already use.) |
 
 New text added in this slice (not a replacement): the intent paragraph (byte for byte, one constant `INTENT`) on both Homes; the
 "Why OspreyFlow exists" and "The five constraints" sections on the Org Home; the same paragraph on the Net Home with a link to
@@ -39,3 +40,17 @@ the constraints; the five names under "Principles the project holds to" on the G
 paragraph is the only use of the word on either site.
 
 The older six-page site (`marketing_site/deploy`) is not edited and does not carry the paragraph.
+
+## Round 6: what was read
+
+Both sites were built into a scratch folder and the text of all twelve pages (the animated overviews' drawn text included) was
+read for every sentence mentioning a ledger, an audit, an export, attribution or "on the record". Result: the only unscoped
+export claim was the audit scene's sub line (row 25), drawn on both Homes. Every other sentence that ties an export to the
+ledger or the audit already names "report, assessment and pack exports": Org Home (the audit card), Org Features ("Audit"),
+Org Public sector ("Can a finding be traced?"), Org Governance ("Principles the project holds to"). Sentences that mention an
+export without a record claim ("publishing to viewers and export", "published inside OspreyFlow or exported") state no
+audit or ledger fact. "Operation Ledger" is the demo case's name.
+`test_site_intent.py` now holds the scope in `export_scope_violations` (every sentence tying an export to the ledger or the
+audit, or speaking of the ledger, must name the three kinds; run on the built pages and on `build.py`, `overview.py`,
+`govanim.py` line by line) and `export_required_violations` (four pages carry the scoped ledger sentence, both Homes carry the
+scene's sub line whole, Governance names the kinds), each with ten unscoped forms planted into a page and into a source.
