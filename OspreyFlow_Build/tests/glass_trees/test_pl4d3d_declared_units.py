@@ -68,6 +68,17 @@ knock-on only if one of these holds, and its row says which in the `basis` colum
 Anything else declared as knock-on fails. Planted (red first): a knock-on row for a file whose diff changes a non-import
 line, a `(b)` pair that differs in a string that is not a chunk name, and a knock-on row with neither `(a)` nor `(b)`.
 
+**No two builds share a tree (the merge gate's round 8).** `npm run build --workspace apps/workspace` begins with
+`sync_govuk_assets.mjs`, which removes and refills `apps/workspace/public/assets/govuk`, a folder every build in one tree
+shares: two builds at once (this file's fixture in two xdist workers, or `test_workspace_bundle.py`'s or `test_render.py`'s
+beside it) died with `ENOTEMPTY`. So every build this file makes (`build_to`) is made in **a private copy of the tree**,
+not under a lock: a lock would hold only for the files that took it, and the other two files' builds are not this slice's to
+change; a copy shares nothing with any of them. The copy is the workspace's source (no `node_modules`, `dist` or generated
+`govuk` folder) with `node_modules` and `packages` linked, and builds the same output as the real tree (no differing unit).
+`test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not` plants the race: two builds at once in one copy fail,
+two `build_to`s at once both pass; `test_a_build_runs_in_a_private_copy_of_the_tree_never_in_the_real_one` shows no build
+of this file runs in the real tree.
+
 It builds, so it takes a few seconds beyond `dist_compare`'s own (about ten in all on an idle Mac; each comparison is
 about five). Under load a timeout is the machine's, not the slice's.
 """
@@ -306,10 +317,8 @@ def run_build(app: Path, directory: Path) -> subprocess.CompletedProcess[str]:
 def build_to(directory: Path) -> Path:
     """A fresh build of `apps/workspace` into `directory`: built in a private copy of the tree, never in the real one,
     so no other build in the sweep (this file's, `test_workspace_bundle.py`'s, `test_render.py`'s) can race it."""
-    done = subprocess.run(
-        ["npm", "run", "build", "--workspace", "apps/workspace", "--", "--outDir", str(directory), "--emptyOutDir"],
-        cwd=CORE, capture_output=True, text=True, timeout=TIMEOUT, check=False,
-    )
+    with tempfile.TemporaryDirectory(prefix="pl4d3d-tree-") as scratch:
+        done = run_build(scratch_tree(Path(scratch)), directory)
     assert done.returncode == 0, done.stdout[-2000:] + done.stderr[-2000:]
     return directory
 
@@ -827,8 +836,12 @@ def test_the_rebaseline_step_refuses_a_declared_unit_that_does_not_differ(tmp_pa
     assert folder_hash(old) == before and not out.exists() and [p.name for p in old.parent.iterdir()] == ["dist"]
 
 
-def test_the_rebaseline_step_builds_the_checked_out_tree_and_writes_the_recorded_hash(baseline: Path, tmp_path: Path) -> None:
-    """The real path: no `--dist`, so it builds this tree; on a copy of the baseline, the declaration the slice made."""
+def test_the_rebaseline_step_takes_a_build_of_the_checked_out_tree_and_writes_the_recorded_hash(baseline: Path, tmp_path: Path) -> None:
+    """The real path on a copy of the baseline, with the declaration the slice made, and a build of this tree.
+
+    The build is `build_to`'s (a private copy of the tree, output identical to the real tree's) passed as `--dist`, not the
+    script's own in-tree build: that one writes the real tree's `public/assets/govuk`, which no other build in the sweep may
+    share (the merge gate's round 8). The script's own build is the conductor's at merge, where nothing else runs."""
     import json
 
     copy = tmp_path / "PL4a-baseline" / "dist"
@@ -836,7 +849,8 @@ def test_the_rebaseline_step_builds_the_checked_out_tree_and_writes_the_recorded
     tests = tmp_path / "tests.txt"
     tests.write_text(TESTS_OUTPUT, encoding="utf-8")
     out = tmp_path / "PL4_BASELINE.json"
-    done = run_rebaseline("--baseline", str(copy), "--declared", str(DECLARED), "--tests", str(tests), "--out", str(out))
+    fresh = build_to(tmp_path / "fresh" / "dist")
+    done = run_rebaseline("--baseline", str(copy), "--declared", str(DECLARED), "--dist", str(fresh), "--tests", str(tests), "--out", str(out))
     assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-2000:]
     recorded = json.loads((CORE / "apps" / "workspace" / "PL4_BASELINE.json").read_text(encoding="utf-8"))
     assert json.loads(out.read_text(encoding="utf-8"))["normalised_hash"] == recorded["normalised_hash"]
