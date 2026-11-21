@@ -11,12 +11,13 @@ harness, the scenarios, the conformance suites), parsed with `ast`; nothing else
 does not parse fails the test, so a file is never skipped silently.
 
 **How it tells `StoredCaseView.wire` from another class's `wire`.** By the signature, not the
-name of the variable: `StoredCaseView.wire` takes no positional argument, so a call of an
-attribute named `wire` with positional arguments (`boards.wire(board, principal)`, which is
-`BoardStore.wire`) is another method's and is left alone, and every `.wire(...)` with none must
-carry `chosen=`. The one unbound shape, `StoredCaseView.wire(view, ...)`, has `self` as its
-positional and is held to the same rule. A `**splat` is not accepted as carrying `chosen`: the
-keyword is written out where it can be read.
+name of the variable: `StoredCaseView.wire` takes no positional argument, and the only other
+`wire` in the tests, `BoardStore.wire(board, principal)`, is always called with two. So every
+bound `.wire(...)` with none or one positional argument is the view's and must carry `chosen=`
+(a bare `held.wire(1)` fails the live run with a `TypeError` of its own, so it is reported too);
+a call with two or more positionals is `BoardStore`'s and is left alone. The unbound shape,
+`StoredCaseView.wire(view, ...)`, is always the view's and is held to the same rule. A `**splat`
+is not accepted as carrying `chosen`: the keyword is written out where it can be read.
 
 **Shown red (rule 15).** `test_the_check_fails_with_chosen_removed_from_a_live_call` plants the
 fault in a copy of `test_case_views_store.py` at the shape its real call site has (a `.wire(`
@@ -42,8 +43,11 @@ def _is_stored_view_wire(call: ast.Call) -> bool:
     if not (isinstance(func, ast.Attribute) and func.attr == "wire"):
         return False
     if isinstance(func.value, ast.Name) and func.value.id == "StoredCaseView":
-        return len(call.args) <= 1  # the unbound form: `self` is the one positional
-    return not call.args
+        return True  # the unbound form: `self` is a positional, whatever else follows
+    # `StoredCaseView.wire(self, *, chosen)` takes no positional; the only other `wire` in the
+    # tests, `BoardStore.wire(board, principal)`, always has two. So a bound call with none or one
+    # positional is the view's (and `held.wire(1)` is a fault the live run would raise on too).
+    return len(call.args) <= 1
 
 
 def wire_calls_without_chosen(source: str, name: str) -> list[str]:
@@ -99,6 +103,8 @@ def test_the_check_fails_with_chosen_removed_from_a_live_call() -> None:
         ("StoredCaseView.wire(held)", True),
         ("StoredCaseView.wire(held, chosen=1)", False),
         ("held.wire(**given)", True),
+        ("held.wire(1)", True),
+        ("StoredCaseView.wire(held, 1)", True),
         ("boards.wire(board, principal)", False),
         ("await boards.wire(board, principal)", False),
     ],

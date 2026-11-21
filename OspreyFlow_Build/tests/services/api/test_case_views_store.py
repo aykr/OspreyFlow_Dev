@@ -212,9 +212,11 @@ async def test_postgres_turns_a_drawings_boards_into_views_and_back(
         False, "promotion-1", ["p1", "d1", "d2"], ["d1", "d2"],
     )  # fmt: skip
     assert held.layout == {"d1": NodePosition(x=0.1, y=0.2)}
-    # The merge's load is this assertion's subject; the count is a reader's visible one, here a
-    # reader who may see all three nodes (there is no graph in this test to count them).
-    assert held.wire(chosen=3).merged_load == "promotion-1"
+    # The merge's load is this assertion's subject. The count is a reader's visible one, and a
+    # merged drawing's added nodes (d1, d2) are never counted (L3.9; rule 7: `visible_chosen`
+    # counts `creators_choice()`, which leaves them out), so the most any caller could send here
+    # is the one node its creator chose, p1; not the three stored.
+    assert held.wire(chosen=1).merged_load == "promotion-1"
     assert [v.id for v in await store.visible_in("case-d", "alice")] == [board.id]
     assert await store.boards_in("case-d", "alice") == []
     assert (await store.get("case-x", elsewhere.id, "alice")).drawing
