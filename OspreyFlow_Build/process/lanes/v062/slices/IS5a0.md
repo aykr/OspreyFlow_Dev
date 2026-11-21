@@ -6,6 +6,17 @@
 - **After:** PL3, PL6, PL9a, PL10 (all merged). **It touches nothing under `apps/workspace`** (PL4 is running there and nothing else may touch it); it reads `packages/design` and `packages/glass-shared` and adds to `apps/pages`.
 - **Status of this brief:** written by the conductor on 21 November 2026 from a read-only scout of the tree on main (the scout's file and line references are below; **re-read each one, lines move**).
 
+## Round 5 (the conductor, 21 November 2026): exactly two test gaps, nothing else
+
+The round-4 verifier (tip `66c6651`) left **two gaps in a test and no fault**. The owner accepted them narrower (backlog rows 3 and 4) but the line cannot apply an accept while rounds remain, so this round does them, and **only them**; the verifier checks only these two.
+
+| # | Open case | Where | What closes it |
+|---|---|---|---|
+| 1 | The people-section words test does not read the pages roots (brief item 6 asked it to) | `OspreyFlow_Build/tests/test_people_section_words.py`, `GLASS_ROOTS` about line 95 and `_glass_files` about lines 98 to 100 | Add `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views` to its roots and `.njk` to its suffixes; plant a template saying "Admin › People" without "and roles" (red), then green |
+| 2 | The guide-navigation words test does not read the pages roots | `OspreyFlow_Build/tests/test_guide_navigation_words.py`, `GLASS_ROOTS` about line 125 and `glass_sources` about lines 128 to 138 | The same extension; plant an old view word in a template (red), then green |
+
+Change no other file. Cheap checks first (ruff, the scan-map check; extend an existing scan row if the walked folders change, and say so). `test_pages_foundation.py` lists the walkers the slice extended: add these two there.
+
 ## What exists on main (the scout's findings; re-check)
 
 `OspreyFlow_Core/apps/pages/server/app.ts`: `/healthz` (about line 93), a home page (129), `/session/sign-in` (181), `/session/callback` (217), POST `/session/sign-out` (257), the `extraRoutes` hook (50, 266 to 268), 404 (278), error handler (288), **no static middleware, so no CSS or JS is served**. `server/oidc.ts` (PL9a), `server/forward.ts` and `server/v1.ts` (PL10, the `/v1` forwarder), `server/multipart.ts` (scripts-off uploads). Templates: only `server/views/layout.njk` (a CSRF meta tag and a JSON page-data block, **no stylesheet link, no header, no skip link, no navigation**), `home.njk`, `error.njk`. **Not found:** `modules/`, `tree-default/`, `tree-govuk/`, a route table, any link to `packages/design`, any client bundling (`OspreyFlow_Core/apps/pages/scripts/build.mjs` about lines 11 to 13 runs `tsc` and copies views; `package.json` has no esbuild). `apps/pages/FUNCTIONS.yaml` (47 rows) and `PARITY_EXCEPTIONS.yaml` exist. `apps/pages/Dockerfile` copies only manifests of the workspaces (about lines 24 to 27 and 37 to 41), then `apps/pages`; it copies no `packages/glass-shared/src`, `packages/design` or `packages/schemas/generated`. **`apps/pages` tests (15 vitest files under `test/server/`) are not run by the Core Makefile's `test-js` (lines 36 to 39) or the root `npm test`.** **No gate reads `apps/pages`:** `ui_words_check.py` (roots at lines 43 to 45), `design_check.py` (35 to 39), `colour_drift_check.py` (28 to 33), `no_branches_check.py` (36 to 40) read the workspace, `packages/design` and the shared package only; `no_react_check.mjs` (lines 33 to 36) already reads `apps/pages` source and bundles.
