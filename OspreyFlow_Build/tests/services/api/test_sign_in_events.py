@@ -819,16 +819,59 @@ def test_the_route_takes_a_json_body_of_the_one_field_only(rig: Rig) -> None:
     assert events(rig) == []
 
 
-def test_a_repeated_callback_of_one_session_records_it_once(rig: Rig) -> None:
+def test_a_repeated_report_of_one_callback_records_it_once(rig: Rig) -> None:
+    """What can really repeat is one report: the same callback's token sent twice. Idempotence is
+    keyed on that token (as a keyed hash, in the store only), not on the identity provider's
+    session."""
+    s = rig.session()
+    token = s.token()
+    assert rig.event(token, "sign_in").json() == {"recorded": True}
+    assert rig.event(token, "sign_in").json() == {"recorded": False}
+    assert len(rig.pool.of("sign_in")) == 1
+    out = s.token()
+    assert rig.event(out, "sign_out").json() == {"recorded": True}
+    assert rig.event(out, "sign_out").json() == {"recorded": False}
+    assert len(rig.pool.of("sign_out")) == 1
+
+
+def test_sign_in_sign_out_sign_in_again_records_every_one_of_them(rig: Rig) -> None:
+    """The page service's sign-out ends its own session and not the identity provider's, so the
+    next sign-in carries the same `sid` and a token of its own. Each callback and each sign-out
+    is a row: the design over-records and never under-records."""
+    s = rig.session()
+    for _ in range(3):
+        assert rig.event(s.token(), "sign_in").json() == {"recorded": True}
+        assert rig.event(s.token(), "sign_out").json() == {"recorded": True}
+    assert len(rig.pool.of("sign_in")) == 3 and len(rig.pool.of("sign_out")) == 3
+    assert len({detail(r)["session"] for r in events(rig)}) == 1, (
+        "one provider session keeps one reference in every row"
+    )
+
+
+def test_a_token_renewed_within_one_session_is_a_report_of_its_own(rig: Rig) -> None:
+    """A different token is a different report, however it came about: nothing here guesses that
+    it was a renewal."""
     s = rig.session()
     assert rig.event(s.token(), "sign_in").json() == {"recorded": True}
     renewed = s.token(iat=int(time.time()) + 3, exp=int(time.time()) + 900)
-    assert rig.event(renewed, "sign_in").json() == {"recorded": False}
-    assert rig.event(s.token(), "sign_in").json() == {"recorded": False}
-    assert len(rig.pool.of("sign_in")) == 1
-    assert rig.event(s.token(), "sign_out").json() == {"recorded": True}
-    assert rig.event(s.token(), "sign_out").json() == {"recorded": False}
-    assert len(rig.pool.of("sign_out")) == 1
+    assert rig.event(renewed, "sign_in").json() == {"recorded": True}
+    assert len(rig.pool.of("sign_in")) == 2
+
+
+def test_a_token_that_names_no_session_is_still_one_report_once(rig: Rig) -> None:
+    s = rig.session(sid=None, auth_time=None, iat=None)
+    token = s.token()
+    assert rig.event(token, "sign_in").json() == {"recorded": True}
+    assert rig.event(token, "sign_in").json() == {"recorded": False}
+    assert rig.event(s.token(), "sign_in").json() == {"recorded": True}
+    assert len(rig.pool.of("sign_in")) == 2
+
+
+def test_a_report_is_remembered_no_longer_than_its_token_lives(rig: Rig) -> None:
+    s = rig.session()
+    assert rig.event(s.token(), "sign_in").json() == {"recorded": True}
+    reported = rig.valkey.ttl_of("sign-in-events:sign_in:")
+    assert len(reported) == 1 and 0 < reported[0] <= 300 + 60, reported
 
 
 def test_the_route_is_rate_limited_per_person(rig: Rig, mod: Any) -> None:
