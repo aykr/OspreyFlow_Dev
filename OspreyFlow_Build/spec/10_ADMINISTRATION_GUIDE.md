@@ -117,6 +117,8 @@ Mode, under **Starter (optional)**; a GOV.UK starter shows the service's name (f
 name above), organisation and phase there. The Demo packs screen then shows the starter's packs
 ticked, to change if you wish.
 
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.
+
 **In an answers file** (section 7): `starter: govuk-aml`, with `appearance.service_name`,
 `appearance.organisation` and `appearance.phase`.
 
@@ -357,11 +359,7 @@ finishes, or after 30 idle minutes. On a release, the page is the release's own 
 with its signature checked against the release; in a developer's checkout it is built with
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
 
-**A GOV.UK install is done from the command line, headless:** `ospreyflow install`, with its answers
-given as flags or in an answers file (`--config install.yaml --yes`, section 7). The guided page described
-here is the `apps/harness` React application. It is served only on the computer you are installing from, while an install runs, and is never rendered into a deployment: the
-deployment you install holds none of it, and the rule that the `pages` service carries no React (ADR-152) does
-not apply to it.
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment. The command's answers are given as flags, or in an answers file (`--config install.yaml --yes`, section 7).
 
 ## 5. Installing Small
 
@@ -811,8 +809,7 @@ environments repository, and its AWS resources (RDS, ElastiCache, OpenSearch, S3
 roles for its service accounts) are asked for the same way. The `cloud-platform` profile writes what
 those pull requests need. It creates no cluster, no VPC and no namespace, and **it installs
 nothing**: `ospreyflow install` takes `lite`, `small` or `enterprise` and has no `cloud-platform` mode, so
-neither the command nor the guided page runs it. A GOV.UK install, on the modes that command has, is done from
-the command line, headless (section 4.1); the guided page is never rendered into a deployment. The
+neither the command nor the guided page runs it. Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment. (Section 4.1.) The
 decisions are ADR-148's.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the
