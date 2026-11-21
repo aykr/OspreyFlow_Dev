@@ -2,8 +2,7 @@
 
 `spec/PL13_GATEWAY_SCOUT.md` answers the owner's nine questions about building OspreyFlow's own
 gateway image from the MIT code only. This test is pure and reads one file by its fixed path; it
-**walks no folder** (no `rglob`, `os.walk`, `**` glob or `git ls-files`), so the scan map needs no
-row for it. The plants are written to pytest's own temporary folder, which is the only other place
+**walks no folder** (it lists no folder by any means), so the scan map needs no row for it. The plants are written to pytest's own temporary folder, which is the only other place
 it looks.
 
 What it holds:
@@ -39,7 +38,7 @@ ROW = re.compile(r"^\|\s*(\d+)\s*\|(.*)\|\s*$")
 VERDICT = re.compile(
     r"^(?:\*\*)?`?VERDICT: (clean cut|not a clean cut)`?(?:\*\*)?\s*[-:–—]\s*\S.*$"
 )
-KEY_SHAPES = (
+_SHAPES = (
     re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),  # an OpenAI-style, gateway or provider key (brief: 8+)
     re.compile(r"AIza[0-9A-Za-z_\-]{20,}"),  # a Google API key
     # The repository's own credential scan (`CREDENTIAL` in `tests/test_sites.py`), shape for shape:
@@ -48,8 +47,10 @@ KEY_SHAPES = (
     re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),  # a GitHub token
     re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),  # a fine-grained GitHub token
     re.compile(r"\bxox[abpr]-[A-Za-z0-9-]{10,}"),  # a Slack token
-    re.compile(r"\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*\S", re.IGNORECASE),
+    re.compile(r"\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*\S"),
 )
+# The repository's scan is case-insensitive over every alternative, so every shape here is too.
+KEY_SHAPES = tuple(re.compile(shape.pattern, re.IGNORECASE) for shape in _SHAPES)
 
 
 def problems(text: str) -> list[str]:
@@ -192,11 +193,18 @@ def test_a_file_with_a_key_shaped_string_is_refused() -> None:
 def _planted_shapes() -> dict[str, str]:
     """One synthetic string per credential shape, made at run time and never written to the repo."""
     upper = "".join(secrets.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") for _ in range(16))
+    # The PEM header is put together at run time so that no whole header is written in this file.
+    pem = "-----BEGIN " + "RSA" + " PRIVATE" + " KEY-----"
     return {
         "an AWS access key id": "AKIA" + upper,
+        "a Google API key": "AIza" + secrets.token_urlsafe(30)[:35],
+        "a PEM private key header": pem,
+        "a classic GitHub token": "ghp_" + secrets.token_hex(18),
+        "an upper-case GitHub token": "GHP_" + secrets.token_hex(18),
         "a fine-grained GitHub token": "github_pat_" + secrets.token_hex(15),
         "a Slack token": "xoxb-" + secrets.token_hex(8),
         "a password assignment": "password=" + secrets.token_hex(6),
+        "an upper-case password assignment": "PASSWORD=" + secrets.token_hex(6),
         "a secret assignment in YAML": "secret: " + secrets.token_hex(6),
         "a token assignment": "token = " + secrets.token_hex(6),
         "an api key assignment": "api_key: " + secrets.token_hex(6),
