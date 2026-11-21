@@ -28,9 +28,18 @@ record by the code that builds it, an error's own text written as a reason.
   **`OspreyFlow_Core/packages`** (all but the adapters that implement the port and the schemas and
   ports that declare it). A caller not in `REVIEWED_CALLERS` / `REVIEWED_FILES`, and an entry whose
   caller has gone, both fail.
-- `test_every_route_that_reaches_a_model_caller_attributes_it` walks `services/api` and fails for a
-  route that calls the question, extraction, email, document or ask-to-search service outside
-  `model_calls.attributed(…)`.
+- `test_every_chain_that_reaches_a_model_is_asked_inside_an_attribution` follows the model on from
+  the port: a function that reaches it (a port method, `run_extraction` by the module it is
+  imported from, a method of a service on a receiver declared or built as that service, through
+  the routes' `QuestionsDep`-style aliases and `request.app.state`) is itself followed, to a fixed
+  point. A function nothing refers to that reaches the model is a **root**, and must not exist: a
+  route asks inside `model_calls.attributed(…)` (which ends the chain), or the root is named in
+  `REVIEWED_ROOTS` with its reason. It walks **`OspreyFlow_Core/services` (every subfolder),
+  `scripts`, `harness`, `cli` and `connectors`**. Planted, at the shape a real change takes: a new
+  service importing `run_extraction`, a chain of two new callers, a function handed over without
+  being called, a route holding the service under another name or off the app's state, and each
+  route's own attribution removed. What it does not follow is written in `reach_of`'s docstring
+  (a service passed untyped through a helper, `getattr`): the first scan is what finds those.
 
 Pure: no store, no network. The live stack owes: the gateway's own call
 (`test_model_gateway_live.py` is the existing live case) and a real Postgres insert of the row (the
@@ -41,6 +50,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import functools
 import json
 import pathlib
 import secrets
@@ -1279,52 +1289,503 @@ def test_a_listed_caller_that_has_gone_is_found(tmp_path: pathlib.Path) -> None:
             "self._model.extract") not in calls  # fmt: skip
 
 
-#: The services a route asks that reach the model, and the name each is held by in `app.py`.
-_ENTRY_POINTS = {"questions.ask", "review_module.run_extraction", "email_extraction.extract",
-                 "document_content.extract", "pattern_ask.ask"}  # fmt: skip
-_ENTRY_OWNERS = {"questions", "review", "email_extraction", "document_content", "pattern_ask"}
+# --- the third scan: whatever reaches the model, by whatever name, is asked in an attribution ---
+
+#: What the third scan reads: the folders the port's callers are searched in.
+_REACH_FOLDERS = _CALL_FOLDERS
+#: The block that attributes a call: `async with model_calls.attributed(…)`.
+_ATTRIBUTING = "model_calls.attributed"
+#: Not a model, though its method is called `extract`: from the first scan's own list.
+_NOT_A_MODEL = {key for key, why in REVIEWED_CALLERS.items() if why.startswith("not a model")}
 
 
-def routes_outside_attribution(root: pathlib.Path = SERVICES / "api") -> list[str]:
-    """Each function in `root` that calls an entry point other than inside a
-    `async with model_calls.attributed(…)` block."""
-    found: list[str] = []
-    for path in sorted(root.glob("*.py")):
-        if path.stem in _ENTRY_OWNERS:
+@dataclass
+class _Ref:
+    name: str
+    #: Inside an attributing block of the function that holds it.
+    guarded: bool
+    #: In the signature (decorators, parameters, annotations, defaults), not the body.
+    signature: bool
+    line: int
+    #: The dotted text if the reference is an attribute (`self._model.extract`), else "".
+    full: str
+
+
+@dataclass
+class _Fn:
+    """One function (or the module's own top level), the class that holds it, every name it refers
+    to, and what its parameters and local names are declared or assigned to be."""
+
+    path: str
+    qualname: str
+    name: str
+    cls: str | None
+    refs: list[_Ref]
+    #: local name -> the type names it was annotated with, or copied or constructed from
+    types: dict[str, list[str]]
+    #: The file: `objs` local name -> (module, name) for `from m import name as local`; `mods`
+    #: local name -> module for `import a.m as local` and `from a import m as local`; `attrs`
+    #: class -> attribute -> type names, from `self.x = param` with an annotated `param`.
+    objs: dict[str, tuple[str, str]]
+    mods: dict[str, str]
+    attrs: dict[str, dict[str, list[str]]]
+
+    @property
+    def stem(self) -> str:
+        return pathlib.PurePosixPath(self.path).stem
+
+
+@dataclass
+class _Alias:
+    """A module-level name made of others (`QuestionsDep = Annotated[QuestionsService, …]`): what
+    the routes' signatures name instead of the class."""
+
+    stem: str
+    name: str
+    of: list[str]
+    objs: dict[str, tuple[str, str]]
+
+
+def _names_in(node: ast.AST | None) -> list[str]:
+    return [] if node is None else [n.id for n in ast.walk(node) if isinstance(n, ast.Name)]
+
+
+def _functions_of(rel: str, tree: ast.Module) -> tuple[list[_Fn], list[_Alias]]:
+    """Every function of a file, a nested one apart from the one that holds it. A name is a
+    reference whether it is called or only taken (`add_task(digest, …)`, `send = held.embed`, a
+    parameter's annotation `svc: QuestionsService`): each `ast.Name` (by id) and `ast.Attribute`
+    (by attribute)."""
+    out: list[_Fn] = []
+    objs: dict[str, tuple[str, str]] = {}
+    mods: dict[str, str] = {}
+    attrs: dict[str, dict[str, list[str]]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module.split(".")[-1] if node.module else ""
+            for a in node.names:
+                objs[a.asname or a.name] = (module, a.name)
+                mods[a.asname or a.name] = a.name
+        elif isinstance(node, ast.Import):
+            for a in node.names:
+                mods[a.asname or a.name.split(".")[0]] = a.name.split(".")[-1]
+
+    def declare(fn: _Fn, node: ast.AST, cls: str | None) -> None:
+        """What a name is: a parameter's annotation, `x: T = …`, `x = y` (y's), `x = T(…)`, and
+        `self.x = param` for the class's other methods."""
+        if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
+            args = node.args
+            for a in (*args.posonlyargs, *args.args, *args.kwonlyargs):
+                fn.types[a.arg] = _names_in(a.annotation) if a.annotation else []
+        for n in ast.walk(node):
+            targets: list[ast.expr] = []
+            value: ast.expr | None = None
+            if isinstance(n, ast.Assign):
+                targets, value = n.targets, n.value
+            elif isinstance(n, ast.AnnAssign):
+                targets, value = [n.target], n.value
+                if isinstance(n.target, ast.Name):
+                    fn.types.setdefault(n.target.id, []).extend(_names_in(n.annotation))
+            for t in targets:
+                held: list[str] = []
+                if isinstance(value, ast.Name):
+                    held = fn.types.get(value.id, [])
+                elif isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+                    held = [value.func.id]
+                elif isinstance(value, ast.Attribute) and ".state." in f".{_dotted(value)}":
+                    held = [f"state:{value.attr}"]  # `request.app.state.questions`
+                if isinstance(t, ast.Attribute) and ".state." in f".{_dotted(t)}":
+                    attrs.setdefault("state", {}).setdefault(t.attr, []).extend(held)
+                    continue
+                if isinstance(t, ast.Name):
+                    fn.types.setdefault(t.id, []).extend(held)
+                elif (isinstance(t, ast.Attribute) and isinstance(t.value, ast.Name)
+                      and t.value.id == "self" and cls):  # fmt: skip
+                    attrs.setdefault(cls, {}).setdefault(t.attr, []).extend(held)
+
+    def walk(
+        node: ast.AST, fn: _Fn, guarded: bool, signature: bool, stack: list[str], cls: str | None
+    ) -> None:
+        if isinstance(node, ast.AsyncFunctionDef | ast.FunctionDef):
+            inner = _Fn(
+                rel, ".".join([*stack, node.name]), node.name, cls, [], {}, objs, mods, attrs
+            )
+            out.append(inner)
+            declare(inner, node, cls)
+            for child in (
+                *node.decorator_list,
+                node.args,
+                *([node.returns] if node.returns else []),
+            ):
+                walk(child, inner, False, True, [*stack, node.name], cls)
+            for child in node.body:
+                walk(child, inner, False, False, [*stack, node.name], cls)
+            return
+        if isinstance(node, ast.ClassDef):
+            for child in ast.iter_child_nodes(node):
+                walk(child, fn, guarded, signature, [*stack, node.name], cls or node.name)
+            return
+        if isinstance(node, ast.Name):
+            fn.refs.append(_Ref(node.id, guarded, signature, node.lineno, ""))
+        elif isinstance(node, ast.Attribute):
+            fn.refs.append(_Ref(node.attr, guarded, signature, node.lineno, _dotted(node)))
+        if isinstance(node, ast.AsyncWith | ast.With):
+            attributing = any(
+                isinstance(i.context_expr, ast.Call)
+                and _dotted(i.context_expr.func) == _ATTRIBUTING
+                for i in node.items
+            )
+            for item in node.items:
+                walk(item, fn, guarded, signature, stack, cls)
+            for child in node.body:
+                walk(child, fn, guarded or attributing, signature, stack, cls)
+            return
+        for child in ast.iter_child_nodes(node):
+            walk(child, fn, guarded, signature, stack, cls)
+
+    top = _Fn(rel, "<module>", "<module>", None, [], {}, objs, mods, attrs)
+    out.append(top)
+    walk(tree, top, False, False, [], None)
+    stem = pathlib.PurePosixPath(rel).stem
+    aliases = []
+    for node in tree.body:
+        target = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else (
+            node.target if isinstance(node, ast.AnnAssign) else None
+        )  # fmt: skip
+        value = getattr(node, "value", None)
+        if isinstance(target, ast.Name) and value is not None:
+            aliases.append(_Alias(stem, target.id, _names_in(value), objs))
+    return out, aliases
+
+
+@functools.cache
+def _parsed(rel: str, source: str) -> tuple[list[_Fn], list[_Alias]]:
+    return _functions_of(rel, ast.parse(source))
+
+
+def _files(core: pathlib.Path) -> tuple[list[_Fn], list[_Alias]]:
+    fns: list[_Fn] = []
+    aliases: list[_Alias] = []
+    for folder in _REACH_FOLDERS:
+        for path in sorted((core / folder).rglob("*.py")):
+            f, a = _parsed(path.relative_to(core).as_posix(), path.read_text())
+            fns.extend(f)
+            aliases.extend(a)
+    return fns, aliases
+
+
+def _target(fn: _Fn, ref: _Ref) -> tuple[str, str] | None:
+    """The (module, name) a reference points to, by what the file imports: a bare name is the one
+    the file imported or defines; an attribute is a name taken from a module the file imported
+    (`review_module.run_extraction`). A method (`svc.ask`) is resolved by what the receiver is
+    declared to be, in `_reaching_ref`; a module's `digest` is not `hashlib`'s."""
+    if not ref.full:
+        return fn.objs.get(ref.name, (fn.stem, ref.name))
+    owner, _, rest = ref.full.partition(".")
+    if rest == ref.name and owner in fn.mods:
+        return (fn.mods[owner], ref.name)
+    return None
+
+
+@dataclass
+class _Reach:
+    """What the fixed point has found so far."""
+
+    #: (module, class) -> the names of its methods that reach a model
+    holders: dict[tuple[str, str], set[str]]
+    #: (module, name) of functions outside a class that reach a model
+    functions: set[tuple[str, str]]
+    #: (module, alias) -> the holder classes it stands for
+    aliases: dict[tuple[str, str], set[tuple[str, str]]]
+    #: method names that only reaching methods carry in the whole scanned tree
+    unambiguous: set[str]
+
+
+def _holders_of(fn: _Fn, receiver: str, reach: _Reach) -> set[tuple[str, str]]:
+    """The holder classes `receiver` (`svc`, `self._proposer`) is declared to be."""
+    if receiver.startswith("self.") and fn.cls and "." not in receiver[5:]:
+        declared = fn.attrs.get(fn.cls, {}).get(receiver[5:], [])
+    elif "." not in receiver:
+        declared = fn.types.get(receiver, [])
+    else:
+        return set()
+    found: set[tuple[str, str]] = set()
+    for type_name in declared:
+        if type_name.startswith("state:"):  # what the app built and put on its state
+            for built in fn.attrs.get("state", {}).get(type_name[6:], []):
+                key = fn.objs.get(built, (fn.stem, built))
+                found |= {key} if key in reach.holders else set()
             continue
-        tree = ast.parse(path.read_text())
-        for fn in ast.walk(tree):
-            if not isinstance(fn, ast.AsyncFunctionDef | ast.FunctionDef):
-                continue
-            guarded: set[int] = set()
-            for node in ast.walk(fn):
-                if isinstance(node, ast.AsyncWith | ast.With) and any(
-                    isinstance(i.context_expr, ast.Call)
-                    and _dotted(i.context_expr.func) == "model_calls.attributed"
-                    for i in node.items
-                ):
-                    guarded |= {id(n) for b in node.body for n in ast.walk(b)}
-            for node in ast.walk(fn):
-                if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                        and _dotted(node.func) in _ENTRY_POINTS
-                        and id(node) not in guarded):  # fmt: skip
-                    found.append(f"{path.name}:{node.lineno} {fn.name} calls {_dotted(node.func)}")
+        key = fn.objs.get(type_name, (fn.stem, type_name))
+        key = (fn.stem, type_name) if key not in reach.holders and key not in reach.aliases else key
+        found |= reach.aliases.get(key, set()) | ({key} if key in reach.holders else set())
     return found
 
 
-def test_every_route_that_reaches_a_model_caller_attributes_it() -> None:
-    assert routes_outside_attribution() == []
+def _reaching_ref(fn: _Fn, r: _Ref, reach: _Reach) -> bool:
+    """Whether the reference is to something that reaches a model."""
+    if r.name in _METHODS:
+        # A port method on any object, as the first scan reads one: not a variable of that name.
+        return "." in r.full and (fn.path, fn.qualname, r.full) not in _NOT_A_MODEL
+    if r.full:
+        receiver = r.full.rpartition(".")[0]
+        for key in _holders_of(fn, receiver, reach):
+            if r.name in reach.holders[key]:
+                return True
+        if _target(fn, r) in reach.functions:
+            return True
+        # A receiver nothing declares: followed by the name alone where no other function has it.
+        return (
+            fn.path.startswith("services/")
+            and not _holders_of(fn, receiver, reach)
+            and r.name in reach.unambiguous
+        )
+    return _target(fn, r) in reach.functions
 
 
-def test_the_route_scan_finds_the_five_routes(tmp_path: pathlib.Path) -> None:
-    """The scan sees what it claims: with every attribution made unrecognisable in a copy, it
-    names the five routes, and no other."""
-    root = tmp_path / "api"
-    shutil.copytree(SERVICES / "api", root, ignore=shutil.ignore_patterns("__pycache__"))
-    source = (root / "app.py").read_text()
-    assert "model_calls.attributed(" in source
-    (root / "app.py").write_text(source.replace("model_calls.attributed(", "unattributed("))
-    named = sorted(f.split()[1] for f in routes_outside_attribution(root))
+def reach_of(
+    core: pathlib.Path = CORE,
+) -> tuple[list[_Fn], list[_Fn], _Reach]:
+    """(exposed, roots, reach) under `core`'s call folders.
+
+    A function **reaches** the model when, outside an attributing block of its own, in its body,
+    it refers to
+
+    - a port method (`extract`, `transcribe`, `describe_image`, `embed`) as an attribute of any
+      object, as the first scan reads one (a variable called `extract` is not one);
+    - a reaching function outside a class (`run_extraction`, bare or as
+      `review_module.run_extraction`, by the module it is imported from, whatever it is called
+      locally); or
+    - a method of a class that has one that reaches (a **holder**), on a receiver declared to be
+      the holder: a parameter annotated with it or with an alias of it (`svc: QuestionsDep`), a
+      name copied from or constructed as one (`svc = questions`, `svc = QuestionsService(…)`), or
+      `self.x` assigned from such a parameter in the class, or a name taken off the app's state
+      that the app built as one (`held = request.app.state.questions`); or such a method's name on
+      a receiver nothing declares, if no other function in `services` has that name.
+
+    That is a fixed point. A **root** is a function that reaches and that no other function refers
+    to (a route, a worker, a new service nobody calls yet): the top of a chain with nothing
+    attributing it. A route that asks inside `model_calls.attributed(…)` does not reach, so the
+    chain ends there. Not followed: a receiver nothing declares whose method's name another
+    function in `services` also has, and any receiver outside `services` (`getattr`, a service
+    passed untyped through a helper): the first two scans are what find those."""
+    fns, aliases = _files(core)
+    defined: dict[str, int] = {}
+    for f in fns:
+        if f.path.startswith("services/"):
+            defined[f.name] = defined.get(f.name, 0) + 1
+    reach = _Reach({}, set(), {}, set())
+    exposed: dict[int, _Fn] = {}
+    changed = True
+    while changed:
+        changed = False
+        for alias in aliases:
+            made = {alias.objs.get(n, (alias.stem, n)) for n in alias.of} & set(reach.holders)
+            if made and reach.aliases.get((alias.stem, alias.name)) != made:
+                reach.aliases[(alias.stem, alias.name)] = made
+                changed = True
+        for fn in fns:
+            if id(fn) in exposed or fn.name == "<module>":
+                continue
+            if any(
+                not r.guarded and not r.signature and _reaching_ref(fn, r, reach) for r in fn.refs
+            ):
+                exposed[id(fn)] = fn
+                if fn.cls:
+                    reach.holders.setdefault((fn.stem, fn.cls), set()).add(fn.name)
+                else:
+                    reach.functions.add((fn.stem, fn.name))
+                changed = True
+        methods: dict[str, int] = {}
+        for methods_of in reach.holders.values():
+            for name in methods_of:
+                methods[name] = methods.get(name, 0) + 1
+        unambiguous = {n for n, c in methods.items() if defined.get(n, 0) == c}
+        if unambiguous != reach.unambiguous:
+            reach.unambiguous = unambiguous
+            changed = True
+    # What is referred to: a method by its attribute name (`svc.summarise`), any other function by
+    # the module and name a reference resolves to (`hashlib`'s `.digest()` is not a `digest`).
+    attributes = {r.name for fn in fns for r in fn.refs if r.full}
+    targets = {_target(fn, r) for fn in fns for r in fn.refs}
+    roots = [
+        fn
+        for fn in exposed.values()
+        if not fn.name.startswith("__")
+        and (fn.name not in attributes if fn.cls else (fn.stem, fn.name) not in targets)
+    ]
+    return list(exposed.values()), roots, reach
+
+
+#: An exposed function nothing refers to, and why that is not an unattributed route to a model.
+#: A scan hit is either a new caller to attribute (its route wraps the call in
+#: `model_calls.attributed`) or, if it is not a model, a line here with the reason.
+REVIEWED_ROOTS: dict[tuple[str, str], str] = {
+    ("services/api/model_routing.py", "RoutedModel.embed"):
+        "the routing's own `embed`: no caller embeds today. A new one is asked from a route inside "
+        "`model_calls.attributed(…)`, or it appears here as an unreferred root of the scan",
+}  # fmt: skip
+
+
+def unattributed_roots(core: pathlib.Path = CORE) -> list[str]:
+    _, roots, _ = reach_of(core)
+    return sorted(
+        f"{fn.path}:{fn.qualname}" for fn in roots if (fn.path, fn.qualname) not in REVIEWED_ROOTS
+    )
+
+
+def attributing_functions(core: pathlib.Path = CORE) -> set[str]:
+    """The functions that ask something that reaches a model inside an attributing block."""
+    fns, _ = _files(core)
+    _, _, reach = reach_of(core)
+    return {
+        fn.name
+        for fn in fns
+        if any(r.guarded and not r.signature and _reaching_ref(fn, r, reach) for r in fn.refs)
+    }
+
+
+def test_every_chain_that_reaches_a_model_is_asked_inside_an_attribution() -> None:
+    """Walks `OspreyFlow_Core/services` (every subfolder), `scripts`, `harness`, `cli` and
+    `connectors`. No function that reaches a model is left unreferred to: each is called by another
+    that attributes the call, however the route names the service."""
+    assert unattributed_roots() == []
+
+
+def test_the_reach_scan_finds_the_chains_it_claims_to() -> None:
+    """A scan that found nothing would pass the test above: it sees the real chains, and the five
+    routes as the places they are attributed."""
+    exposed, _, reach = reach_of()
+    assert {fn.qualname for fn in exposed} >= {
+        "run_extraction",
+        "QuestionsService.ask",
+        "PatternProposer.propose",
+        "PatternAskService.ask",
+        "DocumentContentService._text_of",
+        "RoutedModel.embed",
+    }
+    assert {c for _, c in reach.holders} >= {"QuestionsService", "PatternProposer", "RoutedModel",
+                                             "DocumentContentService", "EmailExtractionService",
+                                             "PatternAskService"}  # fmt: skip
+    assert ("review", "run_extraction") in reach.functions
+    assert {a for _, a in reach.aliases} >= {"QuestionsDep"}
+    assert attributing_functions() >= {
+        "ask_question_route",
+        "ask_to_search_route",
+        "extract_document_route",
+        "extract_email_route",
+        "run_extraction_route",
+    }
+
+
+def _copy_of_core(tmp_path: pathlib.Path) -> pathlib.Path:
+    return _copy_services(tmp_path)
+
+
+def _app_without(tmp_path: pathlib.Path, old: str, new: str) -> pathlib.Path:
+    core = _copy_of_core(tmp_path)
+    path = core / "services" / "api" / "app.py"
+    source = path.read_text()
+    assert old in source, old
+    path.write_text(source.replace(old, new))
+    return core
+
+
+def test_a_new_service_reaching_the_model_through_run_extraction_is_found(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The finding's own shape: `services/api/case_digest.py` imports `run_extraction` from
+    `.review` and calls it bare, the way `document_content.py` does. No port method, no listed
+    entry point, no import of the port: nothing of the first two scans sees it."""
+    core = _copy_of_core(tmp_path)
+    (core / "services" / "api" / "case_digest.py").write_text(
+        "from .review import run_extraction\n\n\n"
+        "async def digest(model, req):\n"
+        "    return await run_extraction(model, req)\n"
+    )
+    assert unattributed_roots(core) == ["services/api/case_digest.py:digest"]
+
+
+def test_a_route_calling_a_service_under_another_name_is_found(tmp_path: pathlib.Path) -> None:
+    """A new route in `app.py` that holds the questions service as `svc` and asks it with no
+    attributing block: the route is the root, and the service's own `ask` is not."""
+    core = _copy_of_core(tmp_path)
+    path = core / "services" / "api" / "app.py"
+    path.write_text(
+        path.read_text() + "\n\nasync def digest_route(questions: QuestionsService, req):\n"
+        "    svc = questions\n"
+        "    return await svc.ask(req)\n"
+    )
+    assert unattributed_roots(core) == ["services/api/app.py:digest_route"]
+
+
+def test_a_service_taken_off_the_app_state_is_found(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A route that takes the service off `request.app.state` and asks it, with no annotation:
+    `app.state.questions` is built as the questions service, so `held` is one."""
+    core = _copy_of_core(tmp_path)
+    path = core / "services" / "api" / "app.py"
+    path.write_text(
+        path.read_text() + "\n\nasync def digest_route(request, req):\n"
+        "    held = request.app.state.questions\n"
+        "    return await held.ask(req)\n"
+    )
+    assert unattributed_roots(core) == ["services/api/app.py:digest_route"]
+
+
+def test_a_chain_of_two_new_callers_is_found_at_its_top(tmp_path: pathlib.Path) -> None:
+    """`nightly` calls `summarise` calls `run_extraction`, nothing attributing: the top of the
+    chain is the one named, since `summarise` is called by it."""
+    core = _copy_of_core(tmp_path)
+    (core / "services" / "api" / "case_digest.py").write_text(
+        "from .review import run_extraction\n\n\n"
+        "async def summarise(model, req):\n"
+        "    return await run_extraction(model, req)\n\n\n"
+        "async def nightly(model, reqs):\n"
+        "    return [await summarise(model, r) for r in reqs]\n"
+    )
+    assert unattributed_roots(core) == ["services/api/case_digest.py:nightly"]
+
+
+def test_a_caller_handed_over_without_being_called_is_found(tmp_path: pathlib.Path) -> None:
+    """`background.add_task(summarise, …)` takes the function, it does not call it: a reference
+    outside an attribution is a call the scan has to see (here, `nightly` holds it)."""
+    core = _copy_of_core(tmp_path)
+    (core / "services" / "api" / "case_digest.py").write_text(
+        "from .review import run_extraction\n\n\n"
+        "async def summarise(model, req):\n"
+        "    return await run_extraction(model, req)\n\n\n"
+        "def nightly(background, req):\n"
+        "    background.add_task(summarise, req)\n"
+    )
+    assert unattributed_roots(core) == ["services/api/case_digest.py:nightly"]
+
+
+def test_a_new_route_that_attributes_its_call_is_not_found(tmp_path: pathlib.Path) -> None:
+    """The same route, asked inside `model_calls.attributed(…)` at the shape `app.py` uses: clean.
+    Without this the scan could be red for every new caller whatever it did."""
+    core = _copy_of_core(tmp_path)
+    (core / "services" / "api" / "case_digest.py").write_text(
+        "from .review import run_extraction\n\n\n"
+        "async def summarise(model, req):\n"
+        "    return await run_extraction(model, req)\n"
+    )
+    path = core / "services" / "api" / "app.py"
+    path.write_text(
+        path.read_text() + "\n\nfrom .case_digest import summarise\n\n\n"
+        "async def digest_route(audit, principal, model, req):\n"
+        "    async with model_calls.attributed(audit, principal, 'inv-1', job='extract',\n"
+        "                                      via='digest'):\n"
+        "        return await summarise(model, req)\n"
+    )
+    assert unattributed_roots(core) == []
+
+
+def test_every_attribution_removed_names_the_five_routes(tmp_path: pathlib.Path) -> None:
+    """With every attribution made unrecognisable in a copy, the scan names the five routes and no
+    other."""
+    core = _app_without(tmp_path, "model_calls.attributed(", "unattributed(")
+    named = sorted(f.split(":")[1] for f in unattributed_roots(core))
     assert named == ["ask_question_route", "ask_to_search_route", "extract_document_route",
                      "extract_email_route", "run_extraction_route"]  # fmt: skip
 
@@ -1332,18 +1793,17 @@ def test_the_route_scan_finds_the_five_routes(tmp_path: pathlib.Path) -> None:
 def test_a_route_that_stops_attributing_is_found(tmp_path: pathlib.Path) -> None:
     """Planted at the real site: `ask_question_route`'s own `async with` block, and nothing else,
     made into a plain call."""
-    root = tmp_path / "api"
-    shutil.copytree(SERVICES / "api", root, ignore=shutil.ignore_patterns("__pycache__"))
-    source = (root / "app.py").read_text()
+    core = _copy_of_core(tmp_path)
+    path = core / "services" / "api" / "app.py"
+    source = path.read_text()
     head, _, rest = source.partition("async def ask_question_route(")
     body, sep, tail = rest.partition("\n\n\n@app.")
     assert "model_calls.attributed(" in body, "ask_question_route does not attribute"
-    (root / "app.py").write_text(
+    path.write_text(
         head
         + "async def ask_question_route("
         + body.replace("model_calls.attributed(", "unattributed(")
         + sep
         + tail
     )
-    found = routes_outside_attribution(root)
-    assert len(found) == 1 and "ask_question_route calls questions.ask" in found[0]
+    assert unattributed_roots(core) == ["services/api/app.py:ask_question_route"]
