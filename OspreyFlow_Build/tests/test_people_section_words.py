@@ -26,12 +26,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from services.api.entra_people import PersonActionRefused, check_administrator_access
+from tools.layout import PAGES_COPY_ROOTS
 
 import principal_auth
 from principal_auth import OwnerNotHeld, OwnerRecordUnavailable
 from schemas.admin import PersonAccessInput
-from services.api.entra_people import PersonActionRefused, check_administrator_access
-from tools.layout import PAGES_COPY_ROOTS
 
 CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 SECTIONS = CORE / "apps/workspace/src/admin/sections.json"
@@ -76,10 +76,13 @@ def _python(path: Path, *, docstrings: bool) -> list[int]:
                   and ALONE.search(n.value))  # fmt: skip
 
 
-def _text(text: str, *, comments: bool = False) -> list[int]:
+def _text(text: str, *, comments: bool = False, template: bool = False) -> list[int]:
     """The lines of a guide or a source file where the name alone starts, read whole (a name over a line break is
-    one name). A guide's version rows are kept as written; a source file's comments, when asked, are left out."""
-    if comments:
+    one name). A guide's version rows are kept as written; a source file's comments, when asked, are left out, and a
+    template's own (`{# #}` and HTML's), which a person never sees, when it is one."""
+    if comments and template:
+        text = re.sub(r"\{#.*?#\}|<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group()), text, flags=re.S)
+    elif comments:
         text = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group()), text, flags=re.S)
         text = re.sub(r"(?m)(^|[^:])//.*$", r"\1", text)
     lines = text.split("\n")
@@ -92,13 +95,15 @@ def _text(text: str, *, comments: bool = False) -> list[int]:
 
 
 #: Where the Glass's own strings are: the workspace, and the package that holds the Conduit clients and the rest of what
-#: moved out of it (ADR-152 decision 6; PL4d2 moved six clients whose errors and headlines a person reads).
-GLASS_ROOTS = ("apps/workspace/src", "packages/glass-shared/src")
+#: moved out of it (ADR-152 decision 6; PL4d2 moved six clients whose errors and headlines a person reads); and the
+#: pages service's templates and modules, the same words drawn on the server (IS5a0 brief item 6).
+GLASS_ROOTS = ("apps/workspace/src", "packages/glass-shared/src", *PAGES_COPY_ROOTS)
 
 
 def _glass_files(roots: tuple[Path, ...] | None = None) -> list[Path]:
     roots = roots or tuple(CORE / r for r in GLASS_ROOTS)
-    return [p for root in roots for p in sorted(root.rglob("*.ts*")) if ".test." not in p.name]
+    return [p for root in roots for p in sorted({*root.rglob("*.ts*"), *root.rglob("*.njk")})
+            if ".test." not in p.name]  # fmt: skip
 
 
 def _said_alone() -> list[str]:
@@ -109,8 +114,8 @@ def _said_alone() -> list[str]:
     for path in sorted((CORE / "packages/schemas").glob("*.py")):  # its docstrings are the schema's descriptions
         found += [f"{path.relative_to(CORE)}:{n}" for n in _python(path, docstrings=True)]
     for path in [*sorted((CORE / "packages/schemas/generated").glob("*.ts")), *_glass_files()]:
-        found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"), comments=True)
-                  ]  # fmt: skip
+        found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"), comments=True,
+                                                                   template=path.suffix == ".njk")]  # fmt: skip
     for path in [*sorted((CORE / "docs").glob("*.md")), CORE / "DEMO_GUIDE.md", CORE / "README.md"]:
         found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"))]
     return found
@@ -186,7 +191,8 @@ def test_the_old_name_planted_in_a_moved_client_is_found(client: str, tmp_path: 
 
 
 def _found(files: list[Path]) -> list[int]:
-    return [n for p in files for n in _text(p.read_text(encoding="utf-8"), comments=True)]
+    return [n for p in files
+            for n in _text(p.read_text(encoding="utf-8"), comments=True, template=p.suffix == ".njk")]  # fmt: skip
 
 
 def test_the_scan_reaches_the_pages_roots() -> None:
@@ -290,8 +296,9 @@ def test_each_right_is_named_as_the_glass_names_it() -> None:
 
 
 def test_a_right_the_giver_does_not_hold_is_refused_by_its_name() -> None:
-    from schemas.rights import Right
     from services.api.custom_roles import RoleRefused, role_refusal
+
+    from schemas.rights import Right
 
     with pytest.raises(RoleRefused) as refused:
         role_refusal("Desk", ["administer_system", "manage_models"], giver_rights=[Right.MANAGE_PEOPLE], names_taken=[])

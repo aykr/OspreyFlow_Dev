@@ -114,6 +114,7 @@ def _screen_text(source: str) -> str:
     """A source file without its comments: what it can put on screen, not what it says about itself."""
     source = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
     source = re.sub(r"\{/\*.*?\*/\}", " ", source, flags=re.DOTALL)
+    source = re.sub(r"\{#.*?#\}|<!--.*?-->", " ", source, flags=re.DOTALL)  # a template's comments (the pages service)
     return re.sub(r"(?m)(^|[^:\"'`])//.*$", r"\1", source)
 
 
@@ -123,8 +124,9 @@ def old_view_words_on_screen(sources: dict[str, str]) -> list[str]:
 
 
 #: The Glass's sources: the workspace, and the shared package that holds what moved out of it (ADR-152 decision 6; the
-#: PL4d2 clients return headlines and errors a person reads). A file is named by its place under its root.
-GLASS_ROOTS = (SRC, CORE / "packages" / "glass-shared" / "src")
+#: PL4d2 clients return headlines and errors a person reads), and the pages service's templates and modules, which draw
+#: the same words on the server (IS5a0 brief item 6). A file is named by its place under its root.
+GLASS_ROOTS = (SRC, CORE / "packages" / "glass-shared" / "src", *(CORE / r for r in PAGES_COPY_ROOTS))
 
 
 def glass_sources(roots: tuple[Path, ...] = GLASS_ROOTS) -> dict[str, str]:
@@ -133,9 +135,11 @@ def glass_sources(roots: tuple[Path, ...] = GLASS_ROOTS) -> dict[str, str]:
     `shared:<place>`, so neither hides the other (found in review: a plain dict key dropped the workspace's four)."""
     found: dict[str, str] = {}
     for root in roots:
-        for p in sorted(root.rglob("*.ts*")):
+        for p in sorted({*root.rglob("*.ts*"), *root.rglob("*.njk")}):
             name = p.relative_to(root).as_posix()
-            found[f"shared:{name}" if name in found else name] = p.read_text(encoding="utf-8")
+            while name in found:  # a place under two roots is kept under each, never one hiding the other
+                name = f"shared:{name}"
+            found[name] = p.read_text(encoding="utf-8")
     return {name: text for name, text in found.items()
             if ".test." not in name and not name.startswith("test") and "/test" not in name}  # fmt: skip
 
@@ -246,7 +250,7 @@ def test_an_old_view_word_planted_in_a_pages_root_is_found(tmp_path: Path) -> No
 def test_a_place_both_roots_hold_is_read_from_both(tmp_path: Path) -> None:
     """The workspace's `layout/panelOrder.ts` (a hook) and the package's (the plain half) are one place under two roots:
     an old word on screen in either is found, and the real tip reads every such pair."""
-    shared = {p.relative_to(root).as_posix() for root in GLASS_ROOTS[1:] for p in root.rglob("*.ts*")}
+    shared = {p.relative_to(root).as_posix() for root in GLASS_ROOTS[1:2] for p in root.rglob("*.ts*")}
     both = sorted(n for n in shared if (SRC / n).exists() and ".test." not in n)
     assert both, "the real tree has places under both roots"
     sources = glass_sources()

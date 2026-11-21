@@ -22,8 +22,10 @@ Nothing builds the image in CI yet, so this is the only thing that would notice 
 **Item 6, the gates read `apps/pages`.** Each of `ui_words_check`, `design_check`, `colour_drift_check` and
 `no_branches_check` is given a planted violation under a copy of the pages roots, in each of the three roots, and flags
 it; the same copy without it is clean. `client_name_check` reads every tracked file and so reads the pages already: that
-is shown with a planted name in each root. The copy walker of `test_copy_says_no_client.py` reads the three roots. A
-`.njk` template is read by `ui_words_check`, `colour_drift_check` and `no_branches_check` as text (their suffix lists
+is shown with a planted name in each root. The copy walker of `test_copy_says_no_client.py` reads the three roots. The walkers of
+`test_people_section_words.py` (the "Admin › People" name) and `test_guide_navigation_words.py` (the old view words)
+read the same three roots and `.njk` templates too, leaving a template's `{# #}` and HTML comments out; each has its own
+plants in its own file (round 5). A `.njk` template is read by `ui_words_check`, `colour_drift_check` and `no_branches_check` as text (their suffix lists
 now name it); `design_check` runs `impeccable`, which reads HTML and not `.njk`, so the gate hands it each template as a
 copy named `.html` and puts the template's own path back on what it finds (`test_a_template_is_read_by_the_design_detector`
 plants an inline side stripe in a template and shows it flagged; without the reader it is not).
