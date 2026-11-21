@@ -732,7 +732,7 @@ remains what it always was: a **developer** flag, for a machine with no Docker d
 checkout with no release yet, never the customer-facing remedy (§5, §7).
 
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
-in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
+in-process, Valkey, SeaweedFS, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest. With
 `resources.gpu: nvidia` on a Linux computer, Ollama alone reserves the NVIDIA GPU (§3a.1). Since
 6 October 2026 also `ner`,

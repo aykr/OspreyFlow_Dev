@@ -29,7 +29,7 @@
    │  JanusGraph       ClickHouse        rustworkx /        Ollama / vLLM      │   │ a read-only login  │
    │                                     GraphFrames        + Whisper + VLM    │   └────────────────────┘
    │                                                        Recogniser: Stanza │
-   │  Working-set cache: Valkey     Object store: MinIO     Index: OpenSearch  │
+   │  Working-set cache: Valkey   Object store: SeaweedFS   Index: OpenSearch  │
    │  Conduit stores: Postgres (cases, grants, alerts, audit, export ledger)   │
    └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -937,6 +937,28 @@ exception below. Before this the gate passed any text containing "lgpl" — `AGP
 with it — and every LGPL package (`tests/licence_check/test_licence_expressions.py`,
 `test_licence_check_mjs.test.mjs`).
 
+**What the allowlist does not see: model weights, map data, font files and base images (PL11; the
+owner's rulings of 21 November 2026).** The gate above reads the licences packages declare; a
+weight, a map dataset, a font file and an image's contents are not packages. They are held to
+`spec/LICENCE_REGISTER.yaml`, a row for each the code names (re-derived from the Dockerfiles, the
+renderer's image and pull lists, the closed model lists, `fonts.json` and the map entries, so a new one
+with no row fails `make licence-check`: `tools/licence_register.py`,
+`tests/licence_check/test_register.py`). **The register applies a different definition from the
+allowlist, which stays as it is for code:** software and base images are open source when their licence
+is approved by the Open Source Initiative (which includes GPL-2.0 with the Classpath exception);
+model weights, by the same test on the weights' own licence; data, by a recognised open-data
+licence, which covers ODbL and OGL. Each row names the test it passed (`osi-software`,
+`osi-weights`, `open-data`, or `restricted`), where its licence was read (the source, at the pinned
+version), and its pin. A row that fails the definition is admitted only as `conditional`, citing the
+owner's ruling (GDS Transport, which ships only with `appearance.govuk_identity`; the owner, 21
+November 2026: not a sovereignty gap). A row whose licence could not be read is `unconfirmed`, and a
+name whose licence does not pass is held for the owner (`HELD_FOR_OWNER`): the gate allows both so
+`make ci` stays green, and `tools/release_local.py` refuses a release while either is left. For an
+image the row is the *project's* licence; whether the operating-system packages inside are covered is
+a column of its own, and no existing scan reads those licences. This section's allowlist now reads
+`OFL-1.1` and `Python-2.0` (the spellings the Node half already read), in the Python gate and in the
+copies the `ner` and Laurium images carry.
+
 **Requires review:** LGPL-3.0, LGPL-2.1. Not on the allowlist, because the condition that makes
 them acceptable here — dynamic linking only — is not something `pip-licenses` or
 `license-checker` can see. Both tools read declared metadata; neither inspects linkage. So an
@@ -1157,7 +1179,7 @@ otherwise reach for by reflex. Two of them appear in the input documents.
 | ArangoDB | BSL 1.1 | ArcadeDB | Relicensed 2024 |
 | FalkorDB | SSPLv1 | rustworkx for in-memory algorithms | Correctly rejected by the Gemini spec; retained here |
 | Mapbox GL JS v2+ | Proprietary | **MapLibre GL JS** (BSD-3) | The v1 fork is the maintained open path |
-| MongoDB | SSPL | PostgreSQL / MinIO | |
+| MongoDB | SSPL | PostgreSQL / SeaweedFS | Documents and files are in the object store (SeaweedFS; ADR-114 Amendment 9) |
 | Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table | |
 | Grafana (9+) | AGPLv3 | Perses, or Grafana as a separate unbundled deployment | AGPL is acceptable for an unmodified separate service, not for bundling |
 | Stanford CoreNLP | GPL-3.0 | **Stanza** (Apache-2.0), held at 1.10.1 | Stanza 1.11.0 to 1.15.0 pull in `udtools` (GPL-2.0-or-later) and `udapi` (GPL-3.0-or-later). ADR-098 |

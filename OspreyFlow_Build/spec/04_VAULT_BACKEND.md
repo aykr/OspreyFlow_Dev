@@ -282,7 +282,7 @@ composite made by the migration or a seed starts at the strictest of its members
 
 | Service | Choice | Licence | Role |
 | --- | --- | --- | --- |
-| Object store | MinIO | AGPL-3.0, run unmodified as a separate service | Original documents, staged Parquet, tiles |
+| Object store | SeaweedFS (`chrislusf/seaweedfs:4.48`) | Apache-2.0, run unmodified as a separate service | Original documents, staged Parquet, tiles |
 | Search index | OpenSearch | Apache-2.0 | Full text, embeddings, JanusGraph mixed index |
 | Cache and queue | Valkey | BSD-3 | Working set, session, cache, local queue |
 | Cluster queue | NATS JetStream | Apache-2.0 | Job distribution on the cluster profile |
@@ -292,11 +292,12 @@ composite made by the migration or a seed starts at the strictest of its members
 | Tiles | PMTiles / TileServer GL | BSD-3 / MIT | Offline basemaps |
 | Observability | OpenTelemetry + Prometheus + Loki | Apache-2.0 | |
 
-MinIO's AGPL requires a decision to be made deliberately rather than by default: running it
-unmodified as a separate containerised service does not impose source obligations on
-OspreyFlow, but modifying it would. If that is judged too close to the line for the deployment,
-SeaweedFS (Apache-2.0) is the substitute and the adapter surface is small — everything goes
-through an S3-compatible client either way.
+The object store the install runs is SeaweedFS (Apache-2.0), run unmodified in its own container
+(`harness/render.py`, the `objectstore` service). It replaced MinIO (AGPL-3.0) under ADR-114
+Amendment 9, because MinIO's public images were withdrawn; the adapter surface was small —
+everything goes through an S3-compatible client either way, and the MediaStore conformance suite
+proved the change. The image's licence and its place in the licence register are in
+`spec/LICENCE_REGISTER.yaml` (row B3).
 
 PostgreSQL rather than the graph store for investigations, judgements and audit. Relational data
 belongs in a relational store, the audit stream needs a different durability and retention
