@@ -40,15 +40,19 @@ provider addresses are synthetic and made when the test runs.
 7. **Rule 12**: the same assertions fail for a Conduit that stops writing the first-seen row, and
    for a route that stops writing its row (planted at the call each is made from).
 8. **No identity provider configuration changes** (item 5 of the brief): `touched_provider_settings`
-   reads the changed file list from `git diff` against the merge-base with `main` (plus the working
-   tree and untracked files) and fails on `harness/realm.py`, `harness/keycloak_admin.py`,
-   `harness/keycloak_theme.py`, `tools/idp_test_realm.py` and any `realm*.json|yaml` export; it is
-   shown red on a scratch repository.
+   reads the file list of THIS slice's own changes only (`git diff` from its recorded base,
+   `SLICE_BASE`, to its branch, `SLICE_LANE`, plus the working tree when that branch is checked out)
+   and fails on `harness/realm.py`, `harness/keycloak_admin.py`, `harness/keycloak_theme.py`,
+   `tools/idp_test_realm.py` and any `realm*.json|yaml` export. It reads nothing of any other
+   branch, so a later slice's realm work (PL9b) is not refused by it; it skips where the base or the
+   branch is not in the checkout. Shown red on a scratch repository, and shown not red for a later
+   branch's realm change and for `main` moving on.
 
 **Folders walked.** `OspreyFlow_Core/services/api/app.py` (read as a syntax tree: the one gate every
 authenticated request passes calls the watch; the route is registered and writes through it);
 `OspreyFlow_Core/services/api/audit_section.py` (classification, through its own functions); the
-repository's own `git diff` file list (item 8). Everything else is run, not read.
+slice's own `git diff` file list (item 8: git's file names, no folder of the repository is walked).
+Everything else is run, not read.
 
 **Owed to a live stack** (not proved here; the live step is off): a real Valkey's own refusal of the
 commands used (`SET ... NX EX`, `INCR`, `EXPIRE`, `GET`, `DEL`) and a real Postgres insert of the
@@ -1103,12 +1107,40 @@ def _git(repo: Path, *args: str) -> str:
     return done.stdout
 
 
-def changed_files(repo: Path, main: str) -> list[str]:
-    """Every file this branch changes against `main`: committed since the merge-base, staged,
-    edited, untracked."""
-    base = _git(repo, "merge-base", "HEAD", main).strip()
-    names = _git(repo, "diff", "--name-only", base).splitlines()
-    names += _git(repo, "ls-files", "--others", "--exclude-standard").splitlines()
+#: The commit this slice began from, and the branch it is built on. The check below reads only what
+#: THIS slice changed (the commits from `SLICE_BASE` to `SLICE_LANE`, and, on that branch, the
+#: working tree): it is the owner's ruling about how SE8 records sign-ins, not a ban on any later
+#: slice's realm work (PL9b plans some), so it must not read the diff of whatever branch runs it.
+SLICE_BASE = "c9cc154"
+SLICE_LANE = "lane/slice-SE8c"
+
+
+def _has(repo: Path, ref: str) -> bool:
+    try:
+        _git(repo, "rev-parse", "--verify", "--quiet", ref + "^{commit}")
+        return True
+    except RuntimeError:
+        return False
+
+
+def slice_changes(repo: Path, base: str, lane: str) -> list[str] | None:
+    """Every file the slice on `lane` changes since `base`: committed on the lane, and, when the
+    lane is the branch checked out, staged, edited or untracked. `None` when `base` or `lane` is
+    not in this checkout (a shallow clone, or the lane deleted after its merge): nothing to read."""
+    if not (_has(repo, base) and _has(repo, lane)):
+        return None
+    names = _git(repo, "diff", "--name-only", "--no-renames", base, lane).splitlines()
+    if _git(repo, "rev-parse", "--abbrev-ref", "HEAD").strip() == lane:
+        status = _git(
+            repo,
+            "-c",
+            "status.renames=false",
+            "status",
+            "--porcelain",
+            "-z",
+            "--untracked-files=all",
+        )
+        names += [entry[3:] for entry in status.split("\0") if len(entry) > 3]
     return sorted(set(names))
 
 
@@ -1116,23 +1148,11 @@ def touched_provider_settings(paths: list[str]) -> list[str]:
     return [p for p in paths if p in PROVIDER_FILES or REALM_EXPORT.search(p)]
 
 
-def _main_ref(repo: Path) -> str | None:
-    for ref in ("main", "origin/main"):
-        try:
-            _git(repo, "rev-parse", "--verify", "--quiet", ref)
-            return ref
-        except RuntimeError:
-            continue
-    return None
-
-
-def test_no_identity_provider_setting_is_changed_by_this_branch() -> None:
-    main = _main_ref(REPO)
-    if main is None:
-        pytest.skip(
-            "no `main` to compare with in this checkout (a shallow clone): the branch's run does"
-        )
-    assert touched_provider_settings(changed_files(REPO, main)) == []
+def test_no_identity_provider_setting_is_changed_by_this_slice() -> None:
+    changed = slice_changes(REPO, SLICE_BASE, SLICE_LANE)
+    if changed is None:
+        pytest.skip("this slice's base or branch is not in this checkout: nothing to read")
+    assert touched_provider_settings(changed) == []
 
 
 def _scratch_repo(tmp_path: Path) -> Path:
@@ -1162,7 +1182,7 @@ def test_the_provider_setting_check_is_red_for_each_way_a_file_can_change(
         _git(repo, "add", "-A")
     if how == "committed":
         _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-qm", "x")
-    assert touched_provider_settings(changed_files(repo, "main")) == [file]
+    assert touched_provider_settings(slice_changes(repo, "main", "lane/x") or []) == [file]
 
 
 @pytest.mark.parametrize(
@@ -1173,7 +1193,7 @@ def test_the_provider_setting_check_is_red_for_a_new_realm_export(
 ) -> None:
     repo = _scratch_repo(tmp_path)
     (repo / "OspreyFlow_Core/harness").joinpath(name).write_text("{}\n")
-    assert touched_provider_settings(changed_files(repo, "main")) == [
+    assert touched_provider_settings(slice_changes(repo, "main", "lane/x") or []) == [
         f"OspreyFlow_Core/harness/{name}"
     ]
 
@@ -1182,13 +1202,72 @@ def test_the_provider_setting_check_is_green_for_a_change_that_touches_none(tmp_
     repo = _scratch_repo(tmp_path)
     (repo / "OspreyFlow_Core/services/api/app.py").write_text("changed\n")
     (repo / "OspreyFlow_Core/services/api/sign_in_events.py").write_text("new\n")
-    assert changed_files(repo, "main") == [
+    assert slice_changes(repo, "main", "lane/x") == [
         "OspreyFlow_Core/services/api/app.py",
         "OspreyFlow_Core/services/api/sign_in_events.py",
     ]
-    assert touched_provider_settings(changed_files(repo, "main")) == []
+    assert touched_provider_settings(slice_changes(repo, "main", "lane/x") or []) == []
 
 
 def test_the_provider_files_named_here_exist_so_the_check_cannot_pass_for_a_renamed_one() -> None:
     for rel in PROVIDER_FILES:
         assert (REPO / rel).is_file(), f"{rel} has moved: name its new path in PROVIDER_FILES"
+
+
+def _commit(repo: Path, message: str) -> None:
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.test", "commit", "-qm", message)
+
+
+@pytest.mark.parametrize("how", ["committed", "edited", "untracked"])
+def test_a_later_slices_realm_work_is_not_this_slices_change(tmp_path: Path, how: str) -> None:
+    """The finding of SE8c round 4: the check must not fail the branch of a LATER slice that edits
+    the realm (PL9b plans to). Planted at the shape the check reads: this slice's lane is done and
+    clean; another branch, started from its tip, changes the realm builder in each way a file can
+    change; the slice's own changes are the same before and after."""
+    repo = _scratch_repo(tmp_path)
+    (repo / "OspreyFlow_Core/services/api/app.py").write_text("slice work\n")
+    _commit(repo, "slice")
+    _git(repo, "checkout", "-q", "-b", "lane/later")
+    realm = repo / "OspreyFlow_Core/harness/realm.py"
+    export = repo / "OspreyFlow_Core/harness/realm-later.json"
+    if how == "committed":
+        realm.write_text("later slice\n")
+        _commit(repo, "later")
+    elif how == "edited":
+        realm.write_text("later slice\n")
+    else:
+        export.write_text("{}\n")
+    assert slice_changes(repo, "main", "lane/x") == ["OspreyFlow_Core/services/api/app.py"]
+    assert touched_provider_settings(slice_changes(repo, "main", "lane/x") or []) == []
+
+
+def test_main_moving_on_with_realm_work_is_not_this_slices_change(tmp_path: Path) -> None:
+    """Once the slice has merged, `main` holds later realm work: reading `main` against HEAD is not
+    reading the slice."""
+    repo = _scratch_repo(tmp_path)
+    (repo / "OspreyFlow_Core/services/api/app.py").write_text("slice work\n")
+    _commit(repo, "slice")
+    _git(repo, "checkout", "-q", "main")
+    _git(
+        repo,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.test",
+        "merge",
+        "-q",
+        "--no-ff",
+        "-m",
+        "merge",
+        "lane/x",
+    )
+    (repo / "OspreyFlow_Core/harness/keycloak_admin.py").write_text("later realm work\n")
+    _commit(repo, "later realm work")
+    assert slice_changes(repo, "main~2", "lane/x") == ["OspreyFlow_Core/services/api/app.py"]
+
+
+def test_the_check_reads_nothing_when_the_slices_base_or_branch_is_absent(tmp_path: Path) -> None:
+    repo = _scratch_repo(tmp_path)
+    assert slice_changes(repo, "main", "lane/gone") is None
+    assert slice_changes(repo, "no-such-base", "lane/x") is None
