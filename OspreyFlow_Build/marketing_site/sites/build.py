@@ -39,6 +39,52 @@ REPO = 'https://github.com/aykr/OspreyFlow'
 STATEMENT = ('OspreyFlow is an open source intelligence mapping platform for crime analysis, anti-money-laundering, '
              'fraud detection, and event monitoring and alerting, developed by Solirius Reply and released under the '
              'Apache License 2.0.')
+#: The platform's stated intent, the owner's paragraph of 20 November 2026, word for word: no edit, no reflow, no change of
+#: punctuation. The one place it is written; both Homes read it from here, and `tests/test_site_intent.py` holds it to the
+#: owner's text by its hash. Each line below ends where the owner's sentence does (or at a comma), with its space.
+INTENT = (
+    'Intelligence mapping tools sit at the centre of sensitive analytical work, yet the organisations that depend on them '
+    'often control neither the software nor the conditions under which their data is processed. '
+    'OspreyFlow was developed from the premise that an organisation cannot be sovereign over its knowledge and intellectual '
+    'property unless it can inspect, modify, host and replace the software that holds them, and that only open-source '
+    'software guarantees this. '
+    'Open source is necessary but not sufficient, so the premise was expressed as four design constraints: every dependency '
+    'must be under an open-source licence; the platform must run fully disconnected, with no data or telemetry leaving the '
+    'deployment unless an administrator allows it; what each person sees must be bounded by handling markings and case '
+    'membership; and every access, export and model call must be attributable. '
+    'A fifth constraint, that analytical judgements carry their evidence and uncertainty with them, emerged from the source '
+    'material during design.')
+#: The five constraints by the owner's names, each with one or two plain sentences and the page that already shows it
+#: (DC1a's table, `process/lanes/v062/slices/DOC1A_REPORT.md`: what is true of v0.6.1, what only of main and said as coming).
+CONSTRAINTS = [
+ ('Software sovereignty',
+  'The licences of the software packages the platform is built from are checked against a list of open-source licences '
+  'whenever the code changes. Model weights, map data, fonts and base images are outside that check today; a register and '
+  'a check for them are coming.',
+  ('governance.html#principles', 'The principles the project holds to')),
+ ('Data sovereignty',
+  'The deployment runs on an internal network with no route out by default, and a hosted model engine is an opt-in that an '
+  'administrator enables. The install downloads images and models, a server on an https address fetches its own '
+  "certificate, and the dashboards' usage image, which a browser could request from outside, is stopped by a fix coming "
+  'in the next release.',
+  ('public-sector.html#security-questions', 'What a security team will ask')),
+ ('Privacy control',
+  "What each person sees is bounded by handling markings and case membership, applied inside the store's own queries "
+  'rather than after them. Conformance suites test it, as does a check of each read route as a person with no role; an '
+  'independent penetration test is planned and not yet done.',
+  ('features.html#admin', 'Markings and clearance')),
+ ('Security management',
+  'Case reads, refusals of case access and changes are recorded in the audit with who, when and what, and report, '
+  'assessment and pack exports are in an export ledger; reference reads that carry no case data, such as the type list '
+  'and map tiles, and a few lookups within a case are outside the audit. Recording each model call with who asked, for '
+  'which case and to which engine, and recording sign-in events, are coming.',
+  ('features.html#admin', 'The audit')),
+ ('Analytical accountability',
+  'A judgement is written on a probability yardstick and cannot be saved without supporting evidence, and anything a model '
+  'finds stays inferred until a person confirms it. Every drawn item carries its grading and its source, and a separate '
+  'status on a judgement itself is not built yet.',
+  ('features.html#boards', 'Drawing boards')),
+]
 #: The owner's decision 2 (12 November 2026): one shared mailbox for enquiries and security reports.
 MAILBOX = 'servicecentre@solirius.com'
 GDS = ('OspreyFlow is designed to meet the GDS Service Standard. Three independent checks are planned and not yet '
@@ -240,6 +286,21 @@ def govuk_section():
                      'illustrations and every name is invented.')
 
 
+def intent_section(cls='', extra=''):
+    """The owner's paragraph, from INTENT alone, as its own section. `esc` leaves it as it is: it holds no mark HTML changes."""
+    assert esc(INTENT) == INTENT
+    return sec('Why OspreyFlow exists', f'<p class="intent">{esc(INTENT)}</p>{extra}', cls, 'why')
+
+
+def constraints_section():
+    """The five constraints, named as the owner names them, each with its plain sentences and a link to where the site shows it."""
+    items = ''.join(f'<article class="card"><h3>{n}</h3><p>{t}</p><p class="more"><a href="{h}">{lab}</a></p></article>'
+                    for n, t, (h, lab) in CONSTRAINTS)
+    return sec('The five constraints', f'<div class="cards c3">{items}</div>', 'tint', 'constraints',
+               intro='The premise above was written as four design constraints, and a fifth. Each is set out here as the product '
+                     'stands in its latest release, with what is coming said as coming.')
+
+
 def hero(kicker, h1, lede, actions, site, art=True):
     acts = ''.join(f'<a class="btn {c}" href="{h}">{t}</a>' for h, t, c in actions)
     a = f'<div class="art">{network_svg(dark=(site == "net"))}</div>' if art else ''
@@ -271,7 +332,7 @@ PRINCIPLES = [
  ('Every link shows where it came from', 'The source, the record and when it arrived are one click away, so a finding can be traced back at disclosure or audit.'),
  ('A model suggests, a person confirms', 'Anything a model finds is marked inferred until an analyst confirms it. Nothing a model proposes is treated as fact.'),
  ('Matches can be undone', '"Same person" is a scored link, never a merge, so a wrong match is reversed cleanly and nothing is lost.'),
- ('You see only what you are cleared for', 'Access is enforced in the store, so a hidden record leaves no trace in a count, a path or a chart.'),
+ ('You see only what you are cleared for', "Access is enforced in the store's own queries, not applied afterwards, by handling markings and case membership."),
 ]
 PLACES = [
  ('The Glass', 'For investigating a case: the network, the map, the timeline, the Matrix view, reports, drawing boards and questions to a model.'),
@@ -287,6 +348,8 @@ def org_index():
              'OspreyFlow is an open-source intelligence mapping platform. It turns records about people, places, objects and events into '
              'a single network, read as a graph, a map, a timeline and reports, inside your own cloud or data centre.',
              [('get-started.html', 'Get started', 'primary'), (REPO, 'Source code', ''), ('features.html', 'See every feature', 'quiet')], 'org')
+    b += intent_section()
+    b += constraints_section()
     b += overview_section()
     b += sec('Where it applies', cards(DOMAINS, 4), 'tint',
              intro='For private and public sector organisations. One platform, with a domain model, rules and demonstration data for each.')
@@ -304,8 +367,8 @@ def org_index():
     b += sec('Built in, not bolted on', split(
              '<h3>Monitoring and alerting</h3><p>Rules written as plain sentences, previewed on the last 90 days before they go live. '
              'A person decides every alert, with a reason, and a second person approves the decisions that matter.</p>'
-             '<h3>Your own models, or one you choose</h3><p>The deployment\'s own model answers by default and nothing leaves. An administrator '
-             'may enable a hosted engine; material reaches it only when its handling code and its dataset both allow it.</p>'
+             '<h3>Your own models, or one you choose</h3><p>The deployment\'s own model answers by default. A hosted engine is an opt-in: an '
+             'administrator may enable one, and material reaches it only when its handling code and its dataset both allow it.</p>'
              '<h3>A UK public sector option</h3><p>The GOV.UK theme is a setting chosen at install, not a fork. '
              '<a href="public-sector.html">How it works, and what "designed to meet" means</a>.</p>', fig('rule'), flip=True))
     b += sec('Run it your way', cards([
@@ -368,14 +431,14 @@ def org_features():
         "<strong>Ask &amp; Chat.</strong> Ask about the documents and the graph around your selection. Each cited fact is a button that selects it on the canvas.",
         '<strong>Extraction.</strong> Names, numbers and places found in documents arrive as inferred, to accept or reject. On the shared-platform profile, a second, open-source extraction engine for structured facts in documents is installed and runs; no screen uses it yet.',
         '<strong>Local by default.</strong> Extraction, vision, transcription and embeddings run on the deployment itself.',
-        "<strong>Hosted engines, by permission.</strong> Each dataset has an egress setting, and material leaves only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London, checked so far against a stand-in gateway, not yet against AWS or an organisation's own.",
-        '<strong>Every answer names the engine and model that produced it.</strong>',
+        "<strong>Hosted engines are an opt-in.</strong> An administrator enables one, each dataset has an egress setting, and material reaches a hosted engine only when that and its handling code both allow it. On the shared-platform profile, your organisation's own AI gateway, or Amazon Bedrock in London, checked so far against a stand-in gateway, not yet against AWS or an organisation's own.",
+        '<strong>An answer shows the engine and model that produced it.</strong> Recording the engine against the person and the case in the audit is coming.',
         '<strong>Keys are write-only,</strong> held by the model gateway alone, with limits and usage per engine.']), fig('questions'), flip=True), ident='models')
     b += sec('Admin and access', cards([
         ('People, roles and teams', 'Built-in roles (Analyst, Data Engineer, Administrator, Reports Viewer, Rule author) and roles you define. No one can give more than they hold.'),
         ('Sign-in', "OspreyFlow's own accounts. On a server of your own, your organisation's account through Microsoft Entra ID, ADFS or another OpenID Connect provider."),
         ('Markings and clearance', 'Handling markings on every record, a highest allowed marking per dataset, and reads filtered in the store.'),
-        ('Audit', 'Who did what and when, including every export, every approval and every change to what may leave the deployment.'),
+        ('Audit', 'Who did what and when: case reads, refusals of case access, and changes to cases, people, datasets, loads and a dataset\'s egress setting. Report, assessment and pack exports are in an export ledger. The type list and map tiles, which carry no case data, and a few lookups within a case are not recorded; recording model calls and sign-in events is coming.'),
         ('Dashboards', 'Apache Superset embedded in a case with the same sign-in, reading a reporting feed.'),
         ('Backups and updates', 'Signed releases. On one computer or a server of your own, installed from a release, an update is backed up first and rolled back on failure; Enterprise is updated by installing the new release.'),
         ('A shared government platform', "A profile for shared government Kubernetes platforms: one namespace, the platform's managed services, non-root containers and a single-copy shape for a proof of concept, with sign-in through Microsoft Entra ID. Installed and checked on a test cluster, not yet on a platform. There, scheduled runs act as their owner while the owner has signed in within the last 24 hours, and reporting runs through Apache Superset; the administration guide's section 6a has every limit.")]), 'tint', 'admin')
@@ -390,7 +453,7 @@ def org_public_sector():
     site = 'org'
     b = hero('UK public sector', 'OspreyFlow for the UK public sector',
              'The whole product under the GOV.UK Design System\'s look, for services on a gov.uk domain, with government security markings, '
-             f'need-to-know access and a full audit trail. Everything on this page is in release {RELEASE}.',
+             f'need-to-know access and an audit trail. Everything on this page is in release {RELEASE}.',
              [('get-started.html', 'Install with a GOV.UK starter', 'primary'), (NET + '/public-sector.html', 'Help from Solirius Reply', '')],
              site, art=False)
     b += govuk_section()
@@ -411,12 +474,12 @@ def org_public_sector():
         '</tbody></table></div><pre><code>ospreyflow install --mode lite --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "Your organisation"</code></pre>'
         '<p>Each starter except Blank comes with its own synthetic demonstration data.</p>', 'tint')
     b += sec('What a security or architecture team will ask', cards([
-        ('Where does the data live?', "Inside your own cloud account or data centre. The deployment does not call out on its own: the install downloads its images and model, a server fetches its own certificate, and anything else, such as a hosted model or your organisation's sign-in, is switched on by an administrator."),
-        ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store, so a hidden record leaves no trace in a count.'),
-        ('Can a finding be traced?', 'Every link keeps its source, its record and when it arrived. Every export and approval is in the audit.'),
-        ('What about models?', 'Local by default. A hosted engine receives material only when the dataset and the handling code both allow it.'),
+        ('Where does the data live?', "Inside your own cloud account or data centre, on an internal network with no route out by default; only the front proxy is published. The install downloads its images and models, and the one-computer install checks for the models again at each start. A server on an https address fetches its own certificate. A hosted model engine or your organisation's sign-in is switched on by an administrator. No test yet proves that no component reports its own usage; a standing browser test of that is coming."),
+        ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store rather than afterwards. Conformance suites test it, and an independent penetration test is planned and not yet done.'),
+        ('Can a finding be traced?', 'Every link keeps its source, its record and when it arrived. Case reads and changes are in the audit, and report, assessment and pack exports are in an export ledger; recording model calls and sign-in events is coming.'),
+        ('What about models?', 'Local by default. A hosted engine is an opt-in that an administrator enables, and it receives material only when the dataset and the handling code both allow it.'),
         ('Is it accessible?', 'Designed to WCAG 2.2 AA, with automated accessibility scans on every screen we test, in the light and dark themes and under GOV.UK on most of them, and a Matrix view of the network as tables. An independent audit is planned.'),
-        ('What is inside it?', 'Open-source components throughout, each listed with its licence. No software licence fee.')]))
+        ('What is inside it?', 'The software packages are checked against a list of open-source licences whenever the code changes. Model weights, map data, fonts and base images are outside that check today; a register for them is coming. No software licence fee.')]), ident='security-questions')
     return page(site, 'public-sector.html', 'UK public sector · OspreyFlow', 'OspreyFlow under the GOV.UK theme: designed to meet the GDS Service Standard, with security markings, need-to-know access and audit.', b)
 
 def net_public_sector():
@@ -424,7 +487,7 @@ def net_public_sector():
     and leads to it, so there is one source and nothing to drift."""
     b = hero('UK public sector', 'OspreyFlow for a UK public sector service',
              "OspreyFlow has a GOV.UK theme for services on a gov.uk domain, with government security markings, need-to-know access "
-             "and a full audit trail. Solirius Reply helps a public sector team take it from a pilot to a live service.",
+             "and an audit trail. Solirius Reply helps a public sector team take it from a pilot to a live service.",
              [('contact.html', 'Talk to Solirius Reply', 'primary'), (ORG + '/public-sector.html', 'The UK public sector page on ospreyflow.org', '')],
              'net', art=False)
     b += sec('What "designed to meet" means', f'<p class="callout">{GDS}</p>')
@@ -460,8 +523,8 @@ def org_start():
         ('Developer Guide', 'The Ingest Studio from a first pipeline to a scheduled one, the domain model, screening lists and the API.'),
         ('Architecture Guide', 'How it is built, what crosses each boundary and how access is enforced, for architects and security reviewers.')], 4) +
         f'<p>Each is in the repository\'s <code>docs/</code> folder, as Markdown and as a PDF with screenshots. <a href="{REPO}">Open the repository</a>.</p>', 'tint')
-    b += sec('Releases', '<p>A checkout of a release tag installs that release\'s own signed images. Nothing checks for updates on its own, '
-        'because the deployment never calls out; ask with <code>ospreyflow update --check</code>.</p>', ident='releases')
+    b += sec('Releases', '<p>A checkout of a release tag installs that release\'s own signed images. OspreyFlow does not check for updates '
+        'on its own; an administrator asks, with <code>ospreyflow update --check</code>.</p>', ident='releases')
     return page('org', 'get-started.html', 'Get started · OspreyFlow', 'Install OspreyFlow: prerequisites, the three commands, the modes and the guides.', b)
 
 def person(name, role, text, placeholder=False):
@@ -527,7 +590,14 @@ def org_governance():
         'Decisions are recorded, with their reasons, where everyone can read them.',
         'The same checks apply to everyone\'s changes, the project leads\' included.',
         'A disagreement is settled by the person who answers for that area, and the decision is written down.',
-        'The open-source product is the whole product. Solirius Reply sells services around it, not a separate edition.']))
+        'The open-source product is the whole product. Solirius Reply sells services around it, not a separate edition.']) +
+        '<h3>The five constraints the platform is built to</h3><p><a href="index.html#constraints">The home page</a> sets each one out, '
+        'with where the product shows it and what is still coming.</p>' + ul([
+        '<strong>Software sovereignty.</strong> Software an organisation can read, change, host and replace.',
+        '<strong>Data sovereignty.</strong> A deployment on an internal network with no route out by default, and a hosted model engine as an opt-in.',
+        '<strong>Privacy control.</strong> What each person sees is bounded by handling markings and case membership.',
+        '<strong>Security management.</strong> Case reads, changes and report, assessment and pack exports recorded against a person; model calls and sign-in events are coming.',
+        '<strong>Analytical accountability.</strong> A judgement is written on a probability yardstick and carries its supporting evidence with it.']), ident='principles')
     b += sec('Changing this', '<p>This page describes how the project runs today, with a small founding team. As contributors join, it will change, '
         'and changes will be proposed in the open. <span class="note">A governance file and a list of maintainers are not yet in the repository.</span></p>', 'tint')
     return page('org', 'governance.html', 'Governance · OspreyFlow', 'Who decides what in the OspreyFlow project: the steward, the project leads and maintainers.', b)
@@ -553,13 +623,15 @@ def net_index():
     b += sec('Why organisations choose it', cards([
         ('Defensible', 'Every link shows where it came from. A model\'s suggestion stays inferred until a person confirms it. A match can be undone.'),
         ('Yours', 'Apache-2.0 open source. You own the data, the deployment and the roadmap you ask of it. No per-seat licence.'),
-        ('Inside your boundary', 'Runs in your own cloud account or data centre. Nothing leaves unless an administrator enables it for a dataset.'),
-        ('Need-to-know by design', 'Access is enforced in the store, so a record someone may not see leaves no trace in a count, a path or a chart.')], 4))
+        ('Inside your boundary', 'Runs in your own cloud account or data centre, on an internal network with no route out by default. A hosted model engine is an opt-in that an administrator enables for a dataset.'),
+        ('Need-to-know by design', "Access is enforced in the store's own queries, not applied afterwards: handling markings and case membership decide what each person sees.")], 4))
+    b += intent_section('', '<p class="more">The five constraints, each with where the product shows it, are on '
+                                f'<a href="{ORG}/index.html#constraints">ospreyflow.org</a>.</p>')
     b += sec('Where it applies', cards([(t, d, ('sectors.html', 'More')) for t, d in DOMAINS], 4), 'tint',
              intro='For private and public sector organisations alike.')
     b += sec('For the UK public sector', split(
         '<p>OspreyFlow includes a dedicated configuration for UK government: the GOV.UK Design System\'s look, government security markings '
-        'with need-to-know access, and a full audit trail.</p><p class="callout">' + GDS + '</p><p class="more"><a href="public-sector.html">The UK public sector option</a></p>',
+        'with need-to-know access, and an audit trail.</p><p class="callout">' + GDS + '</p><p class="more"><a href="public-sector.html">The UK public sector option</a></p>',
         fig('queue-govuk', 'The alert queue under the GOV.UK theme.'), flip=True))
     b += sec('How Solirius Reply helps', cards([
         ('Pilot', 'A few weeks on your own or anonymised data, with a handful of analysts, ending in a short report of what was found.', ('services.html', 'More')),
@@ -616,7 +688,7 @@ def net_services():
         ul(['Managed support and updates.', 'New sources, teams and units.', 'Dashboards for leadership.', 'Training for analysts, data engineers and administrators.']) + '</li></ol>')
     b += sec('What you keep', cards([
         ('The software', 'Apache-2.0. If we part ways, everything keeps running and you can take it forward yourselves or with anyone else.'),
-        ('The data', 'It never leaves your environment. We work inside your boundary, under your controls.'),
+        ('The data', 'It is held in your environment. We work inside your boundary, under your controls, and a hosted model engine is an opt-in that your administrator enables.'),
         ('The configuration', 'Your domain models, pipelines and rules are files you own and can read.')]), 'tint')
     b += sec('Deployment options', cards([
         ('Your cloud account', 'AWS or Azure, on one server or a Kubernetes cluster, using the cloud\'s managed services.'),

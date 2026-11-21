@@ -157,7 +157,7 @@ def a2():
     o.append(f'<g class="a-rise" {st(4.1)}>' + rect(560, 340, 604, 124, K['raised'], K['b'], rx=8) + text(580, 370, 'Close this alert', 13, K['t3'], 600)
              + text(580, 398, 'True match', 19, K['t1'], 700) + text(580, 424, 'Reason: three structured deposits, confirmed against statements.', 14, K['t2'])
              + text(580, 448, 'Propose the close: a second person approves a high-severity one.', 13, K['warn'], 600) + '</g>')
-    o.append(text(44, 372, 'A person decides every alert.', 15, K['t2'], d=4.4)); o.append(text(44, 396, 'Nothing you may not see is shown or counted.', 15, K['t2'], d=4.7))
+    o.append(text(44, 372, 'A person decides every alert.', 15, K['t2'], d=4.4)); o.append(text(44, 396, 'The queue lists only the alerts you may see.', 15, K['t2'], d=4.7))
     return ('Work the alerts', 'One queue for every alert you may see. A person decides each one, with a reason, and a second person approves closing a high-severity one that others may see.',
             svg('An alert queue with four alerts, one claimed and being closed with a reason', ''.join(o)))
 
@@ -291,7 +291,7 @@ def m1():
         g.append(text(x + 120, 440, count, 15, K['t1'], 700, 'middle', d=round(d + 1.0, 2)))
         return ''.join(g)
     o.append(mini(680, 'Cleared higher', True, '6 items', 3.2)); o.append(mini(940, 'Cleared lower', False, '4 items, and the count says 4', 4.2))
-    return ('Decide who sees what', 'Roles, teams, markings and clearance. Access is enforced in the store, so a record someone may not see leaves no trace in a count or a path.',
+    return ('Decide who sees what', "Roles, teams, markings and clearance. Access is enforced in the store's own queries, not applied afterwards.",
             svg('A table of people with their roles and clearance, and the same network seen by two people with different clearance', ''.join(o)))
 
 DATASETS_SUB = ("Every load is recorded with the pipeline version that made it, and can be reverted. The dataset's model is "
@@ -342,8 +342,8 @@ def m3():
     for i, (t, who, what) in enumerate(rows):
         y = 150 + i * 52; d = round(1.0 + i * .5, 2)
         o.append(f'<g class="a-rise" {st(d)}>' + rect(36, y, 1128, 42, K['raised'], K['bSub'], rx=6) + text(52, y + 27, t, 14, K['t2'], mono=True) + text(150, y + 27, who, 14, K['t1'], 600) + text(330, y + 27, what, 15, K['t1']) + '</g>')
-    o.append(text(44, 446, "Where your own read of a record would not show its words, the entry says so. The log is append-only.", 14, K['t2'], d=4.2))
-    return ('Everything is on the record', 'Who did what and when: loads and promotions, people and roles, datasets, and every read that was refused.',
+    o.append(text(44, 446, "Where your own read of a record would not show its words, the entry says so. The product only adds to this log.", 14, K['t2'], d=4.2))
+    return ('Everything is on the record', 'Who did what and when: loads and promotions, people and roles, datasets, and a refused attempt to open a case.',
             svg('An audit log with five entries, each with a time, a person and an action', ''.join(o)))
 
 
