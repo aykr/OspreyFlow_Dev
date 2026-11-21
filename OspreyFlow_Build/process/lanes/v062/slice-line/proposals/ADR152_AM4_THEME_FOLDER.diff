@@ -1,0 +1,92 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -20751,7 +20751,7 @@
+ 3. **GOV.UK is light only.** Under `govuk`, `applyTheme` holds `data-theme` at `light` and neither
+    theme button is drawn: the GOV.UK Design System has no dark mode.
+ 4. **`tokens.css` stays the single colour authority** and gains one `[data-brand="govuk"]` block
+-   after the light block. A brand block redefines chrome only: never a `--ch-*`, `--chart-*`,
++   after the light block (ADR-152 Amendment 4: a brand's block may live in its theme folder's own token file, loaded after the light block). A brand block redefines chrome only: never a `--ch-*`, `--chart-*`,
+    `--seq-*` or `--div-*` token. The nine channels with their shapes, the charts and the ramps are
+    the product's instrument and the Design System does not govern data visualisation.
+    `DESIGN.md` §11 declares each brand's colours and this rule; `designContract.test.ts` holds the
+@@ -41752,3 +41752,42 @@
+ service, its route or its variables are missing; the settings validation fails a value that is not a boolean; and the render of a complete
+ GOV.UK tree with the setting off fails unless it is refused in the words above. The slice that makes the renderers read the setting (PL7a2b)
+ writes them, and does not start before this amendment is applied.
++
++### ADR-152, Amendment 4 (21 November 2026) — a theme's override block, fonts entry and sign-in theme live in the theme's own folder; the shared design package names no theme — Accepted by the owner, 21 November 2026
++
++Status: **Accepted by the owner, 21 November 2026**, in his rulings on slice family PL12 (each theme in one folder). It amends the places
++named in items 3 to 5 and leaves decisions 6 and 7 of this record as they are.
++
++1. **The theme folder.** A theme that is not the default has one folder, `OspreyFlow_Core/packages/themes/<name>/` (the GOV.UK theme:
++   `OspreyFlow_Core/packages/themes/govuk/`). `OspreyFlow_Core/packages/design` holds what every theme shares (the default tokens, the light
++   block, the primitives, the scale, the fonts every theme uses), and no rule in it names a theme. The default theme needs no folder: it is
++   the shared tokens and the light block, and it names no brand.
++2. **What moves into the GOV.UK theme folder, and when.** After slice E of PL4 has merged: the `[data-brand="govuk"]` block of
++   `tokens.css`, the GOV.UK rules in `primitives.css` and `panelType.css`, the GDS Transport files and their entry in the fonts list, and
++   the sign-in theme's stylesheet and `govuk_chrome.js`. **What does not move:** the React workspace's own GOV.UK look (the files under
++   `apps/workspace/src/brand/govuk/`, the component stylesheets that name the brand and the components that branch on the brand), which
++   decision 7 keeps until the GOV.UK tree passes the same acceptance and which decision 13 leaves for the owner to retire (F7); no
++   builder time goes on moving it. The GOV.UK page templates stay in `apps/pages/tree-govuk`, as decision 6 says. The order of the
++   stylesheets is unchanged: the theme's token file is loaded after the light block it overrides, so every computed style is the same.
++3. **ADR-132 decision 4.** "`tokens.css` stays the single colour authority and gains one `[data-brand="govuk"]` block after the light
++   block" now reads: `tokens.css` stays the single colour authority for the shared and the default tokens; a brand's override block is one
++   `[data-brand="<name>"]` block, after the light block, either in `tokens.css` or, for a brand with a theme folder, in that folder's own
++   token file loaded after it. The rule that a brand block redefines chrome only is unchanged.
++4. **Amendment 2 of this record, item 1 (the fonts entry).** The shared families are listed in `OspreyFlow_Core/packages/design/fonts.json`;
++   a theme's own families (GDS Transport, for the GOV.UK theme) are listed in the theme folder's own fonts list, with the same fields
++   (role, source, weights, licence, conditions). The test of Amendment 2, item 4, reads every list and applies the same rules to each.
++5. **The guard.** A check fails if a theme's rule appears outside its folder, with an allowlist of today's GOV.UK rules outside it. The
++   allowlist may only shrink, and it reaches zero at the cutover; the check is shown red first.
++6. **The baseline.** The Default build's comparison baseline (`scripts/dist_compare.mjs`) is re-recorded once, in slice PL12d, after slice E.
++   The difference between the old and the new baseline lists only GOV.UK files; anything else in it fails the slice. The visual, contrast
++   and accessibility suites pass unchanged for the default theme and for the GOV.UK theme with the identity switched on.
++7. **The typeface and the switch.** The GDS Transport files are left out of the default build and added only for a deployment that turns the
++   GOV.UK identity on (decision 14). A deployment with the GOV.UK brand set and the identity switch off fails loudly at start rather than
++   falling back silently; the identity switch (slice PL12e, which absorbs PL7c) ships in the same release as the move. A theme reaches a
++   deployment as a signed image and a template folder, and the Themes menu in Admin holds settings only.
++
++Tests that would fail (rule 12; each shown red against a planted fault in the shape the code writes it, rule 15): the theme-rule check
++(a planted `[data-brand="govuk"]` rule in the shared design package, in a second theme's folder, and in a component stylesheet outside the
++allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
++file and no GOV.UK rule once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
++in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
+diff --git a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+--- a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
++++ b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+@@ -129,6 +129,7 @@
+ | ADR-148 Amendment 23 | The `pages` service on cloud-platform, no Superset under the GOV.UK theme, and the identity switch | orchestrator (draft, decision record) | 2026-11-19 | reserved |
+ | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
+ | ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
++| ADR-152 Amendment 4 | A theme's override block, fonts entry and sign-in theme live in the theme's own folder (`OspreyFlow_Core/packages/themes/<name>/`); the shared design package names no theme; the React GOV.UK look is not moved (F7); the Default baseline is re-recorded once, in PL12d, with a diff of GOV.UK files only (the owner's rulings of 21 Nov on PL12; slice PL12a) | v062 conductor | 2026-11-21 | written |
+ 
+ ## Baseline
+ 
+diff --git a/OspreyFlow_Build/spec/design/DESIGN.md b/OspreyFlow_Build/spec/design/DESIGN.md
+--- a/OspreyFlow_Build/spec/design/DESIGN.md
++++ b/OspreyFlow_Build/spec/design/DESIGN.md
+@@ -421,7 +421,8 @@
+ 
+ A deployment may show another brand instead of the OspreyFlow identity (`appearance.brand` in
+ `osprey.yaml`, `06_DECISIONS.md` ADR-132). A brand is one `[data-brand="<name>"]` block in
+-`tokens.css`, after the light theme's, and it obeys one rule: **it redefines chrome only, never a
++`tokens.css`, after the light theme's (or, for a brand with a theme folder, in that folder's own token file, loaded after it:
++`06_DECISIONS.md` ADR-152 Amendment 4), and it obeys one rule: **it redefines chrome only, never a
+ `--ch-*`, `--chart-*`, `--seq-*` or `--div-*` token.** The nine channels and their shapes, the chart
+ palette and the two ramps are the same under every brand. A brand is always shown light. Every
+ colour a brand block sets is listed below for that brand; anything else in the block is drift.
+diff --git a/OspreyFlow_Core/DESIGN.md b/OspreyFlow_Core/DESIGN.md
+--- a/OspreyFlow_Core/DESIGN.md
++++ b/OspreyFlow_Core/DESIGN.md
+@@ -421,7 +421,8 @@
+ 
+ A deployment may show another brand instead of the OspreyFlow identity (`appearance.brand` in
+ `osprey.yaml`, `06_DECISIONS.md` ADR-132). A brand is one `[data-brand="<name>"]` block in
+-`tokens.css`, after the light theme's, and it obeys one rule: **it redefines chrome only, never a
++`tokens.css`, after the light theme's (or, for a brand with a theme folder, in that folder's own token file, loaded after it:
++`06_DECISIONS.md` ADR-152 Amendment 4), and it obeys one rule: **it redefines chrome only, never a
+ `--ch-*`, `--chart-*`, `--seq-*` or `--div-*` token.** The nine channels and their shapes, the chart
+ palette and the two ramps are the same under every brand. A brand is always shown light. Every
+ colour a brand block sets is listed below for that brand; anything else in the block is drift.
