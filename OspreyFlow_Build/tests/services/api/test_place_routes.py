@@ -60,7 +60,7 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
      "Rules and Monitoring's screening lists (glass-shared/src/alerts/api.ts)"),
     # The queue's list is read in the Glass too, by a report pack's alert items (ADR-134 decision 1).
     (r"/alert-queue$", frozenset({"glass", "rules"}),
-     "Rules and Monitoring's Alerts; the Glass's report packs (glass-shared/src/reports/packsApi.ts)"),
+     "Rules and Monitoring's Alerts; the Glass's report packs (the shared packs client)"),
     # Held rows are worked in the Studio's Runs too (ADR-140), and read by Home.
     (r"/held-rows(/|$)", frozenset({"ingest", "rules"}),
      "Rules and Monitoring's Held rows; the Studio's Runs (ingest/runs/RunsTab.tsx)"),

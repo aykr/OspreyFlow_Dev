@@ -216,7 +216,9 @@ def imports_not_reaching(root: Path, rels: Iterable[str]) -> tuple[list[str], in
     importers = 0
     names = _client_names(root)
     for rel in rels:
-        if Path(rel).suffix not in earlier._SOURCE_SUFFIXES or not rel.startswith("OspreyFlow_Core/"):
+        if Path(rel).suffix not in earlier._SOURCE_SUFFIXES or not rel.startswith(
+            "OspreyFlow_Core/"
+        ):
             continue
         try:
             text = (root / rel).read_text(encoding="utf-8")
@@ -224,7 +226,9 @@ def imports_not_reaching(root: Path, rels: Iterable[str]) -> tuple[list[str], in
             continue
         for hit in _PACKAGE_IMPORT.finditer(text):
             if hit.group(1):
-                bad.append(f"{rel}: {PACKAGE_NAME}{hit.group(1)} (the package is imported by its name)")
+                bad.append(
+                    f"{rel}: {PACKAGE_NAME}{hit.group(1)} (the package is imported by its name)"
+                )
         if not rel.startswith(SHARED) and any(
             names & earlier._names(m.group(1))
             for m in re.finditer(
@@ -268,7 +272,11 @@ def test_the_new_clients_are_among_the_files_that_check_reads() -> None:
     sources = clients._package_sources()
     for rel in (*WHOLE, SENTENCE_MODULE):
         assert SHARED + rel in sources, f"{rel} is not among the package's sources"
-    problems = [p for rel in (*WHOLE, SENTENCE_MODULE) for p in clients.package_import_problems(ROOT, SHARED + rel)]
+    problems = [
+        p
+        for rel in (*WHOLE, SENTENCE_MODULE)
+        for p in clients.package_import_problems(ROOT, SHARED + rel)
+    ]
     assert problems == [], f"{len(problems)} import(s) the package may not make: {problems[:10]}"
 
 
@@ -290,15 +298,25 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(tmp_path: Path) 
         target = tmp_path / (SHARED + rel)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(real, encoding="utf-8")
-        for dependency in (*WHOLE, SENTENCE_MODULE, "/".join(("workingset", "models.ts"))):  # so a sibling import resolves
+        for dependency in (
+            *WHOLE,
+            SENTENCE_MODULE,
+            "/".join(("workingset", "models.ts")),
+        ):  # so a sibling import resolves
             sibling = tmp_path / (SHARED + dependency)
             sibling.parent.mkdir(parents=True, exist_ok=True)
             if not sibling.exists():
-                sibling.write_text((ROOT / (SHARED + dependency)).read_text(encoding="utf-8"), encoding="utf-8")
-        assert clients.package_import_problems(tmp_path, SHARED + rel) == [], f"{rel} is not clean to begin with"
+                sibling.write_text(
+                    (ROOT / (SHARED + dependency)).read_text(encoding="utf-8"), encoding="utf-8"
+                )
+        assert clients.package_import_problems(tmp_path, SHARED + rel) == [], (
+            f"{rel} is not clean to begin with"
+        )
         for line in plants:
             target.write_text(line + real, encoding="utf-8")
-            assert clients.package_import_problems(tmp_path, SHARED + rel), f"{line!r} is not found in {rel}"
+            assert clients.package_import_problems(tmp_path, SHARED + rel), (
+                f"{line!r} is not found in {rel}"
+            )
         target.write_text(real, encoding="utf-8")
 
 
@@ -309,9 +327,13 @@ def test_the_move_changed_no_line_but_the_imports() -> None:
     earlier._skip_if_shallow()
     for rel in WHOLE:
         new, old = SHARED + rel, OLD_OF[rel]
-        commit = earlier._git("log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new).strip()
+        commit = earlier._git(
+            "log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new
+        ).strip()
         assert commit, f"git finds no rename into {new}: the file was not moved with `git mv`"
-        assert earlier._git("show", f"{commit}^:{old}"), f"{old} is not in the commit before the rename"
+        assert earlier._git("show", f"{commit}^:{old}"), (
+            f"{old} is not in the commit before the rename"
+        )
         assert (
             earlier.only_import_lines_changed(
                 earlier._git("show", f"{commit}^:{old}"), earlier._git("show", f"{commit}:{new}")
@@ -329,22 +351,36 @@ def sentence_problems(before: str, after: str, module: str) -> list[str]:
     bar must have lost that line and gained only imports, and nothing else of it may differ."""
     held = _SENTENCE_LINE.findall(before)
     if len(held) != 1:
-        return [f"the status bar held {len(held)} definitions of the sentence before the move, not one"]
+        return [
+            f"the status bar held {len(held)} definitions of the sentence before the move, not one"
+        ]
     problems = []
     if held[0] not in module.splitlines():
         problems.append("the package's module does not hold the status bar's line byte for byte")
     if _SENTENCE_LINE.findall(after):
         problems.append("the status bar still defines the sentence")
-    was, now = Counter(ln for ln in before.splitlines() if ln.strip()), Counter(ln for ln in after.splitlines() if ln.strip())
+    was, now = (
+        Counter(ln for ln in before.splitlines() if ln.strip()),
+        Counter(ln for ln in after.splitlines() if ln.strip()),
+    )
     removed, added = was - now, now - was
     if removed != Counter({held[0]: 1}):
         problems.append(f"the status bar lost more than the constant's line: {sorted(removed)[:3]}")
     for line in added:
-        if not (line.startswith("import ") and f'"{PACKAGE_NAME}"' in line) and not line.startswith(("  ", "}", ")")):
-            problems.append(f"the status bar gained a line that is not an import of the package: {line!r}")
-    if not any(f'"{PACKAGE_NAME}"' in ln and "WITHHELD_SENTENCE" in ln for ln in after.splitlines()):
+        if not (line.startswith("import ") and f'"{PACKAGE_NAME}"' in line) and not line.startswith(
+            ("  ", "}", ")")
+        ):
+            problems.append(
+                f"the status bar gained a line that is not an import of the package: {line!r}"
+            )
+    if not any(
+        f'"{PACKAGE_NAME}"' in ln and "WITHHELD_SENTENCE" in ln for ln in after.splitlines()
+    ):
         # a multi-line import names the constant on a line of its own
-        if not re.search(rf'import\s*\{{[^}}]*\bWITHHELD_SENTENCE\b[^}}]*\}}\s*from\s*"{re.escape(PACKAGE_NAME)}"', after):
+        if not re.search(
+            rf'import\s*\{{[^}}]*\bWITHHELD_SENTENCE\b[^}}]*\}}\s*from\s*"{re.escape(PACKAGE_NAME)}"',
+            after,
+        ):
             problems.append("the status bar does not import the sentence from the package")
     return problems
 
@@ -354,45 +390,73 @@ def test_the_withheld_sentence_is_the_bases_byte_for_byte() -> None:
     in the package's module now, and the status bar changed in nothing but that line and the import that replaces it."""
     earlier._skip_if_shallow()
     new = SHARED + "export/api.ts"
-    commit = earlier._git("log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new).strip()
+    commit = earlier._git(
+        "log", "--follow", "-M", "--diff-filter=R", "--format=%H", "-1", "--", new
+    ).strip()
     assert commit, f"git finds no rename into {new}: the file was not moved with `git mv`"
     before = earlier._git("show", f"{commit}^:{STATUS_BAR}")
     after = earlier._git("show", f"{commit}:{STATUS_BAR}")
     module = earlier._git("show", f"{commit}:{SHARED}{SENTENCE_MODULE}")
     assert sentence_problems(before, after, module) == []
     # And the module as it is now still holds the base's line.
-    assert _SENTENCE_LINE.findall(before)[0] in (ROOT / (SHARED + SENTENCE_MODULE)).read_text(encoding="utf-8").splitlines()
+    assert (
+        _SENTENCE_LINE.findall(before)[0]
+        in (ROOT / (SHARED + SENTENCE_MODULE)).read_text(encoding="utf-8").splitlines()
+    )
 
 
 def test_a_withheld_sentence_that_changed_or_a_status_bar_that_changed_more_is_found() -> None:
     """Red for the comparison above (rule 15), on the lines the real status bar has: the constant moved cleanly, the
     sentence reworded, a second line lost, a line added that is not an import, the old definition left behind."""
-    line = 'export const WITHHELD_SENTENCE = "This case holds material you are not cleared to see.";'
+    line = (
+        'export const WITHHELD_SENTENCE = "This case holds material you are not cleared to see.";'
+    )
     before = f'import {{ useState }} from "react";\n\nexport interface P {{\n  a: number;\n}}\n\n{line}\n\nexport function StatusBar() {{\n  return 1;\n}}\n'
-    after = before.replace(line + "\n\n", "").replace('import { useState } from "react";\n', f'import {{ useState }} from "react";\n\nimport {{ WITHHELD_SENTENCE }} from "{PACKAGE_NAME}";\n')
+    after = before.replace(line + "\n\n", "").replace(
+        'import { useState } from "react";\n',
+        f'import {{ useState }} from "react";\n\nimport {{ WITHHELD_SENTENCE }} from "{PACKAGE_NAME}";\n',
+    )
     module = f"// header\n{line}\n"
     assert sentence_problems(before, after, module) == []
-    assert sentence_problems(before, after, module.replace("cleared", "allowed")), "a reworded sentence is not found"
-    assert sentence_problems(before, after, module.replace("  ", " ").replace("export const", "export  const")), "a changed line is not found"
-    assert sentence_problems(before, after.replace("return 1;", "return 2;"), module), "a second changed line is not found"
+    assert sentence_problems(before, after, module.replace("cleared", "allowed")), (
+        "a reworded sentence is not found"
+    )
+    assert sentence_problems(
+        before, after, module.replace("  ", " ").replace("export const", "export  const")
+    ), "a changed line is not found"
+    assert sentence_problems(before, after.replace("return 1;", "return 2;"), module), (
+        "a second changed line is not found"
+    )
     assert sentence_problems(before, before, module), "the old definition left behind is not found"
-    assert sentence_problems(before, after.replace(f'import {{ WITHHELD_SENTENCE }} from "{PACKAGE_NAME}";\n', ""), module), "a missing import is not found"
-    assert sentence_problems(before, after.replace(PACKAGE_NAME, "./elsewhere"), module), "an import from elsewhere is not found"
+    assert sentence_problems(
+        before,
+        after.replace(f'import {{ WITHHELD_SENTENCE }} from "{PACKAGE_NAME}";\n', ""),
+        module,
+    ), "a missing import is not found"
+    assert sentence_problems(before, after.replace(PACKAGE_NAME, "./elsewhere"), module), (
+        "an import from elsewhere is not found"
+    )
 
 
 def test_no_tracked_file_names_an_old_path() -> None:
     rels = [rel for rel in earlier.tracked() if not _kept_out(rel)]
-    assert len(rels) > 1000, "the walk found too few files: git ls-files is not listing the repository"
+    assert len(rels) > 1000, (
+        "the walk found too few files: git ls-files is not listing the repository"
+    )
     found = old_path_mentions(ROOT, rels)
     shown = "\n".join(f"  {rel}:{line}: {text[:140]}" for rel, line, text in found[:40])
-    assert found == [], f"{len(found)} place(s) still name an old path; the files are now in {SHARED}:\n{shown}"
+    assert found == [], (
+        f"{len(found)} place(s) still name an old path; the files are now in {SHARED}:\n{shown}"
+    )
 
 
 def test_every_named_exception_still_has_its_reason() -> None:
     """An exception outlives its reason when the file it excuses no longer names an old path: left in `NAMED` it keeps that
     file outside the walk, and an old path could be written back into it unseen (rule 12)."""
     stale = [rel for rel in NAMED if not old_path_mentions(ROOT, [rel])]
-    assert stale == [], f"{stale} no longer name an old path: remove them from NAMED, and the walk will cover them"
+    assert stale == [], (
+        f"{stale} no longer name an old path: remove them from NAMED, and the walk will cover them"
+    )
 
 
 def test_every_import_of_a_moved_client_reaches_the_package() -> None:
@@ -531,7 +595,9 @@ def test_an_old_path_put_back_in_one_importer_is_found(case: str, tmp_path: Path
     target = tmp_path / rel
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(new_line + "\n", encoding="utf-8")
-    assert imports_not_reaching(tmp_path, [rel])[0] == [] and old_path_mentions(tmp_path, [rel]) == []
+    assert (
+        imports_not_reaching(tmp_path, [rel])[0] == [] and old_path_mentions(tmp_path, [rel]) == []
+    )
     target.write_text(old_line + "\n", encoding="utf-8")
     assert imports_not_reaching(tmp_path, [rel])[0] or old_path_mentions(tmp_path, [rel]), (
         f"neither walk finds {old_line!r} in {rel}"
@@ -546,9 +612,13 @@ def test_a_file_that_names_no_client_is_not_counted_as_an_importer(tmp_path: Pat
         copy.write_text((ROOT / (SHARED + client)).read_text(encoding="utf-8"), encoding="utf-8")
     rel = WORKSPACE_SRC + "theme/ThemeToggle.tsx"
     (tmp_path / rel).parent.mkdir(parents=True)
-    (tmp_path / rel).write_text(f'import {{ applyTheme }} from "{PACKAGE_NAME}";\n', encoding="utf-8")
+    (tmp_path / rel).write_text(
+        f'import {{ applyTheme }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+    )
     assert imports_not_reaching(tmp_path, [rel]) == ([], 0)
-    (tmp_path / rel).write_text(f'import {{ listPatterns }} from "{PACKAGE_NAME}";\n', encoding="utf-8")
+    (tmp_path / rel).write_text(
+        f'import {{ listPatterns }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+    )
     assert imports_not_reaching(tmp_path, [rel]) == ([], 1)
 
 
@@ -556,7 +626,9 @@ def test_every_import_reached_from_a_spec_resolves() -> None:
     """The Playwright collection check's own half: a spec that imports a file that is gone fails at collection, which no unit
     test runs. Every relative import, reached from any spec by any chain, names a file."""
     specs = earlier.spec_files(earlier.tracked())
-    assert len(specs) >= 100, f"only {len(specs)} spec files found: the walk is not seeing the specs"
+    assert len(specs) >= 100, (
+        f"only {len(specs)} spec files found: the walk is not seeing the specs"
+    )
     missing, reached = earlier.unresolved_from_specs(ROOT, specs)
     assert reached >= 400, f"the walk reached only {reached} files: it is not following imports"
     assert missing == [], f"{len(missing)} import(s) name no file: {missing[:10]}"
@@ -577,11 +649,19 @@ def test_a_spec_that_imports_a_path_that_no_longer_exists_is_found(tmp_path: Pat
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text, encoding="utf-8")
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == []
-    (tmp_path / harness).write_text('import { WITHHELD_ITEMS_SENTENCE } from "../src/reports/packText";\n', encoding="utf-8")
-    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [f"{harness}: ../src/reports/packText"]
-    (tmp_path / harness).write_text(f'import {{ WITHHELD_ITEMS_SENTENCE }} from "{PACKAGE_NAME}";\n', encoding="utf-8")
+    (tmp_path / harness).write_text(
+        'import { WITHHELD_ITEMS_SENTENCE } from "../src/reports/packText";\n', encoding="utf-8"
+    )
+    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
+        f"{harness}: ../src/reports/packText"
+    ]
+    (tmp_path / harness).write_text(
+        f'import {{ WITHHELD_ITEMS_SENTENCE }} from "{PACKAGE_NAME}";\n', encoding="utf-8"
+    )
     (tmp_path / SHARED / "reports" / "packText.ts").unlink()
-    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [f"{SHARED}index.ts: ./reports/packText"]
+    assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
+        f"{SHARED}index.ts: ./reports/packText"
+    ]
 
 
 # ------------------------------------------------------------------------------------------------------- the images
@@ -591,7 +671,9 @@ WORKSPACE_IMAGE = CORE / "apps" / "workspace" / "Dockerfile"
 
 def stale_copies(dockerfile: str) -> list[str]:
     """The sources a stage copies that name the place a client moved from: the file itself."""
-    old = {"/".join(p.split("/")[4:]) for p in OLD_OF.values()}  # `reports/api.ts` under `apps/workspace/src/`
+    old = {
+        "/".join(p.split("/")[4:]) for p in OLD_OF.values()
+    }  # `reports/api.ts` under `apps/workspace/src/`
     return sorted(
         src
         for src in clients.copy_sources(dockerfile)
@@ -618,7 +700,9 @@ def test_the_harness_image_copies_what_the_clients_need() -> None:
     assert earlier.dangling(copied, reached) == []
     names = {str(p.relative_to(CORE.resolve())) for p in reached}
     for rel in (*WHOLE, SENTENCE_MODULE):
-        assert f"packages/glass-shared/src/{rel}" in names, f"the walk does not reach the package's {rel}"
+        assert f"packages/glass-shared/src/{rel}" in names, (
+            f"the walk does not reach the package's {rel}"
+        )
 
 
 def test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found() -> None:
@@ -640,14 +724,20 @@ def test_a_stage_with_a_stale_copy_or_a_copy_gone_is_found() -> None:
         line = f"COPY apps/workspace/src/{rel} ./apps/workspace/src/{rel}\n"
         stale = real.replace(shared, shared + line, 1)
         assert stale_copies(stale) == [f"apps/workspace/src/{rel}"]
-        assert earlier.dangling(image._copied_paths(stale), reached) == [f"apps/workspace/src/{rel}"]
+        assert earlier.dangling(image._copied_paths(stale), reached) == [
+            f"apps/workspace/src/{rel}"
+        ]
 
     workspace = WORKSPACE_IMAGE.read_text(encoding="utf-8")
     assert stale_copies(workspace) == []
     package_line = "COPY packages/glass-shared/src ./packages/glass-shared/src\n"
     assert package_line in workspace
-    assert "packages/glass-shared/src" not in clients.copy_sources(workspace.replace(package_line, "", 1))
-    assert stale_copies(workspace + "COPY apps/workspace/src/patterns/api.ts ./x\n") == ["apps/workspace/src/patterns/api.ts"]
+    assert "packages/glass-shared/src" not in clients.copy_sources(
+        workspace.replace(package_line, "", 1)
+    )
+    assert stale_copies(workspace + "COPY apps/workspace/src/patterns/api.ts ./x\n") == [
+        "apps/workspace/src/patterns/api.ts"
+    ]
 
 
 # --------------------------------------------------------------------------------------------------- the four gates
@@ -687,14 +777,22 @@ def test_the_colour_drift_check_reports_a_plant_in_a_moved_client(
     monkeypatch.setattr(colour_drift_check, "SCANNED", ((shared_copy, mirrors),))
     assert colour_drift_check.main() == 0, "the clean copy of the package is already reported"
     capsys.readouterr()
-    earlier._append(shared_copy, "alerts/api.ts", '\nexport const STRIPE = { background: "#12ab34", padding: 8 };\n')
+    earlier._append(
+        shared_copy,
+        "alerts/api.ts",
+        '\nexport const STRIPE = { background: "#12ab34", padding: 8 };\n',
+    )
     assert colour_drift_check.main() == 1
     assert "packages/glass-shared/src/alerts/api.ts:" in capsys.readouterr().out
 
 
-def test_the_design_detector_reports_a_plant_in_a_moved_client(shared_copy: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_design_detector_reports_a_plant_in_a_moved_client(
+    shared_copy: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(design_check, "SCANNED", [shared_copy])
-    assert design_check.unexcused(design_check.detect(design_check.SCANNED)) == [], "the clean copy already has findings"
+    assert design_check.unexcused(design_check.detect(design_check.SCANNED)) == [], (
+        "the clean copy already has findings"
+    )
     earlier._append(
         shared_copy,
         "reports/dashboards.ts",
@@ -704,7 +802,9 @@ def test_the_design_detector_reports_a_plant_in_a_moved_client(shared_copy: Path
         "};\n",
     )
     found = design_check.unexcused(design_check.detect(design_check.SCANNED))
-    assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [("dashboards.ts", "side-tab")]
+    assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [
+        ("dashboards.ts", "side-tab")
+    ]
 
 
 def test_the_ui_words_check_reports_a_plant_in_a_moved_client(
@@ -732,7 +832,9 @@ def test_the_no_branches_check_reports_a_plant_in_a_moved_client(
     monkeypatch.setattr(no_branches_check, "tree_files", lambda: walk(tmp_core, [top]))
     assert no_branches_check.main() == 0, "the clean copy of the package is already reported"
     capsys.readouterr()
-    earlier._append(shared_copy, "patterns/api.ts", '\nexport const BRANCH_CASE = "branch-by-filter";\n')
+    earlier._append(
+        shared_copy, "patterns/api.ts", '\nexport const BRANCH_CASE = "branch-by-filter";\n'
+    )
     assert no_branches_check.main() == 1
     assert f"{top}/patterns/api.ts:" in capsys.readouterr().out
 
@@ -764,10 +866,16 @@ def test_the_people_name_walk_reads_each_moved_client(client: str, tmp_path: Pat
     copy.write_text(real, encoding="utf-8")
 
     def found() -> list[int]:
-        return [n for p in people._glass_files((tmp_path / "src",)) for n in people._text(p.read_text(encoding="utf-8"), comments=True)]
+        return [
+            n
+            for p in people._glass_files((tmp_path / "src",))
+            for n in people._text(p.read_text(encoding="utf-8"), comments=True)
+        ]
 
     assert found() == []
-    copy.write_text(real + '\nexport const planted = "Set it in Admin › People.";\n', encoding="utf-8")
+    copy.write_text(
+        real + '\nexport const planted = "Set it in Admin › People.";\n', encoding="utf-8"
+    )
     assert found() == [real.count("\n") + 2]
 
 
@@ -784,23 +892,32 @@ def test_the_view_word_walk_reads_each_moved_client(client: str, tmp_path: Path)
     copy.write_text(real, encoding="utf-8")
     assert navigation.old_view_words_on_screen(navigation.glass_sources((tmp_path / "src",))) == []
     copy.write_text(real + '\nexport const planted = "Clear view";\n', encoding="utf-8")
-    assert navigation.old_view_words_on_screen(navigation.glass_sources((tmp_path / "src",))) == [f"{client}: 'Clear view'"]
+    assert navigation.old_view_words_on_screen(navigation.glass_sources((tmp_path / "src",))) == [
+        f"{client}: 'Clear view'"
+    ]
     copy.write_text(real + "\n// Clear view, a comment\n", encoding="utf-8")
     assert navigation.old_view_words_on_screen(navigation.glass_sources((tmp_path / "src",))) == []
 
 
 @pytest.mark.parametrize("planted_in", [0, 1])
-def test_a_moved_clients_place_held_by_both_roots_is_read_from_both(planted_in: int, tmp_path: Path) -> None:
+def test_a_moved_clients_place_held_by_both_roots_is_read_from_both(
+    planted_in: int, tmp_path: Path
+) -> None:
     """Keyed by root (D2's last finding): a place that two roots both hold is kept under both. A client's place held by the
     workspace and by the package at once: an old word in either is found, the second root's under `shared:`."""
     roots = (tmp_path / f"a{planted_in}", tmp_path / f"b{planted_in}")
     for n, root in enumerate(roots):
         (root / "alerts").mkdir(parents=True)
         (root / "alerts" / "names.ts").write_text(
-            'export const word = "Clear view";\n' if n == planted_in else "export const word = 1;\n", encoding="utf-8"
+            'export const word = "Clear view";\n'
+            if n == planted_in
+            else "export const word = 1;\n",
+            encoding="utf-8",
         )
     expected = "alerts/names.ts" if planted_in == 0 else "shared:alerts/names.ts"
-    assert navigation.old_view_words_on_screen(navigation.glass_sources(roots)) == [f"{expected}: 'Clear view'"]
+    assert navigation.old_view_words_on_screen(navigation.glass_sources(roots)) == [
+        f"{expected}: 'Clear view'"
+    ]
 
 
 KIT = CORE / "apps" / "workspace" / "src" / "copyTextsTestKit.ts"
@@ -813,13 +930,17 @@ def test_the_vitest_walkers_name_the_new_folders() -> None:
     the twelve is among them (the vitest cases themselves run under `npm test --workspace apps/workspace`)."""
     kit = KIT.read_text(encoding="utf-8")
     found = _KIT_FOLDERS.search(kit)
-    assert found, "copyTextsTestKit.ts does not state MOVED_FOLDERS as one regular expression on a line of its own"
+    assert found, (
+        "copyTextsTestKit.ts does not state MOVED_FOLDERS as one regular expression on a line of its own"
+    )
     folders = re.compile(found.group(1))
     for rel in WHOLE:
         assert folders.search(f"/glass-shared/src/{rel}"), f"MOVED_FOLDERS does not select {rel}"
     assert "ROOTS" in kit and "SHARED_SRC" in kit
     for walker in ("copyWords.test.ts", "copyNoClient.test.ts", "auth/resolvedPrincipal.test.ts"):
         text = (KIT.parent / walker).read_text(encoding="utf-8")
-        assert "REPORT_CLIENTS" in text and "plantedCopy" in text, f"{walker} has no plant in the report clients"
+        assert "REPORT_CLIENTS" in text and "plantedCopy" in text, (
+            f"{walker} has no plant in the report clients"
+        )
     # The selector is a real filter: a folder the clients are not in is not selected.
     assert not folders.search("/glass-shared/src/keyboard/actionRegistry.ts")
