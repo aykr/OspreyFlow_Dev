@@ -226,6 +226,7 @@ OVERSTATED = [
     "a full audit trail",
     "no route out by default",
     "decide what each person sees",
+    "You see only what you are cleared for",
     "What each person sees is bounded by handling markings and case membership.",
 ]
 #: The shapes behind them, so a reworded return is found too.
@@ -509,14 +510,14 @@ def test_a_hosted_engine_without_the_words_opt_in_is_flagged(sites: Path) -> Non
         ("org/index.html", "next release", "data sovereignty lacks 'next release'"),
         ("org/index.html", "sign-in", "security management lacks 'sign-in'"),
         ("org/public-sector.html", "map data", "the licence statement on org/public-sector.html lacks 'map data'"),
-        ("org/index.html", "known read-side gaps", "privacy control lacks 'known read-side gaps'"),
+        ("org/index.html", "Known read-side gaps", "privacy control lacks 'known read-side gaps'"),
         ("org/index.html", "pulls table", "privacy control lacks 'pulls table'"),
         ("org/index.html", "each start", "data sovereignty lacks 'each start'"),
         ("org/public-sector.html", "usage image", "the data-location card on org/public-sector.html lacks 'usage image'"),
         ("org/public-sector.html", "each start", "the data-location card on org/public-sector.html lacks 'each start'"),
         ("org/public-sector.html", "v0.6.1", "the data-location card on org/public-sector.html lacks 'v0.6.1'"),
         ("net/index.html", "only the front proxy", "the net Home's boundary panels lack 'only the front proxy'"),
-        ("net/index.html", "known gaps", "the net Home's boundary panels lack 'known gaps'"),
+        ("net/index.html", "Known gaps", "the net Home's boundary panels lack 'known gaps'"),
         ("org/governance.html", "known read-side gaps", "the governance principles lack 'known read-side gaps'"),
     ],
 )

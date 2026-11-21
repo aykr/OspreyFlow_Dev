@@ -63,15 +63,16 @@ CONSTRAINTS = [
   'a check for them are coming.',
   ('governance.html#principles', 'The principles the project holds to')),
  ('Data sovereignty',
-  'The deployment runs on an internal network with no route out by default, and a hosted model engine is an opt-in that an '
-  'administrator enables. The install downloads images and models, a server on an https address fetches its own '
-  "certificate, and the dashboards' usage image, which a browser could request from outside, is stopped by a fix coming "
-  'in the next release.',
+  'The deployment runs on an internal network with only the front proxy published, and a hosted model engine is an opt-in '
+  'that an administrator enables. The install downloads images and models, and the one-computer install fetches the models '
+  "again at each start; a server on an https address fetches its own certificate; and the dashboards' usage image, which a "
+  'browser could request from outside, is stopped by a fix coming in the next release.',
   ('public-sector.html#security-questions', 'What a security team will ask')),
  ('Privacy control',
-  "What each person sees is bounded by handling markings and case membership, applied inside the store's own queries "
-  'rather than after them. Conformance suites test it, as does a check of each read route as a person with no role; an '
-  'independent penetration test is planned and not yet done.',
+  "Handling markings and case membership are applied inside the store's own queries rather than after them, and "
+  'conformance suites and a check of each read route as a person with no role test that. Known read-side gaps are '
+  "tracked and not all closed, among them a shared view's count, the search index below the application's filter and the "
+  'case identifiers in the dashboards\' pulls table, and an independent penetration test is planned and not yet done.',
   ('features.html#admin', 'Markings and clearance')),
  ('Security management',
   'Case reads, refusals of case access and changes are recorded in the audit with who, when and what, and report, '
@@ -332,7 +333,7 @@ PRINCIPLES = [
  ('Every link shows where it came from', 'The source, the record and when it arrived are one click away, so a finding can be traced back at disclosure or audit.'),
  ('A model suggests, a person confirms', 'Anything a model finds is marked inferred until an analyst confirms it. Nothing a model proposes is treated as fact.'),
  ('Matches can be undone', '"Same person" is a scored link, never a merge, so a wrong match is reversed cleanly and nothing is lost.'),
- ('You see only what you are cleared for', "Access is enforced in the store's own queries, not applied afterwards, by handling markings and case membership."),
+ ('Access follows clearance and markings',"Access is enforced in the store's own queries, not applied afterwards, by handling markings and case membership."),
 ]
 PLACES = [
  ('The Glass', 'For investigating a case: the network, the map, the timeline, the Matrix view, reports, drawing boards and questions to a model.'),
@@ -474,8 +475,8 @@ def org_public_sector():
         '</tbody></table></div><pre><code>ospreyflow install --mode lite --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "Your organisation"</code></pre>'
         '<p>Each starter except Blank comes with its own synthetic demonstration data.</p>', 'tint')
     b += sec('What a security or architecture team will ask', cards([
-        ('Where does the data live?', "Inside your own cloud account or data centre, on an internal network with no route out by default; only the front proxy is published. The install downloads its images and models, and the one-computer install checks for the models again at each start. A server on an https address fetches its own certificate. A hosted model engine or your organisation's sign-in is switched on by an administrator. No test yet proves that no component reports its own usage; a standing browser test of that is coming."),
-        ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store rather than afterwards. Conformance suites test it, and an independent penetration test is planned and not yet done.'),
+        ('Where does the data live?', "Inside your own cloud account or data centre, on an internal network with only the front proxy published. The install downloads its images and models, and the one-computer install fetches the models again at each start. A server on an https address fetches its own certificate. A hosted model engine or your organisation's sign-in is switched on by an administrator. In release v0.6.1 the dashboards draw a usage image that a person's browser requests from outside if it can reach the internet; a fix is coming in the next release. No test yet proves that no other component reports its own usage; a standing browser test of that is coming."),
+        ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store rather than afterwards. Conformance suites test it; known read-side gaps are tracked and not all closed, and an independent penetration test is planned and not yet done.'),
         ('Can a finding be traced?', 'Every link keeps its source, its record and when it arrived. Case reads and changes are in the audit, and report, assessment and pack exports are in an export ledger; recording model calls and sign-in events is coming.'),
         ('What about models?', 'Local by default. A hosted engine is an opt-in that an administrator enables, and it receives material only when the dataset and the handling code both allow it.'),
         ('Is it accessible?', 'Designed to WCAG 2.2 AA, with automated accessibility scans on every screen we test, in the light and dark themes and under GOV.UK on most of them, and a Matrix view of the network as tables. An independent audit is planned.'),
@@ -594,8 +595,8 @@ def org_governance():
         '<h3>The five constraints the platform is built to</h3><p><a href="index.html#constraints">The home page</a> sets each one out, '
         'with where the product shows it and what is still coming.</p>' + ul([
         '<strong>Software sovereignty.</strong> Software an organisation can read, change, host and replace.',
-        '<strong>Data sovereignty.</strong> A deployment on an internal network with no route out by default, and a hosted model engine as an opt-in.',
-        '<strong>Privacy control.</strong> What each person sees is bounded by handling markings and case membership.',
+        '<strong>Data sovereignty.</strong> A deployment on an internal network with only the front proxy published, and a hosted model engine as an opt-in; the install downloads images and models.',
+        "<strong>Privacy control.</strong> Handling markings and case membership applied inside the store's own queries and tested; known read-side gaps are tracked.",
         '<strong>Security management.</strong> Case reads, changes and report, assessment and pack exports recorded against a person; model calls and sign-in events are coming.',
         '<strong>Analytical accountability.</strong> A judgement is written on a probability yardstick and carries its supporting evidence with it.']), ident='principles')
     b += sec('Changing this', '<p>This page describes how the project runs today, with a small founding team. As contributors join, it will change, '
@@ -623,8 +624,8 @@ def net_index():
     b += sec('Why organisations choose it', cards([
         ('Defensible', 'Every link shows where it came from. A model\'s suggestion stays inferred until a person confirms it. A match can be undone.'),
         ('Yours', 'Apache-2.0 open source. You own the data, the deployment and the roadmap you ask of it. No per-seat licence.'),
-        ('Inside your boundary', 'Runs in your own cloud account or data centre, on an internal network with no route out by default. A hosted model engine is an opt-in that an administrator enables for a dataset.'),
-        ('Need-to-know by design', "Access is enforced in the store's own queries, not applied afterwards: handling markings and case membership decide what each person sees.")], 4))
+        ('Inside your boundary', 'Runs in your own cloud account or data centre, on an internal network with only the front proxy published. The install downloads images and models, and a hosted model engine is an opt-in that an administrator enables for a dataset.'),
+        ('Need-to-know by design', "Handling markings and case membership are applied in the store's own queries, not afterwards, and conformance suites test it. Known gaps on the read side are tracked and not all closed.")], 4))
     b += intent_section('', '<p class="more">The five constraints, each with where the product shows it, are on '
                                 f'<a href="{ORG}/index.html#constraints">ospreyflow.org</a>.</p>')
     b += sec('Where it applies', cards([(t, d, ('sectors.html', 'More')) for t, d in DOMAINS], 4), 'tint',
