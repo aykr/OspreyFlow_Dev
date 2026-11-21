@@ -439,12 +439,17 @@ async def _execute_recipe_run(
             source_store=deps.sources,
         )
         for branch in report.branches:
-            await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-                branch.report,
-                recipe.row_template,
-                ontology=deps.ontology,
-                jobs=deps.jobs,
-                enabled=deps.config.post_ingest_resolution,
+            # C249 and L06: the ids are kept, never discarded, so a job that fails or whose worker
+            # stops can be read from the run that queued it. A type several branches queue is
+            # named once per job: each is its own job.
+            report.resolution_jobs.extend(
+                await resolution_trigger_module.submit_post_ingest_resolution_jobs(
+                    branch.report,
+                    recipe.row_template,
+                    ontology=deps.ontology,
+                    jobs=deps.jobs,
+                    enabled=deps.config.post_ingest_resolution,
+                )
             )
     else:
         report = await run_published_recipe(
@@ -463,12 +468,14 @@ async def _execute_recipe_run(
             sink=sink,
             refresh=refresh,
         )
-        await resolution_trigger_module.submit_post_ingest_resolution_jobs(
-            report,
-            recipe.row_template,
-            ontology=deps.ontology,
-            jobs=deps.jobs,
-            enabled=deps.config.post_ingest_resolution,
+        report.resolution_jobs.extend(
+            await resolution_trigger_module.submit_post_ingest_resolution_jobs(
+                report,
+                recipe.row_template,
+                ontology=deps.ontology,
+                jobs=deps.jobs,
+                enabled=deps.config.post_ingest_resolution,
+            )
         )
     entry = await ChangeStreamWriter(deps.valkey).publish(
         "ingest",
@@ -505,7 +512,12 @@ async def _execute_recipe_run(
         principal=principal,
         action="run_studio_recipe",
         investigation_id=investigation_id,
-        resolved_query={"recipe_id": recipe.recipe_id, "load_id": load_id, "trigger": trigger},
+        resolved_query={
+            "recipe_id": recipe.recipe_id,
+            "load_id": load_id,
+            "trigger": trigger,
+            "resolution_jobs": list(report.resolution_jobs),
+        },
         result_cardinality=report.nodes_created + report.edges_created,
     )
     return report

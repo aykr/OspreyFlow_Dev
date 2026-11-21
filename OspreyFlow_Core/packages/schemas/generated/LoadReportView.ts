@@ -29,6 +29,7 @@ export type Rejections = RejectionRecord[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
 export type DrawnWatchAlerts = number;
+export type ResolutionJobs = string[];
 export type RowsWithdrawn = number;
 export type LinksKeptAnOccurrence = number;
 export type RowsLeftInPlace = number;
@@ -87,6 +88,7 @@ export interface LoadReportView {
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
   drawn_watch_alerts?: DrawnWatchAlerts;
+  resolution_jobs?: ResolutionJobs;
   rows_withdrawn?: RowsWithdrawn;
   links_kept_an_occurrence?: LinksKeptAnOccurrence;
   rows_left_in_place?: RowsLeftInPlace;
