@@ -58,14 +58,15 @@ INTENT = (
 #: (DC1a's table, `process/lanes/v062/slices/DOC1A_REPORT.md`: what is true of v0.6.1, what only of main and said as coming).
 CONSTRAINTS = [
  ('Software sovereignty',
-  'The licences of the software packages the platform is built from are checked against a list of open-source licences '
-  'whenever the code changes. Model weights, map data, fonts and base images are outside that check today; a register and '
-  'a check for them are coming.',
+  'The licences of the Python and Node packages the platform is built from are checked against a list of open-source '
+  'licences whenever the code changes, though the Python packages inside most images are not read by that check. Model '
+  'weights, map data, fonts, base images and operating-system packages are outside it today; a register and a check for the '
+  'first four are coming.',
   ('governance.html#principles', 'The principles the project holds to')),
  ('Data sovereignty',
   'The deployment runs on an internal network with only the front proxy published, and a hosted model engine is an opt-in '
-  'that an administrator enables. The install downloads images and models, and the one-computer install fetches the models '
-  "again at each start; a server on an https address fetches its own certificate; and the dashboards' usage image, which a "
+  'that an administrator enables. The install downloads images and models, and each start of a deployment fetches the models '
+  "again; a server on an https address fetches its own certificate; and the dashboards' usage image, which a "
   'browser could request from outside, is stopped by a fix coming in the next release.',
   ('public-sector.html#security-questions', 'What a security team will ask')),
  ('Privacy control',
@@ -385,7 +386,7 @@ def org_index():
 
 def org_features():
     b = hero(f'Features · release {RELEASE}', 'Everything in OspreyFlow today',
-             f'Everything on this page is built and in release {RELEASE}. '
+             f'What this page describes as built is in release {RELEASE}; what it marks as coming is not. '
              'Screens are from demonstration deployments with synthetic data, and are being replaced.', [('get-started.html', 'Get started', 'primary')], 'org', art=False)
     toc = [('glass', 'The Glass'), ('studio', 'Ingest Studio'), ('monitoring', 'Rules and Monitoring'), ('boards', 'Drawing boards'),
            ('models', 'Models and questions'), ('admin', 'Admin and access'), ('architecture', 'Architecture')]
@@ -454,7 +455,7 @@ def org_public_sector():
     site = 'org'
     b = hero('UK public sector', 'OspreyFlow for the UK public sector',
              'The whole product under the GOV.UK Design System\'s look, for services on a gov.uk domain, with government security markings, '
-             f'need-to-know access and an audit trail. Everything on this page is in release {RELEASE}.',
+             f'need-to-know access and an audit trail. What this page describes as built is in release {RELEASE}; what it marks as coming is not.',
              [('get-started.html', 'Install with a GOV.UK starter', 'primary'), (NET + '/public-sector.html', 'Help from Solirius Reply', '')],
              site, art=False)
     b += govuk_section()
@@ -475,12 +476,12 @@ def org_public_sector():
         '</tbody></table></div><pre><code>ospreyflow install --mode lite --starter govuk-crime --service-name "Analyse crime intelligence" --organisation "Your organisation"</code></pre>'
         '<p>Each starter except Blank comes with its own synthetic demonstration data.</p>', 'tint')
     b += sec('What a security or architecture team will ask', cards([
-        ('Where does the data live?', "Inside your own cloud account or data centre, on an internal network with only the front proxy published. The install downloads its images and models, and the one-computer install fetches the models again at each start. A server on an https address fetches its own certificate. A hosted model engine or your organisation's sign-in is switched on by an administrator. In release v0.6.1 the dashboards draw a usage image that a person's browser requests from outside if it can reach the internet; a fix is coming in the next release. No test yet shows that the other components do not report their own usage, and the repository sets nothing to switch that off in the databases, the search index, the cache, the sign-in service or the local model engine; the internal network is what keeps them off the internet. A browser test is coming for the pages a signed-in person can reach; it cannot show what those components do on their own."),
+        ('Where does the data live?', "Inside your own cloud account or data centre, on an internal network with only the front proxy published. The install downloads its images and models, and each start of a deployment fetches the models again. A server on an https address fetches its own certificate. A hosted model engine or your organisation's sign-in is switched on by an administrator. In release v0.6.1 the dashboards draw a usage image that a person's browser requests from outside if it can reach the internet; a fix is coming in the next release. No test yet shows that the other components do not report their own usage, and the repository sets nothing to switch that off in the databases, the search index, the cache, the sign-in service or the local model engine; the internal network is what keeps them off the internet. A browser test is coming for the pages a signed-in person can reach; it cannot show what those components do on their own."),
         ('Who can see what?', 'Handling markings on every record, clearance and unit on every person, and reads filtered in the store rather than afterwards. Conformance suites test it; known read-side gaps are tracked and not all closed, and an independent penetration test is planned and not yet done.'),
         ('Can a finding be traced?', 'Every link keeps its source, its record and when it arrived. Case reads and changes are in the audit, and report, assessment and pack exports are in an export ledger; recording model calls and sign-in events is coming.'),
         ('What about models?', 'Local by default. A hosted engine is an opt-in that an administrator enables, and it receives material only when the dataset and the handling code both allow it.'),
         ('Is it accessible?', 'Designed to WCAG 2.2 AA, with automated accessibility scans on every screen we test, in the light and dark themes and under GOV.UK on most of them, and a Matrix view of the network as tables. An independent audit is planned.'),
-        ('What is inside it?', 'The software packages are checked against a list of open-source licences whenever the code changes. Model weights, map data, fonts and base images are outside that check today; a register for them is coming. No software licence fee.')]), ident='security-questions')
+        ('What is inside it?', 'The licences of the Python and Node packages are checked against a list of open-source licences whenever the code changes, though the Python packages inside most images are not read by that check. Model weights, map data, fonts, base images and operating-system packages are outside it today; a register for the first four is coming. No software licence fee.')]), ident='security-questions')
     return page(site, 'public-sector.html', 'UK public sector · OspreyFlow', 'OspreyFlow under the GOV.UK theme: designed to meet the GDS Service Standard, with security markings, need-to-know access and audit.', b)
 
 def net_public_sector():
