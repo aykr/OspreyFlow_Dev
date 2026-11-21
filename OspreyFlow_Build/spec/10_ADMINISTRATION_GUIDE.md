@@ -809,8 +809,10 @@ environments repository, and its AWS resources (RDS, ElastiCache, OpenSearch, S3
 roles for its service accounts) are asked for the same way. The `cloud-platform` profile writes what
 those pull requests need. It creates no cluster, no VPC and no namespace, and **it installs
 nothing**: `ospreyflow install` takes `lite`, `small` or `enterprise` and has no `cloud-platform` mode, so
-neither the command nor the guided page runs it. Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment. (Section 4.1.) The
+neither the command nor the guided page runs it. (Section 4.1.) The
 decisions are ADR-148's.
+
+The next three sentences are about the modes `ospreyflow install` does take (`lite`, `small` and `enterprise`), not about `cloud-platform`. Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the
 backups and, for the proof-of-concept shape, the install and decommission runbooks. Nothing here
