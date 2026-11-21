@@ -281,6 +281,8 @@ PORT_CLAIM = re.compile(
     rf"|\b{_KIND}\s+(?:all|each)\s+(?:sit|stand|are|live)\b[^.;]{{0,40}}\bbehind\b",
     re.IGNORECASE,
 )
+#: What stands before a claim that makes it a limit instead: "Not every store is behind a port".
+NEGATED = re.compile(r"\b(?:not|never)\s*$", re.IGNORECASE)
 HOSTAGE = re.compile(r"hostage", re.IGNORECASE)
 NEVER_OF_SUPPLIERS = re.compile(r"\bnever\b", re.IGNORECASE)
 
@@ -299,7 +301,7 @@ def unlimited_claims(text: str) -> list[str]:
         near = sentence + " " + (parts[i + 1] if i + 1 < len(parts) else "")
         if LICENCE_CLAIM.search(sentence) and LICENCE_NAMED.search(sentence) and not LICENCE_LIMIT.search(near):
             found.append("the licence check is said to cover every dependency, with no limit: " + sentence[:70])
-        if PORT_CLAIM.search(sentence):
+        if any(not NEGATED.search(sentence[: m.start()]) for m in PORT_CLAIM.finditer(sentence)):
             found.append("each store or engine is said to sit behind a port: " + sentence[:70])
         if HOSTAGE.search(sentence):
             found.append("a supplier is implied to hold records hostage: " + sentence[:70])
@@ -666,12 +668,14 @@ def test_each_check_is_shown_red() -> None:
     }
     for where, text in planted.items():
         assert unlimited_claims(text) != [], where
+    assert unlimited_claims("Not every store is behind a port. But every engine sits behind ports.\n") != []
     for where, text in planted.items():  # the same sentence among the README's and the guides' own text
         assert unlimited_claims("Opening words here.\n\n" + text + "\nMore words.\n") != [], where
     for fine in (
         "Three tiers, separated by four typed ports. Swapping the engine behind a port means one adapter.\n",
         "The graph store, the analytics store, graph algorithms and the model engines sit behind ports, so for them\n"
         "an adapter is the unit of replacement.\n",
+        "Not every store is behind a port, and not all the stores can be replaced with an adapter.\n",
         "The graph store and the model engines sit behind ports (section 2), so for each of them replacing the engine\n"
         "is one adapter. The search index is not behind a port, so replacing it is not an adapter's work.\n",
     ):

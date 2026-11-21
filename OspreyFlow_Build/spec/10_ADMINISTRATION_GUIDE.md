@@ -15,7 +15,7 @@ from this guide (`tests/test_admin_guide.py`).
 
 You are the person who decides what leaves the deployment and who may do what in it, so here is what
 OspreyFlow is built to, and what each part means for your installation. The
-[architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
+[architecture guide](../../OspreyFlow_Core/docs/architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
 fullest account, with what holds each constraint today and what is "coming".
 
 - **Software sovereignty.** You can inspect, modify, host and replace what you install. The software

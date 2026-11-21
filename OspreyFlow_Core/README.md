@@ -83,8 +83,8 @@ install it.
 
 ## How it is built
 
-Three tiers, separated by four typed ports so any one of them can be swapped without touching the
-others:
+Three tiers, with four typed ports (and three narrower ones beside them) between the Conduit and the
+Vault:
 
 - **The Glass** — the analyst workspace: canvas, timeline, map, dossier, query.
 - **The Conduit** — stateless middleware: API, working-set service, extraction orchestration,
@@ -96,8 +96,10 @@ A port is a narrow interface (a Python `Protocol`) that everything above it is a
 nothing else. Swapping the engine behind a port — a laptop's in-process DuckDB for ClickHouse shared
 by a cluster's Conduits, say — means writing one adapter and changing one line of configuration;
 nothing above the port changes, and the adapter is only supported once it passes the same
-conformance suite every other adapter behind that port passes. The guides above describe the
-architecture each reader needs.
+conformance suite every other adapter behind that port passes. Not every store is behind a port: the
+relational database (the audit table and the export ledger), the working-set store and the search index are
+not, so replacing one of those is not an adapter's work. The architecture guide's section 2 says which is
+which. The guides above describe the architecture each reader needs.
 
 ## Before you install
 
