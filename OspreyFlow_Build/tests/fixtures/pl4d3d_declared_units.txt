@@ -4,7 +4,9 @@ against: b3b426d6427caef0ed0bce862c8e1129a7f3889b7a8f5ba079779431697c2f3e
 # `node scripts/dist_compare.mjs units <pre-PL4 dist> <this build>`; not typed by hand.
 # chunk <TAB> side <TAB> sha-256 of the unit, first 12 <TAB> source module <TAB> reason <TAB> the unit.
 # reasons: split (a unit cut in two), new (a unit that did not exist), moved, knock-on (differs only
-# because it calls a unit that was split: the owner is asked about these in the report).
+# because it calls a unit that was split or, as a whole file, names the index chunk: the owner is asked about these).
+index.html	only after	908f852f307f	via index.js	knock-on	(names a file that changed, or another file)
+index.html	only before	11a21389265c	via index.js	knock-on	(names a file that changed, or another file)
 index.js	only after	03401369589e	admin/needsYou/openings.ts	split	var $61bfe3=$34a042()
 index.js	only after	054b9eef943b	admin/needsYou/openings.ts	split	function $34a042(){try{let $0=$3de864()?.getItem($e38dc6);return $0?JSON.parse($0):[]}catch{return[]}}
 index.js	only after	09b79b03abb7	ingest/runs/externalOrchestrationApi.ts	new	function $ab7991($0,$1,$2,$3){let $4=$7aec4f($0,$2,$3);return fetch(`${$4}/quota`,{headers:{Authorization:`Bearer ${$1}`}}).then($5=>$5.ok?$5.json():null)}
@@ -31,3 +33,5 @@ index.js	only before	b327e209ad65	admin/needsYou/openings.ts	split	var $61bfe3=$
 index.js	only before	ce31f9e92192	admin/needsYou/openings.ts	split	function $0ef25d(){try{let $0=sessionStorage.getItem($e38dc6);return $0?JSON.parse($0):[]}catch{return[]}}
 index.js	only before	d0208df9fd16	glass-shared/src/investigation/cases.ts	split	async function $d91b29($0,$1,$2){let $3=await fetch(`${$0}/v1/investigations/${encodeURIComponent($2)}`,{method:`DELETE`,headers:{Authorization:`Bearer ${$1}`}});if($3.status===403)throw Error(`You do not have permiss...
 index.js	only before	d695f0b1549b	investigation/CasePicker.tsx	knock-on	function $2aba2f({apiBaseUrl:$0,bearerToken:$1,lastCaseId:$2,isAdministrator:$3=!1,openCaseId:$4=null,onClose:$5,onOpen:$6,title:$7=`Choose a case`,onStart:$8}){let[$9,$10]=(0,$e081c1.useState)(null),[$11,$12]=(0,$e08...
+sigma-export-image.esm.js	only after	8bba024c2687	via index.js	knock-on	(names a file that changed, or another file)
+sigma-export-image.esm.js	only before	37b66f78322e	via index.js	knock-on	(names a file that changed, or another file)

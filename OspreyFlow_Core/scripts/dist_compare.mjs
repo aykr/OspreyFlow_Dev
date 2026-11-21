@@ -543,6 +543,43 @@ function commonUnits(before, after) {
   return before.base.filter((unit) => right.has(unit)).length;
 }
 
+/** A row of the `units` listing: what differs, on which side, with a short hash of it. */
+function unitRow(file, side, unit) {
+  // One row is one line: a unit that holds a line break (a shader, a template) shows it as `\n`.
+  const text = readable(unit).replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+  return { file, side, sha: sha(unit).slice(0, 12), unit: text };
+}
+
+/** Every differing unit of a pair of files, uncapped (`compare` shows five a side; this is the whole list). */
+function allUnitRows(file, before, after) {
+  const { removed, added } = unitDifference(before, after, false);
+  const rows = [...removed.map((unit) => unitRow(file, "only before", unit)), ...added.map((unit) => unitRow(file, "only after", unit))];
+  if (before.ordered) {
+    // The same units in another order is a difference too (a CSS rule moved: the cascade reads in order).
+    const gone = multiset(removed);
+    const fresh = multiset(added);
+    const keep = (units, drop) =>
+      units.filter((unit) => {
+        const left = drop.get(unit) ?? 0;
+        if (left > 0) drop.set(unit, left - 1);
+        return left === 0;
+      });
+    const b = keep(before.base, gone);
+    const a = keep(after.base, fresh);
+    for (let index = 0; index < Math.max(b.length, a.length); index += 1) {
+      if (b[index] === a[index]) continue;
+      if (b[index] !== undefined) rows.push(unitRow(file, "only before", `(moved) ${b[index]}`));
+      if (a[index] !== undefined) rows.push(unitRow(file, "only after", `(moved) ${a[index]}`));
+    }
+  }
+  return rows;
+}
+
+/** A difference that is a whole file, not a unit of one: the file, the side, what it was. */
+function fileRows(file, sides, what) {
+  return sides.map(([side, label]) => ({ file, side, sha: sha(label).slice(0, 12), unit: `(${what})` }));
+}
+
 /** Everything that differs between two builds, in words. An empty list is "the same build". */
 export function compareBuilds(beforeDist, afterDist) {
   const before = normalise(beforeDist);
@@ -552,10 +589,12 @@ export function compareBuilds(beforeDist, afterDist) {
   const fixedAfter = new Map(after.files.filter((f) => !f.hashed).map((f) => [f.rel, f]));
   for (const [rel, file] of fixedBefore) {
     const other = fixedAfter.get(rel);
-    if (!other) findings.push({ title: `removed: ${rel} (a file a page asks for by name)`, lines: [] });
+    if (!other) findings.push({ title: `removed: ${rel} (a file a page asks for by name)`, lines: [], rows: fileRows(rel, [["only before", file.label]], "file removed: a page asks for it by name") });
     else if (other.label !== file.label) findings.push(describeChange(`changed: ${rel}`, file, other));
   }
-  for (const rel of fixedAfter.keys()) if (!fixedBefore.has(rel)) findings.push({ title: `added: ${rel} (a file a page asks for by name)`, lines: [] });
+  for (const [rel, file] of fixedAfter) {
+    if (!fixedBefore.has(rel)) findings.push({ title: `added: ${rel} (a file a page asks for by name)`, lines: [], rows: fileRows(rel, [["only after", file.label]], "file added: a page asks for it by name") });
+  }
 
   // Files named by a content hash are matched by what they hold, never by name.
   const poolBefore = before.files.filter((f) => f.hashed);
@@ -588,25 +627,42 @@ export function compareBuilds(beforeDist, afterDist) {
       findings.push(describeChange(`changed: ${file.stem}${file.ext} (named ${file.name} before, ${best.name} after)`, file, best));
     } else if (best && file.stem === best.stem) {
       unmatchedAfter.splice(unmatchedAfter.indexOf(best), 1);
-      findings.push({ title: `changed: ${file.stem}${file.ext}: the bytes differ (${file.size} before, ${best.size} after)`, lines: [] });
+      const name = `${file.stem}${file.ext}`;
+      findings.push({
+        title: `changed: ${name}: the bytes differ (${file.size} before, ${best.size} after)`,
+        lines: [],
+        rows: fileRows(name, [["only before", file.label], ["only after", best.label]], "the bytes differ"),
+      });
     } else {
-      findings.push({ title: `removed: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [] });
+      findings.push({ title: `removed: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [], rows: fileRows(`${file.stem}${file.ext}`, [["only before", file.label]], "file removed") });
     }
   }
-  for (const file of unmatchedAfter) findings.push({ title: `added: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [] });
+  for (const file of unmatchedAfter) {
+    findings.push({ title: `added: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [], rows: fileRows(`${file.stem}${file.ext}`, [["only after", file.label]], "file added") });
+  }
 
   findings.sort((a, b) => Number(Boolean(a.knockOn)) - Number(Boolean(b.knockOn)));
   if (findings.length === 0 && before.hash !== after.hash) {
-    findings.push({ title: "the normalised hashes differ though no single file does (a cycle of chunks, or a reference to another file)", lines: [] });
+    findings.push({
+      title: "the normalised hashes differ though no single file does (a cycle of chunks, or a reference to another file)",
+      lines: [],
+      rows: fileRows("(build)", [["only before", before.hash], ["only after", after.hash]], "the normalised hashes differ though no single file does"),
+    });
   }
   return { before, after, findings };
 }
 
 function describeChange(title, before, after) {
   const { removed, added, note } = unitDifference(before, after, before.ordered);
+  const file = /^changed: (\S+)/.exec(title)[1];
   if (removed.length === 0 && added.length === 0 && !note) {
     // Nothing in this file changed: it names a file that did, or names another file than it did.
-    return { title: `${title.replace(/^changed:/, "also differs:")} (it names a file that changed, or names another file)`, lines: [], knockOn: true };
+    return {
+      title: `${title.replace(/^changed:/, "also differs:")} (it names a file that changed, or names another file)`,
+      lines: [],
+      knockOn: true,
+      rows: fileRows(file, [["only before", before.label], ["only after", after.label]], "names a file that changed, or another file"),
+    };
   }
   const lines = [];
   if (note) lines.push(`  ${note}`);
@@ -614,7 +670,7 @@ function describeChange(title, before, after) {
   if (removed.length > 5) lines.push(`  - ... and ${removed.length - 5} more only before`);
   for (const unit of added.slice(0, 5)) lines.push(`  + ${readable(unit)}`);
   if (added.length > 5) lines.push(`  + ... and ${added.length - 5} more only after`);
-  return { title, lines, removed, added };
+  return { title, lines, removed, added, rows: allUnitRows(file, before, after) };
 }
 
 // ---------------------------------------------------------------------------------------------------- the record
@@ -671,16 +727,16 @@ function runBuild() {
   if (done.status !== 0) throw new Error("npm run build --workspace apps/workspace failed");
 }
 
-/** Every differing unit of every changed file, uncapped, in a stable order: the file, the side, the unit's text. */
+/**
+ * Every difference between two builds, uncapped, in a stable order: the file, the side, the unit's text. A unit of a
+ * changed file, and also a whole file added, removed or changed in its bytes (a page's own file, a lazy chunk, an
+ * image, a font): every finding of `compareBuilds` has rows, so none is dropped.
+ */
 export function differingUnits(findings) {
-  const rows = [];
-  for (const finding of findings) {
-    const file = /^changed: (\S+)/.exec(finding.title)?.[1];
-    if (!file) continue;
-    for (const [side, units] of [["only before", finding.removed ?? []], ["only after", finding.added ?? []]]) {
-      for (const unit of units) rows.push({ file, side, sha: sha(unit).slice(0, 12), unit: readable(unit) });
-    }
-  }
+  const rows = findings.flatMap((finding) => {
+    if (!finding.rows) throw new Error(`a finding with no rows would be left out of the listing: ${finding.title}`);
+    return finding.rows;
+  });
   return rows.sort((a, b) => `${a.file}\t${a.side}\t${a.unit}`.localeCompare(`${b.file}\t${b.side}\t${b.unit}`));
 }
 

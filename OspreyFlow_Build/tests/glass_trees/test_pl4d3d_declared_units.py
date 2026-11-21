@@ -61,6 +61,8 @@ BASELINE_DIST = Path(os.environ.get("PL4_BASELINE_DIST", Path.home() / "dev/ospr
 # The plain half of the cases client, written in pieces (D3d's old-path walk reads this file).
 CASES = "glass-shared/src/" + "investigation/" + "cases.ts"
 REASONS = {"split", "new", "moved", "knock-on"}
+# The "source module" of a whole-file knock-on row: the page and a lazy chunk name the index chunk, which changed.
+VIA_INDEX = "via index.js"
 TIMEOUT = 600
 
 
@@ -73,6 +75,8 @@ class Unit(NamedTuple):
 # What generated the declaration decided for each unit, by what the unit says (label-free where it can be): the unit's
 # source module, and why it differs. Used by `write` only: the check compares chunk, side and hash.
 RULES: list[tuple[str, str, str]] = [
+    # A whole file that differs only because it names the index chunk (the page, a lazy chunk that imports from it).
+    (r"^\(names a file that changed, or another file\)$", VIA_INDEX, "knock-on"),
     (r"^function \$\w+\(\{apiBaseUrl:\$0,bearerToken:\$1,lastCaseId", "investigation/CasePicker.tsx", "knock-on"),
     (r"^function \$\w+\(\$0\)\{let\{pipelines:", "ingest/runs/RunsTab.tsx", "knock-on"),
     (r"investigationId:\$3,datasetId:\$4,deployed:", "ingest/runs/ExternalOrchestration.tsx", "split"),
@@ -157,7 +161,7 @@ def parse_declared(text: str) -> list[tuple[Unit, str, str, str]]:
         assert side in {"only before", "only after"}, f"line {number}: side {side!r}"
         assert re.fullmatch(r"[0-9a-f]{12}", sha), f"line {number}: hash {sha!r}"
         assert reason in REASONS, f"line {number}: reason {reason!r} is none of {sorted(REASONS)}"
-        assert source.endswith((".ts", ".tsx")), f"line {number}: source {source!r}"
+        assert source.endswith((".ts", ".tsx")) or source == VIA_INDEX, f"line {number}: source {source!r}"
         assert unit.strip(), f"line {number}: no unit"
         rows.append((Unit(file, side, sha), source, reason, unit))
     return rows
@@ -192,7 +196,7 @@ def declaration(rows: list[tuple[Unit, str]]) -> str:
         "# `node scripts/dist_compare.mjs units <pre-PL4 dist> <this build>`; not typed by hand.",
         "# chunk <TAB> side <TAB> sha-256 of the unit, first 12 <TAB> source module <TAB> reason <TAB> the unit.",
         "# reasons: split (a unit cut in two), new (a unit that did not exist), moved, knock-on (differs only",
-        "# because it calls a unit that was split: the owner is asked about these in the report).",
+        "# because it calls a unit that was split or, as a whole file, names the index chunk: the owner is asked about these).",
     ]
     body = []
     for unit, text in rows:
@@ -244,7 +248,12 @@ def test_the_declaration_names_each_split_the_brief_declares(declared: list[tupl
         "ingest/runs/externalOrchestrationApi.ts",
         "ingest/runs/ExternalOrchestration.tsx",
     } <= sources
-    assert {unit.file for unit, *_rest in declared} == {"index.js"}
+    # The units are in the index chunk; the page and one lazy chunk differ as whole files only because they name it.
+    assert {unit.file for unit, *_rest in declared} == {"index.js", "index.html", "sigma-export-image.esm.js"}
+    assert {unit.file for unit, _s, reason, _t in declared if reason == "knock-on" and _s == VIA_INDEX} == {
+        "index.html",
+        "sigma-export-image.esm.js",
+    }
 
 
 def test_an_undeclared_change_to_one_unit_is_red(
@@ -262,14 +271,88 @@ def test_an_undeclared_change_to_one_unit_is_red(
     assert problems(actual, declared) == []
     # A unit others call is named by its content: its callers differ with it, so more than one pair is red.
     assert len(now) >= len(actual) + 2
-    assert len([p for p in found if p.startswith("undeclared difference")]) == len(now) - len(actual)
-    assert not [p for p in found if p.startswith("declared but not differing")]
+    # The page and the lazy chunk that name the index chunk differ with it: their declared rows change hash too.
+    assert len([p for p in found if p.startswith("undeclared difference")]) >= len(now) - len(actual)
     # The units printed are cut at 220 characters, so the literal itself may not show: the rows that are new are
     # what the plant changed, and none of them is a declared unit.
     known = {unit for unit, _text in actual}
     new_rows = [unit for unit, _text in now if unit not in known]
-    assert len(new_rows) == len(now) - len(actual)
     assert not [unit for unit in new_rows if unit in {row[0] for row in declared}]
+    assert any(unit.file == "index.js" for unit in new_rows)
+
+
+# A difference that is a whole file is not a unit of one: `dist_compare` reports it at file level, and the listing must
+# too (the round-2 verifier: an added or removed chunk, a changed image or font printed nothing). Each is planted in a
+# copy of the real build, in the shape `dist_compare` itself reads (a `assets/<name>-<8 characters>.<ext>` file, a file
+# a page asks for by name, a changed asset), then the real command is run on it.
+def planted_copy(built: Path, tmp_path: Path) -> Path:
+    planted = tmp_path / "dist"
+    shutil.copytree(built, planted)
+    return planted
+
+
+def assert_red(planted: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]], want: str) -> None:
+    now = read_units(BASELINE_DIST, planted)
+    known = {unit for unit, _text in actual}
+    new_rows = [(unit, text) for unit, text in now if unit not in known]
+    assert new_rows, "the plant is a difference the listing does not show"
+    assert any(want in text for _unit, text in new_rows), [text for _unit, text in new_rows]
+    found = problems(now, declared)
+    # A page or chunk that names the changed file differs with it (its own declared row changes hash), so a declared
+    # row may stop differing as well: red is that an undeclared row appears.
+    assert [p for p in found if p.startswith("undeclared difference")]
+
+
+def test_a_chunk_added_to_the_build_is_red(
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+) -> None:
+    planted = planted_copy(built, tmp_path)
+    (planted / "assets" / "plantedChunk-AbCd1234.js").write_text("export const planted=1;\n", encoding="utf-8")
+    assert_red(planted, actual, declared, "file added")
+
+
+def test_a_chunk_removed_from_the_build_is_red(
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+) -> None:
+    planted = planted_copy(built, tmp_path)
+    next((planted / "assets").glob("*.woff2")).unlink()
+    assert_red(planted, actual, declared, "file removed")
+    # A code chunk that goes is read against the nearest one that is left, so its units show as differing units.
+    gone = tmp_path / "gone"
+    shutil.copytree(built, gone)
+    next((gone / "assets").glob("communityWorker-*.js")).unlink()
+    assert_red(gone, actual, declared, "")
+
+
+def test_a_changed_asset_is_red(
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+) -> None:
+    planted = planted_copy(built, tmp_path)
+    font = next((planted / "assets").glob("*.woff2"))
+    font.write_bytes(font.read_bytes() + b"\0")
+    assert_red(planted, actual, declared, "the bytes differ")
+
+
+def test_a_file_added_or_removed_by_name_is_red(
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+) -> None:
+    added = planted_copy(built, tmp_path)
+    (added / "planted.txt").write_text("a page asks for me by name\n", encoding="utf-8")
+    assert_red(added, actual, declared, "file added: a page asks for it by name")
+    removed = tmp_path / "removed"
+    shutil.copytree(built, removed)
+    (removed / "cookies.html").unlink()
+    assert_red(removed, actual, declared, "file removed: a page asks for it by name")
+
+
+def test_the_listing_has_a_row_for_every_finding_of_compare(built: Path) -> None:
+    """`compare` and `units` agree on whether the builds differ: no finding is dropped from the listing."""
+    done = subprocess.run(
+        [node(), str(SCRIPT), "compare", str(BASELINE_DIST), str(built)],
+        cwd=CORE, capture_output=True, text=True, timeout=TIMEOUT, check=False,
+    )
+    assert done.returncode == 1 and done.stdout.startswith("DIFFERENT")
+    assert read_units(BASELINE_DIST, built)
 
 
 def test_a_declared_unit_left_unchanged_is_red(baseline: Path, declared: list[tuple[Unit, str, str, str]]) -> None:
