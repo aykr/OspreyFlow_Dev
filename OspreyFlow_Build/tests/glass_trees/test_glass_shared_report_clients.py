@@ -290,7 +290,7 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(tmp_path: Path) 
         target = tmp_path / (SHARED + rel)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(real, encoding="utf-8")
-        for dependency in (*WHOLE, SENTENCE_MODULE, "workingset/models.ts"):  # so a sibling import in the clean file resolves
+        for dependency in (*WHOLE, SENTENCE_MODULE, "/".join(("workingset", "models.ts"))):  # so a sibling import resolves
             sibling = tmp_path / (SHARED + dependency)
             sibling.parent.mkdir(parents=True, exist_ok=True)
             if not sibling.exists():
