@@ -16,6 +16,7 @@ import { loadConfig } from "./config.js";
 import { unconfiguredProvider } from "./identity.js";
 import type { CodeFlowProvider, IdentityProvider } from "./identity.js";
 import { createOidcFlow } from "./oidc.js";
+import { PAGES } from "./pageList.js";
 import { ValkeySessionStore } from "./sessionStore.js";
 import { attachStreamProxy } from "./stream.js";
 import type { SessionStore } from "./sessionStore.js";
@@ -35,8 +36,8 @@ export interface StartDeps {
   /** The sign-in flow to use in place of the real one (`OSPREY_PAGES_OIDC_ISSUER` and the rest). */
   codeFlow?: CodeFlowProvider;
   host?: string;
-  /** The built browser assets, in place of `dist/assets` (a test's own folder). */
-  assets?: AssetsSetting;
+  /** The built browser assets, in place of `dist/assets` (a test's own folder); `null` says there are none, whatever is on disk. */
+  assets?: AssetsSetting | null;
   /** Milliseconds since the epoch, for the session and the live-updates proxy. A test moves it by hand. */
   clock?: () => number;
   /** How often the live-updates proxy looks at its open sockets, in milliseconds. */
@@ -82,7 +83,7 @@ export async function main(
 
   // The service is a page service: with no built stylesheet its pages would go out bare. A production start refuses that, in
   // words; a start from the sources (a test, a developer) goes on without, and the layout links nothing.
-  const assets = deps.assets ?? defaultAssets();
+  const assets = deps.assets === null ? undefined : (deps.assets ?? defaultAssets());
   if (assets === undefined && env["NODE_ENV"] === "production") {
     io.error("pages: cannot start: the built assets are missing (no dist/assets/manifest.json). Build the service with npm run build.");
     io.exit(1);
@@ -105,6 +106,7 @@ export async function main(
     store,
     identityProvider: deps.identityProvider ?? unconfiguredProvider,
     ...(assets ? { assets } : {}),
+    pages: PAGES,
     ...(codeFlow ? { codeFlow } : {}),
     sessionSecret: config.sessionSecret.reveal(),
     ...(deps.clock ? { clock: deps.clock } : {}),

@@ -104,8 +104,8 @@ const signedIn: RequestHandler = (req, res, next) => {
  * Checks the list now and returns the function that mounts it. The router it is given is the one behind the headers, the
  * session and the anti-forgery check.
  */
-export function registerPages(pages: readonly PageModule[], known: ReadonlySet<string> = functionIdsFromFile()): (router: Router) => void {
-  check(pages, known);
+export function registerPages(pages: readonly PageModule[], known?: ReadonlySet<string>): (router: Router) => void {
+  check(pages, known ?? (pages.length > 0 ? functionIdsFromFile() : new Set()));
   return (router) => {
     for (const page of pages) {
       for (const method of page.methods) {

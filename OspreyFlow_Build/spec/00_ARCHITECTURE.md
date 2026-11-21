@@ -1201,6 +1201,17 @@ signature (it relies on the token having come straight from the token endpoint),
 the realm's key set, which is `jose`'s own `createRemoteJWKSet` and `jwtVerify`. No flow is hand-written. The service
 calls no address but the identity provider's own (`OSPREY_PAGES_OIDC_ISSUER`).
 
+**ADR-152 addition (21 November 2026; slice IS5a0) — the `pages` service builds its browser assets.** Build time only: all
+three are `devDependencies` of `apps/pages`, so the image's run-time stage (`npm ci --omit=dev`) installs none of them and the
+service serves only what they built. `esbuild` 0.28.2 (MIT; ADR-152 decision 2 names it) bundles the page modules to ES2018
+and the one stylesheet from `packages/design`; the lockfile held it before only as an optional peer of `vite` that was not
+installed. Its 26 platform packages, `@esbuild/<platform>` (each MIT, each only the binary for its own platform), are its
+optional dependencies and are in the lockfile as npm writes them. `@fontsource/atkinson-hyperlegible-next` 5.3.0 and
+`@fontsource/ibm-plex-mono` 5.3.0 (both OFL-1.1, already run-time dependencies of `apps/workspace`) are now also build-time
+dependencies of `apps/pages`: the build reads them for the faces `packages/design/fonts.json` names for the Default tree
+(ADR-152 Amendment 2 point 2), and serves the font files from the service's own address. No GDS Transport and no
+`govuk-frontend` file is among them (that is the GOV.UK tree's). `make licence-check`'s Node half passes with them, offline.
+
 **The Glass's sign-in library, named (20 November 2026; slice LR1).** `oidc-client-ts` has been a run-time
 dependency of `apps/workspace` since the sign-in was built, and `apps/workspace/src/auth/userManager.ts` has said
 since then that this section is its allowlist for what it relies on rather than hand-rolls; this section had no
