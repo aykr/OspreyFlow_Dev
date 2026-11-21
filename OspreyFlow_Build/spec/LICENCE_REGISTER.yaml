@@ -861,3 +861,42 @@ rows:
     test: osi-software
     status: confirmed
     os_packages: *third_party_no
+
+  - id: B21
+    kind: image
+    name: alpine
+    pin: latest
+    ships: >-
+      Default, and every apply or install: the disk check's one-shot probe
+      (`docker run --rm alpine df -k /`, `harness/preflight/context.py`), so the image is pulled and
+      run on the operator's machine before anything else is started.
+    named_in: [harness/preflight/context.py]
+    licence: MIT
+    where_read: >-
+      The packaging project's own licence: https://raw.githubusercontent.com/alpinelinux/docker-alpine/master/LICENSE,
+      the MIT licence ("Copyright (c) 2019 Natanael Copa"), read 21 November 2026. The image's
+      manifest annotations name that project (`org.opencontainers.image.source =
+      https://github.com/alpinelinux/docker-alpine.git`, revision 0c9af76133a2…, version 3.24.4); the
+      LICENSE is not at the root of that revision's branch (it holds the root file system only), so it
+      was read on master. The code names no tag, so `latest` resolved on 21 November 2026 to index
+      sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf (amd64 manifest 0f49f331d921…,
+      built 5 November 2026). Alpine's own packages are listed below.
+    test: osi-software
+    status: confirmed
+    note: >-
+      UNPINNED: the code names `alpine` with no tag or digest, so the install follows `latest`, which
+      moves. Pinning it (a tag and digest in `default_disk_probe`) changes what the product downloads
+      and is out of this slice; it is put to the owner in the report. The gate holds the register to
+      `latest` as the code says it, so a pin added to the code fails the gate until the row follows.
+    os_packages:
+      scan: "no"
+      covered_by: >-
+        Not built by the product, so no scan of ours runs on it. The Docker Official Images'
+        parts list for `alpine:3.24.4` (https://github.com/docker-library/repo-info, `repos/alpine/local/latest.md`,
+        read 21 November 2026, not a list our repository produces) gives sixteen packages and each
+        one's licence: GPL-2.0-only for eight (alpine-baselayout, alpine-baselayout-data, apk-tools,
+        busybox, busybox-binsh, libapk, scanelf, ssl_client), MIT for three (alpine-keys,
+        alpine-release, musl), Apache-2.0 for two (libcrypto3, libssl3), Zlib (zlib), MPL-2.0 AND MIT
+        (ca-certificates-bundle) and MIT AND BSD-2-Clause AND GPL-2.0-or-later (musl-utils). Each is a
+        licence the OSI approves, by the identifiers that list gives (the register's reading, not that
+        list's claim); nothing in this repository reads or checks them.

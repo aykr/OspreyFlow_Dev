@@ -27,8 +27,12 @@ for the owner and registered.
 a name in `HELD_FOR_OWNER`. The gate allows them so that `make ci` stays green while the owner
 decides; a release is refused while any is left, as it is while a live test is owed.
 
-**What it reads** (`read_sources`): the Dockerfiles (`FROM`), `harness/*.py` (the `ServiceImage`
-list and every `*_IMAGE` constant), the Ollama pull script in `harness/render.py`, the closed model
+**What it reads** (`read_sources`, under `OspreyFlow_Core`; the folders a scan row is written from):
+`Dockerfile*` found by one `rglob` over the whole of `OspreyFlow_Core/` (so `cli/`, `scripts/`, `docs/`
+and any other folder count, `node_modules` and `.venv` left out); `harness/**/*.py` (the `ServiceImage`
+list, every `*_IMAGE` constant); `harness/`, `cli/**` and `scripts/*.py` for each `docker run` list
+that names an image literal (the disk probe's `alpine`); `providers/*.yaml`; and the named files
+(`NAMED_FILES`). Also read: the Ollama pull script in `harness/render.py`, the closed model
 lists in `packages/schemas/deployment.py`, the recogniser adapters' default models, the Stanza
 models' pin file, `packages/design/fonts.json`, the basemap build's regions and pinned planetiler,
 `osprey.yaml`'s map providers and `providers/*.yaml`. **Not read**, said here so it is not mistaken
@@ -44,6 +48,7 @@ import ast
 import hashlib
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -207,8 +212,10 @@ def read_sources(core: Path = CORE) -> dict[str, str]:
     found: dict[str, str] = {}
     for name in NAMED_FILES:
         found[name] = (core / name).read_text(encoding="utf-8")
-    for pattern in ("harness/*.py", "providers/*.yaml"):
+    for pattern in ("harness/**/*.py", "cli/**/*.py", "scripts/*.py", "providers/*.yaml"):
         for path in sorted(core.glob(pattern)):
+            if {"node_modules", ".venv", "__pycache__"} & set(path.parts):
+                continue
             found[path.relative_to(core).as_posix()] = path.read_text(encoding="utf-8")
     for path in sorted(core.rglob("Dockerfile*")):
         if {"node_modules", ".venv"} & set(path.parts):
@@ -266,10 +273,56 @@ def _string(node: ast.expr | None) -> str | None:
     return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
 
 
+#: `docker run` options that take a value in the next argument, so the image is not mistaken for it.
+_RUN_VALUE_FLAGS = frozenset(
+    {
+        "--user", "-u", "--network", "--net", "--entrypoint", "-v", "--volume", "-e", "--env",
+        "--name", "--platform", "-w", "--workdir", "--mount", "--memory", "-m", "--cpus", "--pid",
+        "--group-add", "--hostname", "-h", "--label", "-l", "--cap-add", "--cap-drop",
+        "--security-opt", "--env-file", "--pull", "--restart", "--tmpfs", "--add-host",
+    }
+)  # fmt: skip
+#: Options only `docker compose run` has: a list holding one is a compose service, not an image.
+_COMPOSE_ONLY = frozenset({"--no-deps", "-T", "--service-ports", "--use-aliases", "--build"})
+
+
+def _docker_run_images(tree: ast.AST) -> list[str]:
+    """The image literal of each `docker run` argument list in `tree`: a list that starts with
+    `"docker"`, `"podman"` or the container runtime (a name containing `runtime`) and has `"run"`
+    next, then options (a value-taking option skips its value), then the image as a string. A list
+    that goes to a variable or a `*unpacked` argument before the image names nothing here (the
+    image is chosen at run time and is a constant elsewhere), and `docker compose run` is not one."""
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.List) or len(node.elts) < 3:
+            continue
+        head, verb = node.elts[0], node.elts[1]
+        runtime = (isinstance(head, ast.Constant) and head.value in ("docker", "podman")) or (
+            isinstance(head, ast.Name) and "runtime" in head.id.lower()
+        )
+        if not (runtime and isinstance(verb, ast.Constant) and verb.value == "run"):
+            continue
+        words = [_string(e) for e in node.elts[2:]]
+        if any(w in _COMPOSE_ONLY for w in words if w):
+            continue
+        index = 0
+        while index < len(words):
+            word = words[index]
+            if word is None:
+                break
+            if word.startswith("-"):
+                index += 2 if word in _RUN_VALUE_FLAGS else 1
+                continue
+            found.append(word)
+            break
+    return found
+
+
 def _harness_images(sources: dict[str, str]) -> list[tuple[str, str]]:
     """`(reference, file)` for each `ServiceImage(service, "<literal>")` and each module-level
-    `*_IMAGE = "<literal>"` in `harness/*.py`. An owned image (an f-string) and a parameter are not
-    a third-party reference and are left out."""
+    `*_IMAGE = "<literal>"` in `harness/**/*.py`, and each `docker run` argument list that names an
+    image literal in `harness/`, `cli/` and `scripts/`. An owned image (an f-string) and a parameter
+    are not a third-party reference and are left out."""
     constants: dict[str, str] = {}
     trees: dict[str, ast.AST] = {}
     for path, text in sources.items():
@@ -298,6 +351,9 @@ def _harness_images(sources: dict[str, str]) -> list[tuple[str, str]]:
                     literal = constants.get(arg.id)
                 if literal is not None:
                     found.append((literal, path))
+    for path, text in sources.items():
+        if path.endswith(".py") and path.split("/")[0] in ("harness", "cli", "scripts"):
+            found += [(literal, path) for literal in _docker_run_images(ast.parse(text))]
     return found
 
 
@@ -527,7 +583,7 @@ def find_register_violations(
         by_code.setdefault((item.kind, item.name), []).append(item)
     by_register: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for row in rows:
-        by_register.setdefault((row.get("kind", "?"), row.get("name", "?")), []).append(row)
+        by_register.setdefault((row.get("kind") or "?", row.get("name") or "?"), []).append(row)
 
     for (kind, name), items in sorted(by_code.items()):
         listed = by_register.get((kind, name), [])
@@ -588,3 +644,23 @@ def release_refusal(
     if not lines:
         return None
     return "the licence register (spec/LICENCE_REGISTER.yaml) is not settled:\n" + "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`python3 -m tools.licence_register release-check`: exit 1, saying why, while the register is
+    not settled. `OspreyFlow_Build/scripts/publish_user_repo_update.sh` runs it, as `tools/release_local.py` does the
+    same through `release_refusal`: both release paths refuse the same way."""
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments != ["release-check"]:
+        print("usage: python3 -m tools.licence_register release-check", file=sys.stderr)
+        return 2
+    refusal = release_refusal(held=HELD_FOR_OWNER)
+    if refusal:
+        print(refusal, file=sys.stderr)
+        return 1
+    print("the licence register is settled: no row unconfirmed, no name held for the owner")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

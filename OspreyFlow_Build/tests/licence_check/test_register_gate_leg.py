@@ -5,9 +5,9 @@ These sit beside the frozen acceptance file `test_register.py` and each plants i
 text the leg reads, never a hand-written stand-in (rule 15).
 
 **The folders this test walks:** none of its own. It reads what
-`tools.licence_register.read_sources` reads (under `OspreyFlow_Core`: `harness/*.py`,
-`providers/*.yaml`, `Dockerfile*` found under the whole of `OspreyFlow_Core/` and the named files
-in that module's docstring) and the register.
+`tools.licence_register.read_sources` reads, under `OspreyFlow_Core`: `harness/**/*.py`,
+`providers/*.yaml`, `Dockerfile*` found by one `rglob` under the whole of `OspreyFlow_Core/` (`node_modules`
+and `.venv` left out), and the named files in that module's `NAMED_FILES`; and the register.
 """
 
 from __future__ import annotations
@@ -58,8 +58,8 @@ def test_the_gate_leg_reaches_main_and_main_fails_naming_a_planted_image(
     real = reg.read_sources()
     planted: dict[str, Any] = {
         **real,
-        "services/ner/Dockerfile": real["services/ner/Dockerfile"] + "\nFROM alpine:3.21\n",
+        "services/ner/Dockerfile": real["services/ner/Dockerfile"] + "\nFROM debian:12-slim\n",
     }
     monkeypatch.setattr(reg, "read_sources", lambda *a, **k: planted)
     assert licence_check.main() == 1
-    assert "alpine" in capsys.readouterr().err
+    assert "debian" in capsys.readouterr().err
