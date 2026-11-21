@@ -21,7 +21,7 @@ current task needs; do not read all of it every session.
 | `process/07_BUILD_PLAN.md` | Phase scope and exit criteria |
 | `spec/08_ACCEPTANCE_SCENARIOS.md` | The functional definition of done |
 | `spec/09_INGEST_STUDIO.md` | Ingest, connectors, mapping, review queue |
-| `packages/design/tokens.css` (until ADR-152's move lands: `apps/workspace/src/design/tokens.css`) | Any styling. Authoritative — no colour outside these tokens (it moved here from `spec/design/` in Round 14a; `spec/design/` now holds only the brand foundations) |
+| `packages/design/tokens.css` (until ADR-152's move lands: `apps/workspace/src/design/tokens.css`) | Any styling. Authoritative — no colour outside these tokens (a theme's own override block lives in its theme folder, `OspreyFlow_Core/packages/themes/<name>/`: ADR-152 Amendment 4) (it moved here from `spec/design/` in Round 14a; `spec/design/` now holds only the brand foundations) |
 
 All decision records in `spec/06_DECISIONS.md` are accepted. If you believe one is wrong, say so
 and stop — do not implement an alternative and explain afterwards.

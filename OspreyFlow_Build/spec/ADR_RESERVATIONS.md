@@ -128,6 +128,8 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-141 Amendment 2 | The whole-dataset load: the dataset the unit an outside tool starts; a failure stops only what depends on it; one neutral job file, no generated Airflow job (D7-D9, D16, 19 Nov answer 18) | orchestrator (draft, decision record) | 2026-11-19 | reserved |
 | ADR-148 Amendment 23 | The `pages` service on cloud-platform, no Superset under the GOV.UK theme, and the identity switch | orchestrator (draft, decision record) | 2026-11-19 | reserved |
 | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
+| ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
+| ADR-152 Amendment 4 | A theme's override block, fonts entry and sign-in theme live in the theme's own folder (`OspreyFlow_Core/packages/themes/<name>/`); the shared design package names no theme; the React GOV.UK look is not moved (F7); the Default baseline is re-recorded once, in PL12d, with a diff of GOV.UK files only (the owner's rulings of 21 Nov on PL12; slice PL12a) | v062 conductor | 2026-11-21 | written |
 
 ## Baseline
 
