@@ -120,8 +120,14 @@ def old_view_words_on_screen(sources: dict[str, str]) -> list[str]:
             if old in re.sub(r"\s+", " ", _screen_text(source))]  # fmt: skip
 
 
-def glass_sources() -> dict[str, str]:
-    found = {p.relative_to(SRC).as_posix(): p.read_text(encoding="utf-8") for p in sorted(SRC.rglob("*.ts*"))}
+#: The Glass's sources: the workspace, and the shared package that holds what moved out of it (ADR-152 decision 6; the
+#: PL4d2 clients return headlines and errors a person reads). A file is named by its place under its root.
+GLASS_ROOTS = (SRC, CORE / "packages" / "glass-shared" / "src")
+
+
+def glass_sources(roots: tuple[Path, ...] = GLASS_ROOTS) -> dict[str, str]:
+    found = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
+             for root in roots for p in sorted(root.rglob("*.ts*"))}  # fmt: skip
     return {name: text for name, text in found.items()
             if ".test." not in name and not name.startswith("test") and "/test" not in name}  # fmt: skip
 
@@ -172,6 +178,37 @@ def test_view_means_a_saved_view_in_every_guide_and_in_the_glass() -> None:
     # The toolbar's Views menu is withdrawn: nothing draws it.
     drawn = [n for n, s in glass_sources().items() if n != "views/ViewsMenu.tsx" and re.search(r"<ViewsMenu\b", s)]
     assert drawn == [], drawn
+
+
+#: The six clients that moved: a folder, then each file's stem. Never written as a path (the old-path scan in
+#: `glass_trees/test_glass_shared_clients.py` reads this file too, and only the package's own place may name them).
+_MOVED = {"ingest": ("api",), "ingest/sources": ("api",), "ingest/releases": ("releasesApi",),
+          "admin/sections": ("MapsApi", "ModelsApi"), "admin": ("updateNotice",)}  # fmt: skip
+MOVED_CLIENTS = tuple(f"{folder}/{stem}.ts" for folder, stems in _MOVED.items() for stem in stems)
+
+
+def test_the_glass_s_sources_include_the_clients_that_moved_to_the_shared_package() -> None:
+    """The six clients left `apps/workspace/src` in PL4d2; this guard once read only that folder (found in review)."""
+    sources = glass_sources()
+    for client in MOVED_CLIENTS:
+        assert client in sources, client
+        assert not (SRC / client).exists(), client
+
+
+def test_an_old_view_word_planted_in_a_moved_client_is_found(tmp_path: Path) -> None:
+    """Each moved client, copied; the same copy clean finds nothing, with a word on screen it is found, and in a comment
+    (which a person never sees) it is not."""
+    for client in MOVED_CLIENTS:
+        real = (GLASS_ROOTS[1] / client).read_text(encoding="utf-8")
+        copy = tmp_path / "src" / client
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        copy.write_text(real, encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == []
+        copy.write_text(real + '\nexport const planted = "Clear view";\n', encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == [f"{client}: 'Clear view'"]
+        copy.write_text(real + "\n// Clear view, a comment\n", encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == []
+        copy.unlink()
 
 
 def test_each_admin_section_is_named_as_admin_labels_it() -> None:
