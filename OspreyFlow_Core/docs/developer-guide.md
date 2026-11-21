@@ -37,10 +37,11 @@ what is "coming".
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.43** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.44** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.44 | 2026-11-21 | §1: the lead-in to the tiers and ports no longer says everything between the tiers crosses one of four ports. It says what crosses the four ports, that three narrower ports sit beside them, and that the relational store, the working-set store and the search index are not behind a port (DC1c round 7). PDF made again. |
 | 1.43 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says the gate checks the build's package list against an allowlist on every change and does not yet reach every package inside the images, in place of saying every software dependency is under an open-source licence; the line names which stores and engines sit behind ports and says an adapter is the unit of replacement for those (DC1c, round 5). PDF made again. |
 | 1.42 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line is an aim with known read-side gaps, listed in the architecture guide, not a plain statement of fact (DC1c, verifier's finding). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.41 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to a data engineer: the five constraints and what each means for a pipeline (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
@@ -97,7 +98,7 @@ what is "coming".
 The [architecture guide](architecture-guide.md) has the level 1 diagram, with the technology in each
 component, and every interface with what crosses it.
 
-Three tiers; everything that passes between them crosses one of four typed ports:
+Three tiers. What passes between the Conduit and the graph store, the analytics store, graph algorithms and the model engines crosses one of four typed ports, below; the media store, the recognition pass and the search index's feed each have a narrower one beside them. The relational store (the audit table and the export ledger), the working-set store and the search index are not behind a port.
 
 | Tier | What it is |
 | --- | --- |

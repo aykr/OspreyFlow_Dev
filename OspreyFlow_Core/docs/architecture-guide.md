@@ -98,10 +98,11 @@ its own.
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.12** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.13** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.13 | 2026-11-21 | §2: the first sentence no longer says everything between the Conduit and the Vault crosses one of four ports. It says what crosses the four typed ports (the graph store, the analytics store, graph algorithms and the model engines), that the media store, the recognition pass and the search index's feed each have a narrower one, and that the relational store, the working-set store and the search index are not behind a port (the owner's sentence, DC1c round 7). §6: the person is passed into every read, through the ports for the graph store, the analytics store and graph algorithms and in the query itself for the search index. PDF made again. |
 | 1.12 | 2026-11-21 | *Why OspreyFlow is built this way*, held to the truth check a fourth time (DC1c, round 5). Software sovereignty: the line no longer says replaceable software keeps a record from being held hostage, and no longer says each store or engine sits behind a port; it argues for software you can read, change, host and replace on its merits, says which stores and engines are behind a port (the graph store, the analytics store, graph algorithms, the model engines, the media store and the recognition pass) and says the relational store, the working-set store and the search index are not, so replacing one is not an adapter's work. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.11 | 2026-11-21 | *Why OspreyFlow is built this way* and §6, held to the truth check a third time (DC1c, the verifier's findings): the audit sentences say case reads, refusals of access to a case and *changes* are audited, not "every change", and §6 adds that no test yet checks that each route that changes data writes a row; the privacy sentence says what each person sees is *meant to be* bounded. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.10 | 2026-11-21 | *Why OspreyFlow is built this way* and §9, corrected to the truth check (DC1c, verifier's second findings): §9 says an open-source alternative is used or the component is not bundled, since the register's Grafana row records no alternative. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
@@ -152,8 +153,9 @@ organisation's sign-in, and the cloud's managed services.
 | **The Conduit** | The API (FastAPI), stateless and horizontally scaled. Every request is checked against the person making it, and access control is applied inside each query to the stores, never after |
 | **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's own reads, and the results page says search is limited to exact identifiers), PostgreSQL, the object store, and the models |
 
-Everything that passes between the Conduit and the Vault crosses one of four typed **ports**. A port
-is a narrow interface (a Python `Protocol`) that everything above it may call and nothing else may.
+What passes between the Conduit and the graph store, the analytics store, graph algorithms and the model engines crosses one of four typed **ports**; the media store, the recognition pass and the search index's feed each have a narrower one beside them. The relational store (the audit table and the export ledger), the working-set store and the search index are not behind a port.
+
+A port is a narrow interface (a Python `Protocol`) that everything above it may call and nothing else may.
 Each has a conformance suite, written before any adapter, and an adapter is supported only once it
 passes it. Swapping the engine behind a port, say a laptop's in-process DuckDB for a cluster's
 ClickHouse, means writing one adapter and changing one line of configuration.
@@ -265,7 +267,8 @@ person confirms it. No confidence threshold promotes it on anyone's behalf.
 - **Every record carries its handling**: a classification, handling codes, an action code and a
   sanitisation code, set at load and checked again, item by item, at export.
 - **The person travels with every read.** The Conduit resolves who is asking from the token and passes
-  them into every read through the ports, counts included. The adapter puts the filter into the
+  them into every read, counts included: through the ports for the graph store, the analytics store and graph
+  algorithms, and in the query itself for the search index. The adapter puts the filter into the
   traversal or the `WHERE` clause. A record the reader may not see is absent, and so is any degree,
   path length, histogram bucket or figure that would reveal it. Each adapter's conformance suite
   holds it to that.
