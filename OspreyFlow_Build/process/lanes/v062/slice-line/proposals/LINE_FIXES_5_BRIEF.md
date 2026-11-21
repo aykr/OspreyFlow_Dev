@@ -3,7 +3,7 @@
 Written by the conductor on 21 November 2026 for one quiet window the owner picks. Not started. The conductor cannot change the line's
 code (`OspreyFlow_Build/scripts/slice_line/` changes only by the owner's hand), so this is a brief, not a change. **Each item is a fault the
 line showed on 20 and 21 November; each gets a test that was red first with the fault planted in the shape the code meets (rules 12 and
-15) and a planted fault in `scripts/slice_line/tests/plant_faults.py`.** No item opens a path by which a seat could write a pass record,
+15) and a planted fault in `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py`.** No item opens a path by which a seat could write a pass record,
 clear a stop, push or edit the line. Items 1 to 7 are the owner's list; items 8 and 9 are what the conductor found while applying the
 owner's seven lines on 21 November; the merge progress brief comes last.
 
