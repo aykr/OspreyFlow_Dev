@@ -2,8 +2,8 @@
 
 `spec/PL13_GATEWAY_SCOUT.md` answers the owner's nine questions about building OspreyFlow's own
 gateway image from the MIT code only. This test is pure and reads one file by its fixed path; it
-**walks no folder** (it lists no folder by any means), so the scan map needs no row for it. The plants are written to pytest's own temporary folder, which is the only other place
-it looks.
+**walks no folder** (it lists no folder by any means), so the scan map needs no row for it. The
+plants are written to pytest's own temporary folder, which is the only other place it looks.
 
 What it holds:
 
@@ -135,6 +135,22 @@ def test_a_row_with_an_empty_cell_is_refused(cell: str) -> None:
     assert problems(_template().replace(row, emptied)) == [expected]
 
 
+def test_a_row_with_no_evidence_column_is_refused() -> None:
+    # Three cells in all (number, question, answer): without the `len(parts) < 3` guard the
+    # question would be read as the answer and the answer as the evidence, and the row would pass.
+    row = "| 4 | question 4 | an answer for 4 | read: a file at a line |"
+    short = "| 4 | question 4 | an answer for 4 |"
+    assert row in _template()
+    assert problems(_template().replace(row, short)) == ["row 4 has no answer and evidence cells"]
+
+
+def test_a_row_with_only_a_number_and_one_cell_is_refused() -> None:
+    row = "| 4 | question 4 | an answer for 4 | read: a file at a line |"
+    assert problems(_template().replace(row, "| 4 | question 4 |")) == [
+        "row 4 has no answer and evidence cells"
+    ]
+
+
 def test_a_file_with_no_verdict_is_refused() -> None:
     text = "\n".join(ln for ln in _template().splitlines() if not ln.startswith("VERDICT"))
     assert problems(text) == ["no verdict line"]
@@ -142,6 +158,23 @@ def test_a_file_with_no_verdict_is_refused() -> None:
 
 def test_a_verdict_in_neither_form_is_refused() -> None:
     text = _template().replace("VERDICT: clean cut", "VERDICT: mostly clean")
+    assert problems(text) == ["the verdict line is not one of the two forms with a reason"]
+
+
+@pytest.mark.parametrize(
+    "bare",
+    [
+        "VERDICT: clean cut",
+        "VERDICT: not a clean cut",
+        "**VERDICT: clean cut**",
+        "VERDICT: clean cut —",
+        "VERDICT: clean cut - ",
+    ],
+)
+def test_a_verdict_without_a_reason_is_refused(bare: str) -> None:
+    # Each is one of the two forms but gives no reason, so only the reason clause can refuse it.
+    text = _template().replace("VERDICT: clean cut — the open code runs without the folder.", bare)
+    assert bare in text
     assert problems(text) == ["the verdict line is not one of the two forms with a reason"]
 
 
