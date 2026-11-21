@@ -20,13 +20,13 @@ import {
   getYardstick,
   listAssumptions,
   listGaps,
-  listJudgements,
+  listAssessmentJudgements as listJudgements,
   saveAssumption,
   saveGap,
   saveJudgement,
   UnverifiableCitationApiError,
   type Yardstick,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import { ReviewFlagChip } from "./ReviewFlagChip";
 
 import type { Assumption, IntelligenceGap, Judgement, Node } from "../../../../packages/schemas/generated";

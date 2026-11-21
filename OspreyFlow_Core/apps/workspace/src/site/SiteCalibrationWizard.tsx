@@ -27,9 +27,9 @@ import {
   setSiteGrid,
   siteImageUrl,
   type Site,
-} from "./api";
-import type { ControlPoint } from "./bilinear";
-import { computeGridCells, formsASimpleQuadrilateral } from "./bilinear";
+} from "@ospreyflow/glass-shared";
+import type { ControlPoint } from "@ospreyflow/glass-shared";
+import { computeGridCells, formsASimpleQuadrilateral } from "@ospreyflow/glass-shared";
 import {
   onNextMapClick,
   removeAllSiteLayers,
@@ -189,7 +189,7 @@ export function SiteCalibrationWizard({
     // never reads `px`/`py` at all. Catches a scrambled click order (e.g.
     // the BR/BL clicks swapped) that would otherwise silently produce a
     // crossed, badly warped grid rather than an error — see
-    // `bilinear.ts`'s `formsASimpleQuadrilateral` docstring.
+    // `packages/glass-shared/src/site/bilinear.ts`'s `formsASimpleQuadrilateral` docstring.
     if (!formsASimpleQuadrilateral(mapPoints)) {
       setError(
         "Those four map points don't form a simple top-left → top-right → " +

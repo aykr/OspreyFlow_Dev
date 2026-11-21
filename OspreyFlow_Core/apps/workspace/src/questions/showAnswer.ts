@@ -2,7 +2,7 @@
 // answer's items put on the canvas by id (`addByIds`, read on the server as this reader may see them), selected and
 // brought into view; how many are not shown said, never which; past the working set's cap nothing added and the typed
 // refusal said with its figures (rule 2). One function, so the harness proves the App's own steps.
-import { addByIds, type ConnectionsContext } from "../connections/connectionsApi";
+import { addByIds, type ConnectionsContext } from "@ospreyflow/glass-shared";
 import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import type { AnswerIds } from "./AnswerActions";
 

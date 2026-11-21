@@ -1,7 +1,7 @@
 // What the board surface reads from an opened board, as pure functions (ADR-143 decisions 4 and 5):
 // an item's name, whether it is drawn, where it sits, and how far an arrow key moves it. Tested in
 // `boardModel.test.ts`; the surface itself in `keyboard/boards.spec.ts`.
-import type { BoardOpened } from "./boardsApi";
+import type { BoardOpened } from "@ospreyflow/glass-shared";
 
 export type BoardNode = BoardOpened["nodes"][number];
 export type BoardEdge = BoardOpened["edges"][number];

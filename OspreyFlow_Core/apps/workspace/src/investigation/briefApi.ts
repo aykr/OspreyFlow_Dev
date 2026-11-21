@@ -3,7 +3,7 @@
 // brief as the caller may now read it, so what is shown is always what the server says. The shapes
 // are written by hand: `case_brief.py` is not in `schemas-check`'s model list, which covers
 // `schemas.*` only, the same disclosed gap `cases.ts` names for the case listing.
-import { listJudgements } from "../assessment/api";
+import { listAssessmentJudgements as listJudgements } from "@ospreyflow/glass-shared";
 import { listPatterns, fieldOf, refusal, send, type Reply, listTrends } from "@ospreyflow/glass-shared";
 import { listCases } from "./cases";
 

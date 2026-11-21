@@ -13,7 +13,7 @@ import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
 import { listPatterns } from "@ospreyflow/glass-shared";
-import { createMonitor, listMonitors, setMonitorSchedule } from "./api";
+import { createMonitor, listMonitors, setMonitorSchedule } from "@ospreyflow/glass-shared";
 import { StatusBadge } from "./StatusBadge";
 
 export interface MonitorPanelProps {

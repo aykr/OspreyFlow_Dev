@@ -16,7 +16,9 @@ import {
   LINK_CLIENTS,
   movedClients,
   plantedCopy,
+  PLAIN_CLIENTS,
   plantedLinkClients,
+  plantedPlainClients,
   plantedReportClients,
   REPORT_CLIENTS,
   shown,
@@ -76,6 +78,20 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     const walked = sourceFiles();
     for (const rel of LINK_CLIENTS) expect(walked, rel).toContain(join(SHARED_SRC, rel));
     const planted = plantedLinkClients('export const PLANTED = { note: "a placeholder value" };');
+    try {
+      const hits = sourceFiles([planted.root]).flatMap((path) =>
+        clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
+      );
+      expect(hits.sort()).toEqual(planted.files.map((file) => `${file}: a placeholder value`).sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the assessment, boards, connections, explore, map, metrics, ownership, search, site, strength and watches clients that moved (PL4d3c), and finds a word planted in each (rule 15)", () => {
+    const walked = sourceFiles();
+    for (const rel of PLAIN_CLIENTS) expect(walked, rel).toContain(join(SHARED_SRC, rel));
+    const planted = plantedPlainClients('export const PLANTED = { note: "a placeholder value" };');
     try {
       const hits = sourceFiles([planted.root]).flatMap((path) =>
         clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),

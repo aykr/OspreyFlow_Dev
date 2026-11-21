@@ -43,6 +43,7 @@ vi.mock("@ospreyflow/glass-shared", async () => {
   const { makeEdge, makeNode } = await import("./testing/fixtures");
   return {
     ...actual,
+    fetchMapConfig: vi.fn(() => new Promise(() => undefined)),
     createWorkingSet: () => {
       const ws = actual.createWorkingSet();
       ws.store.getState().applyDelta({
@@ -79,10 +80,6 @@ vi.mock("./auth/userManager", async () => {
   };
 });
 
-vi.mock("./map/providers", async () => {
-  const actual = await vi.importActual<typeof import("./map/providers")>("./map/providers");
-  return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
-});
 
 let App!: typeof AppComponent;
 beforeAll(async () => {

@@ -22,7 +22,7 @@ import type { NamedType } from "../canvas/linkLabel";
 import { TypeChip } from "../inspector/TypeChip";
 import type { EntityVisual } from "../ontology/schema";
 import type { WorkingSetGraph, WorkingSetStoreState } from "@ospreyflow/glass-shared";
-import { fetchConnectionStrengths, fetchRarity } from "../strength/api";
+import { fetchConnectionStrengths, fetchRarity } from "@ospreyflow/glass-shared";
 import {
   entityRows,
   linkRows,

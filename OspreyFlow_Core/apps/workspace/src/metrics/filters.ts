@@ -4,7 +4,7 @@
 // rule 2), so the analyst's spatial memory of the network survives the filter, and sliding back
 // brightens everything again. A filter is a way of looking: it belongs to the view, nothing is
 // stored. The rule is pure so it can be tested without a screen; `App.tsx` feeds it the graph.
-import type { ComputeMetricName } from "./api";
+import type { ComputeMetricName } from "@ospreyflow/glass-shared";
 
 /** ADR-139 decision 6: connection strength and shared-attribute rarity join the metrics a filter
  * judges by. Strength is a link's (a node takes its strongest link's), rarity a pair's (a node takes

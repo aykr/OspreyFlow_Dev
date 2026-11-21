@@ -69,8 +69,8 @@ vi.mock("./ontology/schema", async () => {
   };
 });
 
-vi.mock("./map/providers", async () => {
-  const actual = await vi.importActual<typeof import("./map/providers")>("./map/providers");
+vi.mock("@ospreyflow/glass-shared", async () => {
+  const actual = await vi.importActual<typeof import("@ospreyflow/glass-shared")>("@ospreyflow/glass-shared");
   return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
 });
 

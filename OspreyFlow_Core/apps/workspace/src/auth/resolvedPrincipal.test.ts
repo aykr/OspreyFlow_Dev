@@ -10,7 +10,9 @@ import {
   LINK_CLIENTS,
   movedClients,
   plantedCopy,
+  PLAIN_CLIENTS,
   plantedLinkClients,
+  plantedPlainClients,
   plantedReportClients,
   REPORT_CLIENTS,
   SHARED_SRC,
@@ -130,6 +132,22 @@ describe("no token claim of role or access is read in the Glass", () => {
     const walked = sources(SHARED);
     for (const rel of LINK_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
     const planted = plantedLinkClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the assessment, boards, connections, explore, map, metrics, ownership, search, site, strength and watches clients that moved (PL4d3c), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of PLAIN_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedPlainClients(
       "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
     );
     try {

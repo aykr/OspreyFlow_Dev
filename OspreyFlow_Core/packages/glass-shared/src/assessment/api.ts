@@ -14,7 +14,7 @@ import type {
   Assumption,
   IntelligenceGap,
   Judgement,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 export interface YardstickBand {
   label: string;

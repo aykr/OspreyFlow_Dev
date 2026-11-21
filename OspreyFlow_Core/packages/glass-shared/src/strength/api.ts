@@ -11,7 +11,7 @@ import type {
   InfluencerSetVersion,
   RarityResult,
   StrengthInfluencer,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 export type RarityScope = "dataset" | "case";
 

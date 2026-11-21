@@ -42,7 +42,7 @@ import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
 import type { DocumentReaderView } from "@ospreyflow/glass-shared";
 import { displayValue } from "./search/searchOptions";
-import { listJudgements } from "./assessment/api";
+import { listAssessmentJudgements as listJudgements } from "@ospreyflow/glass-shared";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
 import {
   buildEventFilter,
@@ -89,7 +89,7 @@ import {
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
 import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
-import { seedElements } from "./connections/connectionsApi";
+import { seedElements } from "@ospreyflow/glass-shared";
 import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { HideToolbarButton, ShowToolbarButton } from "./canvas/ToolbarToggle";
@@ -99,11 +99,11 @@ import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
 import { MatrixView } from "./matrix/MatrixView";
-import { fetchCaseInfluencers } from "./strength/api";
+import { fetchCaseInfluencers } from "@ospreyflow/glass-shared";
 import { searchPlaces } from "./map/places";
 import { addGazetteer, caseGazetteers, removeGazetteer } from "./map/gazetteers";
 import type { GazetteerControls } from "./map/MapControls";
-import { defaultProvider, fetchMapConfig, switchableProviders } from "./map/providers";
+import { defaultProvider, fetchMapConfig, switchableProviders } from "@ospreyflow/glass-shared";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
   fetchOntologyRegistry,
@@ -139,7 +139,7 @@ import type { AnswerIds } from "./questions/AnswerActions";
 import { showAnswerOnCanvas } from "./questions/showAnswer";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
 import { ExplorePanel } from "./explore/ExplorePanel";
-import type { BusyDay, RankedLink } from "./explore/exploreApi";
+import type { BusyDay, RankedLink } from "@ospreyflow/glass-shared";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
