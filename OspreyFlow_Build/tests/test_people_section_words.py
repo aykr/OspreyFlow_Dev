@@ -31,6 +31,7 @@ import principal_auth
 from principal_auth import OwnerNotHeld, OwnerRecordUnavailable
 from schemas.admin import PersonAccessInput
 from services.api.entra_people import PersonActionRefused, check_administrator_access
+from tools.layout import PAGES_COPY_ROOTS
 
 CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 SECTIONS = CORE / "apps/workspace/src/admin/sections.json"
@@ -182,6 +183,34 @@ def test_the_old_name_planted_in_a_moved_client_is_found(client: str, tmp_path: 
     assert found() == []
     copy.write_text(real + '\nexport const planted = "Set it in Admin › People.";\n', encoding="utf-8")
     assert found() == [real.count("\n") + 2]
+
+
+def _found(files: list[Path]) -> list[int]:
+    return [n for p in files for n in _text(p.read_text(encoding="utf-8"), comments=True)]
+
+
+def test_the_scan_reaches_the_pages_roots() -> None:
+    """The pages service's templates and modules are user-visible copy (ADR-152 decision 6; IS5a0 brief item 6): the
+    Default tree's own layout is read by the real scan, and each pages root is one of its roots."""
+    assert set(PAGES_COPY_ROOTS) <= set(GLASS_ROOTS)
+    read = {p.relative_to(CORE).as_posix() for p in _glass_files()}
+    assert "apps/pages/tree-default/layout.njk" in read
+
+
+@pytest.mark.parametrize("root", PAGES_COPY_ROOTS)
+def test_the_old_name_planted_in_a_pages_root_is_found(root: str, tmp_path: Path) -> None:
+    """Rule 15: a template (or a module) in each pages root says the section's old name; the same file with the new
+    name finds nothing, and so does the old name in a template comment, which a person never sees."""
+    folder = tmp_path / root
+    folder.mkdir(parents=True)
+    page = folder / ("x.ts" if root.endswith("modules") else "x.njk")
+    page.write_text("<p>Set it in Admin › People and roles.</p>\n", encoding="utf-8")
+    assert _found(_glass_files((folder,))) == []
+    page.write_text("<h1>Roles</h1>\n<p>Set it in Admin › People.</p>\n", encoding="utf-8")
+    assert _found(_glass_files((folder,))) == [2]
+    if page.suffix == ".njk":
+        page.write_text("{# Admin › People, a comment #}\n<!-- Admin › People -->\n<p>Roles</p>\n", encoding="utf-8")
+        assert _found(_glass_files((folder,))) == []
 
 
 EVERY = frozenset({"clearance", "org_unit", "handling_codes"})

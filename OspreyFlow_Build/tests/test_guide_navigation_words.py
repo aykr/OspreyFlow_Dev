@@ -19,6 +19,8 @@ import json
 import re
 from pathlib import Path
 
+from tools.layout import PAGES_COPY_ROOTS
+
 CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 DOCS = CORE / "docs"
 SRC = CORE / "apps" / "workspace" / "src"
@@ -215,6 +217,30 @@ def test_an_old_view_word_planted_in_a_moved_client_is_found(tmp_path: Path) -> 
         copy.write_text(real + "\n// Clear view, a comment\n", encoding="utf-8")
         assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == []
         copy.unlink()
+
+
+def test_the_glass_s_sources_include_the_pages_roots() -> None:
+    """The pages service's templates and modules are on-screen copy too (ADR-152 decision 6; IS5a0 brief item 6): each
+    pages root is read, and the Default tree's own templates are among the sources."""
+    assert set(PAGES_COPY_ROOTS) <= {p.relative_to(CORE).as_posix() for p in GLASS_ROOTS}
+    assert {"layout.njk", "home.njk", "error.njk"} <= set(glass_sources())
+
+
+def test_an_old_view_word_planted_in_a_pages_root_is_found(tmp_path: Path) -> None:
+    """Rule 15, one plant in each pages root: the word on screen is found, in a comment (a template's `{# #}` or an
+    HTML comment, or a module's `//`) it is not, and the same file clean finds nothing."""
+    for root in PAGES_COPY_ROOTS:
+        folder = tmp_path / root
+        folder.mkdir(parents=True)
+        page = folder / ("x.ts" if root.endswith("modules") else "x.njk")
+        page.write_text("<p>Clear the selection.</p>\n", encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((folder,))) == []
+        page.write_text("<p>Use Clear view to start again.</p>\n", encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((folder,))) == [f"{page.name}: 'Clear view'"]
+        comment = "// Clear view, a comment\n" if page.suffix == ".ts" else "{# Clear view #}<!-- More views -->\n"
+        page.write_text(comment, encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((folder,))) == []
+        page.unlink()
 
 
 def test_a_place_both_roots_hold_is_read_from_both(tmp_path: Path) -> None:
