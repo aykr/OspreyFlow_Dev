@@ -810,6 +810,81 @@ def test_the_rebaseline_step_builds_the_checked_out_tree_and_writes_the_recorded
     assert [p.name for p in copy.parent.iterdir() if p.name.startswith("dist-before-")], "the old build is kept"
 
 
+# ----------------------------------------------------------------------------- the guard: only the conductor's merge may replace the real folder
+def run_rebaseline_at_default(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run `rebaseline` with no `--baseline`, so the folder it means is the script's own default.
+
+    The default is derived from `$HOME` (and `PL4_BASELINE_DIST` is removed), so a scratch `HOME` makes the default a scratch
+    folder: this plants the real default's shape without ever naming the Mac's real folder (which no test may touch).
+    """
+    env = {k: v for k, v in os.environ.items() if k != "PL4_BASELINE_DIST"} | {"HOME": str(home)}
+    return subprocess.run([node(), str(SCRIPT), "rebaseline", *args], cwd=CORE, capture_output=True, text=True, timeout=TIMEOUT, check=False, env=env)
+
+
+def default_scene(tmp_path: Path) -> tuple[Path, Path, Path, Path, Path]:
+    """A scratch HOME holding a baseline at the script's default path, a new build, a matching declaration and a test output."""
+    home = tmp_path / "home"
+    old = synthetic_dist(home / "dev" / "osprey-acceptance" / "PL4a-baseline" / "dist", index_hash="AAAAAAAA", lazy_hash="11111111")
+    new = synthetic_dist(tmp_path / "new", index_hash="BBBBBBBB", lazy_hash="22222222", answer=2)
+    listing = subprocess.run([node(), str(SCRIPT), "units", str(old), str(new)], cwd=CORE, capture_output=True, text=True, check=True).stdout
+    declared_text = tmp_path / "declared.txt"
+    declared_text.write_text(declaration_for(listing), encoding="utf-8")
+    tests = tmp_path / "tests.txt"
+    tests.write_text(TESTS_OUTPUT, encoding="utf-8")
+    return home, old, new, declared_text, tests
+
+
+def test_the_rebaseline_step_refuses_the_default_folder_without_the_conductors_flag(tmp_path: Path) -> None:
+    """Planted: the call that replaced the Mac's real folder six times by hand (no `--baseline`, so the default)."""
+    home, old, new, declared_text, tests = default_scene(tmp_path)
+    before = folder_hash(old)
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline_at_default(home, "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode != 0, "rebaseline replaced the default baseline folder without --conductor-merge:\n" + done.stdout
+    assert "--conductor-merge" in done.stdout + done.stderr and "conductor" in (done.stdout + done.stderr), "it must say, in words, why it refused"
+    assert folder_hash(old) == before and not out.exists(), "a refused rebaseline must touch nothing"
+    assert [p.name for p in old.parent.iterdir()] == ["dist"], "nothing is moved aside when it refuses"
+
+
+def test_the_rebaseline_step_refuses_an_explicit_baseline_that_is_the_default_folder_too(tmp_path: Path) -> None:
+    """Naming the default path by hand with `--baseline` is the same call: the flag is what the conductor adds."""
+    home, old, new, declared_text, tests = default_scene(tmp_path)
+    before = folder_hash(old)
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline_at_default(home, "--baseline", str(old), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode != 0 and "--conductor-merge" in done.stdout + done.stderr, done.stdout
+    assert folder_hash(old) == before and not out.exists()
+
+
+def test_the_rebaseline_step_replaces_the_default_folder_with_the_conductors_flag(tmp_path: Path) -> None:
+    """Green: with `--conductor-merge` the same call goes through (on a scratch default), and the old folder is kept."""
+    home, old, new, declared_text, tests = default_scene(tmp_path)
+    old_hash, new_hash = folder_hash(old), folder_hash(new)
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline_at_default(home, "--conductor-merge", "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert folder_hash(old) == new_hash
+    kept = [p for p in old.parent.iterdir() if p.name.startswith("dist-before-")]
+    assert len(kept) == 1 and folder_hash(kept[0]) == old_hash
+
+
+def test_a_baseline_that_is_not_the_default_needs_no_flag(tmp_path: Path) -> None:
+    """The tests' own shape (`--baseline <scratch>`) keeps working: the guard is for the default path only."""
+    home, _, new, declared_text, tests = default_scene(tmp_path)
+    other = synthetic_dist(tmp_path / "elsewhere" / "dist", index_hash="AAAAAAAA", lazy_hash="11111111")
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline_at_default(home, "--baseline", str(other), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_the_docstring_names_the_conductors_flag_and_says_nothing_else_may_run_the_step() -> None:
+    doc = __doc__ or ""
+    assert "--conductor-merge" in doc
+    assert "nothing else may run it against the real folder" in " ".join(doc.split())
+    assert "Until the conductor has run it, this proof stays live on the Mac." not in doc
+    assert "--conductor-merge" in SCRIPT.read_text(encoding="utf-8")
+
+
 if __name__ == "__main__":
     if sys.argv[1:] == ["write"]:
         import tempfile
