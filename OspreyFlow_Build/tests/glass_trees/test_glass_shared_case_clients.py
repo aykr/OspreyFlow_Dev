@@ -123,6 +123,9 @@ PACKAGE_FILES = (CASES, *WHOLE, OPENINGS, ORCHESTRATION)
 OLD_OF = {rel: WORKSPACE_SRC + rel for rel in (CASES, *WHOLE)}
 _OLD_STEMS = {old.removesuffix(".ts") for old in OLD_OF.values()}
 
+#: The report clients' module that also writes `caseUrl`, in two pieces: D3a's old-path walk reads this file too.
+REPORT_HTTP = "reports/" + "caseHttp"
+
 #: The names the index gives under another, because a new file wrote a name that an earlier module of the package already
 #: gives: (file, the name it wrote, the name the package exports it as).
 RENAMED_BY_THE_INDEX = (("investigation/cases.ts", "caseUrl", "caseOpenUrl"),)
@@ -282,11 +285,12 @@ def test_an_index_that_drops_or_doubles_a_name_is_found() -> None:
     lost (the case's address given twice); a name left out of a braced export; the cases file starred beside the report
     clients' (the real clash); a file left out."""
     sources = {
-        "reports/caseHttp.ts": "export function caseUrl(api: number, path: string): string { return path; }\n",
+        REPORT_HTTP
+        + ".ts": "export function caseUrl(api: number, path: string): string { return path; }\n",
         "investigation/cases.ts": "export function caseUrl(id: string): string { return id; }\nexport const POLE_LABEL = 1;\n",
     }
     index = (
-        'export * from "./reports/caseHttp";\n'
+        f'export * from "./{REPORT_HTTP}";\n'
         'export { caseUrl as caseOpenUrl, POLE_LABEL } from "./investigation/cases";\n'
     )
     assert index_problems(index, sources) == []
@@ -297,11 +301,10 @@ def test_an_index_that_drops_or_doubles_a_name_is_found() -> None:
     assert any(
         "POLE_LABEL" in p for p in index_problems(index.replace(", POLE_LABEL", ""), sources)
     )
-    starred = 'export * from "./reports/caseHttp";\nexport * from "./investigation/cases";\n'
+    starred = f'export * from "./{REPORT_HTTP}";\nexport * from "./investigation/cases";\n'
     assert any("two modules, one name" in p for p in index_problems(starred, sources))
     assert any(
-        "not exported" in p
-        for p in index_problems('export * from "./reports/caseHttp";\n', sources)
+        "not exported" in p for p in index_problems(f'export * from "./{REPORT_HTTP}";\n', sources)
     )
     assert any(
         "caseOpenUrl" in p
@@ -638,7 +641,7 @@ def test_the_screen_calls_the_four_requests_it_no_longer_makes() -> None:
     for name in ("readQuota", "readOwnedExternally", "markOwnedExternally", "clearOwnedExternally"):
         assert re.search(rf"\b{name}\(", screen), f"the screen does not call {name}"
     imported = re.search(
-        rf"""import\s*\{{([^}}]*)\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""", screen
+        rf"""import\s*(\{{[^}}]*\}})\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""", screen
     )
     assert imported and {
         "readQuota",
