@@ -4,6 +4,9 @@
 //   node scripts/dist_compare.mjs compare <before-dist> <after-dist>
 //        exit 0 and "SAME" when the two builds differ only as a file's new path makes them differ; exit 1 and
 //        "DIFFERENT" with what changed otherwise.
+//   node scripts/dist_compare.mjs units <before-dist> <after-dist>
+//        every differing unit, uncapped, one per line: `<file>\t<only before|only after>\t<sha-12 of the unit>\t<unit>`
+//        (a slice that splits code declares exactly these; `compare` shows five a side, this shows them all).
 //   node scripts/dist_compare.mjs normalise <dist>
 //        the normalised hash of one build, and what it was made from.
 //   node scripts/dist_compare.mjs record --dist <dist> --tests <npm-test-output> [--out <file>]
@@ -611,7 +614,7 @@ function describeChange(title, before, after) {
   if (removed.length > 5) lines.push(`  - ... and ${removed.length - 5} more only before`);
   for (const unit of added.slice(0, 5)) lines.push(`  + ${readable(unit)}`);
   if (added.length > 5) lines.push(`  + ... and ${added.length - 5} more only after`);
-  return { title, lines };
+  return { title, lines, removed, added };
 }
 
 // ---------------------------------------------------------------------------------------------------- the record
@@ -668,6 +671,19 @@ function runBuild() {
   if (done.status !== 0) throw new Error("npm run build --workspace apps/workspace failed");
 }
 
+/** Every differing unit of every changed file, uncapped, in a stable order: the file, the side, the unit's text. */
+export function differingUnits(findings) {
+  const rows = [];
+  for (const finding of findings) {
+    const file = /^changed: (\S+)/.exec(finding.title)?.[1];
+    if (!file) continue;
+    for (const [side, units] of [["only before", finding.removed ?? []], ["only after", finding.added ?? []]]) {
+      for (const unit of units) rows.push({ file, side, sha: sha(unit).slice(0, 12), unit: readable(unit) });
+    }
+  }
+  return rows.sort((a, b) => `${a.file}\t${a.side}\t${a.unit}`.localeCompare(`${b.file}\t${b.side}\t${b.unit}`));
+}
+
 function printFindings(findings) {
   for (const finding of findings) {
     console.log(finding.title);
@@ -690,6 +706,12 @@ function main(args) {
       console.log(`DIFFERENT (${findings.length} finding${findings.length === 1 ? "" : "s"})`);
       printFindings(findings);
       return 1;
+    }
+    case "units": {
+      const [before, after] = rest;
+      if (!before || !after) throw new Error("usage: units <before-dist> <after-dist>");
+      for (const row of differingUnits(compareBuilds(before, after).findings)) console.log(`${row.file}\t${row.side}\t${row.sha}\t${row.unit}`);
+      return 0;
     }
     case "normalise": {
       const { hash, files } = normalise(rest[0]);
