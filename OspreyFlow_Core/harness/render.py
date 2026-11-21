@@ -610,17 +610,18 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
     building = source_path is not None
     sha = git_sha(Path(source_path)) if source_path is not None else git_sha()
 
-    def _owned(service: str, dockerfile: str) -> ServiceImage:
+    def _owned(service: str, dockerfile: str, **own: Any) -> ServiceImage:
         if building:
             return ServiceImage(
                 service,
                 f"osprey/{service}:local",
                 build_context=build_context,
                 dockerfile=dockerfile,
+                **own,
             )
         # ADR-114 Amendment 8: a user repository's release pushes to its own owner's registry.
         registry = os.environ.get("OSPREY_IMAGE_REGISTRY") or OWNED_IMAGE_REGISTRY
-        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile)
+        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile, **own)
 
     # **These third-party references are verified to resolve, and that is not a given.** Two of the
     # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and
@@ -660,22 +661,26 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
             # never rendered: the deployment brought up `ollama` and the Conduit dialled
             # `localhost:4000` inside its own container, so every extraction returned a bare 500
             # (`httpx.ConnectError: All connection attempts failed`, measured over the wire).
-            # **The same image the developer stack pins, by digest — corrected in round 13cdd.**
-            # Round 13cda pinned a tag chosen here instead, so a deployment ran a *different*
-            # LiteLLM from `make dev-up`. That is the exact "two copies that drift" defect the
-            # ollama pull beside it was made byte-identical to avoid, reintroduced one line away
-            # from it. Measured against the same ollama, the same config and the request shape the
-            # route actually emits: the developer stack's proxy returns `{"Endpoint": []}`, while
-            # the tag returns *prose* ("I'm sorry, but I cannot…"), because `main-v1.55.8` does not
-            # translate `response_format: json_schema` into Ollama's own constrained decoding. That
-            # is the `Expecting value: line 1 column 1` `08_ACCEPTANCE_SCENARIOS.md` records as
-            # A6/B6's blocker — not an empty body, which is what it was read as before it was
-            # measured.
+            # **OspreyFlow's own image, built from the publisher's MIT files alone** (the owner's
+            # ruling of 21 November 2026): `deploy/litellm/Dockerfile` installs LiteLLM 1.101.0 from
+            # PyPI, held to the versions its pinned image was measured with, and leaves out the
+            # publisher's commercially licensed folder and package (the build's own licence gate
+            # fails on either). It is released, scanned and signed like the other owned images and
+            # locked as one (`ghcr.io/ospreyflow/litellm:<commit>`), and built from the checkout's
+            # `deploy/litellm` folder alone (the root's `.dockerignore` leaves `deploy/` out).
+            # **It reads no `deployment.env`** (`reads_env_file=False`): it holds the engines' keys
+            # and is given only the variables `_SERVICE_EXTRAS` names for it.
+            # The image that earlier rounds pinned by digest is the one the scout measured
+            # (`spec/PL13_GATEWAY_SCOUT.md`): the 24-call route script gave the same answers on
+            # both, and `test_model_gateway_live.py` passes on ours.
             #
-            # `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if they part.
-            ServiceImage(
+            # `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if the
+            # developer stack builds anything else.
+            _owned(
                 "litellm",
-                "ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b",
+                "deploy/litellm/Dockerfile",
+                own_folder="deploy/litellm",
+                reads_env_file=False,
             ),
             ServiceImage(
                 "whisper",
@@ -1036,8 +1041,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # built image has a stable local tag that `versions.lock` can name and that a later
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
-            service["build"] = {"context": entry.build_context, "dockerfile": entry.dockerfile}
-        if entry.owned:
+            service["build"] = entry.build_stanza()
+        if entry.owned and entry.reads_env_file:
             # Without this the deployment's own generated environment file is written and then
             # never reaches a container: the Conduit fail-fasts on a missing `OIDC_JWKS_URL` and
             # restarts forever. Found running the golden path. Needed whether this owned service
@@ -1844,12 +1849,12 @@ def _render_versions_lock(
                     "digest": "local-build",
                     "source": "local-build",
                     "built_from_git_sha": sha,
-                    "build_context": entry.build_context,
-                    "dockerfile": entry.dockerfile,
+                    "build_context": entry.build_stanza()["context"],
+                    "dockerfile": entry.build_stanza()["dockerfile"],
                 }
             )
             continue
-        # A reference pinned by digest (`ghcr.io/berriai/litellm@sha256:…`) already names the one
+        # A reference pinned by digest (`ollama/ollama@sha256:…`) already names the one
         # image it can ever be, so its digest is read from the reference and no registry is asked:
         # asking added only a way to fail. CI run 43413711132 (13 November 2026) refused to render
         # because ghcr.io did not answer in time for two such references.

@@ -28,6 +28,9 @@ ours:
   worker: {dockerfile: services/worker/Dockerfile, context: .}
   report-sync: {dockerfile: services/report_sync/Dockerfile, context: .}
   superset: {dockerfile: deploy/superset/Dockerfile, context: deploy/superset}
+  # Built from its own folder alone, from the publisher's MIT files (the owner's ruling of 21
+  # November 2026); the folder's own gate fails the build on the publisher's commercial parts.
+  litellm: {dockerfile: deploy/litellm/Dockerfile, context: deploy/litellm}
   # ADR-135 Amendment 6: built from its own folder alone, only when Laurium is chosen.
   laurium: {dockerfile: services/laurium/Dockerfile, context: services/laurium}
 

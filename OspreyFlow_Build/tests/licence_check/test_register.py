@@ -395,13 +395,26 @@ def test_a_name_held_for_the_owner_that_is_also_registered_is_flagged(
 def test_a_held_name_the_code_names_is_not_a_missing_row_but_the_release_refuses(
     reg: Any, rows: list[dict[str, Any]], sources: dict[str, str]
 ) -> None:
-    held = frozenset({"ghcr.io/berriai/litellm"})
-    assert held <= reg.HELD_FOR_OWNER
-    assert not any(r["name"] in held for r in rows), "a held row is not registered"
-    assert reg.find_register_violations(rows, reg.named_by_code(sources), held=held) == []
+    """The hold, planted in the shape it had: a name the code names, with no row. (The one name held
+    until 21 November 2026, the publisher's gateway image, became the product's own image, and
+    nothing is held today, `test_nothing_is_held_for_the_owner_today`; so a name the code does name
+    stands in, its row taken out.)"""
+    held = frozenset({"valkey/valkey"})
+    unregistered = [r for r in rows if r["name"] not in held]
+    assert len(unregistered) == len(rows) - 1, "the register had one row for it"
+    assert reg.find_register_violations(unregistered, reg.named_by_code(sources), held=held) == []
     # Without the hold the same code and register fail: the name is named and not registered.
-    found = reg.find_register_violations(rows, reg.named_by_code(sources), held=frozenset())
-    assert any("ghcr.io/berriai/litellm" in v and "not in the register" in v for v in found)
+    found = reg.find_register_violations(unregistered, reg.named_by_code(sources), held=frozenset())
+    assert any("valkey/valkey" in v and "not in the register" in v for v in found)
+    assert "valkey/valkey" in (reg.release_refusal(unregistered, held=held) or "")
+
+
+def test_nothing_is_held_for_the_owner_today(reg: Any) -> None:
+    """The publisher's gateway image was the one name held (PL11); the owner's ruling of 21 November
+    2026 replaced it with OspreyFlow's own image, and it left the set in the commit that stopped the
+    product naming it. A name added here later is the owner's to rule on: this case is changed then,
+    in the owner's sight."""
+    assert reg.HELD_FOR_OWNER == frozenset()
 
 
 def test_the_gate_leg_reaches_main_and_the_two_python_spellings_pass() -> None:
