@@ -10,12 +10,13 @@ What it holds:
 
 * nine numbered rows, each with a non-empty answer cell and a non-empty evidence cell;
 * exactly one verdict line, `VERDICT: clean cut` or `VERDICT: not a clean cut`, with a reason;
-* no key-shaped string anywhere in the file. The scan is the shape the repository's tests plant and
-  look for (`sk-` and eight or more further characters, as `test_lanes_launch.py` and
-  `test_refresh_before_the_gateway.py` use it) plus the other provider shapes the repository's
-  guides name (a Google API key, a GitHub token, a PEM block). The builder's own synthetic master
-  key cannot be known here, so the shape is what is checked; a 64-character hex image digest is
-  not key-shaped and is allowed, since the file must quote the pinned image's digest.
+* no key-shaped string anywhere in the file. The scan is the repository's own credential scan
+  (`CREDENTIAL` in `tests/test_sites.py`: an AWS key id, a PEM private-key header, GitHub, fine-
+  grained GitHub and Slack tokens, a `password`, `secret`, `api_key` or `token` assignment) plus
+  the brief's `sk-` with eight or more further characters and a Google API key. The builder's own
+  synthetic master key cannot be known here, so the shape is what is checked; a 64-character hex
+  image digest is not key-shaped and is allowed, since the file must quote the pinned image's
+  digest.
 
 Rule 15: each of the three plants (a missing row 4, no verdict, a key-shaped string) is run through
 the same `problems` function the real file is, each taking the shape the file really has (a row of
@@ -39,10 +40,15 @@ VERDICT = re.compile(
     r"^(?:\*\*)?`?VERDICT: (clean cut|not a clean cut)`?(?:\*\*)?\s*[-:–—]\s*\S.*$"
 )
 KEY_SHAPES = (
-    re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),  # an OpenAI-style, gateway or provider key
+    re.compile(r"sk-[A-Za-z0-9_\-]{8,}"),  # an OpenAI-style, gateway or provider key (brief: 8+)
     re.compile(r"AIza[0-9A-Za-z_\-]{20,}"),  # a Google API key
-    re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),  # a GitHub token
-    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    # The repository's own credential scan (`CREDENTIAL` in `tests/test_sites.py`), shape for shape:
+    re.compile(r"AKIA[0-9A-Z]{16}"),  # an AWS access key id (row 4 discusses the Bedrock route)
+    re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY"),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}"),  # a GitHub token
+    re.compile(r"github_pat_[A-Za-z0-9_]{20,}"),  # a fine-grained GitHub token
+    re.compile(r"\bxox[abpr]-[A-Za-z0-9-]{10,}"),  # a Slack token
+    re.compile(r"\b(?:password|passwd|secret|api[_-]?key|token)\s*[:=]\s*\S", re.IGNORECASE),
 )
 
 
@@ -151,6 +157,39 @@ def test_a_file_with_a_key_shaped_string_is_refused() -> None:
     text = _template().replace("an answer for 3", f"the master key was {planted}")
     found = problems(text)
     assert len(found) == 1 and found[0].startswith("a key-shaped string matches")
+
+
+def _planted_shapes() -> dict[str, str]:
+    """One synthetic string per credential shape, made at run time and never written to the repo."""
+    upper = "".join(secrets.choice("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567") for _ in range(16))
+    return {
+        "an AWS access key id": "AKIA" + upper,
+        "a fine-grained GitHub token": "github_pat_" + secrets.token_hex(15),
+        "a Slack token": "xoxb-" + secrets.token_hex(8),
+        "a password assignment": "password=" + secrets.token_hex(6),
+        "a secret assignment in YAML": "secret: " + secrets.token_hex(6),
+        "a token assignment": "token = " + secrets.token_hex(6),
+        "an api key assignment": "api_key: " + secrets.token_hex(6),
+    }
+
+
+@pytest.mark.parametrize("shape", sorted(_planted_shapes()))
+def test_each_credential_shape_the_repository_scans_for_is_refused(shape: str) -> None:
+    planted = _planted_shapes()[shape]
+    # In the cell where row 4 (the Bedrock route, the key listing) would really say it.
+    text = _template().replace("an answer for 4", f"the route used {planted} here")
+    found = problems(text)
+    assert len(found) >= 1 and all(f.startswith("a key-shaped string matches") for f in found), (
+        shape,
+        found,
+    )
+
+
+def test_prose_about_keys_without_a_value_is_not_refused() -> None:
+    # The scan must not refuse the file's own words about keys (a gate that refuses honest text
+    # would be removed): "a master key", "the token budget", "key tags", "secrets" and the like.
+    words = "a master key made at run time, the token budget, key tags, no secrets in the env file"
+    assert problems(_template().replace("an answer for 4", words)) == []
 
 
 def test_a_sha256_digest_is_not_key_shaped() -> None:
