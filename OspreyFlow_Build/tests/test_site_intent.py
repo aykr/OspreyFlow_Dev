@@ -294,6 +294,59 @@ def downloads_without_the_rest(root: Path) -> list[str]:
     return found
 
 
+#: Round 6. Which exports are in the export ledger: DC1a, "Constraint 4 in detail", is report and assessment exports, pack
+#: exports and the report feed. A dataset release export, a rule file export and a source file read write an audit row only;
+#: a platform backup and an object transfer write neither. So wherever a sentence ties an export to the ledger or the audit
+#: (or speaks of the ledger at all), it names the kinds. Found by the words, in any plural, singular or word order.
+EXPORT_SCOPE = "report, assessment and pack"
+EXPORT_WORDS = re.compile(r"\bexport(?:s|ed|ing)?\b")
+RECORD_WORDS = re.compile(r"\bledger\b|\baudit(?:ed)?\b|\bon the record\b")
+SENTENCE_END = re.compile(r"(?<=[.!?])['\"]?\s+")
+
+
+def _sentences(text: str) -> list[str]:
+    """A folded text split into sentences; the 'Operation Ledger' of the demo's case name is not the export ledger."""
+    return [x for x in SENTENCE_END.split(text.replace("operation ledger", "operation l.")) if x]
+
+
+def export_scope_violations_in(text: str, where: str) -> list[str]:
+    found = []
+    for sentence in _sentences(text):
+        ties = (EXPORT_WORDS.search(sentence) and RECORD_WORDS.search(sentence)) or "ledger" in sentence
+        if ties and EXPORT_SCOPE not in sentence:
+            found.append(f"{where}: an export claim without {EXPORT_SCOPE!r}: …{sentence[:160]}…")
+    return found
+
+
+def export_scope_violations(root: Path) -> list[str]:
+    found = []
+    for page in pages(root):
+        found += export_scope_violations_in(_flat(page_text(page)), f"{page.parent.name}/{page.name}")
+    return found
+
+
+def export_scope_violations_in_sources(folder: Path = SITES) -> list[str]:
+    found = []
+    for name in SOURCES:
+        found += export_scope_violations_in(_source_text(folder / name), name)
+    return found
+
+
+#: Where the ledger is named it is named with its scope: the pages and the words that must be there (a page that drops the
+#: scoped sentence is flagged), and both Homes' audit scene, whose sub line is drawn from `overview.py`.
+LEDGER_SCOPED = "report, assessment and pack exports are in an export ledger"
+LEDGER_PAGES = ["org/index.html", "org/features.html", "org/public-sector.html", "net/index.html"]
+AUDIT_SCENE_SUB = ("who did what and when: loads and promotions, people and roles, datasets, and a refused attempt to open a case. "
+                   "report, assessment and pack exports are in an export ledger, and reference reads are outside the audit.")
+
+
+def export_required_violations(root: Path) -> list[str]:
+    found = [f"{n}: lacks {LEDGER_SCOPED!r}" for n in LEDGER_PAGES if LEDGER_SCOPED not in _flat(page_text(root / n))]
+    found += [f"{n}: the audit scene's sub line is not {AUDIT_SCENE_SUB!r}" for n in HOMES.values() if AUDIT_SCENE_SUB not in _flat(page_text(root / n))]
+    found += ["org/governance.html: lacks the kinds of export it records" for _ in [0] if EXPORT_SCOPE not in _flat(page_text(root / "org" / "governance.html"))]
+    return found
+
+
 def guarantees(root: Path) -> list[str]:
     """Outside the paragraph, no 'guarantee' (the paragraph is removed whole, by its exact text, before the page is read)."""
     intent = _intent()
@@ -380,6 +433,12 @@ def test_no_overstated_phrase_remains_in_the_sources() -> None:
 
 def test_wherever_the_downloads_are_named_the_rest_of_the_traffic_out_is_too() -> None:
     assert downloads_without_the_rest(SITES) == []
+
+
+def test_every_export_claim_names_the_kinds_of_export_it_covers() -> None:
+    assert export_scope_violations(SITES) == []
+    assert export_scope_violations_in_sources() == []
+    assert export_required_violations(SITES) == []
 
 
 def test_no_guarantee_outside_the_paragraph() -> None:
@@ -612,6 +671,78 @@ def test_the_licence_attribution_and_tracking_checks_are_red_when_a_claim_is_dro
     path = sites / page
     path.write_text(path.read_text(encoding="utf-8").replace(out, "xxxx"), encoding="utf-8")
     assert fault in wording_violations(sites)
+
+
+#: The unscoped export claims, in the forms the text may take: plural, singular, word order, ledger or audit.
+UNSCOPED_EXPORTS = [
+    "Exports are in a ledger of their own.",
+    "Every export is in the audit.",
+    "All exports are written to the ledger.",
+    "The ledger holds every export.",
+    "Every export writes a ledger row.",
+    "Exports, approvals and loads are recorded in the audit.",
+    "An export is audited.",
+    "Each export is on the record.",
+    "The audit covers exports.",
+    "Everything is in the export ledger.",
+]
+
+
+@pytest.mark.parametrize("claim", UNSCOPED_EXPORTS)
+def test_an_unscoped_export_claim_is_flagged_in_a_page(sites: Path, claim: str) -> None:
+    _plant(sites / "net" / "services.html", f"<p>{html.escape(claim, quote=True)}</p>")
+    assert any(v.startswith("net/services.html") for v in export_scope_violations(sites)), claim
+
+
+@pytest.mark.parametrize("claim", UNSCOPED_EXPORTS)
+def test_an_unscoped_export_claim_is_flagged_in_a_source(tmp_path: Path, claim: str) -> None:
+    folder = tmp_path / "sites"
+    folder.mkdir()
+    for name in SOURCES:
+        shutil.copy(SITES / name, folder / name)
+    path = folder / "overview.py"
+    path.write_text(path.read_text(encoding="utf-8") + f"\nPLANTED = {claim!r}\n", encoding="utf-8")
+    assert any(v.startswith("overview.py") for v in export_scope_violations_in_sources(folder)), claim
+
+
+@pytest.mark.parametrize("claim", ["Report, assessment and pack exports are in an export ledger.", "An export ledger holds report, assessment and pack exports."])
+def test_a_scoped_export_claim_is_not_flagged(sites: Path, claim: str) -> None:
+    _plant(sites / "net" / "services.html", f"<p>{claim}</p>")
+    assert export_scope_violations(sites) == []
+
+
+@pytest.mark.parametrize("home", sorted(HOMES.values()))
+def test_the_audit_scene_sub_line_unscoped_is_flagged_on_each_home(sites: Path, home: str) -> None:
+    """The very sentence round 5 wrote, planted back in the built Home: the scene's own check and the scope check both fail."""
+    page = sites / home
+    source = page.read_text(encoding="utf-8")
+    assert "Report, assessment and pack exports are in an export ledger, and reference reads" in source
+    page.write_text(source.replace("Report, assessment and pack exports are in an export ledger, and reference reads",
+                                   "Exports are in a ledger of their own, and reference reads", 1), encoding="utf-8")
+    assert any(v.startswith(home) for v in export_scope_violations(sites))
+    assert any(v.startswith(home) and "audit scene" in v for v in export_required_violations(sites))
+
+
+@pytest.mark.parametrize("page", LEDGER_PAGES)
+def test_a_page_that_drops_the_scoped_ledger_sentence_is_flagged(sites: Path, page: str) -> None:
+    path = sites / page
+    source = path.read_text(encoding="utf-8")
+    assert "export ledger" in source
+    path.write_text(source.replace("export ledger", "ledger"), encoding="utf-8")
+    assert any(v.startswith(page) and "lacks" in v for v in export_required_violations(sites))
+
+
+def test_the_scene_constant_in_overview_py_is_flagged_when_planted_back(tmp_path: Path) -> None:
+    folder = tmp_path / "sites"
+    folder.mkdir()
+    for name in SOURCES:
+        shutil.copy(SITES / name, folder / name)
+    path = folder / "overview.py"
+    source = path.read_text(encoding="utf-8")
+    old = "Report, assessment and pack exports are in an export ledger, and reference reads"
+    assert old in source
+    path.write_text(source.replace(old, "Exports are in a ledger of their own, and reference reads", 1), encoding="utf-8")
+    assert any(v.startswith("overview.py") for v in export_scope_violations_in_sources(folder))
 
 
 def test_the_older_site_carrying_the_paragraph_is_flagged(tmp_path: Path) -> None:
