@@ -127,6 +127,36 @@ tests that raised `LeaseNotHeld` in one gate and passed in others (find the caus
 main checkout refusing a merge; a background wait that polls `pgrep -f 'merge_slice.py merge'` matching its own command line (give the
 conductor a `merge_slice.py wait-idle` that waits for no merge, so no chain needs `pgrep`).
 
+## 10. The owner's approved decision-record diffs (the owner's word of 21 November: "approved: <diff name>")
+
+When the owner writes "approved: <diff name>" in chat, the conductor applies that diff and commits it with "approved by the owner, <date>" in the message,
+then pushes. This covers diffs that touch only `OspreyFlow_Build/spec/06_DECISIONS.md`, `OspreyFlow_Build/spec/ADR_RESERVATIONS.md`, both `DESIGN.md` copies
+(`OspreyFlow_Build/spec/design/DESIGN.md` and `OspreyFlow_Core/DESIGN.md`) and `OspreyFlow_Build/process/CLAUDE.md`. It never covers `OspreyFlow_Core/Makefile`,
+`.github/workflows/ci.yml`, the release workflow, `harness/signatures.py`, or the owner-only files in the lanes folder (`resume.tsv`, `standing.tsv`,
+`dial.yaml`, `accounts.yaml`, `live_step.yaml`). **Today four things stop the conductor** (read from the code): (1) the guard refuses the conductor's shell
+writes that name any path outside `OspreyFlow_Build/process/lanes/v062/` (`guard.py` about line 312, which is how `git apply` on a scratch copy of the
+specification was refused) and its Edit and Write tools likewise; (2) `merge_slice.py records` commits only paths under `process/lanes/v062/` (about line 998)
+and refuses the owner-only files; (3) the guard refuses a direct `git commit` to `main` by an agent, and `push_main.sh` pushes only a tip the merge script wrote
+(the trailer rule); (4) `process/CLAUDE.md` is on the guard's protected list. **The smallest change: one new `merge_slice.py` mode, run by the conductor, and nothing
+else widened.**
+
+- `merge_slice.py approve-diff <name>`: records, in the records folder (`approved/<name>.json`), the diff file's SHA-256, its name and the date, written by the
+  conductor on seeing the owner's "approved: <name>" in chat. (The line cannot read chat; this is the conductor's attestation, kept in a committed record the owner
+  can audit.)
+- `merge_slice.py apply-approved <name>`: refuses unless (a) an approval record exists and the diff file's current SHA-256 equals the recorded one (**"if the diff
+  has changed since the owner approved it, ask again" is enforced by the hash**); (b) every file the diff touches is in the allowed set above and none is in the
+  excluded set (read the file list from `git apply --numstat`; a rename or a mode change refuses); (c) `git apply --check` passes against main's tip with the main
+  checkout otherwise clean; (d) after applying in the merge tree and before committing, the decision checks pass on the result (`tools/adr_reservations_check`,
+  `tools/doc_citations_check`, `tools/decision_log_publication_check`, and for `CLAUDE.md` the citation check). It then commits with `approved by the owner,
+  <date>` and the names of the diff and its hash in the message, the existing `Slice-Records: yes` trailer **and a new trailer `Owner-Approved-Diff: <name>`**, and
+  pushes through `push_main.sh` (whose trailer rule accepts the new trailer and nothing else new).
+- The guard allows the conductor to run these two modes (it already allows `merge_slice.py` modes); **it does not widen the conductor's shell writes, its Edit and
+  Write tools or `records` mode.** The guard keeps refusing a direct `git apply`, `git commit` or redirect into the specification by the conductor.
+- Tests, red first, in the shape the code meets: a changed diff after approval (refused); a diff touching `OspreyFlow_Core/Makefile`, `release.yml`, `ci.yml`,
+  `harness/signatures.py` or an owner-only lanes file (each refused); a diff touching one allowed and one excluded file (refused whole); a diff that does not apply
+  (refused, nothing staged); a diff that breaks the reservation check (refused, nothing committed); an approval for another name (refused); a stale approval record
+  whose diff was deleted (refused); the happy path commits with the trailer and the push check accepts it. Planted faults in `plant_faults.py` for each refusal.
+
 ## Part 2, only if part 1 is done and proved
 
 `MERGE_PROGRESS_BRIEF.md`, as written (same folder): the merge's and the seats' progress record for the dashboard.
