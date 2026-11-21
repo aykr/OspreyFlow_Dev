@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (386 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (309 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (411 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (323 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -240,6 +240,9 @@ writes it, and `run_seat.py conductor` writes it after the session when the hook
 `board.py --usage` prints totals per slice and per account, each account's five-hour and seven-day windows beside
 it (or "not reported" where its sessions' stream never gave one: the default account's gives only seven-day), and
 says that cost is a list-price estimate, not a bill.
+
+## The line fixes of 21 November 2026 (LINE_FIXES_5_BRIEF.md)
+- **The owner's approved diffs** (10): `merge_slice.py approve-diff <name> <hash8>` records the owner's "approved: <name> <hash8>" (refused unless hash8 is the diff file's SHA-256 now) in `approved/<name>.json`, committed; `merge_slice.py apply-approved <name>` applies `slice-line/proposals/<name>.diff` only while its SHA-256 is the approved one, it touches only spec/06_DECISIONS.md, spec/ADR_RESERVATIONS.md, both DESIGN.md and process/CLAUDE.md (no rename or mode change), it applies to main's tip and the decision checks are green on the result; it commits with "approved by the owner, <date>", `Slice-Records: yes` and `Owner-Approved-Diff: <name>`, lists name, hash8, commit and date in `approved/applied.tsv` (the board prints it for the top of each report) and pushes (`push_main.sh` accepts the new trailer). The guard refuses the conductor's own `git apply`, `git am` and `patch` (but `--check`, `--stat`, `--numstat`, `--summary`).
 
 ## Files outside the repository
 

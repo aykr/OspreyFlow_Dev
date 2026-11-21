@@ -38,7 +38,7 @@ M = [
  ("merge_slice.py", 'if not c.frozen_matches(frozen, row):', 'if False:', "changed_frozen_command"),
  ("merge_slice.py", 'fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)', 'pass', "one_merge_at_a_time"),
  ("merge_slice.py", 'if not rel.startswith(c.V062_REL + "/") or ".." in rel:', 'if False:', "records_mode"),
- ("push_main.sh", "if ! printf '%s' \"$trailers\" | grep -qE '^(Slice-Merge|Slice-Records):'; then", "if false; then", "push_script_refuses"),
+ ("push_main.sh", "if ! printf '%s' \"$trailers\" | grep -qE '^(Slice-Merge|Slice-Records|Owner-Approved-Diff):'; then", "if false; then", "push_script_refuses"),
  ("board.py", '        elif not (verify and verify.get("verdict") == "pass" and verify.get("commit") == merged.get("tip")):', '        elif False:', "refuses_done_without"),
  ("board.py", '    if state == "done":\n', '    if False:\n', "forged_done"),
  ("board.py", '    if not isinstance(data, dict):\n', '    if False:\n', "bad_or_incomplete_record"),
@@ -328,9 +328,24 @@ M = [
  # LINE_FIXES_5_BRIEF.md, C: merged of cut, per build
  ("board.py", '"account": kw["account"], "merged": state == "done"})', '"account": kw["account"], "merged": bool(merged)})', "merge_record_the_board_refuses"),
  ("board.py", '        d["cut"] += 1\n', '        d["cut"] = max(d["cut"], 3)\n', "new_row_raises_the_cut"),
- ("board.py", '            "self_clears": c.self_clears(), "build_slices": counts}', '            "self_clears": c.self_clears(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}}', "no_merged_slice_writes_0_of_n"),
+ ("board.py", '            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}', '            "self_clears": c.self_clears(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}, "approved_diffs": applied_diffs()}', "no_merged_slice_writes_0_of_n"),
  ("board.py", '    builds = {k: {**v, **({"slices": counts[k]["said"]', '    builds = {k: {**v, **({} if True else {"slices": counts[k]["said"]', "two_merged_writes_2_of_3"),
  ("board.py", '        if r["build"] not in ids:\n            continue', '        if False:\n            continue', "not_in_the_plan_is_not_counted"),
+ # LINE_FIXES_5_BRIEF.md, 10: the owner's approved diffs
+ ("merge_slice.py", '    if not re.fullmatch(r"[0-9a-f]{8}", hash8 or "") or digest[:8] != hash8:', '    if False:', "approve_diff_takes_the_name"),
+ ("merge_slice.py", '        rec = c.read_json(c.REPO / APPROVED_REL / f"{stem}.json")\n        if not rec or rec.get("name") != stem:', '        rec = next((c.read_json(q) for q in (c.REPO / APPROVED_REL).glob("*.json")), None)\n        if not rec:', "approval_for_another_name"),
+ ("merge_slice.py", '        if not f.is_file():\n            raise Refused(f"the approved diff', '        if False:\n            raise Refused(f"the approved diff', "stale_approval"),
+ ("merge_slice.py", '        if sha256(f) != rec.get("sha256"):', '        if False:', "changed_after_approval"),
+ ("merge_slice.py", '        if never or outside:', '        if False:', "outside_the_five"),
+ ("merge_slice.py", '        if never or outside:', '        if False:', "one_allowed_and_one_excluded"),
+ ("merge_slice.py", '        if check.returncode:', '        if False:', "does_not_apply"),
+ ("merge_slice.py", '            if q.returncode:\n                said', '            if False:\n                said', "breaks_the_reservation_check"),
+ ("merge_slice.py", '               f"Slice-Records: yes\\n{OWNER_TRAILER}: {stem}"], tree)', '               f"Slice-Records: yes"], tree)', "happy_path_commits"),
+ ("merge_slice.py", '                out.write(f"{date}\\t{stem}\\t{rec[\'sha256\'][:8]}\\t{commit}\\n")', '                pass', "happy_path_commits"),
+ ("board.py", '            print(f"owner-approved diff applied:', '            0 and print(f"owner-approved diff applied:', "happy_path_commits"),
+ ("push_main.sh", "'^(Slice-Merge|Slice-Records|Owner-Approved-Diff):'", "'^(Slice-Merge|Slice-Records):'", "push_check_accepts_the_new_trailer"),
+ ("guard.py", '            if sub_ in ("apply", "am") and not', '            if False and not', "guard_still_refuses_the_conductors_own"),
+ ("guard.py", '        if any(seg and seg[0] in ("patch",)', '        if False and any(seg and seg[0] in ("patch",)', "guard_still_refuses_the_conductors_own"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

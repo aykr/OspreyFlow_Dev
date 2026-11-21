@@ -308,6 +308,15 @@ def check_bash(cmd: str, seat: str, cwd: str) -> None:
         check_builder_bash(cmd, cwd)
     if seat in ("verifier", "scout"):
         check_readonly_bash(raw)
+    if seat == "conductor":  # an approved diff reaches main only through merge_slice.py apply-approved (10)
+        for _d, sub_, args in git_calls(cmd, cwd):
+            if sub_ in ("apply", "am") and not (sub_ == "apply" and any(a in ("--check", "--stat", "--numstat", "--summary")
+                                                                         for a in args)):
+                raise Refuse("the conductor applies no diff itself: an owner-approved diff goes through merge_slice.py "
+                             "apply-approved <name> (git apply --check, --stat, --numstat and --summary are allowed).")
+        if any(seg and seg[0] in ("patch",) or (seg and seg[0].endswith("/patch")) for seg in segments(cmd)):
+            raise Refuse("the conductor applies no diff itself: an owner-approved diff goes through merge_slice.py "
+                         "apply-approved <name>.")
     if seat == "conductor" and WRITE_MARKERS.search(cmd):
         if re.search(r"OspreyFlow_(Core|Build)/(?!process/lanes/v062/)", cmd) or re.search(r"\b(apps|services|packages|tests)/", cmd):
             raise Refuse("the conductor writes no product code: its shell writes stay in " + RECORDS_ROOT + ".")

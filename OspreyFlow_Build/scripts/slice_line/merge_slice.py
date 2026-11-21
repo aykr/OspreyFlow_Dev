@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -1024,6 +1025,143 @@ def records(message: str, paths: list[str]) -> str:
         fh.close()
 
 
+# ------------------------------------------------------------------ the owner's approved diffs (LINE_FIXES_5_BRIEF.md, 10)
+
+#: Where the conductor's proposed diffs are (the owner names one by its file name, without or with `.diff`).
+PROPOSALS_REL = f"{c.V062_REL}/slice-line/proposals"
+#: The approvals (the conductor's attestation of the owner's "approved: <name> <hash8>" in chat) and the list of applied
+#: diffs the board prints and the conductor copies to the top of each report: committed records, beside the rest.
+APPROVED_REL = f"{c.V062_REL}/approved"
+APPLIED_REL = f"{APPROVED_REL}/applied.tsv"
+#: The only files an approved diff may touch (the owner, 21 November 2026).
+APPROVED_FILES = ("OspreyFlow_Build/spec/06_DECISIONS.md", "OspreyFlow_Build/spec/ADR_RESERVATIONS.md",
+                  "OspreyFlow_Build/spec/design/DESIGN.md", "OspreyFlow_Core/DESIGN.md", "OspreyFlow_Build/process/CLAUDE.md")
+#: Never, named in the refusal's words (anything not in APPROVED_FILES is refused anyway).
+NEVER_APPROVED = ("OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/harness/signatures.py", *OWNER_FILES)
+#: The decision checks run on the result before it is committed (OspreyFlow_Build/Makefile's targets of the same names).
+DECISION_CHECKS = ("tools.adr_reservations_check", "tools.doc_citations_check", "tools.decision_log_publication_check")
+OWNER_TRAILER = "Owner-Approved-Diff"
+
+
+def today() -> str:
+    """The line's one date (resume.today(), UTC), imported here as resume.py imports this module."""
+    import resume
+    return resume.today()
+
+
+def diff_file(name: str) -> tuple[str, Path]:
+    """The diff's name (its file name without .diff) and path in the main checkout's proposals folder."""
+    stem = name[:-5] if name.endswith(".diff") else name
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", stem):
+        raise Refused(f"{name!r} is not a diff's name (the file name in {PROPOSALS_REL}, no folder).")
+    return stem, c.REPO / PROPOSALS_REL / f"{stem}.diff"
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def approve_diff(name: str, hash8: str) -> str:
+    """The conductor's record of the owner's "approved: <name> <hash8>": refused unless hash8 is the first 8 characters
+    of the diff file's SHA-256 now; committed in records mode as approved/<name>.json."""
+    stem, f = diff_file(name)
+    if not f.is_file():
+        raise Refused(f"there is no diff {stem} ({f}). Nothing recorded.")
+    digest = sha256(f)
+    if not re.fullmatch(r"[0-9a-f]{8}", hash8 or "") or digest[:8] != hash8:
+        raise Refused(f"the owner's hash8 {hash8!r} is not {stem}.diff's ({digest[:8]}): the diff is not the one he approved, "
+                      "or the hash was copied wrong. Ask him again. Nothing recorded.")
+    rel = f"{APPROVED_REL}/{stem}.json"
+    c.write_json(c.REPO / rel, {"name": stem, "file": f"{PROPOSALS_REL}/{stem}.diff", "sha256": digest, "hash8": hash8,
+                                "date": today(), "at": c.now(),
+                                "by": "the conductor, on the owner's word in chat: approved: " + f"{stem} {hash8}"})
+    sha = records(f"docs(process): the owner's approval of {stem} ({hash8})", [rel])
+    return f"Recorded the owner's approval of {stem} ({hash8}) in {rel}, committed {sha[:10]}."
+
+
+def diff_paths(diff: Path, cwd: Path) -> list[str]:
+    """The files the diff touches (git apply --numstat), refused for a rename, a copy or a mode change."""
+    summary = subprocess.run(["git", "apply", "--summary", str(diff)], cwd=str(cwd), capture_output=True, text=True)
+    numstat = subprocess.run(["git", "apply", "--numstat", str(diff)], cwd=str(cwd), capture_output=True, text=True)
+    if summary.returncode or numstat.returncode:
+        raise Refused(f"git cannot read the diff: {(summary.stderr or numstat.stderr).strip()[:300]}. Nothing changed.")
+    odd = [ln.strip() for ln in summary.stdout.splitlines() if re.match(r"\s*(rename|copy|mode change)\b", ln)]
+    if odd:
+        raise Refused("the diff renames, copies or changes a file's mode (" + "; ".join(odd[:3]) + "): never an approved "
+                      "diff's. Nothing changed.")
+    paths = [ln.split("\t", 2)[2] for ln in numstat.stdout.splitlines() if ln.count("\t") >= 2]
+    if not paths or any("=>" in q for q in paths):
+        raise Refused("the diff names no file, or a renamed one. Nothing changed.")
+    return paths
+
+
+def apply_approved(name: str) -> str:
+    """The owner-approved diff applied, checked and committed to main with its trailer, then pushed; refused in words,
+    with nothing staged or committed, unless every rule holds (LINE_FIXES_5_BRIEF.md, 10)."""
+    stem, f = diff_file(name)
+    fh = lock()
+    tree = None
+    try:
+        rec = c.read_json(c.REPO / APPROVED_REL / f"{stem}.json")
+        if not rec or rec.get("name") != stem:
+            raise Refused(f"no approval of {stem} is recorded ({APPROVED_REL}/{stem}.json): the conductor records the owner's "
+                          f"word first (merge_slice.py approve-diff {stem} <hash8>). Nothing changed.")
+        if not f.is_file():
+            raise Refused(f"the approved diff {stem}.diff is not there any more: the approval is stale. Nothing changed.")
+        if sha256(f) != rec.get("sha256"):
+            raise Refused(f"{stem}.diff has changed since the owner approved it ({rec.get('hash8')} then, "
+                          f"{sha256(f)[:8]} now): ask him again. Nothing changed.")
+        base = main_ready()
+        paths = diff_paths(f, c.REPO)
+        never = [q for q in paths if q.startswith(NEVER_APPROVED) or q in NEVER_APPROVED]
+        outside = [q for q in paths if q not in APPROVED_FILES]
+        if never or outside:
+            raise Refused(f"the diff touches {', '.join(never or outside)}: an approved diff touches only "
+                          f"{', '.join(APPROVED_FILES)}" + (" and never the Makefile, a workflow, harness/signatures.py or "
+                                                           "the owner's lanes files" if never else "")
+                          + ". The whole diff is refused. Nothing changed.")
+        tree = temp_tree(base, f"approved-{stem}")
+        check = subprocess.run(["git", "apply", "--check", str(f)], cwd=str(tree), capture_output=True, text=True)
+        if check.returncode:
+            raise Refused(f"{stem}.diff does not apply to main ({base[:10]}): {check.stderr.strip()[:300]}. Nothing changed.")
+        c.git(["apply", "--index", str(f)], tree)
+        py = c.REPO / "OspreyFlow_Core/.venv/bin/python"
+        py = str(py) if py.is_file() else sys.executable
+        env = {**os.environ, "PYTHONPATH": str(tree / "OspreyFlow_Build"), "PYTHONDONTWRITEBYTECODE": "1"}
+        for mod in DECISION_CHECKS:
+            q = subprocess.run([py, "-m", mod], cwd=str(tree / "OspreyFlow_Core"), env=env, capture_output=True, text=True)
+            if q.returncode:
+                said = "\n".join([ln for ln in (q.stdout + q.stderr).splitlines() if ln.strip()][-8:])
+                raise Refused(f"{stem}.diff applied, but {mod} is red on the result: nothing committed.\n{said}")
+        date = today()
+        c.git(["commit", "-q", "-m", f"docs(spec): {stem} (approved by the owner, {date})\n\nThe owner's approved diff "
+               f"{stem}.diff, sha256 {rec['sha256'][:8]} ({rec['sha256']}), applied by merge_slice.py apply-approved.\n\n"
+               f"Slice-Records: yes\n{OWNER_TRAILER}: {stem}"], tree)
+        commit = c.git(["rev-parse", "HEAD"], tree)
+        if True:  # before item 2 every commit to main is under the merge lock, held here
+            if c.git(["rev-parse", "HEAD"], c.REPO) != base:
+                raise Refused("main moved while the approved diff was being checked: nothing landed; run it again.")
+            c.git(["merge", "-q", "--ff-only", commit], c.REPO)
+            listed = c.REPO / APPLIED_REL
+            listed.parent.mkdir(parents=True, exist_ok=True)
+            if not listed.exists():
+                listed.write_text("date\tname\thash8\tcommit\n")
+            with listed.open("a") as out:
+                out.write(f"{date}\t{stem}\t{rec['sha256'][:8]}\t{commit}\n")
+            c.git(["add", "--", APPLIED_REL], c.REPO)
+            c.git(["commit", "-q", "-m", f"docs(process): {stem} applied ({commit[:10]}), for the owner's next report"
+                   "\n\nSlice-Records: yes", "--", APPLIED_REL], c.REPO)
+        push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True,
+                              text=True)
+        return (f"Applied the owner's approved {stem} ({rec['sha256'][:8]}): commit {commit[:10]} on main, listed in "
+                f"{APPLIED_REL}. Push: {(push.stdout + push.stderr).strip()[-200:]}")
+    finally:
+        if tree:
+            drop_tree(tree)
+            shutil.rmtree(tree, ignore_errors=True)
+        fh.close()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1034,6 +1172,11 @@ def main() -> int:
     r.add_argument("paths", nargs="+")
     sub.add_parser("push-pending")
     sub.add_parser("watch-github")
+    ad = sub.add_parser("approve-diff")
+    ad.add_argument("name")
+    ad.add_argument("hash8")
+    aa = sub.add_parser("apply-approved")
+    aa.add_argument("name")
     a = ap.parse_args()
     try:
         if a.cmd == "merge":
@@ -1043,6 +1186,10 @@ def main() -> int:
             print(push_pending())
         elif a.cmd == "watch-github":
             print(watch_github())
+        elif a.cmd == "approve-diff":
+            print(approve_diff(a.name, a.hash8))
+        elif a.cmd == "apply-approved":
+            print(apply_approved(a.name))
         else:
             print("Committed", records(a.message, a.paths))
     except Refused as e:

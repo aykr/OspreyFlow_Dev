@@ -210,6 +210,19 @@ def owed_list(problems: list[str]) -> list[dict]:
     return [{"test": t, **o} for t, o in sorted(owed.items())]
 
 
+#: The owner-approved diffs applied (merge_slice.py apply-approved; LINE_FIXES_5_BRIEF.md, 10), as committed on main.
+APPLIED_REL = "OspreyFlow_Build/process/lanes/v062/approved/applied.tsv"
+
+
+def applied_diffs() -> list[dict]:
+    try:
+        text = c.git(["show", f"main:{APPLIED_REL}"], c.REPO)
+    except RuntimeError:
+        return []
+    rows = [ln.split("\t") for ln in text.splitlines()[1:] if ln.strip()]
+    return [dict(zip(("date", "name", "hash8", "commit"), r)) for r in rows if len(r) >= 4]
+
+
 def self_clear_lines(rows: list[dict] | None = None) -> list[str]:
     """Each stop the line cleared itself, one line each: the time, the slice, the stop, the cause, what it did."""
     return [f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: {r['what']}"
@@ -232,7 +245,7 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
                            "slices_cut": counts[k]["cut"]} if k in counts else {})} for k, v in builds.items()}
     body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
             "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"},
-            "self_clears": c.self_clears(), "build_slices": counts}
+            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -310,6 +323,8 @@ def main() -> int:
     path = write_status(builds, owed=owed, ci=ci, counts=counts)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
+        for d in applied_diffs():  # for the top of the conductor's report to the owner (10)
+            print(f"owner-approved diff applied: {d['name']} {d['hash8']} commit {d['commit'][:10]} ({d['date']})")
         if ci["state"] == "red":
             print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: not a gate; merges go on (a red run is "
                   "rerun once; a test of ours red twice stops them)")
