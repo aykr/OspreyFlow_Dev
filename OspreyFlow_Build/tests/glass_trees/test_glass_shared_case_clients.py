@@ -775,7 +775,7 @@ def test_every_import_of_a_moved_module_reaches_the_package() -> None:
 
 
 _IMPORT_CLAUSE = re.compile(
-    r"""(?:^|\n)\s*import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*["']([^"']+)["']""", re.S
+    r"""(?:^|\n)\s*import\s+(?:type\s+)?(\{[^}]*\})\s*from\s*["']([^"']+)["']""", re.S
 )
 
 
@@ -1000,7 +1000,10 @@ def test_a_spec_that_imports_a_path_that_no_longer_exists_is_found(tmp_path: Pat
     harness = APPS + "workspace/keyboard/places-harness.tsx"
     files = {
         spec: 'import { mount } from "./places-harness";\n',
-        harness: 'import { openCase } from "../src/investigation/caseNavigation";\n',
+        harness: (
+            'import { openCase } from "../src/investigation/caseNavigation";\n'
+            f'import {{ listCases }} from "{PACKAGE_NAME}";\n'
+        ),
         WORKSPACE_SRC + "investigation/caseNavigation.ts": "export const openCase = 1;\n",
         SHARED + "index.ts": 'export * from "./time/utcStamp";\n',
         SHARED + "time/utcStamp.ts": "export const MONTHS = [];\n",
@@ -1009,15 +1012,12 @@ def test_a_spec_that_imports_a_path_that_no_longer_exists_is_found(tmp_path: Pat
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text, encoding="utf-8")
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == []
-    (tmp_path / harness).write_text(
-        'import { openCase } from "../src/investigation/cases";\n', encoding="utf-8"
-    )
+    clean = (tmp_path / harness).read_text(encoding="utf-8")
+    (tmp_path / harness).write_text(clean.replace("caseNavigation", "cases"), encoding="utf-8")
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
         f"{harness}: ../src/investigation/cases"
     ]
-    (tmp_path / harness).write_text(
-        'import { openCase } from "../src/investigation/caseNavigation";\n', encoding="utf-8"
-    )
+    (tmp_path / harness).write_text(clean, encoding="utf-8")
     (tmp_path / SHARED / "time" / "utcStamp.ts").unlink()
     assert earlier.unresolved_from_specs(tmp_path, [spec])[0] == [
         f"{SHARED}index.ts: ./time/utcStamp"
