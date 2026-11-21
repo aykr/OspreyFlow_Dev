@@ -375,8 +375,18 @@ def test_the_check_sees_a_removal_that_misses_a_table(
     assert set(world.pool.left_for(REMOVED)) == set(world.pool.tables()) - {f"{SCHEMA}.figures"}
 
 
-def test_a_removal_the_mart_refuses_is_a_refusal_the_administrator_sees(world: _World) -> None:
-    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart is unreachable"))
+@pytest.mark.parametrize(
+    "error",
+    [
+        OSError("the mart is unreachable"),
+        asyncpg.InsufficientPrivilegeError("permission denied for table pulls"),
+    ],
+    ids=["unreachable", "the Conduit's role may not delete"],
+)
+def test_a_removal_the_mart_refuses_is_a_refusal_the_administrator_sees(
+    world: _World, error: Exception
+) -> None:
+    world.pool.fail(f"DELETE FROM {SCHEMA}", error)
     before = world.pool.left_for(REMOVED)
     refused = world.remove()
     assert refused.status_code == 503, refused.text
@@ -392,8 +402,11 @@ def test_a_removal_the_mart_refuses_is_a_refusal_the_administrator_sees(world: _
 
 
 def test_a_removal_that_fails_part_way_leaves_nothing_half_removed(world: _World) -> None:
-    """One transaction: a refusal on the second table does not leave the first one emptied alone."""
-    world.pool.fail(f"DELETE FROM {SCHEMA}.pulls", asyncpg.PostgresConnectionError("lost"))
+    """One transaction: a refusal on the last table does not leave the others emptied alone."""
+    from services.report_sync.mart import DASHBOARD_TABLES
+
+    last = DASHBOARD_TABLES[-1]
+    world.pool.fail(f"DELETE FROM {SCHEMA}.{last}", asyncpg.PostgresConnectionError("lost"))
     before = world.pool.left_for(REMOVED)
     assert world.remove().status_code == 503
     assert world.pool.left_for(REMOVED) == before

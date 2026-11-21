@@ -18,6 +18,11 @@ from typing import Any
 import asyncpg
 
 FigureRow = tuple[str, str, str, str, int]  # section, label, typology, week_start, value
+#: Every table `_bootstrap` makes, each holding a `dashboard` column. A dashboard's rows are removed
+#: from all of them, by `prune` here and by the Conduit when an identity is removed
+#: (`services/api/report_freshness.py`): a table added to the schema is added here, and
+#: `tests/services/api/test_removed_identity_mart_rows.py` fails if it is not.
+DASHBOARD_TABLES = ("pulls", "figures")
 _NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
 
@@ -107,7 +112,9 @@ class Mart:
         return changed
 
     async def record_failure(self, dashboard: str, case_id: str, words: str, at: datetime) -> None:
-        """A pull that failed, in words; the rows and their last good pull are left as they were."""
+        """A pull that failed, in words; the rows and their last good pull are left as they were.
+        Only rows that exist are kept: a dashboard removed in the Admin has none left (the Conduit
+        removes them with it), and a refusal writes none for it."""
         async with self._pool.acquire() as conn:
             await conn.execute(
                 f"""INSERT INTO {self.schema}.pulls (dashboard, case_id, last_failure, failed_at)
@@ -117,17 +124,17 @@ class Mart:
             )  # fmt: skip
 
     async def prune(self, configured: Sequence[str]) -> int:
-        """Removes every dashboard no longer configured — its figures and its pulls."""
+        """Removes every dashboard no longer configured: its rows in every table it has one in.
+        Returns how many rows went."""
+        removed = 0
         async with self._pool.acquire() as conn, conn.transaction():
-            await conn.execute(
-                f"DELETE FROM {self.schema}.pulls WHERE NOT (dashboard = ANY($1::text[]))",
-                list(configured),
-            )
-            result = await conn.execute(
-                f"DELETE FROM {self.schema}.figures WHERE NOT (dashboard = ANY($1::text[]))",
-                list(configured),
-            )
-        return int(result.split()[-1])
+            for table in DASHBOARD_TABLES:
+                result = await conn.execute(
+                    f"DELETE FROM {self.schema}.{table} WHERE NOT (dashboard = ANY($1::text[]))",
+                    list(configured),
+                )
+                removed += int(result.split()[-1])
+        return removed
 
     async def figures(self, dashboard: str) -> list[dict[str, Any]]:
         async with self._pool.acquire() as conn:

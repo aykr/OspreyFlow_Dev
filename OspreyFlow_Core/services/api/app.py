@@ -954,7 +954,7 @@ from .recipe_run import (
 from .recipe_runs import External, RecipeRun, RecipeRunStore, RunTrigger
 from .release_notice import read_update_notice
 from .release_version import deployment_version, release_version
-from .report_freshness import ReportFreshness
+from .report_freshness import MartUnreachable, ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
 from .resolution_trigger import ResolveNowAccepted
@@ -18181,6 +18181,7 @@ async def remove_dashboard_route(
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
     investigations: InvestigationsDep,
+    freshness: ReportFreshnessDep,
     audit: AuditDep,
 ) -> Response:
     """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10), so a
@@ -18188,14 +18189,37 @@ async def remove_dashboard_route(
     registration still names the account: if that fails, the dashboard stays registered and removing
     it again revokes; if the removal then fails, it holds no level and is removed again. One not
     registered revokes nothing and is refused by the identity provider's own answer. The audit row
-    counts the grants revoked; it never names their cases."""
-    accounts = [d.account_id for d in await identity_admin.list_dashboards()
-                if d.client_id == client_id]  # fmt: skip
+    counts the grants revoked; it never names their cases.
+
+    Its figures go from the reporting mart next, in every table the sync writes (ADR-111
+    Amendment 2, backlog N19): Superset's Admin and Alpha read the whole mart, and `report-sync`
+    prunes only against a list nothing here updates, so a removed identity's rows would otherwise
+    stay readable.
+    That comes before the identity is deleted for the same reason as the grants: if the mart cannot
+    be reached the dashboard stays registered, the administrator is told in words (503), and
+    removing it again retries; removal is never reported done with the rows still there."""
+    registered = [d for d in await identity_admin.list_dashboards() if d.client_id == client_id]
     revoked = [
         case
-        for account in accounts
-        for case in await investigations.revoke_everywhere(account, by=principal)
+        for d in registered
+        for case in await investigations.revoke_everywhere(d.account_id, by=principal)
     ]
+    if registered:
+        try:
+            await freshness.remove_dashboard(client_id)
+        except MartUnreachable as unreachable:
+            logger.warning("remove_dashboard: the mart refused the removal: %s", unreachable)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={
+                    "error": "reporting_mart_unreachable",
+                    "detail": (
+                        f"The reporting mart could not be reached, so {client_id} was not removed "
+                        "and its figures are still there. Its case grants have been revoked and it "
+                        "is still registered: removing it again will try again."
+                    ),
+                },
+            ) from unreachable
     await identity_admin.delete_dashboard(client_id)
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},

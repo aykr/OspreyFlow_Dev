@@ -22,6 +22,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import asyncpg
 import httpx
 from valkey.asyncio import Valkey
 
@@ -159,7 +160,15 @@ async def sync_once(
 ) -> Summary:
     """One pass over every configured dashboard; `slot` names the period being claimed."""
     summary = Summary()
-    await mart.prune([d.client_id for d in dashboards])
+    try:
+        await mart.prune([d.client_id for d in dashboards])
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+        # Said, never swallowed: the rows of a dashboard no longer configured may still be there.
+        # The pass goes on, so the others' pulls are not lost to it, and the next pass tries again.
+        summary.failed += 1
+        summary.failures.append(
+            f"the rows of removed dashboards could not be pruned from the reporting mart: {e}"
+        )
     for board in dashboards:
         await _pull_dashboard(board, mart, valkey, slot, summary)
     return summary

@@ -146,6 +146,13 @@ class _Identity:
 
 
 class _Freshness:
+    def __init__(self) -> None:
+        self.removed: list[str] = []
+
+    async def remove_dashboard(self, client_id: str) -> int:
+        self.removed.append(client_id)
+        return 0
+
     async def by_dashboard(self) -> dict[str, Freshness]:
         from datetime import UTC, datetime
 
@@ -194,12 +201,14 @@ def client() -> Any:
     audit, identity = _Audit(), _Identity()
     app.dependency_overrides[get_custom_roles] = _NoCustomRoles
     app.dependency_overrides[get_admin_people] = _OwnsNothing
-    app.dependency_overrides[get_report_freshness] = _Freshness
+    freshness = _Freshness()
+    app.dependency_overrides[get_report_freshness] = lambda: freshness
     app.dependency_overrides[get_audit] = lambda: audit
     app.dependency_overrides[get_identity_admin] = lambda: identity
     app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
     test_client = TestClient(app)
     test_client.audit, test_client.identity = audit, identity  # type: ignore[attr-defined]
+    test_client.freshness = freshness  # type: ignore[attr-defined]
     yield test_client
     app.dependency_overrides.clear()
 
@@ -691,8 +700,10 @@ def test_removing_a_dashboard_revokes_every_case_grant_its_account_holds(client:
     record = client.audit.records[-1]
     assert record["action"] == "remove_dashboard"
     assert record["resolved_query"] == {"client_id": "osprey-dashboard-board", "grants_revoked": 2}
+    assert client.freshness.removed == ["osprey-dashboard-board"], "its mart rows go with it (N19)"
     refused = client.delete("/v1/admin/dashboards/osprey-dashboard-gone")
     assert refused.status_code == 409 and grants.revoked == [("sa-1", ADMIN.id)]
+    assert client.freshness.removed == ["osprey-dashboard-board"], "one not registered purges nothing"
 
 
 def test_the_register_route_passes_the_application_id_on(client: Any) -> None:
