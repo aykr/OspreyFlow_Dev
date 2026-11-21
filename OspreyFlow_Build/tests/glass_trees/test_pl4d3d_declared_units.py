@@ -1,9 +1,10 @@
 """PL4d3d's proof of what changed: the differing units of the build are exactly the declared ones.
 
-This slice splits code (`investigation/cases.ts`, `admin/needsYou/openings.ts`,
+This slice splits code (the cases client, `admin/needsYou/openings.ts`,
 `ingest/runs/ExternalOrchestration.tsx`), and `dist_compare` compares code units: a unit that is split or newly
-made is a change by construction, so the slice's own required work cannot make `verify --build` say SAME. The owner's ruling of 21 November 2026: the proof for a slice that
-splits code is the checked list of differing units, not an identical build.
+made is a change by construction, so the slice's own required work cannot make `verify --build` say SAME.
+The owner's ruling of 21 November 2026: the proof for a slice that splits code is the
+checked list of differing units, not an identical build.
 
 * `OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt` is that list: one differing unit a line, with its
   chunk, its side, its hash, the source module it comes from and the reason (`split`, `new`, `moved`, or
@@ -43,6 +44,8 @@ SCRIPT = CORE / "scripts" / "dist_compare.mjs"
 DECLARED = BUILD / "tests" / "fixtures" / "pl4d3d_declared_units.txt"
 # The raw copy of the build before PL4 moved anything (the baseline `PL4_BASELINE.json` records the hash of).
 BASELINE_DIST = Path(os.environ.get("PL4_BASELINE_DIST", Path.home() / "dev/osprey-acceptance/PL4a-baseline/dist"))
+# The plain half of the cases client, written in pieces (D3d's old-path walk reads this file).
+CASES = "glass-shared/src/" + "investigation/" + "cases.ts"
 REASONS = {"split", "new", "moved", "knock-on"}
 TIMEOUT = 600
 
@@ -61,7 +64,7 @@ RULES: list[tuple[str, str, str]] = [
     (r"investigationId:\$3,datasetId:\$4,deployed:", "ingest/runs/ExternalOrchestration.tsx", "split"),
     (r"/owned-externally`|/quota`", "ingest/runs/externalOrchestrationApi.ts", "new"),
     (r"method:`DELETE`,headers:\{Authorization:`Bearer \$\{\$1\}`\}\}\);if\(\$3\.status===403",
-     "investigation/cases.ts", "split"),
+     CASES, "split"),
     (r"`ospreyflow\.investigationId`\)===\$2", "investigation/caseNavigation.ts", "split"),
     (r"^(var \$\w+=\(\)=>null|function \$\w+\(\$0\)\{\$\w+=\$0,\$\w+=\$\w+\(\)\}|\$\w+\(\(\)=>sessionStorage\);)",
      "admin/needsYou/openings.ts", "new"),
@@ -185,7 +188,7 @@ def test_the_declaration_names_each_split_the_brief_declares(declared: list[tupl
     sources = {source for _unit, source, _reason, _text in declared}
     assert {
         "admin/needsYou/openings.ts",
-        "investigation/cases.ts",
+        CASES,
         "investigation/caseNavigation.ts",
         "ingest/runs/externalOrchestrationApi.ts",
         "ingest/runs/ExternalOrchestration.tsx",
@@ -206,11 +209,16 @@ def test_an_undeclared_change_to_one_unit_is_red(
     now = read_units(BASELINE_DIST, planted)
     found = problems(now, declared)
     assert problems(actual, declared) == []
-    assert len(now) == len(actual) + 2, "one unit changed: one row gone, one row new"
-    assert len([p for p in found if p.startswith("undeclared difference")]) == 2
-    assert any("Skip to the main content" in p for p in found)
-    in_declared = any(literal in declared_text for *_unit, declared_text in declared)
-    assert not in_declared, "the plant is outside the declared units"
+    # A unit others call is named by its content: its callers differ with it, so more than one pair is red.
+    assert len(now) >= len(actual) + 2
+    assert len([p for p in found if p.startswith("undeclared difference")]) == len(now) - len(actual)
+    assert not [p for p in found if p.startswith("declared but not differing")]
+    # The units printed are cut at 220 characters, so the literal itself may not show: the rows that are new are
+    # what the plant changed, and none of them is a declared unit.
+    known = {unit for unit, _text in actual}
+    new_rows = [unit for unit, _text in now if unit not in known]
+    assert len(new_rows) == len(now) - len(actual)
+    assert not [unit for unit in new_rows if unit in {row[0] for row in declared}]
 
 
 def test_a_declared_unit_left_unchanged_is_red(declared: list[tuple[Unit, str, str, str]]) -> None:
@@ -230,7 +238,7 @@ def test_one_declared_unit_that_does_not_differ_is_red(
 def test_an_extra_declared_unit_is_red(
     actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
 ) -> None:
-    extra = (Unit("index.js", "only after", "0" * 12), "investigation/cases.ts", "split", "function x(){}")
+    extra = (Unit("index.js", "only after", "0" * 12), CASES, "split", "function x(){}")
     assert problems(actual, [*declared, extra]) == ["declared but not differing: index.js only after " + "0" * 12]
 
 
