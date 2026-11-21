@@ -19,7 +19,10 @@ record by the code that builds it, an error's own text written as a reason.
 
 **The two scans** (rule 12: "which test fails if a new caller of the model port exists?"):
 
-- `test_every_model_port_caller_is_one_the_list_names` walks, for calls,
+- `test_every_model_port_caller_is_one_the_list_names` finds a call by its method (`extract`,
+  `transcribe`, `describe_image`, `embed`) on **any** object, and a file by its importing the port,
+  its gateway adapter, Laurium's or the routing wrapper (`model_routing`, however imported). It
+  walks, for calls,
   **`OspreyFlow_Core/services` (every subfolder), `scripts`, `harness`, `cli` and `connectors`**,
   and, for files that import the model port, its gateway adapter or Laurium's, the same folders and
   **`OspreyFlow_Core/packages`** (all but the adapters that implement the port and the schemas and
@@ -40,7 +43,6 @@ import ast
 import asyncio
 import json
 import pathlib
-import re
 import secrets
 import shutil
 from collections.abc import Iterator
@@ -115,7 +117,10 @@ APP = SERVICES / "api" / "app.py"
 KEY = "sk-" + secrets.token_hex(16)
 PROMPT = "what-did-" + secrets.token_hex(8)
 ADDRESS = f"http://engine-{secrets.token_hex(6)}.internal:4000"
-SECRETS = {"key": KEY, "prompt": PROMPT, "address": ADDRESS}
+#: A dataset's name: the egress refusal's words name datasets (`dataset_refusal`), and no audit
+#: column may carry them.
+DATASET = "dataset-" + secrets.token_hex(6)
+SECRETS = {"key": KEY, "prompt": PROMPT, "address": ADDRESS, "dataset": DATASET}
 
 ACTING = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1", roles=["analyst"])
 STRANGER = Principal(id="eve", clearance="OFFICIAL", org_unit="unit-2", roles=["analyst"])
@@ -263,7 +268,7 @@ FAILURES: dict[str, tuple[str, Any]] = {
 }
 
 
-def _routes(*, hosted_default: bool = False) -> ModelRoutes:
+def _routes(*, hosted_default: bool = False, no_local: bool = False) -> ModelRoutes:
     gemini = Engine(
         name="gemini",
         label="Gemini",
@@ -271,8 +276,9 @@ def _routes(*, hosted_default: bool = False) -> ModelRoutes:
         key_present=True,
         privacy_contract=True,
     )
+    locals_ = {**LOCAL_MODELS, **({"extraction": None} if no_local else {})}
     return ModelRoutes(
-        locals=dict(LOCAL_MODELS),  # type: ignore[arg-type]
+        locals=locals_,  # type: ignore[arg-type]
         engines={"gemini": gemini},
         defaults={"extraction": "gemini"} if hosted_default else {},
         sendable=frozenset({"P"}) if hosted_default else frozenset(),
@@ -280,7 +286,11 @@ def _routes(*, hosted_default: bool = False) -> ModelRoutes:
 
 
 class _AnyDatasetMayGo:
-    """ADR-136: every dataset allows a hosted engine."""
+    """ADR-136: every dataset allows a hosted engine (`egress` says otherwise: `none` or
+    `contracted`, which the stand-in engine, under a contract, would accept)."""
+
+    def __init__(self, egress: str = "any") -> None:
+        self.egress = egress
 
     async def egress_of(self, ids: Any) -> dict[str, Any]:
         from datetime import UTC, datetime
@@ -289,8 +299,9 @@ class _AnyDatasetMayGo:
 
         return {
             i: Dataset(
-                id=i, name=i, owning_unit="unit-1", created_at=datetime(2026, 1, 1, tzinfo=UTC),
-                created_by="x", egress="any",
+                id=i, name=DATASET, owning_unit="unit-1",
+                created_at=datetime(2026, 1, 1, tzinfo=UTC), created_by="x",
+                egress=self.egress,  # type: ignore[arg-type]
             )
             for i in ids
         }  # fmt: skip
@@ -380,18 +391,27 @@ class Run:
     """One path, wired through the real route, service, `RoutedModel` and `AuditWriter`."""
 
     def __init__(
-        self, path: Scenario, *, hosted: bool = False, principal: Principal = ACTING
+        self,
+        path: Scenario,
+        *,
+        hosted: bool = False,
+        principal: Principal = ACTING,
+        egress: str = "any",
+        no_local: bool = False,
     ) -> None:
         self.path = path
         self.pool = _Pool()
         self.inner = _Inner(path.data())
         self.routed = RoutedModel(
             self.inner,  # type: ignore[arg-type]
-            routes=_routes(hosted_default=hosted),
-            egress=_AnyDatasetMayGo() if hosted else None,
+            routes=_routes(hosted_default=hosted, no_local=no_local),
+            egress=_AnyDatasetMayGo(egress) if hosted else None,
         )
+        # Extraction reads the datasets from the principal's scope; the other paths from the case.
         self.principal = (
-            principal if not hosted else principal.model_copy(update={"datasets": ["ds-1"]})
+            principal.model_copy(update={"datasets": ["ds-1"]})
+            if hosted and path.name == "run_extraction"
+            else principal
         )
         overrides: dict[Any, Any] = {
             get_principal: lambda: self.principal,
@@ -402,6 +422,29 @@ class Run:
         name = path.name
         if name == "ask":
             service = asyncio.run(_questions_service())[0]
+            if hosted:
+                from datetime import UTC, datetime
+
+                from services.api.datasets import Dataset
+
+                # The case reads one dataset, named as the egress refusal's words name it.
+                store = service._datasets
+                store.add(  # type: ignore[attr-defined]
+                    Dataset(
+                        id="ds-1",
+                        name=DATASET,
+                        owning_unit="unit-1",
+                        egress=egress,  # type: ignore[arg-type]
+                        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+                        created_by="x",
+                    )  # fmt: skip
+                )
+                store.cases[CASE] = ["ds-1"]  # type: ignore[attr-defined]
+                self.routed = RoutedModel(
+                    self.inner,  # type: ignore[arg-type]
+                    routes=_routes(hosted_default=True, no_local=no_local),
+                    egress=store,
+                )
             service._model = self.routed
             overrides |= {
                 get_questions: lambda: service,
@@ -520,6 +563,126 @@ def test_a_refusal_before_any_engine_was_chosen_names_none(name: str) -> None:
         }  # fmt: skip
     ]
     assert PATHS[name].via not in run.actions()  # no answer, so no access row, as before
+
+
+# --- item 4, before any engine is chosen: the egress refusal, an error and a cancel ---------------
+
+
+@pytest.mark.parametrize("egress", ["none", "contracted"])
+@pytest.mark.parametrize("name", list(PATHS))
+def test_a_data_egress_refusal_is_recorded_as_refused_and_its_words_stay_out(
+    name: str, egress: str
+) -> None:
+    """The deployment's default for the role is a hosted engine, it has no local model for it, and
+    the case's dataset may not go there (`model_routing.choose` raises `ModelEgressRefused`). No
+    engine was chosen, so the row names none; the words of the refusal, which name the dataset, are
+    said to the person and are in no column of any row. `contracted` is refused because this
+    stand-in hosted engine's contract is not the one the dataset's rule asks for (ADR-136)."""
+    from services.api.model_routing import Engine
+
+    run = Run(PATHS[name], hosted=True, egress=egress, no_local=True)
+    if egress == "contracted":
+        gemini = run.routed.routes.engines["gemini"]
+        run.routed.set_routes(
+            ModelRoutes(
+                locals=run.routed.routes.locals,
+                engines={"gemini": Engine(gemini.name, gemini.label, gemini.models, True)},
+                defaults=run.routed.routes.defaults,
+                sendable=run.routed.routes.sendable,
+            )
+        )
+    answer = run.post()
+    assert answer.status_code != 200, answer.text
+    if name in ("run_extraction", "ask"):  # the paths whose words name the dataset
+        assert DATASET in answer.text, "the person is still told which dataset"
+    # A document's vision or speech call has no hosted engine on this deployment, so it runs
+    # locally and is answered; the extraction after it is the one refused.
+    before = len(PATHS[name].jobs) - 1
+    assert run.inner.calls == before
+    assert run.calls() == [
+        *_expected(PATHS[name], outcome="answered", upto=before),
+        {
+            "job": PATHS[name].jobs[-1][0],
+            "engine": None,
+            "model": None,
+            "outcome": "refused",
+            "via": PATHS[name].via,
+        },
+    ]
+    assert _leaks(run.pool) == []
+    assert PATHS[name].via not in run.actions()
+
+
+async def _ask_through_the_routing(reader: Any, pool: _Pool) -> None:
+    """A call whose datasets' egress is read from `reader`, made inside an attributed block through
+    `RoutedModel` as the routes make it."""
+    from services.api import model_calls
+
+    routed = RoutedModel(
+        _Inner({}),  # type: ignore[arg-type]
+        routes=_routes(hosted_default=True),
+        egress=reader,
+    )
+    async with model_calls.attributed(
+        AuditWriter(pool),  # type: ignore[arg-type]
+        ACTING,
+        CASE,
+        job="ask",
+        via="ask_question",  # type: ignore[arg-type]
+    ):
+        await routed.extract(
+            ExtractionRequest(
+                document_id="d", text=PROMPT, json_schema={}, model="x", handling=HANDLING,
+                datasets=["ds-1"],
+            )
+        )  # fmt: skip
+
+
+class _EgressStore:
+    """The store the datasets' egress is read from, failing or hanging as a real one does; its
+    error carries an address and a key, as a transport's does."""
+
+    def __init__(self, *, fail: bool = False, hang: bool = False) -> None:
+        self.fail, self.hang = fail, hang
+        self.asked = asyncio.Event()
+
+    async def egress_of(self, ids: Any) -> dict[str, Any]:
+        self.asked.set()
+        if self.hang:
+            await asyncio.Event().wait()
+        raise OSError(f"{ADDRESS} refused (key {KEY}) for {PROMPT}")
+
+
+async def test_a_failure_reading_the_datasets_before_an_engine_is_chosen_is_errored() -> None:
+    pool = _Pool()
+    with pytest.raises(OSError):
+        await _ask_through_the_routing(_EgressStore(fail=True), pool)
+    assert _calls(pool) == [
+        {"job": "ask", "engine": None, "model": None, "outcome": "errored", "via": "ask_question"}
+    ]
+    assert _leaks(pool) == []
+
+
+async def test_a_call_cancelled_before_an_engine_is_chosen_is_recorded_as_interrupted() -> None:
+    """The person closes the page while the routing is still reading the datasets' egress: no
+    engine had been chosen, so the row says none (`_decided`'s cancel branch)."""
+    pool = _Pool()
+    reader = _EgressStore(hang=True)
+    task = asyncio.create_task(_ask_through_the_routing(reader, pool))
+    await reader.asked.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert _calls(pool) == [
+        {
+            "job": "ask",
+            "engine": None,
+            "model": None,
+            "outcome": "interrupted",
+            "via": "ask_question",
+        }  # fmt: skip
+    ]
+    assert _leaks(pool) == []
 
 
 # --- item 4: a refused or failed call is recorded too --------------------------------------------
@@ -732,9 +895,16 @@ def test_an_engine_taken_from_the_request_body_is_red(monkeypatch: pytest.Monkey
 
 # --- the scans -----------------------------------------------------------------------------------
 
+#: The port's methods. A call is found by the method alone, **whatever the object is called**
+#: (`routed.extract`, `held.embed`, `self._brain.transcribe`): the routing wrapper is held under
+#: many names, and a name list would let the next one through. What the scan finds that is not the
+#: port (a zip archive's `extract`, a service's own `extract`) is named in `REVIEWED_CALLERS`, with
+#: the reason. A method taken without being called (`fn = routed.embed`) is found as well.
 _METHODS = {"extract", "transcribe", "describe_image", "embed"}
-_RECEIVER = re.compile(r"(^|[._])(model|inner|proposer|port|llm)$")
+#: What a file imports to hold the port: the port, its gateway adapter, Laurium's, or the routing
+#: wrapper (`from .model_routing import …`, `from services.api import model_routing`).
 _PORT_IMPORTS = ("ports.model", "adapters.model_litellm", "adapters.extract_laurium")
+_ROUTING = "model_routing"
 _CALL_FOLDERS = ("services", "scripts", "harness", "cli", "connectors")
 _FILE_FOLDERS = (*_CALL_FOLDERS, "packages")
 #: The adapters that implement the port and the folders that declare it are the port, not callers.
@@ -765,7 +935,19 @@ REVIEWED_CALLERS: dict[tuple[str, str, str], str] = {
     ("services/api/model_routing.py", "RoutedModel.describe_image", "self._inner.describe_image"):
         "the routing itself (as above)",
     ("services/api/model_routing.py", "RoutedModel.embed", "self._inner.embed"):
-        "the routing itself; no caller embeds today, and one that did would be recorded here",
+        "the routing itself; no caller embeds today. A call made outside an attributed block is "
+        "noted nowhere (`model_calls.note`), so a new caller is recorded only once its route "
+        "attributes it: this list is where that is reviewed",
+    ("services/api/app.py", "extract_email_route", "email_extraction.extract"):
+        "a route asking the email service, which runs `review.run_extraction`; inside the "
+        "route's attributed block (the route scan)",
+    ("services/api/app.py", "extract_document_route", "document_content.extract"):
+        "a route asking the document service, which makes the describe, transcribe and extract "
+        "calls; inside the route's attributed block (the route scan)",
+    ("scripts/pages_image_react_scan.py", "extract_app", "archive.extract"):
+        "not a model: a zip archive's `extract`",
+    ("scripts/build_local_basemap.py", "_run", "args.extract"):
+        "not a model: a command-line flag (`--extract`) of the basemap build",
 }  # fmt: skip
 
 #: Every file that imports the port, the gateway adapter or Laurium's, with why it is not a caller
@@ -789,13 +971,21 @@ REVIEWED_FILES: dict[str, str] = {
 }
 
 
+def _routing(name: str) -> bool:
+    return name == _ROUTING or name.endswith(f".{_ROUTING}")
+
+
 def _imports_port(tree: ast.Module) -> bool:
+    """The file imports the port, an adapter that implements it, or the routing wrapper (by module,
+    absolute or relative, or as a name taken from its package)."""
     for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            if node.module.startswith(_PORT_IMPORTS):
+        if isinstance(node, ast.ImportFrom):
+            if node.module and (node.module.startswith(_PORT_IMPORTS) or _routing(node.module)):
+                return True
+            if any(a.name == _ROUTING for a in node.names):
                 return True
         if isinstance(node, ast.Import):
-            if any(a.name.startswith(_PORT_IMPORTS) for a in node.names):
+            if any(a.name.startswith(_PORT_IMPORTS) or _routing(a.name) for a in node.names):
                 return True
     return False
 
@@ -807,8 +997,9 @@ def _dotted(node: ast.AST) -> str:
 
 
 def model_port_callers(core: pathlib.Path = CORE) -> tuple[set[tuple[str, str, str]], set[str]]:
-    """(calls, files) found under `core`: every `<model-ish>.extract|transcribe|describe_image|
-    embed(…)` in the call folders, with its enclosing function; every file importing the port."""
+    """(calls, files) found under `core`: every `<anything>.extract|transcribe|describe_image|embed`
+    in the call folders, with its enclosing function; every file importing the port or the
+    routing."""
     calls: set[tuple[str, str, str]] = set()
     files: set[str] = set()
     for folder in _FILE_FOLDERS:
@@ -833,11 +1024,9 @@ def model_port_callers(core: pathlib.Path = CORE) -> tuple[set[tuple[str, str, s
 
                 visit_FunctionDef = visit_AsyncFunctionDef = visit_ClassDef = _scope
 
-                def visit_Call(self, node: ast.Call) -> None:
-                    f = node.func
-                    if (isinstance(f, ast.Attribute) and f.attr in _METHODS
-                            and _RECEIVER.search(_dotted(f.value))):  # fmt: skip
-                        calls.add((rel, ".".join(self.stack), f"{_dotted(f.value)}.{f.attr}"))
+                def visit_Attribute(self, node: ast.Attribute) -> None:
+                    if node.attr in _METHODS:
+                        calls.add((rel, ".".join(self.stack), f"{_dotted(node.value)}.{node.attr}"))
                     self.generic_visit(node)
 
             Visit().visit(tree)
@@ -855,8 +1044,10 @@ def test_every_model_port_caller_is_one_the_list_names() -> None:
 def test_the_scan_finds_the_callers_it_claims_to() -> None:
     """A scan that found nothing would pass the test above."""
     calls, files = model_port_callers()
-    assert len(calls) >= 9 and len(files) >= 10
+    assert len(calls) >= 12 and len(files) >= 10
     assert {c[2] for c in calls} >= {"self._model.extract", "model.extract", "self._inner.embed"}
+    # Whatever the object is called: a zip archive's `extract` and the routes' services are found.
+    assert {c[2] for c in calls} >= {"archive.extract", "document_content.extract"}
 
 
 def _copy_services(tmp_path: pathlib.Path) -> pathlib.Path:
@@ -871,7 +1062,7 @@ def _copy_services(tmp_path: pathlib.Path) -> pathlib.Path:
 def test_a_new_caller_of_the_model_port_is_found(tmp_path: pathlib.Path) -> None:
     """Planted at the shape the services use: a function of a new service calling
     `self._model.extract`, a worker holding the gateway adapter, and a file importing the port
-    that calls it under a name the receiver pattern does not know."""
+    that calls it under a name of its own."""
     core = _copy_services(tmp_path)
     (core / "services" / "ingest" / "planted_summary.py").write_text(
         "class Summary:\n"
@@ -885,9 +1076,53 @@ def test_a_new_caller_of_the_model_port_is_found(tmp_path: pathlib.Path) -> None
     )
     calls, files = model_port_callers(core)
     assert calls - set(REVIEWED_CALLERS) == {
-        ("services/ingest/planted_summary.py", "Summary.summarise", "self._model.extract")
+        ("services/ingest/planted_summary.py", "Summary.summarise", "self._model.extract"),
+        ("services/worker_planted.py", "nightly", "engine.embed"),
     }
     assert files - set(REVIEWED_FILES) == {"services/worker_planted.py"}
+
+
+def test_a_caller_holding_the_routing_under_another_name_is_found(tmp_path: pathlib.Path) -> None:
+    """The shape a real change takes (rule 15), at the real sites: `await routed.extract(…)` added
+    in `QuestionsService.will_read`, which already binds `routed` and is reached from a route with
+    no attributed block; a new service that imports the routing relatively and holds it as `held`;
+    and a method taken without being called. None has a receiver the old name list knew."""
+    core = _copy_services(tmp_path)
+    questions = core / "services" / "api" / "questions.py"
+    source = questions.read_text()
+    line = "        routed = self._model if isinstance(self._model, RoutedModel) else None\n"
+    assert source.count(line) == 1
+    questions.write_text(source.replace(line, line + "        await routed.extract(None)\n"))
+    (core / "services" / "api" / "planted_digest.py").write_text(
+        "from .model_routing import RoutedModel\n\n"
+        "class Digest:\n"
+        "    def __init__(self, held: RoutedModel) -> None:\n"
+        "        self.held = held\n\n"
+        "    async def nightly(self, req):\n"
+        "        send = self.held.describe_image\n"
+        "        return await send(req)\n"
+    )
+    calls, files = model_port_callers(core)
+    assert calls - set(REVIEWED_CALLERS) == {
+        ("services/api/questions.py", "QuestionsService.will_read", "routed.extract"),
+        ("services/api/planted_digest.py", "Digest.nightly", "self.held.describe_image"),
+    }
+    assert files - set(REVIEWED_FILES) == {"services/api/planted_digest.py"}
+
+
+def test_every_way_a_file_can_import_the_routing_is_seen() -> None:
+    for source in (
+        "from .model_routing import RoutedModel",
+        "from services.api.model_routing import RoutedModel",
+        "from services.api import model_routing",
+        "from . import model_routing",
+        "import services.api.model_routing",
+        "from ports.model import ModelPort",
+        "from adapters.model_litellm.client import LiteLLMModel",
+    ):
+        assert _imports_port(ast.parse(source)), source
+    for source in ("from .model_calls import attributed", "import json", "from . import audit"):
+        assert not _imports_port(ast.parse(source)), source
 
 
 def test_a_listed_caller_that_has_gone_is_found(tmp_path: pathlib.Path) -> None:
