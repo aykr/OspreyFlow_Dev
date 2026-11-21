@@ -20,6 +20,9 @@ Which test fails if the invariant is broken (rule 12):
 * a route in the list that belongs to another function, and the row it was meant for counts as routed
       -> `test_a_route_present_for_the_wrong_function_does_not_count`,
          `test_the_planted_fault_any_route_counts_is_caught`
+* two rows on one GOV.UK route, so one function's page counts for another and the tree reads complete early
+      -> `test_two_rows_on_one_route_are_refused_not_complete`, `test_the_real_rows_share_no_route`,
+         `test_the_planted_fault_no_duplicate_route_check_is_caught`
 * a part-of-a-function or "scripts off only" line read as a whole-function exception
       -> `test_a_part_or_scripts_off_line_excuses_no_row`
 * an absent or empty file read as "complete"
@@ -280,6 +283,32 @@ def test_a_route_present_for_the_wrong_function_does_not_count(tmp_path: Path) -
         assert Tree(folder).write(rows, [], listed).state() == PARTIAL, listed
 
 
+def test_two_rows_on_one_route_are_refused_not_complete(tmp_path: Path) -> None:
+    """Rows a and b both claim /b and the list holds /b: a has no page of its own, yet each row's route is listed."""
+    rows = [{"id": "a", "route": "/b"}, {"id": "b", "route": "/b"}, {"id": "c", "route": "/c"}]
+    tree = Tree(tmp_path / "dup").write(rows, [], ["/b", "/c"])
+    with pytest.raises(ValueError) as refused:
+        tree.state()
+    # The error names both rows, and the route, so the copy-paste is found without a search.
+    for named in ("'a'", "'b'", "'/b'"):
+        assert named in str(refused.value), refused.value
+    # Refused whatever the rest says: with the list or the exceptions absent it is still an error, not "partial".
+    with pytest.raises(ValueError):
+        Tree(tmp_path / "dup_noroutes").write(rows, [], None).state()
+    # An excused row's route still counts for the check: the copy-paste is the same fault.
+    excuse = [{"id": "a", "reason": "r", "scope": "whole function", "agreed": "x"}]
+    with pytest.raises(ValueError):
+        Tree(tmp_path / "dup_excused").write(rows, excuse, ["/b", "/c"]).state()
+    # Empty routes are not routes: many unrouted rows are not duplicates of each other.
+    unrouted = [{"id": "a", "route": ""}, {"id": "b", "route": ""}, {"id": "c"}]
+    assert Tree(tmp_path / "empties").write(unrouted, [], ["/x"]).state() == PARTIAL
+
+
+def test_the_real_rows_share_no_route() -> None:
+    routes = [row["route"] for row in real_rows() if row.get("route")]
+    assert len(routes) == len(set(routes))
+
+
 def test_absent_files_are_partial(tmp_path: Path) -> None:
     rows = [{"id": "a", "route": "/a"}]
     # The route list is absent (the tree does not exist yet): never complete.
@@ -364,6 +393,19 @@ def test_the_planted_fault_a_prefix_counts_is_caught(
     )
     problems = parity_problems(tmp_path)
     assert "a route present for another function made the row count" in problems
+
+
+def test_the_planted_fault_no_duplicate_route_check_is_caught(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Remove the check at its call site: the same fixture the refusal case uses now reads complete."""
+    rows = [{"id": "a", "route": "/b"}, {"id": "b", "route": "/b"}, {"id": "c", "route": "/c"}]
+    tree = Tree(tmp_path).write(rows, [], ["/b", "/c"])
+    _plant(monkeypatch, "_check_unique_routes", lambda rows: None)
+    assert tree.state() == COMPLETE  # the quiet early "complete" the check exists to stop
+    monkeypatch.undo()
+    with pytest.raises(ValueError):
+        tree.state()
 
 
 def test_the_planted_fault_a_wrong_default_path_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
