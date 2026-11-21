@@ -373,6 +373,11 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
 - **BL2 (done):** the placed table, its counts note and a note giving both counts are committed under `backlog/`
   (`OPEN_BACKLOG_PLACED_NOTE.md`). 180 placed; 154 open on 18 November (138 open + 16 partly built); the difference of 26 is the 19
   "cannot tell — needs a run" rows plus the 7 proposed rows N19-01 to N19-07. N19 ids stay as proposed.
+  **Updated by the owner's word of 21 November (file 008):** the seven rows are accepted and renumbered **N16 to N22**
+  (`backlog/N16_N22_RENUMBERED_2026-11-21.md`; N19-04 becomes N18, ahead of the other new ones, with the security builds);
+  the 16 "needs a run" rows are one run-sheet row, RS1, plus seven that need the client's environment or his definition
+  (`backlog/BL2_RUN_SHEET_2026-11-21.md`); C023 stays set aside with the demo items, to be settled with PL5, and holds neither
+  BL2 nor CO1.
 - **PL3's fixed secret-shaped string** (`secretFiles.test.ts` about line 46): the owner's word is to fix it in the next slice that
   touches `apps/pages`, with the generator, and tests generate one at run time. That slice's brief must carry it.
 - **Line gap (BL6's first merge attempt, 20 Nov):** `tests/test_lanes_heartbeat.py::test_shows_run_at_once_do_not_mix_their_lines`
@@ -449,6 +454,8 @@ PL1, BL2 "when ready", and rule 5 says a decision that is his is left stopped an
 ## 21 November 2026: test gaps accepted narrower (each a backlog row; the owner's order, the licence gate's own refusal first)
 
 Accepted on the owner's standing line (gaps in a test only, from round 3) or his `accept` lines of 21 November. No fault in behaviour is open in any of them. **Rule 12: each is an invariant stated and exercised by nothing; each row names the planted fault that shows it red.**
+
+**First of the open ones (the owner, 21 November, on accepting PL4d3d at round 8):** **PL4d3d, no test runs the part of `rebaseline` that builds the workspace itself.** `OspreyFlow_Core/scripts/dist_compare.mjs` lines about 796 to 800 (the branch without `--dist`: `spawnSync("npm", ["run","build","--workspace","apps/workspace","--","--outDir", scratch, "--emptyOutDir"])` into `<baseline>.new-<stamp>`, deleted in `finally`) is exactly what the conductor's merge-time command runs, and every `run_rebaseline` call in `OspreyFlow_Build/tests/glass_trees/test_pl4d3d_declared_units.py` passes `--dist`. Round 8 had changed the one test that ran it (it now builds first, then passes `--dist`). Low impact: if the build fails the step throws and leaves the baseline untouched; if it builds the wrong output the declared-units check refuses; either way it fails loudly at the conductor's merge. Test: run the in-tree branch on a scratch copy of the tree (the script's `CORE` pointed at the copy), plant a build that writes the wrong output and assert the step refuses and the baseline is untouched. Until it exists, the conductor checks the step by hand at each merge that runs it (the owner asked for it at PL4d3d's; the result is in the report of that merge).
 
 1. **PL11, a conditional register row whose licence fails its stated test is never shown flagged (first: it guards the licence gate's own refusal).** `OspreyFlow_Build/tools/licence_register.py` lines about 582 to 585: remove them and no test fails. Test: plant it on the real GDS Transport row (F3) with `test: osi-software`, its restricted licence text and `status: conditional`; assert the "does not pass the test osi-software" message names F3.
 2. **PL11, the register pin the code no longer names, when the code still names the thing under another pin.** `licence_register.py` lines about 652 to 653: no test drops one pin of a name the code still names. Test: change `services/laurium/Dockerfile`'s FROM in the sources dict to another image, register that image, and assert the pin message for the second Python row (B13b).
