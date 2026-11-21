@@ -29,7 +29,7 @@ import {
   type RankedLink,
   type RankedNode,
   type TypeCounts,
-} from "./exploreApi";
+} from "@ospreyflow/glass-shared";
 
 /** How many the overall ranking shows first, and how many each type shows when opened. */
 export const TOP = 10;

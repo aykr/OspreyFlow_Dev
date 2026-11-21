@@ -23,7 +23,7 @@ import {
   routeOnCanvas,
   seedRoute,
   type CanvasContents,
-} from "./connectionsApi";
+} from "@ospreyflow/glass-shared";
 
 /** ADR-116 decision 2 and ADR-033: the furthest a search may be widened. */
 export const CONNECTIONS_CEILING = 8;

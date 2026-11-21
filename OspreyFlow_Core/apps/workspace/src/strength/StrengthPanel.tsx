@@ -32,7 +32,7 @@ import {
   proposeInfluencers,
   saveCaseInfluencers,
   sendBackInfluencers,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import {
   andList,
   COMPOSITION_LABEL,

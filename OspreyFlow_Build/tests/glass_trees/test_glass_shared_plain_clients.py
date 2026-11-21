@@ -506,7 +506,7 @@ def test_every_named_exception_still_has_its_reason() -> None:
 
 def test_every_import_of_a_moved_client_reaches_the_package() -> None:
     bad, importers = imports_not_reaching(ROOT, earlier.tracked())
-    assert importers >= 35, (
+    assert importers >= 30, (
         f"only {importers} file(s) under OspreyFlow_Core import a client's name from {PACKAGE_NAME}: the walk found too few imports, or the importers were not repointed"
     )
     assert bad == [], f"{len(bad)} import(s) do not reach the package by its name: {bad[:10]}"

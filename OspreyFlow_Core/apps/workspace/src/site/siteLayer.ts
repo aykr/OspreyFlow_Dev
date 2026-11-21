@@ -5,12 +5,12 @@
 // `SiteCalibrationWizard.tsx`'s own docstring for the full distinction).
 //
 // MapLibre's native `image` source takes exactly four corner coordinates
-// in TL/TR/BR/BL order — the same winding order `bilinear.ts`'s control
+// in TL/TR/BR/BL order — the same winding order `packages/glass-shared/src/site/bilinear.ts`'s control
 // points already use throughout, so no reordering happens at this
 // boundary.
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 
-import type { ControlQuad, GridCell } from "./bilinear";
+import type { ControlQuad, GridCell } from "@ospreyflow/glass-shared";
 
 const SITE_IMAGE_SOURCE_ID = "site-image";
 const SITE_IMAGE_LAYER_ID = "site-image-layer";

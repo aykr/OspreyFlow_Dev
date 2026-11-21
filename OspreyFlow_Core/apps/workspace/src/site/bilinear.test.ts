@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type ControlQuad, computeGridCells, formsASimpleQuadrilateral } from "./bilinear";
+import { type ControlQuad, computeGridCells, formsASimpleQuadrilateral } from "@ospreyflow/glass-shared";
 
 // Same fixtures as `tests/geo/test_bilinear.py`, deliberately — the two
 // implementations must agree, and testing them against the same inputs is

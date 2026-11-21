@@ -9,7 +9,7 @@ import {
   routeOnCanvas,
   seedElements,
   seedRoute,
-} from "./connectionsApi";
+} from "@ospreyflow/glass-shared";
 
 const node = (id: string) => ({ id, type: "Person", properties: {} }) as unknown as Node;
 const edge = (source: string, target: string) =>

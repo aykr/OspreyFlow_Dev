@@ -3,7 +3,7 @@
 // mirroring `ontology/schema.ts`'s `fetchOntologyRegistry` pattern
 // exactly: one fetch per session, no client-side duplication of what
 // `osprey.yaml` already declares.
-import type { PublicMapConfig, PublicMapProvider } from "../../../../packages/schemas/generated";
+import type { PublicMapConfig, PublicMapProvider } from "../../../schemas/generated";
 
 export async function fetchMapConfig(baseUrl: string, bearerToken: string): Promise<PublicMapConfig> {
   const response = await fetch(`${baseUrl}/v1/map/providers`, {

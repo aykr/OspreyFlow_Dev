@@ -17,7 +17,7 @@ import type {
   MatchSuggestions,
   NewDrawing,
   Withdrawn,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 export type { Board, BoardOpened, BoardPictures, DrawnItemMade, DrawnWatch, Grading, MatchSuggestions, NewDrawing, Withdrawn };
 

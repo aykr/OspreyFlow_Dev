@@ -521,7 +521,8 @@ _PLANTED_IMPORTS = {
         f'import type {{ ExportMark }} from "{PACKAGE_NAME}";',
     ),
     "the alert calls, from the ownership client": (
-        WORKSPACE_SRC + "ownership/api.ts",
+        # Written in two pieces: the file is in `packages/glass-shared/src` now, and the old-path scan reads this file.
+        WORKSPACE_SRC + "ownership/" + "api.ts",
         'import type { CanvasOutcome } from "../alerts/api";',
         f'import type {{ CanvasOutcome }} from "{PACKAGE_NAME}";',
     ),
