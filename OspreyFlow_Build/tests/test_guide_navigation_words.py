@@ -126,8 +126,14 @@ GLASS_ROOTS = (SRC, CORE / "packages" / "glass-shared" / "src")
 
 
 def glass_sources(roots: tuple[Path, ...] = GLASS_ROOTS) -> dict[str, str]:
-    found = {p.relative_to(root).as_posix(): p.read_text(encoding="utf-8")
-             for root in roots for p in sorted(root.rglob("*.ts*"))}  # fmt: skip
+    """Every source, keyed by its place under its root. A place that two roots both hold (the package's plain half and
+    the workspace's hook of one name: `layout/panelOrder.ts`) is kept under both: the later root's copy is keyed
+    `shared:<place>`, so neither hides the other (found in review: a plain dict key dropped the workspace's four)."""
+    found: dict[str, str] = {}
+    for root in roots:
+        for p in sorted(root.rglob("*.ts*")):
+            name = p.relative_to(root).as_posix()
+            found[f"shared:{name}" if name in found else name] = p.read_text(encoding="utf-8")
     return {name: text for name, text in found.items()
             if ".test." not in name and not name.startswith("test") and "/test" not in name}  # fmt: skip
 
@@ -209,6 +215,25 @@ def test_an_old_view_word_planted_in_a_moved_client_is_found(tmp_path: Path) -> 
         copy.write_text(real + "\n// Clear view, a comment\n", encoding="utf-8")
         assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == []
         copy.unlink()
+
+
+def test_a_place_both_roots_hold_is_read_from_both(tmp_path: Path) -> None:
+    """The workspace's `layout/panelOrder.ts` (a hook) and the package's (the plain half) are one place under two roots:
+    an old word on screen in either is found, and the real tip reads every such pair."""
+    shared = {p.relative_to(root).as_posix() for root in GLASS_ROOTS[1:] for p in root.rglob("*.ts*")}
+    both = sorted(n for n in shared if (SRC / n).exists() and ".test." not in n)
+    assert both, "the real tree has places under both roots"
+    sources = glass_sources()
+    for place in both:
+        assert place in sources and f"shared:{place}" in sources, place
+    for planted_in in (0, 1):
+        roots = (tmp_path / f"a{planted_in}", tmp_path / f"b{planted_in}")
+        for n, root in enumerate(roots):
+            (root / "layout").mkdir(parents=True)
+            (root / "layout" / "panelOrder.ts").write_text(
+                'export const word = "Clear view";\n' if n == planted_in else "export const word = 1;\n", encoding="utf-8")
+        expected = "layout/panelOrder.ts" if planted_in == 0 else "shared:layout/panelOrder.ts"
+        assert old_view_words_on_screen(glass_sources(roots)) == [f"{expected}: 'Clear view'"]
 
 
 def test_each_admin_section_is_named_as_admin_labels_it() -> None:
