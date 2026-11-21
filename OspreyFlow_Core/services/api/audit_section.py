@@ -238,6 +238,9 @@ READS_AND_OTHER: tuple[str, ...] = (
     "export_rule_file",
     # Rules-b's v052D (ADR-098 Amendment 7): what a question would read, before it is asked.
     "will_read_question",
+    # SE8a: one row for each model call, with who asked, the case, the engine and the model
+    # (names only; `services/api/model_calls.py`). Its words are withheld like any read's.
+    "model_call",
     # Rules' L2.11 (ADR-146 decision 3, Amendment 6): the rule editor's datasets read, a draft
     # saved, tested, made live or asked to go live; with the other rule actions.
     "read_rule_datasets", "rule_draft_saved", "rule_tested", "rule_made_live",
