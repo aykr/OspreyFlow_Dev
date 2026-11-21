@@ -3,9 +3,9 @@
 // the case's view the analyst can see) and what the reader sees of the conversation; nothing here
 // widens either.
 import type { EmailCandidate } from "../inspector/linkEventsApi";
-import type { ReadSummary, UnusableEngine, WillRead } from "../../../../packages/schemas/generated";
+import type { ReadSummary, UnusableEngine, WillRead } from "../../../schemas/generated";
 import type { GraphCitation, SearchCitation } from "./graphFacts";
-import { modelDeadline, unreachedWords } from "@ospreyflow/glass-shared";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 export type { GraphCitation, SearchCitation };
 

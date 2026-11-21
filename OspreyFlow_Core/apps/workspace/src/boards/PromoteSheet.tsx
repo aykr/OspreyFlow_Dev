@@ -8,7 +8,7 @@
 // here decides what may go.
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-import { addsInWords, promote, promotionSheet, startingTicks, STATUS_WORDS, type Promotion, type PromotionSheet, type SheetItem } from "./promotionsApi";
+import { addsInWords, promote, promotionSheet, startingTicks, STATUS_WORDS, type Promotion, type PromotionSheet, type SheetItem } from "@ospreyflow/glass-shared";
 
 const KIND_WORDS: Record<SheetItem["kind"], string> = { node: "Item", link: "Link", picture: "Picture", match: "Match decision" };
 

@@ -31,7 +31,7 @@ functions:
     status: "planned"
   - id: studio-model-proposals
     name: "Studio: Model step, proposed link types"
-    where: "apps/workspace/src/linktypes/ModelProposals.tsx, modelProposalsApi.ts, mounted apps/workspace/src/ingest/IngestStudio.tsx:20,219 (shares linktypes/http.ts 53 and linkTypesApi.ts 171)"
+    where: "apps/workspace/src/linktypes/ModelProposals.tsx, packages/glass-shared/src/linktypes/modelProposalsApi.ts, mounted apps/workspace/src/ingest/IngestStudio.tsx:20,219 (shares packages/glass-shared/src/linktypes/http.ts 53 and packages/glass-shared/src/linktypes/linkTypesApi.ts 171)"
     slice: "IS2"
     scenario: ""
     route: ""

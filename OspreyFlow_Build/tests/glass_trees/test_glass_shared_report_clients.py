@@ -549,7 +549,7 @@ _PLANTED_IMPORTS = {
         f'import {{ listPatterns }} from "{PACKAGE_NAME}";',
     ),
     "the model deadline, from the reader": (
-        WORKSPACE_SRC + "reader/readerApi.ts",
+        WORKSPACE_SRC + "reader/reader" + "Api.ts",
         'import { modelDeadline, unreachedWords } from "../models/modelDeadline";',
         f'import {{ modelDeadline, unreachedWords }} from "{PACKAGE_NAME}";',
     ),

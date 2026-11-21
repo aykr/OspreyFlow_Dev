@@ -20,7 +20,7 @@ import {
   type Promotion,
   type PromotionDetails,
   type RemovedCaseLayers,
-} from "../../boards/promotionsApi";
+} from "@ospreyflow/glass-shared";
 import {
   cancelLayerMerge,
   datasetPromotions,

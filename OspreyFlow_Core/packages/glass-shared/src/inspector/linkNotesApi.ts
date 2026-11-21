@@ -2,7 +2,7 @@
 // `PUT/DELETE .../notes/{note}` (`services/api/link_notes.py`, ADR-075). Same conventions as
 // `assessment/api.ts`: Bearer auth, throw on a non-`ok` response — here with a `LinkNotesError`
 // that carries the server's own sentence and a `kind` the panel words its message from.
-import type { LinkNote } from "../../../../packages/schemas/generated";
+import type { LinkNote } from "../../../schemas/generated";
 
 export type LinkNotesErrorKind =
   /** The link is not in this view, or the person may not see it — the server says one thing. */

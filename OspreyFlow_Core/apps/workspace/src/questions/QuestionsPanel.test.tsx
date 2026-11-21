@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { answeredBy } from "../models/engines";
 import { QuestionsPanel, WHOLE_CASE_LINE, readWords } from "./QuestionsPanel";
-import type { QuestionAnswer, WillRead } from "./questionsApi";
+import type { QuestionAnswer, WillRead } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

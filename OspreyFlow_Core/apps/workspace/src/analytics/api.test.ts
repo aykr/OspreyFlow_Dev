@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { fetchSightings } from "./api";
+import { fetchSightings } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   vi.unstubAllGlobals();

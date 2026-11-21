@@ -84,8 +84,8 @@ import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunity
 import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
 import { latestOnly, workerAssign } from "./communityAssigner";
 import { zoomBandForRatio } from "./zoomBands";
-import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
-import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
+import { emailsOutcomeText, showEmailsAsDocuments } from "@ospreyflow/glass-shared";
+import { eventsEntryLabel, eventsNoun, mayCarryText } from "@ospreyflow/glass-shared";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import {
   DashedArrowProgram,
@@ -112,9 +112,9 @@ import {
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { CapRefusalPrompt } from "./CapRefusalPrompt";
-import { type CaseView, saveView } from "../views/viewsApi";
+import { type CaseView, saveView } from "@ospreyflow/glass-shared";
 import { SaveViewForm } from "../views/SaveViewForm";
-import { fetchFirstSeen } from "../analytics/api";
+import { fetchFirstSeen } from "@ospreyflow/glass-shared";
 import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
 import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/selectLit";
 import type { TimeWindow, WeekdayHourCell } from "../crossfilter/store";

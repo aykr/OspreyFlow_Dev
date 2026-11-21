@@ -12,7 +12,7 @@ import type {
   Sighting,
   StrengthLegend,
 } from "../../../packages/schemas/generated";
-import { fetchSightings } from "./analytics/api";
+import { fetchSightings } from "@ospreyflow/glass-shared";
 import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
 import {
   clearRedirectCallbackParams,
@@ -40,7 +40,7 @@ import { deploymentMarking, deploymentReportsUrl, deploymentWelcome } from "./au
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
-import type { DocumentReaderView } from "./reader/readerApi";
+import type { DocumentReaderView } from "@ospreyflow/glass-shared";
 import { displayValue } from "./search/searchOptions";
 import { listJudgements } from "./assessment/api";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
@@ -109,7 +109,7 @@ import {
   fetchOntologyRegistry,
   type OntologyRegistry,
 } from "./ontology/schema";
-import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi";
+import { fetchCaseLinkTypes, type CaseLinkTypes } from "@ospreyflow/glass-shared";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { SearchResults } from "./search/SearchResults";
 import { useSearchResultsOverlay } from "./search/useSearchResultsOverlay";
@@ -132,8 +132,8 @@ import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import type { CaseState } from "./views/SavedViewOnTheLine";
 import { ViewsPanel } from "./views/ViewsPanel";
-import { type CaseView, type CaseViewOpened, listViews, openView, saveView } from "./views/viewsApi";
-import { bringFactIntoView } from "./questions/graphFacts";
+import { type CaseView, type CaseViewOpened, listViews, openView, saveView } from "@ospreyflow/glass-shared";
+import { bringFactIntoView } from "@ospreyflow/glass-shared";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import type { AnswerIds } from "./questions/AnswerActions";
 import { showAnswerOnCanvas } from "./questions/showAnswer";

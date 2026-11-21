@@ -3,10 +3,10 @@
 // before the change: no call carried a signal, and patterns/ask said a refusal as a status number.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { extractEmail } from "../inspector/linkEventsApi";
+import { extractEmail } from "@ospreyflow/glass-shared";
 import { askToSearch, MODEL_DEADLINE_MS, MODEL_DEADLINE_WORDS } from "@ospreyflow/glass-shared";
-import { askQuestion } from "../questions/questionsApi";
-import { extractDocument } from "../reader/readerApi";
+import { askQuestion } from "@ospreyflow/glass-shared";
+import { extractDocument } from "@ospreyflow/glass-shared";
 
 /** Each Glass call that waits for a model, as its screen makes it. */
 const CALLS: [string, () => Promise<unknown>][] = [

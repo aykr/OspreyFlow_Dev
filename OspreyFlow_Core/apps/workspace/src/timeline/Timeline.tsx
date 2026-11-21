@@ -45,7 +45,7 @@ import type {
   Histogram,
   HistogramRequest,
 } from "../../../../packages/schemas/generated";
-import { fetchCaseEvents, fetchHistogram } from "../analytics/api";
+import { fetchCaseEvents, fetchHistogram } from "@ospreyflow/glass-shared";
 import { publishTimelineSummary } from "./timelineSummary";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { buildEventFilter, type CrossFilterStore, type WeekdayHourCell } from "../crossfilter/store";

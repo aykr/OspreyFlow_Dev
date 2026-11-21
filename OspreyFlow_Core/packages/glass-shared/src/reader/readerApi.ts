@@ -1,7 +1,7 @@
 // The full-screen reader's text (ADR-092): `GET .../documents/{id}/reader` answers only to someone
 // who can see the Document in the case, with one `document_not_found` for hidden and missing alike.
 import type { MessageSpan } from "../dossier/models";
-import { modelDeadline, unreachedWords } from "@ospreyflow/glass-shared";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 /** `services/api/document_reader.py`'s `DocumentReaderView`. */
 export interface DocumentReaderView {

@@ -14,7 +14,7 @@ import {
   typeIdFrom,
   type TypeDraft,
 } from "./defineType";
-import { LinkTypeError, proposeLinkType, type LinkTypeProposal } from "./linkTypesApi";
+import { LinkTypeError, proposeLinkType, type LinkTypeProposal } from "@ospreyflow/glass-shared";
 
 export interface DefineLinkTypeProps {
   apiBaseUrl: string;

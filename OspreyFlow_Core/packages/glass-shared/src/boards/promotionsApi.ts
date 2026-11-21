@@ -16,7 +16,7 @@ import type {
   Promotions,
   RemovedCaseLayers,
   SheetItem,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 export type { LayerDeleted, LayerDryRun, LayerMergeSheet, Promotion, PromotionDetails, PromotionSheet, Promotions, RemovedCaseLayers, SheetItem };
 

@@ -1,7 +1,7 @@
 // The emails behind a link onto the canvas (ADR-092): `POST .../links/{edge}/events/documents`
 // writes each email inside the brushed window as a Document linked to both addresses, all or
 // none against the working set's cap, and answers with the delta that draws them.
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
+import type { WorkingSetDelta } from "../workingset/models";
 
 export interface EmailDocumentsResult {
   written: number;

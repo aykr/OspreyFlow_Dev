@@ -12,7 +12,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BatchExpansion } from "./BatchExpansion";
-import type { BatchExpansionRequest } from "./batchExpansionApi";
+import type { BatchExpansionRequest } from "@ospreyflow/glass-shared";
 import type { LimitExceeded } from "@ospreyflow/glass-shared";
 
 afterEach(() => {

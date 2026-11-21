@@ -2,7 +2,7 @@
 // The request carries the window; each refusal says what to do next, never a bare status.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { emailsOutcomeText, showEmailsAsDocuments } from "./emailDocuments";
+import { emailsOutcomeText, showEmailsAsDocuments } from "@ospreyflow/glass-shared";
 
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", fetchMock);

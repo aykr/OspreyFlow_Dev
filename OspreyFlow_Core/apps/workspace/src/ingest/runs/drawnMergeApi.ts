@@ -10,7 +10,7 @@ import type {
   Promotion,
   TypeChoice,
 } from "../../../../../packages/schemas/generated";
-import { answered, send } from "../../boards/promotionsApi";
+import { answered, sendPromotion as send } from "@ospreyflow/glass-shared";
 
 export type { DrawnMergeDryRun, DrawnMergeInput, DrawnMergeSheet, MergeTargets, TypeChoice };
 

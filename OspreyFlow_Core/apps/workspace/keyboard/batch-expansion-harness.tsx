@@ -16,9 +16,9 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { AskPage } from "../src/questions/AskPage";
 import { useAskPage } from "../src/questions/useAskPage";
-import { openView } from "../src/views/viewsApi";
+import { openView } from "@ospreyflow/glass-shared";
 import { BatchExpansion } from "../src/workingset/BatchExpansion";
-import type { BatchExpansionRequest } from "../src/workingset/batchExpansionApi";
+import type { BatchExpansionRequest } from "@ospreyflow/glass-shared";
 import { applyHarnessBrand } from "./brandHarness";
 
 declare global {
