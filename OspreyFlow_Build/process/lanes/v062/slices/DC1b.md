@@ -17,6 +17,15 @@ Through `OspreyFlow_Build/marketing_site/sites/build.py` only, **never by editin
 5. **The sites' own rules still hold and their tests stay green:** the product's statement and "Solirius Reply"; "designed to meet the GDS Service Standard" with the three checks named as planned; no crown, GOV.UK logotype or GDS Transport; what a page says is in a release is checked against that release (`CHECKED_AGAINST`; the changelog's first heading is v0.6.1, which is the latest release: the owner confirmed it).
 6. **The older six-page site in `marketing_site/deploy` is not edited and does not carry the paragraph** (the owner's ruling).
 
+## Round 6 (the table of what is open after round 5; written by the conductor from the verifier's record on tip `5f29f04`; judged against this table)
+
+| # | Open case | Where | What closes it |
+|---|---|---|---|
+| 1 | Fault: the audit scene's new sub line says "Exports are in a ledger of their own", unscoped. DC1a: only report, assessment and pack exports and the report feed write a ledger row; a dataset release export, a rule file export and a source file read write an audit row only; a platform backup and an object transfer write neither. The slice's own `DC1B_SENTENCES.md` row 12 gives that as a reason the old heading was too strong, and row 10 then uses the unscoped line | `OspreyFlow_Build/marketing_site/sites/overview.py` about line 346 | Name which exports, as `build.py` about lines 443 and 481 already do ("Report, assessment and pack exports are in an export ledger"); correct row 10 of `DC1B_SENTENCES.md` |
+| 2 | Test gap: nothing fails if a page says all exports are in the ledger or in the audit; `OVERSTATED` and `OVERSTATED_SHAPES` have no export-scope phrase; `wording_violations` requires no export scope anywhere | `OspreyFlow_Build/tests/test_site_intent.py` about lines 209 to 249, 324 to 345, 532 to 538 | Add the shapes ("exports are in a ledger" and "every export is in the audit/ledger" without the three named kinds, in any plural/singular/word-order form the text takes), require the named scope where the ledger is mentioned on either site and in both overview scenes, and plant each unscoped shape back (red then green) |
+
+**This is the last round the owner has given on this slice.** Before you report, build both sites and read the output text for every sentence that mentions a ledger, an audit or an export, and list what you read. If any other unscoped export claim is found, fix it in this round too. Everything else stays as the verifier accepted it. Cheap checks first.
+
 ## Round 5 (one round, the owner's add-round line of 21 November, after the stop at round 4 of 4)
 
 Four faults remain (the verifier's, on the round-4 tip). Fix all four; the end state is unchanged (built, verified, then it STOPS for the owner's line):
