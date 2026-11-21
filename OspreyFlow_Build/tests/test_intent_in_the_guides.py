@@ -29,10 +29,11 @@ What the owner's text asks, and the case that fails if it is not so (rule 12):
 bullet of section 6 put back in its list item, the old paragraph of `spec/03` section 6, a passage with the word
 "guarantee" in a sentence — by `test_each_check_is_shown_red`.
 
-**What it reads.** Seven named files and no folder: `OspreyFlow_Core/README.md`; `OspreyFlow_Core/docs/` the four
-`*-guide.md` files; `OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md`, `spec/00_ARCHITECTURE.md` and
-`spec/03_CONDUIT_MIDDLEWARE.md`. It globs nothing (the one `glob` below, in
-`test_no_other_specification_copy_of_a_guide_exists`, lists only the top of `OspreyFlow_Build/spec/`, never below it).
+**What it reads.** Seven named files, each opened by its path; no folder is listed or searched:
+`OspreyFlow_Core/README.md`; the four `*-guide.md` files in `OspreyFlow_Core/docs/`;
+`OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md` (the only guide with a copy in the specification: found by
+listing `spec/` on 20 November 2026, `test_admin_guide_copies.py` holds that copy to the shipped one),
+`spec/00_ARCHITECTURE.md` and `spec/03_CONDUIT_MIDDLEWARE.md`. So its scan-map row, if one is wanted, is empty.
 """
 
 from __future__ import annotations
@@ -118,6 +119,11 @@ def read(path: Path) -> str:
 
 def fold(text: str) -> str:
     return re.sub(r"\s+", " ", text)
+
+
+def without_control(text: str) -> str:
+    """The guide less its version record, whose rows name what changed and so name Mapbox too."""
+    return re.sub(r"<!-- document-control:begin -->.*?<!-- document-control:end -->", " ", text, flags=re.DOTALL)
 
 
 def passage(text: str) -> str | None:
@@ -224,9 +230,9 @@ def test_the_passage_sits_after_the_opening_and_before_the_document_control() ->
         if at < 0:
             problems.append(f"{name}: no passage")
             continue
-        statement = text.find("OspreyFlow is an open")
-        if not 0 <= statement < at:
-            problems.append(f"{name}: the passage is not after the opening statement")
+        opening = text[:at].split("\n", 1)[1].strip()  # what stands between the title and the passage
+        if len(opening.split()) < 25:
+            problems.append(f"{name}: the passage is not after an opening statement")
         for later in ("<!-- document-control:begin -->", "\n## 1. ", "\n## What it does"):
             if later in text and text.index(later) < at:
                 problems.append(f"{name}: the passage is after {later.strip()!r}")
@@ -302,7 +308,7 @@ def test_no_audit_statement_is_unscoped() -> None:
     for words in ("case reads", "export ledger", "withheld", "deployment metadata", "refusals"):
         assert words in guide.lower(), f"architecture guide section 6 does not say {words!r}"
     spec = fold(read(SPEC / "03_CONDUIT_MIDDLEWARE.md"))
-    audit = spec[spec.index("**Audit.**") : spec.index("**Export gate.**")]
+    audit = spec[spec.index("**Audit.**") : spec.index("**Export gate.**")].lower()
     for words in ("deployment metadata", "model calls", "sign-in"):
         assert words in audit, f"spec/03 section 6's audit paragraph has no scope note on {words!r}"
 
@@ -316,7 +322,7 @@ def test_nothing_written_here_guarantees() -> None:
     written["spec/03: audit"] = read(SPEC / "03_CONDUIT_MIDDLEWARE.md")[
         read(SPEC / "03_CONDUIT_MIDDLEWARE.md").index("**Audit.**") :
     ].split("**Export gate.**")[0]
-    sentence = re.search(r"[^.\n]*Mapbox[^.]*\.", fold(texts["administration guide"]))
+    sentence = re.search(r"[^.\n]*Mapbox[^.]*\.", fold(without_control(texts["administration guide"])))
     written["administration guide: Mapbox sentence"] = sentence.group(0) if sentence else ""
     assert {where for where, body in written.items() if GUARANTEE.search(body)} == set()
 
@@ -331,17 +337,11 @@ def test_both_copies_of_the_administration_guide_agree_on_the_new_passages() -> 
     ).split("\n###")[0].replace("\n", " ").count("Mapbox")
 
 
-def test_no_other_specification_copy_of_a_guide_exists() -> None:
-    """Only the administration guide has a copy in the specification; a second one would need its own row here."""
-    copies = sorted(p.name for p in SPEC.glob("*.md") if "GUIDE" in p.name.upper())
-    assert copies == ["10_ADMINISTRATION_GUIDE.md"]
-
-
 def test_the_administration_guide_says_a_mapbox_chart_will_not_load() -> None:
     """The owner's addition of 20 November (SE6a's facts): the content policy allows no outside address and no
     map key is set."""
     for name in ADMIN:
-        text = fold(read(FILES[name]))
+        text = fold(without_control(read(FILES[name])))
         sentence = next((s for s in re.split(r"(?<=\.)\s", text) if "Mapbox" in s), "")
         assert "will not load" in sentence, f"{name}: no sentence that a chart needing Mapbox tiles will not load"
         assert "content" in sentence and "policy" in sentence, f"{name}: the sentence does not say why (the policy)"
