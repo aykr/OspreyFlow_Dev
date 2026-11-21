@@ -1,5 +1,5 @@
 /**
- * Slice IS5a0, round 2: `scripts/build.mjs`, the step the image runs, writes the layout the production service resolves
+ * Slice IS5a0, round 2: `apps/pages/scripts/build.mjs`, the step the image runs, writes the layout the production service resolves
  * its own files from. The server finds its templates at `dist/tree-default`, the function list at `dist/FUNCTIONS.yaml` and
  * the asset manifest at `dist/assets/manifest.json`, all relative to where its code is; nothing else tests that the build
  * writes them there (every other test runs the sources). So this runs the real build into a scratch folder, then starts the
@@ -15,6 +15,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 
+import type { Express } from "express";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { csrfFromPage, request, signIn, TEST_SESSION_SECRET } from "../support/http.js";
@@ -81,7 +82,7 @@ describe("the build's layout", () => {
           return request(app).get("/_built/page").set("Cookie", login.cookie);
         });
         if (missing === "FUNCTIONS.yaml") await expect(attempt).rejects.toThrow(/FUNCTIONS\.yaml could not be read/);
-        else expect((await attempt.catch(() => ({ status: 500 }))).status).toBe(500);
+        else await expect(attempt).rejects.toThrow(/anti-forgery|template not found|layout/i); // the home page cannot render either
       } finally {
         rmSync(broken, { recursive: true, force: true });
       }
@@ -89,10 +90,9 @@ describe("the build's layout", () => {
   }, 180_000);
 });
 
-type BuiltApp = Parameters<typeof request>[0];
 
 /** The BUILT `createApp`, run from the scratch folder, with one page that names a real row and renders a template of its own. */
-async function builtApp(folder: string): Promise<BuiltApp> {
+async function builtApp(folder: string): Promise<Express> {
   const appModule = (await import(pathToFileURL(join(folder, "server", "app.js")).href)) as typeof import("../../server/app.js");
   const storeModule = (await import(pathToFileURL(join(folder, "server", "sessionStore.js")).href)) as typeof import("../../server/sessionStore.js");
   const manifest = JSON.parse(readFileSync(join(folder, "assets", "manifest.json"), "utf8")) as Record<string, string>;

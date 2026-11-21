@@ -30,6 +30,13 @@ export class PageRegistrationError extends Error {
   override name = "PageRegistrationError";
 }
 
+/**
+ * A plain path is lower case with no trailing slash. Express matches a route ignoring case and an optional trailing slash, so
+ * `/studio`, `/Studio` and `/studio/` are one route: allowing them would let two pages claim one route under two spellings (the
+ * later never reached), and a page take `/Healthz`, which the health route answers first. Refusing the spellings, rather than
+ * comparing paths after folding them, leaves one spelling for a path everywhere it is written (a link, a test, a log line).
+ */
+const PLAIN_PATH = /^\/(?:[a-z0-9._~-]+(?:\/[a-z0-9._~-]+)*)?$/;
 const METHODS: readonly string[] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 /** Paths the server answers itself: a page may not take one, or sit under one (`/` is the home page). */
 const OWNED = ["/session", "/healthz", "/assets/pages", "/v1"];
@@ -64,8 +71,10 @@ function check(pages: readonly PageModule[], known: ReadonlySet<string>): void {
         `${where} names an id that is not a row of FUNCTIONS.yaml. A page's id is its FUNCTIONS.yaml row; add the row first.`,
       );
     }
-    if (typeof page.path !== "string" || !/^\/[A-Za-z0-9._~/-]*$/.test(page.path) || page.path.includes("//") || page.path.split("/").includes("..")) {
-      throw new PageRegistrationError(`${where} has a path that is not a plain path: write it with letters, digits and hyphens, starting with a slash.`);
+    if (typeof page.path !== "string" || !PLAIN_PATH.test(page.path) || page.path.includes("//") || page.path.split("/").includes("..")) {
+      throw new PageRegistrationError(
+        `${where} has a path that is not a plain path: write it with lower-case letters, digits and hyphens, starting with a slash and ending with none.`,
+      );
     }
     if (owned(page.path)) {
       throw new PageRegistrationError(`${where} takes a path the server answers itself (the home page, /session, /healthz, /assets/pages and /v1).`);

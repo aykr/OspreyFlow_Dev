@@ -5,14 +5,19 @@
 import { execFileSync } from "node:child_process";
 import { cpSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { buildAssets } from "./assets.mjs";
 
 const root = join(import.meta.dirname, "..");
+// `--out <folder>` writes the build there instead of to `dist/` (the layout is the same: a test builds to a scratch folder and
+// runs what it wrote). The default is the folder the image copies.
+const flag = process.argv.indexOf("--out");
+if (flag !== -1 && !process.argv[flag + 1]) throw new Error("--out needs a folder");
+const out = flag === -1 ? join(root, "dist") : resolve(process.argv[flag + 1]);
 const tsc = createRequire(import.meta.url).resolve("typescript/bin/tsc");
-rmSync(join(root, "dist"), { recursive: true, force: true });
-execFileSync(process.execPath, [tsc, "-p", "tsconfig.build.json"], { cwd: root, stdio: "inherit" });
-cpSync(join(root, "tree-default"), join(root, "dist", "tree-default"), { recursive: true });
-cpSync(join(root, "FUNCTIONS.yaml"), join(root, "dist", "FUNCTIONS.yaml"));
-await buildAssets({ outDir: join(root, "dist", "assets") });
+rmSync(out, { recursive: true, force: true });
+execFileSync(process.execPath, [tsc, "-p", "tsconfig.build.json", "--outDir", out], { cwd: root, stdio: "inherit" });
+cpSync(join(root, "tree-default"), join(out, "tree-default"), { recursive: true });
+cpSync(join(root, "FUNCTIONS.yaml"), join(out, "FUNCTIONS.yaml"));
+await buildAssets({ outDir: join(out, "assets") });
