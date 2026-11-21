@@ -224,6 +224,9 @@ OVERSTATED = [
     "Nothing you may not see is shown or counted",
     "The log is append-only",
     "a full audit trail",
+    "no route out by default",
+    "decide what each person sees",
+    "What each person sees is bounded by handling markings and case membership.",
 ]
 #: The shapes behind them, so a reworded return is found too.
 OVERSTATED_SHAPES = {
@@ -264,16 +267,34 @@ def hosted_without_opt_in(root: Path) -> list[str]:
     return [f"{p.parent.name}/{p.name}" for p in pages(root) if HOSTED.search(page_text(p)) and "opt-in" not in page_text(p).lower()]
 
 
+def _card(root: Path, page: str, title: str) -> str:
+    """One card of a built page, by its heading, tags stripped and folded for finding words."""
+    for a in re.findall(r"<article class=\"card\">(.*?)</article>", _main(root / page), flags=re.DOTALL):
+        if f"<h3>{title}</h3>" in a:
+            return _flat(_strip(a))
+    return ""
+
+
 def wording_violations(root: Path) -> list[str]:
     """What DC1a says the licence statement, the attribution and the Superset fix may claim."""
     found = []
     one = _constraint(root, FIVE[0])
     found += [f"software sovereignty lacks {w!r}" for w in ("model weights", "map data", "fonts", "base images", "outside", "coming") if w not in one]
     two = _constraint(root, FIVE[1])
-    found += [f"data sovereignty lacks {w!r}" for w in ("opt-in", "next release", "no route out by default") if w not in two]
+    found += [f"data sovereignty lacks {w!r}" for w in ("opt-in", "next release", "only the front proxy", "downloads", "each start", "certificate") if w not in two]
+    three = _constraint(root, FIVE[2])
+    found += [f"privacy control lacks {w!r}" for w in ("known read-side gaps", "shared view", "search index", "pulls table", "penetration test") if w not in three]
     four = _constraint(root, FIVE[3])
     found += [f"security management lacks {w!r}" for w in ("coming", "model call", "sign-in", "type list", "map tiles") if w not in four]
     public = _flat(page_text(root / "org" / "public-sector.html"))
+    live = _card(root, "org/public-sector.html", "Where does the data live?")
+    found += [f"the data-location card on org/public-sector.html lacks {w!r}" for w in ("only the front proxy", "downloads", "each start", "certificate", "hosted model engine", "usage image", "v0.6.1", "next release") if w not in live]
+    who = _card(root, "org/public-sector.html", "Who can see what?")
+    found += [f"the access card on org/public-sector.html lacks {w!r}" for w in ("known read-side gaps", "penetration test") if w not in who]
+    net = _card(root, "net/index.html", "Inside your boundary") + " " + _card(root, "net/index.html", "Need-to-know by design")
+    found += [f"the net Home's boundary panels lack {w!r}" for w in ("only the front proxy", "downloads", "opt-in", "known gaps", "conformance suites") if w not in net]
+    governance = _flat(_strip(_section(root / "org" / "governance.html", PRINCIPLES)))
+    found += [f"the governance principles lack {w!r}" for w in ("only the front proxy", "downloads", "known read-side gaps") if w not in governance]
     found += [f"the licence statement on org/public-sector.html lacks {w!r}" for w in ("model weights", "map data", "fonts", "base images", "coming") if w not in public]
     return found
 
@@ -488,6 +509,15 @@ def test_a_hosted_engine_without_the_words_opt_in_is_flagged(sites: Path) -> Non
         ("org/index.html", "next release", "data sovereignty lacks 'next release'"),
         ("org/index.html", "sign-in", "security management lacks 'sign-in'"),
         ("org/public-sector.html", "map data", "the licence statement on org/public-sector.html lacks 'map data'"),
+        ("org/index.html", "known read-side gaps", "privacy control lacks 'known read-side gaps'"),
+        ("org/index.html", "pulls table", "privacy control lacks 'pulls table'"),
+        ("org/index.html", "each start", "data sovereignty lacks 'each start'"),
+        ("org/public-sector.html", "usage image", "the data-location card on org/public-sector.html lacks 'usage image'"),
+        ("org/public-sector.html", "each start", "the data-location card on org/public-sector.html lacks 'each start'"),
+        ("org/public-sector.html", "v0.6.1", "the data-location card on org/public-sector.html lacks 'v0.6.1'"),
+        ("net/index.html", "only the front proxy", "the net Home's boundary panels lack 'only the front proxy'"),
+        ("net/index.html", "known gaps", "the net Home's boundary panels lack 'known gaps'"),
+        ("org/governance.html", "known read-side gaps", "the governance principles lack 'known read-side gaps'"),
     ],
 )
 def test_the_licence_attribution_and_tracking_checks_are_red_when_a_claim_is_dropped(sites: Path, page: str, out: str, fault: str) -> None:
