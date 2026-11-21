@@ -106,7 +106,7 @@ M = [
  ("dry_run.py", '            if code == 0:\n                problems.append("the acceptance command passes on main', '            if False:\n                problems.append("the acceptance command passes on main', "acceptance_that_is_never_red"),
  ("dry_run.py", '            elif malformed(out):\n', '            elif False:\n', "red_only_for_a_malformed"),
  ("dry_run.py", '        out.append(cmd[last:p] + f\'&& {{ echo {n} >> "{marks}"; }} &&\')', '        out.append(cmd[last:p] + "&&")', "which_step_of_the_chain"),
- ("dry_run.py", '                if body is not None:\n', '                if False:\n', "stands_in_the_slices_own"),
+ ("dry_run.py", '        if body is not None:\n', '        if False:\n', "stands_in_the_slices_own"),
  ("common.py", '        if slot not in taken and all(p < 65536 for p in ports) and not ports & spoken:', '        if True:', "slot_clear_of_the_lanes"),
  ("stop_check.py", '        env["OSPREY_PORTS_SLOT"] = str(slot)  # the slice', '        pass  # the slice', "give_a_playwright_command"),
  ("slice_start.py", '    problems = dry_run.prove(row, slot=slot, log=log)', '    problems = dry_run.prove(row, slot=None, log=log)', "give_a_playwright_command"),
@@ -301,6 +301,23 @@ M = [
  ("resume.py", '    if to not in known:', '    if False:', "move_seat_refuses_an_account_that_is_signed_out"),
  ("run_seat.py", '    account = st["verifier_account"]\n', '    account = c.account_for("verifier")\n', "move_seat_the_verifier_then_launches"),
  ("merge_slice.py", '        if not sid or sid in builders:', '        if not sid:', "never_takes_a_builders_session"),
+ # LINE_FIXES_5_BRIEF.md, A: the line clears a stop itself (resume.py self-clear), never what is the owner's alone
+ ("resume.py", '    if rnd >= OWNERS_ROUND:\n', '    if False:\n', "eighth_round"),
+ ("resume.py", '    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))\n', '    hit = None\n', "naming_a_key"),
+ ("resume.py", '        parts.append(body if head.startswith(("RED: checks", "RED: acceptance", "RED: scans")) else str(problem))', '        parts.append(str(problem))', "echoed_command_alone"),
+ ("resume.py", '    if moved or waiting:\n', '    if False:\n', "refreeze_that_changes"),
+ ("resume.py", '    waiting = unapplied(slice_id, "refreeze")\n', '    waiting = []\n', "refreeze_that_changes"),
+ ("resume.py", '        raise Refused(f"{slice_id} stopped at its rounds limit with open findings', '        if False: raise Refused(f"{slice_id} stopped at its rounds limit with open findings', "accepting_a_slice_with_open_findings"),
+ ("resume.py", '        if not kinds or any(k != rs.GAP for k in kinds):\n', '        if False:\n', "finding_of_fault"),
+ ("resume.py", '        if name in acceptance or any(name == Path(f).name for f in dry_run.acceptance_files(frozen)):', '        if False:', "never_removes_the_acceptance"),
+ ("resume.py", '        if any(f == path or f.endswith("/" + path) or path.endswith("/" + f) for f in own):', '        if False:', "never_removes_a_check_the_slice_changed"),
+ ("resume.py", '            if code == 0 or sorted(on_main) != sorted(ids):', '            if False:', "same_failure_on_mains"),
+ ("resume.py", '        dry_run.builder_shaped(tree)\n', '', "cause_b_a_check"),
+ ("resume.py", '    if subprocess.run(["git", "merge-base", "--is-ancestor", main, tip], cwd=str(c.REPO)).returncode == 0:', '    if False:', "neither_cause"),
+ ("resume.py", '    if files is None or files:\n', '    if files is None:\n', "merge_cleanly"),
+ ("resume.py", '        c.log_self_clear(slice_id, stop, "a", what)\n', '', "log_lists_every_clearance"),
+ ("board.py", '        for line in self_clear_lines():\n            print(line)\n', '', "board_prints_it"),
+ ("run_seat.py", '        return 0 if self_clear(slice_id) else 1', '        return 1', "run_seat_tries_the_clearance"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

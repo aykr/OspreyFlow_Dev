@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import merge_slice as ms  # noqa: E402
+import stop_check  # noqa: E402
 
 #: The conductor's own malformed commands, as the line has met them (18 November 2026: BL6's `make -C` path after a
 #: `cd`; AD2's Playwright with no port slot). Add one only for a failure that can never be a test's own.
@@ -82,9 +83,61 @@ def and_positions(cmd: str) -> list[int]:
 
 
 def steps(cmd: str) -> list[str]:
+    return [cmd[a:b] for a, b in step_spans(cmd)]
+
+
+def step_spans(cmd: str) -> list[tuple[int, int]]:
+    """Where each step of the command's `&&` chain is, its surrounding blanks left out."""
     cuts = [0, *[p + 2 for p in and_positions(cmd)]]
     ends = [*and_positions(cmd), len(cmd)]
-    return [cmd[a:b].strip() for a, b in zip(cuts, ends)]
+    out = []
+    for a, b in zip(cuts, ends):
+        while a < b and cmd[a].isspace():
+            a += 1
+        while b > a and cmd[b - 1].isspace():
+            b -= 1
+        out.append((a, b))
+    return out
+
+
+#: A failing test as pytest's summary names it (`FAILED <node id> - <why>`, `ERROR <node id>`), its id as pytest gives it.
+FAILING_ID = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
+
+
+def failing_ids(output: str) -> list[str]:
+    """The failing tests' ids in an output, each once, in order."""
+    return list(dict.fromkeys(FAILING_ID.findall(output or "")))
+
+
+def id_path(test_id: str) -> str:
+    """The file of a test id (`../OspreyFlow_Build/tests/test_x.py::test_y` -> `OspreyFlow_Build/tests/test_x.py`)."""
+    p = test_id.split("::", 1)[0]
+    while p.startswith(("./", "../")):
+        p = p[2:] if p.startswith("./") else p[3:]
+    return p
+
+
+def stand_in(tree: Path, files: list[str]) -> list[str]:
+    """Each of the slice's own new test files absent from `tree`, stood in by a placeholder that passes; the ones written."""
+    out = []
+    for f in files:
+        if (tree / f).exists():
+            continue
+        body = next((b for pat, b in PLACEHOLDERS if pat.search(f)), None)
+        if body is not None:
+            (tree / f).parent.mkdir(parents=True, exist_ok=True)
+            (tree / f).write_text(body)
+            out.append(f)
+    return out
+
+
+def builder_shaped(tree: Path) -> list[str]:
+    """`tree` given what the line puts in every builder worktree beside the branch: main's RULINGS.md copy (the copy
+    every seat reads) and the client names' hashed list where git ignores it. What was put there, in words."""
+    import slice_start  # here, not at the top: slice_start.py imports this module
+    copy = c.deliver_rulings(tree)
+    return [f"the rulings copy ({c.RULINGS_COPY_REL})" if copy else "no rulings copy (main has no RULINGS.md)",
+            slice_start.bring_client_hashes(tree)]
 
 
 def instrument(cmd: str, marks: Path) -> str:
@@ -158,13 +211,7 @@ def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log
         files = acceptance_files(spec)
         new = [f for f in files if not (tree / f).exists()]
         if spec.get("checks"):
-            stand_in = []
-            for f in new:
-                body = next((b for pat, b in PLACEHOLDERS if pat.search(f)), None)
-                if body is not None:
-                    (tree / f).parent.mkdir(parents=True, exist_ok=True)
-                    (tree / f).write_text(body)
-                    stand_in.append(f)
+            stood = stand_in(tree, new)
             code, out, reached = run_marked(spec["checks"], tree, env, log)
             parts = steps(spec["checks"])
             if code != 0:
@@ -172,7 +219,7 @@ def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log
                          + (f" and never reached the last ({parts[-1][:120]})" if reached + 1 < len(parts) else ""))
                 problems.append(f"the checks are red on main (exit {code}): {where}"
                                 + (f"; malformed: {malformed(out)}" if malformed(out) else "") + "\n" + tail(out))
-            for f in stand_in:
+            for f in stood:
                 (tree / f).unlink(missing_ok=True)
         if spec.get("acceptance"):
             for f in files:

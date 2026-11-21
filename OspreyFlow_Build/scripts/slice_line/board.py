@@ -8,6 +8,7 @@ the only writer of that file. It replaces the heartbeat.
     board.py            print the board and write status.js
     board.py --quiet    write status.js only (merge_slice.py and run_seat.py call this after each event)
     board.py --usage    usage per slice and per account, from usage.tsv
+    board.py --self-clears   every stop the line cleared itself (self-clears.tsv), for the conductor's morning report
 """
 from __future__ import annotations
 
@@ -193,6 +194,12 @@ def owed_list(problems: list[str]) -> list[dict]:
     return [{"test": t, **o} for t, o in sorted(owed.items())]
 
 
+def self_clear_lines(rows: list[dict] | None = None) -> list[str]:
+    """Each stop the line cleared itself, one line each: the time, the slice, the stop, the cause, what it did."""
+    return [f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: {r['what']}"
+            for r in (c.self_clears() if rows is None else rows)]
+
+
 def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
@@ -204,7 +211,8 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
     body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
-            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"}}
+            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"},
+            "self_clears": c.self_clears()}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -262,10 +270,14 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--usage", action="store_true")
+    ap.add_argument("--self-clears", action="store_true")
     ap.add_argument("--slices-from", default="main", help="a ref, or 'working' for the working copy")
     a = ap.parse_args()
     if a.usage:
         usage()
+        return 0
+    if a.self_clears:
+        print("\n".join(self_clear_lines()) or "The line has cleared no stop itself.")
         return 0
     try:
         slices = c.load_slices(None if a.slices_from == "working" else a.slices_from)
@@ -298,6 +310,8 @@ def main() -> int:
         fixed = [r for r in c.owner_changes() if r["action"] == "correct-command"]
         for r in fixed:
             print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
+        for line in self_clear_lines():
+            print(line)
         pending = c.DATA / "push.pending"
         if pending.exists():
             print(f"push pending ({pending.read_text().strip()[:10]}): waits for the run on main in progress; the "

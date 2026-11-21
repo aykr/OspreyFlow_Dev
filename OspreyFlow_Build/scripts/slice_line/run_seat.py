@@ -408,7 +408,7 @@ def builder(slice_id: str) -> int:
     if red:
         stop_slice(slice_id, f"the builder could not get the checks green in {red['red_stops']} tries: "
                              "narrow the slice, or change its checks (your word)?")
-        return 1
+        return 0 if self_clear(slice_id) else 1
     tests = c.read_json(c.rec_dir(slice_id) / f"tests-{tip}.json")
     if tests and tests.get("green"):
         c.set_state(slice_id, phase="verifying", tip=tip)
@@ -495,6 +495,20 @@ def verifier(slice_id: str) -> int:
     board()
     print(f"{slice_id}: findings; back to the builder for round {st['round'] + 1}.")
     return 1
+
+
+def self_clear(slice_id: str) -> bool:
+    """The line's own clearance of a stop (resume.py self-clear; LINE_FIXES_5_BRIEF.md, A), tried after a red stop; it
+    says why when it does not clear, and the slice then stays stopped for the owner, as before."""
+    import resume  # here, not at the top: resume.py imports this module
+    try:
+        said = resume.act(slice_id, "self-clear")
+    except (resume.Refused, resume.ms.Refused) as e:
+        print(f"{slice_id}: not cleared by the line: {e}")
+        return False
+    board()
+    print("\n".join(said))
+    return True
 
 
 def standing_accept(slice_id: str) -> bool:

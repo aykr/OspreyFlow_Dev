@@ -306,6 +306,31 @@ def log_owner_change(slice_id: str, action: str, detail: str) -> None:
         fh.write("\t".join([now(), slice_id, action, detail.replace("\t", " ").replace("\n", " ")]) + "\n")
 
 
+#: The line's own clearances of a stop (LINE_FIXES_5_BRIEF.md, A): one row each (time, slice, the stop, the cause a or
+#: b, what the line did), beside owner-changes.tsv; board.py prints them for the conductor's morning report and
+#: status.js carries them (`self_clears`). Each also has its record in the slice's folder (self-clear-<time>.json).
+SELF_CLEARS = DATA / "self-clears.tsv"
+SELF_CLEAR_COLUMNS = ("at", "slice", "stop", "cause", "what")
+
+
+def log_self_clear(slice_id: str, stop: str, cause: str, what: str) -> dict:
+    row = {"at": now(), "slice": slice_id, "stop": stop, "cause": cause, "what": what}
+    SELF_CLEARS.parent.mkdir(parents=True, exist_ok=True)
+    if not SELF_CLEARS.exists():
+        SELF_CLEARS.write_text("\t".join(SELF_CLEAR_COLUMNS) + "\n")
+    with SELF_CLEARS.open("a") as fh:
+        fh.write("\t".join(str(row[k]).replace("\t", " ").replace("\n", " ") for k in SELF_CLEAR_COLUMNS) + "\n")
+    write_json(rec_dir(slice_id) / f"self-clear-{row['at'].replace(':', '')}-{os.urandom(3).hex()}.json", row)
+    return row
+
+
+def self_clears() -> list[dict]:
+    if not SELF_CLEARS.exists():
+        return []
+    rows = [ln.split("\t") for ln in SELF_CLEARS.read_text().splitlines()[1:] if ln.strip()]
+    return [dict(zip(SELF_CLEAR_COLUMNS, r + [""] * (len(SELF_CLEAR_COLUMNS) - len(r)))) for r in rows]
+
+
 def owner_changes() -> list[dict]:
     if not OWNER_CHANGES.exists():
         return []

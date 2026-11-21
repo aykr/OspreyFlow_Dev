@@ -44,7 +44,8 @@ def failures_only(output: str) -> str:
     return "\n".join(keep)
 
 
-def run(cmd: str, cwd: str, slot=None) -> tuple:
+def seat_env(cwd: str, slot=None) -> dict:
+    """The environment the builder's frozen commands run in at Stop (slice_start.py proves the checks in the same)."""
     env = dict(os.environ)
     env.setdefault("ARCADEDB_HTTP_PORT", "9")  # a pure check never reaches a live store
     env.setdefault("POSTGRES_PORT", "9")
@@ -54,6 +55,11 @@ def run(cmd: str, cwd: str, slot=None) -> tuple:
     if (venv / "bin/python").is_file():  # env: full built the worktree's own (F6): first on PATH
         env["VIRTUAL_ENV"] = str(venv)
         env["PATH"] = str(venv / "bin") + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def run(cmd: str, cwd: str, slot=None) -> tuple:
+    env = seat_env(cwd, slot)
     try:
         p = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT_S, env=env)
         return p.returncode, (p.stdout or "") + "\n" + (p.stderr or "")
