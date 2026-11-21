@@ -7,8 +7,8 @@ The owner's ruling of 21 November 2026: the proof for a slice that splits code i
 checked list of differing units, not an identical build.
 
 * `OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt` is that list: one differing unit a line, with its
-  chunk, its side, its hash, the source module it comes from and the reason (`split`, `new`, `moved`, or
-  `knock-on` for a unit that differs only because it calls a unit that was split). It is generated, never typed:
+  chunk, its side, its hash, the source module it comes from, the reason (`split`, `new`, `moved`, or `knock-on`) and,
+  for a knock-on row, its basis. It is generated, never typed:
   `python OspreyFlow_Build/tests/glass_trees/test_pl4d3d_declared_units.py write` runs `dist_compare.mjs units` (the
   script's own uncapped list) on the pre-PL4 build and a fresh build of this tree, and writes what it prints.
 * `test_the_differing_units_are_exactly_the_declared_ones` builds `apps/workspace`, runs the same command and compares
@@ -22,18 +22,46 @@ Which test fails if the invariant is broken (rule 12; each planted in the shape 
   (so nothing differs) and `test_one_declared_unit_that_does_not_differ_is_red` drops one real row;
 * **an extra declared unit**: `test_an_extra_declared_unit_is_red`.
 
-Where the comparison runs, and how it retires (the conductor's round 2):
+Where the comparison runs, and how it retires (the conductor's rounds 2 and 4):
 
 * **It needs the raw pre-PL4 build, which is not in the repository.** The folder is `PL4_BASELINE_DIST` (default
   `~/dev/osprey-acceptance/PL4a-baseline/dist`, the builder's and the verifier's Mac). Where it is absent (GitHub, a clean
   merge tree) the comparison **skips with a stated reason and never errors**.
 * **The proof belongs to one baseline.** The declaration's first line is `against: <sha-256 of that folder>` (names and
   bytes). The comparison runs only if the folder's hash is that value; otherwise it skips with "this proof belongs to an
-  earlier baseline". When the baseline is refreshed (the folder is replaced with the new build, as the slice's re-record
-  does: see the slice's report for the command), the hash stops matching and the proof retires itself; later slices compare
-  with `dist_compare verify --build`, which reads the recorded hash.
-* Tests that need no build always run: the declaration's own form, and the gate itself (`proof_gate`: planted a folder
-  that does not exist, one that does, a declaration for an earlier baseline, and one with no `against` line).
+  earlier baseline".
+* **The retirement is a scripted step, run by the conductor at merge, from the merged commit** (this file does not run it,
+  and nothing here says the folder already holds the new build). From `OspreyFlow_Core`:
+  `node scripts/dist_compare.mjs rebaseline --declared ../OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt`
+  (`--declared` is required: `dist_compare.mjs` is Core's and does not name Build; `--baseline`, `--dist`, `--tests` and
+  `--out` are for a folder, a build, a test output or a record other than the defaults). It builds the workspace from the checked-out commit; prints the
+  old-against-new listing of differing units; **exits non-zero, touching nothing, if any differing unit is neither
+  declared nor knock-on, or if a declared unit does not differ** (`test_the_rebaseline_step_refuses_an_undeclared_difference`
+  and `test_the_rebaseline_step_refuses_a_declared_unit_that_does_not_differ` plant each); otherwise runs the
+  workspace's unit tests, **moves the old baseline folder aside** (never deleted: a dated sibling,
+  `<name>-before-<date>`), puts the new build in its place and writes `apps/workspace/PL4_BASELINE.json`. After it
+  runs, the folder's hash is no longer the declaration's `against:` value, so this proof skips as an earlier baseline
+  and later slices (D3e, slice E, AD1b) compare with `dist_compare verify --build`, which reads the recorded hash.
+  Until the conductor has run it, this proof stays live on the Mac.
+* Tests that need no build always run: the declaration's own form, the gate itself (`proof_gate`: planted a folder that
+  does not exist, one that does, a declaration for an earlier baseline, and one with no `against` line), the knock-on
+  rule, and the rebaseline step on small builds made in a scratch folder.
+
+**A fourth reason, `knock-on`, under a rule this file enforces (the owner's ruling of 21 November 2026).** A unit is
+knock-on only if one of these holds, and its row says which in the `basis` column (`(a)` or `(b)`; every other row has `-`):
+
+* **(a)** its source file's diff against main is import lines only (read against the merge-base of this tree and `main`,
+  so a later change on main does not count; where there is no `main` ref, as on GitHub's shallow checkout, the real rows
+  are not checked and the test says so; and once the slice is on main, that is, once the merge-base already holds
+  `caseNavigation.ts`, the test skips and says so, so a later slice's own change to one of these files is not held to this
+  slice's rule: that retirement is `slice_is_on_main`, planted below);
+* **(b)** it is a built file that is byte-identical to the baseline's once the hashed chunk names
+  (`assets/<stem>-<hash>.<ext>`, and every reference to one) are normalised on both sides, so the only differences are a
+  changed chunk name or a reference to one. `dist_compare` does not expose its normaliser per file, so this file does it,
+  strictly: a name is replaced only if it is a file of that very build. It runs on the real pair where the baseline exists.
+
+Anything else declared as knock-on fails. Planted (red first): a knock-on row for a file whose diff changes a non-import
+line, a `(b)` pair that differs in a string that is not a chunk name, and a knock-on row with neither `(a)` nor `(b)`.
 
 It builds, so it takes a few seconds beyond `dist_compare`'s own (about ten in all on an idle Mac; each comparison is
 about five). Under load a timeout is the machine's, not the slice's.
@@ -41,6 +69,7 @@ about five). Under load a timeout is the machine's, not the slice's.
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import os
 import re
@@ -61,6 +90,8 @@ BASELINE_DIST = Path(os.environ.get("PL4_BASELINE_DIST", Path.home() / "dev/ospr
 # The plain half of the cases client, written in pieces (D3d's old-path walk reads this file).
 CASES = "glass-shared/src/" + "investigation/" + "cases.ts"
 REASONS = {"split", "new", "moved", "knock-on"}
+BASES = {"(a)", "(b)"}
+SRC = CORE / "apps" / "workspace" / "src"
 # The "source module" of a whole-file knock-on row: the page and a lazy chunk name the index chunk, which changed.
 VIA_INDEX = "via index.js"
 TIMEOUT = 600
@@ -70,6 +101,16 @@ class Unit(NamedTuple):
     file: str
     side: str
     sha: str
+
+
+class Row(NamedTuple):
+    """One line of the declaration."""
+
+    unit: Unit
+    source: str
+    reason: str
+    basis: str  # "(a)" or "(b)" for a knock-on row, "-" for every other
+    text: str
 
 
 # What generated the declaration decided for each unit, by what the unit says (label-free where it can be): the unit's
@@ -114,9 +155,98 @@ def proof_gate(baseline: Path, declared_text: str) -> str | None:
     if folder_hash(baseline) != match.group(1):
         return (
             "this proof belongs to an earlier baseline: the baseline folder no longer holds the build the declaration "
-            "was generated against (the slice's re-record replaced it), so later slices are not held to it"
+            "was generated against (the conductor's rebaseline step replaced it), so later slices are not held to it"
         )
     return None
+
+
+# ------------------------------------------------------------------------------------------ the knock-on rule
+# (a) a source file whose diff against main is import lines only. An import statement is `import` then names, braces and
+# commas (nothing a line of code could hold: no `(`, `=` or `;`), `from`, a quoted module and an optional `;`; a bare
+# `import "x";` too. Blank lines are not a difference.
+IMPORT = re.compile(r"^import\s+(?:[\w$*\s{},]*?\s*from\s*)?[\"'][^\"'\n]+[\"'];?[ \t]*$", re.MULTILINE)
+
+
+def without_imports(text: str) -> list[str]:
+    return [line for line in IMPORT.sub("", text).splitlines() if line.strip()]
+
+
+def non_import_changes(before: str, after: str) -> list[str]:
+    """The changed lines (with `-`/`+`) that are not import statements or blank lines; empty when only imports differ."""
+    diff = difflib.unified_diff(without_imports(before), without_imports(after), lineterm="", n=0)
+    return [line for line in diff if not line.startswith(("---", "+++", "@@"))]
+
+
+def git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=60, check=False)
+
+
+def repo_root() -> Path:
+    return Path(git(BUILD, "rev-parse", "--show-toplevel").stdout.strip())
+
+
+def merge_base(repo: Path, main: str = "main") -> str | None:
+    """Where this tree left `main`, or None when there is no such ref (GitHub's shallow checkout)."""
+    done = git(repo, "merge-base", "HEAD", main)
+    return done.stdout.strip() if done.returncode == 0 else None
+
+
+SLICE_MARKER = "OspreyFlow_Core/apps/workspace/src/investigation/caseNavigation.ts"  # a file only this slice makes
+
+
+def slice_is_on_main(repo: Path, base: str, marker: str = SLICE_MARKER) -> bool:
+    """True when the merge-base already holds the slice's own new file: the slice has merged, and rule (a) retires."""
+    return git(repo, "cat-file", "-e", f"{base}:{marker}").returncode == 0
+
+
+def source_difference(repo: Path, base: str, relative: str) -> list[str]:
+    """The non-import changes of one file between `base` and the working tree (the file's `git diff`, read as (a) says)."""
+    shown = git(repo, "show", f"{base}:{relative}")
+    before = shown.stdout if shown.returncode == 0 else ""  # a file that was not there: all of it is a change
+    return non_import_changes(before, (repo / relative).read_text(encoding="utf-8"))
+
+
+# (b) a built file identical to the baseline's once chunk names are normalised. A hashed name is `assets/<stem>-<8
+# characters>.<ext>` (dist_compare's own pattern); it is replaced, wherever the file's text names it, by `<stem><ext>`,
+# and only when it is a file of that very build, so a string that merely looks like one is left and shows as a difference.
+HASHED = re.compile(r"^assets/([^/]+)-([A-Za-z0-9_-]{8})(\.[A-Za-z0-9.]+)$")
+
+
+def hashed_names(dist: Path) -> dict[str, str]:
+    """`<stem>-<hash><ext>` of each hashed file under `assets/`, with the name it normalises to."""
+    names = {}
+    for path in (dist / "assets").iterdir() if (dist / "assets").is_dir() else []:
+        match = HASHED.fullmatch(f"assets/{path.name}")
+        if match and path.is_file():
+            names[path.name] = f"<{match.group(1)}{match.group(3)}>"
+    return names
+
+
+def find_built(dist: Path, file: str) -> Path:
+    """A row's file in a build: the page itself, or the one hashed file with that stem and extension."""
+    if (dist / file).is_file():
+        return dist / file
+    found = [
+        path for path in (dist / "assets").iterdir()
+        if (m := HASHED.fullmatch(f"assets/{path.name}")) and f"{m.group(1)}{m.group(3)}" == file
+    ]
+    assert len(found) == 1, f"{file}: {len(found)} files of that name in {dist}"
+    return found[0]
+
+
+def normalised_text(dist: Path, file: str) -> str:
+    text = find_built(dist, file).read_text(encoding="utf-8")
+    for name, plain in sorted(hashed_names(dist).items(), key=lambda item: -len(item[0])):
+        text = text.replace(name, plain)
+    return text
+
+
+def chunk_name_difference(before: Path, after: Path, file: str) -> list[str]:
+    """What still differs between one file of two builds once chunk names are normalised; empty when byte-identical."""
+    diff = difflib.unified_diff(
+        normalised_text(before, file).splitlines(), normalised_text(after, file).splitlines(), lineterm="", n=0
+    )
+    return [line[:300] for line in diff if not line.startswith(("---", "+++", "@@"))]
 
 
 def node() -> str:
@@ -149,28 +279,35 @@ def build_to(directory: Path) -> Path:
     return directory
 
 
-def parse_declared(text: str) -> list[tuple[Unit, str, str, str]]:
-    """The declaration's rows: unit, source module, reason, unit text."""
+def parse_declared(text: str) -> list[Row]:
+    """The declaration's rows. A knock-on row must say its basis, `(a)` or `(b)`; any other row has `-`."""
     rows = []
     for number, line in enumerate(text.splitlines(), 1):
         if not line.strip() or line.startswith(("#", "against: ")):
             continue
-        parts = line.split("\t", 5)
-        assert len(parts) == 6, f"line {number}: expected chunk, side, hash, source, reason, unit"
-        file, side, sha, source, reason, unit = parts
+        parts = line.split("\t", 6)
+        assert len(parts) == 7, f"line {number}: expected chunk, side, hash, source, reason, basis, unit"
+        file, side, sha, source, reason, basis, unit = parts
         assert side in {"only before", "only after"}, f"line {number}: side {side!r}"
         assert re.fullmatch(r"[0-9a-f]{12}", sha), f"line {number}: hash {sha!r}"
         assert reason in REASONS, f"line {number}: reason {reason!r} is none of {sorted(REASONS)}"
         assert source.endswith((".ts", ".tsx")) or source == VIA_INDEX, f"line {number}: source {source!r}"
+        if reason == "knock-on":
+            assert basis in BASES, f"line {number}: a knock-on row needs its basis, (a) or (b), not {basis!r}"
+            assert (basis == "(b)") == (source == VIA_INDEX), (
+                f"line {number}: (b) is for a built file ({VIA_INDEX!r}), (a) for a source file"
+            )
+        else:
+            assert basis == "-", f"line {number}: only a knock-on row has a basis, not {basis!r}"
         assert unit.strip(), f"line {number}: no unit"
-        rows.append((Unit(file, side, sha), source, reason, unit))
+        rows.append(Row(Unit(file, side, sha), source, reason, basis, unit))
     return rows
 
 
-def problems(actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]) -> list[str]:
+def problems(actual: list[tuple[Unit, str]], declared: list[Row]) -> list[str]:
     """Every way the differing units and the declaration disagree; empty when they are exactly the same list."""
     found = []
-    wanted = [row[0] for row in declared]
+    wanted = [row.unit for row in declared]
     for unit, text in actual:
         if unit in wanted:
             wanted.remove(unit)
@@ -181,10 +318,11 @@ def problems(actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str
     return found
 
 
-def classify(text: str) -> tuple[str, str]:
+def classify(text: str) -> tuple[str, str, str]:
     for pattern, source, reason in RULES:
         if re.search(pattern, text):
-            return source, reason
+            basis = "-" if reason != "knock-on" else ("(b)" if source == VIA_INDEX else "(a)")
+            return source, reason, basis
     raise AssertionError(f"no rule says where this unit comes from: {text[:160]}")
 
 
@@ -194,14 +332,16 @@ def declaration(rows: list[tuple[Unit, str]]) -> str:
         "# PL4d3d: the units of the build that differ from the build before PL4 (ADR-152 R2), and why.",
         "# Generated by `python OspreyFlow_Build/tests/glass_trees/test_pl4d3d_declared_units.py write` from",
         "# `node scripts/dist_compare.mjs units <pre-PL4 dist> <this build>`; not typed by hand.",
-        "# chunk <TAB> side <TAB> sha-256 of the unit, first 12 <TAB> source module <TAB> reason <TAB> the unit.",
-        "# reasons: split (a unit cut in two), new (a unit that did not exist), moved, knock-on (differs only",
-        "# because it calls a unit that was split or, as a whole file, names the index chunk: the owner is asked about these).",
+        "# chunk <TAB> side <TAB> sha-256 of the unit, first 12 <TAB> source module <TAB> reason <TAB> basis <TAB> the unit.",
+        "# reasons: split (a unit cut in two), new (a unit that did not exist), moved, knock-on. A knock-on row says its",
+        "# basis (the owner's rule of 21 November 2026): (a) its source file's diff against main is import lines only;",
+        "# (b) it is a built file byte-identical to the baseline's once hashed chunk names are normalised. Other rows: -.",
+        "# The test enforces both; a knock-on row that meets neither fails the slice.",
     ]
     body = []
     for unit, text in rows:
-        source, reason = classify(text)
-        body.append(f"{unit.file}\t{unit.side}\t{unit.sha}\t{source}\t{reason}\t{text}")
+        source, reason, basis = classify(text)
+        body.append(f"{unit.file}\t{unit.side}\t{unit.sha}\t{source}\t{reason}\t{basis}\t{text}")
     return "\n".join([*head, *sorted(body)]) + "\n"
 
 
@@ -226,21 +366,32 @@ def actual(built: Path) -> list[tuple[Unit, str]]:
 
 
 @pytest.fixture(scope="module")
-def declared() -> list[tuple[Unit, str, str, str]]:
+def declared() -> list[Row]:
     assert DECLARED.is_file(), f"{DECLARED.relative_to(BUILD.parent)} is not there: generate it (see this file's head)"
     return parse_declared(DECLARED.read_text(encoding="utf-8"))
 
 
 # ------------------------------------------------------------------------------------------------------ the proof
 def test_the_differing_units_are_exactly_the_declared_ones(
-    actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     assert actual, "no unit differs: the build was not compared with the pre-PL4 one"
     assert problems(actual, declared) == []
 
 
-def test_the_declaration_names_each_split_the_brief_declares(declared: list[tuple[Unit, str, str, str]]) -> None:
-    sources = {source for _unit, source, _reason, _text in declared}
+def test_each_whole_file_knock_on_row_differs_only_in_chunk_names(
+    built: Path, declared: list[Row]
+) -> None:
+    """(b), on the real pair: the pre-PL4 build and this build, file by file, once chunk names are normalised."""
+    files = sorted({row.unit.file for row in declared if row.reason == "knock-on" and row.basis == "(b)"})
+    assert files == ["index.html", "sigma-export-image.esm.js"]
+    for file in files:
+        changed = chunk_name_difference(BASELINE_DIST, built, file)
+        assert changed == [], f"{file} is not knock-on: it differs in more than chunk names:\n" + "\n".join(changed)
+
+
+def test_the_declaration_names_each_split_the_brief_declares(declared: list[Row]) -> None:
+    sources = {row.source for row in declared}
     assert {
         "admin/needsYou/openings.ts",
         CASES,
@@ -249,15 +400,15 @@ def test_the_declaration_names_each_split_the_brief_declares(declared: list[tupl
         "ingest/runs/ExternalOrchestration.tsx",
     } <= sources
     # The units are in the index chunk; the page and one lazy chunk differ as whole files only because they name it.
-    assert {unit.file for unit, *_rest in declared} == {"index.js", "index.html", "sigma-export-image.esm.js"}
-    assert {unit.file for unit, _s, reason, _t in declared if reason == "knock-on" and _s == VIA_INDEX} == {
+    assert {row.unit.file for row in declared} == {"index.js", "index.html", "sigma-export-image.esm.js"}
+    assert {row.unit.file for row in declared if row.reason == "knock-on" and row.source == VIA_INDEX} == {
         "index.html",
         "sigma-export-image.esm.js",
     }
 
 
 def test_an_undeclared_change_to_one_unit_is_red(
-    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     planted = tmp_path / "dist"
     shutil.copytree(built, planted)
@@ -277,7 +428,7 @@ def test_an_undeclared_change_to_one_unit_is_red(
     # what the plant changed, and none of them is a declared unit.
     known = {unit for unit, _text in actual}
     new_rows = [unit for unit, _text in now if unit not in known]
-    assert not [unit for unit in new_rows if unit in {row[0] for row in declared}]
+    assert not [unit for unit in new_rows if unit in {row.unit for row in declared}]
     assert any(unit.file == "index.js" for unit in new_rows)
 
 
@@ -291,7 +442,7 @@ def planted_copy(built: Path, tmp_path: Path) -> Path:
     return planted
 
 
-def assert_red(planted: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]], want: str) -> None:
+def assert_red(planted: Path, actual: list[tuple[Unit, str]], declared: list[Row], want: str) -> None:
     now = read_units(BASELINE_DIST, planted)
     known = {unit for unit, _text in actual}
     new_rows = [(unit, text) for unit, text in now if unit not in known]
@@ -304,7 +455,7 @@ def assert_red(planted: Path, actual: list[tuple[Unit, str]], declared: list[tup
 
 
 def test_a_chunk_added_to_the_build_is_red(
-    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     planted = planted_copy(built, tmp_path)
     (planted / "assets" / "plantedChunk-AbCd1234.js").write_text("export const planted=1;\n", encoding="utf-8")
@@ -312,7 +463,7 @@ def test_a_chunk_added_to_the_build_is_red(
 
 
 def test_a_chunk_removed_from_the_build_is_red(
-    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     planted = planted_copy(built, tmp_path)
     next((planted / "assets").glob("*.woff2")).unlink()
@@ -325,7 +476,7 @@ def test_a_chunk_removed_from_the_build_is_red(
 
 
 def test_a_changed_asset_is_red(
-    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     planted = planted_copy(built, tmp_path)
     font = next((planted / "assets").glob("*.woff2"))
@@ -334,7 +485,7 @@ def test_a_changed_asset_is_red(
 
 
 def test_a_file_added_or_removed_by_name_is_red(
-    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    built: Path, tmp_path: Path, actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     added = planted_copy(built, tmp_path)
     (added / "planted.txt").write_text("a page asks for me by name\n", encoding="utf-8")
@@ -355,7 +506,7 @@ def test_the_listing_has_a_row_for_every_finding_of_compare(built: Path) -> None
     assert read_units(BASELINE_DIST, built)
 
 
-def test_a_declared_unit_left_unchanged_is_red(baseline: Path, declared: list[tuple[Unit, str, str, str]]) -> None:
+def test_a_declared_unit_left_unchanged_is_red(baseline: Path, declared: list[Row]) -> None:
     assert read_units(baseline, baseline) == []
     found = problems([], declared)
     assert len(found) == len(declared)
@@ -363,30 +514,33 @@ def test_a_declared_unit_left_unchanged_is_red(baseline: Path, declared: list[tu
 
 
 def test_one_declared_unit_that_does_not_differ_is_red(
-    actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     found = problems(actual[1:], declared)
     assert found == [f"declared but not differing: {actual[0][0].file} {actual[0][0].side} {actual[0][0].sha}"]
 
 
 def test_an_extra_declared_unit_is_red(
-    actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
-    extra = (Unit("index.js", "only after", "0" * 12), CASES, "split", "function x(){}")
+    extra = Row(Unit("index.js", "only after", "0" * 12), CASES, "split", "-", "function x(){}")
     assert problems(actual, [*declared, extra]) == ["declared but not differing: index.js only after " + "0" * 12]
 
 
 def test_a_unit_declared_twice_is_not_one_difference(
-    actual: list[tuple[Unit, str]], declared: list[tuple[Unit, str, str, str]]
+    actual: list[tuple[Unit, str]], declared: list[Row]
 ) -> None:
     found = problems(actual, [*declared, declared[0]])
     assert len(found) == 1 and found[0].startswith("declared but not differing")
 
 
 # ------------------------------------------------------------------------------- where the proof runs (no build)
+GOOD_ROW = "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\t-\tunit\n"
+
+
 def declared_for(folder: Path) -> str:
     """A declaration written against `folder`, in the shape `write` makes."""
-    return f"against: {folder_hash(folder)}\n" + "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\tunit\n"
+    return f"against: {folder_hash(folder)}\n" + GOOD_ROW
 
 
 def test_the_declaration_says_which_baseline_it_belongs_to() -> None:
@@ -413,7 +567,7 @@ def test_a_declaration_for_an_earlier_baseline_skips_and_retires_the_proof(tmp_p
         (folder / "index.js").write_text(content, encoding="utf-8")
     declared_older = declared_for(older)
     assert proof_gate(older, declared_older) is None
-    reason = proof_gate(newer, declared_older)  # the re-record: the folder now holds the new build
+    reason = proof_gate(newer, declared_older)  # once the conductor's rebaseline has put the new build in the folder
     assert reason is not None and "belongs to an earlier baseline" in reason
 
 
@@ -427,17 +581,233 @@ def test_the_folder_hash_reads_names_and_bytes(tmp_path: Path) -> None:
 
 
 def test_a_declaration_with_no_against_line_never_runs_the_proof(tmp_path: Path) -> None:
-    reason = proof_gate(tmp_path, "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\tunit\n")
+    reason = proof_gate(tmp_path, GOOD_ROW)
     assert reason is not None and "against" in reason
 
 
 def test_the_reasons_and_sources_are_well_formed() -> None:
-    good = "index.js\tonly after\t" + "a" * 12 + "\tx.ts\tsplit\tunit\n"
-    assert [unit for unit, *_rest in parse_declared(good)] == [Unit("index.js", "only after", "a" * 12)]
+    good = GOOD_ROW
+    assert [row.unit for row in parse_declared(good)] == [Unit("index.js", "only after", "a" * 12)]
     with pytest.raises(AssertionError, match="because"):
         parse_declared(good.replace("split", "because"))
     with pytest.raises(AssertionError, match="hash"):
         parse_declared(good.replace("a" * 12, "a" * 11))
+
+
+# ---------------------------------------------------------------------------------------------- the knock-on rule
+def test_a_knock_on_row_needs_its_basis_and_only_a_knock_on_row_has_one() -> None:
+    knock = "index.js\tonly after\t" + "a" * 12 + "\tinvestigation/CasePicker.tsx\tknock-on\t(a)\tunit\n"
+    assert [row.basis for row in parse_declared(knock)] == ["(a)"]
+    with pytest.raises(AssertionError, match="needs its basis"):
+        parse_declared(knock.replace("(a)", "-"))  # a knock-on row with neither (a) nor (b)
+    with pytest.raises(AssertionError, match="needs its basis"):
+        parse_declared(knock.replace("(a)", "(c)"))
+    with pytest.raises(AssertionError, match="expected"):
+        parse_declared(knock.replace("\t(a)", ""))  # the column is missing altogether
+    with pytest.raises(AssertionError, match="only a knock-on row has a basis"):
+        parse_declared(GOOD_ROW.replace("\t-\t", "\t(a)\t"))
+    with pytest.raises(AssertionError, match=r"\(b\) is for a built file"):
+        parse_declared(knock.replace("(a)", "(b)"))
+    whole = "index.html\tonly after\t" + "a" * 12 + f"\t{VIA_INDEX}\tknock-on\t(b)\t(whole file)\n"
+    assert [row.basis for row in parse_declared(whole)] == ["(b)"]
+    with pytest.raises(AssertionError, match=r"\(a\) for a source file"):
+        parse_declared(whole.replace("(b)", "(a)"))
+
+
+def test_every_knock_on_row_of_the_declaration_names_a_basis(declared: list[Row]) -> None:
+    knock_on = [row for row in declared if row.reason == "knock-on"]
+    assert len(knock_on) == 8, "the owner's eight rows: index.html and the sigma chunk both sides, CasePicker, RunsTab"
+    assert {row.basis for row in knock_on} == BASES
+    for row in declared:
+        if row.reason == "knock-on" and row.basis == "(a)":
+            assert (SRC / row.source).is_file(), f"{row.source} is not a workspace source file"
+
+
+def test_a_knock_on_source_row_has_only_import_lines_in_its_diff_against_main(declared: list[Row]) -> None:
+    """(a), on the real rows: the diff of each source file against where this tree left `main`."""
+    repo = repo_root()
+    base = merge_base(repo)
+    if base is None:
+        pytest.skip("no `main` ref here (GitHub's shallow checkout): rule (a) is checked where main exists, and was by the builder")
+    if slice_is_on_main(repo, base):
+        pytest.skip("this slice is already on main: rule (a) was checked at its merge, and a later change is not this slice's")
+    for source in sorted({row.source for row in declared if row.reason == "knock-on" and row.basis == "(a)"}):
+        changed = source_difference(repo, base, (SRC / source).relative_to(repo).as_posix())
+        assert changed == [], f"{source} is not knock-on: its diff against main changes more than import lines:\n" + "\n".join(changed)
+
+
+def test_the_source_rule_is_red_for_a_changed_line_that_is_not_an_import(tmp_path: Path) -> None:
+    """Planted in a real git repository, read the way the real rows are (`git show <base>:<file>` against the file)."""
+    git(tmp_path, "init", "-q")
+    file = tmp_path / "Picker.tsx"
+    original = 'import { a } from "./a";\nimport {\n  b,\n  c,\n} from "./b";\n\nexport const x = a + b + c;\n'
+    file.write_text(original, encoding="utf-8")
+    git(tmp_path, "add", "Picker.tsx")
+    git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "base")
+    base = git(tmp_path, "rev-parse", "HEAD").stdout.strip()
+    assert merge_base(tmp_path, "no-such-ref") is None
+    # Only imports change (one repointed, one multi-line import reshaped, a blank line gone): not a difference.
+    file.write_text('import { a } from "@pkg/shared";\nimport { b, c } from "./b";\nexport const x = a + b + c;\n', encoding="utf-8")
+    assert source_difference(tmp_path, base, "Picker.tsx") == []
+    # A non-import line changes with the imports: red, and it names the line.
+    file.write_text('import { a } from "@pkg/shared";\nimport { b, c } from "./b";\nexport const x = a + b + c + 1;\n', encoding="utf-8")
+    changed = source_difference(tmp_path, base, "Picker.tsx")
+    assert changed == ["-export const x = a + b + c;", "+export const x = a + b + c + 1;"]
+    # A line that only looks like an import (it has code in it) is a change too.
+    file.write_text(original.replace("\n\nexport", '\nimport "x"; run();\n\nexport'), encoding="utf-8")
+    assert source_difference(tmp_path, base, "Picker.tsx") == ['+import "x"; run();']
+
+
+def test_the_source_rule_retires_once_the_slice_is_on_main(tmp_path: Path) -> None:
+    git(tmp_path, "init", "-q")
+    (tmp_path / "a.ts").write_text("export const a = 1;\n", encoding="utf-8")
+    git(tmp_path, "add", "a.ts")
+    git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "before the slice")
+    before = git(tmp_path, "rev-parse", "HEAD").stdout.strip()
+    assert not slice_is_on_main(tmp_path, before, "marker.ts")
+    (tmp_path / "marker.ts").write_text("export const m = 1;\n", encoding="utf-8")
+    git(tmp_path, "add", "marker.ts")
+    git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "the slice merged")
+    after = git(tmp_path, "rev-parse", "HEAD").stdout.strip()
+    assert slice_is_on_main(tmp_path, after, "marker.ts")
+
+
+def synthetic_dist(root: Path, *, index_hash: str, lazy_hash: str, answer: int = 1, lazy_body: str = "a+1") -> Path:
+    """A small build in the shape Vite writes: a page, the index chunk, and a lazy chunk that imports from the index."""
+    (root / "assets").mkdir(parents=True)
+    (root / "index.html").write_text(f'<script type="module" src="/assets/index-{index_hash}.js"></script>\n', encoding="utf-8")
+    (root / "assets" / f"index-{index_hash}.js").write_text(f"export const answer={answer};export const f=(n)=>n+1;\n", encoding="utf-8")
+    (root / "assets" / f"lazy-{lazy_hash}.js").write_text(
+        f'import{{answer as a}}from"./index-{index_hash}.js";export const g=()=>{lazy_body};\n', encoding="utf-8"
+    )
+    return root
+
+
+def test_the_built_file_rule_is_green_for_a_chunk_name_alone_and_red_for_any_other_string(tmp_path: Path) -> None:
+    """(b), in the shape Vite writes: the page and a lazy chunk name the index chunk by its hashed name."""
+    before = synthetic_dist(tmp_path / "before", index_hash="AAAAAAAA", lazy_hash="11111111")
+    renamed = synthetic_dist(tmp_path / "renamed", index_hash="BBBBBBBB", lazy_hash="22222222")
+    for file in ("index.html", "lazy.js", "index.js"):
+        assert chunk_name_difference(before, renamed, file) == []  # only a chunk name (and references to it) differ
+    assert (before / "index.html").read_bytes() != (renamed / "index.html").read_bytes()  # the raw files do differ
+    # A string that is not a chunk name changes as well: red, and the diff is shown.
+    other = synthetic_dist(tmp_path / "other", index_hash="BBBBBBBB", lazy_hash="22222222", lazy_body="a+2")
+    changed = chunk_name_difference(before, other, "lazy.js")
+    assert changed and any("a+2" in line for line in changed)
+    # A string that merely looks like a chunk name, but is none of the build's files, is a difference too.
+    look = synthetic_dist(tmp_path / "look", index_hash="BBBBBBBB", lazy_hash="22222222")
+    (look / "assets" / "lazy-22222222.js").write_text(
+        'import{answer as a}from"./index-BBBBBBBB.js";export const g=()=>a+1;export const n="assets/other-ZZZZZZZZ.js";\n', encoding="utf-8"
+    )
+    assert chunk_name_difference(before, look, "lazy.js")
+    # The index chunk's own content changed: its rows are not knock-on, and the rule shows it.
+    edited = synthetic_dist(tmp_path / "edited", index_hash="BBBBBBBB", lazy_hash="22222222", answer=2)
+    assert chunk_name_difference(before, edited, "index.js")
+
+
+# ----------------------------------------------------------------------------- the rebaseline step (no real build)
+def run_rebaseline(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([node(), str(SCRIPT), "rebaseline", *args], cwd=CORE, capture_output=True, text=True, timeout=TIMEOUT, check=False)
+
+
+TESTS_OUTPUT = " Test Files  2 passed (2)\n      Tests  5 passed (5)\n"
+
+
+def declaration_for(listing: str) -> str:
+    """A declared file for a `units` listing, in the shape `write` makes (the script reads the first three columns)."""
+    body = []
+    for line in listing.splitlines():
+        file, side, sha, text = line.split("\t", 3)
+        body.append(f"{file}\t{side}\t{sha}\tx.ts\tsplit\t-\t{text}")
+    return "against: " + "0" * 64 + "\n# test\n" + "\n".join(body) + "\n"
+
+
+def rebaseline_scene(tmp_path: Path) -> tuple[Path, Path, Path, Path]:
+    old = synthetic_dist(tmp_path / "baseline" / "dist", index_hash="AAAAAAAA", lazy_hash="11111111")
+    new = synthetic_dist(tmp_path / "new", index_hash="BBBBBBBB", lazy_hash="22222222", answer=2)
+    tests = tmp_path / "tests.txt"
+    tests.write_text(TESTS_OUTPUT, encoding="utf-8")
+    return old, new, tests, tmp_path / "PL4_BASELINE.json"
+
+
+def test_the_rebaseline_step_refuses_an_undeclared_difference(tmp_path: Path) -> None:
+    old, new, tests, out = rebaseline_scene(tmp_path)
+    listing = subprocess.run([node(), str(SCRIPT), "units", str(old), str(new)], cwd=CORE, capture_output=True, text=True, check=True).stdout
+    assert listing.count("\n") >= 3  # the index chunk's unit both sides, and the lazy chunk and the page as knock-ons
+    lines = listing.splitlines()
+    declared_text = tmp_path / "declared.txt"
+    declared_text.write_text(declaration_for("\n".join(lines[1:])), encoding="utf-8")  # one differing unit left undeclared
+    before = folder_hash(old)
+    done = run_rebaseline("--baseline", str(old), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode != 0, done.stdout
+    assert "UNDECLARED" in done.stdout and "REFUSED" in done.stdout
+    assert folder_hash(old) == before, "a refused rebaseline must leave the baseline folder as it was"
+    assert not out.exists(), "a refused rebaseline must not write the record"
+    assert [p.name for p in old.parent.iterdir()] == ["dist"], "nothing is moved aside when it refuses"
+
+
+def test_the_rebaseline_step_replaces_the_folder_and_the_record_and_keeps_the_old_folder(tmp_path: Path) -> None:
+    old, new, tests, out = rebaseline_scene(tmp_path)
+    listing = subprocess.run([node(), str(SCRIPT), "units", str(old), str(new)], cwd=CORE, capture_output=True, text=True, check=True).stdout
+    declared_text = tmp_path / "declared.txt"
+    declared_text.write_text(declaration_for(listing), encoding="utf-8")
+    old_hash, new_hash = folder_hash(old), folder_hash(new)
+    assert old_hash != new_hash
+    done = run_rebaseline("--baseline", str(old), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "UNDECLARED" not in done.stdout and "declared" in done.stdout
+    assert folder_hash(old) == new_hash, "the new build is in the baseline's place"
+    kept = [p for p in old.parent.iterdir() if p.name.startswith("dist-before-")]
+    assert len(kept) == 1 and folder_hash(kept[0]) == old_hash, "the old folder is kept, as a dated sibling, not deleted"
+    assert out.is_file() and '"normalised_hash"' in out.read_text(encoding="utf-8")
+    # The proof's own gate then reads the new folder as another baseline: this proof retires.
+    reason = proof_gate(old, f"against: {old_hash}\n" + GOOD_ROW)
+    assert reason is not None and "belongs to an earlier baseline" in reason
+
+
+def test_the_rebaseline_step_is_the_one_this_file_names() -> None:
+    doc = __doc__ or ""
+    assert "node scripts/dist_compare.mjs rebaseline --declared ../OspreyFlow_Build/tests/fixtures/pl4d3d_declared_units.txt" in doc
+    assert "exits non-zero" in doc and "run by the conductor at merge" in doc
+    assert '"rebaseline"' in SCRIPT.read_text(encoding="utf-8")
+    assert "OspreyFlow_Build" not in SCRIPT.read_text(encoding="utf-8"), "Core's script must not name the Build folder"
+
+
+def test_the_rebaseline_step_needs_the_declaration_named_and_touches_nothing_without_it(tmp_path: Path) -> None:
+    old, new, tests, out = rebaseline_scene(tmp_path)
+    before = folder_hash(old)
+    done = run_rebaseline("--baseline", str(old), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode != 0 and "--declared" in done.stdout
+    assert folder_hash(old) == before and not out.exists() and [p.name for p in old.parent.iterdir()] == ["dist"]
+
+
+def test_the_rebaseline_step_refuses_a_declared_unit_that_does_not_differ(tmp_path: Path) -> None:
+    old, new, tests, out = rebaseline_scene(tmp_path)
+    listing = subprocess.run([node(), str(SCRIPT), "units", str(old), str(new)], cwd=CORE, capture_output=True, text=True, check=True).stdout
+    declared_text = tmp_path / "declared.txt"
+    declared_text.write_text(declaration_for(listing) + "index.js\tonly after\t" + "0" * 12 + "\tx.ts\tsplit\t-\tfunction z(){}\n", encoding="utf-8")
+    before = folder_hash(old)
+    done = run_rebaseline("--baseline", str(old), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
+    assert done.returncode != 0 and "declared but not differing" in done.stdout and "REFUSED" in done.stdout, done.stdout
+    assert folder_hash(old) == before and not out.exists() and [p.name for p in old.parent.iterdir()] == ["dist"]
+
+
+def test_the_rebaseline_step_builds_the_checked_out_tree_and_writes_the_recorded_hash(baseline: Path, tmp_path: Path) -> None:
+    """The real path: no `--dist`, so it builds this tree; on a copy of the baseline, the declaration the slice made."""
+    import json
+
+    copy = tmp_path / "PL4a-baseline" / "dist"
+    shutil.copytree(baseline, copy)
+    tests = tmp_path / "tests.txt"
+    tests.write_text(TESTS_OUTPUT, encoding="utf-8")
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline("--baseline", str(copy), "--declared", str(DECLARED), "--tests", str(tests), "--out", str(out))
+    assert done.returncode == 0, done.stdout[-3000:] + done.stderr[-2000:]
+    recorded = json.loads((CORE / "apps" / "workspace" / "PL4_BASELINE.json").read_text(encoding="utf-8"))
+    assert json.loads(out.read_text(encoding="utf-8"))["normalised_hash"] == recorded["normalised_hash"]
+    reason = proof_gate(copy, DECLARED.read_text(encoding="utf-8"))
+    assert reason is not None and "belongs to an earlier baseline" in reason
+    assert [p.name for p in copy.parent.iterdir() if p.name.startswith("dist-before-")], "the old build is kept"
 
 
 if __name__ == "__main__":
