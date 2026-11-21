@@ -1083,11 +1083,12 @@ export interface AppearanceConfig {
   banner_text?: BannerText;
 }
 /**
- * Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the server-rendered pages
- * (`apps/pages`, the Ingest Studio's frame and Releases first). Off by default, and turned on for one deployment at a
- * time, by the owner, in that deployment's own `osprey.yaml`; nothing else turns it on (not a profile, a brand or a
- * release). Nothing reads the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are theirs,
- * and until they do a render is exactly what it was.
+ * Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the
+ * server-rendered pages (`apps/pages`, the Ingest Studio's frame and Releases first). Off by
+ * default, and turned on for one deployment at a time, by the owner, in that deployment's own
+ * `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
+ * the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
+ * theirs, and until they do a render is exactly what it was.
  */
 export interface PagesConfig {
   enabled?: Enabled;

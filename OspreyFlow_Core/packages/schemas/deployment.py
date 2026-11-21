@@ -1732,11 +1732,12 @@ class AppearanceConfig(BaseModel):
 
 
 class PagesConfig(BaseModel):
-    """Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the server-rendered pages
-    (`apps/pages`, the Ingest Studio's frame and Releases first). Off by default, and turned on for one deployment at a
-    time, by the owner, in that deployment's own `osprey.yaml`; nothing else turns it on (not a profile, a brand or a
-    release). Nothing reads the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are theirs,
-    and until they do a render is exactly what it was."""
+    """Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the
+    server-rendered pages (`apps/pages`, the Ingest Studio's frame and Releases first). Off by
+    default, and turned on for one deployment at a time, by the owner, in that deployment's own
+    `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
+    the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
+    theirs, and until they do a render is exactly what it was."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -1752,7 +1753,8 @@ class PagesConfig(BaseModel):
     @field_validator("enabled", mode="before")
     @classmethod
     def _true_or_false(cls, value: object) -> object:
-        # `yes`, `on`, a quoted "true" and 1 are not booleans here: a setting that turns a service on is not guessed at.
+        # `yes`, `on`, a quoted "true" and 1 are not booleans here: a setting that turns a service
+        # on is not guessed at.
         if not isinstance(value, bool):
             raise ValueError("pages.enabled must be true or false")
         return value

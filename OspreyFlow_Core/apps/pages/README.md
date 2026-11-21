@@ -31,3 +31,22 @@ only, nothing outside the folder. A production start refuses to run without the 
 
 The Default tree never loads or serves the GOV.UK tree's face (`packages/design/fonts.json` says which entries carry a
 condition): the build leaves the GOV.UK brand's rules out of the stylesheet and fails if its face or its files arrive another way.
+
+## The Studio pages (slice IS5a)
+
+`/studio` is the Ingest Studio's frame and `/studio/releases` its Releases screen, on the Default tree. The frame is the layout
+partial every Studio page extends (`tree-default/studio/frame.njk`: the dataset switch, the help panel, the readiness strip, the
+Needs-you reminder, the five places as links); a page fills its `place` block. Their words and plain helpers are
+`server/views/studioWords.ts`, their routes `server/studio.ts`.
+
+- **Calls to the Conduit** are the person's own: `server/conduit.ts` sends the bearer from `accessTokenFor` to the forwarder's
+  address and builds every header itself. The Conduit authorises each route; the page's checks of a right are words only.
+- **A release folder** read from a form is held by `server/staging.ts` in the session store, under a random token the page's
+  forms carry in a hidden field: half an hour at most, never past the session, 2 MB, three at once, removed after the import and
+  on sign-out. It is never in a page, a URL, a cookie or a log line.
+- **An upload page** says `upload: true` in its `PageModule`; its handler reads the form with `server/upload.ts`, which checks the
+  anti-forgery token as the form's first part before any file is read.
+- **The keyboard runner** is `apps/pages/keyboard/` (`npm run test:keyboard --workspace apps/pages`): Playwright against this
+  service started in the test with a fake Conduit, with scripts and without. It resolves `@playwright/test` from the workspace's
+  hoisted copy.
+
