@@ -547,6 +547,176 @@ def test_a_service_running_an_image_built_here_is_never_moved_to_a_registry(repo
     assert after["api"]["image"] == "osprey/api:local"
 
 
+# --- the model gateway: the publisher's image, until this checkout builds OspreyFlow's own ---------
+
+#: The gateway's image in every deployment rendered before PL13b, built from source or not: the
+#: publisher's, by digest (the one the render named, in `harness/render.py`, until 21 November 2026).
+_PUBLISHERS_GATEWAY = (
+    "ghcr.io/berriai/litellm@sha256:"
+    "d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b"
+)
+
+
+def _gateway_before_pl13b(repo: Path, *, from_source: bool) -> Path:
+    """A deployment as `apply` left it before the gateway became our own image: the render's own
+    compose file and lock, with the gateway's stanza as the old render wrote it (the publisher's
+    image by digest, no `build`, no `env_file`; the rest of the stanza is what the new render
+    gives it, which `test_own_gateway_image.py` holds equal) and an operator's own setting beside
+    the rest. Mirrors `apply --build`: the copied `osprey.yaml` carries no `source_path`, so the
+    mode is read from the Conduit's own `build`."""
+    import yaml
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    out = repo / "deploy" / "generated" / "local-lite"
+    for dockerfile in (
+        "apps/workspace/Dockerfile",
+        "services/api/Dockerfile",
+        "services/ingest/Dockerfile",
+        "services/ner/Dockerfile",
+        "deploy/litellm/Dockerfile",
+    ):
+        (repo / dockerfile).parent.mkdir(parents=True, exist_ok=True)
+        (repo / dockerfile).write_text("FROM scratch\n", encoding="utf-8")
+    plain = OspreyConfig()
+    (out / "osprey.yaml").write_text(
+        yaml.safe_dump(plain.model_dump(mode="json"), sort_keys=False), encoding="utf-8"
+    )
+    config = (
+        plain.model_copy(
+            update={"components": plain.components.model_copy(update={"source_path": str(repo)})}
+        )
+        if from_source
+        else plain
+    )
+    artefacts = render(config, allow_unpinned=True).artefacts
+    document = yaml.safe_load(artefacts["compose.yaml"])
+    gateway = document["services"]["litellm"]
+    assert "env_file" not in gateway
+    assert ("build" in gateway) is from_source
+    gateway.pop("build", None)
+    gateway["image"] = _PUBLISHERS_GATEWAY
+    gateway["environment"]["OPERATOR_SETTING"] = "kept"
+    text = artefacts["compose.yaml"]
+    (out / "compose.yaml").write_text(
+        text[: text.index("\nname:") + 1]
+        + yaml.safe_dump(document, sort_keys=False, default_flow_style=False),
+        encoding="utf-8",
+    )
+    lock = yaml.safe_load(artefacts["versions.lock"])
+    for row in lock["images"]:
+        if row["service"] == "litellm":
+            row.clear()
+            row.update(
+                service="litellm",
+                repository="ghcr.io/berriai/litellm",
+                tag="",
+                digest=_PUBLISHERS_GATEWAY.partition("@")[2],
+                source="reference",
+            )
+    (out / "versions.lock").write_text(yaml.safe_dump(lock, sort_keys=False), encoding="utf-8")
+    required = sorted(set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?", text)))
+    with (out / "deployment.env").open("a", encoding="utf-8") as env:  # as applied: every secret
+        env.writelines(f"{name}=held-{name.lower()}\n" for name in required)
+    return out
+
+
+def test_a_deployment_built_from_source_moves_its_gateway_to_the_one_we_build(repo: Path) -> None:
+    """The finding of PL13b's round 3: `refresh` changed an existing service only when the render
+    pulls it (`_pins_moved` skips every service with a `build`), and added only services the
+    deployment lacks, so `git pull` and `ospreyflow start --build` left every deployment built from
+    source on the publisher's image, with the commercial folder, for ever. The stanza becomes the
+    render's own (our image and its `build`), the operator's settings and the rest stay, and the
+    gateway is given no `env_file`, which would hand it the whole deployment's secrets."""
+    import yaml
+
+    out = _gateway_before_pl13b(repo, from_source=True)
+    before = yaml.safe_load((out / "compose.yaml").read_text())["services"]
+    secrets_before = (out / "deployment.env").read_text()
+
+    recorder = Recorder()
+    refresh.refresh(repo, run=recorder, register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())["services"]
+    gateway = after["litellm"]
+    assert gateway["image"] == "osprey/litellm:local"
+    assert gateway["build"] == {"context": "../../../deploy/litellm", "dockerfile": "Dockerfile"}
+    assert "env_file" not in gateway
+    assert gateway["environment"]["OPERATOR_SETTING"] == "kept"
+    for key in set(before["litellm"]) - {"image", "build"}:
+        assert gateway[key] == before["litellm"][key], key
+    for name, service in before.items():
+        if name not in {"litellm", "ollama-models"}:  # the model step brings its pull up to date
+            assert after[name] == service, name
+    assert "berriai" not in (out / "compose.yaml").read_text()
+    # The build step that follows the files builds it: it is a service with a `build` now.
+    assert "build" in _subcommands(recorder.calls)
+    lock = yaml.safe_load((out / "versions.lock").read_text())["images"]
+    (row,) = [r for r in lock if r["service"] == "litellm"]
+    assert row["repository"] == "osprey/litellm"
+    assert row["digest"] == row["source"] == "local-build"
+    assert row["dockerfile"] == "Dockerfile" and row["build_context"].endswith("deploy/litellm")
+    assert "berriai" not in (out / "versions.lock").read_text()
+    # No secret is written or changed by it.
+    env_after = (out / "deployment.env").read_text().splitlines()
+    assert set(secrets_before.splitlines()) <= set(env_after)
+
+
+def test_moving_the_gateway_twice_changes_nothing_the_second_time(repo: Path) -> None:
+    out = _gateway_before_pl13b(repo, from_source=True)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    compose_once = (out / "compose.yaml").read_text()
+    assert "image: osprey/litellm:local" in compose_once  # it moved, so this is not a no-op
+    lock_once = (out / "versions.lock").read_text()
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    assert (out / "compose.yaml").read_text() == compose_once
+    assert (out / "versions.lock").read_text() == lock_once
+
+
+def test_a_gateway_already_built_here_keeps_an_operators_edit(repo: Path) -> None:
+    """Only a gateway that is not built here is converted: one already ours is the operator's."""
+    import yaml
+
+    out = _gateway_before_pl13b(repo, from_source=True)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    document = yaml.safe_load((out / "compose.yaml").read_text())
+    document["services"]["litellm"]["environment"]["OPERATOR_SETTING"] = "edited"
+    text = (out / "compose.yaml").read_text()
+    (out / "compose.yaml").write_text(
+        text[: text.index("\nname:") + 1] + yaml.safe_dump(document, sort_keys=False)
+    )
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    after = yaml.safe_load((out / "compose.yaml").read_text())["services"]["litellm"]
+    assert after["environment"]["OPERATOR_SETTING"] == "edited"
+    assert after["image"] == "osprey/litellm:local"
+
+
+def test_a_deployment_installed_from_a_release_moves_its_gateway_to_our_registry_image(
+    repo: Path,
+) -> None:
+    """The pull-mode half of the same move: no `build`, the image the render names."""
+    import yaml
+    from harness.render import load_config, render
+
+    out = _gateway_before_pl13b(repo, from_source=False)
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    wanted = yaml.safe_load(
+        render(load_config(out / "osprey.yaml"), allow_unpinned=True).artefacts["compose.yaml"]
+    )["services"]["litellm"]
+    gateway = yaml.safe_load((out / "compose.yaml").read_text())["services"]["litellm"]
+    assert gateway["image"] == wanted["image"]
+    assert gateway["image"].startswith("ghcr.io/ospreyflow/litellm:")
+    assert "build" not in gateway and "env_file" not in gateway
+    assert gateway["environment"]["OPERATOR_SETTING"] == "kept"
+
+
 # --- a deployment rendered before the internal network (ADR-114 Amendment 7) ------------------
 
 
