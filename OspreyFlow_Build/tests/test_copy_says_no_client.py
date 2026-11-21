@@ -14,6 +14,12 @@ word, said to an operator or an orchestrator, and is not looked for. Nor is the 
 replay of LiteLLM's own measured words (`stand_in.py`).
 
 Shown red by `test_the_check_finds_each_shape_the_words_took`, planted in today's shapes.
+
+**The pages service's copy** (slice IS5a0; the Glass's own copy is held by the workspace's vitest files, which this slice
+may not touch): the templates and modules of `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views`
+are read for the same words by `pages_copy_hits`, templates with their `{# #}` comments blanked and modules with their
+comments blanked, so a note to a developer is not copy. `test_pages_copy_names_no_client_or_unsettled_setting` holds the
+real tree, and `tests/glass_trees/test_pages_foundation.py` shows each root flagged with a planted line.
 """
 
 from __future__ import annotations
@@ -23,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from tools.ui_words_check import strip_comments
 
 from tests.test_copy_says_pipeline import CORE, SCANNED, _modules, found
 
@@ -34,6 +41,29 @@ WORDS = re.compile(
 #: A dependency's own words, replayed as measured: not ours to say.
 REPLAYED = {CORE / "packages" / "adapters" / "model_litellm" / "stand_in.py"}
 WEIGHTS = CORE / "packages" / "ontology" / "weights"
+
+
+#: The pages service's copy, relative to the product folder: the Default tree's templates, the client modules, and the
+#: server's own views (ADR-152 decision 6).
+PAGES_COPY_ROOTS = ("apps/pages/tree-default", "apps/pages/modules", "apps/pages/server/views")
+
+
+def pages_copy_hits(core: Path = CORE, word: re.Pattern[str] = WORDS) -> list[str]:
+    """`path:line: text` for each line of the pages' copy that holds `word`, paths relative to `core`, sorted."""
+    hits: list[str] = []
+    for root in PAGES_COPY_ROOTS:
+        for path in sorted((core / root).rglob("*")):
+            if path.suffix not in {".njk", ".ts", ".html"} or not path.is_file() or ".test." in path.name:
+                continue
+            text = path.read_text(encoding="utf-8")
+            if path.suffix == ".ts":
+                text = strip_comments(text)
+            else:
+                text = re.sub(r"\{#.*?#\}", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
+            for number, line in enumerate(text.splitlines(), start=1):
+                if word.search(line):
+                    hits.append(f"{path.relative_to(core).as_posix()}:{number}: {line.strip()}")
+    return hits
 
 
 def _strings(value: Any) -> list[str]:
@@ -112,3 +142,23 @@ def refuse() -> None:
     scale = "client"
 '''
     assert found(Path("clean.py"), clean, word=WORDS) == []
+
+
+def test_pages_copy_names_no_client_or_unsettled_setting() -> None:
+    assert pages_copy_hits() == []
+
+
+def test_the_pages_walker_finds_each_shape_and_leaves_a_comment_alone(tmp_path: Path) -> None:
+    core = tmp_path / "core"
+    for root in PAGES_COPY_ROOTS:
+        (core / root).mkdir(parents=True)
+    (core / "apps/pages/tree-default/a.njk").write_text(
+        "{# the client's note to a developer #}\n<p>Its terms are to be confirmed.</p>\n", encoding="utf-8"
+    )
+    (core / "apps/pages/modules/a.ts").write_text(
+        "// the client's comment\nexport const note = `TBC`;\n", encoding="utf-8"
+    )
+    assert [h.split(": ")[0] for h in pages_copy_hits(core)] == [
+        "apps/pages/tree-default/a.njk:2",
+        "apps/pages/modules/a.ts:2",
+    ]

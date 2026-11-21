@@ -23,6 +23,12 @@ lived. The roots the gates are really configured with are not lost by that:
 `test_each_gate_s_roots_hold_the_three_files` shows the three files are inside the real roots of all
 three, by name, and the plants are written in the real files' own folder layout.
 
+**The pages roots (slice IS5a0).** `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views` hold the
+Default tree's templates and the client modules. The same four gates read them, and so does the copy walker of
+`tests/test_copy_says_no_client.py`: `test_each_gate_names_the_pages_roots` holds each gate's own list to the names
+`tools.layout.PAGES_COPY_ROOTS` gives, so a gate that drops one is red; `tests/glass_trees/test_pages_foundation.py`
+holds that each gate reads a violation planted under each root.
+
 This file walks no part of the repository by `git ls-files`: it reads
 `OspreyFlow_Core/packages/design/` only (copied, never written).
 """
@@ -113,3 +119,25 @@ def test_the_no_branches_check_reads_packages_design(
     planted.write_text('.planted::after {\n  content: "Branch to a case";\n}\n', encoding="utf-8")
     assert no_branches_check.main() == 1
     assert f"packages/design/{PLANT}:2:" in capsys.readouterr().out
+
+
+PAGES_ROOTS = ("apps/pages/tree-default", "apps/pages/modules", "apps/pages/server/views")
+
+
+def test_each_gate_names_the_pages_roots() -> None:
+    """A gate's reach cannot fall below the roots now named: each gate's own list holds all three, by name."""
+    from tools import colour_drift_check, layout
+
+    from tests.test_copy_says_no_client import PAGES_COPY_ROOTS
+
+    assert tuple(layout.PAGES_COPY_ROOTS) == PAGES_ROOTS
+    assert tuple(PAGES_COPY_ROOTS) == PAGES_ROOTS
+    named = {
+        "design_check": {Path(p).relative_to(CORE).as_posix() for p in design_check.SCANNED},
+        "ui_words_check": {p.relative_to(CORE).as_posix() for p in ui_words_check.PAGES_ROOTS},
+        "colour_drift_check": {root.relative_to(CORE).as_posix() for root, _ in colour_drift_check.SCANNED},
+        "no_branches_check": set(no_branches_check.SCANNED),
+    }
+    for gate, roots in named.items():
+        assert set(PAGES_ROOTS) <= roots, f"{gate} does not read {sorted(set(PAGES_ROOTS) - roots)}"
+

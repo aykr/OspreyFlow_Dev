@@ -36,6 +36,9 @@
     "apps/harness/keyboard/**/*.tsx",
     "apps/pages/server/**/*.ts",
     "apps/pages/test/**/*.ts",
+    // The pages' client modules (ADR-152 decision 6) run in a browser: the DOM library and the bundler's resolution, as the
+    // workspace's code has. `apps/pages/scripts/assets.mjs` bundles them; this reads their types, imports of the shared package included.
+    "apps/pages/modules/**/*.ts",
     // The shared package (ADR-152 decision 6): plain TypeScript, kept once for both front ends.
     // Every extension a source file may have: a file the compiler never reads is a file whose imports nothing checks.
     "packages/glass-shared/src/**/*.ts",

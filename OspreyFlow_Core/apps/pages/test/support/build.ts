@@ -1,6 +1,8 @@
 import type { Express, Router } from "express";
 
 import { createApp } from "../../server/app.js";
+import type { AssetManifest } from "../../server/assets.js";
+import type { PageModule } from "../../server/pages.js";
 import type { CodeFlowProvider, IdentityProvider } from "../../server/identity.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import type { SessionStore } from "../../server/sessionStore.js";
@@ -32,6 +34,14 @@ export interface BuildOptions {
   codeFlow?: CodeFlowProvider;
   /** The app's clock, when the code flow must read the same one. */
   clock?: TestClock;
+  /** The built assets (the folder `/assets/pages/*` serves and the names the layout links to). */
+  assets?: { dir: string; manifest: AssetManifest };
+  /** Pages in the route-module convention (ADR-152 decision 6), registered behind the session and the anti-forgery check. */
+  pages?: readonly PageModule[];
+  /** Extra template folders, searched after the tree's: the foundation's throw-away fixture page lives in one. */
+  viewDirs?: readonly string[];
+  /** The `FUNCTIONS.yaml` row ids a page may name, when a test wants its own list instead of the real file's. */
+  functionIds?: ReadonlySet<string>;
 }
 
 /** The real app factory, with the in-memory store that refuses what Valkey refuses and a fake provider. */
@@ -44,6 +54,10 @@ export function build(options: BuildOptions = {}): Built {
     ...(options.codeFlow ? { codeFlow: options.codeFlow } : {}),
     clock,
     sessionSecret: options.sessionSecret ?? TEST_SESSION_SECRET,
+    ...(options.assets ? { assets: options.assets } : {}),
+    ...(options.pages ? { pages: options.pages } : {}),
+    ...(options.viewDirs ? { viewDirs: options.viewDirs } : {}),
+    ...(options.functionIds ? { functionIds: options.functionIds } : {}),
     extraRoutes: (router) => {
       router.all("/_test/echo", (_req, res) => {
         res.status(200).type("text/plain").send("accepted");
