@@ -11,6 +11,14 @@ The verifier checks every changed sentence against DC1a's table and has held the
 
 **Recommendation: one add-round line.** All four are concrete and small (two scene strings, two lines of wording and a test requirement, a file). If you add it, round 5 fixes them and also makes the test require the corrected words in every place the claim appears, so a fifth miss cannot pass.
 
+## 9. Slice D2 merged; which stage 4 builds it unblocks (your addition 2): partly, and one question
+
+D2 (`74a983e`) moved the ingest, sources, releases clients. **`admin/api.ts` was left in the workspace** (the builder stopped at it because it imports `help/roles.ts`, which imports `shell/placesByRole.json` and has about ten importers, several React), so the "admin clients" the ADR names are not all in the package yet. Scout of the code (read, not measured):
+- **Ready now (clients already in the package):** IS3 (the read-only dataset map: its data hook is in the package), IS5's Releases, Sources, Register and Screening lists, Publish, Profile and Checks screens.
+- **Not ready on D1 and D2 alone, against your reading:** **IS2** (Model step: the link-type and proposal clients `linktypes/*` are in D3b); **IS5's Runs grid** (needs `boards/promotionsApi`, D3b; and `ExternalOrchestration.tsx` makes four inline fetch calls with no client module, D3c); **IS5 Verify** (`ontology/schema`, which needs E's types; it waits for GG2 in any case); **AD3 and AD4** (not described in any record I can read, and `admin/api.ts` is still in the workspace).
+- **GR2 to GR4 and RM1** need D3a (reports, export, alerts, patterns clients) and D3b (`analytics/api`); GR2's Home needs `home/homeData.ts` and `home/guides.ts`, which are mixed with React/the DOM and need a split first (D3c).
+**Question:** (a) **cut D3c to include moving `help/roles.ts` and `shell/placesByRole.json` and then `admin/api.ts`** (this touches AD1a's generated `placesByRole.json`, which your earlier ruling lets AD1a change once; I recommend D3c does it after AD1a is settled, so the two never edit it at once), or (b) leave `admin/api.ts` in the workspace and have the Admin pages import it from there until E. **D3 was cut three ways (D3a reports/alerts/patterns/export, D3b link/inspector/views/boards/others, D3c the files needing a split first, then the stray `export/api.ts.bak`) on the scout's measure: the rest of D3 is 2.5 times D2.** Nothing the ADR names is dropped.
+
 ## 8. DC1c (the README and four guides) is in round 3 of 4 at the time of writing; PL4d2 in round 4 of 4; LR1 on its third merge attempt
 
 No action needed from you yet. If DC1c or PL4d2 stop at the limit they are added here.
