@@ -31,12 +31,16 @@ reference cannot be worked back to a claim, or matched to a token, without the d
 **Where the secret and "seen" are kept.** In Valkey, which every replica shares and which outlives
 a Conduit's restart (the working set already depends on it): the secret under
 `sign-in-events:secret` (`SET … NX`, so the first replica to ask makes it and the rest read it;
-no expiry; if Valkey is wiped it is made again, and the cost is one more row for each live session,
-never a lost one) and each session under `sign-in-events:seen:<reference>` (`SET … NX EX`, the
-atomic "first time": exactly one replica wins) for the token's remaining life plus a minute, and
-for a `sid` or `auth_time` session at least twelve hours (the session outlives its tokens), never
-more than a day. A small per-process memory in front of it spares Valkey a round trip for every
-request of a session already seen.
+no expiry; read on every use and never held in a process, for Valkey has no persistence: when it is
+wiped the first replica to ask makes a new one and every replica, whichever held the old one, keys
+with it from its next request, so there is one reference for a session on every replica. The cost of
+a wipe is one more row for each live session, as its "seen" keys go too, and never a lost one; a
+request that read the old secret an instant before the wipe may write one row more) and each
+session under `sign-in-events:seen:<reference>` (`SET … NX EX`, the atomic "first time": exactly one
+replica wins) for the token's remaining life plus a minute, and for a `sid` or `auth_time` session
+at least twelve hours (the session outlives its tokens), never more than a day. A small per-process
+memory of references in front of it spares the "seen" write for every request of a session already
+seen (the secret is still read, as above).
 
 **When a store is unreachable: fail open for the request, loudly.** The owner's rule for audit
 writes is fail closed, because an audit write there is the record of what the person is doing; the
@@ -186,7 +190,6 @@ class SignInWatch:
         self._audit = audit
         self._clock = clock
         self._store_timeout = store_timeout
-        self._secret: bytes | None = None
         #: reference -> until when this process knows the session was seen.
         self._local: dict[str, float] = {}
         self._last_warning: float | None = None
@@ -201,13 +204,19 @@ class SignInWatch:
         return await asyncio.wait_for(reply(call), timeout=self._store_timeout)
 
     async def _deployment_secret(self) -> bytes:
-        if self._secret is None:
+        """The deployment's secret, read from Valkey on every use and never held in this process:
+        Valkey keeps nothing across a restart of its container, and a replica that went on keying
+        with a secret Valkey had lost would key a session differently from the replicas that made
+        the new one (a row for each, and references that no longer tie a session's rows together).
+        One `GET` in the steady state; only when the secret is missing is it made (`SET … NX`, so
+        that of two replicas asking at once one wins and both read the winner's)."""
+        held = await self._store(self._valkey.get(_SECRET_KEY))
+        if not held:
             await self._store(self._valkey.set(_SECRET_KEY, secrets.token_hex(32), nx=True))
             held = await self._store(self._valkey.get(_SECRET_KEY))
             if not held:
                 raise LookupError("the deployment's secret could not be had")
-            self._secret = held if isinstance(held, bytes) else str(held).encode()
-        return self._secret
+        return held if isinstance(held, bytes) else str(held).encode()
 
     def _reference(
         self, secret: bytes, principal: Principal, claims: dict[str, Any], session: tuple[str, str]
