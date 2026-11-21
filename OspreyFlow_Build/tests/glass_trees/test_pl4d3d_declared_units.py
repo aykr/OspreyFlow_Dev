@@ -816,13 +816,16 @@ def test_the_rebaseline_step_builds_the_checked_out_tree_and_writes_the_recorded
 
 
 # ----------------------------------------------------------------------------- the guard: only the conductor's merge may replace the real folder
-def run_rebaseline_at_default(home: Path, *args: str) -> subprocess.CompletedProcess[str]:
+def run_rebaseline_at_default(home: Path, *args: str, baseline_dist: Path | None = None) -> subprocess.CompletedProcess[str]:
     """Run `rebaseline` with no `--baseline`, so the folder it means is the script's own default.
 
-    The default is derived from `$HOME` (and `PL4_BASELINE_DIST` is removed), so a scratch `HOME` makes the default a scratch
-    folder: this plants the real default's shape without ever naming the Mac's real folder (which no test may touch).
+    The default is derived from `$HOME` (and `PL4_BASELINE_DIST` is removed unless `baseline_dist` sets it), so a scratch `HOME`
+    makes the real default path a scratch folder: this plants the real default's shape without ever naming the Mac's real folder
+    (which no test may touch).
     """
     env = {k: v for k, v in os.environ.items() if k != "PL4_BASELINE_DIST"} | {"HOME": str(home)}
+    if baseline_dist is not None:
+        env["PL4_BASELINE_DIST"] = str(baseline_dist)
     return subprocess.run([node(), str(SCRIPT), "rebaseline", *args], cwd=CORE, capture_output=True, text=True, timeout=TIMEOUT, check=False, env=env)
 
 
@@ -859,6 +862,35 @@ def test_the_rebaseline_step_refuses_an_explicit_baseline_that_is_the_default_fo
     done = run_rebaseline_at_default(home, "--baseline", str(old), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out))
     assert done.returncode != 0 and "--conductor-merge" in done.stdout + done.stderr, done.stdout
     assert folder_hash(old) == before and not out.exists()
+
+
+def test_the_guard_still_protects_the_real_folder_when_pl4_baseline_dist_names_another(tmp_path: Path) -> None:
+    """Planted (the round-7 finding): `PL4_BASELINE_DIST` points at a scratch folder, `--baseline` names the real path.
+
+    The real folder is the fixed `~/dev/osprey-acceptance/PL4a-baseline/dist`; the environment variable may add a second
+    protected folder but must never move the protection off the real one.
+    """
+    home, old, new, declared_text, tests = default_scene(tmp_path)
+    elsewhere = synthetic_dist(tmp_path / "elsewhere" / "dist", index_hash="AAAAAAAA", lazy_hash="11111111")
+    before = folder_hash(old)
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline_at_default(home, "--baseline", str(old), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out), baseline_dist=elsewhere)
+    assert done.returncode != 0 and "--conductor-merge" in done.stdout + done.stderr, done.stdout
+    assert folder_hash(old) == before and not out.exists(), "a refused rebaseline must touch nothing"
+    assert [p.name for p in old.parent.iterdir()] == ["dist"], "nothing is moved aside when it refuses"
+
+
+def test_the_guard_also_protects_the_folder_pl4_baseline_dist_names(tmp_path: Path) -> None:
+    """The folder the variable names is the proof's baseline on that machine: it is guarded too, and passes with the flag."""
+    home, _, new, declared_text, tests = default_scene(tmp_path)
+    named = synthetic_dist(tmp_path / "named" / "dist", index_hash="AAAAAAAA", lazy_hash="11111111")
+    before = folder_hash(named)
+    out = tmp_path / "PL4_BASELINE.json"
+    done = run_rebaseline_at_default(home, "--baseline", str(named), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out), baseline_dist=named)
+    assert done.returncode != 0 and "--conductor-merge" in done.stdout + done.stderr, done.stdout
+    assert folder_hash(named) == before and not out.exists()
+    done = run_rebaseline_at_default(home, "--conductor-merge", "--baseline", str(named), "--declared", str(declared_text), "--dist", str(new), "--tests", str(tests), "--out", str(out), baseline_dist=named)
+    assert done.returncode == 0, done.stdout + done.stderr
 
 
 def test_the_rebaseline_step_replaces_the_default_folder_with_the_conductors_flag(tmp_path: Path) -> None:
