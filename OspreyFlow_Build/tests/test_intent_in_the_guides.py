@@ -236,14 +236,25 @@ def overstated_lines(body: str) -> list[str]:
     that does not say what is outside the gate."""
     problems: list[str] = []
     privacy = bullet(body, "Privacy control").lower()
-    if privacy and not (("meant to" in privacy or "aim" in privacy) and ("gap" in privacy or "read side" in privacy)):
-        problems.append("privacy control is stated as fact, with no read-side gap named")
+    if privacy and not ("gap" in privacy or "read side" in privacy):
+        problems.append("privacy control names no read-side gap")
+    for sentence in re.split(r"(?<=[.;:])\s+", privacy):
+        if re.search(r"\bbounded\b|\bis left out\b|\bis absent\b", sentence) and not re.search(
+            r"meant to|\baim\b", sentence
+        ):
+            problems.append("privacy control is stated as fact in: " + sentence[:60])
     security = bullet(body, "Security management").lower()
     if "ledger" in security and not re.search(r"report, assessment, pack|some (?:other )?exports", security):
         problems.append("the export ledger is not scoped to the exports that write it")
+    if re.search(r"\bevery (?:change|mutation|write)\s+(?:is|are|was|were)\b", security):
+        problems.append("an audit row for every change is claimed; the truth check supports mutations audited only")
     licence = bullet(body, "Software sovereignty").lower()
     if "licence" in licence and not ("weights" in licence and "coming" in licence):
         problems.append("the licence statement does not say what is outside the gate, as coming")
+    if re.search(r"on every change", licence) and not re.search(
+        r"not (?:yet )?(?:reach|cover|check)|only|two images|inside an image|inside the images", licence
+    ):
+        problems.append("the licence gate is said to check every dependency on every change, with no limit on its reach")
     return problems
 
 
@@ -445,7 +456,23 @@ def test_each_check_is_shown_red() -> None:
         "- **Privacy control:** what a person sees is bounded by handling markings and case membership.\n"
         "- **Security management:** case reads are audited, and exports go in a ledger.\n"
     )
-    assert len(overstated_lines(old)) == 3
+    assert len(overstated_lines(old)) == 4
+    # The shapes the passages actually took before this round: each is found for its own reason.
+    real_licence = (
+        "- **Software sovereignty:** every software dependency is under an open-source licence, checked on every\n"
+        "  change. Model weights are outside that check; a register and a gate for them are coming.\n"
+    )
+    assert overstated_lines(real_licence) == [
+        "the licence gate is said to check every dependency on every change, with no limit on its reach"
+    ]
+    real_privacy = (
+        "- **Privacy control:** What you see is bounded by handling markings and case membership. A record you\n"
+        "  may not see is left out, and the aim is that no count reveals it either; known gaps\n"
+        "  on the read side remain.\n"
+    )
+    assert len(overstated_lines(real_privacy)) == 1
+    real_audit = "- **Security management:** case reads, refusals of access to a case and every change are audited.\n"
+    assert len(overstated_lines(real_audit)) == 1
     assert overstated_lines(
         "- **Software sovereignty:** every dependency is open. Weights are outside it; a gate is coming.\n"
         "- **Privacy control:** meant to be bounded by markings. Some gaps on the read side are known.\n"
