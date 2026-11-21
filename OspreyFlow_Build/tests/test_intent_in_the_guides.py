@@ -682,7 +682,9 @@ def test_each_check_is_shown_red() -> None:
         assert unlimited_claims(fine) == [], fine
 
     # Round 6: the two copies of a guide agree when only a link target differs, and not when a word does.
-    one = "Opening.\n\n" + HEADING + "\n\nSee the [guide](architecture-guide.md) now.\n\n<!-- document-control:begin -->\n"
+    one = (
+        "Opening.\n\n" + HEADING + "\n\nSee the [guide](architecture-guide.md) now.\n\n<!-- document-control:begin -->\n"
+    )
     other = one.replace("(architecture-guide.md)", "(../../OspreyFlow_Core/docs/architecture-guide.md)")
     assert passage(one) != passage(other)
     assert without_link_targets(passage(one)) == without_link_targets(passage(other))
