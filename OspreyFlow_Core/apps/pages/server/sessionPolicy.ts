@@ -42,6 +42,11 @@ declare module "express-session" {
   interface SessionData {
     /** Present once a person has signed in; a session without it is not stored at all. */
     auth?: SessionRecord;
+    /**
+     * The tokens of the release folders this session has staged (slice IS5a, `staging.ts`), oldest first: the proof that a
+     * token is this session's. A few opaque strings; never a folder's content.
+     */
+    staged?: string[];
   }
 }
 

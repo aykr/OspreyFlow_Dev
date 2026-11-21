@@ -134,8 +134,8 @@ describe("Releases: the page (Scenario S, Releases)", () => {
     const bad = await w.get(`${PAGE}&name=Bad%20Name&version=1&export=1`);
     expect(bad.text).toMatch(/<p role="alert">[^<]*is not a name Kubernetes takes/);
     // A person with every right but a dataset none of their cases reads, and a person with the case but not the rights.
-    const stranger = await make(person({ cases: [caseRow({ datasets: ["Other"], dataset_ids: ["other-ds"] })] }));
-    const hiddenDataset = await stranger.get(`/studio/releases?case=${CASE_ID}&export=1`);
+    const stranger = await make(person({ datasetsDenied: [DATASET] }));
+    const hiddenDataset = await stranger.get(`${PAGE}&export=1`);
     const noRights = await make(person({ rights: ["edit_target_model"] }));
     noRights.conduit.failing.add("/me/rights"); // rights unknown: the page offers the export and the Conduit answers for itself
     const forbidden = await noRights.get(`${PAGE}&export=1`);
@@ -186,7 +186,7 @@ describe("Releases: the page (Scenario S, Releases)", () => {
     expect(odd.headers["content-disposition"]).toBeUndefined();
     expect(textOf(odd.text)).toContain("That file is not in the release.");
     // A refusal by the Conduit is the same page of words, with no file.
-    const stranger = await make(person({ cases: [caseRow({ datasets: ["Other"], dataset_ids: ["other-ds"] })] }));
+    const stranger = await make(person({ datasetsDenied: [DATASET] }));
     const refused = await stranger.get(`${PAGE}&name=wing&version=1&download=model.yaml`);
     expect(refused.status).toBe(404);
     expect(refused.headers["content-disposition"]).toBeUndefined();
@@ -209,7 +209,7 @@ describe("Releases: the page (Scenario S, Releases)", () => {
     await checked(w, stagedOf(loose.text));
     expect(Object.keys((JSON.parse(importCalls(w)[1]?.body ?? "{}") as { files: object }).files)).toEqual(["release.yaml"]);
     // A name that climbs out of the folder, or is absolute, is refused in words and holds nothing.
-    for (const path of ["bundle/../../etc/passwd", "/abs/release.yaml", "bundle/a\\b.yaml"]) {
+    for (const path of ["bundle/../../etc/passwd", "/abs/release.yaml", "bundle/a\\\\b.yaml"]) {
       const bad = await upload(w, [{ path, text: "x" }]);
       expect(textOf(bad.text), path).toContain("A file in the folder has a name a release cannot use.");
       expect(stagedOf(bad.text)).toBe("");
@@ -374,7 +374,7 @@ describe("Releases: rights and anti-forgery on every route (rules 3 and 4)", () 
     }
     expect(importCalls(w)).toEqual([]);
     // A person who holds the right for the page but whose case does not read the dataset is told the same as a missing one.
-    const stranger = await make(person({ cases: [caseRow({ datasets: ["Other"], dataset_ids: ["other-ds"] })] }));
+    const stranger = await make(person({ datasetsDenied: [DATASET] }));
     const token = stagedOf((await upload(stranger)).text);
     const refused = await checked(stranger, token);
     expect(textOf(refused.text)).toContain(REFUSED_BODY("The import"));
@@ -541,9 +541,10 @@ describe("Releases: words and the page's shape", () => {
   it("SR16: the page's words never say 'target model', never say anything went live, and the page needs no script", async () => {
     const w = await make(person({ ownDraft: 3 }));
     const token = stagedOf((await upload(w)).text);
-    const pages = [await w.get(PAGE), await checked(w, token), await w.get(`${PAGE}&export=1`)];
-    expect(textOf(pages[1]?.text ?? "")).toContain("Would write");
-    expect(textOf(pages[2]?.text ?? "")).toContain("The release has");
+    const pages = [await w.get(PAGE), await checked(w, token), await checked(w, token, { replace: "1" }), await w.get(`${PAGE}&export=1`)];
+    expect(textOf(pages[1]?.text ?? "")).toContain("importing replaces it");
+    expect(textOf(pages[2]?.text ?? "")).toContain("Would write");
+    expect(textOf(pages[3]?.text ?? "")).toContain("The release has");
     for (const page of pages) {
       expect(page.text).not.toMatch(/target\s*model/i);
       expect(textOf(page.text)).not.toMatch(/\bmade live\b(?! in 1 Model)|\bis live\b|went live/);

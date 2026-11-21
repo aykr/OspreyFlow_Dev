@@ -16,7 +16,7 @@ import type { ForwardSettings } from "./config.js";
 import { csrfProtection } from "./csrf.js";
 import { forwarder, v1Gate } from "./forward.js";
 import { PagesSessionStore } from "./expressStore.js";
-import { registerPages } from "./pages.js";
+import { registerPages, uploadPathsOf } from "./pages.js";
 import type { PageModule } from "./pages.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderRefused, IdentityProviderUnavailable } from "./identity.js";
@@ -33,6 +33,7 @@ import {
 import type { LoginRecord } from "./loginState.js";
 import { COOKIE_NAME, IDLE_SECONDS, MIN_SECRET_LENGTH, newRecord, randomToken } from "./sessionPolicy.js";
 import { LOGIN_KEY_PREFIX } from "./sessionStore.js";
+import { endStaged } from "./staging.js";
 import type { SessionStore } from "./sessionStore.js";
 import { isV1Path, rawPathOf } from "./v1.js";
 
@@ -103,6 +104,15 @@ export function createApp(deps: AppDeps): Express {
   app.set("trust proxy", "loopback, linklocal, uniquelocal");
   nunjucks.configure([TREE, ...(deps.viewDirs ?? [])], { autoescape: true, express: app, noCache: false });
   app.set("view engine", "njk");
+  // What the Studio pages (slice IS5a) read from the app: the Conduit's address and limits, the store that holds a staged
+  // release folder, the clock and the log. Settings, never a request's own.
+  app.locals["studio"] = {
+    forward: deps.forward,
+    store: deps.store,
+    clock,
+    log: deps.log ?? ((): void => undefined),
+    bodyStallMs: deps.bodyStallMs ?? DEFAULT_BODY_STALL_MS,
+  };
 
   app.use(securityHeaders());
 
@@ -114,6 +124,8 @@ export function createApp(deps: AppDeps): Express {
   app.use((_req, res, next) => {
     res.locals["stylesheet"] = manifest?.["pages.css"] === undefined ? undefined : assetUrl(manifest, "pages.css");
     res.locals["asset"] = (name: string): string => assetUrl(manifest, name);
+    // A page's optional enhancement: its module's address when the build made it, else nothing (the page works without it).
+    res.locals["assetIfBuilt"] = (name: string): string => (manifest?.[name] === undefined ? "" : assetUrl(manifest, name));
     next();
   });
 
@@ -153,7 +165,7 @@ export function createApp(deps: AppDeps): Express {
     res.locals["csrfToken"] = req.session?.auth?.csrfToken;
     next();
   });
-  app.use(csrfProtection());
+  app.use(csrfProtection({ uploadPaths: deps.pages ? uploadPathsOf(deps.pages) : new Set<string>() }));
 
   app.get("/", (req, res) => {
     const auth = req.session.auth;
@@ -284,7 +296,8 @@ export function createApp(deps: AppDeps): Express {
   });
 
   app.post("/session/sign-out", async (req, res) => {
-    // The anti-forgery check has already run, so there is a session here.
+    // The anti-forgery check has already run, so there is a session here. A release folder this session staged goes first.
+    await endStaged(deps.store, req.session.staged);
     await callback((done) => {
       req.session.destroy(done);
     });

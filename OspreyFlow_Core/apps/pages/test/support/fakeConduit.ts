@@ -43,6 +43,11 @@ export interface Person {
   sources?: Record<string, unknown>[];
   /** The version of this person's own in-progress model draft: an import refuses to replace it until confirmed. */
   ownDraft?: number;
+  /**
+   * Datasets the person's cases list but the Conduit will no longer open for them (their access changed since the list was
+   * read): its dataset routes answer 404 for these, exactly as for a dataset that does not exist.
+   */
+  datasetsDenied?: string[];
   /** Published pipelines the export left out as marked above what the person may view. */
   leftOut?: number;
 }
@@ -134,7 +139,8 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     const path = target.pathname;
     const method = req.method ?? "GET";
     const visibleCase = (id: string): CaseRow | undefined => person.cases.find((c) => c.id === id);
-    const visibleDataset = (id: string): boolean => person.cases.some((c) => c.dataset_ids?.includes(id));
+    const visibleDataset = (id: string): boolean =>
+      !(person.datasetsDenied ?? []).includes(id) && person.cases.some((c) => c.dataset_ids?.includes(id));
     const has = (...rights: string[]): boolean => rights.every((r) => person.rights.includes(r));
 
     if (path === "/v1/me" && method === "GET") {

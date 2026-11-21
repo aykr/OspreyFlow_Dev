@@ -1,0 +1,52 @@
+{#- The Ingest Studio's frame (slice IS5a): the dataset switch, the help panel, the readiness strip, the Needs-you reminder and the five
+    places as links. Every Studio page extends this and fills `place`. Complete without a script: the switch is a GET form with a
+    button, the help is a `details` that opens in the page, the places are links. -#}
+{% extends "layout.njk" %}
+{% set page = "studio" %}
+{% block content %}
+{% if not f.caseId %}
+<p class="label">{{ words.noCase }}</p>
+{% else %}
+<div class="studio-bar">
+{% if f.casesProblem %}
+<p role="alert">{{ f.casesProblem }}</p>
+{% else %}
+<form method="get" action="{{ f.path }}" class="studio-switch" id="studio-switch">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<label>
+<span class="label">{{ words.datasetLabel }}</span>
+<select class="select" name="dataset"{% if f.datasets | length == 0 %} disabled{% endif %}>
+{% if not f.datasetId %}<option value="">{{ words.noDataset }}</option>
+{% endif %}{% for d in f.datasets %}<option value="{{ d.id }}"{% if d.selected %} selected{% endif %}>{{ d.name }}</option>
+{% endfor %}</select>
+</label>
+<button type="submit" class="btn">{{ words.switchButton }}</button>
+</form>
+{% if f.servingCase %}<span class="label">{{ words.working(f.servingCase.name, f.datasetName) }}</span>{% endif %}
+{% if f.switchProblem %}<span role="alert">{{ f.switchProblem }}</span>{% endif %}
+{% endif %}
+</div>
+<details id="studio-help" class="studio-help">
+<summary>{{ words.help.title }}</summary>
+<p>{{ words.help.intro }}</p>
+<h3>{{ words.help.roles }}</h3>
+{% if help.rolesRead %}<ul>{% for role in help.roles %}<li>{{ role }}</li>{% else %}<li>{{ words.help.nothing }}</li>{% endfor %}</ul>
+{% else %}<p>{{ words.help.rolesUnreadable }}</p>{% endif %}
+<h3>{{ words.help.rights }}</h3>
+{% if help.rights %}<ul>{% for right in help.rights %}<li>{{ right }}</li>{% else %}<li>{{ words.help.nothing }}</li>{% endfor %}</ul>
+{% else %}<p>{{ words.rightsUnreadable }}</p>{% endif %}
+</details>
+{% if f.strip %}<ul aria-label="{{ words.stripLabel }}" class="studio-strip">{% for item in f.strip %}<li>{{ item }}</li>{% endfor %}</ul>
+{% endif %}
+{% if f.pipelinesProblem %}<p role="alert">{{ words.pipelinesUnreadable }}</p>{% endif %}
+{% if f.openingNote %}<p class="caption" role="status">{{ f.openingNote }}</p>{% endif %}
+{% if f.reminder %}<p class="caption studio-proposals-reminder"><a class="btn" href="{{ f.reminder.href }}" aria-describedby="studio-proposals-tip">{{ f.reminder.text }}</a> <span id="studio-proposals-tip" role="note">{{ f.reminder.tip }}</span></p>
+{% endif %}
+{% if f.needsUnread %}<p class="caption" role="status">{{ needsWords.unreadProposals }}</p>{% endif %}
+<nav aria-label="{{ words.placesLabel }}"><ul class="tabs">{% for t in f.tabs %}<li><a class="tabs__tab" href="{{ t.href }}"{% if t.current %} aria-current="page"{% endif %}>{{ t.label }}</a></li>{% endfor %}</ul></nav>
+<div class="studio-place">
+{% block place %}<p class="label">{{ words.choosePlace }}</p>{% endblock %}
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}{% set enhance = assetIfBuilt('modules/studio-frame.ts') %}{% if enhance %}<script type="module" src="{{ enhance }}"></script>{% endif %}{% endblock %}
