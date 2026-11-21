@@ -162,6 +162,9 @@ def test_the_planted_createelement_import_fails_whether_or_not_react_is_installe
         ("apps/pages", "server/view.ts", "import { jsx } from 'react/jsx-runtime';\nexport { jsx };\n", "imports react/jsx-runtime"),
         ("apps/pages", "server/view.ts", "import type { ReactNode } from 'react';\nexport type N = ReactNode;\n", "imports react"),
         ("apps/pages", "server/view.js", "const react = require('react');\nmodule.exports = react;\n", "imports react"),
+        # A page's client module (ADR-152 decision 6; slice IS5a0): the folder the bundle step reads its entry files from.
+        ("apps/pages", "modules/graph.ts", "import { createElement } from 'react';\ndocument.body.append(String(createElement('div')));\n", "imports react"),
+        ("apps/pages", "modules/graph.ts", "import { createRoot } from 'react-dom/client';\nexport { createRoot };\n", "imports react-dom/client"),
         ("packages/glass-shared", "src/lazy.ts", "export const later = () => import('react-dom');\n", "imports react-dom"),
         ("packages/glass-shared", "src/reexport.ts", "export * from 'react';\n", "imports react"),
         ("packages/glass-shared", "src/typed.ts", "export type E = import('react').ReactElement;\n", "imports react"),
@@ -173,6 +176,23 @@ def test_a_react_import_fails(tmp_path: Path, tree_directory: str, filename: str
     code, output = run_check(tmp_path)
     assert code == 1, output
     assert f"{tree_directory}/{filename} {expected}" in output
+
+
+def test_jsx_in_a_page_module_that_imports_nothing_fails(tmp_path: Path) -> None:
+    make_tree(tmp_path)
+    write(tmp_path / "apps/pages/modules/panel.tsx", "export const panel = <div>hello</div>;\n")
+    code, output = run_check(tmp_path)
+    assert code == 1, output
+    assert "apps/pages/modules/panel.tsx holds JSX" in output
+
+
+def test_a_react_marker_in_a_hashed_module_under_the_assets_folder_fails(tmp_path: Path) -> None:
+    """The shape the bundle step writes: `dist/assets/<name>-<hash>.js`, an ES module (slice IS5a0)."""
+    make_tree(tmp_path)
+    write(tmp_path / "apps/pages/dist/assets/graph-4B5ZV6QL.js", 'var e=Symbol.for("react.transitional.element");export{e};\n')
+    code, output = run_check(tmp_path)
+    assert code == 1, output
+    assert "apps/pages/dist/assets/graph-4B5ZV6QL.js carries the React marker react.transitional.element" in output
 
 
 def test_jsx_in_a_file_that_imports_nothing_fails(tmp_path: Path) -> None:
