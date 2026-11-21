@@ -50,9 +50,9 @@ UPGRADE = re.compile(
 )
 #: The images that upgrade their distribution, by the folder of their Dockerfile (the owner's list).
 #: `pages` joined it with its own Dockerfile (ADR-152 R1, slice PL3): a Node image on Debian that takes the
-#: day's fixes like the others.
+#: day's fixes like the others. `litellm`, the model gateway's own image on Wolfi, takes `apk upgrade`.
 EXPECTED = {"api", "ingest", "workspace", "harness", "laurium", "ner", "worker", "report_sync",
-            "superset", "pages"}  # fmt: skip
+            "superset", "pages", "litellm"}  # fmt: skip
 TODAY = upgrade_stamp()
 STAMPED = f"{UPGRADE_STAMP_ARG}={TODAY}"
 
