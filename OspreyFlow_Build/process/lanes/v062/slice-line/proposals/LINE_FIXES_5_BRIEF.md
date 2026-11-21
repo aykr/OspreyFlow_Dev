@@ -7,6 +7,35 @@ line showed on 20 and 21 November; each gets a test that was red first with the 
 clear a stop, push or edit the line. Items 1 to 7 are the owner's list; items 8 and 9 are what the conductor found while applying the
 owner's seven lines on 21 November; the merge progress brief comes last.
 
+## The owner's first three items (his word of 21 November, "fewer stops for my lines"; they come ahead of everything below)
+
+**A. The line clears a stop itself, with no line from the owner, when the cause is (a) main having moved under the slice, or (b) a fault in the
+conductor's brief or checks that changes nothing about what the slice must prove.** Each such clearance is logged (a record in the slice's folder and
+a line in a list the conductor's morning report prints: the slice, the stop, the cause (a or b), what the line did, the time). **Still the owner's
+alone, and refused by the line without his line:** accepting a slice with open findings; a refreeze that changes what is tested; anything on keys
+or security (a stop whose findings name a key, a credential or a security rule is never cleared by the line); any stop at the eighth round.
+Design the test for (a) and (b) so they cannot be abused: (a) is "a merge of main into the branch is clean and the slice's own acceptance and
+checks are unchanged"; (b) is "the red record's failing check is a check the slice did not write, and it fails identically on main's own tree in the
+same worktree shape" (the `test_layout` case: it failed on a tree with nothing of the slice's in it). A check removed from a slice's list by the
+line is removed only in case (b), is recorded, and the acceptance test is never the one removed. Tests: each cause clears and logs; each of the four
+exclusions is refused; a stop with a finding of fault in behaviour is not cleared; the log lists every clearance.
+
+**B. Each brief's checks are dry-run inside a real builder worktree before the slice starts.** `slice_start.py` makes the worktree, runs each command
+in the row's checks column (the acceptance command may be red, as it is red first; every other check must be green on the worktree as it stands
+with nothing built) and refuses to start the slice if one cannot pass there, naming the command and the failing test. This is what would have found
+`test_layout` before a builder spent six tries on it. Tests: a check that fails in a worktree for a worktree-only cause (a planted extra root folder)
+refuses the start in words; a clean row starts; the acceptance command being red does not refuse.
+
+**C. The board writes, for each build, how many of its slices have merged and how many are cut**, so the dashboard shows PL4 as "nine of twelve"
+and not as nothing. Read the build id column of `slices.tsv` and the merge records; "cut" is the number of rows for that build id (a row added
+later raises it); write it in the status file the board already writes. Tests: a build with three rows and two merged writes "2 of 3"; a new row
+raises the cut; a build with no merged slice writes "0 of N", not an absence.
+
+**Also on the owner's word of 21 November, for the conductor (not the line):** the balanced dial is set to 8 rounds in `dial.yaml` and applies to
+slices started after it is committed; after a slice's fourth round a read-only scout lists every open case as a table before round 5 starts and
+rounds 5 to 8 are judged against that table (no fifth round without it). The line may enforce this (refuse to start round 5 until the table file
+exists in the slice's folder); if it is cheap, add that as item D with a test.
+
 ## 1. The plan-id pattern
 
 `common.plan_ids()` reads the plan page's build ids with `[A-Z]{2}\d+`, which does not match ids with a longer prefix; the diff is written
