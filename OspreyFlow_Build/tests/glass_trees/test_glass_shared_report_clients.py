@@ -113,8 +113,6 @@ MODELS_OF_THE_STORE = "workingset" + "/models.ts"
 #: The one new module: the constant `export/api.ts` took from a React file.
 SENTENCE_MODULE = "export/withheldSentence.ts"
 STATUS_BAR = WORKSPACE_SRC + "statusbar/StatusBar.tsx"
-#: What stays: the stray backup beside the export client belongs to the next slice (D3c).
-BACKUP = WORKSPACE_SRC + "export/api.ts.bak"
 
 #: The places that may name an old path because they are a record of the past: the decision log, and the build record
 #: under `process/`. They are not rewritten.
@@ -143,7 +141,7 @@ _NAME_FORMS = (
     r"models/modelDeadline",
 )
 #: Not a route (`/v1/reports/dashboards` is the Conduit's address, not a file), and not `api.test.ts`, `packText.test.ts` or the like (the tests stayed in the workspace, beside where the file was), and
-#: not `api.ts.bak` (the backup stays until D3c).
+#: not `api.ts.bak` (the stray backup was deleted by D3c; `test_glass_shared_plain_clients.py` holds the check that it stays gone).
 _TEXT_FORM = re.compile(
     rf"(?<!glass-shared/src/)(?<!v1/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.(?:css|test\.|spec\.|py|ts\.bak|bak))"
 )
@@ -268,7 +266,6 @@ def test_the_twelve_clients_are_in_the_package_and_not_in_the_workspace() -> Non
         assert re.search(
             rf"""^export\s+(?:\*|\{{[^}}]*\}})\s+from\s+["']{re.escape(stem)}["'];""", index, re.M
         ), f"packages/glass-shared/src/index.ts does not export {stem}"
-    assert BACKUP in names, "the backup beside the export client is D3c's: it is left where it is"
 
 
 def test_the_new_clients_are_among_the_files_that_check_reads() -> None:
