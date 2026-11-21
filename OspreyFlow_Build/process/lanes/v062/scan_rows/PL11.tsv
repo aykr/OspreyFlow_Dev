@@ -1,8 +1,0 @@
-tests/licence_check/test_register.py	OspreyFlow_Core/,OspreyFlow_Build/spec/	read_sources: rglob Dockerfile* over all of Core, harness, cli and scripts Python, providers, named files; the register
-tests/licence_check/test_register_gate_leg.py	OspreyFlow_Core/,OspreyFlow_Build/spec/	read_sources: rglob Dockerfile* over all of Core, harness, cli and scripts Python, providers, named files; the register
-tests/licence_check/test_register_docker_run.py	OspreyFlow_Core/,OspreyFlow_Build/spec/	read_sources: rglob Dockerfile* over all of Core, harness, cli and scripts Python, providers, named files; the register
-tests/licence_check/test_register_row_checks.py	OspreyFlow_Core/,OspreyFlow_Build/spec/	read_sources: rglob Dockerfile* over all of Core, harness, cli and scripts Python, providers, named files; the register
-tests/licence_check/test_register_round2.py	OspreyFlow_Core/,OspreyFlow_Build/spec/,OspreyFlow_Build/scripts/publish_user_repo_update.sh	read_sources: rglob Dockerfile* over all of Core, harness, cli and scripts Python, providers, named files; the register; the publish script's release check
-tests/licence_check/test_register_pins.py	OspreyFlow_Core/,OspreyFlow_Build/spec/	reads render.py, deployment.py, services/ner, the basemap script, the transformers adapter, 06_DECISIONS.md and the register by name, and imports the walking module
-tests/licence_check/test_release_register.py	OspreyFlow_Build/spec/	the register and the release check's refusal over it
-tests/licence_check/test_spec_object_store.py	OspreyFlow_Build/spec/,OspreyFlow_Core/harness/render.py	rglob *.md over spec/ except 06_DECISIONS.md; render.py's object store image

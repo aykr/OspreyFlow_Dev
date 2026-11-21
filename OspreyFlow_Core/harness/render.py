@@ -85,6 +85,7 @@ from schemas.deployment import (
     EXTRACTION_CONTEXT_TOKENS,
     EXTRACTION_MODELS,
     TILES_CONTAINER_PATH,
+    TRANSCRIPTION_MODEL_REVISIONS,
     OspreyConfig,
     Profile,
     SearchBackend,
@@ -1397,13 +1398,23 @@ def _whisper_download_script(model: str) -> str:
     model is about 75 MB, and this path runs only when the model is not whole.) If that fails the
     job says so in words, rather than leaving a traceback, and exits non-zero so the start fails
     loudly. `tests/harness/test_start_needs_no_network.py` runs this script against stubs that do
-    not repair what the real tool does not."""
+    not repair what the real tool does not.
+
+    **The snapshot must be the pinned commit (PL11, 21 November 2026).** The snapshot's folder is
+    named for the commit the files were fetched at, so `model_is_complete` also requires that
+    name to be `TRANSCRIPTION_MODEL_REVISIONS[model]` (the commit `06_DECISIONS.md` ADR-020's
+    Stage 2 addendum records). A machine holding another commit fetches again; if the Hub's
+    `main` is no longer the pinned commit the job fails in words, as the Ollama pull does when a
+    tag has moved, rather than serving other weights without a word. This changes what a first
+    start does when upstream moves `main`: it stops, where it served the new weights before."""
     blobs = f"{_HF_CACHE}/hub/models--{model.replace('/', '--')}/blobs"
+    revision = TRANSCRIPTION_MODEL_REVISIONS[model]
     return (
         "model_is_complete() {\n"
         f'  snapshot="$$(HF_HUB_OFFLINE=1 huggingface-cli download {model} 2>/dev/null'
         ' | tail -n 1)"\n'
         '  [ -d "$$snapshot" ] || return 1\n'
+        f'  [ "$$(basename "$$snapshot")" = {revision} ] || return 1\n'
         "  for file in config.json model.bin tokenizer.json; do\n"
         '    [ -s "$$snapshot/$$file" ] || return 1\n'
         "  done\n"
@@ -1420,9 +1431,11 @@ def _whisper_download_script(model: str) -> str:
         f"  rm -f {blobs}/*.incomplete\n"
         f"  huggingface-cli download --force-download {model} || true\n"
         "  model_is_complete || {\n"
-        f"    echo 'FATAL: the speech model {model} is not on this machine, or not all of it, "
-        "and it could not be fetched. A first start needs the network once, to fetch the "
-        "model weights: connect this machine to the network, then start again. The weights are "
+        f"    echo 'FATAL: the speech model {model} is not on this machine at the recorded "
+        f"version {revision}, or not all of it, and it could not be fetched. A first start "
+        "needs the network once, to fetch the model weights: connect this machine to the "
+        "network, then start again. If the network is fine, the model moved upstream: update "
+        "TRANSCRIPTION_MODEL_REVISIONS deliberately, do not proceed silently. The weights are "
         "kept, so later starts need no network.' >&2\n"
         "    exit 1\n"
         "  }\n"

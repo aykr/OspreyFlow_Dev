@@ -38,10 +38,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
 from itertools import islice
@@ -193,6 +195,48 @@ def download_extract(
 #: (`process/lanes/rules-b/v060-basemap/`).
 PLANETILER_HEAP = "2g"
 
+#: **The planetiler release the register pins** (PL11, the owner's word of 21 November 2026): its
+#: version and the SHA-256 of its jar, read from the release's own digest at
+#: https://github.com/onthegomap/planetiler/releases/tag/v0.10.2 and checked by hashing the jar
+#: itself. The jar is the owner's (`ospreyflow map build --planetiler-jar`, never shipped) and any
+#: planetiler is accepted: a different one is **warned about, not refused**, because the sources
+#: below are what *this* release fetches (read from its classes, `com.onthegomap.planetiler.Main`
+#: and `org.openmaptiles.OpenMapTilesMain`), and another release may fetch others.
+PLANETILER_PIN = {
+    "version": "v0.10.2",
+    "sha256": "f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d",
+}
+
+#: What `planetiler --download` fetches for that release's OpenMapTiles profile, with the SHA-256 of
+#: each file as read on 21 November 2026. The fetch happens inside the jar, which this code cannot
+#: change, so **this is a record, not a check**: nothing here compares the downloaded file to its
+#: hash. `water_polygons` is republished upstream every few days (its Last-Modified was 20 November
+#: 2026), so its hash is a snapshot that will not match a later download; the other two have not
+#: changed since 2022.
+PLANETILER_SOURCES = {
+    "lake_centerline": {
+        "url": "https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip",
+        "sha256": "6c900507c88fc9f5b5a386f90fd0a42d0495e8755a03d075538fb9a6801a3192",
+    },
+    "natural_earth": {
+        "url": "https://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip",
+        "sha256": "375da61836d4779dffa8b87887bc4faa94dac77745ba0ee3914bd7cbedf40a02",
+    },
+    "water_polygons": {
+        "url": "https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip",
+        "sha256": "6194ad9ae31741a5ce8db71635f5d41053329b236aa13bb4eece9d8e5aff2737",
+    },
+}
+
+
+def jar_is_the_pinned_release(jar_path: Path) -> bool:
+    """Is `jar_path` the planetiler release `PLANETILER_PIN` names, byte for byte?"""
+    digest = hashlib.sha256()
+    with jar_path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest() == PLANETILER_PIN["sha256"]
+
 
 def run_planetiler(
     osm_pbf_path: Path,
@@ -249,6 +293,13 @@ def run_planetiler(
             "(a JDK, for example Temurin 21) and run this again. On macOS `/usr/bin/java` is only "
             "a stub until a JDK is installed."
         ) from error
+    if not jar_is_the_pinned_release(jar_path):
+        warnings.warn(
+            f"{jar_path} is not planetiler {PLANETILER_PIN['version']}, the release the licence "
+            "register pins: the auxiliary sources it downloads may differ from the register's list "
+            "(spec/LICENCE_REGISTER.yaml). The build goes on.",
+            stacklevel=2,
+        )
     output_pmtiles_path.parent.mkdir(parents=True, exist_ok=True)
     subprocess_run(
         [

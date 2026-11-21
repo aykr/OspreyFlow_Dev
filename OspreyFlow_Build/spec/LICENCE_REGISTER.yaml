@@ -1,0 +1,912 @@
+# The licence register for what the code gate does not see: model weights, map data, font files and
+# base images (PL11; the owner's rulings of 21 November 2026). `00_ARCHITECTURE.md` §7 is the
+# allowlist for code and stays as it is; this register is the second half of the licence story.
+#
+# WHY YAML, beside the prose: the gate (`tools/licence_register.py`, called from
+# `tools/licence_check.py`) reads the rows, and a table in Markdown would have to be parsed back out
+# of its formatting. The prose is §7's "Licence register for weights, map data, fonts and base
+# images" and the comments here.
+#
+# THE DEFINITION each row is judged by (the owner, 21 November 2026): software and base images are
+# open source when their licence is approved by the Open Source Initiative (which includes GPL-2.0
+# with the Classpath exception); model weights, by the same test on the weights' own licence; data,
+# by a recognised open-data licence, which covers ODbL and OGL. The `test` column says which test a
+# row passed: `osi-software`, `osi-weights`, `open-data`, or `restricted` (the name of failing). The
+# test must fit the kind: a weight passes by `osi-weights`, an image or a font by `osi-software`, map
+# data by `open-data` (the map build's own tool, planetiler, by `osi-software`); `restricted` is open
+# to every kind. `named_in` must hold every file in which the code names the thing (the gate fails
+# when one is missing).
+#
+# COLUMNS: id; kind (weight | map-data | font | image); name (as the code writes it: the gate matches
+# on it); pin (the version, digest, revision or hash the code pins: the gate compares it to the
+# code's); ships (what ships or fetches it, and when); named_in (files, relative to OspreyFlow_Core);
+# licence (as stated by the source); where_read (the source, at the pinned version, and the day it was
+# read); test; status. Optional: note; owner_ruling (required of a `conditional` row); must_read (required
+# of an `unconfirmed` row); os_packages (required of an image).
+#
+# STATUS: `confirmed` (read from the source at the pin); `unconfirmed` (this session could not read
+# a source: no licence is written, `must_read` says exactly what to read); `conditional` (fails the
+# definition, and ships only as the owner has ruled: it cites the ruling). The gate allows
+# `unconfirmed`; the release check refuses a release while any is left, and while any name is in
+# `HELD_FOR_OWNER` (`tools/licence_register.py`).
+#
+# A NAME HELD FOR THE OWNER is not a row: its licence, read at the pin, does not pass the definition
+# and has not been ruled on. Today: ghcr.io/berriai/litellm (its image carries /app/enterprise under
+# the BerriAI Enterprise licence). See `HELD_FOR_OWNER`.
+#
+# IMAGES: `os_packages.scan` says whether an existing scan covers the operating-system packages inside
+# the image (yes | no | partly) and `covered_by` says how. The row's licence is the PROJECT's own, read at
+# the pin. It is not a statement about every package in the image: no scan reads those licences
+# (every row says so). `trivy` runs `scanners: vuln` on the product's own images, which finds
+# vulnerabilities and reads no licence.
+#
+# READ ON 21 November 2026 with the session's network: registry manifests and blobs were read, not
+# pulled or run; no image was started and no scan was run.
+
+schema: 1
+
+definitions:
+  trivy_note: &trivy_vuln_only >-
+    The release workflow's `trivy image` runs `scanners: vuln` (CVEs), and reads no package licence.
+  third_party_no: &third_party_no
+    scan: "no"
+    covered_by: >-
+      Not built by the product, so no scan of ours runs on it (the release matrix's `trivy image`,
+      `scanners: vuln`, covers the product's own seven images and finds CVEs, not licences). Its
+      operating-system packages' licences are not listed or checked by anything in this repository.
+  osm_licence: &osm_where_read >-
+    https://www.openstreetmap.org/copyright, read 21 November 2026: "OpenStreetMap is open data,
+    licensed under the Open Data Commons Open Database License (ODbL) by the OpenStreetMap
+    Foundation (OSMF)".
+
+rows:
+  # ---- model weights ------------------------------------------------------------------------------
+  - id: W1
+    kind: weight
+    name: "qwen2.5:7b-instruct"
+    pin: "845dbda0ea48"
+    ships: >-
+      Default extraction model: pulled at first start by the `ollama-models` job when it is absent
+      from the volume, and checked against this manifest id after the pull.
+    named_in: [packages/schemas/deployment.py, harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      registry.ollama.ai manifest library/qwen2.5:7b-instruct, whose bytes hash to 845dbda0ea48 (the
+      pin). Its licence layer sha256:832dd9e00a68dd83b3c3fb9f5588dad7dcf337a0db50f7d9483f310cd292e92e
+      (11343 bytes, hash checked) is the Apache License, Version 2.0. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+
+  - id: W2
+    kind: weight
+    name: "qwen2.5:14b-instruct"
+    pin: "7cdf5a0187d5"
+    ships: >-
+      Not default: only with `resources.gpu: nvidia`, or when `models.extraction` names it.
+    named_in: [packages/schemas/deployment.py]
+    licence: Apache-2.0
+    where_read: >-
+      registry.ollama.ai manifest library/qwen2.5:14b-instruct, whose bytes hash to 7cdf5a0187d5 (the
+      pin). Its licence layer is the same blob as W1's, sha256:832dd9e00a68…, the Apache License,
+      Version 2.0. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+
+  - id: W3
+    kind: weight
+    name: "qwen2.5:0.5b-instruct"
+    pin: "a8b0c5157701"
+    ships: >-
+      Default: always in the pull script (the conformance and chat route); pulled at first start
+      when absent.
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      registry.ollama.ai manifest library/qwen2.5:0.5b-instruct, whose bytes hash to a8b0c5157701 (the
+      pin). Its licence layer is the same blob as W1's, sha256:832dd9e00a68…, the Apache License,
+      Version 2.0. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+
+  - id: W4
+    kind: weight
+    name: "all-minilm:22m-l6-v2-fp16"
+    pin: "1b226e2802db"
+    ships: >-
+      Default: the embeddings model, in the pull script; pulled at first start when absent.
+    named_in: [harness/render.py, packages/schemas/deployment.py]
+    licence: Apache-2.0
+    where_read: >-
+      registry.ollama.ai manifest library/all-minilm:22m-l6-v2-fp16, whose bytes hash to 1b226e2802db
+      (the pin). Its licence layer sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+      (11357 bytes, hash checked) is the Apache License, Version 2.0. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+
+  - id: W5
+    kind: weight
+    name: "moondream:1.8b-v2-q4_K_M"
+    pin: "c865c80afc38"
+    ships: >-
+      Default: the vision model, in the pull script (not waited on at start); pulled when absent.
+    named_in: [harness/render.py, packages/schemas/deployment.py]
+    licence: Apache-2.0
+    where_read: >-
+      registry.ollama.ai manifest library/moondream:1.8b-v2-q4_K_M, whose bytes hash to c865c80afc38
+      (the pin). Its licence layer is the same blob as W4's, sha256:c71d239df917…, the Apache License,
+      Version 2.0. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+
+  - id: W6
+    kind: weight
+    name: "Systran/faster-whisper-tiny.en"
+    pin: "0d3d19a32d3338f10357c0889762bd8d64bbdeba"
+    ships: >-
+      Default: the `whisper-models` job fetches it from the Hugging Face Hub at first start, into the
+      speech server's cache; the job now refuses any other commit (PL11).
+    named_in: [packages/schemas/deployment.py, harness/render.py]
+    licence: MIT
+    where_read: >-
+      https://huggingface.co/Systran/faster-whisper-tiny.en/raw/0d3d19a32d3338f10357c0889762bd8d64bbdeba/README.md,
+      front matter `license: mit`; the Hub's API for that revision returns sha 0d3d19a3… and
+      cardData.license mit. The repository holds no separate LICENSE file at that revision. The model
+      is a CTranslate2 conversion of openai/whisper-tiny.en. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+    note: >-
+      The speaches server image (B9) is a separate row; its MIT licence is the software's, not the
+      weights'.
+
+  - id: W7
+    kind: weight
+    name: "stanza:en"
+    pin: "sha256:2e9ec1fa8fc0b72d3ec0eddb665e2eb0788ca8f573d495b7f4073a79c32f74ef"
+    ships: >-
+      Default: `stanza.download('en', processors='tokenize,ner')` runs when the `ner` image is built,
+      so the models (tokenize, mwt, ner, the conll17 pretrain, two character language models) ship
+      inside the image. The pin is the SHA-256 of `services/ner/models.sha256`, which the build
+      checks every downloaded file against (and the file count): a different file fails the build.
+    named_in: [services/ner/Dockerfile, services/ner/models.sha256]
+    licence: Apache-2.0
+    where_read: >-
+      https://huggingface.co/stanfordnlp/stanza-en/raw/v1.10.0/README.md, front matter `license:
+      apache-2.0` (stanza 1.10.1, `stanza/_version.py` resources version 1.10.0, is what
+      `stanza.download` fetches: HF `stanfordnlp/stanza-en`, tag v1.10.0). Same card at the tag's
+      commit 9440047500a491eb579b2d2a50c3ebffbe21732f and at the commit the Hub's `resolve/v1.10.0`
+      answered with on the day, 92f1a846e29acaa866ed76e433ede3589115a2a9. Two files' `x-linked-etag`
+      equal their lines in models.sha256 (ner/ontonotes-ww-multi_charlm.pt d9099d2a…,
+      pretrain/conll17.pt edde4c19…). Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+    note: >-
+      The card licenses the repository's models; the corpora they were trained on (the NER model's
+      is OntoNotes 5) carry their own terms, which the owner's definition does not test and this
+      row did not read. `stanza.download` also fetches resources_1.10.0.json from the stanza-resources
+      repository's `main` branch; it is one of the seven files in models.sha256, so a change fails the
+      build rather than passing.
+
+  - id: W8a
+    kind: weight
+    name: "en_core_web_sm"
+    pin: "sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85"
+    ships: >-
+      Only in Laurium's image (opt-in, when Laurium is the extraction engine), installed from a wheel
+      pinned by hash in `services/laurium/requirements.txt`. The in-process spaCy recogniser names it
+      as its default pipeline but the Conduit's own environment does not install it.
+    named_in: [packages/adapters/recognise_spacy/adapter.py, services/laurium/requirements.txt]
+    licence: MIT
+    where_read: >-
+      The wheel en_core_web_sm-3.8.0-py3-none-any.whl from
+      https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/, downloaded and
+      hashed (sha256 1932429d…, equal to the pin in requirements.txt); its meta.json says `license:
+      MIT` and its METADATA `License: MIT`. Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+    note: >-
+      meta.json lists OntoNotes 5 as a training source "commercial (licensed by Explosion)": a
+      training-data term, outside the definition, and not read further.
+
+  - id: W8b
+    kind: weight
+    name: "dslim/bert-base-NER"
+    pin: "d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc"
+    ships: >-
+      Not default: fetched into the Hugging Face cache the first time the transformers recogniser is
+      used, then served from disk. The adapter now loads this commit (PL11); before, it followed `main`.
+    named_in: [packages/adapters/recognise_transformers/adapter.py]
+    licence: MIT
+    where_read: >-
+      https://huggingface.co/dslim/bert-base-NER/raw/d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc/README.md,
+      front matter `license: mit`; the Hub's API reports that sha as `main`'s head (last modified
+      2024-10-08). Read 21 November 2026.
+    test: osi-weights
+    status: confirmed
+
+  # ---- map data -----------------------------------------------------------------------------------
+  - id: M1
+    kind: map-data
+    name: osm-local
+    pin: ODbL
+    ships: >-
+      Named by the shipped osprey.yaml (`file:///data/tiles/osm-local.pmtiles`). The tile file itself
+      is not shipped or downloaded by an install: `ospreyflow map build <region>` makes it (M2 to M6).
+      The pin is the licence id the entry declares: the data has no version.
+    named_in: [osprey.yaml]
+    licence: ODbL-1.0
+    where_read: *osm_where_read
+    test: open-data
+    status: confirmed
+    note: >-
+      ODbL is not approved by the OSI, so this row passes the owner's data test and would fail the
+      software one. osprey.yaml's entry declares `ODbL`, `redistributable: true`, `client_scope: open`.
+
+  - id: M2
+    kind: map-data
+    name: osm-local-berkshire
+    pin: "https://download.geofabrik.de/europe/united-kingdom/england/berkshire-latest.osm.pbf"
+    ships: >-
+      On demand: `ospreyflow map build berkshire` downloads this extract; nothing is downloaded at install.
+      `-latest` is the day's extract: it has no revision to pin.
+    named_in: [scripts/build_local_basemap.py]
+    licence: ODbL-1.0
+    where_read: &geofabrik_where_read >-
+      https://www.openstreetmap.org/copyright, read 21 November 2026: "OpenStreetMap is open data,
+      licensed under the Open Data Commons Open Database License (ODbL)". The extract is OpenStreetMap
+      data cut to a region by Geofabrik; Geofabrik's own pages (download.geofabrik.de, read the same day)
+      state no licence of their own.
+    test: open-data
+    status: confirmed
+
+  - id: M3
+    kind: map-data
+    name: osm-local-rutland
+    pin: "https://download.geofabrik.de/europe/united-kingdom/england/rutland-latest.osm.pbf"
+    ships: "On demand: `ospreyflow map build rutland`. `-latest` has no revision to pin."
+    named_in: [scripts/build_local_basemap.py]
+    licence: ODbL-1.0
+    where_read: *geofabrik_where_read
+    test: open-data
+    status: confirmed
+
+  - id: M4
+    kind: map-data
+    name: osm-local-great-britain
+    pin: "https://download.geofabrik.de/europe/great-britain-latest.osm.pbf"
+    ships: "On demand: `ospreyflow map build great-britain` (about 2 GB). `-latest` has no revision to pin."
+    named_in: [scripts/build_local_basemap.py]
+    licence: ODbL-1.0
+    where_read: *geofabrik_where_read
+    test: open-data
+    status: confirmed
+
+  - id: M5
+    kind: map-data
+    name: osm-local-california
+    pin: "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf"
+    ships: "On demand: `ospreyflow map build california`. `-latest` has no revision to pin."
+    named_in: [scripts/build_local_basemap.py]
+    licence: ODbL-1.0
+    where_read: *geofabrik_where_read
+    test: open-data
+    status: confirmed
+
+  - id: M6
+    kind: map-data
+    name: osm-local-texas
+    pin: "https://download.geofabrik.de/north-america/us/texas-latest.osm.pbf"
+    ships: "On demand: `ospreyflow map build texas`. `-latest` has no revision to pin."
+    named_in: [scripts/build_local_basemap.py]
+    licence: ODbL-1.0
+    where_read: *geofabrik_where_read
+    test: open-data
+    status: confirmed
+
+  - id: M7
+    kind: map-data
+    name: os-open-zoomstack
+    pin: OGL-UK-3.0
+    ships: >-
+      A provider definition in `providers/`; no data is shipped or downloaded. Tiles come from the OS
+      Maps API at use, with the operator's own key, only if an operator configures it. The pin is the
+      licence id the file declares.
+    named_in: [providers/os-open-zoomstack.yaml]
+    licence: null
+    where_read: null
+    test: open-data
+    status: unconfirmed
+    must_read: >-
+      OS's own licence statement for OS Open Zoomstack (https://osdatahub.os.uk/downloads/open/OpenZoomstack
+      and https://www.ordnancesurvey.co.uk/products/os-open-zoomstack: this session read both and
+      neither states a licence in the text it could read; the first is script-rendered), and the terms
+      of the OS Maps API vector tile service the provider calls (api.os.uk/maps/vector/v1/vts), which
+      may differ from the open dataset's. The provider file declares OGL-UK-3.0, which is the
+      repository's statement, not OS's. The OGL v3.0 text itself was read at
+      nationalarchives.gov.uk/doc/open-government-licence/version/3/.
+
+  - id: M8
+    kind: map-data
+    name: usgs-national-map
+    pin: usgs-public-domain
+    ships: >-
+      A provider definition in `providers/`; no data is shipped or downloaded. Tiles come from USGS's
+      service at use, only if an operator configures it. The pin is the licence id the file declares.
+    named_in: [providers/usgs-national-map.yaml]
+    licence: null
+    where_read: null
+    test: open-data
+    status: unconfirmed
+    must_read: >-
+      USGS's own statement at https://www.usgs.gov/information-policies-and-instructions/copyrights-and-credits
+      (this session got HTTP 403 from usgs.gov for it and two other usgs.gov pages), and the National
+      Map's tile service terms. The provider file says "US federal government work, public domain, no
+      usage restriction", which is the repository's statement, not USGS's.
+
+  - id: M9
+    kind: map-data
+    name: planetiler
+    pin: "v0.10.2 sha256:f310bd0413e2e4512b27f4046d418664e8e1d3bf31603c2a70e23de06c167e4d"
+    ships: >-
+      Never shipped: the owner's own jar, given to `ospreyflow map build --planetiler-jar`. It is the
+      tool that builds the basemap and fetches M10 to M12. Any planetiler is accepted; one that is not
+      this release is warned about, not refused.
+    named_in: [scripts/build_local_basemap.py]
+    licence: Apache-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/onthegomap/planetiler/v0.10.2/LICENSE (Apache License, Version
+      2.0). The release asset planetiler.jar was downloaded, hashed (f310bd04…) and equals the digest
+      GitHub's release API gives it. Read 21 November 2026.
+    test: osi-software
+    status: confirmed
+    note: >-
+      Kind `map-data` because it is the map build's own tool, not a package, and no other kind holds
+      it. The jar's bundled dependencies carry their own licences, which this row does not list.
+
+  - id: M10
+    kind: map-data
+    name: "planetiler:lake_centerline"
+    pin: "sha256:6c900507c88fc9f5b5a386f90fd0a42d0495e8755a03d075538fb9a6801a3192"
+    ships: >-
+      Fetched by `planetiler --download` at basemap build, from
+      https://github.com/acalcutt/osm-lakelines/releases/download/v12/lake_centerline.shp.zip
+      (`com.onthegomap.planetiler.Main` of v0.10.2 passes this as its default). The pin is a record:
+      the fetch is inside the jar, so nothing compares the file to its hash.
+    named_in: [scripts/build_local_basemap.py]
+    licence: null
+    where_read: null
+    test: open-data
+    status: unconfirmed
+    must_read: >-
+      A data licence for the v12 release of acalcutt/osm-lakelines. Read on 21 November 2026: the
+      release notes say only "built from OpenStreetMap 2022/04/10 planet pbf ( © OpenStreetMap
+      contributors )"; the repository's LICENSE (MIT) covers its scripts; the README states no data
+      licence. Derived from OpenStreetMap, so ODbL is likely, but no source states it. Ask the
+      publisher, or the owner rules on the derivation.
+
+  - id: M11
+    kind: map-data
+    name: "planetiler:natural_earth"
+    pin: "sha256:375da61836d4779dffa8b87887bc4faa94dac77745ba0ee3914bd7cbedf40a02"
+    ships: >-
+      Fetched by `planetiler --download` at basemap build, from
+      https://naciscdn.org/naturalearth/packages/natural_earth_vector.sqlite.zip (the default
+      `com.onthegomap.planetiler.Main` of v0.10.2 passes; Last-Modified 14 May 2022). A record, not a check.
+    named_in: [scripts/build_local_basemap.py]
+    licence: public-domain
+    where_read: >-
+      https://www.naturalearthdata.com/about/terms-of-use/, read 21 November 2026: "All versions of
+      Natural Earth raster + vector map data found on this website are in the public domain."
+    test: open-data
+    status: confirmed
+    note: >-
+      The fetched file's hash was taken from the naciscdn file the jar names; the OpenMapTiles profile
+      inside the jar names a different mirror (dev.maptiler.download) that `Main` overrides.
+
+  - id: M12
+    kind: map-data
+    name: "planetiler:water_polygons"
+    pin: "sha256:6194ad9ae31741a5ce8db71635f5d41053329b236aa13bb4eece9d8e5aff2737"
+    ships: >-
+      Fetched by `planetiler --download` at basemap build, from
+      https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip. Republished upstream
+      every few days (Last-Modified 20 November 2026), so this hash is a snapshot of the day it was
+      read and will not match a later download. A record, not a check.
+    named_in: [scripts/build_local_basemap.py]
+    licence: ODbL-1.0
+    where_read: >-
+      https://osmdata.openstreetmap.de/data/water-polygons.html, read 21 November 2026: "Data is
+      copyright OpenStreetMap contributors and available under the ODbL."
+    test: open-data
+    status: confirmed
+
+  # ---- fonts --------------------------------------------------------------------------------------
+  - id: F1
+    kind: font
+    name: "Atkinson Hyperlegible Next"
+    pin: "@fontsource/atkinson-hyperlegible-next 5.3.0"
+    ships: >-
+      Default: bundled into the Glass build (weights 400, 600, 700).
+    named_in: [packages/design/fonts.json, apps/workspace/package.json]
+    licence: OFL-1.1
+    where_read: >-
+      The npm tarball @fontsource/atkinson-hyperlegible-next-5.3.0.tgz (its integrity,
+      sha512-8p1tHVoPDo6o…, is the one in package-lock.json): package.json `license: OFL-1.1`, and its
+      LICENSE file, "This Font Software is licensed under the SIL Open Font License, Version 1.1".
+      Read 21 November 2026.
+    test: osi-software
+    status: confirmed
+
+  - id: F2
+    kind: font
+    name: "IBM Plex Mono"
+    pin: "@fontsource/ibm-plex-mono 5.3.0"
+    ships: >-
+      Default: bundled into the Glass build (weights 400, 600).
+    named_in: [packages/design/fonts.json, apps/workspace/package.json]
+    licence: OFL-1.1
+    where_read: >-
+      The npm tarball @fontsource/ibm-plex-mono-5.3.0.tgz (its integrity, sha512-eTgnZjZEGk1Q…, is the
+      one in package-lock.json): package.json `license: OFL-1.1`, and its LICENSE file, "This Font
+      Software is licensed under the SIL Open Font License, Version 1.1". Read 21 November 2026.
+    test: osi-software
+    status: confirmed
+
+  - id: F3
+    kind: font
+    name: "GDS Transport"
+    pin: "govuk-frontend 6.6.0"
+    ships: >-
+      only when appearance.govuk_identity is on: the faces (bold, light) are used and self-hosted under
+      /assets/govuk/ only for a GOV.UK identity, which is on GOV.UK domains (fonts.json: `only_when`,
+      `only_on`).
+    named_in: [packages/design/fonts.json, apps/workspace/package.json]
+    licence: Restricted to services on GOV.UK domains; not OFL
+    where_read: >-
+      The repository's own statement, packages/design/fonts.json (`licence`, citing
+      spec/00_ARCHITECTURE.md and ADR-132). govuk-frontend 6.6.0's LICENSE.txt (read at tag v6.6.0 on
+      21 November 2026) is MIT, Crown Copyright (GDS), and says nothing about the fonts: it covers the code.
+    test: restricted
+    status: conditional
+    owner_ruling: 21 November 2026, not a sovereignty gap
+    note: >-
+      Today's build still holds the files: the workspace's `build` runs `sync_govuk_assets.mjs`
+      unconditionally, so they are in `public/assets/govuk/fonts` and in `dist/`. Taking them out of
+      the default build is the identity-switch slice after PL4's slice E (`slices/PL7c.md`), not this
+      register's; the gate does not fail on it.
+
+  - id: F4
+    kind: font
+    name: "Noto Sans Regular"
+    pin: "v2.0 sha256:3a7a6c2dcd940a840aa6ffac8f39758252a667a0b329945b071fb44bf00e7f47"
+    ships: >-
+      Not default: the basemap's label glyphs, installed into the tiles folder when an operator runs
+      `python -m scripts.fetch_basemap_glyphs`; the archive's SHA-256 is checked on install and a
+      different file is refused.
+    named_in: [scripts/fetch_basemap_glyphs.py]
+    licence: OFL-1.1
+    where_read: >-
+      https://raw.githubusercontent.com/openmaptiles/fonts/v2.0/noto-sans/LICENSE, "This Font Software
+      is licensed under the SIL Open Font License, Version 1.1". The release archive v2.0.zip was
+      downloaded and hashed (3a7a6c2d…, the pin); it holds the glyph files and no licence file of its
+      own. Read 21 November 2026.
+    test: osi-software
+    status: confirmed
+
+  # ---- base images --------------------------------------------------------------------------------
+  # Each image's licence is the PROJECT's own, read from its licence file or label at the pin. A tag
+  # pin is read as the tag resolved on 21 November 2026 and the index digest it gave is in where_read.
+  - id: B1
+    kind: image
+    name: arcadedata/arcadedb
+    pin: "26.10.1"
+    ships: >-
+      Default: the graph store (`graph_store: arcadedb`).
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/ArcadeData/arcadedb/26.10.1/LICENSE, Apache License 2.0. The
+      image's labels carry no licence (maintainer and an MCP server name only). The tag resolved to
+      index sha256:01506549bcb4a6d16af678ee43718850eba605430a3720a6b0398cb0470c710d, amd64 manifest
+      9d2ddf7c…, on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: "no"
+      covered_by: >-
+        Not built by the product, so no scan of ours runs on it (trivy `scanners: vuln` covers the
+        product's own images and finds CVEs, not licences). The image carries a Temurin JDK 21.0.12.1
+        (`JAVA_VERSION` in its config): GPL-2.0 with the Classpath exception, which passes
+        `osi-software`. Its Debian packages' licences are not listed or checked.
+
+  - id: B2
+    kind: image
+    name: valkey/valkey
+    pin: "8.0"
+    ships: >-
+      Default: the session and cache store.
+    named_in: [harness/render.py]
+    licence: BSD-3-Clause
+    where_read: >-
+      https://raw.githubusercontent.com/valkey-io/valkey/8.0.13/COPYING (`VALKEY_VERSION=8.0.13` in
+      the image's config): two BSD 3-Clause licences, Valkey contributors and Redis Ltd. The tag
+      resolved to index sha256:fcb69dfef81599baefeee6cdd0b8339b61b7983a8ee08d307e44844db5bd7047 on 21
+      November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B3
+    kind: image
+    name: chrislusf/seaweedfs
+    pin: "4.48"
+    ships: >-
+      Default: the object store (it replaced MinIO; ADR-114 Amendment 9).
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      The image's own label `org.opencontainers.image.licenses = Apache-2.0` (version 4.48, revision
+      530be3e37337488ecc34d58441e0bc476e121c93), read from its config blob on 21 November 2026; the tag
+      resolved to index sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B4
+    kind: image
+    name: postgres
+    pin: "16.4"
+    ships: >-
+      Default: the deployment's database, and the client its Keycloak step runs.
+    named_in: [harness/render.py]
+    licence: PostgreSQL
+    where_read: >-
+      https://raw.githubusercontent.com/postgres/postgres/REL_16_4/COPYRIGHT (`PG_VERSION=16.4-1.pgdg120+2`
+      in the image's config): the PostgreSQL Licence. The tag resolved to index
+      sha256:e62fbf9d3e2b… on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B5
+    kind: image
+    name: quay.io/keycloak/keycloak
+    pin: "26.0"
+    ships: >-
+      Default: the identity provider.
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      The image's own label `org.opencontainers.image.licenses = Apache-2.0` (version 26.0.8, revision
+      9dc36e6787c902eff4e74369e6a5fd3cd3798e1d), read from its config blob on 21 November 2026; the tag
+      resolved to index sha256:09a381c715ab… .
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B6
+    kind: image
+    name: caddy
+    pin: "2.11.4-alpine"
+    ships: >-
+      Default: the front proxy, the deployment's one door.
+    named_in: [harness/render.py, harness/site.py]
+    licence: Apache-2.0
+    where_read: >-
+      The image's own label `org.opencontainers.image.licenses = Apache-2.0` (version v2.11.4), read
+      from its config blob on 21 November 2026; the tag resolved to index sha256:6aeddd44c307… .
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B7
+    kind: image
+    name: ollama/ollama
+    pin: "sha256:5a5d014aa774f78ebe1340c0d4afc2e35afc12a2c3b34c84e71f78ea20af4ba3"
+    ships: >-
+      Default: the local model server.
+    named_in: [harness/render.py]
+    licence: MIT
+    where_read: >-
+      https://raw.githubusercontent.com/ollama/ollama/v0.18.2/LICENSE, MIT License. The digest is the
+      one the tag 0.18.2 resolves to (both read from the registry on 21 November 2026), which is the
+      version the repository's own comments name. The image's labels carry no licence.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: "no"
+      covered_by: >-
+        Not built by the product, so no scan of ours runs on it. Its Dockerfile at v0.18.2 builds
+        against the NVIDIA CUDA toolkit and AMD ROCm and installs GPU libraries into the image; whether
+        those are under NVIDIA's and AMD's own licences (not OSI-approved) was not read from the image's
+        layers (nothing was pulled). Not enough to say the image as a whole is open source.
+    note: >-
+      The project's licence passes; the GPU libraries the image may carry are the open question the
+      report names.
+
+  # `ghcr.io/berriai/litellm` has no row: it is in HELD_FOR_OWNER (tools/licence_register.py). The image
+  # the renderer pins carries /app/enterprise, licensed LicenseRef-Proprietary, beside MIT code.
+
+  - id: B9
+    kind: image
+    name: ghcr.io/speaches-ai/speaches
+    pin: "sha256:21e3df06d842fb7802ab470dd77c25f0e8c0d22950e8d8c6ae886e851af53ef8"
+    ships: >-
+      Default: the speech-to-text server (container `whisper`).
+    named_in: [harness/render.py]
+    licence: MIT
+    where_read: >-
+      The image's own label `org.opencontainers.image.licenses = MIT`, read from its config blob at
+      the pinned digest (amd64 manifest 1d4f852ff5b1…) on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B10
+    kind: image
+    name: opensearchproject/opensearch
+    pin: "2.17.1"
+    ships: >-
+      Default: search (`search: opensearch`).
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      The image's own label `org.label-schema.license = Apache-2.0` (version 2.17.1), read from its
+      config blob on 21 November 2026; the tag resolved to index sha256:1193b7c29c5d… .
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B11
+    kind: image
+    name: apache/superset
+    pin: "sha256:16b50bbef6648912a79e3293d418fefa743ce555d36c5af6b85d859119ed7f88"
+    ships: >-
+      Default: the base of the product's own `superset` image (`deploy/superset/Dockerfile`), the
+      reference dashboards.
+    named_in: [deploy/superset/Dockerfile]
+    licence: Apache-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/apache/superset/6.1.0/LICENSE.txt, Apache License 2.0 (the
+      image's config says `version = 6.1.0`). Read from the registry at the pinned digest on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: partly
+      covered_by: >-
+        The product builds an image on it, and the release workflow's `trivy image` (`scanners:
+        vuln`) and `make trivy-image-superset` scan that built image for CVEs. Neither reads a
+        licence. Superset's Python packages include LGPL's `psycopg2-binary`, recorded in
+        00_ARCHITECTURE.md §7 (ADR-111 Amendment 2); no scan reads the image's other packages' licences.
+
+  - id: B12
+    kind: image
+    name: eclipse-temurin
+    pin: "21-jdk@sha256:ebfbb18d11ff163ee83b21258acf12248af48d22a0fdfdc68fa1a1516c05976a"
+    ships: >-
+      Default build of the `api` image: a build stage, from which only a `jlink`ed runtime is copied into
+      the final image (`services/api/Dockerfile`; `CONDUIT_JAVA` chooses the variant).
+    named_in: [services/api/Dockerfile]
+    licence: GPL-2.0-only WITH Classpath-exception-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/openjdk/jdk21u/jdk-21.0.13%2B9/LICENSE (`JAVA_VERSION=jdk-21.0.13+9`
+      in the image's config): the GNU General Public License v2 with the "CLASSPATH" exception. The
+      Dockerfile's own label `org.ospreyflow.runtime.java.licence` says the same, and
+      00_ARCHITECTURE.md §7 records the exception (ADR-147 Amendment 2). The image's own labels are
+      its Ubuntu base's and say nothing of a licence. The digest resolved on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: partly
+      covered_by: >-
+        The licence of the runtime that reaches the final image is declared by a Dockerfile label and
+        read by `find_runtime_offenders` (`tools/licence_check.py`). The stage's own Ubuntu packages
+        are not carried into the final image. The `jlink`ed runtime's bundled native libraries are
+        listed in 00_ARCHITECTURE.md §7. The final image's other Debian packages are not listed.
+
+  - id: B13a
+    kind: image
+    name: python
+    pin: "3.12-slim"
+    ships: >-
+      Default: the base of the api, ingest, worker, report-sync and ner images and of the harness (a
+      moving tag: the release build passes `--pull`).
+    named_in:
+      - harness/Dockerfile
+      - services/api/Dockerfile
+      - services/ingest/Dockerfile
+      - services/ner/Dockerfile
+      - services/report_sync/Dockerfile
+      - services/worker/Dockerfile
+    licence: PSF-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/python/cpython/v3.12.16/LICENSE (`PYTHON_VERSION=3.12.16` in
+      the image's config): the PSF License Agreement for Python. The tag resolved to index
+      sha256:5e2bdb1b0d54… on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: &python_os
+      scan: partly
+      covered_by: >-
+        The Python packages installed on top are checked: `make licence-check` reads the Conduit's
+        environment, and the ner and Laurium images run their own gates at build
+        (`services/ner/licence_gate.py`, `services/laurium/licence_gate.py`). The Debian packages in
+        the base are not listed or checked by any gate. trivy `scanners: vuln` runs on the built
+        images and reads no licence.
+
+  - id: B13b
+    kind: image
+    name: python
+    pin: "3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90"
+    ships: >-
+      Default: the base of Laurium's image (opt-in, when Laurium is the extraction engine).
+    named_in: [services/laurium/Dockerfile]
+    licence: PSF-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/python/cpython/v3.13.18/LICENSE (`PYTHON_VERSION=3.13.18` in
+      the image's config at the pinned digest): the PSF License Agreement for Python. Read 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *python_os
+
+  - id: B14
+    kind: image
+    name: node
+    pin: "22-slim"
+    ships: >-
+      Default: the build stage of the workspace, pages and harness images, and the base of the pages
+      runtime (a moving tag: the release build passes `--pull`).
+    named_in: [apps/workspace/Dockerfile, apps/pages/Dockerfile, harness/Dockerfile]
+    licence: MIT
+    where_read: >-
+      https://raw.githubusercontent.com/nodejs/node/v22.23.5/LICENSE (`NODE_VERSION=22.23.5` in the
+      image's config): "Node.js is licensed for use as follows", the MIT licence, followed by the
+      licences of bundled third-party components. The tag resolved to index sha256:e9f565d32859… on
+      21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: partly
+      covered_by: >-
+        The npm packages are checked: `tools/licence_check.mjs` reads the declared licences. The
+        Debian packages in the base are not listed or checked. trivy `scanners: vuln` runs on the built
+        images and reads no licence.
+
+  - id: B15
+    kind: image
+    name: nginx
+    pin: "1.30-alpine"
+    ships: >-
+      Default: the workspace image's runtime.
+    named_in: [apps/workspace/Dockerfile]
+    licence: BSD-2-Clause
+    where_read: >-
+      https://raw.githubusercontent.com/nginx/nginx/release-1.30.7/LICENSE (`NGINX_VERSION=1.30.7` in
+      the image's config): the two-clause BSD licence. The tag resolved to index sha256:caf4e1e032a2…
+      on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: "no"
+      covered_by: >-
+        The workspace image built on it is scanned by trivy `scanners: vuln` (CVEs); no scan reads the
+        Alpine packages' licences, nor the njs and ACME modules the image carries.
+
+  - id: B16
+    kind: image
+    name: docker
+    pin: "29-cli"
+    ships: >-
+      Default: the harness image's Docker command-line client (a build stage).
+    named_in: [harness/Dockerfile]
+    licence: Apache-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/docker/cli/v29.10.0/LICENSE (`DOCKER_VERSION=29.10.0` in the
+      image's config): Apache License 2.0. The tag resolved to index sha256:34507eb5069d… on 21
+      November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B17
+    kind: image
+    name: clickhouse/clickhouse-server
+    pin: "25.8.33.6"
+    ships: >-
+      Not default: the Enterprise profile's analytics store.
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      https://raw.githubusercontent.com/ClickHouse/ClickHouse/v25.8.33.6-lts/LICENSE, Apache License
+      2.0 ("Copyright 2016-2025 ClickHouse, Inc."). The image's config says `com.clickhouse.build.version
+      = 25.8.33.6`; the tag resolved to index sha256:0152dd511bef… on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B18
+    kind: image
+    name: clickhouse/clickhouse-keeper
+    pin: "25.8.33.6"
+    ships: >-
+      Not default: the coordination service of the cluster profile.
+    named_in: [harness/cluster.py]
+    licence: Apache-2.0
+    where_read: >-
+      The same ClickHouse repository and licence as B17 (https://raw.githubusercontent.com/ClickHouse/ClickHouse/v25.8.33.6-lts/LICENSE);
+      the image's config says `com.clickhouse.build.version = 25.8.33.6`; the tag resolved to index
+      sha256:86ef98ab9c41… on 21 November 2026.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B19
+    kind: image
+    name: janusgraph/janusgraph
+    pin: "1.0.0"
+    ships: >-
+      Not default: the alternative graph store (`graph_store: janusgraph`).
+    named_in: [harness/render.py]
+    licence: Apache-2.0
+    where_read: >-
+      The image's own label `org.opencontainers.image.license = Apache-2.0` (version 1.0.0, revision
+      55d7454), read from its config blob on 21 November 2026; the tag resolved to index
+      sha256:164893be6d2b… .
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B20
+    kind: image
+    name: ghcr.io/sigstore/cosign/cosign
+    pin: "v2.4.1@sha256:b03690aa52bfe94054187142fba24dc54137650682810633901767d8a3e15b31"
+    ships: >-
+      Carried in an update bundle and run only to verify signatures (`ospreyflow update --from`); not
+      pulled by a default install.
+    named_in: [harness/signatures.py]
+    licence: Apache-2.0
+    where_read: >-
+      The image's label `io.artifacthub.package.license = Apache-2.0`, and
+      https://raw.githubusercontent.com/sigstore/cosign/v2.4.1/LICENSE, Apache License 2.0, both read on
+      21 November 2026 at the pinned digest.
+    test: osi-software
+    status: confirmed
+    os_packages: *third_party_no
+
+  - id: B21
+    kind: image
+    name: alpine
+    pin: latest
+    ships: >-
+      Default, and every apply or install: the disk check's one-shot probe
+      (`docker run --rm alpine df -k /`, `harness/preflight/context.py`), so the image is pulled and
+      run on the operator's machine before anything else is started.
+    named_in: [harness/preflight/context.py]
+    licence: MIT
+    where_read: >-
+      The packaging project's own licence: https://raw.githubusercontent.com/alpinelinux/docker-alpine/master/LICENSE,
+      the MIT licence ("Copyright (c) 2019 Natanael Copa"), read 21 November 2026. The image's
+      manifest annotations name that project (`org.opencontainers.image.source =
+      https://github.com/alpinelinux/docker-alpine.git`, revision 0c9af76133a2…, version 3.24.4); the
+      LICENSE is not at the root of that revision's branch (it holds the root file system only), so it
+      was read on master. The code names no tag, so `latest` resolved on 21 November 2026 to index
+      sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf (amd64 manifest 0f49f331d921…,
+      built 5 November 2026). Alpine's own packages are listed below.
+    test: osi-software
+    status: confirmed
+    note: >-
+      UNPINNED: the code names `alpine` with no tag or digest, so the install follows `latest`, which
+      moves. Pinning it (a tag and digest in `default_disk_probe`) changes what the product downloads
+      and is out of this slice; it is put to the owner in the report. The gate holds the register to
+      `latest` as the code says it, so a pin added to the code fails the gate until the row follows.
+    os_packages:
+      scan: "no"
+      covered_by: >-
+        Not built by the product, so no scan of ours runs on it. The Docker Official Images'
+        parts list for `alpine:3.24.4` (https://github.com/docker-library/repo-info, `repos/alpine/local/latest.md`,
+        read 21 November 2026, not a list our repository produces) gives sixteen packages and each
+        one's licence: GPL-2.0-only for eight (alpine-baselayout, alpine-baselayout-data, apk-tools,
+        busybox, busybox-binsh, libapk, scanelf, ssl_client), MIT for three (alpine-keys,
+        alpine-release, musl), Apache-2.0 for two (libcrypto3, libssl3), Zlib (zlib), MPL-2.0 AND MIT
+        (ca-certificates-bundle) and MIT AND BSD-2-Clause AND GPL-2.0-or-later (musl-utils). Each is a
+        licence the OSI approves, by the identifiers that list gives (the register's reading, not that
+        list's claim); nothing in this repository reads or checks them.

@@ -254,6 +254,14 @@ VISION_MODELS: dict[str, str] = {"moondream:1.8b-v2-q4_K_M": "c865c80afc38"}
 EMBEDDING_MODELS: dict[str, str] = {"all-minilm:22m-l6-v2-fp16": "1b226e2802db"}
 #: Served by the whisper container, pinned by its image, not by Ollama.
 TRANSCRIPTION_MODELS: tuple[str, ...] = ("Systran/faster-whisper-tiny.en",)
+#: The Hugging Face commit each transcription model is fetched at (`06_DECISIONS.md` ADR-020's
+#: Stage 2 addendum names the same commit). The `whisper-models` job checks the snapshot it holds is
+#: this one and refuses to start otherwise, as the Ollama pull does with a manifest id
+#: (`harness/render.py`, `_whisper_download_script`). Held to the licence register's pin by
+#: `tests/licence_check/test_register.py`.
+TRANSCRIPTION_MODEL_REVISIONS: dict[str, str] = {
+    "Systran/faster-whisper-tiny.en": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+}
 
 ExtractionModel = Literal["qwen2.5:7b-instruct", "qwen2.5:14b-instruct"]
 #: ADR-135 Amendment 1 decision 3: the extraction model on an NVIDIA GPU when none is named.
