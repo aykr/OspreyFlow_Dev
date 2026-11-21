@@ -12,13 +12,39 @@ The other guides in this folder are the [user guide](user-guide.md), for analyst
 [developer guide](developer-guide.md), for data engineers. Appendix A, every `osprey.yaml` setting,
 is made from the deployment's own schema, and is checked against it on every change.
 
+## Why OspreyFlow is built this way
+
+You are the person who decides what leaves the deployment and who may do what in it, so here is what
+OspreyFlow is built to, and what each part means for your installation. The
+[architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
+fullest account, with what holds each constraint today and what is "coming".
+
+- **Software sovereignty.** You can inspect, modify, host and replace what you install. Every software
+  dependency is under an open-source licence, and a gate checks that on every change. Model weights, map
+  data, fonts and base images are outside the gate; a register and a gate for them are coming.
+- **Data sovereignty.** The deployment runs on your network, and its containers have no route out except
+  for the downloads an install makes and the features you configure. A hosted model engine is an opt-in
+  (`models.local_only` is true until you change it). A first install needs the internet, a default
+  install fetches its model files on every start, and a Small deployment on an https address fetches
+  a certificate unless you give it yours. Superset's usage-tracking image, which the person's
+  browser asks for, is not stopped in v0.6.1 and earlier; v0.6.2 stops it with a content policy that
+  allows no outside address.
+- **Privacy control.** What each person sees is bounded by handling markings and case membership, so
+  the clearances and case levels you give people set the limit of what they can read.
+- **Security management.** Case reads, refusals of access to a case and every change are audited
+  (section 9.11, *Operations and Audit*), and exports go in a ledger. Recording every model call and
+  every sign-in is coming.
+- **Analytical accountability.** Judgements carry their evidence and a probability band, and what a model
+  suggests stays *inferred* until a person confirms it.
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.29** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.30** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.30 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to whoever installs it: the five constraints and what each means for an installation (DC1c). §12: a Superset chart that needs outside map tiles will not load, and why (SE6a). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
 | 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
 | 2.27 | 2026-11-20 | Appendix A: `cloud_platform.claims.pages_client_id`, the `pages` service's own app registration, whose delegated token the Conduit admits as the person on every route their rights allow, as the Glass's (ADR-152 decision 11, X1); the Conduit half only, the `pages` service and its render's refusal come later. Version set at merge. |
@@ -3049,6 +3075,10 @@ reads the same figures:
 3. a case's Author gives the dashboard's account Viewer on the case.
 
 Each pull is made as that account, at its clearance, audited and recorded in the export ledger.
+
+**A Superset chart that needs Mapbox tiles will not load**: Superset's content policy allows no address
+outside the deployment, so the browser refuses to fetch them, and no map key is set. A chart that needs
+a tile server or a map key the deployment does not provide is the same.
 
 ![Admin → Dashboard identities: registering a dashboard's account and seeing when it last pulled](images/admin/03-dashboards.png)
 

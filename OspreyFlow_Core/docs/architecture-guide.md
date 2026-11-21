@@ -13,13 +13,87 @@ The other guides in this folder are the [administration guide](administration-gu
 installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and the
 [developer guide](developer-guide.md), for data engineers.
 
+## Why OspreyFlow is built this way
+
+Intelligence mapping sits at the centre of sensitive work, and an organisation is only in charge of that
+work if it is in charge of the software that holds it. OspreyFlow starts from that. A tool for this work
+should be one you can read, change, host and replace, and one in which it is plain who did what. Open
+source is what makes the first of those possible; it is not enough on its own. So the platform is built
+to five constraints. Each is named below, said in plain words, and followed by what holds it today and
+what does not yet. Where something is not built, this guide says "coming".
+
+**Software sovereignty.** You can inspect, modify, host and replace the software that holds your
+knowledge. Software you can read lets you check for yourself what it does with your data, without asking
+its supplier. Software you can change lets you fix or adapt it on your own timetable. Software you can host
+runs where your rules say it must, and software you can replace means a supplier's change of terms never
+holds your records hostage. Here that means every dependency is under an open-source licence, and each
+store or engine sits behind a port (section 2), so replacing one is one adapter and one line of
+configuration. What holds it: a licence gate runs on every change and checks every Python and Node
+package, the runtime each image carries and each demonstration dataset's licence; a package under the GPL
+or AGPL never passes, and an LGPL one only with a recorded exception (section 9). The statement covers
+software dependencies. Model weights, map data, fonts and base images are outside the gate; a register and
+a gate for them are coming, and until they land their licences are not all stated in the repository.
+
+**Data sovereignty.** The aim is a deployment that runs on your own network, with nothing leaving it
+unless an administrator allows it. What holds it: every container sits on an internal network with no route out,
+only the front proxy is published, and a container is given a route out only when a feature an
+administrator has configured needs one (section 3 lists them). The models run inside the deployment.
+A hosted model engine is an opt-in: it is off while `models.local_only` is true, which is the default,
+and when an administrator turns one on, what may be sent is bounded by each dataset's egress setting and
+its handling codes. What does not yet hold: a first install needs the internet (the command, the images and
+the model files are fetched on the way in), and a default install fetches its model files from outside on
+every start; an offline bundle serves updates (administration guide, section 14). Superset's navigation
+bar draws a small usage-tracking image from its maker's address, and it is the person's browser that asks
+for it, so the deployment's internal network does not stand in its way. Superset's content policy in
+v0.6.1 and earlier allowed that address, so a browser that could reach the internet could send the request
+(read in the image's code, not measured in a browser). The fix is in v0.6.2: a content policy for
+Superset that allows no outside address, so a browser refuses the image before it asks. The other stores
+and servers, apart from the model gateway and the speech server (each of which has a switch of its own),
+are kept in by the network, not by a setting of their own. No test yet proves that no page
+requests anything outside the deployment; a browser test that does is coming.
+
+**Privacy control.** What each person sees is bounded by handling markings and by case membership. This
+guide and the screens call it need-to-know, access control, clearance and *withheld*. What holds it:
+access is applied inside the store's own query, in the graph traversal and in the analytics query, and
+search has a filter of its own (section 6). A record a person may not see is absent, and so is any degree,
+path length, histogram bucket or figure that would reveal it. Each adapter's conformance suite, and a
+test that walks every GET route as a person with no role, hold it to that. What does not yet: an
+independent penetration test is planned, not done; the project's backlog lists known gaps on the read
+side; the reporting feed's access path has no clearance test of its own; and where Superset signs people
+in through Entra ID, a person who may build dashboards reads the whole reporting store in their own
+session, so that right is for people cleared for all of it (administration guide, section 6a.7).
+
+**Security management.** What people do in the platform is recorded and can be traced to them. Here,
+*access* means every read and write of case data. The reference reads that carry none, such as the type
+list and map tiles, are outside it, and so is deployment metadata. What holds it: case reads, refusals of
+access to a case and every change are written to an audit table, with who, when and what, and a failed
+write fails the request. The export ledger records who, when, which case, the handling level and whether
+anything was withheld, for report, assessment, pack and feed exports. What does not yet: model calls are
+recorded with the person and the case for some jobs (asking, extraction and document designation), not for
+all, and asking does not record the engine, so one record of every model call, with who asked, for which
+case and to which engine, is coming; sign-in events are not recorded by the platform, and recording them
+is coming; some exports (a dataset release, a rule file, a source file)
+write an audit row but no ledger row, and a platform backup and an object transfer write neither, so a
+ledger row for every export is coming. The audit table is append-only in intent, not yet refused by the
+database to another role, and carries no hash chain. Section 6 lists what is not audited, by design.
+
+**Analytical accountability.** A judgement carries its evidence and its uncertainty with it. What holds
+it: the Inspector's Judgements records a statement, how likely it is on a seven-band probability
+yardstick, and the evidence for and against; a judgement cannot be saved without at least one supporting
+reference, checked on the screen and again on the server; citations are verified when it is saved and
+again at each export; anything a model produces stays *inferred* until a person confirms it (section 5);
+and every drawn item carries a grading and a source. What does not yet: the uncertainty a judgement
+carries is its probability band and nothing finer, and a judgement has no inferred or confirmed status of
+its own.
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.7** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
+**Version 1.8** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.8 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening: the intent and the five constraints (software sovereignty, data sovereignty, privacy control, security management, analytical accountability), each with what holds it today and what is "coming" (DC1c). §6: the audit sentence said to cover case data, with what is not audited by design, the export ledger's contents and the two records still to come, instead of "every read and write". §9: the licence rule and the allowlist in words, naming no product; the table of avoided components moved to the specification's licence register (the owner's ruling of 20 November 2026). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.7 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.6 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.5 | 2026-11-15 | The header names v0.5.2, the release this guide describes (step 5's sweep, §2, at the cut). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -189,8 +263,20 @@ person confirms it. No confidence threshold promotes it on anyone's behalf.
 - **Nothing is cut silently.** A result over the working set's limit is refused with a typed
   `limit_exceeded` and three choices (save a smaller view, filter first, or run it as a batch job),
   never truncated.
-- **Every read and write is audited**, with who, when and what; an expansion that crosses a handling
-  boundary needs a justification.
+- **Reads and writes of case data are audited**, with who, when and what. Case reads, refusals of access
+  to a case and every change are recorded; an expansion that crosses a handling boundary needs a
+  justification, which is recorded with it. A failed audit write fails the request. Here *access* means
+  every read and write of case data. The reference reads that carry none, the type list and map tiles,
+  are outside it.
+- **Exports are recorded in a ledger.** It holds who, when, which case, the handling level and a
+  withheld flag for report, assessment, pack and feed exports.
+- **What is not audited, by design:** deployment metadata (the ontology, map providers, ingest
+  connectors, packs and transforms, the tile proxy), some reads on a case (link types, promotable
+  items, link history and the case brief) and the export ledger's own listing. Refusals other than
+  refusals of case access, connector reads and Studio recipes are not audited either.
+- **Coming:** one record of every model call, with who asked, for which case and to which engine, and a
+  record of sign-in events. Until then the audit holds model calls for some jobs only (the passage
+  *Why OspreyFlow is built this way*, above, says which), and sign-in events are not recorded by the platform.
 
 ## 7. Where the data lives during analysis
 
@@ -230,22 +316,17 @@ is built* gives the same table with each interface's transport.
 
 The build fails if a dependency's licence is not on the allowlist (Apache-2.0, MIT, the BSD
 licences, ISC, MPL-2.0 and a short list of others). GPL and AGPL never pass; an LGPL package passes
-only with a recorded exception, for dynamic linking alone. Several well-known components were
-avoided for their licence:
+only with a recorded exception, for dynamic linking alone.
 
-| Avoided | Its licence | Used instead |
-| --- | --- | --- |
-| Redis 7.4 and later | RSAL / SSPL | Valkey (BSD-3-Clause) |
-| Elasticsearch | SSPL / Elastic Licence | OpenSearch (Apache-2.0) |
-| Neo4j Community | GPL-3.0 | ArcadeDB |
-| ArangoDB | BSL 1.1 | ArcadeDB |
-| FalkorDB | SSPL | rustworkx for in-memory algorithms |
-| Mapbox GL JS 2 and later | Proprietary | MapLibre GL JS (BSD-3-Clause) |
-| MongoDB | SSPL | PostgreSQL, and an S3-protocol object store |
-| Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table |
-| Grafana 9 and later | AGPL-3.0 | Never bundled; acceptable only as an unmodified separate service |
-| Stanford CoreNLP | GPL-3.0 | Stanza (Apache-2.0), held at a version with no GPL dependency |
-| Terraform | BSL 1.1 | OpenTofu (MPL-2.0) |
+The same rule decides what is chosen in the first place. Several well-known components were
+avoided for their licence, in one of three ways: a licence that limits who may host or resell the
+software, a commercial or proprietary licence that makes its use depend on a supplier's agreement, or
+a licence that would bind the whole platform to the same terms, so that distributing it would mean
+distributing everything built on it.
+Where a component's licence was of one of these kinds, OspreyFlow uses an open-source alternative
+instead. The avoided components, their licences and what is used in their place are recorded in the
+internal specification's licence register (`spec/00_ARCHITECTURE.md`, section 7), beside the allowlist
+itself.
 
 **Data has licences too.** A screening list's licence is recorded before its connector ships. Two are
 not confirmed for a customer's screening (the UN list; OpenSanctions, which is non-commercial only),

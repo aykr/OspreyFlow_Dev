@@ -1650,6 +1650,24 @@ result cardinality, and — where the action crosses a handling boundary — the
 analyst supplied. Audit write failure fails the request; an unaudited read in this domain is
 worse than a refused one.
 
+**Scope of the audit (DC1c, 20 November 2026, from the truth check `process/lanes/v062/slices/DOC1A_REPORT.md`;
+a note on the paragraph above, which it does not replace).** "Every read ... records" holds for reads and writes
+of case data, less what follows. *Unaudited by design:* deployment metadata (the ontology, map providers, ingest
+connectors, packs and transforms, the tile proxy); some reads on a case (link types, promotable items, link
+history, the case brief); the export ledger's own listing. *Refusals* other than refusals of case access,
+connector reads and Studio recipes are not audited (`06_DECISIONS.md` says so; a test holds that a refused removal
+is not audited). *Model calls:* asking, extraction, email extraction, document designation and the pattern ask
+record the person and the case, and asking does not record the engine; transcription, image description and
+embedding leave no audit row; the model gateway's own usage record is per engine and job per day, with no person
+or case. One record of every model call (who asked, for which case, to which engine) is SE8's, not built, and no test
+fails today when a model call is not recorded. *Sign-in:* the Conduit and the `pages` service record no sign-in
+or session event; recording them is SE8's, not built. *Exports:* the export
+ledger (`export_ledger`) records who, when, case, handling level and withheld flag for report, assessment, pack
+and report-feed exports; the dataset release export, the rule file export and a source file read write an audit
+row and no ledger row; a platform backup and an object transfer write neither. *The table:* append-only in
+intent: the database does not yet refuse an UPDATE or a DELETE from another role, and there is no hash chain.
+The guides say "coming" for the two unbuilt records, until SE8 merges.
+
 **Export gate.** `POST /export` evaluates every node and edge in the selection against the
 handling scheme. A `consult_originator` item blocks the export and is named specifically.
 Override requires a justification and an originator reference, both recorded. Exports carry the

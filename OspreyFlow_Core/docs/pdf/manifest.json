@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "c1f024fa08076f5e88cde538fc4b4f571fe1861fc005858560f152675d877d21",
+    "body": "653412cace176653f85196cffd865e663fdd1e4badb792ef0ffeeefce83f6560",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,22 +12,22 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "be591bfe7ac601b66827e52c6ab8751eb2d2a31f33dedef39cf93e6e82c053cf",
-    "source": "b671cd5435f8e1fb9f409bafd0c4e009a8c80b942c08b6b19c003d10599b86a0",
-    "version": "2.29"
+    "pdf": "57ba2db621bb6af20bedc48143acfada0383cc76419d56ca478939da0e14d09e",
+    "source": "acb66e2b112a16c7dd3780a8600ca6370136654a1a0091b6cb87e9706cff3235",
+    "version": "2.30"
   },
   "architecture-guide.md": {
-    "body": "64863ff4e301ec2ae5b72e94a2fc5d81179b59dd6d378b5307efc8175b273629",
+    "body": "8f191b899af28c76fcde00309530989e3f25334ed1f60090d0da30afb8766cac",
     "images": {
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "e2523cfb542b74b0724bd8998b8118621eb5a27dbb00dd9e8248e1ee447567f2",
-    "source": "fcecb1d74b47591a47d6767174784ad9775da82eb5be649235a6f1d8ed3f6250",
-    "version": "1.7"
+    "pdf": "8ff2ca39b2808dba1a9bcbc658c07699064fa89f1c9fda6a43915513e4ed97ba",
+    "source": "e9dcb3f9f2ee85eb0553fc27cfc3ca1a2ba6ae0826310eec03a25847fe8366b3",
+    "version": "1.8"
   },
   "developer-guide.md": {
-    "body": "0037950a94ef6854d0d378404e53b573df2174f859f6f07f1e86b2643bb36488",
+    "body": "4463902377c6f7a9e86ce975febd21f58d8aa7dc9dab9eccf8343c63373b8bb8",
     "images": {
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/developer/01-studio-pipelines.png": "37cef8fe2178bcb0b1b53f406aefd85ba13b389a597f8764eb173a655f72c385",
@@ -45,12 +45,12 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "3f4e3683859b279a457b6ed24a35c77db663b2c5c8407e3df118a9414fdf3261",
-    "source": "4d5b63af3cf666c3330e208b46510a2559f22ea5ff884e6e6021a1dea3bf13cb",
-    "version": "1.40"
+    "pdf": "df5f78dc0c1cb307fb9020bc49d0d954b8bcefe4c5e57046cb0937bbf4192382",
+    "source": "2816eb4dbdbb28d25cc05c28aba2934201322d61a2bd9f6f552f1ef97b5fc462",
+    "version": "1.41"
   },
   "user-guide.md": {
-    "body": "5a67bed8538347cb0817eb6567eb23c42e917e2bc6a379913c926309c7cbd0f9",
+    "body": "4558ef561e71502f50fdc8c2f53827df56b121bf34d7afe01431c146fc6a2b7b",
     "images": {
       "images/user/01-welcome.png": "278d4bd12769ad513659766cb9ff488dc7ed9df48a27849f625d197239386eb1",
       "images/user/02-sign-in.png": "de15dc2714b5c09d30c66dd2abf548cb5881a4b4f31bb55ee3be4cf7084b3022",
@@ -79,8 +79,8 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "8c02ae5fbe2927a6b5fc5e6c550014db9b22de0732513a40d5fb60fdb7a1cfc0",
-    "source": "62625b1aa2f807ba992a6fd7628ae44e96adbccda29d1259bd2dd391ce050d6a",
-    "version": "1.77"
+    "pdf": "b834261547429c10075cb74615d02949a2dd8326547147961b8fee98327c2afd",
+    "source": "fdd7b84fde5bcc72b3e57aab2588823990ded813b630da9e86aed2a42ea31b9b",
+    "version": "1.78"
   }
 }

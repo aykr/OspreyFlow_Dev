@@ -9,6 +9,26 @@ sources, persists them in a property graph, and gives an analyst a single worksp
 network, social-network, pattern, temporal and geospatial analysis are five views of one working
 set rather than five separate tools.
 
+## Why OspreyFlow is built this way
+
+Intelligence mapping holds sensitive work, and an organisation is only in charge of that work if it is
+in charge of the software that holds it. OspreyFlow is open source so that you can read, change, host and
+replace it, and it is built to five constraints on top of that. The
+[architecture guide](docs/architecture-guide.md) sets each out in full, with what holds it today and what
+is "coming".
+
+- **Software sovereignty:** every software dependency is under an open-source licence, checked on every
+  change. Model weights, map data, fonts and base images are outside that check for now.
+- **Data sovereignty:** the deployment's containers have no route out except the few that a configured
+  feature needs, such as the model downloads. A hosted model engine is an opt-in that an administrator
+  turns on. A first install needs the internet.
+- **Privacy control:** what a person sees is bounded by handling markings and case membership, applied
+  inside the store's own query.
+- **Security management:** case reads, refusals of access to a case and every change are audited, and
+  exports go in a ledger. Recording every model call, and every sign-in, is coming.
+- **Analytical accountability:** a judgement is saved with its evidence and a probability band, and what a
+  model suggests stays *inferred* until a person confirms it.
+
 ## What it does
 
 - **Intelligence mapping.** One case, read as a network, a map, a timeline and reports, with a
@@ -148,7 +168,7 @@ checking they are signed by this repository's release workflow; any other checko
 source (`install --build` builds on a tag too). Each release's notes are its section of
 `CHANGELOG.md`.
 
-**Is there a newer release?** Nothing checks on its own — the deployment never calls out. Ask:
+**Is there a newer release?** Nothing checks on its own: an administrator asks, from the host. Ask:
 
 ```
 ospreyflow update --check     # asks the repository's releases; Admin → System shows the answer

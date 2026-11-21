@@ -11,13 +11,34 @@ says plainly where something is not yet.
 The other guides in this folder are the [administration guide](administration-guide.md), for
 whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for analysts.
 
+## Why OspreyFlow is built this way
+
+You bring data into a platform that people will rely on for judgements, so here is what OspreyFlow is built
+to and what each part means for a pipeline. The [architecture guide](architecture-guide.md) (its section
+"Why OspreyFlow is built this way") gives the fullest account, with what holds each constraint today and
+what is "coming".
+
+- **Software sovereignty.** You can inspect, modify, host and replace what you work with. Every software
+  dependency is under an open-source licence, and the graph store, the analytics store, graph algorithms
+  and the model engines sit behind ports, so an adapter is the unit of replacement. Model weights, map data, fonts and base images are outside the
+  licence gate; a register and a gate for them are coming.
+- **Data sovereignty.** A hosted model engine is an opt-in that an administrator turns on, and what a
+  pipeline may send to one is bounded by each dataset's egress setting and its handling codes.
+- **Privacy control.** Every record carries its handling, set at load, and what each person then sees is
+  bounded by those markings and by case membership.
+- **Security management.** A run is made as the person who set it, and changes are audited. Recording
+  every model call, and every sign-in, is coming.
+- **Analytical accountability.** A record keeps where it came from, and what a model extracts stays
+  *inferred* until a person confirms it.
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.40** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
+**Version 1.41** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.41 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to a data engineer: the five constraints and what each means for a pipeline (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.40 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.39 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November); §9's example release tag is `v0.6.0`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.38 | 2026-11-15 | The header names v0.5.2 (step 5's sweep, §2, at the cut); §9's example release tag is `v0.5.2`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |

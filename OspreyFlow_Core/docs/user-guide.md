@@ -12,13 +12,32 @@ The other guides in this folder are the [administration guide](administration-gu
 whoever installs and runs OspreyFlow, the [developer guide](developer-guide.md), for data
 engineers, and the [architecture guide](architecture-guide.md), for how it is built. The screenshots show the synthetic demonstration cases; no real data appears in them.
 
+## Why OspreyFlow is built this way
+
+Your work is only as sound as the tool that holds it, so here is what OspreyFlow is built to and what each
+part means for you. The [architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built
+this way") gives the fullest account, with what holds each constraint today and what is "coming".
+
+- **Software sovereignty.** Your organisation can inspect, modify, host and replace the software you work
+  in: every software dependency is under an open-source licence.
+- **Data sovereignty.** The deployment is run by your organisation, on its own network, with no route out
+  except the few an install and an administrator set up. A hosted model engine is an opt-in; ask your
+  administrator whether one is on.
+- **Privacy control.** What you see is bounded by handling markings and case membership. A record you may
+  not see is absent, and so is any count that would reveal it.
+- **Security management.** Case reads, your changes and your report, assessment and pack exports are
+  recorded and traceable to you. Recording every model call, and every sign-in, is coming.
+- **Analytical accountability.** A judgement carries its evidence and a probability band, and what a model
+  suggests stays *inferred* until you confirm it (section 10).
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.77** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
+**Version 1.78** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.78 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to an analyst: the five constraints and what each means for the person working in a case (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.77 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.76 | 2026-11-16 | §6, Ask & Chat's drawer as reviewed (ADR-145 Amendment 20): Esc closes it as it closes other drawers; a marker or *Show all on graph* shows the graph with the drawer kept beside it; closing returns focus to what you opened it from. |
 | 1.75 | 2026-11-16 | v0.6.1 (the owner, 16 Nov): Ask & Chat (§6) opens as a drawer beside the view again, with **Expand** to make it the page and **Show as a drawer** to turn it back, keeping your question, engine and place; Esc closes the drawer, as other drawers; a marker or *Show all on graph* keeps the drawer; each opening is the drawer, and the results' *Ask a question about '…' instead* opens the page; §3's rail row and §5.5's Ask line say so (ADR-145 Amendment 20). |
