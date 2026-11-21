@@ -57,10 +57,10 @@ BY_ROLE_JSON = WORKSPACE_SRC / "shell/placesByRole.json"
 PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # ADR-146 decision 2: Monitoring left the Glass for Rules and Monitoring, its routes with it.
     (r"^/v1/admin/screening-lists|^/v1/screening-lists$", frozenset({"rules"}),
-     "Rules and Monitoring's screening lists (alerts/api.ts)"),
+     "Rules and Monitoring's screening lists (glass-shared/src/alerts/api.ts)"),
     # The queue's list is read in the Glass too, by a report pack's alert items (ADR-134 decision 1).
     (r"/alert-queue$", frozenset({"glass", "rules"}),
-     "Rules and Monitoring's Alerts; the Glass's report packs (reports/packsApi.ts)"),
+     "Rules and Monitoring's Alerts; the Glass's report packs (glass-shared/src/reports/packsApi.ts)"),
     # Held rows are worked in the Studio's Runs too (ADR-140), and read by Home.
     (r"/held-rows(/|$)", frozenset({"ingest", "rules"}),
      "Rules and Monitoring's Held rows; the Studio's Runs (ingest/runs/RunsTab.tsx)"),
@@ -329,8 +329,8 @@ MOVED = {
 #: `packages/glass-shared/src/ingest/sources/api.ts`).
 BASES = {"studioCase": "/v1/investigations/{x}", "dataset": "/v1/datasets/{x}"}
 #: Helpers that take a path relative to a prefix, read wherever they are called: `admin/api.ts`'s
-#: `call(api, "people")`, `alerts/api.ts`'s `caseUrl(base, id, "held-rows")`, and
-#: `reports/caseHttp.ts`'s `send(api, "GET", "data-feeds")`.
+#: `call(api, "people")`, `glass-shared/src/alerts/api.ts`'s `caseUrl(base, id, "held-rows")`, and
+#: `glass-shared/src/reports/caseHttp.ts`'s `send(api, "GET", "data-feeds")`.
 _PATH = r"([`\"][^`\"]*[`\"])"
 RELATIVE_CALLS = [
     (re.compile(r"\bcall<[^>]*>\(\s*api,\s*" + _PATH), "/v1/admin", "admin/api.ts"),
@@ -382,7 +382,7 @@ def _fragments(text: str, prefix: str = "") -> list[str]:
         if " " in literal or "/" not in literal:
             continue
         segments = [s for s in literal.strip("/").split("/") if s]
-        # A generic helper's literal (`/v1/admin/${path}`, `alerts/api.ts`'s
+        # A generic helper's literal (`/v1/admin/${path}`, `glass-shared/src/alerts/api.ts`'s
         # `/v1/investigations/${id}/${path}`, read where it is called through `RELATIVE_CALLS`)
         # names no route: two real segments, or a path from `/v1/` itself (`/v1/investigations`,
         # `/v1/investigations/${id}`).

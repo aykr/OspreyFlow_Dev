@@ -2,7 +2,7 @@
 // weeks or calendar months in UTC, as the AnalyticsPort suite pins them — never only those with events.
 import { describe, expect, it } from "vitest";
 
-import { alertLine, periodsOf } from "./packText";
+import { alertLine, periodsOf } from "@ospreyflow/glass-shared";
 import { figures } from "./reportsTestKit";
 
 describe("periodsOf", () => {

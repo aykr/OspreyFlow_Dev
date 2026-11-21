@@ -1,6 +1,6 @@
 // How the Alerts place names what an alert concerns — the same order of telling properties the
 // server's summary uses (`services/api/alert_queue.py::node_name`), so the two never disagree.
-import type { Node } from "../../../../packages/schemas/generated";
+import type { Node } from "../../../schemas/generated";
 
 const NAME_PROPERTIES = ["name", "account_number", "value_normalised", "family_name", "title", "rule_id"];
 

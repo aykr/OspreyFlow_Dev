@@ -2,7 +2,7 @@
 // a time. `GET .../links/{edge}/events` answers only to someone who can see the link, with the one
 // `link_not_found` refusal for a hidden and a missing link alike.
 import type { EventRecord, Node } from "../../../../packages/schemas/generated";
-import { modelDeadline, unreachedWords } from "../models/modelDeadline";
+import { modelDeadline, unreachedWords } from "@ospreyflow/glass-shared";
 
 export const EVENTS_PAGE_SIZE = 50;
 

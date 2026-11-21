@@ -2,7 +2,7 @@
 // the order the close dialog offers them. The values are the Conduit's (`schemas.domain.
 // CLOSING_REASONS`); the Conduit refuses any other in words. Only a true match confirms what the alert
 // found (rule 5); every other reason leaves it a suggestion.
-import type { AlertDispositionInput } from "../../../../packages/schemas/generated";
+import type { AlertDispositionInput } from "../../../schemas/generated";
 
 export type ClosingReason = AlertDispositionInput["disposition"];
 

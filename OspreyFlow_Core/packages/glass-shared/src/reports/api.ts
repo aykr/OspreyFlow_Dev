@@ -1,6 +1,6 @@
 // The Reports view's calls (`06_DECISIONS.md` ADR-111): the case's figures and the feed. The shape
 // is the generated one, so a change on the server is a type error here, never a silent drift.
-import type { QueuedAlert, ReportFigures, ReportLimitExceeded } from "../../../../packages/schemas/generated";
+import type { QueuedAlert, ReportFigures, ReportLimitExceeded } from "../../../schemas/generated";
 
 export interface ReportsApi {
   apiBaseUrl: string;

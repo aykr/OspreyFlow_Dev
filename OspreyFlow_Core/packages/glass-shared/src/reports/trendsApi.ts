@@ -6,7 +6,7 @@ import type {
   TrendFigures,
   TrendLimitExceededBody,
   TrendOptions,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 import type { ReportsApi } from "./api";
 import { fieldOf, refusal, send, type Reply } from "./caseHttp";
 

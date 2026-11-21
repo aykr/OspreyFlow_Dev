@@ -5,10 +5,8 @@
 import { useState } from "react";
 
 import { Button, Input } from "../design/primitives";
-import type { BlockedItem } from "../export/api";
-import type { ReportsApi } from "./api";
+import { type BlockedItem, type ReportsApi, exportPack } from "@ospreyflow/glass-shared";
 import { packPrintHtml, printInFrame } from "./packExport";
-import { exportPack } from "./packsApi";
 
 export interface ExportControlProps {
   api: ReportsApi;

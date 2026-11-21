@@ -5,7 +5,7 @@
 import type { EmailCandidate } from "../inspector/linkEventsApi";
 import type { ReadSummary, UnusableEngine, WillRead } from "../../../../packages/schemas/generated";
 import type { GraphCitation, SearchCitation } from "./graphFacts";
-import { modelDeadline, unreachedWords } from "../models/modelDeadline";
+import { modelDeadline, unreachedWords } from "@ospreyflow/glass-shared";
 
 export type { GraphCitation, SearchCitation };
 

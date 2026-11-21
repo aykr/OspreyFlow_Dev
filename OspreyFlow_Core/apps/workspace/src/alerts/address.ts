@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import type { AlertExplanation } from "../../../../packages/schemas/generated";
 import { INVESTIGATION_ID_SESSION_KEY } from "../investigation/investigationId";
 import { alertPath, RULES_PATH } from "../shell/router";
-import { openAlertAtAddress } from "./api";
+import { openAlertAtAddress } from "@ospreyflow/glass-shared";
 
 /** Said for an alert that does not exist and for one the reader may not see alike (rule 3). */
 export const NO_SUCH_ALERT = "There is no alert at this address that you can see.";

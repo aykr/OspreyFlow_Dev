@@ -33,8 +33,8 @@ import type {
   ScreeningSubscriptionInput,
   TypologyRule,
   TypologyRuleInput,
-} from "../../../../packages/schemas/generated";
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
+} from "../../../schemas/generated";
+import type { WorkingSetDelta } from "../workingset/models";
 
 export type QueueFilter = "active" | "closed" | "all";
 export type KindFilter = "all" | "typology" | "hotlist" | "monitor" | "analyst" | "drawn_watch";

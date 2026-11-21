@@ -27,10 +27,30 @@ export function shown(path: string): string {
   return path.startsWith(SHARED_SRC) ? `glass-shared/${relative(SHARED_SRC, path)}` : relative(SRC, path);
 }
 
-/** The Conduit clients and the notice that live in the shared package: every file there under the two folders the
+/** The folders of the shared package the Conduit clients came from: the Ingest Studio's and Admin's (PL4d2) and the
+ * reports', export's, alerts', patterns' and models' (PL4d3a). One regular expression on one line, which
+ * `test_glass_shared_report_clients.py` reads. */
+export const MOVED_FOLDERS = /\/(ingest|admin|reports|export|alerts|patterns|models)\//;
+
+/** The twelve clients and words PL4d3a moved: a folder, then each file's stem. Never written as a path (the old-path scan in
+ * `test_glass_shared_report_clients.py` reads this file too, and only the package's own place may name them). */
+const REPORT_STEMS: Record<string, readonly string[]> = {
+  reports: ["api", "caseHttp", "dashboards", "trendsApi", "packsApi", "packText"],
+  export: ["api"],
+  alerts: ["api", "names", "closingReasons"],
+  patterns: ["api"],
+  models: ["modelDeadline"],
+};
+/** Their places under the shared package. A guard that plants in each of them reads this list, so a file that moved back or
+ * went missing fails the plant, not only the walk. */
+export const REPORT_CLIENTS: readonly string[] = Object.entries(REPORT_STEMS).flatMap(([folder, stems]) =>
+  stems.map((stem) => `${folder}/${stem}.ts`),
+);
+
+/** The Conduit clients and the notice that live in the shared package: every file there under the folders the
  * clients came from, found on disc rather than named, so a client added later is walked and checked too. */
 export function movedClients(): string[] {
-  return sourceFiles([SHARED_SRC]).filter((path) => /\/(ingest|admin)\//.test(path));
+  return sourceFiles([SHARED_SRC]).filter((path) => MOVED_FOLDERS.test(path));
 }
 
 /** A copy of the shared package in a temporary folder, with `line` appended to its file named `basename`; returns the
@@ -43,6 +63,18 @@ export function plantedCopy(basename: string, line: string): { root: string; fil
   if (!target) throw new Error(`no ${basename} in the shared package`);
   writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   return { root, file: relative(root, target), remove: () => rmSync(root, { recursive: true, force: true }) };
+}
+
+/** A copy of the shared package with `line` appended to each of the twelve report clients; returns the folder, the files'
+ * paths relative to it (in `REPORT_CLIENTS`' order), and a cleanup. The report guards' plants (rule 15): one in each. */
+export function plantedReportClients(line: string): { root: string; files: string[]; remove: () => void } {
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
+  for (const file of REPORT_CLIENTS) {
+    const target = join(root, file);
+    writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
+  }
+  return { root, files: [...REPORT_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 function filesUnder(dir: string): string[] {

@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { SavedPattern } from "../../../../packages/schemas/generated";
-import { askToSearch, fetchPatternPreview, listPatterns, loadPattern, runPattern, savePattern } from "./api";
+import {
+  askToSearch,
+  fetchPatternPreview,
+  listPatterns,
+  loadPattern,
+  runPattern,
+  savePattern,
+} from "@ospreyflow/glass-shared";
 
 // `savePattern`/`listPatterns`/`loadPattern` are otherwise-thin `fetch` wrappers (`site/api.ts`'s
 // own `api.test.ts` leaves those untested elsewhere in this codebase) — but their `!response.ok`

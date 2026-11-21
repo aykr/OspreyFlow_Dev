@@ -1,3 +1,4 @@
+import { WITHHELD_SENTENCE } from "@ospreyflow/glass-shared";
 import { useState } from "react";
 
 import { WORKSPACE_TIPS } from "./tips";
@@ -20,8 +21,6 @@ export interface StatusBarProps {
  * What the reader may not see is said once, in a sentence with no number (ADR-124 decision 5,
  * which retired the withheld figure): `withheld` is `WorkingSetStoreState.withheld`, and the
  * sentence stands only while it is `true`. */
-export const WITHHELD_SENTENCE = "This case holds material you are not cleared to see.";
-
 export function StatusBar({
   nodeCount,
   edgeCount,

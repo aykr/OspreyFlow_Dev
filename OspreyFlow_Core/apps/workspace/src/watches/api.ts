@@ -1,5 +1,5 @@
 // Fetch wrappers for `POST`/`GET .../hotlists` and `POST`/`GET .../monitors` (the inbox's `GET .../alerts` went in L2.10: one queue, ADR-146 decision 1)
-// (`services/api/watch_routes.py`) — mirrors `patterns/api.ts`'s own conventions (Bearer auth, throw
+// (`services/api/watch_routes.py`) — mirrors `packages/glass-shared/src/patterns/api.ts`'s own conventions (Bearer auth, throw
 // on a non-`ok` response). The jump's case of its own went in L2.9 (ADR-146 decision 6).
 //
 // `Hotlist`, `Monitor` and the schedule's input are the generated shapes.

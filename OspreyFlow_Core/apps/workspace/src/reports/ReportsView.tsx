@@ -11,12 +11,17 @@ import { useEffect, useRef, useState } from "react";
 import type { OutcomeCount, PoleFigures, ReportFigures } from "../../../../packages/schemas/generated";
 
 type DrawingFigures = NonNullable<ReportFigures["drawing"]>;
-import { CLOSING_REASONS, type ClosingReason } from "../alerts/closingReasons";
-import { typologyLabel } from "../alerts/names";
+import {
+  CLOSING_REASONS,
+  type ClosingReason,
+  typologyLabel,
+  fetchFeedCsv,
+  fetchReport,
+  type ReportsApi,
+} from "@ospreyflow/glass-shared";
 import { utcStampOf } from "../time/utcStamp";
 import { Button, Select } from "../design/primitives";
 import { AlertsPanel } from "./AlertsPanel";
-import { fetchFeedCsv, fetchReport, type ReportsApi } from "./api";
 import { Bars, channel, NUMBER, plural, Section } from "./figureParts";
 
 export const PERIODS = [4, 12, 26, 52];

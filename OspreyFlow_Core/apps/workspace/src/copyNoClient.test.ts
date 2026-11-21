@@ -7,11 +7,20 @@
 // (`client_id`, `client_parity`, `oidc-client`) dropped. A string that is one lowercase key alone
 // (`"client"`, a scale's value compared in code) is a key, not copy.
 import { readFileSync } from "node:fs";
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { copyTexts, movedClients, plantedCopy, shown, sourceFiles } from "./copyTextsTestKit";
+import {
+  copyTexts,
+  movedClients,
+  plantedCopy,
+  plantedReportClients,
+  REPORT_CLIENTS,
+  shown,
+  SHARED_SRC,
+  sourceFiles,
+} from "./copyTextsTestKit";
 
 const WORDS = /\bclients?\b|\bclient's\b|\bclients'|to be confirmed|\bTBC\b|\bunconfirmed\b|\bnot confirmed\b|\bplaceholder\b/i;
 const KEY = /^[a-z][a-z0-9]*$/;
@@ -42,6 +51,20 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
         clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
       );
       expect(hits).toEqual([`${planted.file}: a placeholder value`]);
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the report, export, alert and pattern clients that moved (PL4d3a), and finds a word planted in each (rule 15)", () => {
+    const walked = sourceFiles();
+    for (const rel of REPORT_CLIENTS) expect(walked, rel).toContain(join(SHARED_SRC, rel));
+    const planted = plantedReportClients('export const PLANTED = { note: "a placeholder value" };');
+    try {
+      const hits = sourceFiles([planted.root]).flatMap((path) =>
+        clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
+      );
+      expect(hits.sort()).toEqual(planted.files.map((file) => `${file}: a placeholder value`).sort());
     } finally {
       planted.remove();
     }

@@ -138,18 +138,19 @@ _NAME_FORMS = (
     r"patterns/api",
     r"models/modelDeadline",
 )
-#: Not `api.test.ts`, `packText.test.ts` or the like (the tests stayed in the workspace, beside where the file was), and
+#: Not a route (`/v1/reports/dashboards` is the Conduit's address, not a file), and not `api.test.ts`, `packText.test.ts` or the like (the tests stayed in the workspace, beside where the file was), and
 #: not `api.ts.bak` (the backup stays until D3c).
 _TEXT_FORM = re.compile(
-    rf"(?<!glass-shared/src/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.(?:css|test\.|spec\.|py|ts\.bak|bak))"
+    rf"(?<!glass-shared/src/)(?<!v1/)(?<![\w-])(?:{'|'.join(_NAME_FORMS)})\b(?!\.(?:css|test\.|spec\.|py|ts\.bak|bak))"
 )
 #: A bare file name with its extension, as a guide writes it: `packText.ts`.
 _FILE_FORM = re.compile(
     r"(?<![\w/.-])(?:packText|trendsApi|packsApi|caseHttp|closingReasons|modelDeadline|names)\.ts\b"
 )
-#: The segments of one written apart: `join(HERE, "..", "src", "reports", "api")`, Python's `/ "reports" / "api.ts"`.
+#: The segments of one written apart: `join(HERE, "..", "src", "reports", "api")`, Python's `/ "reports" / "api.ts"`. Not
+#: `"reports", "dashboards"`: that pair is two of the Glass's view names in a list, never a path.
 _SEGMENT_FORM = re.compile(
-    r"""["'](?:reports["']\s*[,/]\s*["'](?:api|caseHttp|dashboards|trendsApi|packsApi|packText)"""
+    r"""["'](?:reports["']\s*[,/]\s*["'](?:api|caseHttp|trendsApi|packsApi|packText)"""
     r"""|export["']\s*[,/]\s*["']api|alerts["']\s*[,/]\s*["'](?:api|names|closingReasons)"""
     r"""|patterns["']\s*[,/]\s*["']api|models["']\s*[,/]\s*["']modelDeadline)(?:\.ts)?["']"""
 )
@@ -289,7 +290,7 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(tmp_path: Path) 
         target = tmp_path / (SHARED + rel)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(real, encoding="utf-8")
-        for dependency in WHOLE:  # so a sibling import in the clean file resolves
+        for dependency in (*WHOLE, SENTENCE_MODULE, "workingset/models.ts"):  # so a sibling import in the clean file resolves
             sibling = tmp_path / (SHARED + dependency)
             sibling.parent.mkdir(parents=True, exist_ok=True)
             if not sibling.exists():

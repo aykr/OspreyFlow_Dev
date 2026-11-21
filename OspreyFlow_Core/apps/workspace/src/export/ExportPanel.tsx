@@ -37,7 +37,7 @@ import {
   manifestSentence,
   type ExportMark,
   type ExportResult,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import { buildReportArtefact } from "./reportExport";
 import { buildSubgraphArtefact, serialiseSubgraphArtefact } from "./subgraphExport";
 import { triggerDownload } from "./triggerDownload";

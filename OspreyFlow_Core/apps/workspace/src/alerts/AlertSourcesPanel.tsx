@@ -7,8 +7,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { AlertSource } from "../../../../packages/schemas/generated";
 import { Input } from "../design/primitives";
-import { listAlertSources, type AlertsApi } from "./api";
-import { when } from "./names";
+import { listAlertSources, type AlertsApi, when } from "@ospreyflow/glass-shared";
 
 const STATE_WORDS: Record<string, string> = { live: "Live", draft: "Draft", stopped: "Stopped" };
 
