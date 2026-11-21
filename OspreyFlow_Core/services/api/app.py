@@ -20233,7 +20233,7 @@ async def record_session_event(
 ) -> Any:
     """SE8c: the page service reports a person's sign-in (its callback) or sign-out, with that
     person's own token. The event is recorded for the person the token names and no one else (the
-    body is one field, `kind`, from a closed list; any other field is a 422), once for each session,
+    body is one field, `kind`, from a closed list; any other field is a 422), once for each report,
     at most `RATE_LIMIT_PER_MINUTE` a person a minute. Fails closed like every audit write (503
     `audit_unavailable`); the page service carries on when it is refused. Not a place anyone may
     send words to: nothing in the body is stored."""

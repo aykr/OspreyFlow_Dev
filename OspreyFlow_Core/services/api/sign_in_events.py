@@ -55,8 +55,13 @@ than a missing sign-in) with `session: null`, there being no secret to key a ref
 for that token's person and no one else: the body is one field, `kind`, from a closed list of two,
 and any other field is refused (422), so a caller cannot name a person, a session or a channel. The
 page service's own client credential alone has no person in it and is refused as on every other
-route. Idempotent for one session (a repeated callback answers `recorded: false`); rate-limited per
-person (`RATE_LIMIT_PER_MINUTE`, a fixed window kept in Valkey: no other write route of the Conduit
+route. Idempotent for one report, not for one identity-provider session: the page service's
+sign-out ends its own session and not the provider's, so a second sign-in (and sign-out) of the
+same provider session carries the same `sid` and a token of its own, and is a row of its own.
+What can really repeat is one report, so a keyed hash of the token as sent (kept in the store for
+the token's remaining life and a minute, never the token or a part of it) answers a repeat of that
+report `recorded: false`; the design over-records and never under-records. Rate-limited per person
+(`RATE_LIMIT_PER_MINUTE`, a fixed window kept in Valkey: no other write route of the Conduit
 has a limit, so this one is its own).
 
 **Not recorded here: a refused sign-in.** A refusal never reaches the Conduit (the identity provider
@@ -316,28 +321,45 @@ class SignInWatch:
             return True
         return bool(count <= RATE_LIMIT_PER_MINUTE)
 
+    def _report(self, secret: bytes, kind: EventKind, token: str) -> str:
+        """What one report is: the token it was sent with, as a keyed hash (the token itself and any
+        part of it stay out of the store). A callback's token cannot be sent again by the page
+        service, which never retries, so only one report can repeat; a later sign-in in the same
+        identity-provider session carries a token of its own and is a report of its own."""
+        message = b"\0".join(part.encode() for part in ("osprey-report-v1", kind, token))
+        return hmac.new(secret, message, hashlib.sha256).hexdigest()[:32]
+
+    def _report_ttl(self, claims: dict[str, Any]) -> int:
+        """A report is remembered as long as its token could still be accepted: its remaining life
+        and the resolver's leeway, and never the session's twelve hours."""
+        exp = claims.get("exp")
+        life = exp - self._clock() if isinstance(exp, int | float) else 0
+        return int(min(max(life + LEEWAY_SECONDS, LEEWAY_SECONDS), MAX_MEMORY_SECONDS))
+
     async def record_event(self, token: str, principal: Principal, kind: EventKind) -> bool:
-        """Writes the `sign_in` or `sign_out` row for the person of `token` and no one else, once
-        for each session; False for a repeat. Raises `AuditWriteError` when the row cannot be
-        written (the route's 503), with the session released so that a retry records it."""
+        """Writes the `sign_in` or `sign_out` row for the person of `token` and no one else; False
+        only for a repeat of the same report (the same token, the same kind). Every sign-in and
+        every sign-out of the page service is a row, whatever the identity provider's session: the
+        row's `session` reference ties it to the Conduit's other rows for that session. Raises
+        `AuditWriteError` when the row cannot be written (the route's 503), with the report
+        released so that a retry records it."""
         claims = claims_of(token)
         session = _session_claim(claims)
         reference: str | None = None
         key: str | None = None
-        if session is not None:
-            try:
-                reference = self._reference(
-                    await self._deployment_secret(), principal, claims, session
-                )
-                key = f"{_PREFIX}{kind}:{reference}"
-                ttl = self._ttl(claims, session[0])
-                if not await self._store(self._valkey.set(key, "1", nx=True, ex=ttl)):
-                    return False
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:  # noqa: BLE001 - a duplicate row is better than a missing one
-                self._miss("tell whether an event was recorded", exc)
-                reference, key = None, None
+        try:
+            secret = await self._deployment_secret()
+            if session is not None:
+                reference = self._reference(secret, principal, claims, session)
+            key = f"{_PREFIX}{kind}:{self._report(secret, kind, token)}"
+            ttl = self._report_ttl(claims)
+            if not await self._store(self._valkey.set(key, "1", nx=True, ex=ttl)):
+                return False
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - a duplicate row is better than a missing one
+            self._miss("tell whether an event was recorded", exc)
+            reference, key = None, None
         try:
             await self._audit.record(
                 principal=principal,

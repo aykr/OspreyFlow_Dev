@@ -31,7 +31,7 @@ provider addresses are synthetic and made when the test runs.
 5. **`POST /v1/session-events`** (`sign_in` / `sign_out`): authenticated by the person's own token,
    so it records for that token's person and no other; refused without a token, with an expired or
    foreign token, and with the page service's own client credential alone; a closed list of two
-   kinds and no free text; idempotent for one session; rate-limited; fails closed (503) when the
+   kinds and no free text; idempotent for one report (not one provider session); rate-limited; fails closed (503) when the
    audit store is down, as every audit write does, with the retry still recorded once.
 6. **A record never carries** a token or any part of one, a cookie, a code, a state, a client
    secret, a password, an address of the provider, the session's own `sid` or the deployment
