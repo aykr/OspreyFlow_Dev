@@ -20,6 +20,13 @@
 //                             halves (the React hooks over them stay in the workspace's files of the same names)
 //   admin/inviter             what an inviter may give: the types and `givableLevels`, `givableCodes` (the context and
 //                             `useInviter` stay in the workspace)
+//   ingest/api, ingest/sources/api, ingest/releases/releasesApi
+//                             the Conduit clients of the Ingest Studio, the registered sources and the releases
+//   admin/sections/MapsApi, ModelsApi, admin/updateNotice
+//                             the Conduit clients of Admin's maps and models, and the update notice's words
+//                             (PL4 slice D2: each calls `fetch` and takes the bearer token as an argument; `admin/api`
+//                             stays in the workspace for now, because it takes its words about a refusal from
+//                             `help/roles`, which reads a record the workspace holds)
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -47,3 +54,9 @@ export * from "./layout/panelOrder";
 export * from "./layout/layoutSizes";
 export * from "./layout/sidePanelState";
 export * from "./admin/inviter";
+export * from "./ingest/api";
+export * from "./ingest/sources/api";
+export * from "./ingest/releases/releasesApi";
+export * from "./admin/sections/MapsApi";
+export * from "./admin/sections/ModelsApi";
+export * from "./admin/updateNotice";

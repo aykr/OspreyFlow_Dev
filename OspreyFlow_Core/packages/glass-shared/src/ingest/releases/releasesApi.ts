@@ -4,7 +4,7 @@
 import type {
   ReleaseExport,
   ReleaseImportPlan,
-} from "../../../../../packages/schemas/generated";
+} from "../../../../schemas/generated";
 
 function dataset(apiBaseUrl: string, datasetId: string): string {
   return `${apiBaseUrl}/v1/datasets/${encodeURIComponent(datasetId)}`;

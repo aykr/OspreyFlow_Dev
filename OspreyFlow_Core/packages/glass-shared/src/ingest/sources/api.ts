@@ -19,7 +19,7 @@ import type {
   SourceLineage,
   SourceProfile,
   SourceTable,
-} from "../../../../../packages/schemas/generated";
+} from "../../../../schemas/generated";
 import type { IngestSourceListing } from "../api";
 
 export interface SourcesApi {

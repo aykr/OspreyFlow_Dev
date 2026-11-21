@@ -10,8 +10,8 @@ import type { Connection, RegisterSourceInput, SourceTable } from "../../../../.
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import type { HandlingScheme, IngestSourceFile } from "../api";
-import { listConnections, listDatasetFiles, registerSource, type SourcesApi } from "./api";
+import type { HandlingScheme, IngestSourceFile } from "@ospreyflow/glass-shared";
+import { listConnections, listDatasetFiles, registerSource, type SourcesApi } from "@ospreyflow/glass-shared";
 import { EMPTY_GOVERNANCE, type Governance, GovernanceFields, handlingOf, missing } from "./GovernanceFields";
 
 const STEPS = ["Connection", "File", "Governance and refresh"] as const;

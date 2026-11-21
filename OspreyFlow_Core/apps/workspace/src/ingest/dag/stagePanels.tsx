@@ -10,7 +10,7 @@ import type {
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import { fetchDomainPacks } from "../api";
+import { fetchDomainPacks } from "@ospreyflow/glass-shared";
 
 export function StagePanel({ title, words, children }: { title: string; words: string; children?: React.ReactNode }) {
   return (

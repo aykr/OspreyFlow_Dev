@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { Handling } from "../../../../packages/schemas/generated";
-import type { HandlingScheme } from "../ingest/api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { lowerParts } from "./linkHandling";
 
 const SCHEME: HandlingScheme = {

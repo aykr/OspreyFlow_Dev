@@ -180,7 +180,7 @@ functions:
   # Plain shared code with no screen. A whole-function line in PARITY_EXCEPTIONS.yaml.
   - id: studio-api-helpers
     name: "Studio API and helpers"
-    where: "apps/workspace/src/ingest/api.ts (757), handlingParts.ts, alreadyLoaded.ts, fileSize.ts, percent.ts"
+    where: "packages/glass-shared/src/ingest/api.ts (757); apps/workspace/src/ingest: handlingParts.ts, alreadyLoaded.ts, fileSize.ts, percent.ts"
     slice: "none named"
     scenario: ""
     route: ""

@@ -15,7 +15,7 @@ import type { AdminDataset, Connection, ConnectionInput } from "../../../../../p
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import { addConnection, listAdminConnections } from "../../ingest/sources/api";
+import { addConnection, listAdminConnections } from "@ospreyflow/glass-shared";
 import { listDatasets, testConnection, type AdminApi } from "../api";
 
 type Kind = "files" | "sql" | "api" | "json" | "s3" | "athena";

@@ -30,7 +30,7 @@ import type {
   PipelineGraph,
   DomainPackEntry,
   StagingPreview,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 export interface HandlingCode {
   label: string;

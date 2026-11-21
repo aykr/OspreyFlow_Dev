@@ -65,7 +65,15 @@ import { ContextBanner, crossLinkFor, focusSavedViewsButton, useCaseContext } fr
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
-import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
+import {
+  fetchHandlingScheme,
+  type HandlingScheme,
+  DEFAULT_TIMELINE_HEIGHT,
+  createWorkingSet,
+  type HistoryStepSummary,
+  type LimitExceeded,
+  type WorkingSetDelta,
+} from "@ospreyflow/glass-shared";
 import { Button } from "./design/primitives/Button";
 import { AccountUnread } from "./auth/AccountUnread";
 import { Toast } from "./design/primitives/Toast";
@@ -135,13 +143,6 @@ import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
-import {
-  DEFAULT_TIMELINE_HEIGHT,
-  createWorkingSet,
-  type HistoryStepSummary,
-  type LimitExceeded,
-  type WorkingSetDelta,
-} from "@ospreyflow/glass-shared";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
 import { useOnReturn } from "./strength/useOnReturn";

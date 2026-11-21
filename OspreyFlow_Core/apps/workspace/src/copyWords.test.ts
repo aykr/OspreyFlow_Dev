@@ -7,24 +7,18 @@
 // Every such text is copy, the word alone too (`plural(n, "recipe", "recipes")` builds a sentence from
 // it), except a route or a path: a request's own description ("POST /v1/ingest/recipes") and any token
 // with a slash in it name a route, not a word on screen.
-// Tests and generated types are not on screen and are skipped.
-import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+// Tests and generated types are not on screen and are skipped. Two roots are read: the workspace's source
+// and `packages/glass-shared/src`, where the Conduit clients now live (the copy kit's `ROOTS`).
+import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
-const SRC = join(__dirname);
+import { movedClients, plantedCopy, shown, sourceFiles } from "./copyTextsTestKit";
+
 const WORD = /\brecipes?\b/i;
 const ROUTE = /^(GET|POST|PUT|PATCH|DELETE)\s+\/|\/v1\//;
-
-function files(dir: string): string[] {
-  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) return entry.name === "generated" ? [] : files(path);
-    return /\.(ts|tsx)$/.test(entry.name) && !/\.(test|spec)\./.test(entry.name) ? [path] : [];
-  });
-}
 
 export function copyWords(name: string, source: string): { line: number; words: string }[] {
   const tree = ts.createSourceFile(
@@ -60,10 +54,27 @@ export function copyWords(name: string, source: string): { line: number; words: 
 
 describe("the Glass's copy says pipeline", () => {
   it("in every string, template and line of JSX text a person can be shown", () => {
-    const hits = files(SRC).flatMap((path) =>
-      copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(SRC, path)}:${hit.line}: ${hit.words}`),
+    const hits = sourceFiles().flatMap((path) =>
+      copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${shown(path)}:${hit.line}: ${hit.words}`),
     );
     expect(hits).toEqual([]);
+  });
+
+  it("reads the Conduit clients that moved to packages/glass-shared/src (rule 15)", () => {
+    const walked = sourceFiles();
+    const clients = movedClients();
+    expect(clients.length).toBeGreaterThanOrEqual(6);
+    for (const client of clients) expect(walked, shown(client)).toContain(client);
+    // A plant in a copy of a moved client, in the shape of a line of the update notice, is found by the same walk.
+    const planted = plantedCopy("updateNotice.ts", 'export const PLANTED = { headline: "Recipe not checked yet" };');
+    try {
+      const hits = sourceFiles([planted.root]).flatMap((path) =>
+        copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
+      );
+      expect(hits).toEqual([`${planted.file}: Recipe not checked yet`]);
+    } finally {
+      planted.remove();
+    }
   });
 
   it("is found in each shape the Glass's copy took before this change (rule 15)", () => {

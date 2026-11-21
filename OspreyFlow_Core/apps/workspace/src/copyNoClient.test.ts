@@ -11,7 +11,7 @@ import { relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { copyTexts, sourceFiles, SRC } from "./copyTextsTestKit";
+import { copyTexts, movedClients, plantedCopy, shown, sourceFiles } from "./copyTextsTestKit";
 
 const WORDS = /\bclients?\b|\bclient's\b|\bclients'|to be confirmed|\bTBC\b|\bunconfirmed\b|\bnot confirmed\b|\bplaceholder\b/i;
 const KEY = /^[a-z][a-z0-9]*$/;
@@ -25,9 +25,26 @@ export function clientWords(name: string, source: string): { line: number; words
 describe("the Glass's copy names no client and no setting still to be confirmed", () => {
   it("in every string, template and line of JSX text a person can be shown", () => {
     const hits = sourceFiles().flatMap((path) =>
-      clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(SRC, path)}:${hit.line}: ${hit.words}`),
+      clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${shown(path)}:${hit.line}: ${hit.words}`),
     );
     expect(hits).toEqual([]);
+  });
+
+  it("reads the Conduit clients that moved to packages/glass-shared/src (rule 15)", () => {
+    const walked = sourceFiles();
+    const clients = movedClients();
+    expect(clients.length).toBeGreaterThanOrEqual(6);
+    for (const client of clients) expect(walked, shown(client)).toContain(client);
+    // A plant in a copy of a moved client, in the shape of a line of the update notice, is found by the same walk.
+    const planted = plantedCopy("updateNotice.ts", 'export const PLANTED = { note: "a placeholder value" };');
+    try {
+      const hits = sourceFiles([planted.root]).flatMap((path) =>
+        clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${relative(planted.root, path)}: ${hit.words}`),
+      );
+      expect(hits).toEqual([`${planted.file}: a placeholder value`]);
+    } finally {
+      planted.remove();
+    }
   });
 
   it("is found in each shape the copy took before this change (rule 15)", () => {

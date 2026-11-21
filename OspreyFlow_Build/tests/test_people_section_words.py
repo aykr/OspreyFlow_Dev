@@ -90,6 +90,16 @@ def _text(text: str, *, comments: bool = False) -> list[int]:
     return found
 
 
+#: Where the Glass's own strings are: the workspace, and the package that holds the Conduit clients and the rest of what
+#: moved out of it (ADR-152 decision 6; PL4d2 moved six clients whose errors and headlines a person reads).
+GLASS_ROOTS = ("apps/workspace/src", "packages/glass-shared/src")
+
+
+def _glass_files(roots: tuple[Path, ...] | None = None) -> list[Path]:
+    roots = roots or tuple(CORE / r for r in GLASS_ROOTS)
+    return [p for root in roots for p in sorted(root.rglob("*.ts*")) if ".test." not in p.name]
+
+
 def _said_alone() -> list[str]:
     found = []
     for folder in ("services", "packages/principal_auth", "harness", "cli"):
@@ -97,8 +107,7 @@ def _said_alone() -> list[str]:
             found += [f"{path.relative_to(CORE)}:{n}" for n in _python(path, docstrings=False)]
     for path in sorted((CORE / "packages/schemas").glob("*.py")):  # its docstrings are the schema's descriptions
         found += [f"{path.relative_to(CORE)}:{n}" for n in _python(path, docstrings=True)]
-    glass = [p for p in sorted((CORE / "apps/workspace/src").rglob("*.ts*")) if ".test." not in p.name]
-    for path in [*sorted((CORE / "packages/schemas/generated").glob("*.ts")), *glass]:
+    for path in [*sorted((CORE / "packages/schemas/generated").glob("*.ts")), *_glass_files()]:
         found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"), comments=True)
                   ]  # fmt: skip
     for path in [*sorted((CORE / "docs").glob("*.md")), CORE / "DEMO_GUIDE.md", CORE / "README.md"]:
@@ -140,6 +149,39 @@ def test_the_scan_finds_each_shape_the_real_files_hold(tmp_path: Path) -> None:
               'const words = "That person is not in Admin › People";\n'
               'const url = "https://x.example/y"; // Admin › People\n')  # fmt: skip
     assert _text(source, comments=True) == [4]
+
+
+#: The six clients that moved: a folder, then each file's stem. Never written as a path (the old-path scan in
+#: `glass_trees/test_glass_shared_clients.py` reads this file too, and only the package's own place may name them).
+_MOVED = {"ingest": ("api",), "ingest/sources": ("api",), "ingest/releases": ("releasesApi",),
+          "admin/sections": ("MapsApi", "ModelsApi"), "admin": ("updateNotice",)}  # fmt: skip
+MOVED_CLIENTS = tuple(f"{folder}/{stem}.ts" for folder, stems in _MOVED.items() for stem in stems)
+
+
+def test_the_scan_reaches_the_clients_that_moved_to_the_shared_package() -> None:
+    """The six clients left `apps/workspace/src` in PL4d2; the guard once read only that folder, and a name planted in
+    one of them stayed green (found in review). Each is read, and a plant in a copy of each, at the line a person's
+    words sit on, is found: the same copy, clean, finds nothing."""
+    read = {p.relative_to(CORE).as_posix() for p in _glass_files()}
+    for client in MOVED_CLIENTS:
+        assert f"packages/glass-shared/src/{client}" in read, client
+        assert f"apps/workspace/src/{client}" not in read, client
+
+
+@pytest.mark.parametrize("client", MOVED_CLIENTS)
+def test_the_old_name_planted_in_a_moved_client_is_found(client: str, tmp_path: Path) -> None:
+    real = (CORE / "packages/glass-shared/src" / client).read_text(encoding="utf-8")
+    copy = tmp_path / "src" / client
+    copy.parent.mkdir(parents=True)
+    copy.write_text(real, encoding="utf-8")
+
+    def found() -> list[int]:
+        files = _glass_files((tmp_path / "src",))
+        return [n for p in files for n in _text(p.read_text(encoding="utf-8"), comments=True)]
+
+    assert found() == []
+    copy.write_text(real + '\nexport const planted = "Set it in Admin › People.";\n', encoding="utf-8")
+    assert found() == [real.count("\n") + 2]
 
 
 EVERY = frozenset({"clearance", "org_unit", "handling_codes"})

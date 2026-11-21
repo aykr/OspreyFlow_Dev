@@ -28,7 +28,7 @@ import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
 import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import { endName } from "./LinkDetails";
 import { isInternalReference, propertyLabel } from "./propertyNames";
-import type { HandlingScheme } from "../ingest/api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { WatchForThis, type GlassApi } from "../watches/GlassWatchActions";
 
 function isResolutionLink(type: string): boolean {
