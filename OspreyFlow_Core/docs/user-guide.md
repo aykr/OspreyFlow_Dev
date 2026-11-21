@@ -24,9 +24,11 @@ this way") gives the fullest account, with what holds each constraint today and 
 - **Data sovereignty.** The deployment is run by your organisation, on its own network, with no route out
   except the few an install and an administrator set up. A hosted model engine is an opt-in; ask your
   administrator whether one is on.
-- **Privacy control.** What you see is bounded by handling markings and case membership. A record you
-  may not see is left out of what you are shown, and the aim is that no count reveals it either; known gaps
-  on the read side remain, and the architecture guide lists them.
+- **Privacy control.** What you see is meant to be bounded by handling markings and case membership, so a
+  record you may not see is meant to be left out of what you are shown, and no count is meant to reveal it
+  either. Known gaps on the read side remain, and the architecture guide lists them. One touches you if you
+  can build reports: in the boards' editor a builder sees the figures behind every board, for every case and
+  clearance, so that right is for people cleared for all of them.
 - **Security management.** Case reads, your changes and your report, assessment and pack exports are
   recorded and traceable to you. Recording every model call, and every sign-in, is coming.
 - **Analytical accountability.** A judgement carries its evidence and a probability band, and what a model
@@ -35,10 +37,11 @@ this way") gives the fullest account, with what holds each constraint today and 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.80** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.81** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.81 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line says what you see is *meant to be* bounded by handling markings and case membership, and no longer states it as fact; it names the one gap that touches an analyst who can build reports, that the boards' editor shows the figures behind every board for every case and clearance (DC1c, the verifier's finding). PDF made again. |
 | 1.80 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says model weights, map data, fonts and base images are outside the check that holds it, with a register and a gate for them coming (DC1c, verifier's finding). PDF made again. |
 | 1.79 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line no longer says a count is always hidden; it says the aim and that known gaps on the read side remain (DC1c, verifier's finding). PDF made again. |
 | 1.78 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to an analyst: the five constraints and what each means for the person working in a case (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |

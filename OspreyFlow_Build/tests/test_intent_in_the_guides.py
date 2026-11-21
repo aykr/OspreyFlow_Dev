@@ -254,7 +254,7 @@ def overstated_lines(body: str) -> list[str]:
     if re.search(r"on every change", licence) and not re.search(
         r"not (?:yet )?(?:reach|cover|check)|only|two images|inside an image|inside the images", licence
     ):
-        problems.append("the licence gate is said to check every dependency on every change, with no limit on its reach")
+        problems.append("the licence gate is said to check every dependency on every change, unlimited")
     return problems
 
 
@@ -463,7 +463,7 @@ def test_each_check_is_shown_red() -> None:
         "  change. Model weights are outside that check; a register and a gate for them are coming.\n"
     )
     assert overstated_lines(real_licence) == [
-        "the licence gate is said to check every dependency on every change, with no limit on its reach"
+        "the licence gate is said to check every dependency on every change, unlimited"
     ]
     real_privacy = (
         "- **Privacy control:** What you see is bounded by handling markings and case membership. A record you\n"

@@ -18,8 +18,9 @@ OspreyFlow is built to, and what each part means for your installation. The
 [architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
 fullest account, with what holds each constraint today and what is "coming".
 
-- **Software sovereignty.** You can inspect, modify, host and replace what you install. Every software
-  dependency is under an open-source licence, and a gate checks that on every change. Model weights, map
+- **Software sovereignty.** You can inspect, modify, host and replace what you install. The software
+  dependencies are under open-source licences, and a gate checks the build's package list against an
+  allowlist on every change; it does not yet reach every package inside the images. Model weights, map
   data, fonts and base images are outside the gate; a register and a gate for them are coming.
 - **Data sovereignty.** The deployment runs on your network, and its containers have no route out except
   for the downloads an install makes and the features you configure. A hosted model engine is an opt-in
@@ -34,7 +35,7 @@ fullest account, with what holds each constraint today and what is "coming".
   where Superset signs people in through Entra ID, a person who may build dashboards reads the whole
   reporting store in their own session, so give that right only to people cleared for all of it
   (section 6a.7).
-- **Security management.** Case reads, refusals of access to a case and every change are audited
+- **Security management.** Case reads, refusals of access to a case and changes are audited
   (section 9.11, *Operations and Audit*), and report, assessment, pack and feed exports go in a ledger.
   Some other exports write an audit row but no ledger row, and a platform backup writes neither; a ledger
   row for every export is coming, as is recording every model call and every sign-in.

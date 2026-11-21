@@ -56,7 +56,7 @@ still reaches outside; the other stores and servers are kept in by the network, 
 their own. No test yet proves that no page
 requests anything outside the deployment; a browser test that does is coming.
 
-**Privacy control.** What each person sees is bounded by handling markings and by case membership. This
+**Privacy control.** What each person sees is meant to be bounded by handling markings and by case membership. This
 guide and the screens call it need-to-know, access control, clearance and *withheld*. What holds it:
 access is applied inside the store's own query, in the graph traversal and in the analytics query, and
 search has a filter of its own (section 6). The aim is that a record a person may not see is absent, and so is any degree,
@@ -72,7 +72,7 @@ session, so that right is for people cleared for all of it (administration guide
 **Security management.** What people do in the platform is recorded and can be traced to them. Here,
 *access* means every read and write of case data. The reference reads that carry none, such as the type
 list and map tiles, are outside it, and so is deployment metadata. What holds it: case reads, refusals of
-access to a case and every change are written to an audit table, with who, when and what, and a failed
+access to a case and changes are written to an audit table, with who, when and what, and a failed
 write fails the request. The export ledger records who, when, which case, the handling level and whether
 anything was withheld, for report, assessment, pack and feed exports. What does not yet: model calls are
 recorded with the person and the case for some jobs (asking, extraction and document designation), not for
@@ -80,7 +80,7 @@ all, and asking does not record the engine, so one record of every model call, w
 case and to which engine, is coming; sign-in events are not recorded by the platform, and recording them
 is coming; some exports (a dataset release, a rule file, a source file)
 write an audit row but no ledger row, and a platform backup and an object transfer write neither, so a
-ledger row for every export is coming. The audit table is append-only in intent, not yet refused by the
+ledger row for every export is coming. No test yet checks that each route that changes data writes an audit row. The audit table is append-only in intent, not yet refused by the
 database to another role, and carries no hash chain. Section 6 lists what is not audited, by design.
 
 **Analytical accountability.** A judgement carries its evidence and its uncertainty with it. What holds
@@ -95,10 +95,11 @@ its own.
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.10** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.11** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.11 | 2026-11-21 | *Why OspreyFlow is built this way* and §6, held to the truth check a third time (DC1c, the verifier's findings): the audit sentences say case reads, refusals of access to a case and *changes* are audited, not "every change", and §6 adds that no test yet checks that each route that changes data writes a row; the privacy sentence says what each person sees is *meant to be* bounded. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.10 | 2026-11-21 | *Why OspreyFlow is built this way* and §9, corrected to the truth check (DC1c, verifier's second findings): §9 says an open-source alternative is used or the component is not bundled, since the register's Grafana row records no alternative. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.9 | 2026-11-21 | *Why OspreyFlow is built this way*, corrected to the truth check (DC1c, verifier's findings): a container's route out is described as what the model downloads, the proxy's certificate fetch and the configured features need, not as configured alone; the speech server's download step and the certificate fetch are named among what does not yet hold; the licence gate is described as reading the build's package metadata, with the Python packages inside an image checked for two images only; Superset's tracking image is from "an address outside the deployment"; the privacy sentence is an aim held by the store's queries, with two named read-side gaps. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.8 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening: the intent and the five constraints (software sovereignty, data sovereignty, privacy control, security management, analytical accountability), each with what holds it today and what is "coming" (DC1c). §6: the audit sentence said to cover case data, with what is not audited by design, the export ledger's contents and the two records still to come, instead of "every read and write". §9: the licence rule and the allowlist in words, naming no product; the table of avoided components moved to the specification's licence register (the owner's ruling of 20 November 2026). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
@@ -272,7 +273,7 @@ person confirms it. No confidence threshold promotes it on anyone's behalf.
   `limit_exceeded` and three choices (save a smaller view, filter first, or run it as a batch job),
   never truncated.
 - **Reads and writes of case data are audited**, with who, when and what. Case reads, refusals of access
-  to a case and every change are recorded; an expansion that crosses a handling boundary needs a
+  to a case and changes are recorded; an expansion that crosses a handling boundary needs a
   justification, which is recorded with it. A failed audit write fails the request. Here *access* means
   every read and write of case data. The reference reads that carry none, the type list and map tiles,
   are outside it.

@@ -19,8 +19,9 @@ OspreyFlow is built to, and what each part means for your installation. The
 [architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
 fullest account, with what holds each constraint today and what is "coming".
 
-- **Software sovereignty.** You can inspect, modify, host and replace what you install. Every software
-  dependency is under an open-source licence, and a gate checks that on every change. Model weights, map
+- **Software sovereignty.** You can inspect, modify, host and replace what you install. The software
+  dependencies are under open-source licences, and a gate checks the build's package list against an
+  allowlist on every change; it does not yet reach every package inside the images. Model weights, map
   data, fonts and base images are outside the gate; a register and a gate for them are coming.
 - **Data sovereignty.** The deployment runs on your network, and its containers have no route out except
   for the downloads an install makes and the features you configure. A hosted model engine is an opt-in
@@ -35,7 +36,7 @@ fullest account, with what holds each constraint today and what is "coming".
   where Superset signs people in through Entra ID, a person who may build dashboards reads the whole
   reporting store in their own session, so give that right only to people cleared for all of it
   (section 6a.7).
-- **Security management.** Case reads, refusals of access to a case and every change are audited
+- **Security management.** Case reads, refusals of access to a case and changes are audited
   (section 9.11, *Operations and Audit*), and report, assessment, pack and feed exports go in a ledger.
   Some other exports write an audit row but no ledger row, and a platform backup writes neither; a ledger
   row for every export is coming, as is recording every model call and every sign-in.
@@ -45,10 +46,11 @@ fullest account, with what holds each constraint today and what is "coming".
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.31** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 2.32** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.32 | 2026-11-21 | *Why OspreyFlow is built this way*, held to the truth check a third time (DC1c, the verifier's findings). Software sovereignty: the line says the licence gate checks the build's package list against an allowlist on every change and does not yet reach every package inside the images, in place of saying it checks every dependency; model weights, map data, fonts and base images are still outside the gate, with a register and a gate for them coming. Security management: case reads, refusals of access to a case and changes are audited, no longer "every change". The shipped guide and its copy in the specification (`spec/10_ADMINISTRATION_GUIDE.md`) carry the same passage word for word. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 2.31 | 2026-11-21 | *Why OspreyFlow is built this way*, held to the truth check a second time (DC1c, the verifier's findings). Privacy control: the line says what each person sees is meant to be bounded by handling markings and case membership, and no longer states it as fact; it names the one read-side gap an administrator controls, that where Superset signs people in through Entra ID a person who may build dashboards reads the whole reporting store in their own session (§6a.7), so that right is for people cleared for all of it, and it points to the architecture guide for the others (a pulls figure shown to an administrator who may not see those cases, and the search index's own access setting, which is not yet set). Security management: the line says report, assessment, pack and feed exports go in the export ledger, and that some other exports write an audit row but no ledger row, and a platform backup writes neither, so a ledger row for every export is coming; recording every model call and every sign-in is still coming, as before. §12's sentence on Superset charts that need outside map tiles is as it was. The architecture guide gives the fullest account of all five constraints, with what holds each today and what is coming. The shipped guide and its copy in the specification (`spec/10_ADMINISTRATION_GUIDE.md`) carry the same passage word for word, and `tests/test_admin_guide_copies.py` holds the two together. The passage still says that the deployment runs on your network and that its containers have no route out except for the downloads an install makes and the features you configure; that a hosted model engine is an opt-in, off while `models.local_only` is true; that a first install needs the internet, that a default install fetches its model files on every start, and that a Small deployment on an https address fetches a certificate unless you give it yours; and that Superset's usage-tracking image is not stopped in v0.6.1 and earlier, while v0.6.2 stops it with a content policy that allows no outside address. The licence line still says that model weights, map data, fonts and base images are outside the licence gate, with a register and a gate for them coming. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 2.30 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to whoever installs it: the five constraints and what each means for an installation (DC1c). §12: a Superset chart that needs outside map tiles will not load, and why (SE6a). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
