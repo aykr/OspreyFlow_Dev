@@ -588,7 +588,8 @@ def test_a_bad_or_incomplete_record_is_skipped_and_reported_and_the_board_goes_o
     def board():
         p = sh([w["py"], str(w["lines"] / "board.py")], w["repo"], w["env"], check=False)
         rows = {ln.split()[0]: ln for ln in p.stdout.splitlines() if ln.startswith(("S1 ", "S2 "))}
-        builds = status_file.read_text().split('"builds":', 1)[1] if status_file.exists() else ""
+        builds = (status_file.read_text().split('"builds":', 1)[1].split('"owed_live_tests":', 1)[0]
+                  if status_file.exists() else "")  # the builds map alone (C adds build_slices after it)
         return p, rows, builds
 
     kept = rec.read_bytes() if rec.exists() else None

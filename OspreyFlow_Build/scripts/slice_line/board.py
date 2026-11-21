@@ -184,7 +184,23 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         shown = f"waiting on {', '.join(waits)}" if waits else "ready"
         source = "backlog file's after column"
     rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
-                 "from": source, "track": kw["track"], "account": kw["account"]})
+                 "from": source, "track": kw["track"], "account": kw["account"], "merged": state == "done"})
+
+
+def slice_counts(rows: list[dict], ids: set) -> dict:
+    """For each build of the plan with rows in the backlog file: how many of its slices have merged (shown done, from a
+    merge record the board accepts) and how many are cut (its rows: a row added later raises it), and the two said as
+    "M of N" (LINE_FIXES_5_BRIEF.md, C). A build with none merged says "0 of N"; it is never left out."""
+    out: dict = {}
+    for r in rows:
+        if r["build"] not in ids:
+            continue  # reported to the owner already, never written
+        d = out.setdefault(r["build"], {"merged": 0, "cut": 0})
+        d["cut"] += 1
+        d["merged"] += 1 if r.get("merged") else 0
+    for d in out.values():
+        d["said"] = f"{d['merged']} of {d['cut']}"
+    return out
 
 
 def owed_list(problems: list[str]) -> list[dict]:
@@ -200,7 +216,8 @@ def self_clear_lines(rows: list[dict] | None = None) -> list[str]:
             for r in (c.self_clears() if rows is None else rows)]
 
 
-def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None) -> Path:
+def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None,
+                 counts: dict | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
     try:
@@ -210,9 +227,12 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
     for k, v in builds.items():
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
+    counts = counts or {}
+    builds = {k: {**v, **({"slices": counts[k]["said"], "slices_merged": counts[k]["merged"],
+                           "slices_cut": counts[k]["cut"]} if k in counts else {})} for k, v in builds.items()}
     body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
             "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"},
-            "self_clears": c.self_clears()}
+            "self_clears": c.self_clears(), "build_slices": counts}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -284,9 +304,10 @@ def main() -> int:
     except RuntimeError:
         slices = []
     rows, builds, problems = compute(slices)
+    counts = slice_counts(rows, c.plan_ids())
     owed = owed_list(problems)
     ci = c.main_ci()
-    path = write_status(builds, owed=owed, ci=ci)
+    path = write_status(builds, owed=owed, ci=ci, counts=counts)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
         if ci["state"] == "red":
@@ -299,6 +320,7 @@ def main() -> int:
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
+        print("slices merged of those cut, per build: " + ", ".join(f"{b} {d['said']}" for b, d in sorted(counts.items())))
         for acct in sorted({r['account'] for r in rows if r['account']} | {"default", "sol"}):
             near, stop = c.near_limit(acct), c.account_stop(acct)
             if near or stop:

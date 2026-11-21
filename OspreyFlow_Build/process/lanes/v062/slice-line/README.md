@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (381 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (304 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (386 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (309 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -110,7 +110,10 @@ without a tool call; the line's own cap is 6 red stops.
    A slice merged on an acceptance has `accepted_findings` (the count, the text, the split) in `merged.json`; the board
    prints "merged, accepted narrower: N findings" and `status.js` keeps the findings (`accepted_findings`) for the
    conductor's next report.
-5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop.
+5. `board.py` prints the board and writes `status.js` after every merge, verifier record and stop. For each build
+   it writes how many of its slices have merged and how many are cut (its rows in `slices.tsv` on main; a row
+   added later raises it): `slices` ("9 of 12"), `slices_merged` and `slices_cut` on the build's entry, and
+   `build_slices` for every build of the plan with rows, so a build with none merged says "0 of N".
 
 ## The merge gate's findings, retries and temp folders
 

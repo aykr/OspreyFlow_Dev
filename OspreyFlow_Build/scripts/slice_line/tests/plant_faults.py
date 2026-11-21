@@ -172,7 +172,7 @@ M = [
  ("OspreyFlow_Build/tools/release_local.py", '    refusal = green_refusal(sha)\n    if refusal:', '    refusal = None\n    if refusal:', "both_release_paths_check_github_green"),
  ("OspreyFlow_Build/scripts/publish_user_repo_update.sh", 'python3 "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check', 'true "$ROOT/ospreyflow/OspreyFlow_Build/scripts/slice_line/release_green.py" check', "both_release_paths_check_github_green"),
  ("board.py", '            print(f"main is red: run {ci[\'run\']}', '            print(f"main: run {ci[\'run\']}', "board_prints_main_is_red"),
- ("board.py", '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, ci=ci)', '    ci = c.main_ci()\n    path = write_status(builds, owed=owed)', "board_prints_main_is_red"),
+ ("board.py", '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, ci=ci, counts=counts)', '    ci = c.main_ci()\n    path = write_status(builds, owed=owed, counts=counts)', "board_prints_main_is_red"),
  ("guard.py", '    r"(?:^|[\\s;&|(`\'\\"\\\\/=])(?:claude|claude-sol|claude-ayan)(?=$|[\\s;&|)`\'\\"<>])"', '    r"(?:^|[\\s;&|(`])(?:claude|claude-sol|claude-ayan)(?:\\s|$)"', "seat_launch_every_variant"),
  ("guard.py", '    r"|claude-code\\b"\n', '', "seat_launch_every_variant"),
  ("guard.py", '    r"|\\$\\{?\\w+\\}?\\s*[\'\\"]?aude\\b"\n', '', "seat_launch_every_variant"),
@@ -325,6 +325,12 @@ M = [
  ("dry_run.py", '    written = stand_in(tree, acceptance_files(spec))\n', '    written = []\n', "acceptance_command_being_red"),
  ("slice_start.py", '    if not problems and left:\n', '    if False:\n', "leave_files"),
  ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "rulings_copy_is_in_the_worktree"),
+ # LINE_FIXES_5_BRIEF.md, C: merged of cut, per build
+ ("board.py", '"account": kw["account"], "merged": state == "done"})', '"account": kw["account"], "merged": bool(merged)})', "merge_record_the_board_refuses"),
+ ("board.py", '        d["cut"] += 1\n', '        d["cut"] = max(d["cut"], 3)\n', "new_row_raises_the_cut"),
+ ("board.py", '            "self_clears": c.self_clears(), "build_slices": counts}', '            "self_clears": c.self_clears(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}}', "no_merged_slice_writes_0_of_n"),
+ ("board.py", '    builds = {k: {**v, **({"slices": counts[k]["said"]', '    builds = {k: {**v, **({} if True else {"slices": counts[k]["said"]', "two_merged_writes_2_of_3"),
+ ("board.py", '        if r["build"] not in ids:\n            continue', '        if False:\n            continue', "not_in_the_plan_is_not_counted"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
