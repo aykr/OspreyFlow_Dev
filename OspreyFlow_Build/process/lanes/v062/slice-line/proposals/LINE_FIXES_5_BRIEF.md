@@ -140,7 +140,12 @@ and refuses the owner-only files; (3) the guard refuses a direct `git commit` to
 (the trailer rule); (4) `process/CLAUDE.md` is on the guard's protected list. **The smallest change: one new `merge_slice.py` mode, run by the conductor, and nothing
 else widened.**
 
-- `merge_slice.py approve-diff <name>`: records, in the records folder (`approved/<name>.json`), the diff file's SHA-256, its name and the date, written by the
+- **The owner's two additions (21 November):** (a) the owner gives the approval in chat as `approved: <name> <hash8>`, where hash8 is the first 8 characters of
+  the diff's SHA-256; `approve-diff` takes **both** the name and the hash8, and **refuses if they do not match the file** (the conductor never runs it on a name
+  alone); (b) **every report to the owner lists, at the top, each owner-approved diff applied since the last report: name, hash8, commit.** Make the second
+  mechanical: `apply-approved` appends a line (name, hash8, commit, date) to a committed list in the records folder that the board prints and the conductor copies
+  into the report.
+- `merge_slice.py approve-diff <name> <hash8>`: records, in the records folder (`approved/<name>.json`), the diff file's SHA-256, its name and the date, written by the
   conductor on seeing the owner's "approved: <name>" in chat. (The line cannot read chat; this is the conductor's attestation, kept in a committed record the owner
   can audit.)
 - `merge_slice.py apply-approved <name>`: refuses unless (a) an approval record exists and the diff file's current SHA-256 equals the recorded one (**"if the diff
