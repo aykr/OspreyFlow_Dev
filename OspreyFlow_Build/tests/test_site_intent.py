@@ -12,7 +12,7 @@ DC1a's table in `process/lanes/v062/slices/DOC1A_REPORT.md`):
   flagged when planted back in the shape the pages carry it, and the shapes behind them);
 - outside the paragraph neither site says "guarantee";
 - a hosted engine is described as an opt-in; the licence statement says what it covers and what is outside it; the
-  attribution of model calls and sign-in events, and the fix for Superset's usage image, are said as coming and as v0.6.2;
+  attribution of model calls and sign-in events, and the fix for Superset's usage image, are said as coming, the fix as in the next release (the pages name no version but the latest);
 - the older six-page site (`marketing_site/deploy`) does not carry the paragraph.
 
 Every check is a function of one folder, run on the committed pages and then on a copy with one violation planted in the
@@ -270,7 +270,7 @@ def wording_violations(root: Path) -> list[str]:
     one = _constraint(root, FIVE[0])
     found += [f"software sovereignty lacks {w!r}" for w in ("model weights", "map data", "fonts", "base images", "outside", "coming") if w not in one]
     two = _constraint(root, FIVE[1])
-    found += [f"data sovereignty lacks {w!r}" for w in ("opt-in", "v0.6.2", "no route out by default") if w not in two]
+    found += [f"data sovereignty lacks {w!r}" for w in ("opt-in", "next release", "no route out by default") if w not in two]
     four = _constraint(root, FIVE[3])
     found += [f"security management lacks {w!r}" for w in ("coming", "model call", "sign-in", "type list", "map tiles") if w not in four]
     public = _flat(page_text(root / "org" / "public-sector.html"))
@@ -430,7 +430,7 @@ def test_a_constraint_with_three_sentences_or_no_link_is_flagged(sites: Path) ->
     page = sites / HOMES["org"]
     source = page.read_text(encoding="utf-8")
     page.write_text(source.replace("<h3>Privacy control</h3><p>", "<h3>Privacy control</h3><p>One. Two. Three. ", 1), encoding="utf-8")
-    assert any("Privacy control has 3 sentences" in v or "Privacy control has 4 sentences" in v for v in constraint_violations(sites))
+    assert any(re.search(r"Privacy control has [3-9] sentences", v) for v in constraint_violations(sites))
     page.write_text(re.sub(r'(<h3>Analytical accountability</h3>.*?)<a href="[^"]*">', r'\1<a href="https://example.test/">', page.read_text(encoding="utf-8"), count=1, flags=re.DOTALL), encoding="utf-8")
     assert any("Analytical accountability links to" in v for v in constraint_violations(sites))
 
@@ -476,16 +476,16 @@ def test_the_paragraphs_own_guarantee_is_not_flagged_and_a_changed_paragraph_is_
 def test_a_hosted_engine_without_the_words_opt_in_is_flagged(sites: Path) -> None:
     for p in pages(sites):
         p.write_text(re.sub(r"opt-in", "optional", p.read_text(encoding="utf-8"), flags=re.IGNORECASE), encoding="utf-8")
-    assert "net/services.html" not in hosted_without_opt_in(sites)
-    _plant(sites / "net" / "services.html", "<p>A hosted engine answers when asked.</p>")
-    assert "net/services.html" in hosted_without_opt_in(sites)
+    assert "net/contact.html" not in hosted_without_opt_in(sites)
+    _plant(sites / "net" / "contact.html", "<p>A hosted engine answers when asked.</p>")
+    assert "net/contact.html" in hosted_without_opt_in(sites)
 
 
 @pytest.mark.parametrize(
     "page, out, fault",
     [
         ("org/index.html", "base images", "software sovereignty lacks 'base images'"),
-        ("org/index.html", "v0.6.2", "data sovereignty lacks 'v0.6.2'"),
+        ("org/index.html", "next release", "data sovereignty lacks 'next release'"),
         ("org/index.html", "sign-in", "security management lacks 'sign-in'"),
         ("org/public-sector.html", "map data", "the licence statement on org/public-sector.html lacks 'map data'"),
     ],
