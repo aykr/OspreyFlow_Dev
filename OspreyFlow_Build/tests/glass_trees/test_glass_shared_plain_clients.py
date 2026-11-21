@@ -130,7 +130,7 @@ RENAMED_BY_THE_INDEX = (
 
 #: The stray file, written in two pieces: this file is read by the old-path walks of the earlier moves, which look for
 #: the export client's name.
-STRAY = WORKSPACE_SRC + "export/api" + ".ts.bak"
+STRAY = WORKSPACE_SRC + "export/" + "api.ts.bak"
 
 #: The places that may name an old path because they are a record of the past: the decision log, and the build record
 #: under `process/`. They are not rewritten.
@@ -1005,8 +1005,10 @@ def test_the_stray_backup_is_gone() -> None:
 def test_a_backup_left_in_the_tree_is_found() -> None:
     """Red for the check above (rule 15), on the shape `git ls-files` gives: the stray file itself, another backup beside a
     source file of the package, and a backup of a file that is not part of the product's code (not this check's business)."""
-    clean = [WORKSPACE_SRC + "export/ExportPanel.tsx", SHARED + "theme/theme.ts"]
+    clean = [WORKSPACE_SRC + "export/ExportPanel.tsx", SHARED + "somewhere/helper.ts"]
     assert stray_backups(clean) == []
     assert stray_backups([*clean, STRAY]) == [STRAY]
-    assert stray_backups([*clean, SHARED + "theme/theme.ts.bak"]) == [SHARED + "theme/theme.ts.bak"]
+    assert stray_backups([*clean, SHARED + "somewhere/helper.ts.bak"]) == [
+        SHARED + "somewhere/helper.ts.bak"
+    ]
     assert stray_backups([*clean, "OspreyFlow_Build/tests/fixtures/old.csv.bak"]) == []
