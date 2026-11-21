@@ -6,7 +6,7 @@
 // (ADR-095 decision 4). Reachable by keyboard (`keyboard/link-events.spec.ts`).
 import { useEffect, useRef, useState } from "react";
 
-import { emailsOutcomeText, showEmailsAsDocuments } from "./emailDocuments";
+import { emailsOutcomeText, showEmailsAsDocuments } from "@ospreyflow/glass-shared";
 
 import type { EventRecord } from "../../../../packages/schemas/generated";
 import {
@@ -25,8 +25,8 @@ import {
   fetchLinkEvents,
   type EmailCandidate,
   type LinkEventPage,
-} from "./linkEventsApi";
-import { emailDocumentId, type DocumentReaderView } from "../reader/readerApi";
+} from "@ospreyflow/glass-shared";
+import { emailDocumentId, type DocumentReaderView } from "@ospreyflow/glass-shared";
 
 export interface LinkEventsProps {
   apiBaseUrl: string;

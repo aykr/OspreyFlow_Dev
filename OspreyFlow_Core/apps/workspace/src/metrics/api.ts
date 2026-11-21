@@ -1,5 +1,5 @@
 // Fetch wrapper for `POST /v1/investigations/{id}/compute/{metric}`
-// (`services/api/compute_routes.py`) — mirrors `analytics/api.ts`'s own conventions. `services/
+// (`services/api/compute_routes.py`) — mirrors `packages/glass-shared/src/analytics/api.ts`'s own conventions. `services/
 // api/compute_routes.py`'s `ComputeMetricRequest`/`ComputeMetricAccepted` are route-level models,
 // not `packages/schemas/`-generated ones (the same "hand-typed inline" shape
 // `resolution/ThresholdControl.tsx`'s own `{ threshold: number }` already establishes for

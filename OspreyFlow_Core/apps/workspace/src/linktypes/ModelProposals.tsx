@@ -9,8 +9,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { currentBrand } from "@ospreyflow/glass-shared";
-import { LinkTypeError, type ProposalStatus } from "./linkTypesApi";
-import { decideModelProposal, listModelProposals, type ModelProposal } from "./modelProposalsApi";
+import { LinkTypeError, type ProposalStatus } from "@ospreyflow/glass-shared";
+import { decideModelProposal, listModelProposals, type ModelProposal } from "@ospreyflow/glass-shared";
 
 export interface ModelProposalsProps {
   apiBaseUrl: string;

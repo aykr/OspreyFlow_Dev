@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { OntologyRegistry } from "../ontology/schema";
 import { actOnAppear } from "../testing/actOnAppear";
 import { DocumentReader } from "./DocumentReader";
-import type { DocumentReaderView } from "./readerApi";
+import type { DocumentReaderView } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

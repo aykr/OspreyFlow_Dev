@@ -11,7 +11,8 @@ vi.mock("echarts/core", () => ({
     resize: () => undefined, dispose: () => undefined, getOption: () => ({}) }),
 }));  // prettier-ignore
 const holders = vi.fn();
-vi.mock("../analytics/api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   fetchHistogram: async () => ({ bucketing: "fixed_interval", buckets: [], total: 0 }),
   fetchCaseEvents: (...args: unknown[]) => holders(...args),
 }));

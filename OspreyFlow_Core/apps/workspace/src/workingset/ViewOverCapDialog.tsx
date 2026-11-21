@@ -1,6 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from "react";
 
-import { type CaseViewOpened, deleteView, openView, saveView } from "../views/viewsApi";
+import { type CaseViewOpened, deleteView, openView, saveView } from "@ospreyflow/glass-shared";
 import type { LimitExceeded } from "@ospreyflow/glass-shared";
 
 const COUNT = new Intl.NumberFormat("en-GB");

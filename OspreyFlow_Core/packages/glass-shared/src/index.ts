@@ -32,6 +32,16 @@
 //                             the Conduit clients of the export, the alert queue and rules, the patterns and the reports,
 //                             and the words they and the print document share (PL4 slice D3a: each calls `fetch` and takes
 //                             the bearer token as an argument; `WITHHELD_SENTENCE` came out of the status bar's React file)
+//   inspector/emailDocuments, linkChangeApi, linkEventsApi, linkNotesApi, linktypes/http, linkTypesApi,
+//   modelProposalsApi, questions/questionsApi, graphFacts, reader/readerApi, dossier/api, models,
+//   views/viewsApi, workingset/batchExpansionApi, boards/promotionsApi, analytics/api
+//                             the Conduit clients of the link inspector and its notes, the link types and their model
+//                             proposals, the questions and the reader, the saved views, the batch expansion, the boards'
+//                             promotions and the analytics (PL4 slice D3b: each calls `fetch` and takes the bearer token
+//                             as an argument; `questions/graphFacts` came along, as `questionsApi` takes its citation
+//                             types from it). Three names were written twice, so the index gives them apart: the link
+//                             types' `send` is `sendLinkType`, the promotions' is `sendPromotion` and the questions'
+//                             `rejectProposal` is `rejectQuestionProposal` (the report clients keep `send`)
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -78,3 +88,52 @@ export * from "./reports/dashboards";
 export * from "./reports/trendsApi";
 export * from "./reports/packText";
 export * from "./reports/packsApi";
+export * from "./dossier/models";
+export * from "./dossier/api";
+export * from "./inspector/emailDocuments";
+export * from "./inspector/linkChangeApi";
+export * from "./inspector/linkEventsApi";
+export * from "./inspector/linkNotesApi";
+export { LinkTypeError, type LinkTypeErrorKind, send as sendLinkType } from "./linktypes/http";
+export * from "./linktypes/linkTypesApi";
+export * from "./linktypes/modelProposalsApi";
+export * from "./questions/graphFacts";
+export {
+  type AskScope,
+  type Citation,
+  type QuestionAnswer,
+  type ReadFrom,
+  type ReadSummary,
+  type UnusableEngine,
+  type WillRead,
+  type WillReadScope,
+  acceptProposal,
+  askQuestion,
+  listQuestions,
+  rejectProposal as rejectQuestionProposal,
+  willRead,
+} from "./questions/questionsApi";
+export * from "./reader/readerApi";
+export * from "./views/viewsApi";
+export * from "./workingset/batchExpansionApi";
+export {
+  type Answer,
+  type LayerDeleted,
+  type LayerDryRun,
+  type LayerMergeSheet,
+  type Promotion,
+  type PromotionDetails,
+  type PromotionSheet,
+  type Promotions,
+  type RemovedCaseLayers,
+  type SheetItem,
+  STATUS_WORDS,
+  addsInWords,
+  answered,
+  boardPromotions,
+  promote,
+  promotionSheet,
+  send as sendPromotion,
+  startingTicks,
+} from "./boards/promotionsApi";
+export * from "./analytics/api";

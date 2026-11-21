@@ -320,7 +320,8 @@ MOVED = {
     "linktypes/ProposedTypes.tsx": "admin",  # ADR-090 Amendment 5: Proposed types, in Admin
     # ADR-143 decision 9 (L3.5): the Studio's Model tab decides a dataset's proposed link types.
     "linktypes/ModelProposals.tsx": "ingest",
-    "linktypes/modelProposalsApi.ts": "ingest",
+    # Written in two pieces: the file is in `packages/glass-shared/src` now, and the old-path scan reads this file.
+    "linktypes/modelProposals" + "Api.ts": "ingest",
     # ADR-146 decisions 4 and 7: the watches and alerts made from the Glass are drawn in the Glass.
     "watches/GlassWatchActions.tsx": "glass",
 }

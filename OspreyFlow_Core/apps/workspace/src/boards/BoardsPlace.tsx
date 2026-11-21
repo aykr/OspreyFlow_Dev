@@ -8,7 +8,7 @@ import { useCallback, useEffect, useState } from "react";
 import { currentBrand } from "@ospreyflow/glass-shared";
 import { BoardEditor, type EntityTypeShape } from "./BoardEditor";
 import { listBoards, makeBoard, startDrawing, type Board } from "./boardsApi";
-import { listViews } from "../views/viewsApi";
+import { listViews } from "@ospreyflow/glass-shared";
 import "./boards.css";
 
 export interface BoardsPlaceProps {

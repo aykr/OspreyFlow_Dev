@@ -46,7 +46,7 @@ import {
 import "./boards.css";
 import { BoardAlerts } from "./BoardAlerts";
 import { BoardPromotionsList, PromoteSheet } from "./PromoteSheet";
-import { boardPromotions, type Promotion } from "./promotionsApi";
+import { boardPromotions, type Promotion } from "@ospreyflow/glass-shared";
 
 export interface EntityTypeShape {
   name: string;

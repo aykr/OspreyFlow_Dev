@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { makeNode } from "../testing/fixtures";
-import { candidateSource, eventsNoun } from "./linkEventsApi";
+import { candidateSource, eventsNoun } from "@ospreyflow/glass-shared";
 
 const enronAddress = makeNode("enron-ep-1", {
   type: "Endpoint",

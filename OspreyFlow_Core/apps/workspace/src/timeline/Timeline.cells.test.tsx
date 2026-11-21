@@ -19,7 +19,8 @@ vi.mock("echarts/core", () => ({
     getOption: () => ({}),
   }),
 }));
-vi.mock("../analytics/api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   fetchHistogram: async (_u: string, _t: string, request: { bucketing: string }) =>
     request.bucketing === "weekday_hour"
       ? { bucketing: "weekday_hour", buckets: [{ weekday: 5, hour: 9, count: 2 }], total: 2 }

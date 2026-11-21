@@ -3,7 +3,7 @@
 // decisions. Same conventions as `inspector/linkChangeApi.ts`: Bearer auth, and a refusal thrown
 // with the server's own sentence and a `kind` the form words its message from. The shapes are
 // written out here because they are not domain models; they mirror the server's.
-import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
+import type { EdgeTypeDef } from "../../../schemas/generated";
 
 export type ProposalStatus = "pending" | "promoted" | "rejected" | "withdrawn" | "merged" | "retired" | "accepted";
 

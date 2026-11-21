@@ -13,7 +13,7 @@ import type {
   TrendFigures,
   TrendOptions,
 } from "../../../../packages/schemas/generated";
-import { fetchCaseEvents } from "../analytics/api";
+import { fetchCaseEvents } from "@ospreyflow/glass-shared";
 import { DOMAIN_PACKS, type DomainPack, domainLabels, listCases } from "../investigation/cases";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { Button, Checkbox, Input, RadioGroup, Select } from "../design/primitives";

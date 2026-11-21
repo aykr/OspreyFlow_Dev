@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { extractDocument } from "./readerApi";
+import { extractDocument } from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

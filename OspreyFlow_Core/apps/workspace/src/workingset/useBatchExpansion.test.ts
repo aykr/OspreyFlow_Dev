@@ -6,7 +6,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import type { BatchExpansionRequest } from "./batchExpansionApi";
+import type { BatchExpansionRequest } from "@ospreyflow/glass-shared";
 import { useBatchExpansion } from "./useBatchExpansion";
 
 const REQUEST: BatchExpansionRequest = {

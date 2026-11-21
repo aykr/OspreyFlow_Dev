@@ -1007,9 +1007,9 @@ def test_the_vitest_walkers_name_the_new_folders() -> None:
     assert "LINK_CLIENTS" in kit and "plantedLinkClients" in kit, (
         "the kit does not list the link clients or plant in them"
     )
-    listed = set(re.findall(r'"(\w+)"', kit))
+    block = kit[kit.index("const LINK_STEMS") :].split("};", 1)[0]
     for folder, stems in _MOVED.items():
-        assert folder in listed and all(stem in listed for stem in stems), (
+        assert re.search(rf"\b{folder}:", block) and all(f'"{stem}"' in block for stem in stems), (
             f"the kit's list of link clients leaves out {folder}"
         )
     for walker in ("copyWords.test.ts", "copyNoClient.test.ts", "auth/resolvedPrincipal.test.ts"):

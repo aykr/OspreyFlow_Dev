@@ -3,7 +3,7 @@
 // analyst typed as the request the server takes, or a sentence saying what is wrong. The server
 // holds the same rules (`services/api/link_types.py`); these only spare the analyst a round trip.
 import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
-import type { ProposeLinkTypeInput } from "./linkTypesApi";
+import type { ProposeLinkTypeInput } from "@ospreyflow/glass-shared";
 
 /** The nine data-channel names a type may be drawn in (`schemas/domain.py::DATA_CHANNELS`). */
 export const TYPE_COLOURS = ["ochre", "rose", "plum", "violet", "indigo", "azure", "cyan", "jade", "moss"] as const;

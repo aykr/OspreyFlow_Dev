@@ -4,7 +4,7 @@ import type { Edge, EdgeTypeDef, Handling } from "../../../../packages/schemas/g
 import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { linkTypeName } from "../canvas/linkLabel";
 import { DefineLinkType, definitionOf } from "../linktypes/DefineLinkType";
-import { LinkChangeError, changeLink, type LinkChangeResult } from "./linkChangeApi";
+import { LinkChangeError, changeLink, type LinkChangeResult } from "@ospreyflow/glass-shared";
 import {
   MAX_REASON_CHARS,
   basisChoicesFor,

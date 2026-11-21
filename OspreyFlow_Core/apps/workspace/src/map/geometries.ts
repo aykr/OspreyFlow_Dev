@@ -9,7 +9,7 @@ import type {
   Node,
   OntologySchema,
 } from "../../../../packages/schemas/generated";
-import { fetchGeometries } from "../analytics/api";
+import { fetchGeometries } from "@ospreyflow/glass-shared";
 import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 
 /** `node.properties.geometry_ref` is untyped JSON on the wire

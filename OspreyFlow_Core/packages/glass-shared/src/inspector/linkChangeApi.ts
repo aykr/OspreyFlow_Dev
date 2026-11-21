@@ -3,8 +3,8 @@
 // throw on a refusal with the server's own sentence and a `kind` the form words its message from.
 // The shapes are written out here because they are not domain models (`schemas/generated` holds
 // only those); they mirror `LinkChange`, `LinkChangeRequest` and `LinkChangeResult` in the server.
-import type { Edge, Handling } from "../../../../packages/schemas/generated";
-import type { DeltaReplaceEdge } from "@ospreyflow/glass-shared";
+import type { Edge, Handling } from "../../../schemas/generated";
+import type { DeltaReplaceEdge } from "../workingset/models";
 
 export interface LinkChangeRecord {
   id: string;

@@ -5,7 +5,7 @@
 import type { Edge, EdgeTypeDef, Handling, PropertyDef } from "../../../../packages/schemas/generated";
 import { linkTypeName } from "../canvas/linkLabel";
 import type { HandlingScheme } from "@ospreyflow/glass-shared";
-import type { LinkChangeInput } from "./linkChangeApi";
+import type { LinkChangeInput } from "@ospreyflow/glass-shared";
 import { lowerParts } from "./linkHandling";
 
 /** The same limit the server holds (`services/api/link_changes.py::MAX_REASON_CHARS`). */

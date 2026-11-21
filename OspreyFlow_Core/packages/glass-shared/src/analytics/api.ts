@@ -14,7 +14,7 @@ import type {
   HistogramRequest,
   Sighting,
   SightingRequest,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 function authHeaders(bearerToken: string): HeadersInit {
   return { Authorization: `Bearer ${bearerToken}`, "Content-Type": "application/json" };

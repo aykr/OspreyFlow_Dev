@@ -10,8 +10,8 @@ import type {
   CaseView,
   CaseViewOpened,
   ViewFilter,
-} from "../../../../packages/schemas/generated";
-import type { LimitExceeded } from "@ospreyflow/glass-shared";
+} from "../../../schemas/generated";
+import type { LimitExceeded } from "../workingset/models";
 
 export type { CaseView, CaseViewOpened, ViewFilter };
 

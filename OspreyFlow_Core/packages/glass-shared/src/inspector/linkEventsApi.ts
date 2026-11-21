@@ -1,8 +1,8 @@
 // The events behind one link (ADR-089): the emails between two addresses, newest first, a page at
 // a time. `GET .../links/{edge}/events` answers only to someone who can see the link, with the one
 // `link_not_found` refusal for a hidden and a missing link alike.
-import type { EventRecord, Node } from "../../../../packages/schemas/generated";
-import { modelDeadline, unreachedWords } from "@ospreyflow/glass-shared";
+import type { EventRecord, Node } from "../../../schemas/generated";
+import { modelDeadline, unreachedWords } from "../models/modelDeadline";
 
 export const EVENTS_PAGE_SIZE = 50;
 

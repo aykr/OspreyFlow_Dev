@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { LinkChangeRecord, LinkSnapshot } from "./linkChangeApi";
+import type { LinkChangeRecord, LinkSnapshot } from "@ospreyflow/glass-shared";
 import { describeChange } from "./describeChange";
 
 const base: LinkSnapshot = { type: "ASSOCIATE_OF", properties: {}, interval: null, occurrences: 3 };

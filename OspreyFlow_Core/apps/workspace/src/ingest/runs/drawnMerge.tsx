@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ChecksList, LeftOutList, SheetChecklist } from "../../boards/PromoteSheet";
-import { addsInWords, startingTicks, STATUS_WORDS, type Promotion } from "../../boards/promotionsApi";
+import { addsInWords, startingTicks, STATUS_WORDS, type Promotion } from "@ospreyflow/glass-shared";
 import { currentBrand } from "@ospreyflow/glass-shared";
 import {
   drawnMergeSheet,
