@@ -33,15 +33,44 @@ export class IdentityProviderUnavailable extends Error {
 }
 
 /**
+ * Why a sign-in was refused, as a word of ours from a closed list: what the service's own log says (SE8c), and nothing of
+ * the provider's own words. The provider's refusals themselves stay in the provider's own log, which is where an
+ * organisation reads them; the service records only the class.
+ */
+export const REFUSAL_REASONS = [
+  "no_login_cookie",
+  "no_login_record",
+  "provider_error",
+  "state_mismatch",
+  "no_code",
+  "code_refused",
+  "id_token_invalid",
+  "nonce_mismatch",
+  "no_id_token",
+  "no_subject",
+  "refused",
+] as const;
+
+export type RefusalReason = (typeof REFUSAL_REASONS)[number];
+
+export function isRefusalReason(value: unknown): value is RefusalReason {
+  return typeof value === "string" && (REFUSAL_REASONS as readonly string[]).includes(value);
+}
+
+/**
  * The provider was reached and said no, or answered with something that does not verify: a refused
  * code, a state or nonce that is not the flow's own, a token for another audience, the provider's own
  * `error=` on the callback. Answered `403` in words that change nothing about the person's access, and
- * **never** in the provider's words (ADR-044: not the same as `IdentityProviderUnavailable`).
+ * **never** in the provider's words (ADR-044: not the same as `IdentityProviderUnavailable`). What is
+ * logged is `reason`, a word from `REFUSAL_REASONS`, never `message`.
  */
 export class IdentityProviderRefused extends Error {
-  constructor(message: string) {
+  readonly reason: RefusalReason;
+
+  constructor(message: string, reason: RefusalReason = "refused") {
     super(message);
     this.name = "IdentityProviderRefused";
+    this.reason = reason;
   }
 }
 

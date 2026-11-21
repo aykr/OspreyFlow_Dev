@@ -47,6 +47,7 @@ import { MemorySessionStore } from "../../server/sessionStore.js";
 import { main } from "../../server/start.js";
 import type { Running } from "../../server/start.js";
 import { captureOutput } from "../support/capture.js";
+import { noSessionEvents } from "../support/noSessionEvents.js";
 import { testClock } from "../support/clock.js";
 import type { TestClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request as pageRequest, TEST_SESSION_SECRET } from "../support/http.js";
@@ -537,7 +538,7 @@ async function startPages(options: StartOptions = {}): Promise<Pages> {
   const running = await main(
     env,
     { log: (m) => void io.logs.push(m), error: (m) => void io.errors.push(m), exit: (c) => void io.exits.push(c) },
-    { store: memory, identityProvider: provider, host: "127.0.0.1", clock },
+    { store: memory, identityProvider: provider, host: "127.0.0.1", clock, sessionEvents: noSessionEvents },
   );
   if (!running) throw new Error(`the service did not start: ${io.errors.join(" / ")}`);
   everyone.push(running);

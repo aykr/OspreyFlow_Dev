@@ -237,6 +237,12 @@ class Pool:
         return [r for r in self.rows if r["action"] == action]
 
 
+def events(rig: Rig) -> list[dict[str, Any]]:
+    """The rows the route writes (`sign_in`, `sign_out`): a valid token on a refused body still
+    writes the first-seen row, which is the Conduit seeing a session and not this route's doing."""
+    return [r for r in rig.pool.rows if r["action"] in ("sign_in", "sign_out")]
+
+
 def detail(row: dict[str, Any]) -> dict[str, Any]:
     out = json.loads(row["resolved_query"])
     assert isinstance(out, dict)
@@ -721,10 +727,10 @@ def test_the_route_refuses_an_expired_token_and_a_token_of_another_key(rig: Rig)
 def test_the_route_records_for_the_person_of_the_token_and_never_for_another(rig: Rig) -> None:
     alice, bob = rig.session("analyst-1"), rig.session("analyst-2")
     rig.event(bob.token(), "sign_in")
-    assert [r["principal_id"] for r in rig.pool.rows] == ["analyst-2"]
+    assert [r["principal_id"] for r in rig.pool.rows] == ["analyst-2", "analyst-2"]
     assert "analyst-1" not in json.dumps(rig.pool.rows, default=str)
     rig.event(alice.token(), "sign_out")
-    assert {(r["action"], r["principal_id"]) for r in rig.pool.rows} == {
+    assert {(r["action"], r["principal_id"]) for r in events(rig)} == {
         ("sign_in", "analyst-2"),
         ("sign_out", "analyst-1"),
     }
@@ -738,7 +744,7 @@ def test_a_caller_cannot_name_a_person_a_session_or_a_channel(rig: Rig, field: s
     not ignored."""
     s = rig.session("analyst-2")
     answer = rig.event(s.token(), "sign_in", **{field: "analyst-1"})
-    assert answer.status_code == 422 and rig.pool.rows == []
+    assert answer.status_code == 422 and events(rig) == []
 
 
 @pytest.mark.parametrize(
@@ -757,7 +763,7 @@ def test_a_caller_cannot_name_a_person_a_session_or_a_channel(rig: Rig, field: s
     ],
 )
 def test_the_event_kind_is_a_closed_list_of_two(rig: Rig, kind: Any) -> None:
-    assert rig.event(rig.session().token(), kind).status_code == 422 and rig.pool.rows == []
+    assert rig.event(rig.session().token(), kind).status_code == 422 and events(rig) == []
 
 
 def test_free_text_in_the_kind_is_stored_nowhere_and_logged_nowhere(
@@ -772,7 +778,7 @@ def test_free_text_in_the_kind_is_stored_nowhere_and_logged_nowhere(
     ):
         answer = rig.http.post(ROUTE, json=body, headers={"Authorization": f"Bearer {s.token()}"})
         assert answer.status_code == 422
-    assert rig.pool.rows == [] and leaks(rig, caplog, {"the caller's text": text}) == []
+    assert events(rig) == [] and leaks(rig, caplog, {"the caller's text": text}) == []
 
 
 def test_the_route_takes_a_json_body_of_the_one_field_only(rig: Rig) -> None:
@@ -781,7 +787,7 @@ def test_the_route_takes_a_json_body_of_the_one_field_only(rig: Rig) -> None:
     for content in ("kind=sign_in", "", "[]", '"sign_in"', "{"):
         assert rig.http.post(ROUTE, content=content, headers=headers).status_code == 422
     assert rig.http.post(ROUTE, headers=headers).status_code == 422
-    assert rig.pool.rows == []
+    assert events(rig) == []
 
 
 def test_a_repeated_callback_of_one_session_records_it_once(rig: Rig) -> None:
@@ -831,7 +837,7 @@ def test_the_route_records_even_when_valkey_is_down_a_duplicate_over_a_missing_r
     rig.valkey.down = True
     assert rig.event(s.token(), "sign_in").status_code == 200
     assert len(rig.pool.of("sign_in")) == 1
-    assert detail(rig.pool.rows[0])["session"] is None, (
+    assert detail(events(rig)[0])["session"] is None, (
         "no secret to key the reference with: said so, not guessed"
     )
 

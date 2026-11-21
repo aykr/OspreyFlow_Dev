@@ -1030,6 +1030,7 @@ from .service_identity import (
     ServiceIdentityVerifier,
     is_deployment_client,
 )
+from .sign_in_events import SessionEvent, SessionEventResponse, SignInWatch
 from .site_images import (
     object_key_for,
     read_site_image,
@@ -1346,6 +1347,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         graph, ValkeyWorkingSetStore(valkey), handling_scheme, valkey=valkey
     )
     app.state.audit = audit
+    # SE8c: the first time a session is seen is recorded, from `get_principal`, and the page service
+    # reports its sign-ins and sign-outs: both over the Valkey and the audit writer above.
+    app.state.sign_in_watch = SignInWatch(valkey, audit)
     app.state.investigations = investigations
     app.state.custom_roles = custom_roles
     app.state.admin_people = admin_people
@@ -2254,6 +2258,13 @@ async def get_principal(
                     + ", ".join(sorted(identity.routes)),
                 },
             )
+    # SE8c: a session this Conduit has not seen is recorded, once, after the resolver has accepted
+    # its token (a refused token writes nothing). A dashboard identity admitted to named routes
+    # alone is an application, not a person signing in. `note_seen` never raises: a store fault
+    # is counted and logged, never a refused request.
+    watch: SignInWatch | None = getattr(request.app.state, "sign_in_watch", None)
+    if watch is not None and identity.routes is None:
+        await watch.note_seen(credentials.credentials, identity)
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
@@ -20211,6 +20222,30 @@ async def me_route(principal: PrincipalDep) -> MeResponse:
         roles=list(principal.roles),
         receivable_handling_codes=list(principal.receivable_handling_codes),
     )
+
+
+@app.post("/v1/session-events", response_model=SessionEventResponse)
+async def record_session_event(
+    body: SessionEvent,
+    request: Request,
+    principal: PrincipalDep,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> Any:
+    """SE8c: the page service reports a person's sign-in (its callback) or sign-out, with that
+    person's own token. The event is recorded for the person the token names and no one else (the
+    body is one field, `kind`, from a closed list; any other field is a 422), once for each session,
+    at most `RATE_LIMIT_PER_MINUTE` a person a minute. Fails closed like every audit write (503
+    `audit_unavailable`); the page service carries on when it is refused. Not a place anyone may
+    send words to: nothing in the body is stored."""
+    watch: SignInWatch | None = getattr(request.app.state, "sign_in_watch", None)
+    if watch is None:
+        return JSONResponse(status_code=503, content={"error": "session_events_unavailable"})
+    if not await watch.allow(principal):
+        return JSONResponse(
+            status_code=429, content={"error": "rate_limited"}, headers={"Retry-After": "60"}
+        )
+    recorded = await watch.record_event(credentials.credentials, principal, body.kind)
+    return SessionEventResponse(recorded=recorded)
 
 
 @app.get("/v1/me/rights")

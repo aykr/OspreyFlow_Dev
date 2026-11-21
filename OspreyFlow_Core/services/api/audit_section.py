@@ -241,6 +241,9 @@ READS_AND_OTHER: tuple[str, ...] = (
     # SE8a: one row for each model call, with who asked, the case, the engine and the model
     # (names only; `services/api/model_calls.py`). Its words are withheld like any read's.
     "model_call",
+    # SE8c: a session the Conduit saw for the first time, and the page service's report of a
+    # sign-in and a sign-out (`services/api/sign_in_events.py`). Names and a keyed reference only.
+    "sign_in_seen", "sign_in", "sign_out",
     # Rules' L2.11 (ADR-146 decision 3, Amendment 6): the rule editor's datasets read, a draft
     # saved, tested, made live or asked to go live; with the other rule actions.
     "read_rule_datasets", "rule_draft_saved", "rule_tested", "rule_made_live",

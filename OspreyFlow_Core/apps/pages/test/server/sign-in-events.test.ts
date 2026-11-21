@@ -476,13 +476,14 @@ describe("the Conduit is down, silent or refusing: sign-in and sign-out go on", 
   });
 
   it("silent: the sign-in is not held for it, and the call is given up", async () => {
-    const r = await rig({ timeoutMs: 150 });
+    const r = await rig({ timeoutMs: 1500 });
     r.conduit.hang = true;
     const started = Date.now();
     const signed = await signInOnce(r);
-    expect(Date.now() - started).toBeLessThan(2000);
+    // Two requests (the sign-in, then the page) and no wait for a Conduit that will not answer for 1.5 s.
+    expect(Date.now() - started).toBeLessThan(900);
     expect(sessionKeys(r).length).toBe(1);
-    await until("the given-up call", () => r.misses() === 1, 3000);
+    await until("the given-up call", () => r.misses() === 1, 4000);
     const res = await signOut(r, signed);
     expect(res.status).toBe(303);
     expect(sessionKeys(r)).toEqual([]);
