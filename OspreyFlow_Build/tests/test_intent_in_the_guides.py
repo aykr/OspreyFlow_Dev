@@ -249,8 +249,7 @@ LICENCE_LIMIT = re.compile(
 )
 #: "each store or engine sits behind a port": PostgreSQL, Valkey and OpenSearch are not behind one.
 PORT_CLAIM = re.compile(
-    r"\b(?:each|every|all)\b[^.;]{0,60}\b(?:stores?|engines?|components?|dependenc\w+)\b[^.;]{0,80}\bbehind\s+a\s+port"
-    r"|\b(?:each|every|all)\b[^.;]{0,40}\bbehind\s+a\s+port",
+    r"\b(?:each|every|all)\s+(?:of\s+the\s+)?(?:stores?|engines?|components?|dependenc\w+)\b[^.;]{0,80}\bbehind\s+a\s+port",
     re.IGNORECASE,
 )
 HOSTAGE = re.compile(r"hostage", re.IGNORECASE)
@@ -484,14 +483,17 @@ def test_no_file_states_the_licence_gate_or_replacement_without_its_limit() -> N
 
 def test_the_architecture_passage_says_which_stores_are_behind_a_port() -> None:
     """Section 2 puts four ports and three narrower ones in front of the graph store, the analytics store, graph
-    algorithms, the models, the media store, recognition and the index feed; PostgreSQL, Valkey and OpenSearch
-    are in front of none, so the passage must not claim replacement for them."""
-    bullet_text = bullet(passage(read(FILES[ARCHITECTURE])) or "", "Software sovereignty")
-    for store in ("PostgreSQL", "Valkey", "OpenSearch"):
-        assert store in bullet_text, f"the passage does not name {store} as outside the ports"
+    algorithms, the models, the media store, recognition and the index feed; the relational store (the audit
+    table and the export ledger), the working-set store and the search index are in front of none, so the
+    passage must say so and must not claim replacement for them. It names them by what they do: the passage
+    names no product (`test_the_passages_name_no_product`)."""
+    bullet_text = fold(bullet(passage(read(FILES[ARCHITECTURE])) or "", "Software sovereignty")).lower()
+    for behind in ("graph store", "analytics store", "graph algorithms", "model engines", "media store"):
+        assert behind in bullet_text, f"the passage does not say the {behind} sits behind a port"
+    for outside in ("relational store", "working-set store", "search index"):
+        assert outside in bullet_text, f"the passage does not name the {outside} as outside the ports"
     assert re.search(r"not behind a port|behind no port|no port", bullet_text)
-    for behind in ("graph store", "analytics store", "model"):
-        assert behind in bullet_text, f"the passage does not say the {behind} is behind a port"
+    assert "replacing one is not an adapter" in bullet_text
 
 
 # ---------------------------------------------------------------- rule 15: each check shown red

@@ -19,8 +19,9 @@ part means for you. The [architecture guide](architecture-guide.md) (its section
 this way") gives the fullest account, with what holds each constraint today and what is "coming".
 
 - **Software sovereignty.** Your organisation can inspect, modify, host and replace the software you work
-  in: every software dependency is under an open-source licence. Model weights, map data, fonts and base
-  images are outside the check that holds that; a register and a gate for them are coming.
+  in. The software dependencies are under open-source licences, and a gate checks the build's package list
+  against an allowlist on every change; it does not yet reach every package inside the images. Model
+  weights, map data, fonts and base images are outside that check; a register and a gate for them are coming.
 - **Data sovereignty.** The deployment is run by your organisation, on its own network, with no route out
   except the few an install and an administrator set up. A hosted model engine is an opt-in; ask your
   administrator whether one is on.
@@ -37,10 +38,11 @@ this way") gives the fullest account, with what holds each constraint today and 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.81** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.82** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.82 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says the gate checks the build's package list against an allowlist on every change and does not yet reach every package inside the images, in place of saying every software dependency is under an open-source licence; model weights, map data, fonts and base images stay outside that check, with a register and a gate for them coming (DC1c, round 5). PDF made again. |
 | 1.81 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line says what you see is *meant to be* bounded by handling markings and case membership, and no longer states it as fact; it names the one gap that touches an analyst who can build reports, that the boards' editor shows the figures behind every board for every case and clearance (DC1c, the verifier's finding). PDF made again. |
 | 1.80 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says model weights, map data, fonts and base images are outside the check that holds it, with a register and a gate for them coming (DC1c, verifier's finding). PDF made again. |
 | 1.79 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line no longer says a count is always hidden; it says the aim and that known gaps on the read side remain (DC1c, verifier's finding). PDF made again. |

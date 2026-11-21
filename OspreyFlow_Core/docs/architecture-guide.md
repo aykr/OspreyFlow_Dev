@@ -24,11 +24,14 @@ what does not yet. Where something is not built, this guide says "coming".
 
 **Software sovereignty.** You can inspect, modify, host and replace the software that holds your
 knowledge. Software you can read lets you check for yourself what it does with your data, without asking
-its supplier. Software you can change lets you fix or adapt it on your own timetable. Software you can host
-runs where your rules say it must, and software you can replace means a supplier's change of terms never
-holds your records hostage. Here that means every dependency is under an open-source licence, and each
-store or engine sits behind a port (section 2), so replacing one is one adapter and one line of
-configuration. What holds it: a licence gate runs on every change and reads the Python and Node package
+anyone else. Software you can change lets you fix or adapt it on your own timetable. Software you can host
+runs where your rules say it must, and software you can replace lets you change one part without
+rebuilding the rest. Here that means the software dependencies are under open-source licences. The graph
+store, the analytics store, graph algorithms, the model engines, the media store and the recognition pass
+sit behind ports (section 2), so for each of them replacing the engine is one adapter and one line of
+configuration. The relational store (the audit table and the export ledger), the working-set store and the
+search index are not behind a port: they are open-source software you can read and host, but there is no
+port for them, so replacing one is not an adapter's work. What holds it: a licence gate runs on every change and reads the Python and Node package
 metadata of the build, the runtime each image carries and each demonstration dataset's licence (the Python
 packages inside an image are checked for two images only); a package under the GPL
 or AGPL never passes, and an LGPL one only with a recorded exception (section 9). The statement covers
@@ -95,10 +98,11 @@ its own.
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.11** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.12** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.12 | 2026-11-21 | *Why OspreyFlow is built this way*, held to the truth check a fourth time (DC1c, round 5). Software sovereignty: the line no longer says replaceable software keeps a record from being held hostage, and no longer says each store or engine sits behind a port; it argues for software you can read, change, host and replace on its merits, says which stores and engines are behind a port (the graph store, the analytics store, graph algorithms, the model engines, the media store and the recognition pass) and says the relational store, the working-set store and the search index are not, so replacing one is not an adapter's work. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.11 | 2026-11-21 | *Why OspreyFlow is built this way* and §6, held to the truth check a third time (DC1c, the verifier's findings): the audit sentences say case reads, refusals of access to a case and *changes* are audited, not "every change", and §6 adds that no test yet checks that each route that changes data writes a row; the privacy sentence says what each person sees is *meant to be* bounded. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.10 | 2026-11-21 | *Why OspreyFlow is built this way* and §9, corrected to the truth check (DC1c, verifier's second findings): §9 says an open-source alternative is used or the component is not bundled, since the register's Grafana row records no alternative. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.9 | 2026-11-21 | *Why OspreyFlow is built this way*, corrected to the truth check (DC1c, verifier's findings): a container's route out is described as what the model downloads, the proxy's certificate fetch and the configured features need, not as configured alone; the speech server's download step and the certificate fetch are named among what does not yet hold; the licence gate is described as reading the build's package metadata, with the Python packages inside an image checked for two images only; Superset's tracking image is from "an address outside the deployment"; the privacy sentence is an aim held by the store's queries, with two named read-side gaps. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
