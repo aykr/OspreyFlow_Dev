@@ -42,7 +42,7 @@ import {
   type BoardOpened,
   type Grading,
   type MatchSuggestions,
-} from "./boardsApi";
+} from "@ospreyflow/glass-shared";
 import "./boards.css";
 import { BoardAlerts } from "./BoardAlerts";
 import { BoardPromotionsList, PromoteSheet } from "./PromoteSheet";

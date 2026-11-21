@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import { clamp, gradesOf, itemLabel, linkLabel, moved, nextPlace, offerGrades, placed } from "./boardModel";
-import type { BoardOpened } from "./boardsApi";
+import type { BoardOpened } from "@ospreyflow/glass-shared";
 
 const at = "2026-11-08T10:00:00Z";
 const provenance = (drawn?: Record<string, unknown>) => ({

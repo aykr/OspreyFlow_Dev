@@ -3,7 +3,7 @@
 // on a non-`ok` response). The jump's case of its own went in L2.9 (ADR-146 decision 6).
 //
 // `Hotlist`, `Monitor` and the schedule's input are the generated shapes.
-import type { Hotlist, Monitor, MonitorScheduleInput } from "../../../../packages/schemas/generated";
+import type { Hotlist, Monitor, MonitorScheduleInput } from "../../../schemas/generated";
 
 /** ADR-133 ruling 3: whom a hotlist's alerts reach. */
 export type HotlistAudience = NonNullable<Hotlist["audience"]>;

@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 
 import type { Edge, LinkStrength, PairRarity } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { fetchConnectionStrengths, fetchRarity } from "../strength/api";
+import { fetchConnectionStrengths, fetchRarity } from "@ospreyflow/glass-shared";
 import {
   COMPOSITION_LABEL,
   MEASURE_LABEL,

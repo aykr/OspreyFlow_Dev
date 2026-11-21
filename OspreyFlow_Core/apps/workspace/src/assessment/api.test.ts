@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { saveJudgement, UnverifiableCitationApiError } from "./api";
+import { saveJudgement, UnverifiableCitationApiError } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   vi.unstubAllGlobals();

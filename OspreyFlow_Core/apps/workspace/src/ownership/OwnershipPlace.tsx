@@ -9,7 +9,7 @@ import { useState } from "react";
 import type { Edge, KycStatus, Node, OwnershipView, OwnerTrace } from "../../../../packages/schemas/generated";
 import { Button, Input } from "../design/primitives";
 import { nodeName, type CanvasOutcome } from "@ospreyflow/glass-shared";
-import { findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi } from "./api";
+import { findEntities, kycStatus, ownershipToCanvas, traceOwnership, type OwnershipApi } from "@ospreyflow/glass-shared";
 
 export interface OwnershipPlaceProps {
   apiBaseUrl: string;

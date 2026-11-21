@@ -25,6 +25,16 @@ Pure only, with the store ports pinned to 9: the new test; `tests/test_docs_pdf.
 
 Rendering the Node service in any deployment (compose, Caddyfile, Helm, cloud-platform Ingress, `service_inventory`), its path routing, any `OSPREY_PAGES_*` setting in a renderer, `appearance.govuk_identity` and the I9 proofs, the I14 refusal of Superset under GOV.UK, the I18 and I22 render tests, the cutover and release-notes test, the pages image's `packages/glass-shared` copy (until a page imports it), anything under `apps/workspace`, the protected files, and the demo.
 
+## Round 6 (the table of what is open after round 5; written by the conductor from the verifier's record on tip `a82b32e`; judged against this table)
+
+The verifier checked everything else and found it holds (the derived state, the uniqueness check and its planted faults, the allowlist lines, the guided-page facts, no renderer file in the diff). **One open case:**
+
+| # | Open case | Where | What closes it |
+|---|---|---|---|
+| 1 | Fault (wording): in section 6a the GOV.UK install sentences ("Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.") sit inside the cloud-platform paragraph, just before its closing "(Section 4.1.) The decisions are ADR-148's.", so the paragraph credits them to ADR-148 (the cloud-platform namespace ADR) when they come from ADR-152 Amendment 1 decision 5 and the owner's ruling of 21 November; and "Use the command line (`ospreyflow install`)" follows a sentence saying the command does not run `cloud-platform`, so a reader of 6a cannot tell whether the advice applies to that profile | `OspreyFlow_Core/docs/administration-guide.md` about line 1034, and the same text in `OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md` about line 812 | Move the GOV.UK sentences after "The decisions are ADR-148's.", or start them with words saying they cover the GOV.UK modes `ospreyflow install` does take (lite, small, enterprise); both copies; PDF and manifest by the project's command, never by hand; `tests/test_docs_pdf.py`, `tests/test_admin_guide.py` stay green |
+
+**This is the last round the owner has given on this slice.** Change nothing else. Cheap checks first.
+
 ## Round 5 (one round, the owner's add-round line and ruling of 21 November, after the stop at round 4 of 4)
 
 Round 4 left one fault in the install passages (two contradictory statements) and one gap in the test. **The owner has ruled on the first (21 November 2026): both routes are allowed, said plainly. No product change.** Write the three passages (administration guide sections 4.1 and 6a, the README's "Installing and running it"; both copies of each guide; the PDF and manifest with the project's own command, never by hand) to say exactly this and nothing the ADR does not say:

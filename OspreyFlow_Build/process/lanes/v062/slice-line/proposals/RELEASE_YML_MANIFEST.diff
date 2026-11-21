@@ -1,0 +1,35 @@
+diff --git a/OspreyFlow_Core/.github/workflows/release.yml b/OspreyFlow_Core/.github/workflows/release.yml
+--- a/OspreyFlow_Core/.github/workflows/release.yml
++++ b/OspreyFlow_Core/.github/workflows/release.yml
+@@ -140,6 +140,14 @@
+       # The lock names the third-party images' digests, so it is signed too (Amendment 8 point 11).
+       - name: Sign the lock, keyless
+         run: cosign sign-blob --yes --bundle versions.lock.sigstore.json versions.lock
++      # ADR-114 Amendment 51: the maintainer's manifest of this tag, generated from the tracked files at the tag and
++      # signed as the lock is. No second rules file is supplied, so it has no "maintained under" column.
++      - name: The maintainer's manifest
++        run: PYTHONPATH=.:packages uv run python -m scripts.maintainer_manifest --ref "$GITHUB_REF_NAME" --out .
++      - name: Sign the manifest, keyless
++        run: |
++          cosign sign-blob --yes --bundle maintainer-manifest.csv.sigstore.json maintainer-manifest.csv
++          cosign sign-blob --yes --bundle maintainer-manifest.md.sigstore.json maintainer-manifest.md
+       # ADR-114 Amendment 11: the guided install page, built here and shipped beside the release —
+       # stamped with the hash of its sources, packed, and signed as the lock is.
+       - uses: actions/setup-node@v4
+@@ -175,6 +183,8 @@
+             --lock versions.lock --lock-signature versions.lock.sigstore.json \
+             --blob install-page.tar.gz --blob-signature install-page.tar.gz.sigstore.json \
+             --blob "ospreyflow-${GITHUB_REF_NAME#v}.tgz" --blob-signature "ospreyflow-${GITHUB_REF_NAME#v}.tgz.sigstore.json" \
++            --blob maintainer-manifest.csv --blob-signature maintainer-manifest.csv.sigstore.json \
++            --blob maintainer-manifest.md --blob-signature maintainer-manifest.md.sigstore.json \
+             --artifact "$CHART_REF" \
+             --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" --cosign cosign
+       - name: Publish
+@@ -184,4 +194,6 @@
+           gh release create "$GITHUB_REF_NAME" --title "OspreyFlow $GITHUB_REF_NAME" \
+             --notes-file notes.md versions.lock versions.lock.sigstore.json \
+             install-page.tar.gz install-page.tar.gz.sigstore.json \
+-            "ospreyflow-${GITHUB_REF_NAME#v}.tgz" "ospreyflow-${GITHUB_REF_NAME#v}.tgz.sigstore.json"
++            "ospreyflow-${GITHUB_REF_NAME#v}.tgz" "ospreyflow-${GITHUB_REF_NAME#v}.tgz.sigstore.json" \
++            maintainer-manifest.csv maintainer-manifest.csv.sigstore.json \
++            maintainer-manifest.md maintainer-manifest.md.sigstore.json

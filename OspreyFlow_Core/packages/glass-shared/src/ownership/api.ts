@@ -1,8 +1,8 @@
 // The Ownership place's calls (`06_DECISIONS.md` ADR-109 phase C; `03_CONDUIT_MIDDLEWARE.md`
 // §3.8b): find an organisation or account by what it is called, trace who ultimately owns or
 // controls it, and put its structure on the canvas. Shapes are the generated ones.
-import type { KycStatus, Node, OwnershipView } from "../../../../packages/schemas/generated";
-import type { CanvasOutcome } from "@ospreyflow/glass-shared";
+import type { KycStatus, Node, OwnershipView } from "../../../schemas/generated";
+import type { CanvasOutcome } from "../alerts/api";
 
 export interface OwnershipApi {
   apiBaseUrl: string;

@@ -20,7 +20,7 @@ import type Graph from "graphology";
 import { useState } from "react";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import { listAssumptions, listGaps, listJudgements, getYardstick } from "../assessment/api";
+import { listAssumptions, listGaps, listAssessmentJudgements as listJudgements, getYardstick } from "@ospreyflow/glass-shared";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { caseLabel, listCases } from "../investigation/cases";
 import { Button } from "../design/primitives/Button";

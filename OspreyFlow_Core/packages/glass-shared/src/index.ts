@@ -42,6 +42,15 @@
 //                             types from it). Three names were written twice, so the index gives them apart: the link
 //                             types' `send` is `sendLinkType`, the promotions' is `sendPromotion` and the questions'
 //                             `rejectProposal` is `rejectQuestionProposal` (the report clients keep `send`)
+//   assessment/api, boards/boardsApi, connections/connectionsApi, explore/exploreApi, map/providers, metrics/api,
+//   ownership/api, search/addFromListApi, site/api, site/bilinear, strength/api, watches/api
+//                             the remaining plain Conduit clients: the assessment's judgements, assumptions and gaps, the
+//                             boards, the connections, the exploring panel, the map's provider list, the metrics call,
+//                             the ownership place, the list-adding call, the site calibration's call and arithmetic, the
+//                             strength explainer and the watches (PL4 slice D3c: each calls `fetch` and takes the bearer
+//                             token as an argument). Two names were written twice, so the index gives them apart: the
+//                             assessment's `listJudgements` is `listAssessmentJudgements` (the report clients keep
+//                             `listJudgements`) and the boards' `Answer` is `BoardAnswer` (the promotions keep `Answer`)
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -137,3 +146,60 @@ export {
   startingTicks,
 } from "./boards/promotionsApi";
 export * from "./analytics/api";
+export {
+  getYardstick,
+  listAssumptions,
+  listGaps,
+  listJudgements as listAssessmentJudgements,
+  saveAssumption,
+  type SaveAssumptionRequest,
+  saveGap,
+  type SaveGapRequest,
+  saveJudgement,
+  type SaveJudgementRequest,
+  UnverifiableCitationApiError,
+  type Yardstick,
+  type YardstickBand,
+} from "./assessment/api";
+export {
+  type Answer as BoardAnswer,
+  type Asserted,
+  type Board,
+  type BoardOpened,
+  boardPictures,
+  type BoardPictures,
+  choosePicture,
+  decideMatch,
+  declareItem,
+  drawLink,
+  type DrawnItemMade,
+  type DrawnWatch,
+  drawnWatches,
+  editItem,
+  type Grading,
+  type ItemToDraw,
+  type LinkToDraw,
+  listBoards,
+  makeBoard,
+  matchSuggestions,
+  type MatchSuggestions,
+  moveItems,
+  type NewDrawing,
+  openBoard,
+  pictureUrl,
+  shareBoard,
+  startDrawing,
+  uploadPicture,
+  withdrawItem,
+  type Withdrawn,
+} from "./boards/boardsApi";
+export * from "./connections/connectionsApi";
+export * from "./explore/exploreApi";
+export * from "./map/providers";
+export * from "./metrics/api";
+export * from "./ownership/api";
+export * from "./search/addFromListApi";
+export * from "./site/api";
+export * from "./site/bilinear";
+export * from "./strength/api";
+export * from "./watches/api";

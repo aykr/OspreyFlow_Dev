@@ -22,7 +22,7 @@ import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
-import { createHotlist, readHotlists, setHotlistAudience, type HotlistAudience } from "./api";
+import { createHotlist, readHotlists, setHotlistAudience, type HotlistAudience } from "@ospreyflow/glass-shared";
 import { StatusBadge } from "./StatusBadge";
 
 export interface HotlistPanelProps {

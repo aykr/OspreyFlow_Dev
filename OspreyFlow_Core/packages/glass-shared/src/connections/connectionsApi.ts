@@ -4,8 +4,8 @@
 // for, at most ten with "more" said when there are others (rule 2). A route is put on the canvas the
 // way the Pathfinder puts a path there (ADR-033): what the canvas lacks is sent to the case's `/seed`,
 // so it is part of the working set, not only drawn.
-import type { Connections, Edge, Node, Path } from "../../../../packages/schemas/generated";
-import { outcomeDeltas, type ExpansionOutcome, type WorkingSetDelta } from "@ospreyflow/glass-shared";
+import type { Connections, Edge, Node, Path } from "../../../schemas/generated";
+import { outcomeDeltas, type ExpansionOutcome, type WorkingSetDelta } from "../workingset/models";
 
 export interface ConnectionsContext {
   apiBaseUrl: string;

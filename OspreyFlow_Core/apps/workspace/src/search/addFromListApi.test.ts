@@ -10,7 +10,7 @@ import {
   countSentence,
   listFromFile,
   MAX_IDENTIFIERS,
-} from "./addFromListApi";
+} from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

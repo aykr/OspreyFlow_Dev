@@ -9,8 +9,8 @@ import type {
   StarterQuestions,
   TypeCounts,
   WhatsNew,
-} from "../../../../packages/schemas/generated";
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
+} from "../../../schemas/generated";
+import type { WorkingSetDelta } from "../workingset/models";
 
 export type {
   Bridge,
@@ -29,7 +29,7 @@ export type {
   WhatsNew,
   StarterQuestion,
   StarterQuestions,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 function exploreUrl(apiBaseUrl: string, investigationId: string, path: string): string {
   return `${apiBaseUrl}/v1/investigations/${encodeURIComponent(investigationId)}/explore/${path}`;
