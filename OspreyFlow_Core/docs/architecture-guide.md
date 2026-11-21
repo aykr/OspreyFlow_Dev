@@ -95,10 +95,11 @@ its own.
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.9** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.10** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.10 | 2026-11-21 | *Why OspreyFlow is built this way* and §9, corrected to the truth check (DC1c, verifier's second findings): §9 says an open-source alternative is used or the component is not bundled, since the register's Grafana row records no alternative. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.9 | 2026-11-21 | *Why OspreyFlow is built this way*, corrected to the truth check (DC1c, verifier's findings): a container's route out is described as what the model downloads, the proxy's certificate fetch and the configured features need, not as configured alone; the speech server's download step and the certificate fetch are named among what does not yet hold; the licence gate is described as reading the build's package metadata, with the Python packages inside an image checked for two images only; Superset's tracking image is from "an address outside the deployment"; the privacy sentence is an aim held by the store's queries, with two named read-side gaps. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.8 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening: the intent and the five constraints (software sovereignty, data sovereignty, privacy control, security management, analytical accountability), each with what holds it today and what is "coming" (DC1c). §6: the audit sentence said to cover case data, with what is not audited by design, the export ledger's contents and the two records still to come, instead of "every read and write". §9: the licence rule and the allowlist in words, naming no product; the table of avoided components moved to the specification's licence register (the owner's ruling of 20 November 2026). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.7 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
@@ -331,7 +332,7 @@ software, a commercial or proprietary licence that makes its use depend on a sup
 a licence that would bind the whole platform to the same terms, so that distributing it would mean
 distributing everything built on it.
 Where a component's licence was of one of these kinds, OspreyFlow uses an open-source alternative
-instead. The avoided components, their licences and what is used in their place are recorded in the
+instead, or does not bundle the component. The avoided components, their licences and what is used in their place are recorded in the
 internal specification's licence register (`spec/00_ARCHITECTURE.md`, section 7), beside the allowlist
 itself.
 

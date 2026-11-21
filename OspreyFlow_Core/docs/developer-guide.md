@@ -25,7 +25,8 @@ what is "coming".
 - **Data sovereignty.** A hosted model engine is an opt-in that an administrator turns on, and what a
   pipeline may send to one is bounded by each dataset's egress setting and its handling codes.
 - **Privacy control.** Every record carries its handling, set at load, and what each person then sees is
-  bounded by those markings and by case membership.
+  meant to be bounded by those markings and by case membership. Some gaps on the read side are known
+  and are listed in the architecture guide.
 - **Security management.** A run is made as the person who set it, and changes are audited. Recording
   every model call, and every sign-in, is coming.
 - **Analytical accountability.** A record keeps where it came from, and what a model extracts stays
@@ -34,10 +35,11 @@ what is "coming".
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.41** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 1.42** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.42 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line is an aim with known read-side gaps, listed in the architecture guide, not a plain statement of fact (DC1c, verifier's finding). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.41 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to a data engineer: the five constraints and what each means for a pipeline (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.40 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.39 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November); §9's example release tag is `v0.6.0`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |

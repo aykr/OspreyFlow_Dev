@@ -18,14 +18,17 @@ replace it, and it is built to five constraints on top of that. The
 is "coming".
 
 - **Software sovereignty:** every software dependency is under an open-source licence, checked on every
-  change. Model weights, map data, fonts and base images are outside that check for now.
+  change. Model weights, map data, fonts and base images are outside that check; a register and a gate
+  for them are coming.
 - **Data sovereignty:** the deployment's containers have no route out except the few that an install or a configured
   feature needs, such as the model downloads. A hosted model engine is an opt-in that an administrator
   turns on. A first install needs the internet.
-- **Privacy control:** what a person sees is bounded by handling markings and case membership, applied
-  inside the store's own query.
+- **Privacy control:** what a person sees is meant to be bounded by handling markings and case membership,
+  applied inside the store's own query. Some gaps on the read side are known and are listed in the
+  architecture guide.
 - **Security management:** case reads, refusals of access to a case and every change are audited, and
-  exports go in a ledger. Recording every model call, and every sign-in, is coming.
+  report, assessment, pack and feed exports go in a ledger (some other exports do not yet, and a ledger row
+  for every export is coming). Recording every model call, and every sign-in, is coming.
 - **Analytical accountability:** a judgement is saved with its evidence and a probability band, and what a
   model suggests stays *inferred* until a person confirms it.
 

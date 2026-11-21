@@ -29,21 +29,27 @@ fullest account, with what holds each constraint today and what is "coming".
   a certificate unless you give it yours. Superset's usage-tracking image, which the person's
   browser asks for, is not stopped in v0.6.1 and earlier; v0.6.2 stops it with a content policy that
   allows no outside address.
-- **Privacy control.** What each person sees is bounded by handling markings and case membership, so
-  the clearances and case levels you give people set the limit of what they can read.
+- **Privacy control.** What each person sees is meant to be bounded by handling markings and case
+  membership, so the clearances and case levels you give people are what set the limit of what they can
+  read. Some gaps on the read side are known (the architecture guide lists them). One is yours to manage:
+  where Superset signs people in through Entra ID, a person who may build dashboards reads the whole
+  reporting store in their own session, so give that right only to people cleared for all of it
+  (section 6a.7).
 - **Security management.** Case reads, refusals of access to a case and every change are audited
-  (section 9.11, *Operations and Audit*), and exports go in a ledger. Recording every model call and
-  every sign-in is coming.
+  (section 9.11, *Operations and Audit*), and report, assessment, pack and feed exports go in a ledger.
+  Some other exports write an audit row but no ledger row, and a platform backup writes neither; a ledger
+  row for every export is coming, as is recording every model call and every sign-in.
 - **Analytical accountability.** Judgements carry their evidence and a probability band, and what a model
   suggests stays *inferred* until a person confirms it.
 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.30** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.31** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.31 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line is an aim with the known read-side gaps named, among them the dashboard builder's right (§6a.7), which is yours to manage; the export ledger is said to cover report, assessment, pack and feed exports, with a ledger row for every export coming (DC1c, verifier's findings). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 2.30 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to whoever installs it: the five constraints and what each means for an installation (DC1c). §12: a Superset chart that needs outside map tiles will not load, and why (SE6a). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
 | 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |

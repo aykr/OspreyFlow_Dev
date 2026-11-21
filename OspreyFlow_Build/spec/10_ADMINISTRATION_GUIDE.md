@@ -28,11 +28,16 @@ fullest account, with what holds each constraint today and what is "coming".
   a certificate unless you give it yours. Superset's usage-tracking image, which the person's
   browser asks for, is not stopped in v0.6.1 and earlier; v0.6.2 stops it with a content policy that
   allows no outside address.
-- **Privacy control.** What each person sees is bounded by handling markings and case membership, so
-  the clearances and case levels you give people set the limit of what they can read.
+- **Privacy control.** What each person sees is meant to be bounded by handling markings and case
+  membership, so the clearances and case levels you give people are what set the limit of what they can
+  read. Some gaps on the read side are known (the architecture guide lists them). One is yours to manage:
+  where Superset signs people in through Entra ID, a person who may build dashboards reads the whole
+  reporting store in their own session, so give that right only to people cleared for all of it
+  (section 6a.7).
 - **Security management.** Case reads, refusals of access to a case and every change are audited
-  (section 9.11, *Operations and Audit*), and exports go in a ledger. Recording every model call and
-  every sign-in is coming.
+  (section 9.11, *Operations and Audit*), and report, assessment, pack and feed exports go in a ledger.
+  Some other exports write an audit row but no ledger row, and a platform backup writes neither; a ledger
+  row for every export is coming, as is recording every model call and every sign-in.
 - **Analytical accountability.** Judgements carry their evidence and a probability band, and what a model
   suggests stays *inferred* until a person confirms it.
 

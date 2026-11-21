@@ -19,7 +19,8 @@ part means for you. The [architecture guide](architecture-guide.md) (its section
 this way") gives the fullest account, with what holds each constraint today and what is "coming".
 
 - **Software sovereignty.** Your organisation can inspect, modify, host and replace the software you work
-  in: every software dependency is under an open-source licence.
+  in: every software dependency is under an open-source licence. Model weights, map data, fonts and base
+  images are outside the check that holds that; a register and a gate for them are coming.
 - **Data sovereignty.** The deployment is run by your organisation, on its own network, with no route out
   except the few an install and an administrator set up. A hosted model engine is an opt-in; ask your
   administrator whether one is on.
@@ -34,10 +35,11 @@ this way") gives the fullest account, with what holds each constraint today and 
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.79** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.80** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.80 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says model weights, map data, fonts and base images are outside the check that holds it, with a register and a gate for them coming (DC1c, verifier's finding). PDF made again. |
 | 1.79 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line no longer says a count is always hidden; it says the aim and that known gaps on the read side remain (DC1c, verifier's finding). PDF made again. |
 | 1.78 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to an analyst: the five constraints and what each means for the person working in a case (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.77 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |

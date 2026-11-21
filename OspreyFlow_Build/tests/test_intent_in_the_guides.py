@@ -23,7 +23,13 @@ What the owner's text asks, and the case that fails if it is not so (rule 12):
   `test_both_copies_of_the_administration_guide_agree_on_the_new_passages`;
 - the administration guide says a Superset chart needing Mapbox tiles will not load, and why —
   `test_the_administration_guide_says_a_mapbox_chart_will_not_load`;
-- the README's "the deployment never calls out" is corrected — `test_the_readme_does_not_say_the_deployment_never_calls_out`.
+- the README's "the deployment never calls out" is corrected —
+  `test_the_readme_does_not_say_the_deployment_never_calls_out`;
+- the passages carry the limits the truth check found (privacy an aim with read-side gaps named, the export ledger
+  scoped, what is outside the licence gate said to be coming) —
+  `test_the_passages_carry_the_limits_the_truth_check_found`;
+- section 9 does not say every avoided component has an alternative —
+  `test_section_9_does_not_say_every_avoided_component_has_an_alternative`.
 
 **Rule 15: each gate is shown red** at the shape the real text takes — the old section 9 table put back, the old
 bullet of section 6 put back in its list item, the old paragraph of `spec/03` section 6, a passage with the word
@@ -190,8 +196,9 @@ def unscoped_audit_statements(text: str) -> list[str]:
 
 
 def new_text(texts: dict[str, str]) -> dict[str, str]:
-    """Everything this slice wrote, by where it is: the passages, section 9, section 6, the sentence on
-    Superset's maps, the README's corrected line, the specification's scope note and moved table."""
+    """Everything this slice wrote, by where it is: the passages, sections 6 and 9 of the architecture guide, the
+    README's corrected line, and the paragraph above the moved table in `spec/00`. The specification's audit
+    paragraph and the sentence on Superset's maps are added by `test_nothing_written_here_guarantees`."""
     out: dict[str, str] = {}
     for name, text in texts.items():
         body = passage(text)
@@ -200,7 +207,44 @@ def new_text(texts: dict[str, str]) -> dict[str, str]:
     arch = texts[ARCHITECTURE]
     out["architecture guide: section 6"] = section(arch, "6", "7")
     out["architecture guide: section 9"] = section(arch, "9", "10")
+    out["README: release check"] = release_check_line(texts["README"])
+    out["spec/00: note above the moved table"] = moved_table_note(read(SPEC / "00_ARCHITECTURE.md"))
     return out
+
+
+def release_check_line(readme: str) -> str:
+    """The README's corrected paragraph on whether there is a newer release; empty when it is gone."""
+    start = readme.find("**Is there a newer release?**")
+    return readme[start : readme.index("\n\n", start)] if start >= 0 else ""
+
+
+def moved_table_note(spec_00: str) -> str:
+    """The paragraph this slice wrote above the moved table, from its bold lead-in to the table; empty if none."""
+    start = spec_00.find("**The avoided components, as the architecture guide's section 9 stated them")
+    return spec_00[start : spec_00.index(MOVED_HEADER, start)] if start >= 0 and MOVED_HEADER in spec_00 else ""
+
+
+def bullet(body: str, name: str) -> str:
+    """The item or paragraph of a passage that opens with the constraint's bold name; empty when none does."""
+    found = re.search(rf"\*\*{re.escape(name)}[.:]\*\*(.*?)(?=\n\s*\n|\n- \*\*|\Z)", body, re.DOTALL)
+    return fold(found.group(1)) if found else ""
+
+
+def overstated_lines(body: str) -> list[str]:
+    """What the truth check does not support in a passage (DOC1A_REPORT.md rows 1, 3 and 4): privacy stated as
+    fact with no read-side gap named, a ledger said to hold exports without its scope, and a licence statement
+    that does not say what is outside the gate."""
+    problems: list[str] = []
+    privacy = bullet(body, "Privacy control").lower()
+    if privacy and not (("meant to" in privacy or "aim" in privacy) and ("gap" in privacy or "read side" in privacy)):
+        problems.append("privacy control is stated as fact, with no read-side gap named")
+    security = bullet(body, "Security management").lower()
+    if "ledger" in security and not re.search(r"report, assessment, pack|some (?:other )?exports", security):
+        problems.append("the export ledger is not scoped to the exports that write it")
+    licence = bullet(body, "Software sovereignty").lower()
+    if "licence" in licence and not ("weights" in licence and "coming" in licence):
+        problems.append("the licence statement does not say what is outside the gate, as coming")
+    return problems
 
 
 def _texts() -> dict[str, str]:
@@ -256,6 +300,7 @@ def test_the_passages_name_no_product() -> None:
     found = [
         f"{where}: {n}"
         for where, body in new_text(_texts()).items()
+        if not where.startswith("spec/")  # the internal specification is where the names now live
         for n in products_in(body, names + list(USED_INSTEAD))
     ]
     assert found == []
@@ -327,6 +372,19 @@ def test_nothing_written_here_guarantees() -> None:
     assert {where for where, body in written.items() if GUARANTEE.search(body)} == set()
 
 
+def test_the_passages_carry_the_limits_the_truth_check_found() -> None:
+    texts = _texts()
+    problems = {n: overstated_lines(passage(t) or "") for n, t in texts.items()}
+    assert {n: p for n, p in problems.items() if p} == {}
+
+
+def test_section_9_does_not_say_every_avoided_component_has_an_alternative() -> None:
+    """The register's Grafana row records no alternative used, only that it is never bundled."""
+    nine = fold(section(read(FILES[ARCHITECTURE]), "9", "10")).lower()
+    assert "does not bundle" in nine or "not bundle" in nine
+    assert not re.search(r"uses an open-source alternative instead\.", nine)
+
+
 def test_both_copies_of_the_administration_guide_agree_on_the_new_passages() -> None:
     shipped, spec = (read(FILES[n]) for n in ADMIN)
     assert passage(shipped) is not None and passage(shipped) == passage(spec)
@@ -381,3 +439,21 @@ def test_each_check_is_shown_red() -> None:
     assert GUARANTEE.search("OspreyFlow guarantees that nothing leaves.")
     assert GUARANTEE.search("a guaranteed result")
     assert not GUARANTEE.search("what it does and how it is checked")
+    # The overstated lines as they stood, in the shape a passage takes, are found; the corrected ones are not.
+    old = (
+        "- **Software sovereignty:** every software dependency is under an open-source licence.\n"
+        "- **Privacy control:** what a person sees is bounded by handling markings and case membership.\n"
+        "- **Security management:** case reads are audited, and exports go in a ledger.\n"
+    )
+    assert len(overstated_lines(old)) == 3
+    assert overstated_lines(
+        "- **Software sovereignty:** every dependency is open. Weights are outside it; a gate is coming.\n"
+        "- **Privacy control:** meant to be bounded by markings. Some gaps on the read side are known.\n"
+        "- **Security management:** report, assessment, pack and feed exports go in a ledger.\n"
+    ) == []
+    # The new text is read from the README's line and the specification's note, and a planted word there is found.
+    line = release_check_line("x\n\n**Is there a newer release?** Ask.\n\nNext.\n")
+    assert line == "**Is there a newer release?** Ask."
+    note = "**The avoided components, as the architecture guide's section 9 stated them (a).**\nWords.\n\n"
+    assert GUARANTEE.search(moved_table_note(note + MOVED_HEADER + "\n") + "It guarantees.") is not None
+    assert moved_table_note(note + MOVED_HEADER + "\n").startswith("**The avoided components")
