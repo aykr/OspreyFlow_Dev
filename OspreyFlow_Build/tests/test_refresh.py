@@ -408,6 +408,7 @@ def test_a_new_owned_service_is_built_like_the_deployments_others_when_it_was_re
         "services/api/Dockerfile",
         "services/ingest/Dockerfile",
         "services/ner/Dockerfile",
+        "deploy/litellm/Dockerfile",  # the model gateway is ours too (21 November 2026)
     ):
         (repo / dockerfile).parent.mkdir(parents=True, exist_ok=True)
         (repo / dockerfile).write_text("FROM scratch\n", encoding="utf-8")
@@ -522,7 +523,8 @@ def test_a_service_running_an_image_built_here_is_never_moved_to_a_registry(repo
 
     out = repo / "deploy" / "generated" / "local-lite"
     for dockerfile in ("apps/workspace/Dockerfile", "services/api/Dockerfile",
-                       "services/ingest/Dockerfile", "services/ner/Dockerfile"):  # fmt: skip
+                       "services/ingest/Dockerfile", "services/ner/Dockerfile",
+                       "deploy/litellm/Dockerfile"):  # fmt: skip
         (repo / dockerfile).parent.mkdir(parents=True, exist_ok=True)
         (repo / dockerfile).write_text("FROM scratch\n", encoding="utf-8")
     settings = {"reporting": {"sync": True}}

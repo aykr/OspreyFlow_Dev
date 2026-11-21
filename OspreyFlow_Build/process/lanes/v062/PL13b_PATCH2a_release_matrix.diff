@@ -1,0 +1,13 @@
+--- a/OspreyFlow_Core/.github/workflows/release.yml
++++ b/OspreyFlow_Core/.github/workflows/release.yml
+@@ -63,6 +63,10 @@
+           - { service: report-sync, dockerfile: services/report_sync/Dockerfile }
+           # Built from its own folder, not the repository root.
+           - { service: superset, dockerfile: deploy/superset/Dockerfile, context: deploy/superset }
++          # The model gateway, built from the publisher's MIT files alone (the owner's ruling of 21 November
++          # 2026): its commercially licensed folder and package are never in it (its own licence gate fails
++          # the build on either), and it is built from its own folder. Scanned and signed below like every image.
++          - { service: litellm, dockerfile: deploy/litellm/Dockerfile, context: deploy/litellm }
+     steps:
+       - uses: actions/checkout@v4
+       - uses: docker/login-action@v3

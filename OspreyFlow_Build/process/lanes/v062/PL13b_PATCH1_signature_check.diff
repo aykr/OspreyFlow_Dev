@@ -1,0 +1,347 @@
+--- a/OspreyFlow_Core/harness/signatures.py
++++ b/OspreyFlow_Core/harness/signatures.py
+@@ -54,9 +54,14 @@
+ #: is a third party's, except those below.
+ OWNED_SERVICES = ("workspace", "api", "ingest", "ner")
+ #: Built and signed by the release too, and checked whenever a lock names them: Superset, which a
+-#: release's lock names from build order step 20a on (a lock from before names none).
+-OPTIONAL_OWNED_SERVICES = ("superset",)
++#: release's lock names from build order step 20a on (a lock from before names none), and the model
++#: gateway, which a release's lock names as ours from the release that first builds it.
++OPTIONAL_OWNED_SERVICES = ("superset", "litellm")
+ SIGNED_SERVICES = OWNED_SERVICES + OPTIONAL_OWNED_SERVICES
++#: Every lock before that release names the publisher's gateway image under the service name
++#: `litellm`: a third party's image, never signed by our release. The name alone cannot tell it from
++#: ours, so an entry is checked only if its repository is not under one of these.
++THIRD_PARTY_REPOSITORIES = ("ghcr.io/berriai/",)
+ _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+ 
+ Run = Callable[[Sequence[str]], tuple[int, str]]
+@@ -224,6 +229,12 @@
+             )
+ 
+ 
++def is_signed_image(service: object, repository: object) -> bool:
++    """Whether a lock entry is an image our release signs: a signed service whose repository is not
++    a third party's (the publisher's gateway, which older locks name as `litellm`)."""
++    return service in SIGNED_SERVICES and not str(repository).startswith(THIRD_PARTY_REPOSITORIES)
++
++
+ def owned_references(lock_text: str) -> list[str]:
+     """`repository@digest` of each owned image in a lock, in the lock's order (an optional one,
+     Superset, whenever the lock names it). An owned image with no real digest, or one of
+@@ -236,7 +247,7 @@
+     refs = []
+     for entry in entries:
+         service = entry.get("service")
+-        if service not in SIGNED_SERVICES:
++        if not is_signed_image(service, entry.get("repository")):
+             continue
+         digest = str(entry.get("digest"))
+         if not _DIGEST.match(digest):
+--- a/OspreyFlow_Core/harness/bundle.py
++++ b/OspreyFlow_Core/harness/bundle.py
+@@ -47,9 +47,9 @@
+ from harness.signatures import (
+     COSIGN_IMAGE_IDS,
+     COSIGN_PLATFORM_IMAGES,
+-    SIGNED_SERVICES,
+     Cosign,
+     Identity,
++    is_signed_image,
+ )
+ 
+ BUNDLE_FORMAT = 1
+@@ -317,7 +317,7 @@
+             )
+         layout = root / str(item["saved"])
+         config = _manifest_config(layout, digest, repository, platform)
+-        if entry.get("service") in SIGNED_SERVICES:
++        if is_signed_image(entry.get("service"), repository):
+             ok, said = cosign.verify_local(layout, identity)
+             if not ok:
+                 last = said.splitlines()[-1] if said else "no answer"
+--- a/OspreyFlow_Core/harness/update.py
++++ b/OspreyFlow_Core/harness/update.py
+@@ -56,6 +56,7 @@
+ )
+ from harness.signatures import (
+     SIGNED_SERVICES,
++    THIRD_PARTY_REPOSITORIES,
+     Cosign,
+     Identity,
+     Keyless,
+@@ -365,8 +366,10 @@
+         name = str(row.get("Service"))
+         image = (services.get(name) or {}).get("image", "")
+         repository = _repository(str(image))
+-        if repository not in digests or not any(
+-            repository.endswith(f"/{s}") for s in SIGNED_SERVICES
++        if (
++            repository not in digests
++            or repository.startswith(THIRD_PARTY_REPOSITORIES)
++            or not any(repository.endswith(f"/{s}") for s in SIGNED_SERVICES)
+         ):
+             continue
+         image_id = _ok(
+--- /dev/null
++++ b/OspreyFlow_Build/tests/harness/test_gateway_signatures.py
+@@ -0,0 +1,258 @@
++"""The model gateway's two names in a release's lock (slice PL13b; the scout's row 6, patch 1).
++
++Until the release that first builds OspreyFlow's own gateway image, every lock names the
++publisher's image under the service name `litellm` (`ghcr.io/berriai/litellm@sha256:…`), a third
++party's image the release never signs. From that release on, the lock names
++`ghcr.io/<owner>/litellm`, ours, built and signed by the release workflow. The name `litellm`
++alone cannot tell the two apart, so a check that adds `litellm` to the signed services by name
++alone hands the publisher's image to `cosign verify` against OspreyFlow's workflow, which it can
++never pass: every older lock, every older bundle and the next release would be refused (measured
++in memory with a fake cosign, 21 November 2026). Each case below is red against that one-line
++change and green with `is_signed_image` in all three places that decided by name:
++`owned_references` (the lock's check), `check_bundle` (a bundle's offline check) and
++`verify_running` (an update's check of what runs).
++
++The fake cosign refuses what it holds no signature for, as cosign does (`CLAUDE.md` rule 15: a
++fixture models its dependency's refusals, not only its grants).
++"""
++
++from __future__ import annotations
++
++import json
++from collections.abc import Sequence
++from pathlib import Path
++
++import pytest
++import yaml
++from harness import update
++from harness.bundle import BundleRefused, check_bundle
++from harness.signatures import (
++    Cosign,
++    Keyless,
++    PublicKey,
++    SignatureRefused,
++    is_signed_image,
++    owned_references,
++    verify_release,
++)
++
++from tests.harness.test_bundle import KEY, REG, _cosign, _Docker, _layout
++
++D = "sha256:" + "a" * 64
++E = "sha256:" + "b" * 64
++PUBLISHERS = "ghcr.io/berriai/litellm"
++OURS = "ghcr.io/acme/litellm"
++OWNED = ("workspace", "api", "ingest", "ner")
++
++
++def _lock(gateway_repository: str | None, gateway_digest: str = E) -> str:
++    """A release's lock: the four owned images, and the gateway as the lock names it."""
++    rows = [
++        {"service": s, "repository": f"ghcr.io/acme/{s}", "tag": "x", "digest": D,
++         "source": "registry"}
++        for s in OWNED
++    ]  # fmt: skip
++    if gateway_repository is not None:
++        rows.append({"service": "litellm", "repository": gateway_repository, "tag": "",
++                     "digest": gateway_digest, "source": "reference"})  # fmt: skip
++    return "# GENERATED\n" + yaml.safe_dump({"images": rows}, sort_keys=False)
++
++
++class _FakeCosign:
++    """Answers `verify` as cosign does: 0 for an image it holds a signature for, else 1."""
++
++    def __init__(self, signed: set[str]) -> None:
++        self.signed = signed
++        self.asked: list[str] = []
++
++    def __call__(self, argv: Sequence[str]) -> tuple[int, str]:
++        self.asked.append(argv[-1])
++        if argv[-1] in self.signed:
++            return 0, "Verification for ... -- The following checks were performed"
++        return 1, f"Error: no matching signatures: {argv[-1]}"
++
++
++IDENTITY = Keyless("acme", "ospreyflow", "v0.6.2")
++
++
++# --- the lock's check: owned_references and verify_release ----------------------------------------
++
++
++def test_an_older_lock_naming_the_publishers_gateway_is_not_ours_to_verify() -> None:
++    old = _lock(PUBLISHERS)
++    refs = owned_references(old)
++    assert refs == [f"ghcr.io/acme/{s}@{D}" for s in OWNED]
++    assert not any("litellm" in ref for ref in refs)
++
++
++def test_an_older_lock_still_verifies_with_a_cosign_that_refuses_what_is_not_ours() -> None:
++    old = _lock(PUBLISHERS)
++    cosign = _FakeCosign({f"ghcr.io/acme/{s}@{D}" for s in OWNED})
++    verify_release(old, IDENTITY, Cosign(cosign))
++    assert len(cosign.asked) == 4 and not any("berriai" in asked for asked in cosign.asked)
++
++
++def test_our_gateway_is_checked_like_every_owned_image_once_the_lock_names_it() -> None:
++    new = _lock(OURS)
++    assert f"{OURS}@{E}" in owned_references(new)
++    signed = {f"ghcr.io/acme/{s}@{D}" for s in OWNED} | {f"{OURS}@{E}"}
++    cosign = _FakeCosign(signed)
++    verify_release(new, IDENTITY, Cosign(cosign))
++    assert len(cosign.asked) == 5
++
++
++def test_our_gateway_unsigned_is_refused_by_name_and_the_publishers_is_not_what_saves_it() -> None:
++    new = _lock(OURS)
++    cosign = _FakeCosign({f"ghcr.io/acme/{s}@{D}" for s in OWNED})
++    with pytest.raises(SignatureRefused) as refused:
++        verify_release(new, IDENTITY, Cosign(cosign))
++    assert f"{OURS}@{E}" in str(refused.value)
++
++
++def test_a_gateway_with_no_real_digest_in_a_lock_that_names_ours_is_refused() -> None:
++    with pytest.raises(SignatureRefused, match="litellm has no digest"):
++        owned_references(_lock(OURS, "unresolved"))
++
++
++@pytest.mark.parametrize(
++    ("service", "repository", "signed"),
++    [
++        ("litellm", PUBLISHERS, False),  # the older locks' own entry
++        ("litellm", OURS, True),
++        ("litellm", "ghcr.io/Berriai/litellm", True),  # not the publisher's registry path: ours
++        ("api", PUBLISHERS, False),  # whatever name a third party's repository carries
++        ("api", "ghcr.io/acme/api", True),
++        ("arcadedb", "arcadedata/arcadedb", False),
++        ("superset", "ghcr.io/acme/superset", True),
++        (None, OURS, False),
++    ],
++    ids=[
++        "publisher",
++        "ours",
++        "other-case",
++        "third-party-api",
++        "ours-api",
++        "store",
++        "superset",
++        "none",
++    ],
++)
++def test_is_signed_image_decides_by_service_and_by_repository(
++    service: str | None, repository: str, signed: bool
++) -> None:
++    assert is_signed_image(service, repository) is signed
++
++
++# --- a bundle's offline check: check_bundle ------------------------------------------------------
++
++
++def _bundle(tmp: Path, gateway_repository: str) -> Path:
++    """An opened bundle by hand (the shape `tests/harness/test_bundle.py` builds), with the gateway
++    as its fifth image."""
++    root = tmp / "opened"
++    rows, entries = [], []
++    for index, service in enumerate([*OWNED, "litellm"]):
++        manifest, config = _layout(root / "saved" / str(index), service)
++        repository = gateway_repository if service == "litellm" else f"{REG}/{service}"
++        local = f"{repository}:ospreyflow-v0.6.2"
++        tar = root / "images" / f"{index}.tar"
++        tar.parent.mkdir(parents=True, exist_ok=True)
++        tar.write_text(json.dumps([local, config]))
++        rows.append({"service": service, "repository": repository, "tag": "x", "digest": manifest,
++                     "source": "registry"})  # fmt: skip
++        entries.append({"service": service, "repository": repository, "digest": manifest,
++                        "saved": f"saved/{index}", "tar": f"images/{index}.tar",
++                        "local": local})  # fmt: skip
++    (root / "versions.lock").write_text(
++        "# GENERATED\n" + yaml.safe_dump({"images": rows}, sort_keys=False)
++    )
++    (root / "versions.lock.sigstore.json").write_text("{}")
++    (root / "release.json").write_text(json.dumps({"format": 1, "tag": "v0.6.2", "notes": "- new"}))
++    (root / "manifest.json").write_text(json.dumps({"images": entries}))
++    (root / "source.bundle").write_text("git bundle")
++    return root
++
++
++def test_an_older_bundle_carrying_the_publishers_gateway_is_not_asked_for_its_signature(
++    tmp_path: Path,
++) -> None:
++    root = _bundle(tmp_path, PUBLISHERS)
++    cosign, asked = _cosign(signed={"0", "1", "2", "3"})  # the four we sign; not index 4
++    images = check_bundle(root, KEY, cosign, _Docker().run)
++    assert PUBLISHERS in images
++    owned_checks = [a for a in asked if "verify-blob" not in a]
++    assert len(owned_checks) == 4
++
++
++def test_a_bundle_carrying_our_gateway_unsigned_is_refused_naming_it(tmp_path: Path) -> None:
++    root = _bundle(tmp_path, f"{REG}/litellm")
++    cosign, _ = _cosign(signed={"0", "1", "2", "3"})
++    with pytest.raises(BundleRefused, match=f"{REG}/litellm"):
++        check_bundle(root, KEY, cosign, _Docker().run)
++
++
++def test_a_bundle_carrying_our_gateway_signed_is_loaded(tmp_path: Path) -> None:
++    root = _bundle(tmp_path, f"{REG}/litellm")
++    cosign, asked = _cosign(signed={"0", "1", "2", "3", "4"})
++    images = check_bundle(root, KEY, cosign, _Docker().run)
++    assert f"{REG}/litellm" in images
++    assert len([a for a in asked if "verify-blob" not in a]) == 5
++
++
++# --- an update's check of what runs: verify_running ---------------------------------------------
++
++
++def _host(run: object, tmp_path: Path) -> update.Host:
++    return update.Host(
++        run=run, cosign=Cosign(run), identity=lambda _: PublicKey(Path("/k")),
++        backup=lambda: tmp_path, restore=lambda _: None, files_up_to_date=lambda: {},
++        find_release=lambda _: {},
++    )  # fmt: skip
++
++
++def _running_gateway(tmp_path: Path, repository: str, image_digest: str, runs: str):
++    """A deployment whose gateway container runs `runs` (its RepoDigests), against a lock naming
++    `repository@image_digest`."""
++    directory = tmp_path / "deployment"
++    directory.mkdir()
++    (directory / "compose.yaml").write_text(
++        yaml.safe_dump({"services": {"litellm": {"image": f"{repository}@{image_digest}"}}})
++    )
++    lock = "# GENERATED\n" + yaml.safe_dump({"images": [
++        {"service": "litellm", "repository": repository, "tag": "", "digest": image_digest,
++         "source": "reference"}]}, sort_keys=False)  # fmt: skip
++    asked: list[list[str]] = []
++
++    def run(argv: Sequence[str]) -> tuple[int, str]:
++        argv = list(argv)
++        asked.append(argv)
++        if "ps" in argv:
++            return 0, json.dumps({"Service": "litellm", "Name": "osprey-litellm-1",
++                                  "State": "running", "Health": "healthy"})  # fmt: skip
++        if argv[:2] == ["docker", "inspect"]:
++            return 0, "sha256:" + "c" * 64
++        if argv[:3] == ["docker", "image", "inspect"]:
++            return 0, json.dumps([f"{repository}@{runs}"])
++        raise AssertionError(argv)
++
++    return directory, lock, run, asked
++
++
++def test_an_update_does_not_hold_the_publishers_gateway_to_a_release_that_never_signed_it(
++    tmp_path: Path,
++) -> None:
++    """The deployment still runs the publisher's image (an older lock, digest-pinned). It is not one
++    the release signs, so a container on another digest than the lock's is not this check's finding
++    (the one-line change made it one)."""
++    directory, lock, run, asked = _running_gateway(tmp_path, PUBLISHERS, E, runs=D)
++    update.verify_running(_host(run, tmp_path), directory, lock)
++    assert not [a for a in asked if a[:2] == ["docker", "inspect"]]
++
++
++def test_an_update_holds_our_gateway_to_the_digest_the_lock_names(tmp_path: Path) -> None:
++    directory, lock, run, _ = _running_gateway(tmp_path, OURS, E, runs=D)  # still the old image
++    with pytest.raises(update.UpdateFailed, match="litellm runs another image"):
++        update.verify_running(_host(run, tmp_path), directory, lock)
++    (tmp_path / "ok").mkdir()
++    directory2, lock2, run2, _ = _running_gateway(tmp_path / "ok", OURS, E, runs=E)
++    update.verify_running(_host(run2, tmp_path), directory2, lock2)

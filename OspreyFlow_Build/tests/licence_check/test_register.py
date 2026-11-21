@@ -412,7 +412,8 @@ def test_a_held_name_the_code_names_is_not_a_missing_row_but_the_release_refuses
 def test_nothing_is_held_for_the_owner_today(reg: Any) -> None:
     """The publisher's gateway image was the one name held (PL11); the owner's ruling of 21 November
     2026 replaced it with OspreyFlow's own image, and it left the set in the commit that stopped the
-    product naming it. A name added here later is the owner's to rule on, and this says so when it is."""
+    product naming it. A name added here later is the owner's to rule on: this case is changed then,
+    in the owner's sight."""
     assert reg.HELD_FOR_OWNER == frozenset()
 
 

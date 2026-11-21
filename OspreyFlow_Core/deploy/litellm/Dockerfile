@@ -11,12 +11,13 @@
 #  2. `overrides.txt` removes the one proprietary package the `proxy` extra would bring in;
 #  3. `licence_gate.py` reads what is installed, fails the build on that package, on any
 #     distribution declaring a proprietary licence and on the commercial folder, in the builder and
-#     again over what the final stage was given, and is deleted afterwards;
+#     again over what the final stage was given (the script itself is removed from the image's files
+#     afterwards);
 #  4. the final stage copies from the builder only the five paths named below.
 # The test that holds this file to all of that is `tests/harness/test_own_gateway_image.py`.
 FROM ghcr.io/astral-sh/uv:0.11.7@sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a AS uvbin
 
-# Builder: compilers and the Prisma command line's npm, none of which ship.
+# Builder: compilers, rust and npm (for the Prisma command line), none of which ship.
 FROM cgr.dev/chainguard/wolfi-base@sha256:e624c5d5e42382ce7165ddafcbbf8e6769a24cbd02ea6114b880b05ae5ba2a8d AS builder
 USER root
 WORKDIR /app

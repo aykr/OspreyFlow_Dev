@@ -89,8 +89,10 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 #: The product repository's owner, lower case, as the workflow names its images.
 REGISTRY = os.environ.get("OSPREY_IMAGE_REGISTRY", "ghcr.io/aykr")
 #: Our images the lock names (`harness.release_lock`: every image any option renders). The release builds two
-#: more (worker, report-sync) for the Enterprise chart, which the lock does not name.
-LOCKED_OURS = frozenset({"workspace", "api", "ingest", "ner", "superset"})
+#: more (worker, report-sync) for the Enterprise chart, which the lock does not name. The model
+#: gateway (`litellm`) joined on 21 November 2026, when it became OspreyFlow's own image
+#: (`deploy/litellm`).
+LOCKED_OURS = frozenset({"workspace", "api", "ingest", "ner", "litellm", "superset"})
 
 
 def workflow(path: Path = WORKFLOW) -> dict[str, Any]:

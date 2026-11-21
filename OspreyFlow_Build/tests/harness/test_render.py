@@ -735,7 +735,8 @@ def test_every_rendered_build_context_points_at_a_dockerfile_that_exists(
     for name, spec in compose["services"].items():
         if "build" not in spec:
             continue
-        dockerfile = (output_folder / spec["build"]["context"] / spec["build"]["dockerfile"]).resolve()
+        context = output_folder / spec["build"]["context"]
+        dockerfile = (context / spec["build"]["dockerfile"]).resolve()
         assert dockerfile.is_file(), f"{name} builds from {dockerfile}, which does not exist"
 
 

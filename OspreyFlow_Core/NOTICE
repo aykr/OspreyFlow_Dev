@@ -29,3 +29,8 @@ A deployment that chooses Laurium as its extraction engine runs Laurium's servic
   arrow-pd-parser 2.2.0, Copyright 2020 Crown Copyright (Ministry of Justice)
 
 That image carries its own NOTICE (services/laurium/NOTICE) with the full notices.
+
+The model gateway's image (deploy/litellm/) installs LiteLLM 1.101.0 and litellm-proxy-extras 0.4.94
+unmodified from PyPI, Copyright (c) 2023 Berri AI, under the MIT licence; it leaves out the
+publisher's commercially licensed folder and package, and its folder carries a NOTICE (deploy/litellm/NOTICE)
+with the full licence text.
