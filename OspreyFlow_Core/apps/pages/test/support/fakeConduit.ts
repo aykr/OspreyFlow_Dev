@@ -7,6 +7,10 @@
  *    query is ignored, so refused as missing;
  *  - a dataset or a case the person's own cases do not read is 404 `{"detail": "Not Found"}`, whatever the person's rights
  *    (the Conduit answers a thing a person may not see exactly as one that does not exist);
+ *  - the recipe registry (`GET /v1/investigations/{id}/ingest/recipe-registry`) answers only what the case's datasets reach, as the
+ *    real route's `reach_clause` does (`services/api/dataset_scope.py`): a recipe whose `dataset_id` is one of the case's datasets,
+ *    or none (made before the datasets were stamped); never another dataset's. `registryScope: "none"` models a Conduit that did
+ *    not, to show the page keeps its own filter (slice IS3);
  *  - the readiness strip's three reads need a right each, checked before the case or the dataset (a route's dependency runs
  *    before its handler): the pipelines `edit_pipelines`, a pipeline's runs `run_pipelines`, a dataset's sources
  *    `add_ingest_files`; 403 `{"detail": "Missing right: ..."}`, which the page must never show;
@@ -54,6 +58,13 @@ export interface Person {
    * read): its dataset routes answer 404 for these, exactly as for a dataset that does not exist.
    */
   datasetsDenied?: string[];
+  /**
+   * Cases the person's list names but the Conduit will no longer open for them: the registry answers 404 for these, as
+   * for a case that does not exist (slice IS3).
+   */
+  casesDenied?: string[];
+  /** `"none"`: the registry answers every recipe the person holds, whatever the case's datasets (a fault the page must survive). */
+  registryScope?: "case" | "none";
   /** Published pipelines the export left out as marked above what the person may view. */
   leftOut?: number;
   /**
@@ -187,8 +198,17 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     if (found && method === "GET") {
       // The right first: the real route's dependency runs before its handler, so a person without it learns nothing of the case.
       if (!has("edit_pipelines")) return json(res, 403, { detail: "Missing right: edit_pipelines" });
-      if (!visibleCase(decodeURIComponent(found[1] as string))) return json(res, 404, { detail: "Not Found" });
-      return json(res, 200, person.pipelines ?? []);
+      const opened = visibleCase(decodeURIComponent(found[1] as string));
+      if (!opened || (person.casesDenied ?? []).includes(opened.id)) return json(res, 404, { detail: "Not Found" });
+      const reach = new Set(opened.dataset_ids ?? []);
+      const recipes = person.pipelines ?? [];
+      return json(
+        res,
+        200,
+        (person.registryScope ?? "case") === "none"
+          ? recipes
+          : recipes.filter((r) => r["dataset_id"] === undefined || r["dataset_id"] === null || reach.has(String(r["dataset_id"]))),
+      );
     }
     found = /^\/v1\/investigations\/([^/]+)\/ingest\/recipes\/([^/]+)\/runs$/.exec(path);
     if (found && method === "GET") {
