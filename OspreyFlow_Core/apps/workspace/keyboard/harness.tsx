@@ -12,16 +12,19 @@ import { createRef, StrictMode, useEffect, useState } from "react";
 
 import "../../../packages/design/tokens.css";
 import { applyHarnessBrand } from "./brandHarness";
-import { applyTheme, createWorkingSet } from "@ospreyflow/glass-shared";
+import {
+  applyTheme,
+  createWorkingSet,
+  OntologyRegistry,
+  bringFactIntoView,
+  saveView,
+} from "@ospreyflow/glass-shared";
 import "../../../packages/design/primitives.css";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { SelectionList } from "../src/inspector/SelectionList";
 import { createCrossFilterStore } from "../src/crossfilter/store";
-import { OntologyRegistry } from "../src/ontology/schema";
-import { bringFactIntoView } from "@ospreyflow/glass-shared";
 import type { AnswerIds } from "../src/questions/AnswerActions";
 import { showAnswerOnCanvas } from "../src/questions/showAnswer";
-import { saveView } from "@ospreyflow/glass-shared";
 import { QuestionsPanel } from "../src/questions/QuestionsPanel";
 import { AskPage } from "../src/questions/AskPage";
 import { useAskPage } from "../src/questions/useAskPage";

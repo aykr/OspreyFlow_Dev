@@ -1,8 +1,7 @@
 // An entity type as the canvas draws it (ADR-097 step 1, design review item 4): its shape in its
 // channel's colour, then its name, so the Inspector's header reads as the node does.
-import { cachedNodeSvgDataUri, type NodeShape } from "../color/nodeVisual";
-import { activePalette } from "@ospreyflow/glass-shared";
-import type { EntityVisual } from "../ontology/schema";
+import { cachedNodeSvgDataUri, type NodeShape, activePalette } from "@ospreyflow/glass-shared";
+import type { EntityVisual } from "@ospreyflow/glass-shared";
 
 export function TypeChip({ type, visual }: { type: string; visual?: EntityVisual }) {
   // The palette of the theme shown now (ADR-070); the dark one's constants were used in either.

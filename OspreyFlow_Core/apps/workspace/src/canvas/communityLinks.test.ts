@@ -8,7 +8,7 @@ import {
   communityLinkWidth,
   drawsCommunityLinks,
   drawsNodeDots,
-} from "./communityLinks";
+} from "@ospreyflow/glass-shared";
 
 // ADR-119: on a large working set the zoomed-out bands draw links between communities, and the
 // individual links from the neighbourhood band in.

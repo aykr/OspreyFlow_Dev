@@ -1,8 +1,6 @@
 import { Popover } from "../design/primitives/Popover";
-import type { LimitExceeded } from "@ospreyflow/glass-shared";
+import type { LimitExceeded, NarrowingOption, NamedType } from "@ospreyflow/glass-shared";
 import { figure as capFigure } from "../workingset/ViewOverCapDialog";
-import type { NarrowingOption } from "./expansionGate";
-import type { NamedType } from "./linkLabel";
 import { NarrowingChoices } from "./NarrowingChoices";
 
 export interface CapRefusalPromptProps {

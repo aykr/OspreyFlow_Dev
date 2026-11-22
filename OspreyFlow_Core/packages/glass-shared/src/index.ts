@@ -63,6 +63,18 @@
 //                             handed in by `bindOpeningsStorage` (the workspace binds the tab's). One name was written
 //                             twice, so the index gives it apart: the case's address `caseUrl` is `caseOpenUrl` (the report
 //                             clients keep `caseUrl`)
+//   canvas/nodeGestures, forceLayout, removeNodes, edgeSelection, settledAnchor, nodeDrag, nodeHitArea,
+//   chunkedTextureRefresh, provenancePatterns, singleFlight, focusAnnouncement, linkLabel, zoomBands, edgeTypeMenu,
+//   expansionGate, expansionPreview, expansionOutcome, layoutModes, cameraMoves, communityLinks, linkHover,
+//   linksAmong, valueIcons; color/nodeVisual; ontology/schema
+//                             the canvas's and the graph's plain logic (the gestures, the force and arranged layouts,
+//                             the zoom bands, the link words, the expansion's gate and preview, the camera's redraws,
+//                             the community links, the value icons), the node's drawing as one generated image, and the
+//                             ontology's registry and its one request (PL4 slice E: twenty-five whole files, nothing
+//                             split, nothing else changed). A Sigma, a graph or a scheduler is a parameter, never an
+//                             import; the files that stay in the workspace's `canvas/` are the community files, the two
+//                             that keep a choice in the browser, the five that need splitting and the three that import
+//                             a drawing library
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -309,3 +321,28 @@ export * from "./home/guides";
 export * from "./home/homeData";
 export * from "./reports/ruleGroup";
 export * from "./canvas/entityPictures";
+export * from "./canvas/nodeGestures";
+export * from "./canvas/forceLayout";
+export * from "./canvas/removeNodes";
+export * from "./canvas/edgeSelection";
+export * from "./canvas/settledAnchor";
+export * from "./canvas/nodeDrag";
+export * from "./canvas/nodeHitArea";
+export * from "./canvas/chunkedTextureRefresh";
+export * from "./canvas/provenancePatterns";
+export * from "./canvas/singleFlight";
+export * from "./canvas/focusAnnouncement";
+export * from "./canvas/linkLabel";
+export * from "./canvas/zoomBands";
+export * from "./canvas/edgeTypeMenu";
+export * from "./canvas/expansionGate";
+export * from "./canvas/expansionPreview";
+export * from "./canvas/expansionOutcome";
+export * from "./canvas/layoutModes";
+export * from "./canvas/cameraMoves";
+export * from "./canvas/communityLinks";
+export * from "./canvas/linkHover";
+export * from "./canvas/linksAmong";
+export * from "./canvas/valueIcons";
+export * from "./color/nodeVisual";
+export * from "./ontology/schema";

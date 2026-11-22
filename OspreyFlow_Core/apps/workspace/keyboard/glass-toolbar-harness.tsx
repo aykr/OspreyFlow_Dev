@@ -20,11 +20,10 @@ import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
 import { HideToolbarButton, ShowToolbarButton } from "../src/canvas/ToolbarToggle";
 import { useViewToolbar, VIEW_TOOLBAR_ID, writeToolbarHidden } from "../src/canvas/toolbarVisibility";
 import { useCompactWidth } from "../src/canvas/toolbarCompact";
-import { OntologyRegistry } from "../src/ontology/schema";
+import { OntologyRegistry, applyTheme, createWorkingSet } from "@ospreyflow/glass-shared";
 import { ResolutionThresholdControl } from "../src/resolution/ThresholdControl";
 import { ClassificationStrip } from "../src/shell/ClassificationStrip";
 import { ContextBanner } from "../src/shell/ContextBanner";
-import { applyTheme, createWorkingSet } from "@ospreyflow/glass-shared";
 import type { Edge, Node, OntologySchema } from "../../../packages/schemas/generated";
 
 declare global {

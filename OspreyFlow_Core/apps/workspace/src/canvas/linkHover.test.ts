@@ -3,7 +3,7 @@
 import Graph from "graphology";
 import { describe, expect, it } from "vitest";
 
-import { linkHoverText } from "./linkHover";
+import { linkHoverText } from "@ospreyflow/glass-shared";
 
 function graph() {
   const g = new Graph({ multi: true, type: "mixed" }); // as `packages/glass-shared/src/workingset/store.ts` makes it

@@ -5,7 +5,7 @@
 // are the type's. This module only answers "which drawing, if any", and words what it means for the
 // legend and the Inspector; the order against the entity's picture and the analyst's choice is
 // `iconChoices.ts`'s.
-import { glyphMarkup, hasGlyph } from "@ospreyflow/glass-shared";
+import { glyphMarkup, hasGlyph } from "../color/nodeGlyphs";
 
 /** The rule an entity type declares: the enum property it reads, and some of its values' drawings. */
 export interface IconByValueRule {

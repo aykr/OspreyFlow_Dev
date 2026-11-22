@@ -23,9 +23,8 @@ import type {
   InfluencerSetVersion,
   StrengthInfluencer,
 } from "../../../../packages/schemas/generated";
-import { linkTypeName } from "../canvas/linkLabel";
-import { Button, Checkbox, Input, Select } from "../design/primitives";
 import {
+  linkTypeName,
   approveInfluencers,
   fetchCaseInfluencers,
   fetchInfluencerHistory,
@@ -33,6 +32,7 @@ import {
   saveCaseInfluencers,
   sendBackInfluencers,
 } from "@ospreyflow/glass-shared";
+import { Button, Checkbox, Input, Select } from "../design/primitives";
 import {
   andList,
   COMPOSITION_LABEL,

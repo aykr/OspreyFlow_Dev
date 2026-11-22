@@ -70,18 +70,18 @@ vi.mock("./auth/userManager", async () => {
     signOut: vi.fn(),
   };
 });
-vi.mock("./ontology/schema", async () => {
-  const actual = await vi.importActual<typeof import("./ontology/schema")>("./ontology/schema");
-  return { ...actual, fetchOntologyRegistry: vi.fn() };
-});
 vi.mock("@ospreyflow/glass-shared", async () => {
   const actual = await vi.importActual<typeof import("@ospreyflow/glass-shared")>("@ospreyflow/glass-shared");
-  return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
+  return {
+    ...actual,
+    fetchMapConfig: vi.fn(() => new Promise(() => undefined)),
+    fetchOntologyRegistry: vi.fn(),
+  };
 });
 
 import * as oidcConfig from "./auth/oidcConfig";
 import * as userManager from "./auth/userManager";
-import * as ontologySchema from "./ontology/schema";
+import * as ontologySchema from "@ospreyflow/glass-shared";
 
 /** A person the four places open for, who holds the Glass and the Studio (so the banner carries its
  * cross-link) and every rail destination: the most a case screen draws. */

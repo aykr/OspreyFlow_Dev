@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { OntologySchema } from "../../../../packages/schemas/generated";
-import { OntologyRegistry } from "./schema";
+import { OntologyRegistry } from "@ospreyflow/glass-shared";
 
 function schema(): OntologySchema {
   return {

@@ -28,7 +28,7 @@ import {
 } from "../handlingParts";
 import { FieldBindingEditor } from "./FieldBindingEditor";
 import { classificationWouldLoosen, entityTypesForPole, edgeTypesForEndpoints } from "./rowTemplate";
-import { linkTypeName } from "../../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 
 const POLE_CLASSES = ["person", "object", "location", "event", "organisation"] as const;
 

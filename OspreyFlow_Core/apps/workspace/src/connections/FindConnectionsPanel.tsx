@@ -9,13 +9,9 @@
 import { useState } from "react";
 
 import type { Node, Path } from "../../../../packages/schemas/generated";
-import { linkTypeName, type NamedType } from "../canvas/linkLabel";
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
-import { Button } from "../design/primitives/Button";
-import { Panel } from "../design/primitives/Panel";
-import { GlobalSearch } from "../search/GlobalSearch";
-import { displayValue } from "../search/searchOptions";
 import {
+  linkTypeName,
+  type NamedType,
   degreeMarks,
   degreesApart,
   findConnections,
@@ -24,6 +20,11 @@ import {
   seedRoute,
   type CanvasContents,
 } from "@ospreyflow/glass-shared";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
+import { Button } from "../design/primitives/Button";
+import { Panel } from "../design/primitives/Panel";
+import { GlobalSearch } from "../search/GlobalSearch";
+import { displayValue } from "../search/searchOptions";
 
 /** ADR-116 decision 2 and ADR-033: the furthest a search may be widened. */
 export const CONNECTIONS_CEILING = 8;

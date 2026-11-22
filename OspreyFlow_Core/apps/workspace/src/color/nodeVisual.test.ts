@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cachedNodeSvgDataUri, renderNodeSvg } from "./nodeVisual";
+import { cachedNodeSvgDataUri, renderNodeSvg } from "@ospreyflow/glass-shared";
 
 const SHAPES = ["circle", "square", "diamond", "hexagon", "triangle", "page", "pin"] as const;
 

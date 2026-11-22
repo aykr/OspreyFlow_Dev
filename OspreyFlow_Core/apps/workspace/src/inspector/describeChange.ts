@@ -6,7 +6,7 @@
 // component import came back undefined and `tsc` refused the pair (TS1149). Two modules in one folder
 // must never differ only in case.
 import type { LinkChangeRecord, LinkSnapshot } from "@ospreyflow/glass-shared";
-import { linkTypeName } from "../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 import { intervalText } from "./intervalText";
 
 function show(value: unknown): string {

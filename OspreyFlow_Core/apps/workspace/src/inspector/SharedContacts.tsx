@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import type { EdgeTypeDef, Node } from "../../../../packages/schemas/generated";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { linkTypeName } from "../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 import type { SharedContacts as Found } from "../../../../packages/schemas/generated";
 import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
