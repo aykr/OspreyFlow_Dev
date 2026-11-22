@@ -379,7 +379,7 @@ M = [
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "one_id_of_each_prefix_length"),
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "three_letter_build_starts"),
  # LINE_FIXES_5_BRIEF.md, 4: lint and the scan-map check in the Stop check
- ("stop_check.py", '        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)\n', '        lp, lr = [], []\n', "lint_error_is_red_in_the_same_round"),
+ ("stop_check.py", '        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)\n', '        lp, lr = [], []\n', "lint_error_is_red_in_the_same_round"),
  ("stop_check.py", '    one("ruff format", [ruff, "format", "--check", "--force-exclude"], core, py, "ruff format --check")\n', '', "not_formatted_is_red"),
  ("stop_check.py", '    one("eslint", [eslint], core,', '    0 and one("eslint", [eslint], core,', "eslint_error_is_red"),
  ("stop_check.py", '        missing = scan_select.unmapped(Path(wt) / "OspreyFlow_Build", table, only=new)\n', '        missing = []\n', "no_scan_map_row_is_red"),
@@ -526,6 +526,13 @@ M = [
  ("merge_slice.py", '            record_refusal(slice_id, prog.rec.get("tip") or "", cause)', '            pass', "refused_merge_says_which"),
  ("board.py", '        if by_cause:  # the owner', '        if False:  # the owner', "refused_merge_says_which"),
  ("board.py", '        if cause and (st.get("last_merge_refusal") or "") >= (st.get("refused_at") or "~"):', '        if False:', "refused_merge_says_which"),
+ # the owner's file 006 (line fault 12): the suite never depends on the machine's git configuration
+ ("tests/test_gates.py", 'git config user.name t && git config user.email t@t.invalid && ', '', "world_commits_with_its_own_identity"),
+ ("tests/conftest.py", '"GIT_CONFIG_VALUE_0": "true"', '"GIT_CONFIG_VALUE_0": "false"', "suite_runs_as_on_a_machine"),
+ # the owner's file 007, line fault 14: the branch's own changes, from its merge-base with main
+ ("stop_check.py", '    return git(["merge-base", "main", "HEAD"], wt) or frozen.get("base") or "main"', '    return frozen.get("base") or "main"', "main_brought_in_is_not_the_slices"),
+ ("stop_check.py", '        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)', '        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)', "main_brought_in_is_not_the_slices"),
+ ("stop_check.py", 'scan_select.touched(wt, own_base(wt, frozen))', 'scan_select.touched(wt, frozen.get("base") or "main")', "only_mains_file_selects"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

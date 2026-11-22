@@ -156,6 +156,13 @@ def tool(wt: str, env: dict, local: str, name: str):
     return str(own) if own.is_file() else shutil.which(name, path=env.get("PATH"))
 
 
+def own_base(wt: str, frozen: dict) -> str:
+    """Where the branch's own changes are measured from: its merge-base with main (the owner's file 007, line fault 14:
+    measured from the frozen base, everything a builder took in from main counted as the slice's, and IS5a was failed
+    six times for two files of main's). The frozen base when main cannot be read."""
+    return git(["merge-base", "main", "HEAD"], wt) or frozen.get("base") or "main"
+
+
 def lint(wt: str, base: str, slice_id: str, slot=None) -> tuple:
     """(problems, results) of CI's lint and the scan-map check on the files the branch changed against its base."""
     env = seat_env(wt, slot)
@@ -256,7 +263,7 @@ def main() -> int:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import scan_select
-        scans = scan_select.not_named(scan_select.select(scan_select.touched(wt, frozen.get("base") or "main"),
+        scans = scan_select.not_named(scan_select.select(scan_select.touched(wt, own_base(wt, frozen)),
                                                          scan_select.entries()),
                                       frozen.get("checks") or "", frozen.get("acceptance") or "")
     except Exception as e:  # fail closed: a slice's checks are never run without the scans the line requires
@@ -276,7 +283,7 @@ def main() -> int:
     results += pr
 
     try:  # LINE_FIXES_5_BRIEF.md, 4: CI's lint and the scan map, on what the branch changed
-        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)
+        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)
         problems += lp
         results += lr
     except Exception as e:  # fail closed, as for the scans
