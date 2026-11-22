@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Button } from "../design/primitives/Button";
 import { Input } from "../design/primitives/Input";
 import { RadioGroup } from "../design/primitives/RadioGroup";
-import { type Dataset, type DomainPack, createCase, listDatasets } from "./cases";
+import { type Dataset, type DomainPack, createCase, listDatasets } from "@ospreyflow/glass-shared";
 import { DatasetChoice } from "./DatasetChoice";
 import { DomainChoice } from "./DomainChoice";
 

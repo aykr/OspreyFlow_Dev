@@ -17,7 +17,7 @@ import type {
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
-import type { IngestSourceFile } from "../api";
+import type { IngestSourceFile } from "@ospreyflow/glass-shared";
 import {
   addDeploymentList,
   importOwnList,
@@ -29,7 +29,7 @@ import {
   setDeploymentListSchedule,
   setSubscribed,
   type SourcesApi,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import { RightButton, useWhyNot } from "../studio/rightsGate";
 
 type ListTemplate = DeploymentListInput["template"];

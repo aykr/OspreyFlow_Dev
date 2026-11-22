@@ -9,12 +9,15 @@
     "test": "vitest run"
   },
   "devDependencies": {
+    "@fontsource/atkinson-hyperlegible-next": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
     "@types/express": "^5.0.6",
     "@types/express-session": "1.19.0",
     "@types/node": "^22.10.2",
     "@types/nunjucks": "^3.2.6",
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.5.13",
+    "esbuild": "^0.28.2",
     "supertest": "^7.3.2",
     "typescript": "^5.7.2",
     "vitest": "^5.0.0"

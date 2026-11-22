@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { SourceTable } from "../../../../../packages/schemas/generated";
-import { listSources } from "../sources/api";
+import { listSources } from "@ospreyflow/glass-shared";
 
 export type RegisteredSources = SourceTable[] | null | "unreadable";
 

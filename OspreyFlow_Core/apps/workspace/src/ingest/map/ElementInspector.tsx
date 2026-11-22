@@ -18,7 +18,7 @@ import { Input } from "../../design/primitives/Input";
 import { Panel } from "../../design/primitives/Panel";
 import { RadioGroup } from "../../design/primitives/RadioGroup";
 import { Select } from "../../design/primitives/Select";
-import type { HandlingScheme } from "../api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import {
   HANDLING_BINDABLE,
   HANDLING_PART_LABELS,

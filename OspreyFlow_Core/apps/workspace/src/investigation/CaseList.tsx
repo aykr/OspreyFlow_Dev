@@ -8,8 +8,8 @@
 // only the views this reader may see, so another member's private view is never sent here.
 import { useEffect, useState } from "react";
 
-import { type CaseView, listViews } from "../views/viewsApi";
-import { type CaseListing, caseLabel, listCases, orderCases } from "./cases";
+import { type CaseView, listViews } from "@ospreyflow/glass-shared";
+import { type CaseListing, caseLabel, listCases, orderCases } from "@ospreyflow/glass-shared";
 
 export interface CaseListProps {
   apiBaseUrl: string;

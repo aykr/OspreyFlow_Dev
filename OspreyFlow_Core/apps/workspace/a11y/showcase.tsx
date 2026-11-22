@@ -20,7 +20,7 @@ import { IconButton } from "../src/design/primitives/IconButton";
 import { Input } from "../src/design/primitives/Input";
 import { explanationBasis } from "../src/resolution/explainView";
 import { HighlightedMessage } from "../src/dossier/HighlightedMessage";
-import type { DocumentView } from "../src/dossier/models";
+import type { DocumentView } from "@ospreyflow/glass-shared";
 import { OntologyRegistry } from "../src/ontology/schema";
 import { Panel } from "../src/design/primitives/Panel";
 import { RadioGroup } from "../src/design/primitives/RadioGroup";

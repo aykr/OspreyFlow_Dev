@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import type { LoadCheck, LoadChecksView } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Select } from "../../design/primitives/Select";
-import { fetchChecks, saveChecks } from "../api";
+import { fetchChecks, saveChecks } from "@ospreyflow/glass-shared";
 import { RightButton } from "../studio/rightsGate";
 
 export interface ChecksScreenProps {

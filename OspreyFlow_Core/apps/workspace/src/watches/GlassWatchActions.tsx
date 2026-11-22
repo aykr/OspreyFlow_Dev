@@ -12,10 +12,10 @@
 // Each is kept in *What raises alerts* or the one queue; the Glass works neither.
 import { useEffect, useState } from "react";
 import type { Node } from "../../../../packages/schemas/generated";
-import { raiseAlert } from "../alerts/api";
+import { raiseAlert } from "@ospreyflow/glass-shared";
 import { Button, Input, Select } from "../design/primitives";
-import { listCases } from "../investigation/cases";
-import { createHotlist, createMonitor } from "./api";
+import { listCases } from "@ospreyflow/glass-shared";
+import { createHotlist, createMonitor } from "@ospreyflow/glass-shared";
 
 export interface GlassApi {
   apiBaseUrl: string;

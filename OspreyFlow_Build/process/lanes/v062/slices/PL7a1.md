@@ -24,3 +24,26 @@ Pure only, with the store ports pinned to 9: the new test; `tests/test_docs_pdf.
 ## Out of scope (held for the owner: PL7a2 and PL7b)
 
 Rendering the Node service in any deployment (compose, Caddyfile, Helm, cloud-platform Ingress, `service_inventory`), its path routing, any `OSPREY_PAGES_*` setting in a renderer, `appearance.govuk_identity` and the I9 proofs, the I14 refusal of Superset under GOV.UK, the I18 and I22 render tests, the cutover and release-notes test, the pages image's `packages/glass-shared` copy (until a page imports it), anything under `apps/workspace`, the protected files, and the demo.
+
+## Round 6 (the table of what is open after round 5; written by the conductor from the verifier's record on tip `a82b32e`; judged against this table)
+
+The verifier checked everything else and found it holds (the derived state, the uniqueness check and its planted faults, the allowlist lines, the guided-page facts, no renderer file in the diff). **One open case:**
+
+| # | Open case | Where | What closes it |
+|---|---|---|---|
+| 1 | Fault (wording): in section 6a the GOV.UK install sentences ("Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.") sit inside the cloud-platform paragraph, just before its closing "(Section 4.1.) The decisions are ADR-148's.", so the paragraph credits them to ADR-148 (the cloud-platform namespace ADR) when they come from ADR-152 Amendment 1 decision 5 and the owner's ruling of 21 November; and "Use the command line (`ospreyflow install`)" follows a sentence saying the command does not run `cloud-platform`, so a reader of 6a cannot tell whether the advice applies to that profile | `OspreyFlow_Core/docs/administration-guide.md` about line 1034, and the same text in `OspreyFlow_Build/spec/10_ADMINISTRATION_GUIDE.md` about line 812 | Move the GOV.UK sentences after "The decisions are ADR-148's.", or start them with words saying they cover the GOV.UK modes `ospreyflow install` does take (lite, small, enterprise); both copies; PDF and manifest by the project's command, never by hand; `tests/test_docs_pdf.py`, `tests/test_admin_guide.py` stay green |
+
+**This is the last round the owner has given on this slice.** Change nothing else. Cheap checks first.
+
+## Round 5 (one round, the owner's add-round line and ruling of 21 November, after the stop at round 4 of 4)
+
+Round 4 left one fault in the install passages (two contradictory statements) and one gap in the test. **The owner has ruled on the first (21 November 2026): both routes are allowed, said plainly. No product change.** Write the three passages (administration guide sections 4.1 and 6a, the README's "Installing and running it"; both copies of each guide; the PDF and manifest with the project's own command, never by hand) to say exactly this and nothing the ADR does not say:
+
+- **Use the command line (`ospreyflow install`) where the installing computer must itself run no React either.** A GOV.UK install from the command line is headless.
+- **The guided page (`ospreyflow install --gui`, `apps/harness/src/screens/ModeScreen.tsx`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.**
+- Section 1a and the new passages must agree, word for word on those two facts, so a reader finds one statement. Read section 1a and the screen to confirm the second fact is true as written (does it run only on that computer; does it leave nothing in the deployment?); **if the code shows otherwise, do not write it: say what is true and list the difference in your report as a question for the owner.** Cloud-platform: say only what is true today, as before.
+- **Do not edit ADR-152 Amendment 1 decision 5.** The owner corrects it from a diff the conductor writes; leave the ADR text, its I22 row and the citation allowlist exactly as the earlier rounds left them. If a passage cites decision 5, cite it as "headless from the command line" and say in your report that the amendment is being corrected.
+
+**The test gap:** two `FUNCTIONS.yaml` rows with the same GOV.UK route make the derived state read "complete" early (and I22 would then drop the workspace from a GOV.UK deployment). **Add a uniqueness check to `govuk_tree_state` (or its loader): a duplicate GOV.UK route among the rows is an error that names both rows, not a quiet "complete"; and the case in `test_tree_parity.py`: a fixture with two rows on one route and every other row routed is refused (not complete), and the real tree has no duplicates.** Plant at the real call site: remove the check; the case goes red. Keep every earlier case green (a route present for the wrong function does not count, exceptions remove exactly one row).
+
+Cheap checks first (ruff, the scan-map check, `tests/test_docs_pdf.py`, `tests/test_admin_guide.py`, `tests/test_doc_citations_check.py`, the render tests untouched as the no-change proof). This is the last round; report a line per open item.

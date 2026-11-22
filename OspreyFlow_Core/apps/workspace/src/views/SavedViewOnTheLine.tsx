@@ -11,7 +11,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 
 import "./views.css";
 
-import { missingNote, type CaseViewOpened } from "./viewsApi";
+import { missingNote, type CaseViewOpened } from "@ospreyflow/glass-shared";
 
 type Annotation = NonNullable<CaseViewOpened["annotations"]>[number];
 

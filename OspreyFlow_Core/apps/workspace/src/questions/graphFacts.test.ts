@@ -2,7 +2,7 @@
 // it selects those ids on the canvas and brings them into view.
 import { describe, expect, it, vi } from "vitest";
 
-import { bringFactIntoView, splitAnswer, type GraphCitation } from "./graphFacts";
+import { bringFactIntoView, splitAnswer, type GraphCitation } from "@ospreyflow/glass-shared";
 
 const G1: GraphCitation = { number: 1, label: "[G-1]", node_ids: ["n-a", "n-b"], link_ids: ["l-1"] };
 const G2: GraphCitation = { number: 2, label: "[G-2]", node_ids: ["n-c"], link_ids: [] };

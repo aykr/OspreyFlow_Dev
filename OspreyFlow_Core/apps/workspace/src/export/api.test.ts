@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ExportBlockedApiError, OverrideRequiredApiError, submitExport } from "./api";
+import { ExportBlockedApiError, OverrideRequiredApiError, submitExport } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -36,7 +36,7 @@ import {
   type CaseBriefView,
   type RequirementStatus,
 } from "./briefApi";
-import { listCases } from "./cases";
+import { listCases } from "@ospreyflow/glass-shared";
 
 export interface CaseBriefProps {
   apiBaseUrl: string;

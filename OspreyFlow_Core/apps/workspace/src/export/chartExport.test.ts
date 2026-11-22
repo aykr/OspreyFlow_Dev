@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { readPngTextChunks } from "./pngMark";
 import { chartMarkFields, embedChartMark } from "./chartExport";
-import type { ExportMark } from "./api";
+import type { ExportMark } from "@ospreyflow/glass-shared";
 
 // The same real, valid 1x1 PNG fixture `pngMark.test.ts` already uses — stands in for whatever
 // bytes `@sigma/export-image`'s own `toBlob` (untestable in this environment, see

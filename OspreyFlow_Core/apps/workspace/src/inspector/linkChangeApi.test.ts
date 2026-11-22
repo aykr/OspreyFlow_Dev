@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LinkChangeError, changeLink, fetchLinkHistory } from "./linkChangeApi";
+import { LinkChangeError, changeLink, fetchLinkHistory } from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { GeoBin } from "../../../../packages/schemas/generated";
-import * as api from "../analytics/api";
+import * as api from "@ospreyflow/glass-shared";
 import { createCrossFilterStore } from "./store";
 import { followCrossFilterWithMapBins } from "./mapBins";
 

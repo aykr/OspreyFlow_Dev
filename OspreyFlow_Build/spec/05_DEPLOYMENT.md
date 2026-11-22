@@ -722,7 +722,7 @@ baked in at build time (`--build-arg OSPREY_BUILT_FROM_SHA`) to compute the same
 render resolves against. `render`'s own default resolver (`daemon_then_registry_digest_resolver`)
 checks the local daemon first, then the image's own registry — no local pull needed — so a bare
 customer laptop resolves a real, published digest on its very first render. A reference already
-pinned by digest (`ghcr.io/berriai/litellm@sha256:…`) is never looked up: the lock takes the digest
+pinned by digest (`ollama/ollama@sha256:…`) is never looked up: the lock takes the digest
 from the reference and records `source: reference`, so a registry that does not answer cannot
 refuse it (CI run 43413711132, 13 November 2026, refused two such references because ghcr.io did
 not answer; `test_a_reference_pinned_by_digest_is_locked_from_the_reference_never_the_registry`
@@ -732,7 +732,7 @@ remains what it always was: a **developer** flag, for a machine with no Docker d
 checkout with no release yet, never the customer-facing remedy (§5, §7).
 
 What is running afterwards: the workspace, one Conduit, three workers, ArcadeDB, DuckDB
-in-process, Valkey, MinIO, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
+in-process, Valkey, SeaweedFS, OpenSearch single-node, PostgreSQL, Keycloak, Ollama, and a
 faster-whisper container. Twelve containers, roughly 11 GB of RAM at rest. With
 `resources.gpu: nvidia` on a Linux computer, Ollama alone reserves the NVIDIA GPU (§3a.1). Since
 6 October 2026 also `ner`,

@@ -22,8 +22,10 @@ which. This is that sequence, in order:
 A third-party store the checkout pins at a new version (ADR-101: ArcadeDB 26.10.1) is moved to it:
 the service takes the rendered image, its probe and the rendered value of each setting the render
 names, and
-`versions.lock` names the new tag. A setting of the operator's own stays, and a service already at
-the checkout's version is not touched, so an operator's edit to it is theirs.
+`versions.lock` names the new tag. A service this checkout builds that the deployment still runs
+from a pulled image (the model gateway, OspreyFlow's own since PL13b) is given the render's image
+and `build`, and the lock the local build's row. A setting of the operator's own stays, and a
+service already at the checkout's version is not touched, so an operator's edit to it is theirs.
 
 It also brings the deployment's models up to date with its own `osprey.yaml` (ADR-095): the chosen
 extraction model's pull line in `compose.yaml`, the proxy's routing table `litellm.yaml`, and the
@@ -83,6 +85,7 @@ from harness.render import (
     STATE_CONTAINER_PATH,
     STORE_VOLUMES,
     _render_compose,
+    _render_versions_lock,
     load_config,
     release_version,
     render_litellm_config,
@@ -594,7 +597,15 @@ def _published_on_loopback(directory: Path) -> None:
 def _pins_moved(directory: Path) -> None:
     """A service built from no source here whose rendered image differs from the deployment's is
     moved to it, with the rendered values of its settings (a new version's launch options). Secrets
-    are `${...}` references in both, so none is written."""
+    are `${...}` references in both, so none is written.
+
+    The other way round, a service this checkout now **builds** that the deployment still runs from
+    a pulled image (the model gateway, once it became OspreyFlow's own image: PL13b) takes the
+    render's `image` and `build`, and its row in the lock becomes the local build's. The rest of
+    its stanza stays as the deployment has it, an operator's setting included, and no `env_file`
+    comes with it. Without this a deployment built from source kept the publisher's gateway image
+    until its next `apply`: this step skipped every service with a `build`, and the one before it
+    adds only services the deployment lacks."""
     config_path = directory / "osprey.yaml"
     if not config_path.is_file():
         return
@@ -607,13 +618,20 @@ def _pins_moved(directory: Path) -> None:
     # report-sync runs the Conduit's image with no `build` of its own: rendered in pull mode it
     # looked "moved" to a registry image that does not exist (ADR-111 Amendment 4's refresh).
     config = _like_the_deployment(config, services, directory)
-    rendered = yaml.safe_load(
-        _render_compose(config, service_images(config, build_context=_build_context(services)))
-    )["services"]
+    images = service_images(config, build_context=_build_context(services))
+    rendered = yaml.safe_load(_render_compose(config, images))["services"]
     moved: dict[str, str] = {}
+    built_here: list[str] = []
     for name, wanted in rendered.items():
         service = services.get(name)
-        if not isinstance(service, dict) or "build" in wanted or "build" in service:
+        if not isinstance(service, dict):
+            continue
+        if "build" in wanted and "build" not in service and "image" in wanted:
+            service["image"] = wanted["image"]
+            service["build"] = wanted["build"]
+            built_here.append(name)
+            continue
+        if "build" in wanted or "build" in service:
             continue
         if service.get("image") == wanted.get("image") or "image" not in wanted:
             continue
@@ -626,7 +644,7 @@ def _pins_moved(directory: Path) -> None:
         if "healthcheck" in wanted:
             service["healthcheck"] = wanted["healthcheck"]
         moved[name] = str(wanted["image"]).rsplit(":", 1)[1]
-    if not moved:
+    if not moved and not built_here:
         return
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     compose_path.write_text(text[:header_end] + body, encoding="utf-8")
@@ -635,9 +653,21 @@ def _pins_moved(directory: Path) -> None:
         lock_text = lock_path.read_text(encoding="utf-8")
         lock_header = "".join(line for line in lock_text.splitlines(True) if line.startswith("#"))
         lock = yaml.safe_load(lock_text) or {}
-        for entry in lock.get("images", []):
+        local_rows = {
+            row["service"]: row
+            for row in yaml.safe_load(
+                _render_versions_lock(
+                    [i for i in images if i.service in built_here],
+                    lambda _image: None,
+                    allow_unpinned=True,
+                )
+            ).get("images", [])
+        }
+        for index, entry in enumerate(lock.get("images", [])):
             if entry.get("service") in moved:
                 entry["tag"] = moved[entry["service"]]
+            elif entry.get("service") in local_rows:
+                lock["images"][index] = local_rows[entry["service"]]
         lock_path.write_text(
             lock_header + "\n" + yaml.safe_dump(lock, sort_keys=False), encoding="utf-8"
         )

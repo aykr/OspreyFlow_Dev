@@ -17,11 +17,11 @@
 // place to anyone whose rights do not open it (`services/api/rules_place.py`).
 import { useEffect, useState, type ReactNode } from "react";
 import { Tabs } from "../design/primitives";
-import { listCases, type AccessLevel } from "../investigation/cases";
+import { listCases, type AccessLevel } from "@ospreyflow/glass-shared";
 import { NO_SUCH_ALERT, type AlertAtAddressState } from "./address";
 import { AlertQueue, type AlertEvidence } from "./AlertQueue";
 import { AlertSourcesPanel } from "./AlertSourcesPanel";
-import type { CanvasOutcome } from "./api";
+import type { CanvasOutcome } from "@ospreyflow/glass-shared";
 import { HeldRowsPanel } from "./HeldRowsPanel";
 import { ListsPanel } from "./ListsPanel";
 import { RuleAuditPanel } from "./RuleAuditPanel";

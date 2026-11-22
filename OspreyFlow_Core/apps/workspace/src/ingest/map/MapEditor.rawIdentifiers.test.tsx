@@ -39,8 +39,8 @@ const TEMPLATE: RowTemplate = {
   edges: [{ type: "HELD_AT", from: "prisoner", to: "cell", properties: {} }],
 } as unknown as RowTemplate;
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ospreyflow/glass-shared")>();
   return {
     ...actual,
     fetchDraft: vi.fn(async () => ({

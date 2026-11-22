@@ -6,11 +6,10 @@ import { useEffect, useState } from "react";
 
 import type { AddPackItem, Judgement, PackDraft, PackHistory, PackVersionSummary, QueuedAlert, ReportPack, TrendDefinition } from "../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../design/primitives";
-import type { ReportsApi } from "./api";
-import { ExportControl } from "./ExportControl";
-import { PackItemView } from "./PackItemView";
-import { formatDay, WITHHELD_ITEMS_SENTENCE } from "./packText";
 import {
+  type ReportsApi,
+  formatDay,
+  WITHHELD_ITEMS_SENTENCE,
   addItem,
   createPack,
   fetchClassifications,
@@ -24,8 +23,10 @@ import {
   removeItem,
   reorderItems,
   withdrawVersion,
-} from "./packsApi";
-import { listTrends } from "./trendsApi";
+  listTrends,
+} from "@ospreyflow/glass-shared";
+import { ExportControl } from "./ExportControl";
+import { PackItemView } from "./PackItemView";
 
 type Kind = "trend" | "assessment" | "note" | "alert";
 

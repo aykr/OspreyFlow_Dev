@@ -14,7 +14,7 @@ import {
   rejectProposal,
   retireLinkType,
   type LinkTypeProposal,
-} from "./linkTypesApi";
+} from "@ospreyflow/glass-shared";
 
 export interface ProposedTypesProps {
   apiBaseUrl: string;

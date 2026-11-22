@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { ScheduleRunView, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
-import { fetchRecipeRegistry, fetchRecipeRuns } from "../api";
+import { fetchRecipeRegistry, fetchRecipeRuns } from "@ospreyflow/glass-shared";
 
 export interface StudioData {
   /** Every pipeline but a previous version; `null` until read. */

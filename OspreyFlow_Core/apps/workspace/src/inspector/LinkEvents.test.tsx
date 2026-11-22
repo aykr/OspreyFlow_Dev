@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { LinkEvents } from "./LinkEvents";
-import { eventsEntryLabel } from "./linkEventsApi";
+import { eventsEntryLabel } from "@ospreyflow/glass-shared";
 
 // ADR-089. The emails behind a link: newest first as the server orders them, fifty at a time with
 // Show more, one opened to read with its cut-off said.

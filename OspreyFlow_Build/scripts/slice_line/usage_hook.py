@@ -8,6 +8,7 @@ Runs from the fixed place (~/.ospreyflow/slice-line/bin/usage_hook.py). Standard
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import sys
@@ -24,12 +25,36 @@ def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+def locked(name: str):
+    """The data folder's lock of that name, as common.file_lock takes it: held while the shared file is written (6)."""
+    d = DATA / "locks"
+    d.mkdir(parents=True, exist_ok=True)
+    fh = (d / (name + ".lock")).open("a")
+    fcntl.flock(fh, fcntl.LOCK_EX)
+    return fh
+
+
+def write_whole(path: Path, text: str) -> None:
+    """Written whole under a name of this writer's own, then renamed: a reader never sees it half-written (6)."""
+    tmp = path.with_name("." + path.name + "." + str(os.getpid()) + "." + os.urandom(4).hex() + ".tmp")
+    try:
+        tmp.write_text(text)
+        os.replace(str(tmp), str(path))
+    finally:
+        if tmp.exists():
+            tmp.unlink()
+
+
 def append_usage(row: list) -> None:
     f = DATA / "usage.tsv"
-    if not f.exists():
-        f.write_text(HEADER)
-    with f.open("a") as fh:
-        fh.write("\t".join(str(x) for x in row) + "\n")
+    lock = locked("usage")
+    try:
+        if not f.exists() or f.stat().st_size == 0:
+            f.write_text(HEADER)
+        with f.open("a") as fh:
+            fh.write("\t".join(str(x) for x in row) + "\n")
+    finally:
+        lock.close()
 
 
 def transcript_usage(path: Path) -> dict:
@@ -91,7 +116,7 @@ def main() -> int:
     if mode == "stop-failure" and event.get("error") in ACCOUNT_STOPS:
         d = DATA / "accounts"
         d.mkdir(exist_ok=True)
-        (d / (account + ".stopped.json")).write_text(json.dumps({
+        write_whole(d / (account + ".stopped.json"), json.dumps({
             "account": account, "error": event.get("error"), "at": now(), "seat": seat,
             "slice": os.environ.get("OSPREY_SLICE", ""), "message": (event.get("last_assistant_message") or "")[:300],
         }, indent=1))

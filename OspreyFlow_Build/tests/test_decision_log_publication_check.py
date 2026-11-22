@@ -6,7 +6,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.decision_log_publication_check import ALLOWLIST_PATH, find_violations
+import pytest
+from tools import decision_log_publication_check as gate
+from tools.decision_log_publication_check import (
+    ALLOWLIST_PATH,
+    DECISIONS_PATH,
+    find_duplicate_headings,
+    find_violations,
+)
 
 
 def _load_allowlist() -> set[tuple[str, str]]:
@@ -143,3 +150,77 @@ def test_an_amendment_to_a_product_adr_filed_under_a_process_one_is_still_checke
         encoding="utf-8",
     )
     assert find_violations(fixture) == [("052", "034")]
+
+
+# --- a heading written twice (slice BL1b) ------------------------------------------------------
+#
+# `_sections` joins two sections of one number, so a block repeated by a union merge or a repeated
+# commit was read as one longer section and nothing said so. The planted shape is the real one: a
+# whole amendment block appended again after the log's end.
+
+
+def test_the_real_decision_log_has_no_heading_written_twice_beyond_the_known_one() -> None:
+    assert find_duplicate_headings() == []
+
+
+def test_an_amendment_block_written_twice_is_reported(tmp_path: Path) -> None:
+    block = (
+        "### ADR-055, Amendment 10 (20 November 2026) — a planted amendment\n\n"
+        "Status: accepted from a planted ruling.\n"
+    )
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-055 — A product decision\n\nIts own text.\n\n" + block + "\n" + block,
+        encoding="utf-8",
+    )
+    assert find_duplicate_headings(fixture) == [
+        "ADR-055 Amendment 10 has 2 headings in 06_DECISIONS.md (a block written twice)"
+    ]
+
+
+def test_an_adr_heading_written_twice_is_reported(tmp_path: Path) -> None:
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-199 — A planted record — ACCEPTED\n\nText.\n\n---\n\n"
+        "## ADR-199 — A planted record — ACCEPTED\n\nText.\n",
+        encoding="utf-8",
+    )
+    assert find_duplicate_headings(fixture) == [
+        "ADR-199 has 2 headings in 06_DECISIONS.md (a block written twice)"
+    ]
+
+
+def test_the_real_log_path_is_the_one_the_gate_reads() -> None:
+    assert find_duplicate_headings(DECISIONS_PATH) == find_duplicate_headings()
+
+
+# The gate `make decision-log-publication-check` runs is `main()`; the cases above reach the finder
+# alone, so a `main()` that dropped the finding or its `return 1` would still pass them.
+
+
+def test_main_returns_1_and_names_the_heading_when_a_block_is_written_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    block = "### ADR-055, Amendment 10 (20 November 2026) — a planted one\n\nStatus: planted.\n"
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-055 — A product decision\n\nText.\n\n" + block + "\n" + block, encoding="utf-8"
+    )
+    monkeypatch.setattr(gate, "DECISIONS_PATH", fixture)
+    assert gate.main() == 1
+    out = capsys.readouterr().out
+    assert "headings written twice" in out
+    assert "ADR-055 Amendment 10 has 2 headings" in out
+
+
+def test_main_returns_0_for_a_log_with_each_block_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    fixture = tmp_path / "06_DECISIONS.md"
+    fixture.write_text(
+        "## ADR-055 — A product decision\n\nText.\n\n### ADR-055, Amendment 10 (a day)\n\nx\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(gate, "DECISIONS_PATH", fixture)
+    assert gate.main() == 0
+    assert "headings written twice" not in capsys.readouterr().out

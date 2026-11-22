@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../design/primitives/Button";
 import { canChangeCase, type Rights } from "../rights/visibility";
-import { type CaseListing, type Dataset, caseDatasets, datasetLabel, listCases, listDatasets, setCaseDatasets } from "./cases";
+import { type CaseListing, type Dataset, caseDatasets, datasetLabel, listCases, listDatasets, setCaseDatasets } from "@ospreyflow/glass-shared";
 import { DatasetChoice } from "./DatasetChoice";
 
 export interface CaseDatasetsProps {

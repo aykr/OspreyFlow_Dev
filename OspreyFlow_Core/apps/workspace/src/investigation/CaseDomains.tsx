@@ -5,7 +5,7 @@
 // refuses a change of packs through the case (409 `packs_from_the_model`).
 import { useEffect, useState } from "react";
 
-import { type CaseListing, type DomainPack, domainLabels, listCases } from "./cases";
+import { type CaseListing, type DomainPack, domainLabels, listCases } from "@ospreyflow/glass-shared";
 
 export interface CaseDomainsProps {
   apiBaseUrl: string;

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { SourceLineage, SourceProfile, SourceTable } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Input } from "../../design/primitives/Input";
-import type { HandlingScheme } from "../api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { statusWords } from "../studio/vocabulary";
 import {
   editGovernance,
@@ -18,7 +18,7 @@ import {
   sourceLineage,
   sourceProfile,
   type SourcesApi,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import { type Governance, GovernanceFields, governanceOf, handlingOf, missing, refreshInWords } from "./GovernanceFields";
 import { RightButton } from "../studio/rightsGate";
 

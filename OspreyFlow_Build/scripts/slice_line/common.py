@@ -5,7 +5,9 @@ import this: they run from the fixed place with the system python.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
+import fcntl
 import io
 import json
 import os
@@ -81,7 +83,7 @@ def slice_row(slice_id: str, ref: str | None = "main") -> dict:
 
 def plan_ids() -> set[str]:
     """The build ids in the owner's plan page (index.html's N list): BL1, CO1, IS2 ..."""
-    return set(re.findall(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,', PLAN_HTML.read_text()))
+    return set(re.findall(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,', PLAN_HTML.read_text()))
 
 
 def load_dial() -> dict:
@@ -144,7 +146,8 @@ def signed_in(account: str) -> bool:
 
 def account_state(account: str) -> dict:
     f = DATA / "accounts" / f"{account}.json"
-    return json.loads(f.read_text()) if f.exists() else {}
+    with file_lock(f"account-{account}", shared=True):
+        return json.loads(f.read_text()) if f.exists() else {}
 
 
 def account_stop(account: str) -> dict | None:
@@ -201,10 +204,26 @@ def read_json(p: Path) -> dict | None:
 
 
 def write_json(p: Path, data: dict) -> None:
+    """Written whole, then renamed into place, through a temporary name of this writer's own: two writers never share
+    one (two seats of one account did, and renamed each other's half-written file: LINE_FIXES_5_BRIEF.md, 6)."""
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=1))
-    os.replace(tmp, p)
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=1))
+        os.replace(tmp, p)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@contextlib.contextmanager
+def file_lock(name: str, shared: bool = False):
+    """A lock in the data folder's locks/, held for a read (shared) or a read-and-write (exclusive); a second holder
+    waits for it, never fails (6)."""
+    d = DATA / "locks"
+    d.mkdir(parents=True, exist_ok=True)
+    with (d / f"{name}.lock").open("a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        yield
 
 
 def state(slice_id: str) -> dict:
@@ -238,26 +257,67 @@ def refreeze(slice_id: str, by: str) -> dict:
     return frozen
 
 
-#: The owner's rulings reach a slice's worktree, which is a snapshot from the slice's start, as an untracked copy of
-#: main's RULINGS.md at a path every checkout's .gitignore keeps out of git (`Claude outputs/`), never as a commit on
-#: the slice's branch: a copy committed there conflicts with main the next time main's rulings change (BL6, 18
-#: November 2026). run_seat.py writes it before every builder and verifier session and names it in the prompt.
+#: The owner's rulings reach a slice's worktree, which is a snapshot from the slice's start, as a copy of main's
+#: RULINGS.md, never as a commit on the slice's branch: a copy committed there conflicts with main the next time main's
+#: rulings change (BL6, 18 November 2026). run_seat.py writes it before every builder and verifier session and names it
+#: in the prompt. The copy lives in the worktree's own git folder (`git rev-parse --git-path`), which is no entry of the
+#: tree: at the tree's root (`Claude outputs/slice-line/`, until 21 November 2026) it failed test_layout's "no product
+#: folder is left at the root" in every builder's worktree (PL4d3c; LINE_FIXES_5_BRIEF.md, 5). A copy left at the old
+#: place is removed when the new one is written.
 RULINGS_REL = f"{V062_REL}/RULINGS.md"
-RULINGS_COPY_REL = "Claude outputs/slice-line/RULINGS.md"
+RULINGS_COPY_REL = "slice-line/RULINGS.md"
+OLD_RULINGS_COPY_REL = "Claude outputs/slice-line/RULINGS.md"
+
+
+def rulings_copy(tree: Path) -> Path | None:
+    """Where the rulings copy of `tree` goes: inside its own git folder, never among its files."""
+    p = subprocess.run(["git", "-C", str(tree), "rev-parse", "--path-format=absolute", "--git-path", RULINGS_COPY_REL],
+                       capture_output=True, text=True)
+    if p.returncode != 0 or not p.stdout.strip():
+        return None
+    dest = Path(p.stdout.strip())
+    top = subprocess.run(["git", "-C", str(tree), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if top.returncode != 0 or str(dest).startswith(top.stdout.strip().rstrip("/") + "/") and ".git/" not in str(dest):
+        return None  # never a path among the tree's own files
+    return dest
 
 
 def deliver_rulings(tree: Path) -> str | None:
-    """Main's RULINGS.md, copied into `tree` where git ignores it; the copy's path, or None when it cannot be."""
+    """Main's RULINGS.md, copied into `tree`'s own git folder; the copy's path, or None when it cannot be."""
     try:
         text = git(["show", f"main:{RULINGS_REL}"], REPO)
     except RuntimeError:
         return None
-    if subprocess.run(["git", "-C", str(tree), "check-ignore", "-q", RULINGS_COPY_REL]).returncode != 0:
+    dest = rulings_copy(tree)
+    if dest is None:
         return None
-    dest = Path(tree) / RULINGS_COPY_REL
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text + "\n")
+    old = Path(tree) / OLD_RULINGS_COPY_REL
+    if old.is_file():  # the copy the line used to leave at the root (5): removed, with the folders it alone kept
+        old.unlink()
+        for d in (old.parent, old.parent.parent):
+            try:
+                d.rmdir()
+            except OSError:
+                break
     return str(dest)
+
+
+#: The scout's table of every open case, before a slice's fifth round (the owner, 21 November 2026: after round 4 a
+#: read-only scout lists every open case as a table, and rounds 5 to 8 are judged against it; no fifth round without
+#: it): slices/<ID>_ROUND<N>_TABLE.md beside the slice's brief, N 5 or more, in the main checkout (committed or not).
+TABLE_ROUND = 5
+
+
+def round_table(slice_id: str) -> Path | None:
+    """The slice's open-case table for rounds 5 on, or None when there is none."""
+    folder = REPO / V062_REL / "slices"
+    for f in sorted(folder.glob(f"{slice_id}_ROUND*_TABLE.md")) if folder.is_dir() else []:
+        m = re.fullmatch(rf"{re.escape(slice_id)}_ROUND(\d+)_TABLE\.md", f.name)
+        if m and int(m.group(1)) >= TABLE_ROUND and f.read_text().strip():
+            return f
+    return None
 
 
 #: The owner's written word for resume.py (README, "Resuming a slice"): lines `<slice> <action> <YYYY-MM-DD>`, one use
@@ -304,6 +364,53 @@ def log_owner_change(slice_id: str, action: str, detail: str) -> None:
         OWNER_CHANGES.write_text("at\tslice\taction\tdetail\n")
     with OWNER_CHANGES.open("a") as fh:
         fh.write("\t".join([now(), slice_id, action, detail.replace("\t", " ").replace("\n", " ")]) + "\n")
+
+
+#: The line's own clearances of a stop (LINE_FIXES_5_BRIEF.md, A): one row each (time, slice, the stop, the cause a or
+#: b, what the line did), beside owner-changes.tsv; board.py prints them for the conductor's morning report and
+#: status.js carries them (`self_clears`). Each also has its record in the slice's folder (self-clear-<time>.json).
+SELF_CLEARS = DATA / "self-clears.tsv"
+SELF_CLEAR_COLUMNS = ("at", "slice", "stop", "cause", "what")
+
+
+def log_self_clear(slice_id: str, stop: str, cause: str, what: str) -> dict:
+    row = {"at": now(), "slice": slice_id, "stop": stop, "cause": cause, "what": what}
+    SELF_CLEARS.parent.mkdir(parents=True, exist_ok=True)
+    if not SELF_CLEARS.exists():
+        SELF_CLEARS.write_text("\t".join(SELF_CLEAR_COLUMNS) + "\n")
+    with SELF_CLEARS.open("a") as fh:
+        fh.write("\t".join(str(row[k]).replace("\t", " ").replace("\n", " ") for k in SELF_CLEAR_COLUMNS) + "\n")
+    write_json(rec_dir(slice_id) / f"self-clear-{row['at'].replace(':', '')}-{os.urandom(3).hex()}.json", row)
+    return row
+
+
+def self_clears() -> list[dict]:
+    if not SELF_CLEARS.exists():
+        return []
+    rows = [ln.split("\t") for ln in SELF_CLEARS.read_text().splitlines()[1:] if ln.strip()]
+    return [dict(zip(SELF_CLEAR_COLUMNS, r + [""] * (len(SELF_CLEAR_COLUMNS) - len(r)))) for r in rows]
+
+
+def unapplied_lines() -> list[dict]:
+    """The owner's lines in resume.tsv for a slice not yet used (no use logged in owner-changes.tsv): each its slice,
+    action, arguments (move-seat's seat and account), date and text. The k-th of k identical lines is unapplied until it
+    has k uses. Lines that are not a slice's (clear-account) are left out."""
+    if not RESUME_FILE.is_file():
+        return []
+    lines = [ln.split() for ln in RESUME_FILE.read_text().splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    changes = owner_changes()
+    out, seen = [], {}
+    for parts in lines:
+        if len(parts) < 3 or parts[0] == "clear-account":
+            continue
+        sid, action, args, date = parts[0], parts[1], parts[2:-1], parts[-1]
+        key = tuple(parts)
+        seen[key] = seen.get(key, 0) + 1
+        tag = f"resume.tsv {date} {' '.join([action, *args])}:"
+        used = sum(1 for r in changes if r["slice"] == sid and r["detail"].startswith(tag))
+        if used < seen[key]:
+            out.append({"slice": sid, "action": action, "args": args, "date": date, "text": "\t".join(parts)})
+    return out
 
 
 def owner_changes() -> list[dict]:

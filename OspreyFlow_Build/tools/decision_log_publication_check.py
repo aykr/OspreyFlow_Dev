@@ -32,6 +32,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from tools.adr_reservations_check import find_duplicate_headings as _duplicate_headings
 from tools.layout import REPO as REPO_ROOT
 from tools.layout import rel
 
@@ -109,6 +110,17 @@ def find_violations(decisions_path: Path = DECISIONS_PATH) -> list[tuple[str, st
     return violations
 
 
+def find_duplicate_headings(decisions_path: Path = DECISIONS_PATH) -> list[str]:
+    """Every ADR or amendment heading written twice. `_sections` joins two sections of one number
+    silently, so a block repeated by a merge or a copy is read as one longer section and nothing
+    says
+    so; this reports it (the known repeat is in
+    `adr_reservations_check.KNOWN_DUPLICATE_HEADINGS`)."""
+    if not decisions_path.exists():
+        return []
+    return _duplicate_headings(decisions_path.read_text(encoding="utf-8"))
+
+
 def _load_allowlist() -> set[tuple[str, str]]:
     """`(product_adr, process_adr)` pairs already known and accepted, the same "known debt
     enumerated, new debt fails immediately" shape `product_tree_link_check.py`'s own allowlist
@@ -126,9 +138,17 @@ def _load_allowlist() -> set[tuple[str, str]]:
 
 
 def main() -> int:
-    violations = find_violations()
+    violations = find_violations(DECISIONS_PATH)
     allowlisted = _load_allowlist()
     new_violations = [v for v in violations if v not in allowlisted]
+    repeated = find_duplicate_headings(DECISIONS_PATH)
+    if repeated:
+        print(
+            "decision-log-publication-check: headings written twice (each is read as one section):"
+        )
+        for problem in repeated:
+            print(f"  - {problem}")
+        return 1
     if new_violations:
         print("decision-log-publication-check: new PRODUCT ADRs citing a PROCESS ADR:")
         for product_adr, process_adr in new_violations:

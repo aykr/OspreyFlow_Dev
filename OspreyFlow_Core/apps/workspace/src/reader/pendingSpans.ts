@@ -4,7 +4,7 @@
 // (`services/api/document_reader.py`). A span that fails it, falls outside the shown text (the
 // reader shows the first 4,000 characters), or overlaps an earlier one is left undrawn; its list
 // row still shows the finding.
-import type { EmailCandidate } from "../inspector/linkEventsApi";
+import type { EmailCandidate } from "@ospreyflow/glass-shared";
 
 export interface PendingSpan {
   start: number;

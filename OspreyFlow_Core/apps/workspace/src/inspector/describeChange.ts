@@ -5,7 +5,7 @@
 // case: on a case-insensitive disk (macOS, Windows) `./LinkHistory` resolved to this file, so the
 // component import came back undefined and `tsc` refused the pair (TS1149). Two modules in one folder
 // must never differ only in case.
-import type { LinkChangeRecord, LinkSnapshot } from "./linkChangeApi";
+import type { LinkChangeRecord, LinkSnapshot } from "@ospreyflow/glass-shared";
 import { linkTypeName } from "../canvas/linkLabel";
 import { intervalText } from "./intervalText";
 

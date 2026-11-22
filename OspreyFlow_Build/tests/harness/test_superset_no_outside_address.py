@@ -90,6 +90,8 @@ from tests.harness.test_superset_entra_sign_in import _superset
 
 CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
 PAGES_SERVER = CORE / "apps" / "pages" / "server"
+# The Default tree's templates (ADR-152 decision 6; IS5a0 moved them from `server/views`).
+PAGES_VIEWS = CORE / "apps" / "pages" / "tree-default"
 WORKSPACE = CORE / "apps" / "workspace"
 
 # --- the policy ---------------------------------------------------------------------------------
@@ -457,7 +459,7 @@ def addresses_in_headers(text: str) -> list[tuple[str, str]]:
 
 
 def _served_files() -> dict[str, Path]:
-    views = sorted((PAGES_SERVER / "views").glob("*.njk"))
+    views = sorted(PAGES_VIEWS.glob("*.njk"))
     static = sorted((WORKSPACE / "public").glob("*.html"))
     files = [*views, PAGES_SERVER / "headers.ts", WORKSPACE / "index.html", *static]
     return {str(f.relative_to(CORE)): f for f in files}
@@ -467,9 +469,9 @@ def test_the_scan_reads_the_files_it_claims_to() -> None:
     """A moved folder must not turn this into a scan of nothing (rule 12)."""
     names = set(_served_files())
     assert {
-        "apps/pages/server/views/layout.njk",
-        "apps/pages/server/views/home.njk",
-        "apps/pages/server/views/error.njk",
+        "apps/pages/tree-default/layout.njk",
+        "apps/pages/tree-default/home.njk",
+        "apps/pages/tree-default/error.njk",
         "apps/pages/server/headers.ts",
         "apps/workspace/index.html",
     } <= names
@@ -500,7 +502,7 @@ def test_no_served_source_file_names_an_outside_host() -> None:
     ids=["img", "stylesheet", "script", "import", "css-url", "form-action"],
 )
 def test_an_outside_load_planted_in_a_pages_view_is_red(plant: str) -> None:
-    name = "apps/pages/server/views/layout.njk"
+    name = "apps/pages/tree-default/layout.njk"
     real = (CORE / name).read_text(encoding="utf-8")
     planted = real.replace("</body>", f"{plant}\n</body>")
     assert planted != real

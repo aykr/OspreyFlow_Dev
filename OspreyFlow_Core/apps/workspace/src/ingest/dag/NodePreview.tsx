@@ -21,7 +21,7 @@ import { Table, type TableColumn } from "../../design/primitives/Table";
 import { OntologyRegistry } from "../../ontology/schema";
 import type { WorkingSet } from "@ospreyflow/glass-shared";
 import { workingSetOfDryRun } from "../verify/VerifyScreen";
-import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "../api";
+import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "@ospreyflow/glass-shared";
 import { RightButton } from "../studio/rightsGate";
 
 /** The most rows a table Preview reads. The one place this number is written:

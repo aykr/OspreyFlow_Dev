@@ -28,7 +28,7 @@ import { ContextBanner, crossLinkFor } from "../src/shell/ContextBanner";
 import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { PlaceSwitcher } from "../src/shell/PlaceSwitcher";
 import { useLastGlassView } from "../src/shell/placeMemory";
-import { openCase } from "../src/investigation/cases";
+import { openCase } from "../src/investigation/caseNavigation";
 import { initialInvestigationId } from "../src/investigation/investigationId";
 import { placesFor, type PlaceId } from "../src/shell/places";
 import { LeftRail } from "../src/shell/LeftRail";

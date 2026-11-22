@@ -21,7 +21,7 @@ settings:
       verifier:  {model: sonnet, effort: high, passes: [acceptance]}
   balanced:
     builders: 6
-    rounds: 4
+    rounds: 8
     seats:
       conductor: {model: sonnet, effort: high}
       scout:     {model: haiku,  effort: medium}

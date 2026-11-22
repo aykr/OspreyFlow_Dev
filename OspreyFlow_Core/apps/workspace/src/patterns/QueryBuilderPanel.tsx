@@ -43,7 +43,7 @@ import {
   type PatternPreview,
   type PatternProposal,
   type PatternRunAccepted,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import {
   addCondition,
   addEdge,

@@ -85,6 +85,7 @@ from schemas.deployment import (
     EXTRACTION_CONTEXT_TOKENS,
     EXTRACTION_MODELS,
     TILES_CONTAINER_PATH,
+    TRANSCRIPTION_MODEL_REVISIONS,
     OspreyConfig,
     Profile,
     SearchBackend,
@@ -609,17 +610,18 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
     building = source_path is not None
     sha = git_sha(Path(source_path)) if source_path is not None else git_sha()
 
-    def _owned(service: str, dockerfile: str) -> ServiceImage:
+    def _owned(service: str, dockerfile: str, **own: Any) -> ServiceImage:
         if building:
             return ServiceImage(
                 service,
                 f"osprey/{service}:local",
                 build_context=build_context,
                 dockerfile=dockerfile,
+                **own,
             )
         # ADR-114 Amendment 8: a user repository's release pushes to its own owner's registry.
         registry = os.environ.get("OSPREY_IMAGE_REGISTRY") or OWNED_IMAGE_REGISTRY
-        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile)
+        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile, **own)
 
     # **These third-party references are verified to resolve, and that is not a given.** Two of the
     # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and
@@ -659,22 +661,26 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
             # never rendered: the deployment brought up `ollama` and the Conduit dialled
             # `localhost:4000` inside its own container, so every extraction returned a bare 500
             # (`httpx.ConnectError: All connection attempts failed`, measured over the wire).
-            # **The same image the developer stack pins, by digest — corrected in round 13cdd.**
-            # Round 13cda pinned a tag chosen here instead, so a deployment ran a *different*
-            # LiteLLM from `make dev-up`. That is the exact "two copies that drift" defect the
-            # ollama pull beside it was made byte-identical to avoid, reintroduced one line away
-            # from it. Measured against the same ollama, the same config and the request shape the
-            # route actually emits: the developer stack's proxy returns `{"Endpoint": []}`, while
-            # the tag returns *prose* ("I'm sorry, but I cannot…"), because `main-v1.55.8` does not
-            # translate `response_format: json_schema` into Ollama's own constrained decoding. That
-            # is the `Expecting value: line 1 column 1` `08_ACCEPTANCE_SCENARIOS.md` records as
-            # A6/B6's blocker — not an empty body, which is what it was read as before it was
-            # measured.
+            # **OspreyFlow's own image, built from the publisher's MIT files alone** (the owner's
+            # ruling of 21 November 2026): `deploy/litellm/Dockerfile` installs LiteLLM 1.101.0 from
+            # PyPI, held to the versions its pinned image was measured with, and leaves out the
+            # publisher's commercially licensed folder and package (the build's own licence gate
+            # fails on either). It is released, scanned and signed like the other owned images and
+            # locked as one (`ghcr.io/ospreyflow/litellm:<commit>`), and built from the checkout's
+            # `deploy/litellm` folder alone (the root's `.dockerignore` leaves `deploy/` out).
+            # **It reads no `deployment.env`** (`reads_env_file=False`): it holds the engines' keys
+            # and is given only the variables `_SERVICE_EXTRAS` names for it.
+            # The image that earlier rounds pinned by digest is the one the scout measured
+            # (`spec/PL13_GATEWAY_SCOUT.md`): the 24-call route script gave the same answers on
+            # both, and `test_model_gateway_live.py` passes on ours.
             #
-            # `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if they part.
-            ServiceImage(
+            # `test_the_rendered_model_proxy_is_the_developer_stacks` is what fails if the
+            # developer stack builds anything else.
+            _owned(
                 "litellm",
-                "ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b",
+                "deploy/litellm/Dockerfile",
+                own_folder="deploy/litellm",
+                reads_env_file=False,
             ),
             ServiceImage(
                 "whisper",
@@ -1035,8 +1041,8 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # built image has a stable local tag that `versions.lock` can name and that a later
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
-            service["build"] = {"context": entry.build_context, "dockerfile": entry.dockerfile}
-        if entry.owned:
+            service["build"] = entry.build_stanza()
+        if entry.owned and entry.reads_env_file:
             # Without this the deployment's own generated environment file is written and then
             # never reaches a container: the Conduit fail-fasts on a missing `OIDC_JWKS_URL` and
             # restarts forever. Found running the golden path. Needed whether this owned service
@@ -1397,13 +1403,23 @@ def _whisper_download_script(model: str) -> str:
     model is about 75 MB, and this path runs only when the model is not whole.) If that fails the
     job says so in words, rather than leaving a traceback, and exits non-zero so the start fails
     loudly. `tests/harness/test_start_needs_no_network.py` runs this script against stubs that do
-    not repair what the real tool does not."""
+    not repair what the real tool does not.
+
+    **The snapshot must be the pinned commit (PL11, 21 November 2026).** The snapshot's folder is
+    named for the commit the files were fetched at, so `model_is_complete` also requires that
+    name to be `TRANSCRIPTION_MODEL_REVISIONS[model]` (the commit `06_DECISIONS.md` ADR-020's
+    Stage 2 addendum records). A machine holding another commit fetches again; if the Hub's
+    `main` is no longer the pinned commit the job fails in words, as the Ollama pull does when a
+    tag has moved, rather than serving other weights without a word. This changes what a first
+    start does when upstream moves `main`: it stops, where it served the new weights before."""
     blobs = f"{_HF_CACHE}/hub/models--{model.replace('/', '--')}/blobs"
+    revision = TRANSCRIPTION_MODEL_REVISIONS[model]
     return (
         "model_is_complete() {\n"
         f'  snapshot="$$(HF_HUB_OFFLINE=1 huggingface-cli download {model} 2>/dev/null'
         ' | tail -n 1)"\n'
         '  [ -d "$$snapshot" ] || return 1\n'
+        f'  [ "$$(basename "$$snapshot")" = {revision} ] || return 1\n'
         "  for file in config.json model.bin tokenizer.json; do\n"
         '    [ -s "$$snapshot/$$file" ] || return 1\n'
         "  done\n"
@@ -1420,9 +1436,11 @@ def _whisper_download_script(model: str) -> str:
         f"  rm -f {blobs}/*.incomplete\n"
         f"  huggingface-cli download --force-download {model} || true\n"
         "  model_is_complete || {\n"
-        f"    echo 'FATAL: the speech model {model} is not on this machine, or not all of it, "
-        "and it could not be fetched. A first start needs the network once, to fetch the "
-        "model weights: connect this machine to the network, then start again. The weights are "
+        f"    echo 'FATAL: the speech model {model} is not on this machine at the recorded "
+        f"version {revision}, or not all of it, and it could not be fetched. A first start "
+        "needs the network once, to fetch the model weights: connect this machine to the "
+        "network, then start again. If the network is fine, the model moved upstream: update "
+        "TRANSCRIPTION_MODEL_REVISIONS deliberately, do not proceed silently. The weights are "
         "kept, so later starts need no network.' >&2\n"
         "    exit 1\n"
         "  }\n"
@@ -1831,12 +1849,12 @@ def _render_versions_lock(
                     "digest": "local-build",
                     "source": "local-build",
                     "built_from_git_sha": sha,
-                    "build_context": entry.build_context,
-                    "dockerfile": entry.dockerfile,
+                    "build_context": entry.build_stanza()["context"],
+                    "dockerfile": entry.build_stanza()["dockerfile"],
                 }
             )
             continue
-        # A reference pinned by digest (`ghcr.io/berriai/litellm@sha256:…`) already names the one
+        # A reference pinned by digest (`ollama/ollama@sha256:…`) already names the one
         # image it can ever be, so its digest is read from the reference and no registry is asked:
         # asking added only a way to fail. CI run 43413711132 (13 November 2026) refused to render
         # because ghcr.io did not answer in time for two such references.

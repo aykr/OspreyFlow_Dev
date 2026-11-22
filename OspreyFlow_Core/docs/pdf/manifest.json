@@ -1,6 +1,6 @@
 {
   "administration-guide.md": {
-    "body": "6affee5f9e939e0f94825081a1c3cf511d4ffc2e480874d8aac27eb596fe7c43",
+    "body": "8d9872a08314dde0f0be59aab2e984f0711acc6013257a3ce9408f1c54473941",
     "images": {
       "images/admin/01-people.png": "ed01f0e8b2c9ddb9460d3efdb3cb009410295e3e31e5093d0a8d1109b6abcb69",
       "images/admin/02-access.png": "c91a213349b4187b57fc18384e42ec4314dc1511c7b7e57e491bc65a0037286d",
@@ -12,9 +12,9 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "61c7d7f0862d0d905e54e60091eb89c55d90e44bdb922ca8785ea5e375fd1e60",
-    "source": "6dece1f05d93ee6eb2be246229fa1c5ede6c52f133fe54e917accaf96b4cc7f4",
-    "version": "2.33"
+    "pdf": "66b512d18d92fa460d58cb98c3a9f2a76200b663222997c9c10366931528aa34",
+    "source": "42767d69c7ec57d17b6d317152afd21b46b463973cb0f30ef6420afde9bab657",
+    "version": "2.38"
   },
   "architecture-guide.md": {
     "body": "0cf5c3c582625fc2b806eab054fae885e15edd6037b1f5d8c22ee6e4164a29d5",
@@ -22,7 +22,7 @@
       "images/architecture/level-0.svg": "b44cb62a5b2da7d3ff5eb84c1d77b34e000c38b004431e4c3c12ea746e70c71b",
       "images/architecture/level-1.svg": "26be1b09cd448cc5209b3e56e40a19a8766a71973e9b9984ece8b02b946e3a55"
     },
-    "pdf": "336922efeb7413bf59f7cb7911e99762236415663292909ea5f3517204d5d9bf",
+    "pdf": "56b07fe57300e7f7dd58d4cbf9ec8fe84d7fc085dfe01c382fdd427a7ccca189",
     "source": "5a764e8735497be924d36f60f57bbb2c39b1865baaeda102c18f24ed40133509",
     "version": "1.13"
   },
@@ -45,7 +45,7 @@
       "images/developer/12-verify-would-raise.png": "e00c85fa9c746c8160f12c633e97d7d508af88f495d577b9ce9f826eec5d4763",
       "images/developer/13-checks-on-load.png": "41e838f55d1448a3c20ab70bbc7f587db063982847c85015ab5a656a85c7b492"
     },
-    "pdf": "66612a2d12cd765f9fbc4631504abc16131e41e38bc99116119a23ed1b7bbd88",
+    "pdf": "a4cd0a530a606c0028319fdd994e25be34da738e4e5377838d252b709f37aec0",
     "source": "5c0c4d1057a3352afcdeda4d4a95c86ef0428425523cb87ced0db86cf16ba5a8",
     "version": "1.44"
   },
@@ -79,7 +79,7 @@
       "images/user/25-scheduled-rule.png": "85fd57e01b357aaa6923a965531bc1a29970cf4cd1b0f503f519988bfe8381e1",
       "images/user/26-second-person.png": "c27f6a95d9a76921c21821823ec56de4334b4670ce2455fe30f964aac38802e8"
     },
-    "pdf": "7ad7dd7cbf2fa981fb84ab2f1de498bf51c642499fcdfc195c4fa81df0443863",
+    "pdf": "9d6d9cdc3cfb39175e70ee8b41624541aa0132bc40acf6f109216c35a6915058",
     "source": "79cd274e5ae09bf9e52d87db3610402daccf9fc7caa122a5ff62cf09c57d4933",
     "version": "1.82"
   }

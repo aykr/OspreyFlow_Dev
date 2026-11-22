@@ -421,7 +421,8 @@ radii, motion and the accessibility floor. The rebrand touched the identity, not
 
 A deployment may show another brand instead of the OspreyFlow identity (`appearance.brand` in
 `osprey.yaml`, `06_DECISIONS.md` ADR-132). A brand is one `[data-brand="<name>"]` block in
-`tokens.css`, after the light theme's, and it obeys one rule: **it redefines chrome only, never a
+`tokens.css`, after the light theme's (or, for a brand with a theme folder, in that folder's own token file, loaded after it:
+`06_DECISIONS.md` ADR-152 Amendment 4), and it obeys one rule: **it redefines chrome only, never a
 `--ch-*`, `--chart-*`, `--seq-*` or `--div-*` token.** The nine channels and their shapes, the chart
 palette and the two ramps are the same under every brand. A brand is always shown light. Every
 colour a brand block sets is listed below for that brand; anything else in the block is drift.

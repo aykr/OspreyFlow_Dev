@@ -4,6 +4,20 @@
 //   node scripts/dist_compare.mjs compare <before-dist> <after-dist>
 //        exit 0 and "SAME" when the two builds differ only as a file's new path makes them differ; exit 1 and
 //        "DIFFERENT" with what changed otherwise.
+//   node scripts/dist_compare.mjs units <before-dist> <after-dist>
+//        every differing unit, uncapped, one per line: `<file>\t<only before|only after>\t<sha-12 of the unit>\t<unit>`
+//        (a slice that splits code declares exactly these; `compare` shows five a side, this shows them all).
+//   node scripts/dist_compare.mjs rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>] [--conductor-merge]
+//        REFUSES, in words and touching nothing, to run against the real baseline folder (a fixed path) or $PL4_BASELINE_DIST unless `--conductor-merge`
+//        is given: only the conductor's merge passes it; everything else names a copy with `--baseline`.
+//        the conductor's step at merge (PL4d3d, the owner's ruling of 21 November 2026), run from the merged commit:
+//        builds the workspace from the checked-out tree (or takes `--dist`), compares it with the baseline folder (default
+//        `$PL4_BASELINE_DIST`, else `~/dev/osprey-acceptance/PL4a-baseline/dist`), prints the old-against-new listing of
+//        differing units and EXITS NON-ZERO, touching nothing, if any differing unit is not in the declared file
+//        (`--declared`, required: the list of units a slice declares, a knock-on one included; this script lives in Core,
+//        which does not name where that list is kept) or if a declared unit does not differ.
+//        Otherwise it runs the workspace's unit tests, moves the old baseline folder aside (never deleted: a dated
+//        sibling, `<name>-before-<date>`), puts the new build in its place and writes `PL4_BASELINE.json`.
 //   node scripts/dist_compare.mjs normalise <dist>
 //        the normalised hash of one build, and what it was made from.
 //   node scripts/dist_compare.mjs record --dist <dist> --tests <npm-test-output> [--out <file>]
@@ -41,8 +55,9 @@
 // may not reach it. The unit tests and the browser gates stand behind the rest.
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { homedir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -540,6 +555,43 @@ function commonUnits(before, after) {
   return before.base.filter((unit) => right.has(unit)).length;
 }
 
+/** A row of the `units` listing: what differs, on which side, with a short hash of it. */
+function unitRow(file, side, unit) {
+  // One row is one line: a unit that holds a line break (a shader, a template) shows it as `\n`.
+  const text = readable(unit).replace(/\r/g, "\\r").replace(/\n/g, "\\n").replace(/\t/g, "\\t");
+  return { file, side, sha: sha(unit).slice(0, 12), unit: text };
+}
+
+/** Every differing unit of a pair of files, uncapped (`compare` shows five a side; this is the whole list). */
+function allUnitRows(file, before, after) {
+  const { removed, added } = unitDifference(before, after, false);
+  const rows = [...removed.map((unit) => unitRow(file, "only before", unit)), ...added.map((unit) => unitRow(file, "only after", unit))];
+  if (before.ordered) {
+    // The same units in another order is a difference too (a CSS rule moved: the cascade reads in order).
+    const gone = multiset(removed);
+    const fresh = multiset(added);
+    const keep = (units, drop) =>
+      units.filter((unit) => {
+        const left = drop.get(unit) ?? 0;
+        if (left > 0) drop.set(unit, left - 1);
+        return left === 0;
+      });
+    const b = keep(before.base, gone);
+    const a = keep(after.base, fresh);
+    for (let index = 0; index < Math.max(b.length, a.length); index += 1) {
+      if (b[index] === a[index]) continue;
+      if (b[index] !== undefined) rows.push(unitRow(file, "only before", `(moved) ${b[index]}`));
+      if (a[index] !== undefined) rows.push(unitRow(file, "only after", `(moved) ${a[index]}`));
+    }
+  }
+  return rows;
+}
+
+/** A difference that is a whole file, not a unit of one: the file, the side, what it was. */
+function fileRows(file, sides, what) {
+  return sides.map(([side, label]) => ({ file, side, sha: sha(label).slice(0, 12), unit: `(${what})` }));
+}
+
 /** Everything that differs between two builds, in words. An empty list is "the same build". */
 export function compareBuilds(beforeDist, afterDist) {
   const before = normalise(beforeDist);
@@ -549,10 +601,12 @@ export function compareBuilds(beforeDist, afterDist) {
   const fixedAfter = new Map(after.files.filter((f) => !f.hashed).map((f) => [f.rel, f]));
   for (const [rel, file] of fixedBefore) {
     const other = fixedAfter.get(rel);
-    if (!other) findings.push({ title: `removed: ${rel} (a file a page asks for by name)`, lines: [] });
+    if (!other) findings.push({ title: `removed: ${rel} (a file a page asks for by name)`, lines: [], rows: fileRows(rel, [["only before", file.label]], "file removed: a page asks for it by name") });
     else if (other.label !== file.label) findings.push(describeChange(`changed: ${rel}`, file, other));
   }
-  for (const rel of fixedAfter.keys()) if (!fixedBefore.has(rel)) findings.push({ title: `added: ${rel} (a file a page asks for by name)`, lines: [] });
+  for (const [rel, file] of fixedAfter) {
+    if (!fixedBefore.has(rel)) findings.push({ title: `added: ${rel} (a file a page asks for by name)`, lines: [], rows: fileRows(rel, [["only after", file.label]], "file added: a page asks for it by name") });
+  }
 
   // Files named by a content hash are matched by what they hold, never by name.
   const poolBefore = before.files.filter((f) => f.hashed);
@@ -585,25 +639,42 @@ export function compareBuilds(beforeDist, afterDist) {
       findings.push(describeChange(`changed: ${file.stem}${file.ext} (named ${file.name} before, ${best.name} after)`, file, best));
     } else if (best && file.stem === best.stem) {
       unmatchedAfter.splice(unmatchedAfter.indexOf(best), 1);
-      findings.push({ title: `changed: ${file.stem}${file.ext}: the bytes differ (${file.size} before, ${best.size} after)`, lines: [] });
+      const name = `${file.stem}${file.ext}`;
+      findings.push({
+        title: `changed: ${name}: the bytes differ (${file.size} before, ${best.size} after)`,
+        lines: [],
+        rows: fileRows(name, [["only before", file.label], ["only after", best.label]], "the bytes differ"),
+      });
     } else {
-      findings.push({ title: `removed: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [] });
+      findings.push({ title: `removed: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [], rows: fileRows(`${file.stem}${file.ext}`, [["only before", file.label]], "file removed") });
     }
   }
-  for (const file of unmatchedAfter) findings.push({ title: `added: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [] });
+  for (const file of unmatchedAfter) {
+    findings.push({ title: `added: ${file.stem}${file.ext} (${file.name}, ${file.size} bytes)`, lines: [], rows: fileRows(`${file.stem}${file.ext}`, [["only after", file.label]], "file added") });
+  }
 
   findings.sort((a, b) => Number(Boolean(a.knockOn)) - Number(Boolean(b.knockOn)));
   if (findings.length === 0 && before.hash !== after.hash) {
-    findings.push({ title: "the normalised hashes differ though no single file does (a cycle of chunks, or a reference to another file)", lines: [] });
+    findings.push({
+      title: "the normalised hashes differ though no single file does (a cycle of chunks, or a reference to another file)",
+      lines: [],
+      rows: fileRows("(build)", [["only before", before.hash], ["only after", after.hash]], "the normalised hashes differ though no single file does"),
+    });
   }
   return { before, after, findings };
 }
 
 function describeChange(title, before, after) {
   const { removed, added, note } = unitDifference(before, after, before.ordered);
+  const file = /^changed: (\S+)/.exec(title)[1];
   if (removed.length === 0 && added.length === 0 && !note) {
     // Nothing in this file changed: it names a file that did, or names another file than it did.
-    return { title: `${title.replace(/^changed:/, "also differs:")} (it names a file that changed, or names another file)`, lines: [], knockOn: true };
+    return {
+      title: `${title.replace(/^changed:/, "also differs:")} (it names a file that changed, or names another file)`,
+      lines: [],
+      knockOn: true,
+      rows: fileRows(file, [["only before", before.label], ["only after", after.label]], "names a file that changed, or another file"),
+    };
   }
   const lines = [];
   if (note) lines.push(`  ${note}`);
@@ -611,7 +682,7 @@ function describeChange(title, before, after) {
   if (removed.length > 5) lines.push(`  - ... and ${removed.length - 5} more only before`);
   for (const unit of added.slice(0, 5)) lines.push(`  + ${readable(unit)}`);
   if (added.length > 5) lines.push(`  + ... and ${added.length - 5} more only after`);
-  return { title, lines };
+  return { title, lines, removed, added, rows: allUnitRows(file, before, after) };
 }
 
 // ---------------------------------------------------------------------------------------------------- the record
@@ -656,6 +727,119 @@ export function makeRecord(dist, testOutput) {
   };
 }
 
+// ---------------------------------------------------------------------------------------------------- the rebaseline
+
+/** The Mac's one real baseline folder: fixed, and never moved by an environment variable. */
+export function realBaseline() {
+  return resolve(join(homedir(), "dev/osprey-acceptance/PL4a-baseline/dist"));
+}
+
+/** The raw copy of the build before PL4 moved anything: the folder `rebaseline` replaces by default. */
+export const DEFAULT_BASELINE = process.env.PL4_BASELINE_DIST ?? realBaseline();
+
+/** The folders only the conductor's merge may replace: the real one, and the one `PL4_BASELINE_DIST` names (the proof's own). */
+export function guardedBaselines() {
+  return new Set([realBaseline(), resolve(DEFAULT_BASELINE)]);
+}
+
+/** The declared units (`<file>\t<side>\t<sha>` of each row; comments and the `against:` line are not rows), as a multiset. */
+export function declaredKeys(text) {
+  const keys = new Map();
+  for (const line of text.split("\n")) {
+    if (!line.trim() || line.startsWith("#") || line.startsWith("against: ")) continue;
+    const [file, side, unitSha] = line.split("\t");
+    const key = `${file}\t${side}\t${unitSha}`;
+    keys.set(key, (keys.get(key) ?? 0) + 1);
+  }
+  return keys;
+}
+
+/** The differing rows (as `differingUnits` lists them) with whether each is declared; a declared row is used once. */
+export function checkAgainstDeclared(rows, declaredText) {
+  const left = declaredKeys(declaredText);
+  const checked = rows.map((row) => {
+    const key = `${row.file}\t${row.side}\t${row.sha}`;
+    const have = left.get(key) ?? 0;
+    if (have > 0) left.set(key, have - 1);
+    return { row, declared: have > 0 };
+  });
+  // A declared unit that does not differ is as wrong as an undeclared one that does.
+  const missing = [...left].flatMap(([key, count]) => Array(count).fill(key));
+  return { checked, missing };
+}
+
+function stamp() {
+  return new Date().toISOString().replace(/[-:]/g, "").replace(/\..*$/, "").replace("T", "-");
+}
+
+function rebaseline(rest) {
+  const baseline = resolve(flag(rest, "--baseline") ?? DEFAULT_BASELINE);
+  // The real baseline folder is fixed (`realBaseline`), whatever PL4_BASELINE_DIST says, and the folder that variable names
+  // is guarded too: only the conductor's merge replaces either (the real one was swapped by hand six times in PL4d3d).
+  // Anything else names its own folder with --baseline; the conductor adds --conductor-merge.
+  if (guardedBaselines().has(baseline) && !rest.includes("--conductor-merge")) {
+    console.log(`REFUSED: ${baseline} is a protected baseline folder (the real one or $PL4_BASELINE_DIST), and only the conductor's merge replaces it: the conductor adds --conductor-merge; anything else passes --baseline <a copy>. Nothing was touched.`);
+    return 1;
+  }
+  const declaredFlag = flag(rest, "--declared");
+  if (!declaredFlag) throw new Error("usage: rebaseline --declared <file> [--baseline <folder>] [--dist <built>] [--tests <npm-test-output>] [--out <file>]");
+  const declaredPath = resolve(declaredFlag);
+  const out = resolve(flag(rest, "--out") ?? join(CORE, "apps/workspace/PL4_BASELINE.json"));
+  if (!existsSync(baseline)) throw new Error(`no baseline build at ${baseline}: nothing to replace (set PL4_BASELINE_DIST or pass --baseline)`);
+  if (!existsSync(declaredPath)) throw new Error(`no declared-units file at ${declaredPath}`);
+  const declaredText = readFileSync(declaredPath, "utf8");
+
+  let fresh = flag(rest, "--dist");
+  let scratch = null;
+  if (fresh) {
+    fresh = resolve(fresh);
+  } else {
+    scratch = `${baseline}.new-${stamp()}`;
+    const built = spawnSync("npm", ["run", "build", "--workspace", "apps/workspace", "--", "--outDir", scratch, "--emptyOutDir"], { cwd: CORE, stdio: "inherit" });
+    if (built.status !== 0) throw new Error("npm run build --workspace apps/workspace failed: the baseline is untouched");
+    fresh = scratch;
+  }
+  try {
+    const rows = differingUnits(compareBuilds(baseline, fresh).findings);
+    const { checked, missing } = checkAgainstDeclared(rows, declaredText);
+    console.log(`old baseline ${baseline}\nnew build ${fresh}\n${rows.length} differing unit${rows.length === 1 ? "" : "s"} (old against new):`);
+    for (const { row, declared } of checked) console.log(`${row.file}\t${row.side}\t${row.sha}\t${declared ? "declared" : "UNDECLARED"}\t${row.unit.slice(0, 100)}`);
+    const undeclared = checked.filter((c) => !c.declared);
+    for (const key of missing) console.log(`${key.replaceAll("\t", " ")}\tdeclared but not differing`);
+    if (undeclared.length > 0 || missing.length > 0) {
+      console.log(`REFUSED: ${undeclared.length} differing unit${undeclared.length === 1 ? " is" : "s are"} neither declared nor knock-on and ${missing.length} declared unit${missing.length === 1 ? "" : "s"} do${missing.length === 1 ? "es" : ""} not differ, in ${declaredPath}; the baseline folder and the record are untouched`);
+      return 1;
+    }
+
+    let testOutput;
+    const testsPath = flag(rest, "--tests");
+    if (testsPath) {
+      testOutput = readFileSync(testsPath, "utf8");
+    } else {
+      const ran = spawnSync("npm", ["test", "--workspace", "apps/workspace"], { cwd: CORE, encoding: "utf8", maxBuffer: 1 << 28 });
+      testOutput = `${ran.stdout}\n${ran.stderr}`;
+      if (ran.status !== 0) {
+        console.log("REFUSED: the workspace's unit tests do not pass on this commit (a timeout under load is a rerun); the baseline folder and the record are untouched");
+        return 1;
+      }
+    }
+    const record = makeRecord(fresh, testOutput);
+
+    const aside = `${baseline}-before-${stamp()}`;
+    renameSync(baseline, aside);
+    cpSync(fresh, baseline, { recursive: true });
+    const previous = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : null;
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
+    console.log(`the old baseline folder is kept at ${aside}`);
+    console.log(`the new build is in ${baseline}`);
+    console.log(`wrote ${out}: ${record.files.total} files, hash ${record.normalised_hash.slice(0, 16)} (was ${previous ? previous.normalised_hash.slice(0, 16) : "none"})`);
+    return 0;
+  } finally {
+    if (scratch) rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
 // -------------------------------------------------------------------------------------------------------- the CLI
 
 function flag(args, name) {
@@ -666,6 +850,19 @@ function flag(args, name) {
 function runBuild() {
   const done = spawnSync("npm", ["run", "build", "--workspace", "apps/workspace"], { cwd: CORE, stdio: "inherit" });
   if (done.status !== 0) throw new Error("npm run build --workspace apps/workspace failed");
+}
+
+/**
+ * Every difference between two builds, uncapped, in a stable order: the file, the side, the unit's text. A unit of a
+ * changed file, and also a whole file added, removed or changed in its bytes (a page's own file, a lazy chunk, an
+ * image, a font): every finding of `compareBuilds` has rows, so none is dropped.
+ */
+export function differingUnits(findings) {
+  const rows = findings.flatMap((finding) => {
+    if (!finding.rows) throw new Error(`a finding with no rows would be left out of the listing: ${finding.title}`);
+    return finding.rows;
+  });
+  return rows.sort((a, b) => `${a.file}\t${a.side}\t${a.unit}`.localeCompare(`${b.file}\t${b.side}\t${b.unit}`));
 }
 
 function printFindings(findings) {
@@ -691,6 +888,14 @@ function main(args) {
       printFindings(findings);
       return 1;
     }
+    case "units": {
+      const [before, after] = rest;
+      if (!before || !after) throw new Error("usage: units <before-dist> <after-dist>");
+      for (const row of differingUnits(compareBuilds(before, after).findings)) console.log(`${row.file}\t${row.side}\t${row.sha}\t${row.unit}`);
+      return 0;
+    }
+    case "rebaseline":
+      return rebaseline(rest);
     case "normalise": {
       const { hash, files } = normalise(rest[0]);
       console.log(JSON.stringify({ normalised_hash: hash, normaliser_version: NORMALISER_VERSION, files: fileCounts(files) }, null, 2));
@@ -740,7 +945,7 @@ function main(args) {
       return failed ? 1 : 0;
     }
     default:
-      throw new Error("usage: dist_compare.mjs compare|normalise|record|verify ...");
+      throw new Error("usage: dist_compare.mjs compare|units|rebaseline|normalise|record|verify ...");
   }
 }
 

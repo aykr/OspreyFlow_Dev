@@ -303,6 +303,10 @@ async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
     async def nothing(*args: Any, **kwargs: Any) -> None:
         return None
 
+    async def no_jobs(*args: Any, **kwargs: Any) -> list[str]:
+        # As the real hook answers: the ids of the jobs it queued (C249, L06), none here.
+        return []
+
     async def loaded(*args: Any, **kwargs: Any) -> LoadReport:
         return LoadReport(load_id="load-7", recipe_id="r", recipe_version=1, nodes_created=1)
 
@@ -319,7 +323,7 @@ async def test_a_recipe_run_runs_the_drawn_watches_on_the_dataset_it_loaded_into
     monkeypatch.setattr(run_module, "run_published_recipe", loaded)
     monkeypatch.setattr(run_module, "_rule_gate", nothing)
     monkeypatch.setattr(
-        run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing
+        run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", no_jobs
     )
     monkeypatch.setattr(
         run_module, "ChangeStreamWriter", lambda valkey: SimpleNamespace(publish=published)

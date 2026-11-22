@@ -4,8 +4,8 @@
 // behind it. What it lists is `answersFor.ts`'s, from the person's own reads alone.
 import { useEffect, useState } from "react";
 
-import { readNeedsYou, type NeedsYou } from "../admin/needsYou/needsYouApi";
-import { type CaseListing, listCases } from "../investigation/cases";
+import { readNeedsYou, type NeedsYou } from "@ospreyflow/glass-shared";
+import { type CaseListing, listCases } from "@ospreyflow/glass-shared";
 import { answersFor, type Opens } from "./answersFor";
 
 export interface AnswersForProps {

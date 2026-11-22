@@ -4,7 +4,7 @@
 // the deployment's own scheme. A refused file is said by name and the rest still go.
 import { useEffect, useState } from "react";
 
-import { fetchHandlingScheme } from "../ingest/api";
+import { fetchHandlingScheme } from "@ospreyflow/glass-shared";
 
 export interface AddFilesProps {
   apiBaseUrl: string;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { utcStamp, utcStampOf } from "./utcStamp";
+import { utcStamp, utcStampOf } from "@ospreyflow/glass-shared";
 
 describe("utcStamp", () => {
   it("writes a moment as day, month, year and UTC time, whatever the engine's own month names", () => {

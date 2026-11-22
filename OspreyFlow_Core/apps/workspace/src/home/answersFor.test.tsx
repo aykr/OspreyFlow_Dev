@@ -6,8 +6,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { NeedsYou } from "../admin/needsYou/needsYouApi";
-import type { CaseListing } from "../investigation/cases";
+import type { NeedsYou } from "@ospreyflow/glass-shared";
+import type { CaseListing } from "@ospreyflow/glass-shared";
 import { answersFor, whyHeld } from "./answersFor";
 import { AnswersForSection } from "./AnswersForSection";
 

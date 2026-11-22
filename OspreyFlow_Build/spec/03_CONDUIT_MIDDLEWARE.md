@@ -840,7 +840,17 @@ a watch has nothing to newly fire on.
 
 ```
 POST   /v1/resolution/{entity_type}/run   re-run resolution for one entity type across the whole corpus
+GET    /v1/resolution/jobs/{job_id}       what became of a matching job a run queued, in words (C249, L06)
 ```
+
+`GET /v1/resolution/jobs/{job_id}` is a read of the job queue, not of the graph: it needs the right
+to read reports, is not investigation-scoped (as the run that queued the job is not), and its answer
+is in the server's own words and carries no node, count or value. A job that is waiting, running,
+overdue (running past the matching lock's life, which is not the same as lost), finished, failed or
+gone is each said in words. Records a run left out are not said to a reader, not even as a yes or no
+(rule 3: the run reads the whole corpus as the service principal); the run's own result names them
+for an operator. An id with no record, an expired one and another kind of job's id get the same
+answer, so the route is no oracle for which ids exist.
 
 `ADR-025`'s own mechanism for a resolution comparison config that changed, or a backlog that never
 ran — this acts on every entity of the given type regardless of which investigation's working set

@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 
 import { buildReportArtefact } from "./reportExport";
 import type { Assumption, IntelligenceGap, Judgement } from "../../../../packages/schemas/generated";
-import type { Yardstick } from "../assessment/api";
-import type { ExportManifest, ExportMark } from "./api";
+import type { Yardstick } from "@ospreyflow/glass-shared";
+import type { ExportManifest, ExportMark } from "@ospreyflow/glass-shared";
 
 const MARK: ExportMark = {
   osprey_mark: "OspreyFlow",

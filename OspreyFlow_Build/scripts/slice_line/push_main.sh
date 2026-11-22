@@ -23,7 +23,7 @@ common="$(git rev-parse --path-format=absolute --git-common-dir)"
 [ "$(dirname "$common")" = "$top" ] || { say "Refused: not the main checkout ($top)."; exit 2; }
 [ "$(git rev-parse --abbrev-ref HEAD)" = "main" ] || { say "Refused: the main checkout is not on main."; exit 2; }
 trailers="$(git log -1 --format='%(trailers:only,unfold)' HEAD)"
-if ! printf '%s' "$trailers" | grep -qE '^(Slice-Merge|Slice-Records):'; then
+if ! printf '%s' "$trailers" | grep -qE '^(Slice-Merge|Slice-Records|Owner-Approved-Diff):'; then
   say "Refused: main's tip $(git rev-parse --short HEAD) was not written by the merge script."; exit 2
 fi
 want="$(cat "$BIN/origin.url" 2>/dev/null || true)"

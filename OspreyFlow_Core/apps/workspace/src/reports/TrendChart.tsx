@@ -2,7 +2,7 @@
 // series when there are series — and a legend naming every series. Nothing is sampled or capped
 // (rule 2): a trend too large to draw is refused by the server with its choices, not sliced here.
 import type { TrendFigures } from "../../../../packages/schemas/generated";
-import { formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "./packText";
+import { formatDay, formatNumber, periodKey, periodsOf, trendSentence } from "@ospreyflow/glass-shared";
 
 export const CHANNELS = ["--ch-azure", "--ch-ochre", "--ch-jade", "--ch-plum", "--ch-rose", "--ch-cyan", "--ch-indigo", "--ch-moss"];
 

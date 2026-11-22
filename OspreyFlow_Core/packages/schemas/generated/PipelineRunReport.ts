@@ -64,6 +64,7 @@ export type RuleMergedEdgeIds = EdgeId[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
 export type DrawnWatchAlerts = number;
+export type ResolutionJobs = string[];
 export type Markings = Handling[];
 export type WallMs = number;
 export type RowsRead1 = number;
@@ -127,6 +128,7 @@ export type TouchedEdgeIds1 = EdgeId[];
 export type RowsHeld1 = number;
 export type RuleNotes1 = string[];
 export type DrawnWatchAlerts1 = number;
+export type ResolutionJobs1 = string[];
 export type Markings2 = Handling[];
 
 /**
@@ -153,6 +155,7 @@ export interface PipelineRunReport {
   rows_held?: RowsHeld1;
   rule_notes?: RuleNotes1;
   drawn_watch_alerts?: DrawnWatchAlerts1;
+  resolution_jobs?: ResolutionJobs1;
   markings?: Markings2;
   metering?: RunMetering | null;
   [k: string]: unknown;
@@ -205,6 +208,7 @@ export interface LoadReport {
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
   drawn_watch_alerts?: DrawnWatchAlerts;
+  resolution_jobs?: ResolutionJobs;
   markings?: Markings;
   metering?: RunMetering | null;
   staging_steps?: StagingSteps;

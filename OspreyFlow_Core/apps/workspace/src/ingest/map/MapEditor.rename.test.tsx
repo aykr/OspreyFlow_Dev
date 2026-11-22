@@ -19,8 +19,8 @@ const ONTOLOGY = {
   edge_types: [{ name: "COMMUNICATED_WITH", from: ["Endpoint"], to: ["Endpoint"] }],
 };
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ospreyflow/glass-shared")>();
   return {
     ...actual,
     fetchDraft: vi.fn(async () => ({

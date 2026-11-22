@@ -6,8 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { DataFeed } from "../../../../packages/schemas/generated";
 import { runInWords } from "../admin/Schedules";
-import type { ReportsApi } from "./api";
-import { refusal, send } from "./caseHttp";
+import { type ReportsApi, refusal, send } from "@ospreyflow/glass-shared";
 
 const when = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Europe/London" }) : "—";

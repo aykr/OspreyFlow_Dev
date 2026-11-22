@@ -122,6 +122,19 @@ def _environment() -> dict[str, str]:
     return env
 
 
+def point_at_the_seeds_ingest_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The root a recipe's source is read from (`studio_profile._confined`), in this process. The
+    seed subprocess is given `INGEST` by `_environment`; the reads the tests make themselves
+    (`run_recipe_as`, `publish_reports_fallback`) need it here too, or `tests/conftest.py`'s
+    per-test root refuses every file of the seed (C068)."""
+    monkeypatch.setenv("OSPREY_INGEST_ROOT", str(INGEST))
+
+
+@pytest.fixture(autouse=True)
+def _the_seeds_ingest_folder(monkeypatch: pytest.MonkeyPatch) -> None:
+    point_at_the_seeds_ingest_folder(monkeypatch)
+
+
 def run_seed(*flags: str) -> subprocess.CompletedProcess[str]:
     """`python -m scripts.seed_pid` as an operator runs it, against the stack in the environment."""
     return subprocess.run(  # noqa: S603

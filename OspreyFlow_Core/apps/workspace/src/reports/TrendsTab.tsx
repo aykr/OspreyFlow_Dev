@@ -13,14 +13,22 @@ import type {
   TrendFigures,
   TrendOptions,
 } from "../../../../packages/schemas/generated";
-import { fetchCaseEvents } from "../analytics/api";
-import { DOMAIN_PACKS, type DomainPack, domainLabels, listCases } from "../investigation/cases";
+import { fetchCaseEvents } from "@ospreyflow/glass-shared";
+import { DOMAIN_PACKS, type DomainPack, domainLabels, listCases } from "@ospreyflow/glass-shared";
 import { eventsElsewhereSentence } from "../analytics/eventsElsewhere";
 import { Button, Checkbox, Input, RadioGroup, Select } from "../design/primitives";
-import type { ReportsApi } from "./api";
-import { addItem, listPacks } from "./packsApi";
+import {
+  type ReportsApi,
+  addItem,
+  listPacks,
+  deleteTrend,
+  fetchTrendFigures,
+  fetchTrendOptions,
+  listTrends,
+  previewTrend,
+  saveTrend,
+} from "@ospreyflow/glass-shared";
 import { TrendChart } from "./TrendChart";
-import { deleteTrend, fetchTrendFigures, fetchTrendOptions, listTrends, previewTrend, saveTrend } from "./trendsApi";
 
 const MAX_FILTERS = 5;
 const WEEKS = [4, 12, 26, 52, 104];

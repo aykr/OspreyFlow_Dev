@@ -24,6 +24,15 @@
   undo-seat-failure  a verifier call that was refused, written before seat failures existed as the    owner's line
                    finding "no verdict returned" (CO2, 19 November 2026): the record becomes a
                    seat_failure record, the round goes back by one, the phase to verifying
+  self-clear       the line clears a stop itself (LINE_FIXES_5_BRIEF.md, A), when its cause is       none: the code
+                   (b) a check the slice did not write that fails identically on main's own tree in    holds the limits;
+                   the same worktree shape (the check is removed from the slice's row, recorded),     run_seat.py tries
+                   or (a) main having moved under the slice (main merges into the branch cleanly and   it after a red stop
+                   the slice's own acceptance and checks are unchanged). Never: an accept, a refreeze
+                   that changes what is tested, a stop naming a key, a credential or a security rule,
+                   a stop at the eighth round, a stop on a verifier's findings. Each clearance is
+                   logged (self-clear-<time>.json in the slice's folder; self-clears.tsv, which the
+                   board prints for the conductor's morning report)
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -39,6 +48,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -51,7 +61,7 @@ import merge_slice as ms  # noqa: E402
 import run_seat as rs  # noqa: E402
 
 ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat",
-           "undo-seat-failure")
+           "undo-seat-failure", "self-clear")
 #: What run_seat.py wrote, before 1f, for a verifier session whose call was refused (CO2, 19 November 2026).
 NO_VERDICT = "no verdict returned"
 #: The seat move-seat moves, and the key of state.json run_seat.py reads its account from.
@@ -65,6 +75,11 @@ TEST_FILE = re.compile(r"[\w./-]*(?:test_[\w-]+\.py|[\w-]+_test\.py|[\w.-]+\.(?:
 
 class Refused(Exception):
     pass
+
+
+class Busy(Refused):
+    """Refused by a lock alone (a merge whose record names no slice or names this one, or another resume.py action on
+    the slice): nothing about the action is wrong, and it can be tried again when the lock frees."""
 
 
 def today() -> str:
@@ -184,14 +199,16 @@ def back_to_building(slice_id: str, wt: Path, **kw) -> list[str]:
 # ------------------------------------------------------------------ slices.tsv: one row's frozen columns
 
 
-def changed_row(slice_id: str, allowed: tuple[str, ...]) -> tuple[dict, dict]:
+def changed_row(slice_id: str, allowed: tuple[str, ...], briefs_aside: bool = False) -> tuple[dict, dict]:
     """The slice's row on main and in the working copy, when the working copy differs from main in that row only, and
-    there only in `allowed` columns; refused otherwise."""
+    there only in `allowed` columns; refused otherwise. `briefs_aside` (refreeze, 8.1): other uncommitted files under
+    the slices folder (the conductor's briefs) stay as they are, uncommitted; only slices.tsv is committed."""
     branch = c.git(["rev-parse", "--abbrev-ref", "HEAD"], c.REPO)
     if branch != "main":
         raise Refused(f"the main checkout is not on main ({branch}).")
     dirty = [ln[3:] for ln in c.git(["status", "--porcelain", "--untracked-files=no"], c.REPO).splitlines()
-             if not ln[3:].startswith(ms.OWNERS_LOCAL)]
+             if not ln[3:].startswith(ms.OWNERS_LOCAL)
+             and not (briefs_aside and ln[3:].startswith(f"{c.V062_REL}/slices/") and ln[:2].strip() == "M")]
     if dirty != [c.SLICES_REL]:
         raise Refused(f"the main checkout must differ from main in {c.SLICES_REL} alone (and the owner's own files): "
                       + (", ".join(dirty[:5]) or "nothing changed"))
@@ -212,14 +229,20 @@ def changed_row(slice_id: str, allowed: tuple[str, ...]) -> tuple[dict, dict]:
 
 
 def commit_row(slice_id: str, message: str) -> str:
-    c.git(["add", "--", c.SLICES_REL], c.REPO)
-    staged = c.git(["diff", "--cached", "--name-only"], c.REPO).splitlines()
-    if staged != [c.SLICES_REL]:
-        c.git(["reset", "-q", "--", c.SLICES_REL], c.REPO)
-        raise Refused("something besides slices.tsv would be committed: " + ", ".join(staged))
-    c.git(["commit", "-q", "-m", f"{message}\n\nSlice-Records: yes"], c.REPO)
-    subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True)
-    return c.git(["rev-parse", "HEAD"], c.REPO)
+    """slices.tsv committed alone in records mode, one commit at a time with every other (the records lock). While a
+    merge of another slice runs (LINE_FIXES_5_BRIEF.md, 2) it is not pushed: the merge lands beneath its result and
+    pushes it with the merge, as a records commit made meanwhile."""
+    with ms.records_lock():
+        c.git(["add", "--", c.SLICES_REL], c.REPO)
+        staged = c.git(["diff", "--cached", "--name-only"], c.REPO).splitlines()
+        if staged != [c.SLICES_REL]:
+            c.git(["reset", "-q", "--", c.SLICES_REL], c.REPO)
+            raise Refused("something besides slices.tsv would be committed: " + ", ".join(staged))
+        c.git(["commit", "-q", "-m", f"{message}\n\nSlice-Records: yes"], c.REPO)
+        sha = c.git(["rev-parse", "HEAD"], c.REPO)
+    if MERGE_RUNNING is None:
+        subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True)
+    return sha
 
 
 # ------------------------------------------------------------------ correct-command's limits
@@ -298,7 +321,33 @@ def newest_record_is(slice_id: str, tip: str) -> None:
     recs = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
     if not recs or recs[-1].name != f"verify-{tip}.json":
         raise Refused(f"the newest findings record is {recs[-1].name if recs else 'none'}, not the verifier's for "
-                      f"{tip[:10]}: the standing accept reads only the newest verifier record. Nothing changed.")
+                      f"{tip[:10]}: an accept reads only the newest verifier record. Nothing changed.")
+
+
+def before_the_limit(slice_id: str, phase: str, rnd: int, limit: int, tip: str, verify: dict, rec: Path) -> None:
+    """The owner's accept before the rounds limit (the owner's word of 21 November 2026): the verifier's findings for
+    the tip are on record (findings_at_tip), and it is refused, in words, while a seat of the slice is at work, when a
+    newer record than the verifier's is the newest, and when the slice is stopped on red checks. A key or security
+    finding is refused at any round (no_key_finding)."""
+    if phase == "stopped" and (rec / "red_stop.json").exists():
+        raise Refused(f"{slice_id} is stopped on red checks (red_stop.json), not on findings: there is no verifier "
+                      "finding to accept (clear-stop or refreeze). Nothing changed.")
+    for r in c.running_seats(slice_id):
+        raise Refused(f"{slice_id}'s {r.get('seat')} is at work (pid {r.get('pid')}): the accept waits until its "
+                      "session ends, and is refused if it commits (the tip it accepts must be the verifier's). Run it "
+                      "again then. Nothing changed.")
+    newest_record_is(slice_id, tip)
+
+
+def no_key_finding(verify: dict) -> None:
+    """The owner's word of 21 November 2026 (his file 003): a fault that can expose a key, show it back, log it or send
+    it where it was not given is never accepted, at any round, on the standing word or on his own line."""
+    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+                                         for f in verify["findings"]))
+    if hit:
+        raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): the owner's accept "
+                      "never covers one, at any round (his word of 21 November 2026). It needs the builder's fix. "
+                      "Nothing changed.")
 
 
 def only_gaps(findings: list[dict], legacy: bool) -> None:
@@ -349,6 +398,11 @@ def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[st
     newest_record_is(slice_id, tip)
     legacy = rs.is_legacy(verify)
     only_gaps(verify["findings"], legacy)
+    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+                                         for f in verify["findings"]))
+    if hit:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding is never covered by the standing word
+        raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): never accepted on "
+                      "the standing word, gap or not. It needs the owner's resume.tsv line (accept). Nothing changed.")
     acc = write_acceptance(slice_id, tip, verify, rule["line"], "standing",
                            {"rule": f"standing.tsv: {rule['line']} (RULINGS.md, 19 November 2026, ruling 5: from a "
                                     "slice's third round on, a gap in a test never blocks)", "round": rnd})
@@ -469,8 +523,289 @@ def undo_seat_failure(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[
             f"{rnd - 1}, verifying. The conductor runs run_seat.py verifier {slice_id} once its account is clear."]
 
 
+# ------------------------------------------------------------------ self-clear: the line clears a stop itself (A)
+
+
+#: Any stop at this round or later is the owner's alone, whatever its cause (LINE_FIXES_5_BRIEF.md, A: "any stop at the
+#: eighth round"; the balanced dial's 8 rounds, the owner, 21 November 2026).
+OWNERS_ROUND = 8
+#: A stop whose findings name a key, a credential or a security rule is never cleared by the line. Matched anywhere in a
+#: word, in any case, on purpose: a word too many leaves the stop with the owner, as before; a word too few never can.
+SECURITY_WORDS = re.compile(r"key|credential|secret|token|passw|security|secure|auth|oidc|cve|vulnerab|certificate|"
+                            r"encrypt|signing|guard\.py|emails\.sha256|sha256", re.I)
+
+
+def unapplied(slice_id: str, action: str) -> list[str]:
+    """The owner's lines in resume.tsv for this slice and action, of any day, not yet used (no use logged)."""
+    return list(dict.fromkeys(ln["text"] for ln in c.unapplied_lines() if ln["slice"] == slice_id and ln["action"] == action))
+
+
+def stop_of(st: dict, rec: Path) -> str:
+    """What stopped the slice: 'red' (the Stop hook's six red stops), 'findings' (the verifier's, at the rounds limit),
+    'refused' (the merge gate), or '' (not stopped, or stopped for its account)."""
+    phase = st.get("phase")
+    if phase == "stopped" and (rec / "red_stop.json").exists():
+        return "red"
+    if phase == "stopped" and st.get("round", 1) >= st.get("rounds_limit", 1):
+        return "findings"
+    if phase == "refused":
+        return "refused"
+    return ""
+
+
+def stop_words(st: dict, rec: Path, tip: str) -> str:
+    """The stop's findings, in their own words: the red stop's failure lines (not the command it echoes), the
+    verifier's and the gate's findings for the tip, and the stop's note."""
+    parts = []
+    for problem in (c.read_json(rec / "red_stop.json") or {}).get("last") or []:
+        head, _, body = str(problem).partition("\n")
+        parts.append(body if head.startswith(("RED: checks", "RED: acceptance", "RED: scans")) else str(problem))
+    for name in (f"verify-{tip}.json", f"verify-gate-{tip}.json"):
+        for f in (c.read_json(rec / name) or {}).get("findings") or []:
+            parts.append(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence")))
+    parts.append(str(st.get("note", "")))
+    return "\n".join(parts)
+
+
+def owners_alone(slice_id: str, frozen: dict, st: dict, rec: Path, stop: str, tip: str) -> None:
+    """Refused, in words, when the stop is the owner's alone whatever its cause: the eighth round, a key or a security
+    rule, a stop on a verifier's findings (a fault in behaviour, or open findings only the owner accepts), a refreeze
+    that changes what is tested."""
+    rnd = st.get("round", 1)
+    if rnd >= OWNERS_ROUND:
+        raise Refused(f"{slice_id} is in round {rnd}: any stop at the eighth round is the owner's alone. It waits for "
+                      "the owner's line. Nothing changed.")
+    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))
+    if hit:
+        raise Refused(f"{slice_id}'s stop names a key, a credential or a security rule ({hit.group(0)!r} in its "
+                      "findings): the line never clears it. It waits for the owner's line. Nothing changed.")
+    if stop == "findings":
+        verify = c.read_json(rec / f"verify-{tip}.json") or {}
+        legacy = rs.is_legacy(verify)
+        kinds = [rs.kind_of(f, legacy) for f in verify.get("findings") or []]
+        if not kinds or any(k != rs.GAP for k in kinds):
+            raise Refused(f"{slice_id} stopped on its verifier's findings, with a fault in behaviour (or a finding with "
+                          "no kind): the line never clears that. The owner adds a round or accepts. Nothing changed.")
+        raise Refused(f"{slice_id} stopped at its rounds limit with open findings ({len(kinds)} gaps in a test): "
+                      "accepting a slice with open findings is the owner's (his line, or his standing line), never the "
+                      "line's. Nothing changed.")
+    row = c.slice_row(slice_id)
+    moved = [k for k in c.FROZEN_KEYS if (frozen.get(k) or "") != (row.get(k) or "")]
+    waiting = unapplied(slice_id, "refreeze")
+    if moved or waiting:
+        raise Refused(f"{slice_id}'s frozen commands differ from main's row ({', '.join(moved) or 'none yet'})"
+                      + (f" and the owner's refreeze line is waiting ({'; '.join(waiting)})" if waiting else "")
+                      + ": a refreeze changes what is tested and is the owner's alone. Nothing changed.")
+
+
+def cause_a(slice_id: str, frozen: dict, wt: Path, tip: str) -> str:
+    """Why main having moved under the slice is not the cause ('' when it is): main has commits the branch lacks; they
+    merge into it cleanly; they change none of the slice's own acceptance files; and the line has not cleared this
+    slice for this main already (one clearance per move of main, so a slice red for its own reasons is not cleared
+    again and again)."""
+    main = c.git(["rev-parse", "main"], c.REPO)
+    if subprocess.run(["git", "merge-base", "--is-ancestor", main, tip], cwd=str(c.REPO)).returncode == 0:
+        return "main has not moved under the slice (the branch already holds main)"
+    if any(r["slice"] == slice_id and r["cause"] == "a" and main in r["what"] for r in c.self_clears()):
+        return f"the line already cleared {slice_id} once for main at {main[:10]}"
+    files = conflicts_with_main(wt)
+    if files is None or files:
+        return "main does not merge into the branch cleanly" + (f" ({', '.join(files[:5])})" if files else "")
+    base = c.git(["merge-base", main, tip], c.REPO)
+    own = dry_run.acceptance_files(frozen)
+    touched = c.git(["diff", "--name-only", base, main, "--", *own], c.REPO).split() if own else []
+    if touched:
+        return f"main's move changes the slice's own acceptance files ({', '.join(touched)})"
+    return ""
+
+
+def cause_b(slice_id: str, frozen: dict, st: dict, rec: Path, tip: str, log: Path) -> tuple[str, dict]:
+    """Why a broken check that is not the slice's is not the cause ('' when it is), and when it is, what the line
+    removes: every red in the red stop is in the checks; each failing test is one the slice did not write (not among
+    its acceptance files, not changed by its branch, not the acceptance's); all of them are run by one pytest step;
+    that step, run on main's own tree made as a builder's worktree is made, fails on exactly the same tests; and
+    with those tests deselected the step is green there."""
+    red = c.read_json(rec / "red_stop.json") or {}
+    last = [str(x) for x in red.get("last") or []]
+    if not last or any(not x.startswith("RED: checks") for x in last):
+        return "the red stop is not the checks alone (" + "; ".join(x.split("\n", 1)[0][:80] for x in last) + ")", {}
+    ids = dry_run.failing_ids("\n".join(last))
+    if not ids:
+        return "the red stop names no failing test", {}
+    own = set(dry_run.acceptance_files(frozen))
+    own |= set(c.git(["diff", "--name-only", f"{frozen['base']}...{tip}"], c.REPO).split())
+    acceptance = frozen.get("acceptance") or ""
+    for i in ids:
+        path = dry_run.id_path(i)
+        name = Path(path).name
+        if name in acceptance or any(name == Path(f).name for f in dry_run.acceptance_files(frozen)):
+            return f"{i} is the acceptance's test: the acceptance is never removed", {}
+        if any(f == path or f.endswith("/" + path) or path.endswith("/" + f) for f in own):
+            return f"{i} is in a file the slice wrote or changed", {}
+    checks = frozen.get("checks") or ""
+    spans = dry_run.step_spans(checks)
+
+    def runs(step: str, test_id: str) -> bool:
+        path = dry_run.id_path(test_id)
+        parents = [str(Path(path).parent)] + [str(q) for q in Path(path).parents][1:-1]
+        return "pytest" in step and (Path(path).name in step or any(f"{q}/" in step or step.rstrip("/").endswith(q)
+                                                                     for q in parents))
+    where = [n for n, (a, b) in enumerate(spans) if all(runs(checks[a:b], i) for i in ids)]
+    if len(where) != 1:
+        return f"no one pytest step of the checks runs all of {', '.join(ids)}", {}
+    a, b = spans[where[0]]
+    step = checks[a:b]
+    narrowed = step + "".join(f" --deselect {shlex.quote(i)}" for i in ids)
+    tree = dry_run.scratch_tree("main")
+    try:
+        dry_run.builder_shaped(tree)
+        if c.slice_row(slice_id).get("env") == "full":  # the worktree's own environment, as slice_start.py builds it
+            ms.slice_env(tree, log, st.get("slot"))
+        env = stop_check_env(tree, st.get("slot"))
+        stood = dry_run.stand_in(tree, dry_run.acceptance_files(frozen))
+        try:
+            code, out, _ = dry_run.run_marked(step, tree, env, log)
+            on_main = dry_run.failing_ids(out)
+            if code == 0 or sorted(on_main) != sorted(ids):
+                return (f"the step does not fail identically on main's own tree (main: exit {code}, failing "
+                        f"{', '.join(on_main) or 'none'}; the slice: {', '.join(ids)})"), {}
+            code2, out2, _ = dry_run.run_marked(narrowed, tree, env, log)
+            if code2 != 0:
+                return (f"with {', '.join(ids)} removed the step is still red on main's own tree (exit {code2}): "
+                        + dry_run.tail(out2, 4)), {}
+        finally:
+            for f in stood:
+                (tree / f).unlink(missing_ok=True)
+    finally:
+        dry_run.drop_tree(tree)
+    return "", {"ids": ids, "step": step, "narrowed": narrowed, "checks": checks[:a] + narrowed + checks[b:]}
+
+
+def stop_check_env(tree: Path, slot) -> dict:
+    import stop_check  # the Stop hook's own environment for a builder's commands (standard library only)
+    return stop_check.seat_env(str(tree), slot)
+
+
+def row_with_checks(slice_id: str, checks: str) -> None:
+    """slices.tsv in the main checkout, the slice's checks column alone changed (written whole, then renamed)."""
+    f = c.REPO / c.SLICES_REL
+    lines = f.read_text().split("\n")
+    hits = [n for n, ln in enumerate(lines) if ln.startswith(slice_id + "\t")]
+    if len(hits) != 1:
+        raise Refused(f"{c.SLICES_REL} holds {len(hits)} rows for {slice_id}. Nothing changed.")
+    cols = lines[hits[0]].split("\t")
+    if len(cols) != len(c.COLUMNS):
+        raise Refused(f"{slice_id}'s row has {len(cols)} columns, not {len(c.COLUMNS)}. Nothing changed.")
+    cols[c.COLUMNS.index("checks")] = checks
+    lines[hits[0]] = "\t".join(cols)
+    tmp = f.with_name(f.name + ".tmp")
+    tmp.write_text("\n".join(lines))
+    tmp.replace(f)
+
+
+def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> list[str]:
+    """The line's own clearance of a stop, with no line from the owner (LINE_FIXES_5_BRIEF.md, A), or a refusal in
+    words. The exclusions come first and hold whatever the cause; then (b), the narrower diagnosis, then (a)."""
+    stop = stop_of(st, rec)
+    if not stop:
+        raise Refused(f"{slice_id} is not stopped on red checks or at its rounds limit (phase {st.get('phase')}): "
+                      "nothing for the line to clear. Nothing changed.")
+    if stop == "refused":
+        raise Refused(f"{slice_id} was refused by the merge gate: resume.py {slice_id} send-back is the action (no line "
+                      "within the rounds limit, or for a conflict). Nothing changed.")
+    tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    owners_alone(slice_id, frozen, st, rec, stop, tip)
+    log = c.DATA / "dry-runs" / f"{slice_id}-self-clear-{int(time.time())}.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    why_b, removal = cause_b(slice_id, frozen, st, rec, tip, log) if stop == "red" else ("not a red stop", {})
+    if not why_b:
+        changed_row_free = [ln for ln in c.git(["status", "--porcelain", "--untracked-files=no"], c.REPO).splitlines()
+                            if not ln[3:].startswith(ms.OWNERS_LOCAL)]
+        if c.git(["rev-parse", "--abbrev-ref", "HEAD"], c.REPO) != "main" or changed_row_free or \
+                c.git(["diff", "--cached", "--name-only"], c.REPO):
+            raise Refused(f"cause (b) holds for {slice_id}, but the main checkout is not on main with nothing "
+                          "uncommitted: the line commits the slice's narrowed row there. Commit or set aside first. "
+                          "Nothing changed.")
+        row_with_checks(slice_id, removal["checks"])
+        removed = ", ".join(removal["ids"])
+        sha = commit_row(slice_id, f"docs(process): {slice_id}'s checks without {removed}, which fail identically on "
+                                   "main (the line's self-clear, cause b)")
+        c.refreeze(slice_id, f"line (self-clear, cause b): removed {removed}")
+        (rec / "red_stop.json").unlink()
+        (rec / "red_stops").unlink(missing_ok=True)
+        said = back_to_building(slice_id, wt)
+        what = (f"removed {removed} from the checks (a check the slice did not write, failing identically on main's "
+                f"own tree; committed {sha[:10]}; the acceptance unchanged); red stop at {tip[:10]} cleared; building, "
+                f"round {st.get('round', 1)} unchanged")
+        c.log_self_clear(slice_id, "red", "b", what)
+        return [f"{slice_id}: cleared by the line (cause b): {what}.", *said]
+    why_a = cause_a(slice_id, frozen, wt, tip)
+    if not why_a:
+        main = c.git(["rev-parse", "main"], c.REPO)
+        if subprocess.run(["git", "merge", "--no-edit", "-m", f"merge: main into lane for slice {slice_id} (the line's "
+                           "self-clear, cause a: main moved under the slice)", main], cwd=str(wt),
+                          capture_output=True).returncode != 0:
+            c.git(["merge", "--abort"], wt, check=False)
+            raise Refused(f"merging main into {slice_id}'s branch failed: undone. Nothing changed.")
+        (rec / "red_stop.json").unlink(missing_ok=True)
+        (rec / "red_stops").unlink(missing_ok=True)
+        said = back_to_building(slice_id, wt)
+        what = (f"main {main} merged into the branch (clean; the slice's acceptance and checks unchanged); {stop} stop "
+                f"at {tip[:10]} cleared; building, round {st.get('round', 1)} unchanged")
+        c.log_self_clear(slice_id, stop, "a", what)
+        return [f"{slice_id}: cleared by the line (cause a): {what}.", *said]
+    raise Refused(f"{slice_id}'s stop is not one the line clears: not (b): {why_b}; not (a): {why_a}. It waits for the "
+                  "owner's line, as before. Nothing changed.")
+
+
+#: The actions that go on while a merge of another slice runs (LINE_FIXES_5_BRIEF.md, 2b; the owner, 21 November 2026:
+#: a running merge held six of his lines and two standing accepts). Each touches only the records folder, the slice's own
+#: worktree and, for refreeze and self-clear's cause (b), the slice's own row of slices.tsv, committed under the records
+#: lock and landed beneath the merge's tested result as any records commit is. The others (correct-command, move-seat),
+#: and any action on the slice being merged, wait for it.
+DURING_MERGE = ("add-round", "clear-stop", "send-back", "accept", "refreeze", "undo-seat-failure", "self-clear")
+#: The slice a running merge is merging, while this action goes on beside it (set by locks()); None otherwise.
+MERGE_RUNNING: str | None = None
+
+
+def locks(slice_id: str, action: str) -> list:
+    """The merge lock, or, while a merge of another slice runs, nothing of it for the actions that may go on; and the
+    slice's own lock, so two actions on one slice never run together. Refused in words otherwise."""
+    held = []
+    try:
+        held.append(ms.lock())
+    except ms.Refused:
+        busy = ms.merging()
+        if busy is None:  # it ended between the two looks
+            try:
+                held.append(ms.lock())
+            except ms.Refused as e:
+                raise Busy(str(e)) from None
+        elif action not in DURING_MERGE:
+            raise Busy(f"another merge is running ({busy}): {action} waits for it (only {', '.join(DURING_MERGE)}, on "
+                          "another slice, go on meanwhile). Nothing changed.")
+        elif busy in (slice_id, "?"):
+            raise Busy(f"another merge is running ({slice_id if busy == slice_id else 'of a slice its record does not name'}"
+                          f"): {action} on {slice_id} waits for it. Nothing changed.")
+        else:
+            global MERGE_RUNNING
+            MERGE_RUNNING = busy
+    import fcntl
+    f = c.DATA / "locks" / f"resume-{slice_id}.lock"  # beside the records, never in them
+    f.parent.mkdir(parents=True, exist_ok=True)
+    fh = f.open("w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fh.close()
+        for h in held:
+            h.close()
+        raise Busy(f"another resume.py action on {slice_id} is running. Nothing changed.")
+    return [*held, fh]
+
+
 def act(slice_id: str, action: str, standing_only: bool = False, args: list[str] | tuple[str, ...] = ()) -> list[str]:
-    fh = ms.lock()
+    held = locks(slice_id, action)
     try:
         frozen = frozen_of(slice_id)
         if action == "move-seat":  # touches state.json's one key only: a builder at work in the worktree is no matter
@@ -483,8 +818,11 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
         if action == "undo-seat-failure":
             return undo_seat_failure(slice_id, frozen, st, rec)
 
+        if action == "self-clear":
+            return self_clear(slice_id, frozen, st, rec, wt)
+
         if action == "refreeze":
-            _old, new = changed_row(slice_id, c.FROZEN_KEYS)
+            _old, new = changed_row(slice_id, c.FROZEN_KEYS, briefs_aside=True)
             if all((frozen.get(k) or "") == new[k] for k in c.FROZEN_KEYS):
                 raise Refused(f"{slice_id}'s row in the working copy is what is already frozen.")
             tag = authority(slice_id, action)
@@ -496,6 +834,10 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             return [f"{slice_id}: refrozen from main ({sha[:10]}); its phase is unchanged ({phase})."]
 
         if action == "add-round":
+            if phase == "refused":  # 8.4: the owner's add-round line is send-back's authority past the limit
+                raise Refused(f"{slice_id} was refused by the merge gate (phase refused, round {rnd} of {limit}): the "
+                              f"action is resume.py {slice_id} send-back, which uses this add-round line past the rounds "
+                              "limit (and needs none within it). The line is not used. Nothing changed.")
             if phase != "stopped" or (rec / "red_stop.json").exists() or rnd < limit:
                 raise Refused(f"{slice_id} is not stopped at its rounds limit (phase {phase}, round {rnd} of {limit}).")
             tag = authority(slice_id, action)
@@ -506,6 +848,11 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
         if action == "clear-stop":
             if phase != "stopped" or not (rec / "red_stop.json").exists():
                 raise Refused(f"{slice_id} is not stopped on red checks (phase {phase}, no red_stop.json).")
+            waiting = unapplied(slice_id, "refreeze")
+            if waiting:  # 8.2: building on the old checks would only meet the same stop again
+                raise Refused(f"the owner's refreeze line for {slice_id} is waiting ({'; '.join(waiting)}): apply it first "
+                              f"(resume.py {slice_id} refreeze), then clear-stop, so the builder starts on the new checks. "
+                              "Nothing changed.")
             tag = authority(slice_id, action)
             red = c.read_json(rec / "red_stop.json") or {}
             (rec / "red_stop.json").unlink()
@@ -569,19 +916,24 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
         if action == "accept":
             tip, verify = findings_at_tip(slice_id, frozen)
             at_limit = rnd >= limit and (phase == "refused" or (phase == "stopped" and not (rec / "red_stop.json").exists()))
-            if not at_limit:
-                raise Refused(f"{slice_id} is not stopped at its rounds limit (phase {phase}, round {rnd} of {limit}): "
-                              "the owner accepts a slice narrower only once its rounds are spent. Nothing changed.")
+            if not at_limit:  # the owner's word of 21 November 2026: at any round, once the verifier's record is there
+                before_the_limit(slice_id, phase, rnd, limit, tip, verify, rec)
+            no_key_finding(verify)  # at any round (the owner's file 003)
             tag = authority(slice_id, action)
-            acc = write_acceptance(slice_id, tip, verify, f"{slice_id} {action} {today()}", "owner (resume.tsv)")
+            seen_in = rnd - 1 if phase == "building" else rnd  # a slice sent back to building is a round on
+            acc = write_acceptance(slice_id, tip, verify, f"{slice_id} {action} {today()}", "owner (resume.tsv)",
+                                   None if at_limit else {"round": seen_in, "before_the_limit": True})
             n = len(acc["findings"])
             c.log_owner_change(slice_id, action, f"{tag}: tip {tip}; {n} findings accepted "
-                                                 f"({rs.kinds_said(rs.kinds_of(acc['findings'], rs.is_legacy(verify)))})")
+                                                 f"({rs.kinds_said(rs.kinds_of(acc['findings'], rs.is_legacy(verify)))})"
+                                                 + ("" if at_limit else f"; before the rounds limit, round {seen_in} "
+                                                                        f"of {limit}"))
             return [f"{slice_id}: accepted narrower at {tip[:10]} with {n} findings, on the owner's word; verified. "
                     f"The conductor runs merge_slice.py merge {slice_id}: every other gate still runs."]
         raise Refused(f"unknown action {action}")
     finally:
-        fh.close()
+        for fh in held:
+            fh.close()
 
 
 def main() -> int:

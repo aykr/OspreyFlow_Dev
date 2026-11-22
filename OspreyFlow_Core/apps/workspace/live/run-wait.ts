@@ -8,8 +8,9 @@
 // 2 November 2026). The run-now request is answered only when that run has finished, with that
 // run's own load id and counts, so the kit waits on that answer instead.
 
-/** The Publish screen's run-now request (`POST …/ingest/recipes/{id}/run`, `src/ingest/api.ts`'s
- * `runRecipe`): never the runs list's `GET …/runs`, which holds the older runs. */
+/** The Publish screen's run-now request (`POST …/ingest/recipes/{id}/run`, `runRecipe` in
+ * `packages/glass-shared/src/ingest/api.ts`): never the runs list's `GET …/runs`, which holds the older
+ * runs. */
 export function isRunNowRequest(method: string, url: string): boolean {
   if (method.toUpperCase() !== "POST") return false;
   return /\/v1\/investigations\/[^/]+\/ingest\/recipes\/[^/]+\/run$/.test(new URL(url).pathname);

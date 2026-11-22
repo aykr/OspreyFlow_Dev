@@ -9,7 +9,7 @@ import type { Node } from "../../../../packages/schemas/generated";
 import { AccordionSection } from "../design/primitives/AccordionSection";
 import { nodeLabel } from "../canvas/nodeAttributes";
 import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
-import { eventsNoun } from "../inspector/linkEventsApi";
+import { eventsNoun } from "@ospreyflow/glass-shared";
 import { AddFromList } from "../search/AddFromList";
 import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import {
@@ -29,7 +29,7 @@ import {
   type RankedLink,
   type RankedNode,
   type TypeCounts,
-} from "./exploreApi";
+} from "@ospreyflow/glass-shared";
 
 /** How many the overall ranking shows first, and how many each type shows when opened. */
 export const TOP = 10;

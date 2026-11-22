@@ -26,11 +26,12 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from services.api.entra_people import PersonActionRefused, check_administrator_access
+from tools.layout import PAGES_COPY_ROOTS
 
 import principal_auth
 from principal_auth import OwnerNotHeld, OwnerRecordUnavailable
 from schemas.admin import PersonAccessInput
-from services.api.entra_people import PersonActionRefused, check_administrator_access
 
 CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 SECTIONS = CORE / "apps/workspace/src/admin/sections.json"
@@ -75,10 +76,13 @@ def _python(path: Path, *, docstrings: bool) -> list[int]:
                   and ALONE.search(n.value))  # fmt: skip
 
 
-def _text(text: str, *, comments: bool = False) -> list[int]:
+def _text(text: str, *, comments: bool = False, template: bool = False) -> list[int]:
     """The lines of a guide or a source file where the name alone starts, read whole (a name over a line break is
-    one name). A guide's version rows are kept as written; a source file's comments, when asked, are left out."""
-    if comments:
+    one name). A guide's version rows are kept as written; a source file's comments, when asked, are left out, and a
+    template's own (`{# #}` and HTML's), which a person never sees, when it is one."""
+    if comments and template:
+        text = re.sub(r"\{#.*?#\}|<!--.*?-->", lambda m: re.sub(r"[^\n]", " ", m.group()), text, flags=re.S)
+    elif comments:
         text = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group()), text, flags=re.S)
         text = re.sub(r"(?m)(^|[^:])//.*$", r"\1", text)
     lines = text.split("\n")
@@ -90,6 +94,18 @@ def _text(text: str, *, comments: bool = False) -> list[int]:
     return found
 
 
+#: Where the Glass's own strings are: the workspace, and the package that holds the Conduit clients and the rest of what
+#: moved out of it (ADR-152 decision 6; PL4d2 moved six clients whose errors and headlines a person reads); and the
+#: pages service's templates and modules, the same words drawn on the server (IS5a0 brief item 6).
+GLASS_ROOTS = ("apps/workspace/src", "packages/glass-shared/src", *PAGES_COPY_ROOTS)
+
+
+def _glass_files(roots: tuple[Path, ...] | None = None) -> list[Path]:
+    roots = roots or tuple(CORE / r for r in GLASS_ROOTS)
+    return [p for root in roots for p in sorted({*root.rglob("*.ts*"), *root.rglob("*.njk")})
+            if ".test." not in p.name]  # fmt: skip
+
+
 def _said_alone() -> list[str]:
     found = []
     for folder in ("services", "packages/principal_auth", "harness", "cli"):
@@ -97,10 +113,9 @@ def _said_alone() -> list[str]:
             found += [f"{path.relative_to(CORE)}:{n}" for n in _python(path, docstrings=False)]
     for path in sorted((CORE / "packages/schemas").glob("*.py")):  # its docstrings are the schema's descriptions
         found += [f"{path.relative_to(CORE)}:{n}" for n in _python(path, docstrings=True)]
-    glass = [p for p in sorted((CORE / "apps/workspace/src").rglob("*.ts*")) if ".test." not in p.name]
-    for path in [*sorted((CORE / "packages/schemas/generated").glob("*.ts")), *glass]:
-        found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"), comments=True)
-                  ]  # fmt: skip
+    for path in [*sorted((CORE / "packages/schemas/generated").glob("*.ts")), *_glass_files()]:
+        found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"), comments=True,
+                                                                   template=path.suffix == ".njk")]  # fmt: skip
     for path in [*sorted((CORE / "docs").glob("*.md")), CORE / "DEMO_GUIDE.md", CORE / "README.md"]:
         found += [f"{path.relative_to(CORE)}:{n}" for n in _text(path.read_text(encoding="utf-8"))]
     return found
@@ -140,6 +155,68 @@ def test_the_scan_finds_each_shape_the_real_files_hold(tmp_path: Path) -> None:
               'const words = "That person is not in Admin › People";\n'
               'const url = "https://x.example/y"; // Admin › People\n')  # fmt: skip
     assert _text(source, comments=True) == [4]
+
+
+#: The six clients that moved: a folder, then each file's stem. Never written as a path (the old-path scan in
+#: `glass_trees/test_glass_shared_clients.py` reads this file too, and only the package's own place may name them).
+_MOVED = {"ingest": ("api",), "ingest/sources": ("api",), "ingest/releases": ("releasesApi",),
+          "admin/sections": ("MapsApi", "ModelsApi"), "admin": ("updateNotice",)}  # fmt: skip
+MOVED_CLIENTS = tuple(f"{folder}/{stem}.ts" for folder, stems in _MOVED.items() for stem in stems)
+
+
+def test_the_scan_reaches_the_clients_that_moved_to_the_shared_package() -> None:
+    """The six clients left `apps/workspace/src` in PL4d2; the guard once read only that folder, and a name planted in
+    one of them stayed green (found in review). Each is read, and a plant in a copy of each, at the line a person's
+    words sit on, is found: the same copy, clean, finds nothing."""
+    read = {p.relative_to(CORE).as_posix() for p in _glass_files()}
+    for client in MOVED_CLIENTS:
+        assert f"packages/glass-shared/src/{client}" in read, client
+        assert f"apps/workspace/src/{client}" not in read, client
+
+
+@pytest.mark.parametrize("client", MOVED_CLIENTS)
+def test_the_old_name_planted_in_a_moved_client_is_found(client: str, tmp_path: Path) -> None:
+    real = (CORE / "packages/glass-shared/src" / client).read_text(encoding="utf-8")
+    copy = tmp_path / "src" / client
+    copy.parent.mkdir(parents=True)
+    copy.write_text(real, encoding="utf-8")
+
+    def found() -> list[int]:
+        files = _glass_files((tmp_path / "src",))
+        return [n for p in files for n in _text(p.read_text(encoding="utf-8"), comments=True)]
+
+    assert found() == []
+    copy.write_text(real + '\nexport const planted = "Set it in Admin › People.";\n', encoding="utf-8")
+    assert found() == [real.count("\n") + 2]
+
+
+def _found(files: list[Path]) -> list[int]:
+    return [n for p in files
+            for n in _text(p.read_text(encoding="utf-8"), comments=True, template=p.suffix == ".njk")]  # fmt: skip
+
+
+def test_the_scan_reaches_the_pages_roots() -> None:
+    """The pages service's templates and modules are user-visible copy (ADR-152 decision 6; IS5a0 brief item 6): the
+    Default tree's own layout is read by the real scan, and each pages root is one of its roots."""
+    assert set(PAGES_COPY_ROOTS) <= set(GLASS_ROOTS)
+    read = {p.relative_to(CORE).as_posix() for p in _glass_files()}
+    assert "apps/pages/tree-default/layout.njk" in read
+
+
+@pytest.mark.parametrize("root", PAGES_COPY_ROOTS)
+def test_the_old_name_planted_in_a_pages_root_is_found(root: str, tmp_path: Path) -> None:
+    """Rule 15: a template (or a module) in each pages root says the section's old name; the same file with the new
+    name finds nothing, and so does the old name in a template comment, which a person never sees."""
+    folder = tmp_path / root
+    folder.mkdir(parents=True)
+    page = folder / ("x.ts" if root.endswith("modules") else "x.njk")
+    page.write_text("<p>Set it in Admin › People and roles.</p>\n", encoding="utf-8")
+    assert _found(_glass_files((folder,))) == []
+    page.write_text("<h1>Roles</h1>\n<p>Set it in Admin › People.</p>\n", encoding="utf-8")
+    assert _found(_glass_files((folder,))) == [2]
+    if page.suffix == ".njk":
+        page.write_text("{# Admin › People, a comment #}\n<!-- Admin › People -->\n<p>Roles</p>\n", encoding="utf-8")
+        assert _found(_glass_files((folder,))) == []
 
 
 EVERY = frozenset({"clearance", "org_unit", "handling_codes"})
@@ -219,8 +296,9 @@ def test_each_right_is_named_as_the_glass_names_it() -> None:
 
 
 def test_a_right_the_giver_does_not_hold_is_refused_by_its_name() -> None:
-    from schemas.rights import Right
     from services.api.custom_roles import RoleRefused, role_refusal
+
+    from schemas.rights import Right
 
     with pytest.raises(RoleRefused) as refused:
         role_refusal("Desk", ["administer_system", "manage_models"], giver_rights=[Right.MANAGE_PEOPLE], names_taken=[])

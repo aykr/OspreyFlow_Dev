@@ -6,7 +6,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { INVESTIGATION_ID_SESSION_KEY } from "./investigationId";
-import { caseIsOpenable, caseUrl, createCase, listCases, openCase, openCaseView, removeCase, setCaseDatasets } from "./cases";
+import { caseIsOpenable, caseOpenUrl as caseUrl, createCase, listCases, setCaseDatasets } from "@ospreyflow/glass-shared";
+import { openCase, openCaseView, removeCase } from "./caseNavigation";
 
 const fetchMock = vi.fn();
 
@@ -150,7 +151,7 @@ describe("removing a case", () => {
 
 describe("datasetLabel (ADR-099 Amendment 6)", () => {
   it("is the name and the id, the id shortened to its last five characters past twelve", async () => {
-    const { datasetLabel } = await import("./cases");
+    const { datasetLabel } = await import("@ospreyflow/glass-shared");
     expect(datasetLabel("enron", "Enron corpus")).toBe("Enron corpus · enron");
     expect(datasetLabel("01K9XQ0000000000000000ABCD", "Enron corpus")).toBe("Enron corpus · …0ABCD");
   });

@@ -26,7 +26,7 @@ import {
   setLimits,
   testConnection,
   type ModelsApi,
-} from "./ModelsApi";
+} from "@ospreyflow/glass-shared";
 import { LimitsForm, ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
 
 /** The jobs an engine outside the deployment may take. Embeddings never leave it (ADR-135). */

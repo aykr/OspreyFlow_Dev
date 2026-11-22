@@ -251,7 +251,7 @@ def test_the_module_exports_what_the_record_names() -> None:
 
 
 def test_the_glass_labels_the_packs_as_the_studio_does() -> None:
-    """The Glass writes the packs' labels by hand (`cases.ts`, outside `schemas-check`), so the
+    """The Glass writes the packs' labels by hand (`cases.ts` in `packages/glass-shared`, outside `schemas-check`), so the
     two lists are held in step here: each Studio label, in the catalogue's order, is in
     `DOMAIN_PACKS`, and so is the POLE label. A pack added or relabelled in the Conduit fails this
     until the Glass follows."""
@@ -261,7 +261,9 @@ def test_the_glass_labels_the_packs_as_the_studio_does() -> None:
 
     from ontology.packs import pack_catalogue
 
-    source = (REPO / "apps" / "workspace" / "src" / "investigation" / "cases.ts").read_text()
+    source = (
+        REPO / "packages" / "glass-shared" / "src" / "investigation" / "cases.ts"
+    ).read_text()
     pole, *packs = pack_catalogue()
     assert f'POLE_LABEL = "{pole.label}"' in source
     declared = re.findall(r'\{ name: "(\w+)", label: "([^"]+)" \}', source)

@@ -4,9 +4,9 @@
 # session on the server and renders each page complete before sending it. Express, express-session,
 # Nunjucks and helmet; no React, and nothing fetched from another address (ADR-152 decision 3).
 #
-# Three stages, on the Node version the workspace image's builder pins: one compiles the TypeScript, one
-# installs only what the service needs at run time, and the last carries the compiled service and that
-# and nothing else. The build context is `OspreyFlow_Core` (`-f apps/pages/Dockerfile .`), as for the
+# Three stages, on the Node version the workspace image's builder pins: one compiles the TypeScript and builds the
+# browser assets (esbuild, a build-time package only), one installs only what the service needs at run time, and the
+# last carries the compiled service, its templates and its built assets, and the run-time packages, and nothing else. The build context is `OspreyFlow_Core` (`-f apps/pages/Dockerfile .`), as for the
 # workspace.
 #
 # The session cookie's signing secret (`OSPREY_PAGES_SESSION_SECRET`, at least 32 characters) is a
@@ -28,6 +28,13 @@ COPY apps/pages/package.json ./apps/pages/
 COPY packages/glass-shared/package.json ./packages/glass-shared/
 RUN npm ci --workspace apps/pages
 
+# What the build reads beyond the service's own folder (scripts/assets.mjs): the design package (the stylesheet, and the font
+# list that says which faces the Default tree serves), the shared package's source (a page's module may import it: its
+# `exports` name `src/index.ts`, which esbuild reads as it is) and the generated schema types the shared package's clients
+# import. Nothing else of the checkout is copied: the workspace's source, the Conduit and the harness are not here.
+COPY packages/design ./packages/design
+COPY packages/glass-shared/src ./packages/glass-shared/src
+COPY packages/schemas/generated ./packages/schemas/generated
 COPY apps/pages ./apps/pages
 RUN npm run build --workspace apps/pages
 

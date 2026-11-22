@@ -34,6 +34,7 @@ export type Rejections = RejectionRecord[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
 export type DrawnWatchAlerts = number;
+export type ResolutionJobs = string[];
 export type RowsWithdrawn = number;
 export type LinksKeptAnOccurrence = number;
 export type RowsLeftInPlace = number;
@@ -100,6 +101,7 @@ export type Rejections1 = RejectionRecord[];
 export type RowsHeld1 = number;
 export type RuleNotes1 = string[];
 export type DrawnWatchAlerts1 = number;
+export type ResolutionJobs1 = string[];
 export type ExpertSteps1 = ExpertStepDisclosure[];
 export type Withheld1 = boolean;
 
@@ -123,6 +125,7 @@ export interface PipelineRunReportView {
   rows_held?: RowsHeld1;
   rule_notes?: RuleNotes1;
   drawn_watch_alerts?: DrawnWatchAlerts1;
+  resolution_jobs?: ResolutionJobs1;
   metering?: RunMetering | null;
   expert_steps?: ExpertSteps1;
   withheld?: Withheld1;
@@ -159,6 +162,7 @@ export interface LoadReportView {
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
   drawn_watch_alerts?: DrawnWatchAlerts;
+  resolution_jobs?: ResolutionJobs;
   rows_withdrawn?: RowsWithdrawn;
   links_kept_an_occurrence?: LinksKeptAnOccurrence;
   rows_left_in_place?: RowsLeftInPlace;

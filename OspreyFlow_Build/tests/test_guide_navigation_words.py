@@ -19,6 +19,8 @@ import json
 import re
 from pathlib import Path
 
+from tools.layout import PAGES_COPY_ROOTS
+
 CORE = Path(__file__).resolve().parents[2] / "OspreyFlow_Core"
 DOCS = CORE / "docs"
 SRC = CORE / "apps" / "workspace" / "src"
@@ -112,6 +114,7 @@ def _screen_text(source: str) -> str:
     """A source file without its comments: what it can put on screen, not what it says about itself."""
     source = re.sub(r"/\*.*?\*/", " ", source, flags=re.DOTALL)
     source = re.sub(r"\{/\*.*?\*/\}", " ", source, flags=re.DOTALL)
+    source = re.sub(r"\{#.*?#\}|<!--.*?-->", " ", source, flags=re.DOTALL)  # a template's comments (the pages service)
     return re.sub(r"(?m)(^|[^:\"'`])//.*$", r"\1", source)
 
 
@@ -120,8 +123,23 @@ def old_view_words_on_screen(sources: dict[str, str]) -> list[str]:
             if old in re.sub(r"\s+", " ", _screen_text(source))]  # fmt: skip
 
 
-def glass_sources() -> dict[str, str]:
-    found = {p.relative_to(SRC).as_posix(): p.read_text(encoding="utf-8") for p in sorted(SRC.rglob("*.ts*"))}
+#: The Glass's sources: the workspace, and the shared package that holds what moved out of it (ADR-152 decision 6; the
+#: PL4d2 clients return headlines and errors a person reads), and the pages service's templates and modules, which draw
+#: the same words on the server (IS5a0 brief item 6). A file is named by its place under its root.
+GLASS_ROOTS = (SRC, CORE / "packages" / "glass-shared" / "src", *(CORE / r for r in PAGES_COPY_ROOTS))
+
+
+def glass_sources(roots: tuple[Path, ...] = GLASS_ROOTS) -> dict[str, str]:
+    """Every source, keyed by its place under its root. A place that two roots both hold (the package's plain half and
+    the workspace's hook of one name: `layout/panelOrder.ts`) is kept under both: the later root's copy is keyed
+    `shared:<place>`, so neither hides the other (found in review: a plain dict key dropped the workspace's four)."""
+    found: dict[str, str] = {}
+    for root in roots:
+        for p in sorted({*root.rglob("*.ts*"), *root.rglob("*.njk")}):
+            name = p.relative_to(root).as_posix()
+            while name in found:  # a place under two roots is kept under each, never one hiding the other
+                name = f"shared:{name}"
+            found[name] = p.read_text(encoding="utf-8")
     return {name: text for name, text in found.items()
             if ".test." not in name and not name.startswith("test") and "/test" not in name}  # fmt: skip
 
@@ -172,6 +190,80 @@ def test_view_means_a_saved_view_in_every_guide_and_in_the_glass() -> None:
     # The toolbar's Views menu is withdrawn: nothing draws it.
     drawn = [n for n, s in glass_sources().items() if n != "views/ViewsMenu.tsx" and re.search(r"<ViewsMenu\b", s)]
     assert drawn == [], drawn
+
+
+#: The six clients that moved: a folder, then each file's stem. Never written as a path (the old-path scan in
+#: `glass_trees/test_glass_shared_clients.py` reads this file too, and only the package's own place may name them).
+_MOVED = {"ingest": ("api",), "ingest/sources": ("api",), "ingest/releases": ("releasesApi",),
+          "admin/sections": ("MapsApi", "ModelsApi"), "admin": ("updateNotice",)}  # fmt: skip
+MOVED_CLIENTS = tuple(f"{folder}/{stem}.ts" for folder, stems in _MOVED.items() for stem in stems)
+
+
+def test_the_glass_s_sources_include_the_clients_that_moved_to_the_shared_package() -> None:
+    """The six clients left `apps/workspace/src` in PL4d2; this guard once read only that folder (found in review)."""
+    sources = glass_sources()
+    for client in MOVED_CLIENTS:
+        assert client in sources, client
+        assert not (SRC / client).exists(), client
+
+
+def test_an_old_view_word_planted_in_a_moved_client_is_found(tmp_path: Path) -> None:
+    """Each moved client, copied; the same copy clean finds nothing, with a word on screen it is found, and in a comment
+    (which a person never sees) it is not."""
+    for client in MOVED_CLIENTS:
+        real = (GLASS_ROOTS[1] / client).read_text(encoding="utf-8")
+        copy = tmp_path / "src" / client
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        copy.write_text(real, encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == []
+        copy.write_text(real + '\nexport const planted = "Clear view";\n', encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == [f"{client}: 'Clear view'"]
+        copy.write_text(real + "\n// Clear view, a comment\n", encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((tmp_path / "src",))) == []
+        copy.unlink()
+
+
+def test_the_glass_s_sources_include_the_pages_roots() -> None:
+    """The pages service's templates and modules are on-screen copy too (ADR-152 decision 6; IS5a0 brief item 6): each
+    pages root is read, and the Default tree's own templates are among the sources."""
+    assert set(PAGES_COPY_ROOTS) <= {p.relative_to(CORE).as_posix() for p in GLASS_ROOTS}
+    assert {"layout.njk", "home.njk", "error.njk"} <= set(glass_sources())
+
+
+def test_an_old_view_word_planted_in_a_pages_root_is_found(tmp_path: Path) -> None:
+    """Rule 15, one plant in each pages root: the word on screen is found, in a comment (a template's `{# #}` or an
+    HTML comment, or a module's `//`) it is not, and the same file clean finds nothing."""
+    for root in PAGES_COPY_ROOTS:
+        folder = tmp_path / root
+        folder.mkdir(parents=True)
+        page = folder / ("x.ts" if root.endswith("modules") else "x.njk")
+        page.write_text("<p>Clear the selection.</p>\n", encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((folder,))) == []
+        page.write_text("<p>Use Clear view to start again.</p>\n", encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((folder,))) == [f"{page.name}: 'Clear view'"]
+        comment = "// Clear view, a comment\n" if page.suffix == ".ts" else "{# Clear view #}<!-- More views -->\n"
+        page.write_text(comment, encoding="utf-8")
+        assert old_view_words_on_screen(glass_sources((folder,))) == []
+        page.unlink()
+
+
+def test_a_place_both_roots_hold_is_read_from_both(tmp_path: Path) -> None:
+    """The workspace's `layout/panelOrder.ts` (a hook) and the package's (the plain half) are one place under two roots:
+    an old word on screen in either is found, and the real tip reads every such pair."""
+    shared = {p.relative_to(root).as_posix() for root in GLASS_ROOTS[1:2] for p in root.rglob("*.ts*")}
+    both = sorted(n for n in shared if (SRC / n).exists() and ".test." not in n)
+    assert both, "the real tree has places under both roots"
+    sources = glass_sources()
+    for place in both:
+        assert place in sources and f"shared:{place}" in sources, place
+    for planted_in in (0, 1):
+        roots = (tmp_path / f"a{planted_in}", tmp_path / f"b{planted_in}")
+        for n, root in enumerate(roots):
+            (root / "layout").mkdir(parents=True)
+            (root / "layout" / "panelOrder.ts").write_text(
+                'export const word = "Clear view";\n' if n == planted_in else "export const word = 1;\n", encoding="utf-8")
+        expected = "layout/panelOrder.ts" if planted_in == 0 else "shared:layout/panelOrder.ts"
+        assert old_view_words_on_screen(glass_sources(roots)) == [f"{expected}: 'Clear view'"]
 
 
 def test_each_admin_section_is_named_as_admin_labels_it() -> None:

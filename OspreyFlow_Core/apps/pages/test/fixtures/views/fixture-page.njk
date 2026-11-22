@@ -1,0 +1,19 @@
+{% extends "layout.njk" %}
+{% block title %}Fixture page{% endblock %}
+{% block content %}
+<h1>Fixture page</h1>
+<p>Everything in this table is in the HTML the server sends, with no script run.</p>
+<table>
+<caption>Fixture rows</caption>
+<thead><tr><th scope="col">Name</th><th scope="col">Count</th></tr></thead>
+<tbody>
+{% for row in rows %}<tr><td>{{ row.name }}</td><td>{{ row.count }}</td></tr>
+{% endfor %}</tbody>
+</table>
+<form method="post" action="/_fixture/page">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<button type="submit">Add a row</button>
+</form>
+{% endblock %}
+{% block page_data %}<script type="application/json" id="page-data" nonce="{{ cspNonce }}">{"page":"fixture","rows":{{ rows | length }}}</script>{% endblock %}
+{% block scripts %}<script type="module" src="{{ asset('modules/fixture.ts') }}"></script>{% endblock %}

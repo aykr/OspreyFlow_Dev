@@ -5,8 +5,7 @@
 import { useState } from "react";
 import type { RuleScheduleView, RuleVersion, TypologyRule } from "../../../../packages/schemas/generated";
 import { Button, Input } from "../design/primitives";
-import { approveRule, rejectRule, ruleRuns, ruleVersions, type AlertsApi } from "./api";
-import { when } from "./names";
+import { approveRule, rejectRule, ruleRuns, ruleVersions, type AlertsApi, when } from "@ospreyflow/glass-shared";
 
 const ACTION_WORDS: Record<string, string> = { deploy: "deploying it", change: "a change to it", retire: "retiring it" };
 const STATUS_WORDS: Record<string, string> = {

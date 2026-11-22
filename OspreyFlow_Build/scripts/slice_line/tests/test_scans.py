@@ -70,6 +70,11 @@ def test_the_stop_hook_runs_no_scan_for_a_path_no_row_names_and_records_those_it
     assert [r["name"] for r in rec["results"]] == ["checks", "acceptance"], rec
     (wt / "OspreyFlow_Core/apps/other.ts").write_text("export const y = 2;\n")
     sh("git add -A OspreyFlow_Core/apps && git commit -qm 'feat: another section'", wt, w["env"])
+    lintbin = w["tmp"] / "lintbin"  # eslint, which the Stop hook now runs on a changed .ts (LINE_FIXES_5_BRIEF.md, 4)
+    lintbin.mkdir(exist_ok=True)
+    (lintbin / "eslint").write_text("#!/bin/sh\nexit 0\n")
+    (lintbin / "eslint").chmod(0o755)
+    w["env"]["PATH"] = f"{lintbin}{os.pathsep}{w['env'].get('PATH', '/usr/bin:/bin')}"
     assert stop_gate(w, wt) is None
     tip = sh("git rev-parse HEAD", wt).stdout.strip()
     rec = json.loads((w["data"] / f"records/S1/tests-{tip}.json").read_text())

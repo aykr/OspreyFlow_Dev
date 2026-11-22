@@ -7,9 +7,8 @@ import type { HeldRow } from "../../../../packages/schemas/generated";
 import { COUNTS_WITHHELD_REASON } from "../admin/Schedules";
 import { Button } from "../design/primitives";
 import { rowNumber, sourceName } from "../inspector/sourceLocator";
-import type { AccessLevel } from "../investigation/cases";
-import { listHeldRows, rejectHeldRows, releaseHeldRows, type AlertsApi } from "./api";
-import { when } from "./names";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
+import { listHeldRows, rejectHeldRows, releaseHeldRows, type AlertsApi, when } from "@ospreyflow/glass-shared";
 
 export interface HeldRowsPanelProps extends AlertsApi {
   level: AccessLevel | null;
