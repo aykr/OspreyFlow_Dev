@@ -273,6 +273,7 @@ says that cost is a list-price estimate, not a bill.
 - **`merge_slice.py server-report`** (004, 6): the Mac-only remainder's and the whole merge's time with the green counted, the same for the whole gate, refusals caught before the slot, environment differences, the shadow.
 - **Three project checks at every stop** (005): `route-coverage-check`, `test-file-coverage-check` and `mypy` run at the start and at every stop in the builder's worktree, as the line's own step (a slice started before meets them at its next stop, no refreeze). A refused merge records its cause; the board counts refusals by cause.
 - **The branch's own changes** (007): the Stop hook's per-file checks and scans read the files changed since `git merge-base main HEAD`, not the frozen base: what a builder takes in from main is never the slice's.
+- **Main's scan rows** (007): the Stop hook's scan-map check adds main's `scan_map.tsv` rows to the installed copy's, so a row a merge added counts at once; nothing installed changes.
 
 ## Files outside the repository
 

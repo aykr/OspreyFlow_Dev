@@ -156,6 +156,24 @@ def tool(wt: str, env: dict, local: str, name: str):
     return str(own) if own.is_file() else shutil.which(name, path=env.get("PATH"))
 
 
+LINE_MAP = "OspreyFlow_Build/scripts/slice_line/scan_map.tsv"
+
+
+def main_map(wt: str) -> list:
+    """main's scan_map.tsv rows, read beside the installed copy for the scan-map check (the owner's file 007: the
+    installed copy goes stale when a merge adds a row, 195 rows installed against 196 on main after PL4d3e, and a
+    builder was failed for a row that exists). Rows only add: the installed copy stays the authority and nothing
+    installed changes. [] when main's copy cannot be read."""
+    import scan_select
+    p = subprocess.run(["git", "show", "main:" + LINE_MAP], cwd=wt, capture_output=True, text=True)
+    if p.returncode != 0:
+        return []
+    try:
+        return scan_select.load(p.stdout)
+    except ValueError:
+        return []
+
+
 def own_base(wt: str, frozen: dict) -> str:
     """Where the branch's own changes are measured from: its merge-base with main (the owner's file 007, line fault 14:
     measured from the frozen base, everything a builder took in from main counted as the slice's, and IS5a was failed
@@ -202,7 +220,7 @@ def lint(wt: str, base: str, slice_id: str, slot=None) -> tuple:
     if new:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import scan_select
-        table = scan_select.entries()
+        table = scan_select.entries() + main_map(wt)  # the owner's file 007: rows a merge added since the install
         rows = subprocess.run(["git", "show", "main:" + SCAN_ROWS + slice_id + ".tsv"], cwd=wt, capture_output=True,
                               text=True)
         if rows.returncode == 0:

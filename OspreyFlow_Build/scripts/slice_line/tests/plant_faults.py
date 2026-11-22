@@ -533,6 +533,9 @@ M = [
  ("stop_check.py", '    return git(["merge-base", "main", "HEAD"], wt) or frozen.get("base") or "main"', '    return frozen.get("base") or "main"', "main_brought_in_is_not_the_slices"),
  ("stop_check.py", '        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)', '        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)', "main_brought_in_is_not_the_slices"),
  ("stop_check.py", 'scan_select.touched(wt, own_base(wt, frozen))', 'scan_select.touched(wt, frozen.get("base") or "main")', "only_mains_file_selects"),
+ # the owner's file 007: main's scan-map rows count beside the installed copy
+ ("stop_check.py", '        table = scan_select.entries() + main_map(wt)  # the owner', '        table = scan_select.entries()  # the owner', "row_a_merge_added_on_main"),
+ ("stop_check.py", '    p = subprocess.run(["git", "show", "main:" + LINE_MAP], cwd=wt, capture_output=True, text=True)', '    p = subprocess.run(["git", "show", "HEAD~999:" + LINE_MAP], cwd=wt, capture_output=True, text=True)', "row_a_merge_added_on_main"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
