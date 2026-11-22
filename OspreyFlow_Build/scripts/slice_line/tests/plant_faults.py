@@ -198,7 +198,7 @@ M = [
  ("resume.py", '    if not (tests and tests.get("green") and tests.get("commit") == tip):', '    if False:', "accept_refuses_a_tip_the_verifier"),
  ("resume.py", '    if not verify or verify.get("commit") != tip:\n        raise Refused(f"no verifier record for the tip', '    if False:\n        raise Refused(f"no verifier record for the tip', "accept_refuses_a_tip_the_verifier"),
  ("resume.py", '    if verify.get("verdict") == "pass":\n', '    if False:\n', "last_verdict_is_pass"),
- ("resume.py", '            if not at_limit:\n', '            if False:\n', "accept_refuses_a_slice_not_stopped"),
+ ("resume.py", '            if not at_limit:  # the owner', '            if False:  # the owner', "seat_of_the_slice_is_at_work"),
  ("resume.py", '    findings = verify["findings"]\n', '    findings = verify["findings"][:1]\n', "changes_no_finding"),
  ("resume.py", '    split = {"faults_in_behaviour": [f for f in findings if rs.kind_of(f, legacy) == rs.FAULT],', '    split = {"faults_in_behaviour": [f for f in findings if rs.kind_of(f, legacy) != rs.GAP],', "changes_no_finding"),
  ("resume.py", '    legacy = rs.is_legacy(verify)\n', '    legacy = False\n', "accept_splits_a_record_written_before"),
@@ -217,7 +217,7 @@ M = [
  ("resume.py", '    if rnd < rule["from_round"]:\n', '    if False:\n', "standing_accept_waits_for_the_third_round"),
  ("resume.py", '    only_gaps(verify["findings"], legacy)\n', '', "never_accepts_a_fault_in_behaviour"),
  ("resume.py", '    other = [f for f in findings if rs.kind_of(f, legacy) not in rs.KINDS]\n', '    other = []\n', "never_accepts_a_fault_in_behaviour"),
- ("resume.py", '    newest_record_is(slice_id, tip)\n', '', "standing_accept_by_the_conductor"),
+ ("resume.py", '    newest_record_is(slice_id, tip)\n    legacy = rs.is_legacy(verify)\n', '    legacy = rs.is_legacy(verify)\n', "standing_accept_by_the_conductor"),
  ("resume.py", '    legacy = rs.is_legacy(verify)\n    only_gaps', '    legacy = False\n    only_gaps', "standing_accept_reads_a_record_written_before"),
  ("merge_slice.py", '    if acc.get("by") == "standing":  # the owner', '    if False:  # the owner', "merge_reads_the_owners_line_again"),
  ("run_seat.py", '    taken = standing_accept(slice_id)\n    if taken:\n        return 0\n', '    taken = False\n    if taken:\n        return 0\n', "standing_accept_on_accepts"),
@@ -422,6 +422,14 @@ M = [
  ("run_seat.py", '    if taken is None:  # held', '    if False:  # held', "held_past_the_limit"),
  ("run_seat.py", '            if time.monotonic() >= until:\n', '            if False:\n', "held_past_the_limit"),
  ("run_seat.py", '        except resume.Busy as e:\n', '        except resume.Refused as e:\n', "refused_by_its_rule_is_not_held"),
+ # the owner's word of 21 November, 18: the owner's accept at any round, once the verifier's findings are on record
+ ("resume.py", "    for r in c.running_seats(slice_id):\n        raise Refused(f\"{slice_id}'s {r.get('seat')} is at work", "    for r in []:\n        raise Refused(f\"{slice_id}'s {r.get('seat')} is at work", "seat_of_the_slice_is_at_work"),
+ ("resume.py", '    newest_record_is(slice_id, tip)\n\n\ndef no_key_finding', '\n\n\ndef no_key_finding', "accept_before_the_limit_reads_only_the_newest"),
+ ("resume.py", '    if hit:\n        raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): the owner', '    if False:\n        raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): the owner', "security_or_key_finding"),
+ ("resume.py", "            no_key_finding(verify)  # at any round (the owner's file 003)\n", '', "accept_at_the_limit_never_covers_a_security_or_key_finding"),
+ ("resume.py", '    if phase == "stopped" and (rec / "red_stop.json").exists():\n        raise Refused(f"{slice_id} is stopped on red checks (red_stop.json), not on findings', '    if False:\n        raise Refused(f"{slice_id} is stopped on red checks (red_stop.json), not on findings', "stopped_on_red_checks"),
+ ("resume.py", '            seen_in = rnd - 1 if phase == "building" else rnd', '            seen_in = rnd', "applies_in_round_1"),
+ ("resume.py", 'None if at_limit else {"round": seen_in, "before_the_limit": True}', '{"round": seen_in, "before_the_limit": True}', "accept_at_the_limit_takes_any_other_finding"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

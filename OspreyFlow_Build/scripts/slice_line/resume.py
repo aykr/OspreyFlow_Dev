@@ -321,7 +321,33 @@ def newest_record_is(slice_id: str, tip: str) -> None:
     recs = sorted(c.rec_dir(slice_id).glob("verify-*.json"), key=lambda p: p.stat().st_mtime)
     if not recs or recs[-1].name != f"verify-{tip}.json":
         raise Refused(f"the newest findings record is {recs[-1].name if recs else 'none'}, not the verifier's for "
-                      f"{tip[:10]}: the standing accept reads only the newest verifier record. Nothing changed.")
+                      f"{tip[:10]}: an accept reads only the newest verifier record. Nothing changed.")
+
+
+def before_the_limit(slice_id: str, phase: str, rnd: int, limit: int, tip: str, verify: dict, rec: Path) -> None:
+    """The owner's accept before the rounds limit (the owner's word of 21 November 2026): the verifier's findings for
+    the tip are on record (findings_at_tip), and it is refused, in words, while a seat of the slice is at work, when a
+    newer record than the verifier's is the newest, and when the slice is stopped on red checks. A key or security
+    finding is refused at any round (no_key_finding)."""
+    if phase == "stopped" and (rec / "red_stop.json").exists():
+        raise Refused(f"{slice_id} is stopped on red checks (red_stop.json), not on findings: there is no verifier "
+                      "finding to accept (clear-stop or refreeze). Nothing changed.")
+    for r in c.running_seats(slice_id):
+        raise Refused(f"{slice_id}'s {r.get('seat')} is at work (pid {r.get('pid')}): the accept waits until its "
+                      "session ends, and is refused if it commits (the tip it accepts must be the verifier's). Run it "
+                      "again then. Nothing changed.")
+    newest_record_is(slice_id, tip)
+
+
+def no_key_finding(verify: dict) -> None:
+    """The owner's word of 21 November 2026 (his file 003): a fault that can expose a key, show it back, log it or send
+    it where it was not given is never accepted, at any round, on the standing word or on his own line."""
+    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+                                         for f in verify["findings"]))
+    if hit:
+        raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): the owner's accept "
+                      "never covers one, at any round (his word of 21 November 2026). It needs the builder's fix. "
+                      "Nothing changed.")
 
 
 def only_gaps(findings: list[dict], legacy: bool) -> None:
@@ -890,14 +916,18 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
         if action == "accept":
             tip, verify = findings_at_tip(slice_id, frozen)
             at_limit = rnd >= limit and (phase == "refused" or (phase == "stopped" and not (rec / "red_stop.json").exists()))
-            if not at_limit:
-                raise Refused(f"{slice_id} is not stopped at its rounds limit (phase {phase}, round {rnd} of {limit}): "
-                              "the owner accepts a slice narrower only once its rounds are spent. Nothing changed.")
+            if not at_limit:  # the owner's word of 21 November 2026: at any round, once the verifier's record is there
+                before_the_limit(slice_id, phase, rnd, limit, tip, verify, rec)
+            no_key_finding(verify)  # at any round (the owner's file 003)
             tag = authority(slice_id, action)
-            acc = write_acceptance(slice_id, tip, verify, f"{slice_id} {action} {today()}", "owner (resume.tsv)")
+            seen_in = rnd - 1 if phase == "building" else rnd  # a slice sent back to building is a round on
+            acc = write_acceptance(slice_id, tip, verify, f"{slice_id} {action} {today()}", "owner (resume.tsv)",
+                                   None if at_limit else {"round": seen_in, "before_the_limit": True})
             n = len(acc["findings"])
             c.log_owner_change(slice_id, action, f"{tag}: tip {tip}; {n} findings accepted "
-                                                 f"({rs.kinds_said(rs.kinds_of(acc['findings'], rs.is_legacy(verify)))})")
+                                                 f"({rs.kinds_said(rs.kinds_of(acc['findings'], rs.is_legacy(verify)))})"
+                                                 + ("" if at_limit else f"; before the rounds limit, round {seen_in} "
+                                                                        f"of {limit}"))
             return [f"{slice_id}: accepted narrower at {tip[:10]} with {n} findings, on the owner's word; verified. "
                     f"The conductor runs merge_slice.py merge {slice_id}: every other gate still runs."]
         raise Refused(f"unknown action {action}")

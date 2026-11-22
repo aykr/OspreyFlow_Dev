@@ -116,13 +116,15 @@ def test_accept_refuses_a_slice_whose_last_verdict_is_pass(world):
     assert snapshot(w) == before and changes(w) == []
 
 
-def test_accept_refuses_a_slice_not_stopped_at_its_rounds_limit(world):
+def test_accept_refuses_a_slice_whose_verifier_has_not_returned_for_its_tip(world):
+    """Before the rounds limit the owner's accept applies once the verifier's findings are on record
+    (test_accept_any_round.py); with none yet for the tip, it is refused."""
     w = world
-    stopped_with_findings(w, round_=1, limit=2)  # findings in round 1 of 2: back to the builder, not stopped
+    at_verifier(w, round_=1, limit=2)
     owner_line(w, f"S1\taccept\t{TODAY}")
     before = snapshot(w)
     p = resume(w)
-    assert said_refused(p, "rounds limit"), p.stderr
+    assert said_refused(p, "no verifier record"), p.stderr
     assert snapshot(w) == before
 
 
