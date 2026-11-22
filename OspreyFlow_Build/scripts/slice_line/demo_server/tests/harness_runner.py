@@ -56,7 +56,10 @@ def stand_in_gate(tree, job, log, deadline, result):
         result["checks"] = spec["checks"]
     result["lists_from"] = "stand-in"
     result["list_drift"] = []
-    return [{"step": "stand-in", "exit": int(spec.get("exit", 0)), "seconds": 0}]
+    red = any((Path(tree) / f).exists() for f in spec.get("red_with", []))  # 013: red for a candidate holding it
+    if red:
+        result["failing"]["targets"] += ["test"]
+    return [{"step": "stand-in", "exit": 1 if red else int(spec.get("exit", 0)), "seconds": 0}]
 
 
 if conf.get("launch") == "direct":
