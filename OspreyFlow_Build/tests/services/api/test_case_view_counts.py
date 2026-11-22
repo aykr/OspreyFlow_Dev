@@ -2,14 +2,13 @@
 
 A view's `chosen` (every answer that carries a `CaseView`) is the count of its chosen nodes **this
 reader may see now**, never the count its creator stored: a stored count tells a reader how many
-nodes a shared view holds above their clearance. `CaseViewOpened.missing` is **0 for every
-principal, the creator included**: the owner's rule (the boards' rule, `test_boards.py`) is that
-`missing` counts only what was lost after the view was placed, and anything hidden by a marking is
-counted nowhere; the store records no deletion of a graph node with a time or a placing (only an
-untimed `reverted` flag, the same for a node the reader may not read), so a number "lost" can only
-be got as the chosen ids less the nodes shown, which counts every hidden node too, or from an
-existence lookup, which is an oracle (rule 3). A view reports what is visible and does not report
-what is gone until the store records deletions (`spec/01_DOMAIN_MODEL.md`, §2.2c).
+nodes a shared view holds above their clearance. `CaseViewOpened.missing` counts only the chosen
+nodes **deleted since, that this reader could have seen** (SE9, ADR-144 Amendment 7; the cases for a
+deletion are `test_case_view_missing.py`'s): the owner's rule (the boards' rule, `test_boards.py`) is
+that `missing` counts only what was lost, and anything hidden by a marking is counted nowhere. It is
+never the chosen ids less the nodes shown, which counts every hidden node too, nor an existence
+lookup, which is an oracle (rule 3). Here, with nothing deleted, `missing` is 0 for everyone whatever
+is hidden from them (`spec/01_DOMAIN_MODEL.md`, §2.2c).
 
 The world is `test_case_views.py`'s: five chosen ids, of which Alice (SECRET, the creator) may read
 three (`open`, `near`, `secret`) and Bob (OFFICIAL) two (`open`, `near`); `elsewhere` is in a dataset
@@ -28,7 +27,7 @@ What a mistake here would do, and the case that fails for it (each also shown re
   (`test_the_wire_check_fails_with_the_stored_count_restored`);
 - `missing` handing anyone, creator or reader, the hidden number (chosen less shown):
   `test_no_number_includes_what_the_asker_may_not_see` (a node re-marked above them after the save,
-  one in a dataset the case does not read, one deleted, one reverted, their own clearance lowered;
+  one in a dataset the case does not read, one gone from the store, their own clearance lowered;
   each for the creator, a reader and a viewer), red with `missing_for` returning the difference
   (`test_the_missing_check_fails_with_the_difference_put_back`);
 - `missing` telling an id that does not exist from one that exists and is hidden, which lets the
@@ -237,13 +236,6 @@ def _deleted(world: _World, _who: str, _mp: pytest.MonkeyPatch) -> None:
     del world.graph._graph_nodes["near"]
 
 
-def _reverted(world: _World, _who: str, _mp: pytest.MonkeyPatch) -> None:
-    """`near` is reverted: the store's one recorded removal, untimed, and invisible to every read."""
-    held = _in("src", node("near"))
-    audit = held.audit.model_copy(update={"reverted": True})
-    world.graph._graph_nodes["near"] = held.model_copy(update={"audit": audit})
-
-
 def _lowered(world: _World, who: str, mp: pytest.MonkeyPatch) -> None:
     """The asker's own clearance is lowered to OFFICIAL: every SECRET node leaves their number."""
     lowered = views_world.PEOPLE[who].model_copy(update={"clearance": "OFFICIAL"})
@@ -251,12 +243,12 @@ def _lowered(world: _World, who: str, mp: pytest.MonkeyPatch) -> None:
 
 
 #: What can happen to a chosen node after a view is saved, and to its asker: each leaves a node the
-#: asker cannot read now, and none is something the owner's rule lets `missing` count.
+#: asker cannot read now, and none is a deletion the asker could have seen, which is all `missing`
+#: counts (a node reverted while the asker could see it is counted: `test_case_view_missing.py`).
 CHANGES = {
     "re_marked_above_them": _re_marked,
     "moved_to_a_dataset_the_case_does_not_read": _moved_elsewhere,
     "deleted": _deleted,
-    "reverted": _reverted,
     "their_own_clearance_lowered": _lowered,
 }
 #: The creator, a reader (Editor) and a Viewer who may read what the creator may.
@@ -278,10 +270,9 @@ def test_no_number_includes_what_the_asker_may_not_see(
     world: _World, monkeypatch: pytest.MonkeyPatch, change: str, who: str
 ) -> None:
     """For the creator and for each reader alike, `missing` is nothing (the boards' rule: only an
-    item lost after placement is counted, and a store that records no such loss counts none; a
-    node hidden by a marking is counted nowhere), and `chosen` is exactly the nodes shown. Told
-    "5 chosen, 3 shown, 2 missing" the creator would learn how many of the view's nodes are above
-    their clearance or outside the case (C045)."""
+    item lost is counted, and none was deleted here; a node hidden by a marking is counted nowhere),
+    and `chosen` is exactly the nodes shown. Told "5 chosen, 3 shown, 2 missing" the creator would
+    learn how many of the view's nodes are above their clearance or outside the case (C045)."""
     opened = _after_a_change(world, change, who, monkeypatch)
     assert opened["missing"] == 0
     assert opened["view"]["chosen"] == len(opened["nodes"])
@@ -294,14 +285,13 @@ def test_no_number_includes_what_the_asker_may_not_see(
 def test_the_missing_check_fails_with_the_difference_put_back(
     world: _World, monkeypatch: pytest.MonkeyPatch, change: str, who: str
 ) -> None:
-    """Rule 15, at the real call site's shape: `open_view` asks `missing_for` with the view, the
-    reader and the nodes shown. Planted with round 1's body (the chosen ids less the nodes shown,
-    for the view's creator alone), every case that asserts the creator is told nothing fails, and
-    planted for everyone (round 0's), every reader's case does too."""
+    """Rule 15, at the real call site's shape: `open_view` asks `missing_for` with the graph, the
+    view and the reader's principal. Planted with round 1's body (the chosen ids less the nodes the
+    reader may see), every case that asserts a reader is told nothing fails."""
 
-    def difference(view: StoredCaseView, reader: str, shown: Any) -> int:
-        added = set(view.merged_added)
-        return len(set(view.node_ids or []) - added) - sum(1 for n in shown if n.id not in added)
+    async def difference(graph: Any, view: StoredCaseView, principal: Principal) -> int:
+        ids = view.creators_choice() or []
+        return len(set(ids)) - await graph.count_visible(ids, principal)
 
     monkeypatch.setattr(case_views_module, "missing_for", difference)
     opened = _after_a_change(world, change, who, monkeypatch)
@@ -335,7 +325,7 @@ def test_the_probe_check_fails_with_an_existence_count(
     the view with the absent id and nothing for the one with the hidden id: the answers differ."""
     held = world.graph._world_nodes()
 
-    def by_existence(view: StoredCaseView, reader: str, shown: Any) -> int:
+    async def by_existence(graph: Any, view: StoredCaseView, principal: Principal) -> int:
         return sum(1 for i in set(view.node_ids or []) if i not in held)
 
     monkeypatch.setattr(case_views_module, "missing_for", by_existence)

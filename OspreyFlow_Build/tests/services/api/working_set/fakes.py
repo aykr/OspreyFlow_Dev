@@ -305,6 +305,11 @@ class FakeGraphPort:
         self._superseded_edge_ids = superseded_edge_ids
         self.get_nodes_requests: list[tuple[list[NodeId], Principal]] = []
         self.count_visible_requests: list[tuple[list[NodeId], Principal]] = []
+        self.count_deleted_visible_requests: list[tuple[list[NodeId], Principal]] = []
+        #: What the store keeps of a deletion (SE9): the time and the person, set with `reverted`
+        #: by `revert_elements` and cleared by a fresh create. `None` for either is a deletion
+        #: written before the store kept them; the count does not read them.
+        self.deletion_records: dict[NodeId, tuple[datetime | None, str | None]] = {}
         self.get_edges_requests: list[tuple[list[EdgeId], Principal]] = []
         self.paths_at_length_requests: list[tuple[NodeId, NodeId, int, Principal]] = []
         self.expand_requests: list[ExpandRequest] = []
@@ -345,13 +350,21 @@ class FakeGraphPort:
 
     @staticmethod
     def _body_readable(
-        principal: Principal, element: Node | Edge, *, superseded: bool, hidden: bool
+        principal: Principal,
+        element: Node | Edge,
+        *,
+        superseded: bool,
+        hidden: bool,
+        deleted: bool = False,
     ) -> bool:
         """The adapter's access step, on the element's own body: handling, datasets, a superseded
-        body, a reverted body; and the explicit overrides."""
+        body, a reverted body; and the explicit overrides. `deleted=True` turns the reverted test
+        round and leaves every other axis as it is (the adapter's `deleted` step: `reverted` true,
+        not superseded, and the same handling and dataset axes), so a deletion is counted for a
+        reader who could have seen the element live."""
         if hidden or superseded or element.audit.superseded_by is not None:
             return False
-        if element.audit.reverted:
+        if element.audit.reverted is not deleted:
             return False
         if principal.datasets is not None and not set(principal.datasets) & set(element.datasets):
             return False
@@ -423,6 +436,54 @@ class FakeGraphPort:
         self.count_visible_requests.append((list(node_ids), principal))
         world = self._world_nodes()
         return sum(1 for i in set(node_ids) if i in world and self._node_readable(principal, world[i]))
+
+    async def count_deleted_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
+        """SE9: how many of the ids are deleted (reverted, not superseded) and would pass
+        `principal`'s access step if live. Judged by each node's own body, never by the id alone: a
+        fake counting every reverted id, or every id it holds, would pass each case that plants a
+        hidden deletion (rule 12). An absent, a live, a superseded and a hidden deleted id are each
+        not counted, alike. Returns a number and nothing else."""
+        if isinstance(node_ids, str):
+            raise TypeError("ids must be a sequence of ids, not a single string")
+        self.count_deleted_visible_requests.append((list(node_ids), principal))
+        world = self._world_nodes()
+        return sum(
+            1
+            for i in set(node_ids)
+            if i in world
+            and self._body_readable(
+                principal,
+                world[i],
+                superseded=i in self._superseded_node_ids,
+                hidden=i in self._hidden_node_ids,
+                deleted=True,
+            )
+        )
+
+    async def revert_elements(
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        tx: TxId,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
+    ) -> None:
+        """Marks the held nodes reverted and records when and by whom with the flag, as the adapter
+        does in the one statement; an id the fake does not hold is a no-op, as in the store."""
+        for node_id in dict.fromkeys(node_ids):
+            held = self._graph_nodes.get(node_id)
+            if held is None:
+                continue
+            audit = held.audit.model_copy(update={"reverted": True})
+            self._graph_nodes[node_id] = held.model_copy(update={"audit": audit})
+            self.deletion_records[node_id] = (at or datetime.now(UTC), by)
+
+    def recreate(self, node: Node) -> None:
+        """A fresh create over a deleted node's id (ADR-127 Amendment 6): live again, the flag and
+        the record cleared together."""
+        self._graph_nodes[node.id] = node
+        self.deletion_records.pop(node.id, None)
 
     async def get_edges(self, edge_ids: Sequence[EdgeId], principal: Principal) -> list[Edge]:
         """ADR-124's read by id: a link comes back only when it is held, it is readable by its own
