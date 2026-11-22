@@ -185,7 +185,9 @@ class Graph:
     async def rollback_transaction(self, tx: str) -> None:
         return None
 
-    async def revert_elements(self, node_ids: Any, edge_ids: Any, tx: str) -> None:
+    async def revert_elements(
+        self, node_ids: Any, edge_ids: Any, tx: str, **_recorded: object
+    ) -> None:
         self.steps.hit("graph", ",".join(node_ids), ",".join(edge_ids))
         self.reverted.update(node_ids)
         self.reverted.update(edge_ids)

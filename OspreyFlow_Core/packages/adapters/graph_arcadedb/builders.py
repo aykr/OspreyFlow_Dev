@@ -423,6 +423,25 @@ def render_count_visible_gremlin(
     return f"{source}.{has_access}.values('id').dedup().count()"
 
 
+def render_count_deleted_visible_gremlin(
+    record_ids: Sequence[str], access: AccessFilter, principal: Principal
+) -> str:
+    """`GraphPort.count_deleted_visible` (SE9, ADR-144 Amendment 7):
+    `render_count_visible_gremlin`'s count with the access step's one reverted test turned round
+    (`deleted=True`). The vertices at `record_ids`, the reader's own step on the vertex itself, so
+    what is counted is deleted, not superseded, and would pass the reader's clearance, handling
+    codes and datasets if it were live; a live, hidden, superseded or absent node is not counted.
+    Only a count leaves the query. For no record ids the query is still rendered
+    (`g.V().limit(0)`), so an absent id costs the round trip a hidden or a deleted one does."""
+    has_access = access.gremlin_has_step(principal, deleted=True)
+    source = (
+        "g.V().limit(0)"
+        if not record_ids
+        else f"g.V({groovy_string_list_literal(list(record_ids))})"
+    )
+    return f"{source}.{has_access}.values('id').dedup().count()"
+
+
 def render_get_edges_gremlin(
     record_ids: Sequence[str], access: AccessFilter, principal: Principal
 ) -> str:

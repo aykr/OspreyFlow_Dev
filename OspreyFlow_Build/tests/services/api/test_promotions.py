@@ -1167,7 +1167,9 @@ def test_the_delete_check_fails_with_the_layer_withdrawn_whole(
 ) -> None:
     graph = pw.graph
 
-    async def whole(dataset_id: str, withdrawal: str, tx: str) -> PromotionReverted:
+    async def whole(
+        dataset_id: str, withdrawal: str, tx: str, **_recorded: object
+    ) -> PromotionReverted:
         nodes = [n.id for n in graph._graph_nodes.values() if dataset_id in n.datasets]
         edges = [e.id for e in graph._graph_edges if dataset_id in e.datasets]
         graph._pending[tx][2].append((nodes, edges, withdrawal))

@@ -42,7 +42,9 @@ AT = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
 # --- the query ----------------------------------------------------------------------------------
 
 
-def test_the_count_query_carries_the_readers_access_step_with_the_reverted_test_turned_round() -> None:
+def test_the_count_query_carries_the_readers_access_step_with_the_reverted_test_turned_round() -> (
+    None
+):
     access = AccessFilter(load_uk_le_scheme())
     secret = READER.model_copy(update={"clearance": "SECRET"})
     query = render_count_deleted_visible_gremlin(["#9:1", "#9:2"], access, READER)
@@ -155,7 +157,7 @@ async def test_a_revert_sets_when_and_by_whom_in_the_statement_that_sets_the_fla
     await graph.revert_elements(["p1"], ["e1"], "tx", by="analyst-1", at=AT)
     for row in (store.vertices["Person"]["p1"], store.edges["ASSOCIATE_OF"]["e1"]):
         assert row["reverted"] is True
-        assert (row["reverted_at"], row["reverted_by"]) == (AT, "analyst-1")
+        assert (row["reverted_at"], row["reverted_by"]) == (AT.isoformat(), "analyst-1")
     # The flag and the record are one statement: no UPDATE sets one without the other.
     updates = [c for c in store.sql_sent if c.startswith("UPDATE ")]
     assert updates and all("reverted_at = :at, reverted_by = :by" in c for c in updates)
@@ -169,7 +171,7 @@ async def test_a_revert_that_names_no_one_still_records_the_time() -> None:
     await graph.revert_elements(["p1"], [], "tx")
     row = store.vertices["Person"]["p1"]
     assert row["reverted_by"] is None
-    assert before <= row["reverted_at"] <= datetime.now(UTC)
+    assert before <= datetime.fromisoformat(row["reverted_at"]) <= datetime.now(UTC)
 
 
 class _WithdrawStore(TypedStore):
@@ -211,7 +213,7 @@ async def test_withdraw_and_layer_withdrawal_set_when_and_by_whom_with_the_flag(
             r"SET reverted = true, reverted_at = :at, reverted_by = :by, withdrawn_by_load = :\w+ ",
             command,
         ), command
-        assert params["at"] == AT and params["by"] in ("analyst-2", "analyst-3")
+        assert params["at"] == AT.isoformat() and params["by"] in ("analyst-2", "analyst-3")
 
 
 async def test_a_restore_clears_when_and_by_whom_with_the_flag() -> None:

@@ -414,7 +414,9 @@ class MergingGraph(ValidatingGraph):
 
     # --- the revert (ADR-127 Amendment 6), as the adapter does it ---------------------------
 
-    async def revert_elements(self, node_ids: Any, edge_ids: Any, tx: object) -> None:
+    async def revert_elements(
+        self, node_ids: Any, edge_ids: Any, tx: object, **_recorded: object
+    ) -> None:
         """Marks the named nodes and links reverted, by id and nothing else (`reverted` holds the
         ids of both, which never collide). Idempotent, as setting the flag again is."""
         self.reverted_calls.append((list(node_ids), list(edge_ids)))
@@ -428,7 +430,12 @@ class MergingGraph(ValidatingGraph):
     # --- a full snapshot's withdrawal (ADR-110 Amendment 6 point 3), as the adapter does it ----
 
     async def withdraw_elements(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], load_id: str, tx: object
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        load_id: str,
+        tx: object,
+        **_recorded: object,
     ) -> None:
         """Marks each live element reverted and withdrawn by `load_id`; one already reverted (or
         withdrawn) is left as it is, as the adapter's `AND reverted = false` leaves it."""

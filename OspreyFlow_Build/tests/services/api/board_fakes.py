@@ -285,13 +285,18 @@ class BoardGraph(FakeGraphPort):
         return new_id
 
     async def revert_elements(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], tx: str
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], tx: str, **_recorded: object
     ) -> None:
         """As the adapter: each set reverted at commit, with no withdrawing load stamped."""
         self._pending[tx][2].append((list(node_ids), list(edge_ids), None))
 
     async def withdraw_elements(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], load_id: str, tx: str
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        load_id: str,
+        tx: str,
+        **_recorded: object,
     ) -> None:
         self._pending[tx][2].append((list(node_ids), list(edge_ids), load_id))
 
@@ -368,7 +373,9 @@ class BoardGraph(FakeGraphPort):
         self._later.setdefault(tx, []).append(land)
         return PromotionReverted(nodes=len(node_ids), edges=len(edge_ids))
 
-    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: str) -> PromotionReverted:
+    async def withdraw_layer(
+        self, dataset_id: str, withdrawal: str, tx: str, **_recorded: object
+    ) -> PromotionReverted:
         nodes = [
             n.id for n in self._graph_nodes.values()
             if not n.audit.reverted and list(n.datasets) == [dataset_id]

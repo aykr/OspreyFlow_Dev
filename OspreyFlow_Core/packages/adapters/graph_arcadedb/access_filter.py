@@ -68,7 +68,11 @@ class AccessFilter:
         return f'filter(values("datasets").unfold().is(within({named})))'
 
     def gremlin_structural_step(
-        self, *, include_superseded: bool = False, datasets: list[str] | None = None
+        self,
+        *,
+        include_superseded: bool = False,
+        datasets: list[str] | None = None,
+        deleted: bool = False,
     ) -> str:
         """The two exclusions `gremlin_has_step` bundles in that are not
         principal-dependent at all — reverted and (unless lifted)
@@ -77,7 +81,12 @@ class AccessFilter:
 
         `datasets` (ADR-099) is carried here, not with the two handling axes: what lies outside a
         case's datasets is not hidden from the case, it is not in its world."""
-        steps = ['has("reverted",false)']
+        # `deleted` turns the one reverted test round (SE9, ADR-144 Amendment 7): the elements a
+        # revert or a withdrawal took back, for `count_deleted_visible`. Nothing else changes: a
+        # superseded one is still out (a correction is not a deletion), and the dataset axis and
+        # both handling axes are the reader's own, so a deletion is counted only for a reader who
+        # could have seen the element live.
+        steps = ['has("reverted",true)' if deleted else 'has("reverted",false)']
         if not include_superseded:
             steps.append('hasNot("superseded_by")')
         dataset_step = self.gremlin_dataset_step(datasets)
@@ -85,7 +94,9 @@ class AccessFilter:
             steps.append(dataset_step)
         return ".".join(steps)
 
-    def gremlin_has_step(self, principal: Principal, *, include_superseded: bool = False) -> str:
+    def gremlin_has_step(
+        self, principal: Principal, *, include_superseded: bool = False, deleted: bool = False
+    ) -> str:
         """Both handling axes, plus two more that are not
         principal-dependent at all: a reverted element (`services/ingest/load_revert.py`,
         `01_DOMAIN_MODEL.md` §2.4) is invisible to every
@@ -104,7 +115,7 @@ class AccessFilter:
         because this principal both may receive that specific restricted
         code and belongs to the record's owning or originating unit."""
         structural_step = self.gremlin_structural_step(
-            include_superseded=include_superseded, datasets=principal.datasets
+            include_superseded=include_superseded, datasets=principal.datasets, deleted=deleted
         )
         classification_step = (
             f'has("handling_classification",'

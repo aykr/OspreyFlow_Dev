@@ -166,8 +166,8 @@ def test_the_never_visible_check_fails_with_every_deletion_counted(
 
 
 def _re_marked_then_deleted(world: _World) -> None:
-    """`near` is re-marked above every reader's clearance after the save, then deleted."""
-    world.graph._graph_nodes["near"] = _in("src", node("near", "TOP SECRET"))
+    """`near` is re-marked SECRET after the save, then deleted: above Bob, not above Alice or Rita."""
+    world.graph._graph_nodes["near"] = _in("src", node("near", "SECRET"))
     _delete(world, "near")
 
 
@@ -183,20 +183,37 @@ def _elsewhere_deleted(world: _World) -> None:
 
 
 HIDDEN_THEN_DELETED = {
-    "re_marked_above_everyone_then_deleted": _re_marked_then_deleted,
+    "re_marked_above_bob_then_deleted": _re_marked_then_deleted,
     "moved_to_a_dataset_the_case_does_not_read_then_deleted": _moved_then_deleted,
     "never_in_the_cases_datasets_then_deleted": _elsewhere_deleted,
 }
+#: Each change and the askers it leaves nothing to tell: the marking is above Bob alone; a dataset
+#: the case does not read is out of everyone's world.
+LEAVES_NOTHING_FOR = {
+    "re_marked_above_bob_then_deleted": ("bob",),
+    "moved_to_a_dataset_the_case_does_not_read_then_deleted": ASKERS,
+    "never_in_the_cases_datasets_then_deleted": ASKERS,
+}
+HIDDEN_PAIRS = [(c, who) for c in sorted(HIDDEN_THEN_DELETED) for who in LEAVES_NOTHING_FOR[c]]
 
 
-@pytest.mark.parametrize("who", ASKERS)
-@pytest.mark.parametrize("change", sorted(HIDDEN_THEN_DELETED))
+@pytest.mark.parametrize(("change", "who"), HIDDEN_PAIRS)
 def test_an_item_hidden_by_clearance_or_dataset_then_deleted_is_counted_nowhere(
     world: _World, change: str, who: str
 ) -> None:
     view_id = _saved(shared=True)
     HIDDEN_THEN_DELETED[change](world)
     assert _missing(who, view_id) == 0
+
+
+def test_an_item_re_marked_above_one_reader_is_still_counted_for_those_who_may_see_it(
+    world: _World,
+) -> None:
+    """The filter is the reader's own: `near` re-marked SECRET and deleted is nothing to Bob, and
+    one deletion to Alice and Rita, who can read SECRET."""
+    view_id = _saved(shared=True)
+    _re_marked_then_deleted(world)
+    assert [_missing(who, view_id) for who in ASKERS] == [1, 0, 1]
 
 
 def test_a_lowered_clearance_then_a_deletion_is_counted_nowhere(
@@ -211,8 +228,7 @@ def test_a_lowered_clearance_then_a_deletion_is_counted_nowhere(
     assert _missing("alice", view_id) == 0
 
 
-@pytest.mark.parametrize("who", ASKERS)
-@pytest.mark.parametrize("change", sorted(HIDDEN_THEN_DELETED))
+@pytest.mark.parametrize(("change", "who"), HIDDEN_PAIRS)
 def test_the_hidden_check_fails_with_the_record_read_without_the_access_step(
     world: _World, monkeypatch: pytest.MonkeyPatch, change: str, who: str
 ) -> None:
@@ -221,7 +237,7 @@ def test_the_hidden_check_fails_with_the_record_read_without_the_access_step(
     real = FakeGraphPort.count_deleted_visible
 
     async def wide(self: FakeGraphPort, node_ids: Any, principal: Principal) -> int:
-        everyone = principal.model_copy(update={"datasets": None, "clearance": "TOP SECRET"})
+        everyone = principal.model_copy(update={"datasets": None, "clearance": "SECRET"})
         return await real(self, node_ids, everyone)
 
     monkeypatch.setattr(FakeGraphPort, "count_deleted_visible", wide)

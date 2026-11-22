@@ -11763,7 +11763,7 @@ async def _delete_layer(
         audit, principal, "delete_layer", investigation_id, 0, dataset_id=dataset_id,
         layer_id=layer,
     )  # fmt: skip
-    return await promotions.delete_layer(investigation_id, layer)
+    return await promotions.delete_layer(investigation_id, layer, by=principal.id)
 
 
 @app.delete("/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer", dependencies=_LAYER_WRITES)

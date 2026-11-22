@@ -835,7 +835,7 @@ class Boards:
         tx = await self.graph.begin_transaction()
         try:
             await self.graph.withdraw_drawn(  # type: ignore[attr-defined]
-                nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx
+                nodes, links, f"{WITHDRAWAL_PREFIX}{item.item_id}", tx, by=principal.id
             )
         except Exception:
             await self.graph.rollback_transaction(tx)

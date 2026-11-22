@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal, Protocol, runtime_checkable
 
 from schemas.compute import LinkStructure
@@ -30,6 +31,7 @@ from schemas.domain import (
     PathRequest,
     PatternQuery,
     Principal,
+    PrincipalId,
     RoutesAtLength,
     SchemaReport,
     Subgraph,
@@ -238,6 +240,22 @@ class GraphPort(Protocol):
         `str` is a `TypeError`, as for `get_nodes`. For a caller that must tell a reader how many
         of a saved selection they may see (a case view's `chosen`, C045) and never how many they
         may not."""
+        ...
+
+    async def count_deleted_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
+        """SE9, ADR-144 Amendment 7: how many of the given ids are **deleted** (set `reverted` by a
+        revert or a withdrawal, and not superseded) **and would pass `principal`'s access step if
+        they were live**: their clearance, a restricted `handling_code`, the case's datasets.
+        Counted in the store, the access step in the query (rule 3), the one every other read
+        carries with its reverted test turned round, so an axis added to the step reaches this
+        count with no change here; only a number leaves the adapter. A missing id, a live one, a
+        superseded one (a correction, never a deletion) and a deleted one above the reader are each
+        not counted, identically: nothing in the number, or in the requests made, says which. A
+        node deleted and written again is live (the fresh create clears the flag) and is not
+        counted. The time and the person of a deletion are for the record: a deletion made before
+        the store kept them counts if the reader could see the element. Each id counts once however
+        often it is given. No ids give `0`. A bare `str` is a `TypeError`, as for `get_nodes`. For
+        a case view's `missing`, and for nothing that names or locates a deleted element."""
         ...
 
     async def existing_node_ids(self, node_ids: Sequence[NodeId]) -> set[NodeId]:
@@ -767,7 +785,13 @@ class GraphPort(Protocol):
         ...
 
     async def revert_elements(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], tx: TxId
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        tx: TxId,
+        *,
+        by: PrincipalId | None = None,
+        at: datetime | None = None,
     ) -> None:
         """Marks existing elements reverted (`AuditStub.reverted`,
         `01_DOMAIN_MODEL.md` §2.4) — `services/ingest/load_revert.py` is
@@ -785,11 +809,25 @@ class GraphPort(Protocol):
         Each id is resolved to its stored type through that type's unique `id` index, nodes among
         the vertex types and links among the edge types only, and set reverted by SQL on that
         type, in chunks. An id held by two types of one kind raises `AmbiguousElementId` before
-        anything is written. Setting the flag again changes nothing, so a rerun is safe."""
+        anything is written. Setting the flag again changes nothing, so a rerun is safe.
+
+        **The record of a deletion** (SE9, ADR-144 Amendment 7): the same statement that sets
+        `reverted` sets `reverted_at` (`at`, else the adapter's clock, UTC) and `reverted_by` (`by`,
+        the principal who acted, `None` where the caller names none), in the same transaction, so a
+        rolled-back revert records nothing. Nothing reads them: `count_deleted_visible` counts by
+        the flag, so a deletion made before they were kept counts all the same. A rerun sets them
+        again."""
         ...
 
     async def withdraw_elements(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], load_id: str, tx: TxId
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        load_id: str,
+        tx: TxId,
+        *,
+        by: PrincipalId | None = None,
+        at: datetime | None = None,
     ) -> None:
         """ADR-110 Amendment 6 point 3, as Amendment 15 leaves it: no refresh calls this since
         Amendment 15 (a full snapshot withdraws its dropped rows' events alone, never an element);
@@ -798,7 +836,8 @@ class GraphPort(Protocol):
         every reader with no read changed, and `audit.withdrawn_by_load` records the refresh.
         An element already reverted is left as it is (it is not this load's to
         restore). Unknown ids and none are a safe no-op; resolved as `revert_elements` resolves
-        them, refusing an ambiguous id."""
+        them, refusing an ambiguous id. Records `reverted_at` and `reverted_by` with the flag, as
+        `revert_elements` does."""
         ...
 
     async def restore_withdrawn(self, load_id: str, tx: TxId) -> RestoredElements:
@@ -806,7 +845,9 @@ class GraphPort(Protocol):
         `withdrawn_by_load` cleared. Nothing else is touched, never an element reverted for another
         reason (the revert of the load that made it clears `withdrawn_by_load`, so it is not found
         here), and never a link whose pair (type and ends) has a live link written since: each link
-        is written once, so that one stays withdrawn. Running it again restores nothing."""
+        is written once, so that one stays withdrawn. Running it again restores nothing. The
+        restored element is live again, so `reverted_at` and `reverted_by` are cleared with the flag
+        (a deletion taken back is not one)."""
         ...
 
     async def promote_elements(
@@ -833,12 +874,19 @@ class GraphPort(Protocol):
         ...
 
     async def withdraw_layer(
-        self, dataset_id: str, withdrawal: str, tx: TxId
+        self,
+        dataset_id: str,
+        withdrawal: str,
+        tx: TxId,
+        *,
+        by: PrincipalId | None = None,
+        at: datetime | None = None,
     ) -> PromotionReverted:
         """A removed case's layer deleted (ADR-143 Amendment 2 decision 1): every live element
         whose `datasets` is exactly `[dataset_id]` is set reverted (`withdrawn_by_load =
         withdrawal`), never deleted, so the audit keeps it. An element holding another dataset too
-        (one promoted from the layer) is never touched."""
+        (one promoted from the layer) is never touched. Records `reverted_at` and `reverted_by` with
+        the flag, as `revert_elements` does."""
         ...
 
     async def live_edges_touching(

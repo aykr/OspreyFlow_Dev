@@ -13,12 +13,13 @@ exists.
 
 **Live.** A view of chosen nodes reads them from the graph by id (`GraphPort.get_nodes`, filtered in
 the adapter) and the links among those it may show (`edges_among`); `chosen` on every answer is the
-count this reader may see now (`visible_chosen`), and `missing` is 0 for everyone, the creator too
-(C045): the chosen ids less the nodes shown counts every node above the reader as well as the ones
-that are gone, and an existence lookup is an oracle, so a view reports what is visible and not what
-is gone until the store records deletions (`missing_for`). A filtered view narrows the reader's own
-projection of the case's working set, as ADR-124's filter did. A result past the working set's cap
-is the typed `limit_exceeded` (rule 2).
+count this reader may see now (`visible_chosen`), and `missing` is how many of the chosen nodes have
+been deleted since and would pass this reader's own access step if live (SE9, ADR-144 Amendment 7;
+`missing_for`, counted in the store by `GraphPort.count_deleted_visible`): the chosen ids less the
+nodes shown would count every node above the reader as well as the ones that are gone (C045), and an
+existence lookup is an oracle, so the number is the store's, under the reader's own access step. A
+filtered view narrows the reader's own projection of the case's working set, as ADR-124's filter
+did. A result past the working set's cap is the typed `limit_exceeded` (rule 2).
 
 **Collapsed at the view's own threshold** (ADR-144 decision 1 and Amendment 2; spec 03 §3.1, case
 views): each node shown carries the cluster it falls in at the view's `threshold`, or at the case's
@@ -44,6 +45,7 @@ from ports.graph import GraphPort
 from schemas.case_views import CaseView, CaseViewInput, CaseViewOpened, NodePosition, ViewFilter
 from schemas.domain import NOT_SAME_AS, SAME_AS, Edge, Interval, Node, NodeId, Principal
 
+from .case_view_deletions import deleted_and_visible
 from .working_set.models import LimitExceededError
 
 
@@ -594,27 +596,17 @@ async def _collapsed(
     ]
 
 
-def missing_for(view: StoredCaseView, reader: str, shown: Sequence[Node]) -> int:
-    """`CaseViewOpened.missing` (ADR-144 decision 2): **0 for every principal, the creator too**,
-    until the store records deletions.
-
-    The boards' rule (`boards.py`, the orchestrator's ruling on L3.3) is that `missing` counts only
-    what was *lost after placement*, and that anything hidden by a marking is counted nowhere. A
-    board can keep it because each item's record carries a `withdrawn_at`. A view has no such
-    record: the store keeps no time and no placing for a removed graph node (only an untimed
-    `reverted` flag, which is the same for a node the reader may not read), so the number can only
-    be got two ways, and each breaks rule 3. The chosen ids less the nodes shown counts every node
-    the reader cannot read now (re-marked above them, in a dataset the case does not read, their
-    own clearance lowered) with the ones that are gone; told even to the creator, it says how many
-    of the view's nodes are above them. An existence lookup (`existing_node_ids`, which no route
-    may call) is an oracle: a count that differs for an id that does not exist and for one that
-    exists and is hidden lets anyone who can save a view probe the store for hidden nodes. So the
-    answer is nothing, to everyone: a view reports what is visible (`chosen`, and the nodes) and
-    does not report what is gone. The wire keeps the field (the Glass reads it as a number and
-    shows nothing for 0); the arguments stay so a recorded deletion can be counted here without
-    touching a caller."""
-    del view, reader, shown
-    return 0
+async def missing_for(graph: GraphPort, view: StoredCaseView, principal: Principal) -> int:
+    """`CaseViewOpened.missing` (ADR-144 Amendment 7): the view's chosen nodes that have been
+    deleted and that `principal`'s own access step would pass if they were live, counted by the
+    graph port in the store (rule 3), so a node above the reader, outside the case's datasets or
+    never held is in no number, and a missing id and a hidden deleted one answer alike. The boards'
+    rule (`boards.py`) is the same: only what was lost, and anything hidden by a marking is counted
+    nowhere. Not the chosen ids less the nodes shown, which counts every hidden node too, and not an
+    existence lookup (`existing_node_ids`, which no route may call), which is an oracle. Counted for
+    the reader asking, over the creator's choice, never put on the wire with the stored selection or
+    its length. `case_view_deletions` holds the one call."""
+    return await deleted_and_visible(graph, view.creators_choice(), principal)
 
 
 async def open_view(
@@ -632,7 +624,7 @@ async def open_view(
         # and never counted, as on the board they came from (rule 7).
         added = set(view.merged_added)
         chosen: int | None = sum(1 for n in nodes if n.id not in added)
-        missing = missing_for(view, principal.id, nodes)
+        missing = await missing_for(graph, view, principal)
     else:
         assert view.filter is not None  # one lens, exactly (`CaseViewInput`)
         nodes, edges = await working_set.filtered_view(view.case_id, principal, view.filter)
