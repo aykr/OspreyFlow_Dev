@@ -40,9 +40,11 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    SerializerFunctionWrapHandler,
     ValidationError,
     ValidationInfo,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -1737,7 +1739,8 @@ class PagesConfig(BaseModel):
     default, and turned on for one deployment at a time, by the owner, in that deployment's own
     `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
     the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
-    theirs, and until they do a render is exactly what it was."""
+    theirs. A render is exactly what it was while the setting is absent because `OspreyConfig`
+    leaves this section out of its dump unless the file wrote it (Amendment 3 point 2)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -2135,6 +2138,20 @@ class OspreyConfig(BaseModel):
     grading: GradingConfig = Field(default_factory=GradingConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
     resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
+
+    @model_serializer(mode="wrap")
+    def _leave_out_pages_unless_the_file_wrote_it(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        """ADR-152 Amendment 3 point 2: off or absent renders byte for byte what it did. The
+        renderers write `osprey.yaml` from `model_dump(exclude_none=True)`, which keeps a
+        `False`, so a `pages` section the operator never wrote would appear in every rendered
+        file. It is dumped only when the file named it (as `AppearanceConfig.told()` does for
+        `banner_text`); `config.pages.enabled` still reads `False` when it is absent."""
+        dumped = handler(self)
+        if "pages" not in self.model_fields_set:
+            dumped.pop("pages", None)
+        return dumped
 
     @model_validator(mode="after")
     def _external_services_belong_to_a_cloud(self) -> OspreyConfig:

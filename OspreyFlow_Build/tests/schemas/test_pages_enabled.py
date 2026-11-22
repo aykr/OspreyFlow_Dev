@@ -22,9 +22,11 @@ Which test fails if the invariant is broken (rule 12):
   deployment loader: that file is the owner's)
 * an unknown sibling taken in -> `test_an_unknown_sibling_still_fails`
 * the setting read by anything yet -> `test_nothing_reads_the_setting_yet`
-* a render that gains a `pages` block while the file omits the setting (Amendment 3 point 2, off
-  or absent means byte for byte unchanged) -> `test_an_absent_setting_is_not_in_the_dump_the_renderers_write`,
-  `test_the_renderers_own_dump_calls_carry_no_pages_block`, shown red by `test_a_dump_that_adds_pages_is_caught`
+* a render that gains a `pages` block while the file omits the setting (Amendment 3 point 2: off
+  or absent means byte for byte unchanged)
+  -> `test_an_absent_setting_is_not_in_the_dump_the_renderers_write` and
+  `test_the_renderers_own_dump_calls_carry_no_pages_block`, shown red by
+  `test_a_dump_that_adds_pages_is_caught`
 """
 
 from __future__ import annotations
@@ -192,7 +194,7 @@ def _adds_pages(dump: dict[str, Any]) -> bool:
     [
         {},
         {"profile": "local-lite"},
-        {"profile": "small", "network": {"hostname": "example.test"}},
+        {"profile": "small", "network": {"public_origin": "https://osprey.example.org"}},
         {"appearance": {"brand": "govuk"}},
     ],
 )

@@ -1088,7 +1088,8 @@ export interface AppearanceConfig {
  * default, and turned on for one deployment at a time, by the owner, in that deployment's own
  * `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
  * the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
- * theirs, and until they do a render is exactly what it was.
+ * theirs. A render is exactly what it was while the setting is absent because `OspreyConfig`
+ * leaves this section out of its dump unless the file wrote it (Amendment 3 point 2).
  */
 export interface PagesConfig {
   enabled?: Enabled;
