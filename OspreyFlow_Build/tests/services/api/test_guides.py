@@ -308,11 +308,11 @@ def test_the_conduit_image_carries_the_three_guides_and_their_manifest() -> None
 
 
 def test_the_glass_links_each_guide_under_the_place_the_conduit_serves_it_for() -> None:
-    """`apps/workspace/src/home/guides.ts`'s `GUIDE_FOR_PLACE` puts each guide under the card of the
+    """`packages/glass-shared/src/home/guides.ts`'s `GUIDE_FOR_PLACE` puts each guide under the card of the
     place `guides.py` checks it against, so no link sits under a card whose holder is refused."""
     import re
 
-    source = (REPO_ROOT / "apps/workspace/src/home/guides.ts").read_text(encoding="utf-8")
+    source = (REPO_ROOT / "packages/glass-shared/src/home/guides.ts").read_text(encoding="utf-8")
     table = source[
         source.index("GUIDE_FOR_PLACE") : source.index("};", source.index("GUIDE_FOR_PLACE"))
     ]

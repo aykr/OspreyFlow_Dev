@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { HomePage } from "../src/home/HomePage";
-import type { HomeSummary } from "../src/home/homeData";
+import type { HomeSummary } from "@ospreyflow/glass-shared";
 import { RolesHelpPage } from "../src/help/RolesHelpPage";
 import { ALERT_MONITORING, AlertMonitoringBoard } from "../src/reports/AlertMonitoringBoard";
 import { journeyWords } from "../src/reports/journey";

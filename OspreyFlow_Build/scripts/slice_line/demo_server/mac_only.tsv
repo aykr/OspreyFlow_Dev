@@ -1,0 +1,4 @@
+# Tests whose snapshots exist only for another platform (the owner's ruling 3): reported "not run on this
+# machine" on Linux, never red. Re-derived by lists.derive_mac_only; neither make ci nor make test runs these today.
+name	snapshots	evidence
+OspreyFlow_Core/apps/workspace/map-verify/contrast.spec.ts	3	map-contrast-dark-darwin.png; map-contrast-govuk-darwin.png; map-contrast-light-darwin.png

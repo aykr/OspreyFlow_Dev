@@ -13,7 +13,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ScheduleRunView, SourceTable, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
-import BY_ROLE from "../../shell/placesByRole.json";
+import { PLACES_BY_ROLE as BY_ROLE } from "@ospreyflow/glass-shared";
 import { ChecksScreen } from "../checks/ChecksScreen";
 import { PipelineStudio } from "../dag/PipelineStudio";
 import { IngestStudio } from "../IngestStudio";

@@ -34,7 +34,7 @@ import type {
   SignInKind,
   GuestSignIn,
   SystemStatus,
-} from "../../../../packages/schemas/generated";
+} from "../../../schemas/generated";
 
 export interface AdminApi {
   apiBaseUrl: string;

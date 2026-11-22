@@ -11,8 +11,13 @@ import type {
   UpdateNotice,
 } from "../../../../../packages/schemas/generated";
 import { Button, Select } from "../../design/primitives";
-import { datasetOwnerSetting, setDatasetOwnerSetting, systemStatus, type AdminApi } from "../api";
-import { updateWords } from "@ospreyflow/glass-shared";
+import {
+  type AdminApi,
+  datasetOwnerSetting,
+  setDatasetOwnerSetting,
+  systemStatus,
+  updateWords,
+} from "@ospreyflow/glass-shared";
 
 export function System({ api }: { api: AdminApi }) {
   const [status, setStatus] = useState<SystemStatus | null>(null);

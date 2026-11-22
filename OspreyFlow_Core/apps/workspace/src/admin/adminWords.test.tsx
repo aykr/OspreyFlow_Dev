@@ -8,7 +8,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RIGHT_WORDS } from "../help/roles";
+import { RIGHT_WORDS } from "@ospreyflow/glass-shared";
 
 const EVERY_RIGHT_OF_ALL = Object.keys(RIGHT_WORDS);
 import { AnswersForSection } from "../home/AnswersForSection";

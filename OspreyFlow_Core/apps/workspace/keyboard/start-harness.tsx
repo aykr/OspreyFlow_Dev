@@ -9,7 +9,7 @@ import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "./brandHarness";
 import { BrandFrame } from "../src/brand/BrandFrame";
 import { TopBar } from "../src/shell/TopBar";
-import type { HomeSummary } from "../src/home/homeData";
+import type { HomeSummary } from "@ospreyflow/glass-shared";
 import { startScreen, type StartChoice } from "../src/shell/startScreen";
 
 declare global {

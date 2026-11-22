@@ -19,8 +19,7 @@ import { CaseSwitcher } from "../src/investigation/CaseSwitcher";
 import { GlobalSearch } from "../src/search/GlobalSearch";
 import { GlassCanvas } from "../src/canvas/GlassCanvas";
 import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "@ospreyflow/glass-shared";
-import { guideUrl } from "../src/home/guides";
+import { createWorkingSet, guideUrl } from "@ospreyflow/glass-shared";
 import { offeredViews, ON_THE_RAIL, RAIL_LABELS, railMark, splitRail, splitViews, VIEW_LABELS } from "../src/shell/railLayout";
 import { startPlaces, type RailEntry } from "../src/rights/visibility";
 

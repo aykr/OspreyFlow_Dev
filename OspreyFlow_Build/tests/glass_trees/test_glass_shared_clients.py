@@ -12,11 +12,9 @@ Each calls `fetch` against the Conduit and takes the bearer token as an argument
 React, a drawing library or a store. The generated schemas are reached the way the package's own working-set store
 reaches them (a type import, by the shortest relative path, `../../../schemas/generated` from a folder below `src`).
 
-**Two files did not move, and the test says why.** `admin/api.ts` imports `../help/roles` for its words about a refusal, and
-`help/roles.ts` reads `shell/placesByRole.json`, a record that lives in the workspace: the Python tests
-(`test_place_routes.py`, `test_guide_role_words.py`) pin it at that path and generate it there, and the package may never
-import a workspace file. `test_the_admin_client_stays_while_its_words_need_the_workspace` fails if either file moves
-without the record, or if the package starts to import it.
+**Two files did not move then, and moved in PL4d3e.** `admin/api.ts` imports the roles' words for its refusals, and
+the roles' words read the record of the places each role opens, which lived in the workspace until the owner's ruling of
+21 November 2026 moved the three together (`test_glass_shared_admin_clients.py` is their proof).
 
 Every importer followed (the workspace, its tests, the Playwright harnesses and specs outside `src/`, the harness). The
 tests stayed in the workspace, and a test that replaced a client with a double now replaces the package's export of it.
@@ -99,10 +97,6 @@ WHOLE = (
 )
 OLD_OF = {rel: WORKSPACE_SRC + rel for rel in WHOLE}
 _OLD_STEMS = {old.removesuffix(".ts") for old in OLD_OF.values()}
-
-#: The two that stay, and the record that keeps them there.
-STAYS = ("admin/api.ts", "help/roles.ts")
-RECORD = "shell/placesByRole.json"
 
 #: The places that may name an old path because they are a record of the past: the decision log, and the build record
 #: under `process/`. They are not rewritten.
@@ -307,28 +301,6 @@ def test_the_six_clients_are_in_the_package_and_not_in_the_workspace() -> None:
         ), f"packages/glass-shared/src/index.ts does not export {stem}"
 
 
-def test_the_admin_client_stays_while_its_words_need_the_workspace() -> None:
-    """`admin/api.ts` takes its words from `help/roles.ts`, which reads a record the workspace holds. Either both of those
-    and the record move together (a decision of the owner's, with the Python tests that pin the record's path) or neither
-    does; and the package never imports a workspace file."""
-    names = earlier.tracked()
-    for rel in STAYS:
-        assert WORKSPACE_SRC + rel in names, f"{WORKSPACE_SRC}{rel} left the workspace"
-        assert SHARED + rel not in names, (
-            f"{SHARED}{rel} is in the package, which cannot reach the record"
-        )
-    roles = (ROOT / (WORKSPACE_SRC + "help/roles.ts")).read_text(encoding="utf-8")
-    assert f'"../{RECORD}"' in roles, (
-        "help/roles.ts no longer reads the record: this exception's reason is gone"
-    )
-    assert WORKSPACE_SRC + RECORD in names, "the record is not where the Python tests pin it"
-    assert SHARED + RECORD not in names
-    admin = (ROOT / (WORKSPACE_SRC + "admin/api.ts")).read_text(encoding="utf-8")
-    assert '"../help/roles"' in admin, (
-        "admin/api.ts no longer imports the roles' words: this exception's reason is gone"
-    )
-
-
 def test_the_package_s_clients_import_no_react_and_no_workspace_path() -> None:
     sources = _package_sources()
     assert len(sources) >= 20, (
@@ -380,8 +352,8 @@ def test_a_workspace_import_in_a_moved_client_is_found(tmp_path: Path) -> None:
     target.write_text(real, encoding="utf-8")
     assert package_import_problems(tmp_path, SHARED + rel) == []
     plants = {
-        "the roles' words": 'import { rightName, rolesHolding } from "../../help/roles";\n',
-        "the record": 'import BY_ROLE from "../../../../../apps/workspace/src/shell/placesByRole.json";\n',
+        "the roles' help page": 'import { RolesHelpPage } from "../../../../../apps/workspace/src/help/RolesHelpPage";\n',
+        "a record the workspace holds": 'import BY_ROLE from "../../../../../apps/workspace/src/shell/places.json";\n',
         "a workspace module by a long path": 'import { applyTheme } from "../../../../../apps/workspace/src/theme/ThemeToggle";\n',
         "the schemas, one level too far": 'import type { MapsAdminView } from "../../../../../schemas/generated";\n',
         "the schemas, the long way": 'import type { MapsAdminView } from "../../../../packages/schemas/generated";\n',
