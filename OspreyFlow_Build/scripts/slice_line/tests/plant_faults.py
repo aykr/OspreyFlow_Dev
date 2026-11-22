@@ -398,6 +398,15 @@ M = [
  ("common.py", '        if used < seen[key]:\n', '        if True:\n', "unapplied_line_shows_the_state"),
  ("board.py", '        if ln["slice"] == sid and (ln["action"] in ANSWERS[kind] or ln["action"] in ANY_STOP):', '        if ln["slice"] == sid:', "only_a_line_that_answers_the_stop"),
  ("board.py", '    elif st.get("phase") != "stopped":\n        return None\n', '', "slice_not_stopped_never_shows_it"),
+ # LINE_FIXES_5_BRIEF.md, 8: found on 21 November
+ ("merge_slice.py", '            if fr["slice"] in refreezes and c.SLICES_REL not in rels:\n                continue', '            if False:\n                continue', "brief_while_a_covered_refreeze_waits"),
+ ("merge_slice.py", '            if fr["slice"] in refreezes:\n                raise Refused', '            if False:\n                raise Refused', "brief_while_a_covered_refreeze_waits"),
+ ("resume.py", '            _old, new = changed_row(slice_id, c.FROZEN_KEYS, briefs_aside=True)', '            _old, new = changed_row(slice_id, c.FROZEN_KEYS)', "leaves_other_uncommitted_briefs"),
+ ("resume.py", '            if waiting:  # 8.2:', '            if False:  # 8.2:', "clear_stop_waits_for_a_waiting_refreeze"),
+ ("resume.py", '            if phase == "refused":  # 8.4:', '            if False:  # 8.4:', "refused_by_the_gate_names_send_back"),
+ ("guard.py", '            continue  # a quoted message', '            pass  # a quoted message', "conductors_records_writes_are_allowed"),
+ ("guard.py", '        seg = VARIABLE.sub(lambda v: known.get(v.group(1), v.group(0)), seg)\n', '', "same_shapes_writing_elsewhere"),
+ ("guard.py", '            if left:\n', '            if False:\n', "same_shapes_writing_elsewhere"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

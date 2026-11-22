@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (466 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (367 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (485 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (375 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -252,6 +252,7 @@ says that cost is a list-price estimate, not a bill.
 - **The rulings copy in the worktree's git folder** (5): `git rev-parse --git-path slice-line/RULINGS.md`, no entry of the tree, so `test_layout` passes in a builder's worktree; a copy left at `Claude outputs/slice-line/` is removed when the new one is written.
 - **Two seats of one account at once** (6): `common.write_json` writes through a temporary name of its own; the account's windows are read and written under `locks/account-<account>.lock`, usage.tsv under `locks/usage.lock`; the StopFailure hook writes the stop file whole. A second seat waits, never fails.
 - **The owner's line is in** (7): a stopped or refused slice with an unapplied resume.tsv line that answers its stop shows "the owner's line is in: <action> (<date>), waiting to be applied" (the board's row, the entry's note and `owner_line`); it goes when the line is used.
+- **Found on 21 November** (8): `records` ignores a slices.tsv change an unapplied refreeze line covers (and leaves slices.tsv to the refreeze), and the refreeze leaves other uncommitted briefs under slices/ alone; `clear-stop` is refused while a refreeze line waits; `add-round` on a slice refused by the gate names `send-back`; the guard reads a chain's line-script runs and simple variables apart (and refuses a write into a variable it cannot resolve).
 
 ## Files outside the repository
 

@@ -1109,8 +1109,10 @@ def records(message: str, paths: list[str]) -> str:
 def _records(message: str, paths: list[str], push: bool = True) -> str:
     if not paths:
         raise Refused("name the record files to commit.")
+    rels = []
     for p in paths:
         rel = os.path.relpath(os.path.abspath(p), c.REPO) if os.path.isabs(p) else p
+        rels.append(os.path.normpath(rel))
         if not rel.startswith(c.V062_REL + "/") or ".." in rel:
             raise Refused(f"records mode commits only {c.V062_REL}/: not {rel}.")
         if rel in OWNER_FILES:
@@ -1118,10 +1120,16 @@ def _records(message: str, paths: list[str], push: bool = True) -> str:
     main_ready(records=True)
     working = c.load_slices(None) if (c.REPO / c.SLICES_REL).exists() else []
     rows = {r["id"]: r for r in working}
+    refreezes = {ln["slice"] for ln in c.unapplied_lines() if ln["action"] == "refreeze"}
     for d in c.RECORDS.glob("*/frozen.json") if c.RECORDS.exists() else []:
         fr = c.read_json(d) or {}
         if fr.get("slice") in rows and not c.frozen_matches(fr, rows[fr["slice"]]) and \
                 not (c.read_json(d.parent / "merged.json")):
+            if fr["slice"] in refreezes and c.SLICES_REL not in rels:
+                continue  # 8.1: the owner's refreeze line covers it, and resume.py refreeze commits slices.tsv itself
+            if fr["slice"] in refreezes:
+                raise Refused(f"slices.tsv waits for the owner's refreeze of {fr['slice']} (resume.tsv), which commits it: "
+                              "leave it out of this records commit, then run resume.py " + fr["slice"] + " refreeze.")
             raise Refused(f"slices.tsv changes the frozen acceptance or checks of started slice {fr['slice']}: "
                           "that needs the owner's word (refreeze.py).")
     c.git(["add", "--", *paths], c.REPO)

@@ -194,14 +194,16 @@ def back_to_building(slice_id: str, wt: Path, **kw) -> list[str]:
 # ------------------------------------------------------------------ slices.tsv: one row's frozen columns
 
 
-def changed_row(slice_id: str, allowed: tuple[str, ...]) -> tuple[dict, dict]:
+def changed_row(slice_id: str, allowed: tuple[str, ...], briefs_aside: bool = False) -> tuple[dict, dict]:
     """The slice's row on main and in the working copy, when the working copy differs from main in that row only, and
-    there only in `allowed` columns; refused otherwise."""
+    there only in `allowed` columns; refused otherwise. `briefs_aside` (refreeze, 8.1): other uncommitted files under
+    the slices folder (the conductor's briefs) stay as they are, uncommitted; only slices.tsv is committed."""
     branch = c.git(["rev-parse", "--abbrev-ref", "HEAD"], c.REPO)
     if branch != "main":
         raise Refused(f"the main checkout is not on main ({branch}).")
     dirty = [ln[3:] for ln in c.git(["status", "--porcelain", "--untracked-files=no"], c.REPO).splitlines()
-             if not ln[3:].startswith(ms.OWNERS_LOCAL)]
+             if not ln[3:].startswith(ms.OWNERS_LOCAL)
+             and not (briefs_aside and ln[3:].startswith(f"{c.V062_REL}/slices/") and ln[:2].strip() == "M")]
     if dirty != [c.SLICES_REL]:
         raise Refused(f"the main checkout must differ from main in {c.SLICES_REL} alone (and the owner's own files): "
                       + (", ".join(dirty[:5]) or "nothing changed"))
@@ -786,7 +788,7 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             return self_clear(slice_id, frozen, st, rec, wt)
 
         if action == "refreeze":
-            _old, new = changed_row(slice_id, c.FROZEN_KEYS)
+            _old, new = changed_row(slice_id, c.FROZEN_KEYS, briefs_aside=True)
             if all((frozen.get(k) or "") == new[k] for k in c.FROZEN_KEYS):
                 raise Refused(f"{slice_id}'s row in the working copy is what is already frozen.")
             tag = authority(slice_id, action)
@@ -798,6 +800,10 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             return [f"{slice_id}: refrozen from main ({sha[:10]}); its phase is unchanged ({phase})."]
 
         if action == "add-round":
+            if phase == "refused":  # 8.4: the owner's add-round line is send-back's authority past the limit
+                raise Refused(f"{slice_id} was refused by the merge gate (phase refused, round {rnd} of {limit}): the "
+                              f"action is resume.py {slice_id} send-back, which uses this add-round line past the rounds "
+                              "limit (and needs none within it). The line is not used. Nothing changed.")
             if phase != "stopped" or (rec / "red_stop.json").exists() or rnd < limit:
                 raise Refused(f"{slice_id} is not stopped at its rounds limit (phase {phase}, round {rnd} of {limit}).")
             tag = authority(slice_id, action)
@@ -808,6 +814,11 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
         if action == "clear-stop":
             if phase != "stopped" or not (rec / "red_stop.json").exists():
                 raise Refused(f"{slice_id} is not stopped on red checks (phase {phase}, no red_stop.json).")
+            waiting = unapplied(slice_id, "refreeze")
+            if waiting:  # 8.2: building on the old checks would only meet the same stop again
+                raise Refused(f"the owner's refreeze line for {slice_id} is waiting ({'; '.join(waiting)}): apply it first "
+                              f"(resume.py {slice_id} refreeze), then clear-stop, so the builder starts on the new checks. "
+                              "Nothing changed.")
             tag = authority(slice_id, action)
             red = c.read_json(rec / "red_stop.json") or {}
             (rec / "red_stop.json").unlink()
