@@ -26,18 +26,24 @@ chart-check` and `make cp-policy-check` template the chart). So each Helm shape 
 for byte and in the manifest with their SHA-256: what `helm template` renders from, so a template
 that changes (a workload, an Ingress path, a NetworkPolicy) is a changed file, named. **Stored as
 the chart is with `pages.enabled` off** (`tools.reference_render.chart_off_view`, which reads one
-guard and is not a Helm renderer): a block of a template opened by `{{- if .Values.pages.enabled }}`
-on a line of its own and closed by `{{- end }}` on one of its own, with no `else`, is not in the
-stored file (and only where Go's trim markers leave the text around it alone: a dash before `if`,
-a line of content with nothing trailing before the guard, and an end that does not trim what
-follows it; `{{- end -}}`, `{{ if`, a blank line before the guard are shown as a change); a template that is nothing but such a block is not a file; a top-level `pages:` section
-of the chart's default `values.yaml` that says `enabled: false` is not there. So the chart PL7a2b
-changes to add the page service, behind that guard, is the reference unchanged; the same block
-unguarded, guarded by anything else (`if .Values.pages` is true of a mapping that says `enabled:
-false`), under an `else`, or switched on by default, is red (each case is below). That is the
-guard's name from the owner's ruling of 21 November 2026 (answer 6: `pages.enabled`); if PL7a2b
-names it otherwise, the guard it uses is a deliberate change to `chart_off_view`, in a diff he
-reads. **What this cannot see** without `helm`: a template that renders a page service while off
+guard and is not a Helm renderer): a block of a template opened by the exact line
+`{{- if .Values.pages.enabled }}` and closed by the exact line `{{- end }}`, each on a line of its
+own, with no `else` and no second `pages.enabled` guard inside, is not in the stored file; a
+template that is nothing but such a block is not a file; a top-level `pages:` section of the
+chart's default `values.yaml` that says `enabled: false` is not there. **That is the one form the
+view reads, and any other line that mentions `pages.enabled` fails closed**: the view is not built,
+`UnsupportedGuard` names the file and the line, the invariant case fails, and `--write` refuses
+(it writes nothing). Among them: a guard with a trailing `-}}`, with no leading dash, indented, or
+inline; a close that is `{{ end }}`, `{{end}}` or `{{- end -}}` (Helm's trim markers apply whether
+or not the `if` is taken, so the off render is not the text without the block); an `else`; a
+nested guard; a block never closed; an inline action inside the block, whose count cannot be told.
+The view does not model Helm's whitespace beyond that: write the guard after a line of content.
+So the chart PL7a2b changes to add the page service, behind that guard, is the reference unchanged;
+the same block unguarded, guarded by anything that does not name `pages.enabled` (`if
+.Values.pages` is true of a mapping that says `enabled: false`), or switched on by default, is red
+(each case is below). That is the guard's name from the owner's ruling of 21 November 2026 (answer
+6: `pages.enabled`); if PL7a2b names it otherwise, the guard it uses is a deliberate change to
+`chart_off_view`, in a diff he reads. **What this cannot see** without `helm`: a template that renders a page service while off
 by a guard it does not read (a `lookup`, an `include` of a helper), or a workload the renderer
 writes into the values (that one is in the stored values, and is red).
 
@@ -764,43 +770,6 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
             lambda t: t + GUARD + "{{- end }}\n" + A_PAGES_WORKLOAD,
             "the rendered text goes on",
         ),
-        # Guard and end on one line: not a block this reads, so it stays in view.
-        (
-            "templates/workloads.yaml",
-            lambda t: t + "{{- if .Values.pages.enabled }}x{{- end }}\n",
-            "pages.enabled",
-        ),
-        # An `else`: what is in it renders while the setting is off, so the block is not removed.
-        (
-            "templates/workloads.yaml",
-            lambda t: t + GUARD + A_PAGES_WORKLOAD + "{{- else }}\n  y: 2\n{{- end }}\n",
-            "{{- if .Values.pages.enabled }}",
-        ),
-        # A guard that is never closed: nothing is removed.
-        (
-            "templates/workloads.yaml",
-            lambda t: t + GUARD + A_PAGES_WORKLOAD,
-            "{{- if .Values.pages",
-        ),
-        # A guard closed by `{{- end -}}`: the trim after the action joins the line after the block
-        # to the line before the guard, so the render changes while the setting is off. The block
-        # is inserted before an existing line, so the view without it would equal the reference.
-        (
-            "templates/workloads.yaml",
-            lambda t: _insert_before(
-                t, "  maxUnavailable:", GUARD + A_PAGES_WORKLOAD + END_TRIMMED
-            ),
-            "{{- if .Values.pages.enabled }}",
-        ),
-        # A guard with no dash before `if`: off, the guard's own indentation and its line break are
-        # left in the render, an extra line.
-        (
-            "templates/workloads.yaml",
-            lambda t: _insert_before(
-                t, "  maxUnavailable:", DASHLESS_GUARD + A_PAGES_WORKLOAD + "{{- end }}\n"
-            ),
-            "{{ if .Values.pages.enabled }}",
-        ),
         # Switched on in the chart's own defaults: a page service rendered by default.
         ("values.yaml", lambda t: t + "pages:\n  enabled: true\n", "'pages:'"),
         # On, with a sub-toggle that is off (the shape PL7a2b is likely to write): the section's
@@ -821,11 +790,6 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
     ids=[
         "a section guard",
         "the body after the end",
-        "one line",
-        "an else",
-        "never closed",
-        "a guard closed by a trimming end",
-        "a guard with no dash",
         "on by default",
         "on by default with a sub-toggle off",
         "on by default, sub-toggle first",
@@ -848,6 +812,161 @@ def test_a_pages_change_that_renders_while_off_is_red(
         message
     )
     assert line_has in message, f"red for another reason:\n{message}"
+
+
+def _line_of(edited: str, real: str, text: str, skip: int = 0) -> int:
+    """The 1-based line in `edited`, from the first line that differs from `real`, equal to
+    `text` (the `skip`th such line after the first)."""
+    mine, theirs = edited.splitlines(), real.splitlines()
+    first = next(
+        (i for i, (x, y) in enumerate(zip(mine, theirs, strict=False)) if x != y),
+        min(len(mine), len(theirs)),
+    )
+    hits = [i for i in range(first, len(mine)) if mine[i] == text]
+    return hits[skip] + 1
+
+
+#: Each form the view does not read, in the text a template would carry (inserted before an
+#: existing line of `templates/workloads.yaml`, as a block of the chart would be), the line it must
+#: be refused at, and which of the lines equal to it that is.
+UNSUPPORTED_GUARDS = {
+    "a trimming end": (
+        lambda t: _insert_before(t, "  maxUnavailable:", GUARD + A_PAGES_WORKLOAD + END_TRIMMED),
+        "{{- end -}}",
+        0,
+    ),
+    "a trimming end where the block ends the file": (
+        lambda t: t + GUARD + A_PAGES_WORKLOAD + END_TRIMMED,
+        "{{- end -}}",
+        0,
+    ),
+    "a guard with no leading dash": (
+        lambda t: _insert_before(
+            t, "  maxUnavailable:", DASHLESS_GUARD + A_PAGES_WORKLOAD + "{{- end }}\n"
+        ),
+        "{{ if .Values.pages.enabled }}",
+        0,
+    ),
+    "a guard with a trailing trim": (
+        lambda t: _insert_before(
+            t,
+            "  maxUnavailable:",
+            "{{- if .Values.pages.enabled -}}\n" + A_PAGES_WORKLOAD + "{{- end }}\n",
+        ),
+        "{{- if .Values.pages.enabled -}}",
+        0,
+    ),
+    "an indented guard": (
+        lambda t: _insert_before(
+            t,
+            "  maxUnavailable:",
+            "  {{- if .Values.pages.enabled }}\n" + A_PAGES_WORKLOAD + "{{- end }}\n",
+        ),
+        "  {{- if .Values.pages.enabled }}",
+        0,
+    ),
+    "a guard closed by an end with no dash": (
+        lambda t: _insert_before(t, "  maxUnavailable:", GUARD + A_PAGES_WORKLOAD + "{{ end }}\n"),
+        "{{ end }}",
+        0,
+    ),
+    "a guard closed by a compact end": (
+        lambda t: _insert_before(t, "  maxUnavailable:", GUARD + A_PAGES_WORKLOAD + "{{end}}\n"),
+        "{{end}}",
+        0,
+    ),
+    "an else": (
+        lambda t: _insert_before(
+            t,
+            "  maxUnavailable:",
+            GUARD + A_PAGES_WORKLOAD + "{{- else }}\n  y: 2\n{{- end }}\n",
+        ),
+        "{{- else }}",
+        0,
+    ),
+    "a nested guard": (
+        lambda t: _insert_before(
+            t,
+            "  maxUnavailable:",
+            GUARD + GUARD + A_PAGES_WORKLOAD + "{{- end }}\n{{- end }}\n",
+        ),
+        "{{- if .Values.pages.enabled }}",
+        1,
+    ),
+    "an inline guard": (
+        lambda t: t + "{{- if .Values.pages.enabled }}x{{- end }}\n",
+        "{{- if .Values.pages.enabled }}x{{- end }}",
+        0,
+    ),
+    "an inline guard in a value": (
+        lambda t: _insert_before(
+            t, "  maxUnavailable:", "  replicas: {{ if .Values.pages.enabled }}2{{ end }}\n"
+        ),
+        "  replicas: {{ if .Values.pages.enabled }}2{{ end }}",
+        0,
+    ),
+    "the setting read as a value": (
+        lambda t: _insert_before(t, "  maxUnavailable:", "  pages: {{ .Values.pages.enabled }}\n"),
+        "  pages: {{ .Values.pages.enabled }}",
+        0,
+    ),
+    "a guard that is never closed": (
+        lambda t: t + GUARD + A_PAGES_WORKLOAD,
+        "{{- if .Values.pages.enabled }}",
+        0,
+    ),
+    "an inline action inside the block": (
+        lambda t: _insert_before(
+            t,
+            "  maxUnavailable:",
+            GUARD + "{{- if .Values.global }}x: 1{{- end }}\n" + A_PAGES_WORKLOAD + "{{- end }}\n",
+        ),
+        "{{- if .Values.global }}x: 1{{- end }}",
+        0,
+    ),
+}
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", HELM)
+@pytest.mark.parametrize("case", sorted(UNSUPPORTED_GUARDS))
+def test_a_guard_form_the_view_does_not_read_fails_the_invariant_case(
+    shape: str, brand: str, case: str, tmp_path: Path
+) -> None:
+    """Fail closed: a line that mentions `pages.enabled` in any form but the one accepted builds no
+    view. The render the invariant case makes (`render_files` of the shape, no pages setting) raises
+    `UnsupportedGuard`, naming the stored file and the line, in each of the forms a template would
+    take (rule 15). It is not left in the view as text: that was green once `--write` had stored
+    it, with the off render changed."""
+    edit, offending, skip = UNSUPPORTED_GUARDS[case]
+    copy = _chart_copy(tmp_path)
+    _edit(copy, "templates/workloads.yaml", edit)
+    edited = (copy / "templates" / "workloads.yaml").read_text(encoding="utf-8")
+    real = (CHART_REAL / "templates" / "workloads.yaml").read_text(encoding="utf-8")
+    line = _line_of(edited, real, offending, skip)
+    config = ref.config_for(shape, brand)
+    assert "pages" not in config.model_fields_set
+    with mock.patch.object(ref, "CHART", copy), pytest.raises(ref.UnsupportedGuard) as refused:
+        ref.render_files(config)
+    assert f"chart/templates/workloads.yaml:{line}:" in str(refused.value), str(refused.value)
+
+
+def test_the_regenerate_command_refuses_a_guard_it_does_not_read(tmp_path: Path) -> None:
+    """`--write` stores what the view builds, so a view that cannot be built must stop it before it
+    touches the reference (every shape is rendered first), and `--check` must not say clean."""
+    root = tmp_path / "reference"
+    ref.write_reference(root)
+    before = _tree(root)
+    copy = _chart_copy(tmp_path)
+    edit = UNSUPPORTED_GUARDS["a trimming end"][0]
+    _edit(copy, "templates/workloads.yaml", edit)
+    with mock.patch.object(ref, "CHART", copy):
+        with pytest.raises(ref.UnsupportedGuard):
+            ref.write_reference(root)
+        assert _tree(root) == before, "a refused write changed the reference"
+        assert ref.main(["--write", "--reference", str(root)]) == 2
+        assert ref.main(["--check", "--reference", str(root)]) == 2
+    assert _tree(root) == before
 
 
 @pytest.mark.parametrize(
@@ -1078,7 +1197,7 @@ def test_the_scan_of_the_stored_files_is_red_on_each_thing_it_names(
     assert all(expect in line or "host" in line for line in found), found
 
 
-# ---- the guard's block count when an action is not on a line of its own (rule 15) ----
+# ---- the guard scan: one form accepted, anything else that mentions the setting refused ----
 
 
 #: A guarded block inside an outer `range`, with `inside` where a template might put an action that
@@ -1122,6 +1241,8 @@ def test_the_guard_scan_removes_only_the_block_when_every_action_is_on_its_own_l
         "{{- if .Values.global }}\n{{- end }}{{- if .Values.other }}\n{{- end }}\n",
         # An `else` after text, at the guard's own level: what it holds renders while off.
         "  x: 1 {{- else }}\n",
+        # An `else` of its own at the guard's level.
+        "{{- else }}\n",
     ],
     ids=[
         "inline if and end",
@@ -1130,29 +1251,27 @@ def test_the_guard_scan_removes_only_the_block_when_every_action_is_on_its_own_l
         "an open after text",
         "an end and an open on one line",
         "an else after text",
+        "an else",
     ],
 )
-def test_a_guard_whose_block_count_cannot_be_told_is_left_in_the_view(inside: str) -> None:
+def test_a_guard_whose_block_count_cannot_be_told_is_refused(inside: str) -> None:
     """`without_pages_guard` removes a guarded block only when it can count its end. An action that
-    opens or closes a block anywhere but as the whole of a line makes the count unreliable, so the
-    guard and everything the scan would have passed stay in the view (a shown change), and never a
-    line that renders while the setting is off is taken out: that line would then be stored by
-    `--write` as if it were not there, and a change to it would show nothing."""
+    opens or closes a block anywhere but as the whole of a line makes the count unreliable, so no
+    view is built: `UnsupportedGuard` names the file and the line of the guard."""
     template = _ranged_guard(inside)
-    assert ref.without_pages_guard(template) == template
-    assert "real: {{ . }}" in ref.without_pages_guard(template)
+    with pytest.raises(ref.UnsupportedGuard) as refused:
+        ref.without_pages_guard(template, "chart/templates/x.yaml")
+    assert "chart/templates/x.yaml:" in str(refused.value)
 
 
-# ---- a guard's own trim markers: Go's lexer applies them whether or not the if is taken ----
-
-
-def test_a_guard_removed_from_the_view_is_one_whose_off_render_is_the_view() -> None:
-    """The control for the plants below: a dashed guard closed by a plain end, after a line of
-    content with nothing trailing on it, renders (off) as the template with the block's lines taken
-    out. Inside the block, an end with a trailing trim marker is skipped text and changes nothing:
-    only the guard's own two actions count."""
+def test_a_guard_removed_from_the_view_is_the_one_accepted_form() -> None:
+    """The control for the plants below: the exact guard line, the exact end line, a nested block
+    of another name whose own end trims (skipped text, whatever its marker says)."""
     template = "a: 1\n" + GUARD + "{{- if .Values.global }}\nx: 1\n{{- end -}}\n{{- end }}\nb: 2\n"
     assert ref.without_pages_guard(template) == "a: 1\nb: 2\n"
+    # Two guards in one template, each read.
+    two = "a: 1\n" + GUARD + "x: 1\n{{- end }}\nb: 2\n" + GUARD + "y: 1\n{{- end }}\nc: 3\n"
+    assert ref.without_pages_guard(two) == "a: 1\nb: 2\nc: 3\n"
 
 
 @pytest.mark.parametrize(
@@ -1161,43 +1280,53 @@ def test_a_guard_removed_from_the_view_is_one_whose_off_render_is_the_view() -> 
         # The guard's own end trims what follows it: off, `b: 2` loses its line break and joins
         # `a: 1` (the render is `a: 1b: 2`).
         "a: 1\n" + GUARD + "x: 1\n{{- end -}}\n  b: 2\n",
-        # The same where the end is the last thing in the template: nothing follows, but the shape
-        # is the same, and is not read.
+        # The same where the end is the last thing in the template.
         "a: 1\n" + GUARD + "x: 1\n{{- end -}}\n",
-        # No dash before `if`: off, the guard's indentation and the line break after the end stay,
-        # one extra line in the render (inside a block scalar, content).
+        # No dash before `if`.
         "a: 1\n" + DASHLESS_GUARD + "x: 1\n{{- end }}\nb: 2\n",
-        # Blank lines before a dashed guard: its left trim takes them, so off the render has none.
-        "a: 1\n\n" + GUARD + "x: 1\n{{- end }}\nb: 2\n",
-        # Spaces at the end of the line before a dashed guard: the left trim takes them too.
-        "a: 1  \n" + GUARD + "x: 1\n{{- end }}\nb: 2\n",
-        # A guard first in the template with content after the block: off, the render starts with
-        # the line break that follows the end.
-        GUARD + "x: 1\n{{- end }}\nb: 2\n",
+        # A trailing trim on the guard, an indented guard.
+        "a: 1\n{{- if .Values.pages.enabled -}}\nx: 1\n{{- end }}\nb: 2\n",
+        "a: 1\n  " + GUARD + "x: 1\n{{- end }}\nb: 2\n",
+        # The one the round-7 verifier found: an indented, trailing-trimmed guard, closed by `{{ end }}`.
+        "a: 1\n  {{- if .Values.pages.enabled -}}\nx: 1\n{{ end }}\nb: 2\n",
+        # Nested: two guards, the inner inside the outer (the pair of ends nests too).
+        "a: 1\n" + GUARD + GUARD + "x: 1\n{{- end }}\n{{- end }}\nb: 2\n",
+        # Carriage returns: not the exact line.
+        "a: 1\r\n{{- if .Values.pages.enabled }}\r\nx: 1\r\n{{- end }}\r\nb: 2\r\n",
     ],
     ids=[
         "an end that trims what follows",
         "a trimming end last",
         "a guard with no dash",
-        "a blank line before the guard",
-        "spaces before the guard",
-        "a guard first, with content after",
+        "a guard with a trailing trim",
+        "an indented guard",
+        "the verifier's example",
+        "a nested guard",
+        "carriage returns",
     ],
 )
-def test_a_guard_whose_off_render_is_not_the_template_without_the_block_is_left_in_the_view(
-    template: str,
-) -> None:
-    """`without_pages_guard` removes a block only where Go's lexer would leave the rest of the
-    template as the view has it. A trim marker on the guard's left, on the end's right, or none
-    where there should be one, changes the whitespace around the block whether or not the `if` is
-    taken; the view then keeps the guard and the block, and the change shows (rule 15: each plant
-    is the template the scan would read, not a bare string that fails another way)."""
-    assert ref.without_pages_guard(template) == template
+def test_a_guard_that_is_not_the_exact_form_builds_no_view(template: str) -> None:
+    """`without_pages_guard` accepts one form and refuses the rest, whatever the whitespace around
+    it would do in Go's lexer (it does not model that). A trim marker on the guard's left, on the
+    end's right, or none where there should be one, a second guard inside the first: no view, the
+    file and the line named."""
+    with pytest.raises(ref.UnsupportedGuard) as refused:
+        ref.without_pages_guard(template, "chart/templates/x.yaml")
+    assert "chart/templates/x.yaml:2:" in str(refused.value), str(refused.value)
+
+
+def test_a_mention_outside_any_guard_is_refused_and_the_other_pages_guards_are_not() -> None:
+    """A line that names `pages.enabled` and is not the guard line is refused, a comment included;
+    `if .Values.pages` (the section, not the setting) does not mention it and is left as text, red
+    through the reference, as before."""
+    with pytest.raises(ref.UnsupportedGuard):
+        ref.without_pages_guard("a: 1\n# {{- if .Values.pages.enabled }}\nb: 2\n")
+    section = "a: 1\n{{- if .Values.pages }}\nx: 1\n{{- end }}\nb: 2\n"
+    assert ref.without_pages_guard(section) == section
 
 
 def test_a_guard_that_is_the_whole_template_is_not_a_file() -> None:
-    """The one place a guard may come first: nothing follows the block, so the off render is a
-    line break, which Helm does not write as a manifest."""
+    """A template that is nothing but the guarded block renders nothing: Helm writes no manifest."""
     assert (
         ref.chart_off_view("templates/pages.yaml", (GUARD + "x: 1\n{{- end }}\n").encode()) is None
     )
