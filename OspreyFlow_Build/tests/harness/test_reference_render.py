@@ -651,6 +651,9 @@ def test_a_changed_page_service_line_in_the_deployment_env_is_red(
 # ---- "unchanged when off" in the chart: a block guarded by `pages.enabled` is not rendered ----
 
 GUARD = "{{- if .Values.pages.enabled }}\n"
+#: The guard with no dash before `if`, and an end that trims what follows it (`-}}`).
+DASHLESS_GUARD = "{{ if .Values.pages.enabled }}\n"
+END_TRIMMED = "{{- end -}}\n"
 A_PAGES_WORKLOAD = (
     "---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pages\nspec:\n  replicas: 1\n"
 )
@@ -659,6 +662,12 @@ A_PAGES_WORKLOAD = (
 def _differences_with_chart(shape: str, brand: str, chart: Path) -> list[str]:
     with mock.patch.object(ref, "CHART", chart):
         return ref.differences(shape, brand, ref.render_shape(shape, brand))
+
+
+def _insert_before(text: str, line_start: str, block: str) -> str:
+    """`block` put in front of the first line of `text` that starts with `line_start`."""
+    at = text.index(line_start)
+    return text[:at] + block + text[at:]
 
 
 def _edit(chart: Path, relative: str, edit: Callable[[str], str]) -> None:
@@ -771,6 +780,25 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
             lambda t: t + GUARD + A_PAGES_WORKLOAD,
             "{{- if .Values.pages",
         ),
+        # A guard closed by `{{- end -}}`: the trim after the action joins the line after the block
+        # to the line before the guard, so the render changes while the setting is off. The block
+        # is inserted before an existing line, so the view without it would equal the reference.
+        (
+            "templates/workloads.yaml",
+            lambda t: _insert_before(
+                t, "  maxUnavailable:", GUARD + A_PAGES_WORKLOAD + END_TRIMMED
+            ),
+            "{{- if .Values.pages.enabled }}",
+        ),
+        # A guard with no dash before `if`: off, the guard's own indentation and its line break are
+        # left in the render, an extra line.
+        (
+            "templates/workloads.yaml",
+            lambda t: _insert_before(
+                t, "  maxUnavailable:", DASHLESS_GUARD + A_PAGES_WORKLOAD + "{{- end }}\n"
+            ),
+            "{{ if .Values.pages.enabled }}",
+        ),
         # Switched on in the chart's own defaults: a page service rendered by default.
         ("values.yaml", lambda t: t + "pages:\n  enabled: true\n", "'pages:'"),
         # On, with a sub-toggle that is off (the shape PL7a2b is likely to write): the section's
@@ -794,6 +822,8 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
         "one line",
         "an else",
         "never closed",
+        "a guard closed by a trimming end",
+        "a guard with no dash",
         "on by default",
         "on by default with a sub-toggle off",
         "on by default, sub-toggle first",
@@ -1109,3 +1139,63 @@ def test_a_guard_whose_block_count_cannot_be_told_is_left_in_the_view(inside: st
     template = _ranged_guard(inside)
     assert ref.without_pages_guard(template) == template
     assert "real: {{ . }}" in ref.without_pages_guard(template)
+
+
+# ---- a guard's own trim markers: Go's lexer applies them whether or not the if is taken ----
+
+
+def test_a_guard_removed_from_the_view_is_one_whose_off_render_is_the_view() -> None:
+    """The control for the plants below: a dashed guard closed by a plain end, after a line of
+    content with nothing trailing on it, renders (off) as the template with the block's lines taken
+    out. Inside the block, an end with a trailing trim marker is skipped text and changes nothing:
+    only the guard's own two actions count."""
+    template = "a: 1\n" + GUARD + "{{- if .Values.global }}\nx: 1\n{{- end -}}\n{{- end }}\nb: 2\n"
+    assert ref.without_pages_guard(template) == "a: 1\nb: 2\n"
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        # The guard's own end trims what follows it: off, `b: 2` loses its line break and joins
+        # `a: 1` (the render is `a: 1b: 2`).
+        "a: 1\n" + GUARD + "x: 1\n{{- end -}}\n  b: 2\n",
+        # The same where the end is the last thing in the template: nothing follows, but the shape
+        # is the same, and is not read.
+        "a: 1\n" + GUARD + "x: 1\n{{- end -}}\n",
+        # No dash before `if`: off, the guard's indentation and the line break after the end stay,
+        # one extra line in the render (inside a block scalar, content).
+        "a: 1\n" + DASHLESS_GUARD + "x: 1\n{{- end }}\nb: 2\n",
+        # Blank lines before a dashed guard: its left trim takes them, so off the render has none.
+        "a: 1\n\n" + GUARD + "x: 1\n{{- end }}\nb: 2\n",
+        # Spaces at the end of the line before a dashed guard: the left trim takes them too.
+        "a: 1  \n" + GUARD + "x: 1\n{{- end }}\nb: 2\n",
+        # A guard first in the template with content after the block: off, the render starts with
+        # the line break that follows the end.
+        GUARD + "x: 1\n{{- end }}\nb: 2\n",
+    ],
+    ids=[
+        "an end that trims what follows",
+        "a trimming end last",
+        "a guard with no dash",
+        "a blank line before the guard",
+        "spaces before the guard",
+        "a guard first, with content after",
+    ],
+)
+def test_a_guard_whose_off_render_is_not_the_template_without_the_block_is_left_in_the_view(
+    template: str,
+) -> None:
+    """`without_pages_guard` removes a block only where Go's lexer would leave the rest of the
+    template as the view has it. A trim marker on the guard's left, on the end's right, or none
+    where there should be one, changes the whitespace around the block whether or not the `if` is
+    taken; the view then keeps the guard and the block, and the change shows (rule 15: each plant
+    is the template the scan would read, not a bare string that fails another way)."""
+    assert ref.without_pages_guard(template) == template
+
+
+def test_a_guard_that_is_the_whole_template_is_not_a_file() -> None:
+    """The one place a guard may come first: nothing follows the block, so the off render is a
+    line break, which Helm does not write as a manifest."""
+    assert (
+        ref.chart_off_view("templates/pages.yaml", (GUARD + "x: 1\n{{- end }}\n").encode()) is None
+    )
