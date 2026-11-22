@@ -31,8 +31,11 @@
 # `HELD_FOR_OWNER` (`tools/licence_register.py`).
 #
 # A NAME HELD FOR THE OWNER is not a row: its licence, read at the pin, does not pass the definition
-# and has not been ruled on. Today: ghcr.io/berriai/litellm (its image carries /app/enterprise under
-# the BerriAI Enterprise licence). See `HELD_FOR_OWNER`.
+# and has not been ruled on. None today. The one that was held until 21 November 2026,
+# ghcr.io/berriai/litellm (its image carried /app/enterprise under the BerriAI Enterprise licence),
+# left `HELD_FOR_OWNER` when the product stopped naming it: the gateway is now OspreyFlow's own image,
+# built from the publisher's MIT files alone (`deploy/litellm/Dockerfile`; rows B22 and B23 are its
+# bases). See `HELD_FOR_OWNER`.
 #
 # IMAGES: `os_packages.scan` says whether an existing scan covers the operating-system packages inside
 # the image (yes | no | partly) and `covered_by` says how. The row's licence is the PROJECT's own, read at
@@ -623,8 +626,8 @@ rows:
       The project's licence passes; the GPU libraries the image may carry are the open question the
       report names.
 
-  # `ghcr.io/berriai/litellm` has no row: it is in HELD_FOR_OWNER (tools/licence_register.py). The image
-  # the renderer pins carries /app/enterprise, licensed LicenseRef-Proprietary, beside MIT code.
+  # The publisher's `ghcr.io/berriai/litellm` has no row: the product no longer names it (the gateway is
+  # built from `deploy/litellm/Dockerfile`; its two bases are B22 and B23 below).
 
   - id: B9
     kind: image
@@ -910,3 +913,58 @@ rows:
         (ca-certificates-bundle) and MIT AND BSD-2-Clause AND GPL-2.0-or-later (musl-utils). Each is a
         licence the OSI approves, by the identifiers that list gives (the register's reading, not that
         list's claim); nothing in this repository reads or checks them.
+
+  # ---- the model gateway image's bases (deploy/litellm/Dockerfile) ----------------------------------
+  - id: B22
+    kind: image
+    name: cgr.dev/chainguard/wolfi-base
+    pin: "sha256:e624c5d5e42382ce7165ddafcbbf8e6769a24cbd02ea6114b880b05ae5ba2a8d"
+    ships: >-
+      Default: the model gateway's own image, both of its build stages (the publisher's own Dockerfile
+      names this digest for both; the product builds on it and ships the final stage).
+    named_in: [deploy/litellm/Dockerfile]
+    licence: MIT
+    where_read: >-
+      The image's own package database at the pinned digest (`/lib/apk/db/installed`, read from the
+      image on 21 November 2026, no network): `wolfi-base`, `wolfi-baselayout` and `wolfi-keys`, the
+      packages that make the base, each declare `MIT`. The recipes that build Wolfi's packages are
+      Apache-2.0 (https://raw.githubusercontent.com/wolfi-dev/os/main/LICENSE, read the same day:
+      "The Wolfi build recipes themselves are provided under the Apache License 2.0"). The image's
+      labels carry no licence (vendor Chainguard, source github.com/chainguard-images/images).
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: partly
+      covered_by: >-
+        The product builds its gateway image on it (the base's own fifteen packages are listed by the
+        image's database: MIT, Apache-2.0, MPL-2.0 AND MIT, GPL-2.0-only, LGPL-2.1-or-later,
+        GPL-3.0-or-later WITH GCC-exception-3.1), and the release workflow's `trivy image`
+        (`scanners: vuln`) and `make trivy-image-litellm` scan that built image for CVEs, which reads
+        no licence. The final image's 51 operating-system packages were listed from its own database
+        on 21 November 2026 and none is commercial (MIT 16, LGPL-2.1-or-later 6, Apache-2.0 6,
+        GPL-3.0-or-later 4, BSD 5, GPL-2.0-only 2, PSF-2.0 2, and a few open licences with exceptions
+        or public-domain dedications); nothing in the build reads them. The image's Python packages
+        are read by the build's own gate (`deploy/litellm/licence_gate.py`), a deny list for a
+        proprietary licence, not an allowlist.
+
+  - id: B23
+    kind: image
+    name: ghcr.io/astral-sh/uv
+    pin: "0.11.7@sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a"
+    ships: >-
+      The model gateway image's build only (the first stage, `uvbin`): the installer is copied into
+      the builder and is not in the image that ships.
+    named_in: [deploy/litellm/Dockerfile]
+    licence: Apache-2.0
+    where_read: >-
+      The image's own label `org.opencontainers.image.licenses = Apache-2.0` (version 0.11.7, revision
+      9d177269e110f40d578804e1b3d4ca3183a4ef6c, source github.com/astral-sh/uv), read from the image's
+      configuration at the pinned digest on 21 November 2026. The project is dual-licensed (MIT or
+      Apache-2.0, at the user's choice); either passes the definition.
+    test: osi-software
+    status: confirmed
+    os_packages:
+      scan: "no"
+      covered_by: >-
+        Used to build only: the image holds the `uv` and `uvx` programs alone (it has no operating
+        system layer to list), and none of it is in the gateway image that ships.

@@ -48,9 +48,18 @@ def test_theirs_are_copied_by_their_digest(rig: Rig, plan: dict[str, object]) ->
     by_target = {argv[5]: argv[6] for argv in copies}
     arcadedb = f"{REGISTRY}/arcadedata/arcadedb:26.10.1"
     assert by_target[arcadedb].startswith("arcadedata/arcadedb:26.10.1@sha256:")
-    # A reference given by its digest alone keeps that digest, once, and is pushed under a tag.
-    litellm = next(t for t in by_target if "/berriai/litellm:" in t)
-    assert by_target[litellm].count("@") == 1
+    # A reference given by its digest alone keeps that digest, once, and is pushed under a tag. (The
+    # model gateway was this plan's example; it is now one of ours, built here, and no third-party
+    # image of this plan is named by digest alone, so the copy's own rule is held directly.)
+    from harness.cloud_platform import _Copies
+
+    digest = "sha256:" + "a" * 64
+    copies = _Copies(REGISTRY, "ghcr.io/ospreyflow", lambda _target: None)
+    assert copies(f"ollama/ollama@{digest}") == f"{REGISTRY}/ollama/ollama@{digest}"
+    (entry,) = copies.plan.values()
+    assert entry["source"] == f"ollama/ollama@{digest}" and entry["target"].endswith(
+        f"/ollama/ollama:sha256-{'a' * 12}"
+    )
     # No third-party image is ever built.
     built = [c.argv for c in rig.runner.calls if c.argv[:2] == ["docker", "build"]]
     assert not [argv for argv in built if "arcadedb" in " ".join(argv)]
@@ -64,7 +73,12 @@ def test_ours_are_built_here_the_conduit_without_java(rig: Rig, plan: dict[str, 
     }  # fmt: skip
     # Report sync and Superset are not on the profile until their step after P10 (ADR-148
     # Amendment 8), so their images are not built for it.
-    assert {"api", "workspace", "worker", "ner"} <= set(built)
+    assert {"api", "workspace", "worker", "ner", "litellm"} <= set(built)
+    # The model gateway is built from its own folder alone (the root's `.dockerignore` leaves
+    # `deploy/` out), as Superset and Laurium are.
+    gateway = built["litellm"].argv
+    assert gateway[gateway.index("-f") + 1] == "deploy/litellm/Dockerfile"
+    assert gateway[-1] == "deploy/litellm"
     assert not {"report-sync", "superset"} & set(built)
     api = built["api"].argv
     assert api[api.index("--build-arg") + 1] == "CONDUIT_JAVA=omitted"

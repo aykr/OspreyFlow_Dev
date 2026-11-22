@@ -110,10 +110,13 @@ def tests_for(kind: str, name: str = "") -> tuple[str, ...]:
 #: on the code naming it, and the release check refuses while any is here. When the owner rules, the
 #: name leaves this set and becomes a row (a name in both is a violation).
 #:
-#: `ghcr.io/berriai/litellm`: the image the renderer pins (`harness/render.py`, by digest) carries
-#: `/app/enterprise` under the BerriAI Enterprise licence, which is proprietary (21 November 2026;
-#: the licence text and where it was read are in PL11's report to the owner).
-HELD_FOR_OWNER: frozenset[str] = frozenset({"ghcr.io/berriai/litellm"})
+#: Empty since slice PL13b (21 November 2026). The one name held until then, the publisher's
+#: `ghcr.io/berriai/litellm`, carried `/app/enterprise` under the BerriAI Enterprise licence, which
+#: is proprietary. The owner ruled that OspreyFlow builds its own gateway image from the MIT files
+#: alone (`deploy/litellm/Dockerfile`, its rows B22 and B23), and the name left this set in the
+#: commit that stopped the product naming that image anywhere
+#: (`tests/harness/test_own_gateway_image.py` holds the two together).
+HELD_FOR_OWNER: frozenset[str] = frozenset()
 
 #: Licences the Open Source Initiative approves, by SPDX identifier in lower case
 #: (opensource.org/licenses, as read for the owner's definition). A `WITH` exception is one term:

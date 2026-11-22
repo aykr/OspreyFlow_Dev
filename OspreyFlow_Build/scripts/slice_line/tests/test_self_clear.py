@@ -24,15 +24,30 @@ from test_gates import sh, started, stop_gate, world  # noqa: F401  (world is a 
 from test_resume import V062, changes, owner_line, resume, said_refused, set_state, snapshot, state
 
 PY = sys.executable
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 #: tests/test_layout.py's case, in small: a product folder left at the root of the tree fails it.
-LAYOUT = '''from pathlib import Path
+LAYOUT_STAND_IN = '''from pathlib import Path
 
 
 def test_no_product_folder_is_left_at_the_root():
     root = Path(__file__).resolve().parents[1]
     stray = sorted(p.name for p in root.iterdir() if p.name == "Claude outputs")
     assert not stray, f"still at the root: {stray}"
+'''
+#: A check that fails only in a tree made as a builder's worktree is made, as test_layout did on the rulings copy until
+#: the line moved it into the worktree's git folder (5): here, on the hashed client-name list, which the line copies into
+#: every worktree where git ignores it (the main checkout keeps it; a fresh tree has none).
+HASHES = "OspreyFlow_Build/marketing_site/client_names.local.sha256"
+LAYOUT = '''from pathlib import Path
+
+HASHES = "OspreyFlow_Build/marketing_site/client_names.local.sha256"
+
+
+def test_no_product_folder_is_left_at_the_root():
+    root = Path(__file__).resolve().parents[1]
+    stray = sorted(p.name for p in root.iterdir() if p.name == "Claude outputs")
+    stray += [HASHES.rsplit(".", 1)[0]] if (root / HASHES).exists() else []  # its name alone (no hash words)
+    assert not stray, f"left in the tree: {stray}"
 
 
 def test_the_readme_is_there():
@@ -63,7 +78,8 @@ def layout_slice(w, acceptance="sh accept.sh", files="accept.sh"):
     """S1, its checks running the layout test, started while main has no RULINGS.md (so no copy at the root), its work
     committed green. Returns the worktree."""
     set_row(w, acceptance=acceptance, files=files)
-    commit_main(w, {"tests/test_layout.py": LAYOUT}, "docs: S1 and the layout test")
+    gi = (w["repo"] / ".gitignore").read_text()
+    commit_main(w, {"tests/test_layout.py": LAYOUT, ".gitignore": gi + HASHES + "\n"}, "docs: S1 and the layout test")
     p, wt = started(w)
     assert p.returncode == 0, p.stdout + p.stderr
     (wt / "accept.sh").write_text("exit 0\n")
@@ -71,12 +87,21 @@ def layout_slice(w, acceptance="sh accept.sh", files="accept.sh"):
     return wt
 
 
+def hashes_in_the_main_checkout(w):
+    """The hashed client-name list in the main checkout, where git ignores it, as on the owner's Mac."""
+    gi = w["repo"] / ".gitignore"
+    if HASHES not in gi.read_text():
+        commit_main(w, {".gitignore": gi.read_text() + HASHES + "\n"}, "chore: the hashed list is never committed")
+    (w["repo"] / HASHES).parent.mkdir(parents=True, exist_ok=True)
+    (w["repo"] / HASHES).write_text("0" * 64 + "\n")
+
+
 def rulings_reach_the_worktree(w, wt):
-    """main's RULINGS.md, committed, and its copy put at the worktree's root as run_seat.py puts it."""
-    commit_main(w, {f"{V062}/RULINGS.md": "# Rulings\n"}, "docs(process): rulings")
-    code = (f"import sys; sys.path.insert(0, {str(w['lines'])!r}); import common as c; from pathlib import Path; "
-            f"print(c.deliver_rulings(Path({str(wt)!r})))")
-    assert sh([w["py"], "-c", code], w["repo"], w["env"]).stdout.strip().endswith("RULINGS.md")
+    """The worktree-only file reaches the worktree as the line brings it (slice_start.py's copy of the hashed list)."""
+    hashes_in_the_main_checkout(w)
+    code = (f"import sys; sys.path.insert(0, {str(w['lines'])!r}); import slice_start; from pathlib import Path; "
+            f"print(slice_start.bring_client_hashes(Path({str(wt)!r})))")
+    assert "was copied" in sh([w["py"], "-c", code], w["repo"], w["env"]).stdout
 
 
 def red_six_times(w, wt):

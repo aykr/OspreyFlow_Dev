@@ -19,7 +19,7 @@ from test_gates import built, merge, sh, verified, world  # noqa: F401  (world i
 
 AD2_LOG = str(Path(__file__).resolve().parent / "fixtures/ad2_merge_gate.log")
 V062 = "OspreyFlow_Build/process/lanes/v062"
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 AD2_TESTS = ("test_each_built_section_s_routes_need_its_right[people]",
              "test_each_section_s_routes_refuse_a_principal_without_its_right[people]",
              "test_each_shared_read_is_read_by_exactly_the_sections_named")

@@ -1093,7 +1093,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | worker | Deployment | 1 | `ospreyflow/worker` | 500m / 2 | 2Gi / 4Gi | none |
 | ner | Deployment | 1 | `ospreyflow/ner` | 250m / 1 | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
 | laurium | Deployment | 1 | `ospreyflow/laurium` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
-| litellm | Deployment | 1 | `berriai/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
+| litellm | Deployment | 1 | `ospreyflow/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
 | arcadedb | StatefulSet | 1 | `arcadedata/arcadedb` | 1 / 2 | 12Gi / 12Gi | http://127.0.0.1:2480/api/v1/ready |
 | clickhouse | StatefulSet | 1 | `clickhouse/clickhouse-server` | 1 / 2 | 8Gi / 8Gi | http://localhost:8123/ping |
 | superset | Deployment | 1 | `ospreyflow/superset` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8088/health |
@@ -1125,9 +1125,9 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | `ospreyflow/laurium` | ours | built from `services/laurium/Dockerfile` |
 | `ospreyflow/superset` | ours | built from `deploy/superset/Dockerfile` |
 | `ospreyflow/report-sync` | ours | built from `services/report_sync/Dockerfile` |
+| `ospreyflow/litellm` | ours | built from `deploy/litellm/Dockerfile` |
 | `arcadedata/arcadedb` | upstream | copied from `arcadedata/arcadedb:26.10.1` |
 | `clickhouse/clickhouse-server` | upstream | copied from `clickhouse/clickhouse-server:25.8.33.6` |
-| `berriai/litellm` | upstream | copied from `ghcr.io/berriai/litellm` |
 | `postgres` | upstream | copied from `postgres:16.4` |
 
 #### Managed services

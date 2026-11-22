@@ -133,7 +133,8 @@ def stand_in(tree: Path, files: list[str]) -> list[str]:
 
 def builder_shaped(tree: Path) -> list[str]:
     """`tree` given what the line puts in every builder worktree beside the branch: main's RULINGS.md copy (the copy
-    every seat reads) and the client names' hashed list where git ignores it. What was put there, in words."""
+    every seat reads, in the tree's own git folder) and the client names' hashed list where git ignores it. What was
+    put there, in words."""
     import slice_start  # here, not at the top: slice_start.py imports this module
     copy = c.deliver_rulings(tree)
     return [f"the rulings copy ({c.RULINGS_COPY_REL})" if copy else "no rulings copy (main has no RULINGS.md)",

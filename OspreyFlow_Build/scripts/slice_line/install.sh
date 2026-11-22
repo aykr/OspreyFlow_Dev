@@ -43,11 +43,13 @@ m = {f: hashlib.sha256((b / "bin" / f).read_bytes()).hexdigest()
      for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv", "shim/claude")}
 (b / "manifest.json").write_text(json.dumps(m, indent=1))
 py = "/usr/bin/python3 $HOME/.ospreyflow/slice-line/bin/"
+import re  # the Stop hook's limit is stop_check.py's own (HOOK_TIMEOUT_S): its commands always end inside it
+stop_s = int(re.search(r"^HOOK_TIMEOUT_S = (\d+)", (b / "bin" / "stop_check.py").read_text(), re.M).group(1))
 hook = lambda cmd, **kw: {"hooks": [{"type": "command", "command": py + cmd, **kw}]}
 settings = {"hooks": {
     "SessionStart": [hook("guard.py session-start")],
     "PreToolUse": [{"matcher": "*", **hook("guard.py pre")}],
-    "Stop": [{"hooks": [{"type": "command", "command": py + "stop_check.py", "timeout": 1800},
+    "Stop": [{"hooks": [{"type": "command", "command": py + "stop_check.py", "timeout": stop_s},
                         {"type": "command", "command": py + "guard.py stop"}]}],
     "SubagentStop": [hook("guard.py stop")],
     "StopFailure": [hook("usage_hook.py stop-failure")],

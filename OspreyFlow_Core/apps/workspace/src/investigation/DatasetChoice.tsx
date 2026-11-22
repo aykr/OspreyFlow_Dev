@@ -2,7 +2,7 @@
 // composite), as a radio list. Shared by a new case's form and a case's own "Data this case reads".
 // The Conduit never sends an analyst layer (ADR-143 decision 1), so none can be offered here.
 import { RadioGroup } from "../design/primitives/RadioGroup";
-import { type Dataset, datasetChoiceLabel } from "./cases";
+import { type Dataset, datasetChoiceLabel } from "@ospreyflow/glass-shared";
 
 export interface DatasetChoiceProps {
   datasets: readonly Dataset[];

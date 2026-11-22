@@ -5,10 +5,10 @@
 // beyond the reader. The words are `help/roles.ts`'s, the one source the tips and the help page use.
 // Where no source exists yet (a team's lead and cover, a watch's owner and expiry, a level given
 // through a team, which the case list does not carry) Home says nothing rather than invent it.
-import type { NeedsYou } from "../admin/needsYou/needsYouApi";
+import type { NeedsYou } from "@ospreyflow/glass-shared";
 import { RIGHT_GROUPS } from "../admin/sections/Roles";
 import { LEVEL_WORDS, PLACE_WORDS, ROLE_WORDS, rightName, rightSays, rolesHolding, type Right } from "../help/roles";
-import type { CaseListing } from "../investigation/cases";
+import type { CaseListing } from "@ospreyflow/glass-shared";
 import { placesFor } from "../shell/places";
 
 export interface CanDo {

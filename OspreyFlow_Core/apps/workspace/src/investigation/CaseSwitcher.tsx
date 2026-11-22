@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
-import { type CaseListing, caseLabel, listCases, scopeBadge } from "./cases";
+import { type CaseListing, caseLabel, listCases, scopeBadge } from "@ospreyflow/glass-shared";
 import { CaseList } from "./CaseList";
 import { NewCaseForm } from "./NewCaseForm";
 

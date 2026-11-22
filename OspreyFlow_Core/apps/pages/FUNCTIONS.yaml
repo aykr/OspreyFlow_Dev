@@ -24,7 +24,7 @@
 functions:
   - id: studio-model-text
     name: "Studio: Model step, domain model text"
-    where: "apps/workspace/src/ingest/studio/ModelTab.tsx (20, a placeholder: \"thin until phase 5\", :1), studio/packs.ts"
+    where: "apps/workspace/src/ingest/studio/ModelTab.tsx (20, a placeholder: \"thin until phase 5\", :1), packages/glass-shared/src/ingest/studio/packs.ts"
     slice: "IS2"
     scenario: ""
     route: ""

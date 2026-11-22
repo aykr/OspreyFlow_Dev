@@ -51,6 +51,18 @@
 //                             token as an argument). Two names were written twice, so the index gives them apart: the
 //                             assessment's `listJudgements` is `listAssessmentJudgements` (the report clients keep
 //                             `listJudgements`) and the boards' `Answer` is `BoardAnswer` (the promotions keep `Answer`)
+//   investigation/cases, time/utcStamp, admin/needsYou/needsYouApi, admin/needsYou/openings, ingest/studio/datasets,
+//   ingest/studio/packs, ingest/runs/externalOrchestrationApi
+//                             the cases client (the types, the pack list, the labels and the requests: list, create,
+//                             rename, remove on the server, the datasets a case reads), the moment's words it uses, the
+//                             reader's *Needs you* read and the request that waits for the place that takes it, the Studio's
+//                             dataset and pack helpers, and the Runs tab's four requests for external orchestration (PL4
+//                             slice D3d). Two files were split: the cases client's page half (`openCase`, `openCaseView`
+//                             and forgetting a removed case in the tab) stays in the workspace as
+//                             `investigation/caseNavigation.ts`, and the openings keep where a request is held in a storage
+//                             handed in by `bindOpeningsStorage` (the workspace binds the tab's). One name was written
+//                             twice, so the index gives it apart: the case's address `caseUrl` is `caseOpenUrl` (the report
+//                             clients keep `caseUrl`)
 //
 // What it must never import, as a value or as a type (I1, I13):
 //   react, react-dom, react/jsx-runtime        no React, so `pages` can use it (ADR-152 decision 1)
@@ -203,3 +215,34 @@ export * from "./site/api";
 export * from "./site/bilinear";
 export * from "./strength/api";
 export * from "./watches/api";
+export * from "./time/utcStamp";
+export {
+  type AccessLevel,
+  caseDatasets,
+  type CaseData,
+  caseIsOpenable,
+  caseLabel,
+  type CaseListing,
+  caseUrl as caseOpenUrl,
+  createCase,
+  type Dataset,
+  datasetChoiceLabel,
+  datasetLabel,
+  DOMAIN_PACKS,
+  domainLabels,
+  type DomainPack,
+  listCases,
+  listDatasets,
+  orderCases,
+  POLE_LABEL,
+  removeCaseOnServer,
+  renameCase,
+  scopeBadge,
+  setCaseDatasets,
+  sortedDomains,
+} from "./investigation/cases";
+export * from "./admin/needsYou/needsYouApi";
+export * from "./admin/needsYou/openings";
+export * from "./ingest/studio/datasets";
+export * from "./ingest/studio/packs";
+export * from "./ingest/runs/externalOrchestrationApi";

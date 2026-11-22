@@ -14,7 +14,7 @@ import { useEffect, useState } from "react";
 import type { Node } from "../../../../packages/schemas/generated";
 import { raiseAlert } from "@ospreyflow/glass-shared";
 import { Button, Input, Select } from "../design/primitives";
-import { listCases } from "../investigation/cases";
+import { listCases } from "@ospreyflow/glass-shared";
 import { createHotlist, createMonitor } from "@ospreyflow/glass-shared";
 
 export interface GlassApi {

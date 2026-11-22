@@ -14,12 +14,22 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
 
 SRC = Path(__file__).resolve().parents[1]
 SYSPY = "/usr/bin/python3"
+#: The run's one date (UTC), taken once (LINE_FIXES_5_BRIEF.md, 9: tests that wrote a line dated with a TODAY taken at
+#: import and then ran a script that read the clock again were refused when the run crossed midnight). Every test
+#: module takes it from here, and the scripts in the throwaway repository read it too (TODAY_IN_THE_COPY): the real
+#: line's scripts are unchanged and always read the clock.
+TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+TODAY_REAL = '''def today() -> str:
+    return time.strftime("%Y-%m-%d", time.gmtime())'''
+TODAY_IN_THE_COPY = '''def today() -> str:
+    return __import__("os").environ.get("TEST_TODAY") or time.strftime("%Y-%m-%d", time.gmtime())'''
 OWNER = "owner" + "@" + "example.test"
 KEY_AWS = "AKIA" + "ABCDEFGHIJKLMNOP"
 KEY_ANT = "sk-" + "ant-" + "api03-" + "x" * 40
@@ -42,7 +52,8 @@ GH = (Path(__file__).resolve().parent / "fake_gh.py").read_text()
 #: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
 #: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
-#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them.
+#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them; TEST_GATE_SLEEP:
+#: seconds the gate runs, writing nothing.
 STAND_IN_GATE = """def _stand_in_gate(t, b, l):
     Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
     l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
@@ -52,9 +63,15 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l):
         l.with_suffix('.retries.json').write_text(os.environ['TEST_GATE_RETRIES'])
     if os.environ.get('TEST_LIVE_NOTE'):
         l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE'])
+    if os.environ.get('TEST_GATE_DURING'):  # what happens on the Mac while the gate runs (LINE_FIXES_5_BRIEF.md, 2)
+        import subprocess as _sp
+        _sp.run(os.environ['TEST_GATE_DURING'], shell=True, cwd=os.environ.get('TEST_GATE_DURING_CWD') or None)
     if os.environ.get('TEST_GATE_SEES'):
         have = [n for n in ('.venv', 'node_modules') if (t / 'OspreyFlow_Core' / n).exists()]
         Path(os.environ['TEST_GATE_SEES']).write_text(' '.join(have) or 'clean')
+    if os.environ.get('TEST_GATE_SLEEP'):  # a gate that runs a while and writes nothing meanwhile (merge progress)
+        import time as _t
+        _t.sleep(float(os.environ['TEST_GATE_SLEEP']))
     return int(os.environ.get('TEST_GATE', '0'))
 
 
@@ -84,7 +101,7 @@ def world(tmp_path):
     fake_claude.chmod(0o755)
     env = {**os.environ, "HOME": str(home), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_AUTHOR_NAME": "t",
            "GIT_AUTHOR_EMAIL": "t@t.invalid", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t.invalid",
-           "OSPREY_PUSH_NO_CI_CHECK": "1", "OSPREY_CLAUDE_BIN": str(fake_claude),
+           "OSPREY_PUSH_NO_CI_CHECK": "1", "TEST_TODAY": TODAY, "OSPREY_CLAUDE_BIN": str(fake_claude),
            "OSPREY_SLICE_WT_ROOT": str(tmp_path / "wt"), "PATH": f"{ghbin}{os.pathsep}{os.environ.get('PATH', '')}"}
     for k in ("OSPREY_SLICE_HOME", "OSPREY_SEAT", "OSPREY_SLICE", "OSPREY_SLICE_WORKTREE", "OSPREY_STATUS_FILE"):
         env.pop(k, None)
@@ -95,6 +112,9 @@ def world(tmp_path):
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
     gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE))
+    day = lines / "resume.py"  # the run's one date, in this copy only (9)
+    assert TODAY_REAL in day.read_text(), "resume.today() changed: the suite's one-date copy needs it"
+    day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))
     v062 = repo / "OspreyFlow_Build/process/lanes/v062"
     v062.mkdir(parents=True)
     real = SRC.parents[1] / "process/lanes/v062"
@@ -1053,3 +1073,18 @@ def test_the_suite_runs_on_its_own_checkouts_venv_never_the_main_checkouts_when_
     shutil.rmtree(tree / "OspreyFlow_Core/.venv")
     sh(["bash", str(run)], tree, env)
     assert log.read_text().split() == ["TREE", "MAIN"]
+
+
+def test_the_run_has_one_date_even_across_midnight(world):
+    """A line dated with the run's date is the owner's word for the whole run, whatever the clock says by the time the
+    script reads it (LR1's merge, 20 November, 23:4x UTC: five tests refused after midnight). Shown with a date that is
+    not today's at all; and the real line's resume.today() still reads the clock."""
+    w = world
+    env = {**w["env"], "TEST_TODAY": "2026-01-02"}
+    code = (f"import sys; sys.path.insert(0, {str(w['lines'])!r}); import resume, clear_account; "
+            "print(resume.today(), clear_account.today())")
+    assert sh([w["py"], "-c", code], w["repo"], env).stdout.split() == ["2026-01-02", "2026-01-02"]
+    real = (SRC / "resume.py").read_text()
+    assert TODAY_REAL in real and "TEST_TODAY" not in real
+    for f in SRC.glob("*.py"):
+        assert "TEST_TODAY" not in f.read_text() and 'strftime("%Y-%m-%d"' not in f.read_text().replace(TODAY_REAL, ""), f

@@ -31,4 +31,4 @@ The two new tests; the existing `apps/pages` vitest files; `tests/glass_trees/te
 
 ## Out of scope
 
-Editing the run order, the whole-dataset load, the suggestion, any line or graph (IS6); the GOV.UK tree's page; the Studio frame (IS5a); `pipelineLayout.ts` moving; any Conduit change (stop and report instead); anything under `apps/workspace`; the protected files; rendering `pages` in a deployment (PL7a2).
+**The Studio's Map step (row template, field bindings, its own Sigma instance, the only dragging in the Studio) is IS4m, under the existing build IS4 (the owner, 21 November, file 009 answer 8); it is not this page.** Editing the run order, the whole-dataset load, the suggestion, any line or graph (IS6); the GOV.UK tree's page; the Studio frame (IS5a); `pipelineLayout.ts` moving; any Conduit change (stop and report instead); anything under `apps/workspace`; the protected files; rendering `pages` in a deployment (PL7a2).

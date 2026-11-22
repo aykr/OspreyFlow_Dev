@@ -242,9 +242,7 @@ def source_tables(
         chosen = branch_location(node, location)  # the run's file choice, as Verify's
         if chosen:
             reader = reader.model_copy(update={"source_location": chosen})
-        rows = _read_rows(reader)
-        if limit is not None:
-            rows = rows[:limit]
+        rows = _read_rows(reader, limit=limit)  # the reader stops at `limit`: never a whole read
         table = source_table(node.id, rows, load_id=f"{load_id}:{node.id}")
         carried = carry_declared_marking(
             table, default, marked=marked, classification=classified

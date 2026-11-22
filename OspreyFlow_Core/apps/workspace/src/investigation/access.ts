@@ -1,7 +1,7 @@
 // Who can open a case (ADR-052 §7, Amendment 4): the Glass's side of `…/access`. Everyone reads
 // their own level; only an Author is served the grants (and, ADR-106, the grantees' names). The
 // Conduit decides every change; this only asks and says the refusal in words.
-import type { AccessLevel } from "./cases";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
 
 export interface CaseAccess {
   your_level: AccessLevel | null;

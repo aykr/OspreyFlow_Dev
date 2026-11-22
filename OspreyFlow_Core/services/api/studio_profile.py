@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import ValidationError
-from services.ingest.connectors.csv_connector import read_csv
+from services.ingest.connectors.csv_connector import read_csv_head
 from services.ingest.engine import _merge_override, recipe_handlings
 from services.ingest.profiler import DEFAULT_SAMPLE_SIZE, profile_source
 from services.ingest.recipe_rules import handling_bindings, literal_handling, template_elements
@@ -176,7 +176,10 @@ def connector_for(draft: StudioRecipeDraft) -> RecipeConnector:
     )
 
 
-def _read_rows(recipe: StudioRecipeDraft) -> list[dict[str, str]]:
+def _read_rows(recipe: StudioRecipeDraft, limit: int | None = None) -> list[dict[str, str]]:
+    """The recipe's source rows: the first `limit` of them, reading no more of the file than that
+    (the owner's word of 21 November 2026), or every row when `limit` is `None`. Every read of a
+    source that needs a sample asks for its sample's size; a run and Test read whole sources."""
     # `connector_profile` is optional on a draft — an unset one is as unavailable as an unknown
     # one, and is refused by the same named error rather than crashing on a `None` lookup.
     if recipe.connector_profile is None:
@@ -192,12 +195,8 @@ def _read_rows(recipe: StudioRecipeDraft) -> list[dict[str, str]]:
     try:
         # The profile's own delimiter/encoding, not the reader's defaults: a layout that declares
         # a semicolon separator was being read as one column before this, and profiled as such.
-        return list(
-            read_csv(
-                source,
-                delimiter=profile.delimiter,
-                encoding=profile.encoding,
-            )
+        return read_csv_head(
+            source, limit=limit, delimiter=profile.delimiter, encoding=profile.encoding
         )
     except (OSError, UnicodeDecodeError, csv.Error) as exc:
         raise SourceUnreadableError(str(exc)) from exc
@@ -339,10 +338,12 @@ async def profile_recipe_source(
         source_handling = Handling(**recipe.handling)
     except ValidationError as exc:
         raise SourceHandlingIncompleteError(str(exc)) from exc
-    rows = _read_rows(recipe)
+    # The sample, and one row more: that row is what says whether the sample is the whole source.
+    rows = _read_rows(recipe, limit=DEFAULT_SAMPLE_SIZE + 1)
     sampled = sample_markings(recipe, scheme, rows[:DEFAULT_SAMPLE_SIZE])
     return profile_source(
         rows,
+        sample_size=DEFAULT_SAMPLE_SIZE,
         source_handling=source_handling,
         principal=principal,
         scheme=scheme,

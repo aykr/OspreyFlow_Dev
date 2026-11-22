@@ -20,7 +20,7 @@ import { flushSync } from "react-dom";
 
 import { currentBrand } from "@ospreyflow/glass-shared";
 import { CaseStateItems, SavedViewDetails, type CaseState } from "../views/SavedViewOnTheLine";
-import { caseDatasets, caseLabel, listCases } from "../investigation/cases";
+import { caseDatasets, caseLabel, listCases } from "@ospreyflow/glass-shared";
 import { PLACE_NAME, type PlaceId } from "./places";
 import "./places.css";
 

@@ -5,7 +5,7 @@
 // what) Home says nothing rather than invent it; the build plan's E3 row lists each.
 import { typologyLabel } from "@ospreyflow/glass-shared";
 import { alertRuleGroup } from "../reports/figureParts";
-import type { CaseListing } from "../investigation/cases";
+import type { CaseListing } from "@ospreyflow/glass-shared";
 
 export type Unreadable = "unreadable";
 export type Tone = "ok" | "warn" | "error" | "info";

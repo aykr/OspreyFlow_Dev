@@ -1,0 +1,43 @@
+The model gateway image (deploy/litellm)
+
+OspreyFlow's own gateway image is built from the MIT-licensed files of the litellm project, as
+PyPI publishes them: litellm 1.101.0 and litellm-proxy-extras 0.4.94. It is not derived from the
+publisher's image, and it carries neither the publisher's commercially licensed folder (the
+"enterprise" directory its top-level licence carves out) nor its proprietary package: the one
+override file keeps the package out of the install, and the build's licence gate
+(licence_gate.py) fails the build if either is found.
+
+docker/prod_entrypoint.sh and docker/entrypoint.sh are copied unchanged from the project's
+repository at revision 18243cd7 (the revision the pinned image was built from), where they are
+MIT-licensed like the rest of the repository outside that directory. Their SHA-256 digests are
+held by the test that guards this folder:
+  prod_entrypoint.sh  6265520d64e737623031e0d421dbd58675c5e20bba06cfe4172706b9d5fd9558
+  entrypoint.sh       28d6fd672a96d22be895c0d7f457aeb4beb28c11d3c0d3e799cbbef4c47869c7
+
+The licence of the litellm project's MIT-licensed files, as the PyPI package carries it
+(litellm-1.101.0.dist-info/licenses/LICENSE), after the portion it reserves:
+
+  MIT License
+
+  Copyright (c) 2023 Berri AI
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+The other packages in the image are third parties' own, each under its own licence (the
+constraints file lists them); the Prisma command line and engines under /opt/prisma are Apache-2.0.

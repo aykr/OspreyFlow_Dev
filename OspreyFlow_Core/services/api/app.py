@@ -560,6 +560,7 @@ from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
 from . import reports as reports_module
 from . import resolution as resolution_module
+from . import resolution_job_status as resolution_job_status_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
@@ -958,6 +959,7 @@ from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .resolution_job_status import ResolutionJobStatus
 from .resolution_trigger import ResolveNowAccepted
 from .review import (
     AcceptCandidateRequest,
@@ -9167,6 +9169,22 @@ async def resolve_now_route(
         result_cardinality=1,
     )
     return accepted
+
+
+@app.get(
+    "/v1/resolution/jobs/{job_id}",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
+async def resolution_job_status_route(
+    job_id: str, principal: PrincipalDep, jobs: JobsDep
+) -> ResolutionJobStatus:
+    """What became of a matching job a run or "Resolve now" queued, in words (C249, L06;
+    `resolution_job_status.py` has the reasoning). A read of the job queue, not of the graph: the
+    answer carries no node, count or value (rule 7), and an id with no record, an expired one and
+    another kind of job's answer alike. Not investigation-scoped, as the run that queued it is
+    not: the right is a reader of reports."""
+    del principal
+    return await resolution_job_status_module.resolution_job_status(jobs, job_id)
 
 
 # --- ontology -----------------------------------------------------------------

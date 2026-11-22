@@ -5,7 +5,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CaseSwitcher } from "./CaseSwitcher";
-import { scopeBadge } from "./cases";
+import { scopeBadge } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

@@ -25,7 +25,7 @@ PLANTED = {
     "services/api/investigations.py": "    branched_from: str | None = None",
     "services/api/rights.py": '    BRANCH_CASE = "branch_case"',
     "apps/workspace/src/investigation/CaseTree.tsx": "<li>Branch of {name}</li>",
-    "apps/workspace/src/ingest/studio/datasets.ts": "c.branched_from ? 1 : 0",
+    "packages/glass-shared/src/ingest/studio/datasets.ts": "c.branched_from ? 1 : 0",
 }
 
 
@@ -58,7 +58,7 @@ def test_a_folder_wide_exception_would_have_hidden_a_cases_branch(
 ) -> None:
     """Rule 15's second clause: the plant in the shape the real tree held (a case's
     `branched_from` in the Studio's own folder), against the exception a folder would give."""
-    path = "apps/workspace/src/ingest/studio/datasets.ts"
+    path = "packages/glass-shared/src/ingest/studio/datasets.ts"
     planted = {path: PLANTED[path]}
     assert findings(planted) != []
     folder_wide = {p: "the Studio's folder" for p in (path, *check.PIPELINE_FILES)}

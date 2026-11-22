@@ -61,6 +61,7 @@ export type RuleMergedEdgeIds = EdgeId[];
 export type RowsHeld = number;
 export type RuleNotes = string[];
 export type DrawnWatchAlerts = number;
+export type ResolutionJobs = string[];
 export type Markings = Handling[];
 export type WallMs = number;
 export type RowsRead1 = number;
@@ -141,6 +142,7 @@ export interface LoadReport {
   rows_held?: RowsHeld;
   rule_notes?: RuleNotes;
   drawn_watch_alerts?: DrawnWatchAlerts;
+  resolution_jobs?: ResolutionJobs;
   markings?: Markings;
   metering?: RunMetering | null;
   staging_steps?: StagingSteps;
