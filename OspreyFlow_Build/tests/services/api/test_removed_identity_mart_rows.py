@@ -71,7 +71,11 @@ from services.api.app import (
     get_principal,
     get_report_freshness,
 )
-from services.api.identity_admin import PersonActionRefused
+from services.api.identity_admin import (
+    IdentityAdmin,
+    IdentityAdminRefused,
+    PersonActionRefused,
+)
 from services.api.report_freshness import ReportFreshness
 from services.report_sync import mart as mart_module
 from services.report_sync.mart import CONTROL_SCHEMA, Mart
@@ -690,13 +694,100 @@ def test_a_mart_that_fails_after_the_identity_went_says_so_in_words(world: _Worl
     message = refused.json()["detail"]["message"]
     assert world.identity.deleted == [REMOVED]
     assert "was removed from the identity provider" in message and "may still be there" in message
-    assert "removing it again will try again" not in message
+    assert "can no longer be removed again" not in message, "it can: see the next case"
+    assert "remove it again" in message.lower(), "the administrator is told how to finish"
     # The identity is gone at the provider, so who removed it is on the record all the same, with
     # the grants it revoked, and the row says the mart did not confirm its figures went.
     rows = [r for r in world.audit.records if r["action"] == "remove_dashboard"]
     assert len(rows) == 1, "a deletion that happened is audited even when the mart then fails"
     assert rows[0]["resolved_query"]["client_id"] == REMOVED
     assert rows[0]["resolved_query"]["mart_confirmed"] is False
+
+
+def test_a_mart_that_failed_after_the_identity_went_is_finished_by_removing_it_again(
+    world: _World,
+) -> None:
+    """The finding this closes: the stamp fails after the provider has deleted the identity, the
+    transaction rolls the rows back, and a retry found the identity unknown, was refused, rolled
+    back again, and the rows stayed for good (the next refused pull then rewrote them). A retry now
+    commits the purge and the stamp, because an identity the provider does not hold should hold no
+    rows, and the administrator is told it is done."""
+    before = world.pool.left_for(REMOVED)
+    world.pool.fail(
+        f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards", asyncpg.PostgresConnectionError("lost")
+    )
+    assert world.remove().status_code == 503
+    assert world.identity.deleted == [REMOVED]
+    assert world.pool.left_for(REMOVED) == before, "rolled back: the rows are certainly still there"
+    world.pool.heal()
+    again = world.remove()
+    assert again.status_code == 204, again.text
+    assert world.pool.left_for(REMOVED) == {}, "the retry did not clear the rows"
+    assert world.pool.removed_at(REMOVED) is not None, "the retry did not stamp the removal"
+    rows = [r for r in world.audit.records if r["action"] == "remove_dashboard"]
+    assert [r["resolved_query"].get("mart_confirmed", True) for r in rows] == [False, True]
+
+
+async def test_a_refused_pull_after_the_retry_does_not_rewrite_the_rows(world: _World) -> None:
+    """The consequence the finding named: after the failed removal and its retry, the identity is
+    still in the environment's list, its token is refused, and `record_failure` finds nothing to
+    keep and a stamp that stops any write of a pull that began before it."""
+    world.pool.fail(
+        f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards", asyncpg.PostgresConnectionError("lost")
+    )
+    assert world.remove().status_code == 503
+    world.pool.heal()
+    assert world.remove().status_code == 204
+    mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    await sync_once([_board(REMOVED), _board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    assert world.pool.left_for(REMOVED) == {}
+    assert set(world.pool.left_for(KEPT)) == set(world.pool.tables())
+
+
+def test_an_identity_the_provider_does_not_hold_loses_leftover_rows_and_one_with_none_is_refused(
+    world: _World,
+) -> None:
+    """Not registered and rows left in the mart (a removal that never finished): done, 204. Not
+    registered and none left (a mistyped id): still the provider's refusal, as before, and no other
+    identity's row is touched either way."""
+    world.identity.registered = [d for d in world.identity.registered if d.client_id != REMOVED]
+    kept_before = world.pool.left_for(KEPT)
+    assert world.remove().status_code == 204
+    assert world.pool.left_for(REMOVED) == {}
+    assert world.pool.left_for(KEPT) == kept_before
+    assert world.remove("osprey-dashboard-mistyped").status_code == 409
+    assert world.pool.left_for(KEPT) == kept_before
+
+
+def test_the_identity_provider_s_refusal_of_one_it_does_not_hold_is_told_apart_from_other_refusals(
+    world: _World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Only "not registered" finishes the purge: any other refusal (here a provider that cannot be
+    reached) still rolls the rows back, so a removal that did not happen takes nothing."""
+    world.identity.registered = [d for d in world.identity.registered if d.client_id != REMOVED]
+    world.identity.refuses = IdentityAdminRefused("the identity provider could not be reached")
+    before = world.pool.left_for(REMOVED)
+    assert world.remove().status_code == 502
+    assert world.pool.left_for(REMOVED) == before
+    assert world.pool.removed_at(REMOVED) is None
+
+
+async def test_the_keycloak_admin_says_not_registered_in_a_way_the_route_can_tell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The real `IdentityAdmin.delete_dashboard` for an identity the realm does not hold raises
+    `NoSuchDashboard` (still an `IdentityAdminRefused`, so it is answered as before)."""
+
+    from services.api.identity_admin import NoSuchDashboard
+
+    async def unknown(self: IdentityAdmin, client_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(IdentityAdmin, "_uuid", unknown)
+    admin = object.__new__(IdentityAdmin)
+    with pytest.raises(NoSuchDashboard) as raised:
+        await admin.delete_dashboard("osprey-dashboard-gone")
+    assert isinstance(raised.value, IdentityAdminRefused)
 
 
 # --- A pull already running when the identity is removed ------------------------------------------
