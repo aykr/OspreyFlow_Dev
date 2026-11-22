@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (509 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (394 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (515 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (402 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -257,6 +257,7 @@ says that cost is a list-price estimate, not a bill.
 - **The night's faults** (9): a merge is no longer held by the conductor's own uncommitted records (an uncommitted file the branch changes, or anything else uncommitted outside the records folder, still refuses, before the gate); `merge_slice.py wait-idle [--minutes N]` waits on the merge lock itself (no `pgrep` that matches its own command line).
 - **A standing accept a lock refuses is held, never lost** (the owner, 21 November 2026; IS5a0, PL11): when `run_seat.py`'s standing accept is refused by a lock alone (`resume.Busy`: a merge whose record names no slice, or another resume.py action on the slice), it is tried again each time the lock may have freed, before any other round starts. Still held after 180 minutes, the slice stops (no round started) and the stop says to run `resume.py <ID> accept` when the lock frees. A refusal by the rule itself goes on at once, as before.
 - **The owner's accept at any round** (the owner, 21 November 2026; IS5a0, PL11): `resume.py <ID> accept` on his line applies once the verifier's findings for the tip are on record, whatever the round, not only at the rounds limit. Before the limit it is refused while a builder or verifier of the slice is at work (run it again when the session ends; a builder's commit since means the tip was never verified, and it is refused), when a newer record (the gate's) is the newest, and for a stop on red checks. At any round, at the limit too, it never covers a finding that names a key, a credential or a security rule (the owner's file 003: a fault that can expose a key, show it back, log it or send it where it was not given). `accepted-<tip>.json` gives the round and `before_the_limit`.
+- **The Stop hook ends inside its installed limit** (the owner, 21 November 2026): the hook is installed with `stop_check.HOOK_TIMEOUT_S` (1800 s; `install.sh` reads it), and every command it runs (checks, acceptance, scans, lint) shares one allowance 90 s under it, each getting only what is left (and 1500 s at most). A command cut off is ended with every process it started (one that held the output pipe kept the old hook waiting), is red, and is named with how long it ran and why in the builder's words and in `stop-timeout-<commit>.json`; a command left with no time is named as not run. `stop_check.py` is installed: run install.sh.
 
 ## Files outside the repository
 

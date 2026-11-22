@@ -430,6 +430,15 @@ M = [
  ("resume.py", '    if phase == "stopped" and (rec / "red_stop.json").exists():\n        raise Refused(f"{slice_id} is stopped on red checks (red_stop.json), not on findings', '    if False:\n        raise Refused(f"{slice_id} is stopped on red checks (red_stop.json), not on findings', "stopped_on_red_checks"),
  ("resume.py", '            seen_in = rnd - 1 if phase == "building" else rnd', '            seen_in = rnd', "applies_in_round_1"),
  ("resume.py", 'None if at_limit else {"round": seen_in, "before_the_limit": True}', '{"round": seen_in, "before_the_limit": True}', "accept_at_the_limit_takes_any_other_finding"),
+ # the owner's word of 21 November, 21: the Stop hook's commands end inside its installed limit
+ ("stop_check.py", '    DEADLINE = time.monotonic() + allowance()\n', '    DEADLINE = None\n', "together_pass_the_allowance"),
+ ("stop_check.py", '            os.killpg(p.pid, signal.SIGKILL)', '            p.kill()', "children_hold_its_output"),
+ ("install.sh", '"command": py + "stop_check.py", "timeout": stop_s}', '"command": py + "stop_check.py", "timeout": 1800}', "install_sh_takes_the_hooks_limit"),
+ ("stop_check.py", 'MARGIN_S = 90\n', 'MARGIN_S = 0\n', "fit_inside_the_hooks_installed_limit"),
+ ("stop_check.py", '    if CUT:  # the slice', '    if False:  # the slice', "record_says_so"),
+ ("stop_check.py", '    if CUT:  # the slice', '    if True:  # the slice', "writes_no_timeout_record"),
+ ("stop_check.py", '    by = "command" if limit >= TIMEOUT_S else "allowance"\n', '    by = "command"\n', "record_says_so"),
+ ("stop_check.py", '    if limit <= 0:\n', '    if False:\n', "left_with_no_time_is_not_run"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
