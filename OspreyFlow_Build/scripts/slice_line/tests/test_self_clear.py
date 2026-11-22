@@ -24,7 +24,7 @@ from test_gates import sh, started, stop_gate, world  # noqa: F401  (world is a 
 from test_resume import V062, changes, owner_line, resume, said_refused, set_state, snapshot, state
 
 PY = sys.executable
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 #: tests/test_layout.py's case, in small: a product folder left at the root of the tree fails it.
 LAYOUT_STAND_IN = '''from pathlib import Path
 

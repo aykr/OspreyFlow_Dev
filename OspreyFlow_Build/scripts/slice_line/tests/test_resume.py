@@ -17,7 +17,7 @@ import pytest
 from test_gates import bash, guard, refused, sh, started, stop_gate, world  # noqa: F401  (world is a fixture)
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 RULINGS_COPY = "slice-line/RULINGS.md"  # in the worktree's own git folder (5)
 
 

@@ -21,9 +21,7 @@ import pytest
 
 import time
 
-from test_gates import bash, refused, sh, world  # noqa: F401  (world is a fixture)
-
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY, bash, refused, sh, world  # noqa: F401  (world is a fixture; TODAY the run's one date: 9)
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
 PROPOSALS = f"{V062}/slice-line/proposals"

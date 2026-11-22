@@ -407,6 +407,8 @@ M = [
  ("guard.py", '            continue  # a quoted message', '            pass  # a quoted message', "conductors_records_writes_are_allowed"),
  ("guard.py", '        seg = VARIABLE.sub(lambda v: known.get(v.group(1), v.group(0)), seg)\n', '', "same_shapes_writing_elsewhere"),
  ("guard.py", '            if left:\n', '            if False:\n', "same_shapes_writing_elsewhere"),
+ # LINE_FIXES_5_BRIEF.md, 9: the run's one date
+ ("tests/test_gates.py", '    day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))\n', '', "the_run_has_one_date"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

@@ -17,7 +17,7 @@ from test_finding_kind import FAULT, GAP, at_verifier, finding, run_verifier
 from test_gates import main_sha, merge, sh, world  # noqa: F401  (world is a fixture)
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 FINDINGS = [finding(FAULT, "the form shows a choice before its data has loaded"),
             finding(GAP, "no test fails if the error message is dropped")]
 
