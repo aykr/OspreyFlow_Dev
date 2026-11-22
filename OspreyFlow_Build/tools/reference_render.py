@@ -57,6 +57,8 @@ BUILD = Path(__file__).resolve().parents[1]
 CORE = BUILD.parent / "OspreyFlow_Core"
 REFERENCE = BUILD / "tests" / "fixtures" / "reference_render"
 MANIFEST = "MANIFEST.json"
+#: The cloud-platform configurations `make cp-policy-check` and the render tests read.
+CLOUD_PLATFORM_FIXTURES = BUILD / "tests" / "fixtures" / "cloud_platform"
 
 #: The two brands the renderers read (`appearance.brand`). `ospreyflow` is the default.
 BRANDS = ("ospreyflow", "govuk")
@@ -107,10 +109,8 @@ def raw_config(shape: str) -> dict[str, Any]:
             },
             "cluster": {"shared_storage_class": "efs-sc"},
         }
-    from tools.cp_policy_check import FIXTURES
-
     name = {"cloud-platform": "development", "cloud-platform-poc": "poc"}[shape]
-    return yaml.safe_load((FIXTURES / f"{name}.yaml").read_text(encoding="utf-8"))
+    return yaml.safe_load((CLOUD_PLATFORM_FIXTURES / f"{name}.yaml").read_text(encoding="utf-8"))
 
 
 def config_for(shape: str, brand: str, **settings: Any) -> Any:
