@@ -22,6 +22,10 @@
 
 Pure only, store ports pinned to 9: the new test; `tests/harness/test_render.py` and the cloud-platform render tests untouched and green; `tests/test_doc_citations_check.py`; `ruff check .` in `OspreyFlow_Core`; ruff format on the files changed. Before your final report run by hand what the conductor runs again: ruff on every file changed and the scan-map check for the test you add.
 
+## Round 7 (22 November 2026, the conductor; read `slices/PL7a2a_ROUND7_TABLE.md` first)
+
+Two open faults, both from the round-6 verifier: (1) the regenerate tool's docstring says the stored files include `deployment.json`, which no shape writes (the renderers write `glass.json`): make the docstring and the test module's docstring agree with what is really stored; (2) the "chart as it renders with `pages.enabled` off" view hides a changed off render when a guarded block closes with `{{- end -}}` (Helm's trailing `-}}` trims the next line whether or not the `if` is taken) and when a guard has no leading dash. **Do not model Helm's text rules further. Make the off-view fail closed:** the scanner accepts exactly one guard form (the exact line `{{- if .Values.pages.enabled }}` closed by the exact line `{{- end }}`, each on a line of its own, no `else`, no nesting of the same guard); for any other form that mentions `pages.enabled` it builds no view, the invariant case fails, and the file and line are named. A red case for each of: a trailing `-}}`, a guard with no leading dash, an `else`, a nested guard, an inline guard (each in the shape the real chart's text would take, rule 15). Change only what these two need.
+
 ## Out of scope
 
 Any renderer, compose, Caddyfile, Helm or setting change; the page service in any deployment (PL7a2b); the identity switch (its own slice after PL4's slice E); I14, I16, I18, I22 render tests; Superset under GOV.UK (PL7b); the demo's deployment (read-only, and nothing is deployed); anything under `apps/`; protected files.
