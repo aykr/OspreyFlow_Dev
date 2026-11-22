@@ -28,7 +28,9 @@ that changes (a workload, an Ingress path, a NetworkPolicy) is a changed file, n
 the chart is with `pages.enabled` off** (`tools.reference_render.chart_off_view`, which reads one
 guard and is not a Helm renderer): a block of a template opened by `{{- if .Values.pages.enabled }}`
 on a line of its own and closed by `{{- end }}` on one of its own, with no `else`, is not in the
-stored file; a template that is nothing but such a block is not a file; a top-level `pages:` section
+stored file (and only where Go's trim markers leave the text around it alone: a dash before `if`,
+a line of content with nothing trailing before the guard, and an end that does not trim what
+follows it; `{{- end -}}`, `{{ if`, a blank line before the guard are shown as a change); a template that is nothing but such a block is not a file; a top-level `pages:` section
 of the chart's default `values.yaml` that says `enabled: false` is not there. So the chart PL7a2b
 changes to add the page service, behind that guard, is the reference unchanged; the same block
 unguarded, guarded by anything else (`if .Values.pages` is true of a mapping that says `enabled:

@@ -11,8 +11,9 @@ changed file, named, in a diff the owner can read.
 
 It changes no renderer: it calls `harness.render.render` and, for the compose shapes, runs
 `harness.apply.stage_deployment` itself (in a temporary folder, with the inputs below fixed), so the
-files stored are the files `apply` writes: the compose file, the Caddyfile, `deployment.json` and
-`deployment.env`, with the env lines `stage_deployment` appends for the page service.
+files stored are the files `apply` writes: the compose file, the Caddyfile, `glass.json` (the file
+the renderers write for the Glass: there is no `deployment.json`) and `deployment.env`, with the
+env lines `stage_deployment` appends for the page service.
 
 **What is pinned, and why.** A render reads things that are not the configuration; each is fixed
 here, so the reference holds the same bytes on every machine and every day:
@@ -254,7 +255,10 @@ def staged_files(config: Any, render_fn: Callable[..., Any]) -> dict[str, bytes]
 _BLOCK_OPEN = re.compile(r"^\s*\{\{-?\s*(?:if|range|with|define|block)\b")
 _BLOCK_END = re.compile(r"^\s*\{\{-?\s*end\s*-?\}\}\s*$")
 _BLOCK_ELSE = re.compile(r"^\s*\{\{-?\s*else\b")
-_PAGES_GUARD = re.compile(r"^\s*\{\{-?\s*if\s+\.Values\.pages\.enabled\s*-?\}\}\s*$")
+_PAGES_GUARD = re.compile(r"^\s*\{\{-\s*if\s+\.Values\.pages\.enabled\s*-?\}\}\s*$")
+#: An end that trims what follows it (`{{- end -}}`): Go's lexer removes the line break and the
+#: indentation after the action whether or not the `if` was taken.
+_TRIMS_AFTER = re.compile(r"\s-\}\}\s*$")
 #: An action anywhere in a line that opens a block, closes one, or is an `else`: a line that holds
 #: one of these other than as the whole of the line (`_BLOCK_OPEN`, `_BLOCK_END`, `_BLOCK_ELSE`
 #: matched, and no second one) is a line whose block count cannot be trusted.
@@ -265,9 +269,10 @@ def _guarded_block_end(lines: list[str], start: int) -> int | None:
     """The index of the line that closes the block opened at `start`, or None when it cannot be
     told: the block is not closed, an action that opens or closes a block (or is an `else`) is
     anywhere in a line but as the whole of it (`{{- if .X }}a{{- end }}`, `  x: 1 {{- end }}`, two
-    on one line), so the count is off, or the guard has an `else` (what is in it renders while the
-    setting is off). None leaves the block in what is stored, which is the cautious side: it shows
-    as a change."""
+    on one line), so the count is off, the guard has an `else` (what is in it renders while the
+    setting is off), or the guard's own end trims what follows it (`{{- end -}}`: off, the line
+    after the block is joined to the one before the guard). None leaves the block in what is
+    stored, which is the cautious side: it shows as a change."""
     depth = 0
     for index in range(start, len(lines)):
         line = lines[index]
@@ -279,7 +284,9 @@ def _guarded_block_end(lines: list[str], start: int) -> int | None:
         elif _BLOCK_END.match(line):
             depth -= 1
             if depth == 0:
-                return index
+                # The guard's own end. An end nested inside is skipped text while the setting is
+                # off, and its trim marker changes nothing; this one's does.
+                return None if _TRIMS_AFTER.search(line) else index
         elif _BLOCK_ELSE.match(line):
             if depth == 1:
                 return None
@@ -288,18 +295,43 @@ def _guarded_block_end(lines: list[str], start: int) -> int | None:
     return None
 
 
+def _left_trim_is_harmless(lines: list[str], start: int, end: int) -> bool:
+    """Whether the guard at `start` (always `{{- if`, which trims all whitespace before it, line
+    breaks and blank lines included) leaves the template as the view has it, when its block is
+    taken out: the line before it is content with nothing trailing, so the trim takes only that
+    line's own break, which the line after the block's end puts back. A guard first in the template
+    is harmless only when nothing but whitespace follows the block (the off render is then a line
+    break: no manifest)."""
+    if start == 0:
+        return not "".join(lines[end + 1 :]).strip()
+    before = lines[start - 1]
+    return (
+        before.endswith("\n") and bool(before[:-1].strip()) and before[:-1] == before[:-1].rstrip()
+    )
+
+
 def without_pages_guard(text: str) -> str:
     """A template as it renders with `pages.enabled` off: every block opened by
     `{{- if .Values.pages.enabled }}` on a line of its own and closed by `{{- end }}` on one of its
     own, with no `else`, removed. Not a Helm renderer: it understands that one guard and nothing
     else, and a guard of any other shape (`if .Values.pages`, which is true of a mapping that says
     `enabled: false`; `if or .Values.pages.enabled ...`; a guard and its end on one line) is left
-    where it is and shows as a changed template."""
+    where it is and shows as a changed template.
+
+    Go's lexer applies a trim marker whether or not an `if` is taken, so the view is the off render
+    only where the markers leave the whitespace around the block alone: the guard must have the dash
+    on its left (`{{ if` leaves its indentation and line break in the render), the line before it
+    must be content with nothing trailing (blank lines and trailing spaces are eaten), and its own
+    end must not trim what follows (`{{- end -}}` joins the next line to the one before). Write the
+    guard as `{{- if .Values.pages.enabled }}` ... `{{- end }}`, after a line of content; any other
+    form shows as a change, which is the cautious side."""
     lines = text.splitlines(keepends=True)
     kept: list[str] = []
     index = 0
     while index < len(lines):
         end = _guarded_block_end(lines, index) if _PAGES_GUARD.match(lines[index]) else None
+        if end is not None and not _left_trim_is_harmless(lines, index, end):
+            end = None
         if end is None:
             kept.append(lines[index])
             index += 1
