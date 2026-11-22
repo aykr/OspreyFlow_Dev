@@ -1,0 +1,10 @@
+# SE6b: every open case before round 11 (22 November 2026, 16:53 UTC)
+
+**The owner's rule (21 November 2026): no round from 5 on starts without a table of every open case.** Written by the conductor from the round-10 verifier's record (tip `16cb58d916`) and the round-10 table (`slices/SE6b_ROUND10_TABLE.md`). Nothing was run by the conductor. **The owner added a round (a third `add-round` line); the limit is now 11.**
+
+| Case | Raised in | Kind | Status at `16cb58d916` |
+| --- | --- | --- | --- |
+| Every case of rounds 1 to 9 (the stamp-first removal, the dashboard list, the figures, the moved Admin client path of round 10) | rounds 1 to 10 | faults and gaps | Answered; the round-10 verifier read only the one-path change and raised nothing on them |
+| **The live test added in round 9, `test_a_stamped_dashboard_has_no_figures_in_the_list_and_is_pending`, stamps the fixed name `osprey-dashboard-a` and never takes the stamp away.** The stamp is kept in the shared control schema, not the test's own schema, so on the next run against the same Postgres the earlier tests in the same file are refused with `DashboardRemoved` when they write that name (`test_each_dashboard_is_counted_on_its_own`, `test_a_standing_failure_is_shown_and_a_later_success_clears_it`), and afterwards every schema's dashboard list shows stale names. | round 10 | **fault in behaviour** (test isolation) | **Open** |
+
+**Open: 1 case.** **The fix, and only this:** in that one live test, either stamp a name that is unique to the run (and to the test's own schema) so no other test or run can write it, or remove the stamp in the test's teardown, whichever the file's other tests already do for their own state; show that a second run of the file against the same Postgres no longer refuses the earlier tests (name how: by reading the teardown against the stamp store's own delete, as there is no stack here, and say that a live run is owed). **Change no product code and no other test.** The verifier reads only this change.
