@@ -16,8 +16,12 @@
  * is told in words. The store refuses a value over `MAX_STAGED_VALUE_BYTES` as a second guard.
  * WHO CAN READ IT. Only the session that staged it: a token must be in the session's own list (`session.staged`) and the
  * record must name the session's own subject. A token that is another session's, made up, expired or already used reads as
- * "no longer held", in the same words, and says nothing of which it was. Never written to disk: the store is Valkey, or
- * memory in a test.
+ * "no longer held", in the same words, and says nothing of which it was.
+ * NEVER WRITTEN TO DISK. The folder is held in the pages process's own memory (`createApp`'s `stagedStore`, a
+ * `MemorySessionStore`), not in the session's store: the deployment's Valkey keeps its built-in save points and snapshots its
+ * keys to disk, so `ValkeySessionStore` refuses this prefix, and a test (`studioReleasesRound4.test.ts`) shows that no folder
+ * key reaches the session store. The cost: a folder is lost when the pages process restarts (the person is told it is no longer
+ * held and chooses the folder again), and a second pages process would not see the first's folders.
  */
 import type { SessionRecord } from "./sessionPolicy.js";
 import { randomToken, ttlSeconds } from "./sessionPolicy.js";

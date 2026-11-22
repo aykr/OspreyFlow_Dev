@@ -566,9 +566,8 @@ async function releasesPost(req: Request, res: Response): Promise<void> {
       token = await held.put(folder);
     } catch (error) {
       if (!(error instanceof StagedTooLarge)) throw error;
-      // A folder over what is held is said as large; a session with under a second left is said as ending, not as a folder fault.
-      const ending = error.reason === "session";
-      renderReleases(req, res, frame, { ...base, problem: ending ? RELEASE_WORDS.sessionEnding : RELEASE_WORDS.tooLarge }, ending ? 503 : 413);
+      const said = notHeld(error);
+      renderReleases(req, res, frame, { ...base, problem: said.words }, said.status);
       return;
     }
     renderReleases(req, res, frame, { ...base, ...stagedView(token, folder) });
@@ -603,6 +602,25 @@ async function releasesPost(req: Request, res: Response): Promise<void> {
   });
 }
 
+/** A folder that cannot be held, in words: a folder over what is held is said as large; a session with under a second left, as ending. */
+function notHeld(error: StagedTooLarge): { words: string; status: number } {
+  const ending = error.reason === "session";
+  return { words: ending ? RELEASE_WORDS.sessionEnding : RELEASE_WORDS.tooLarge, status: ending ? 503 : 413 };
+}
+
+/** Writes the folder's last check down; false, with the page already sent in words, when it cannot be held (a session about to end). */
+async function saveChecked(input: { req: Request; res: Response; frame: Frame; held: Held; token: string; folder: Staged; base: ReleaseView }): Promise<boolean> {
+  try {
+    await input.held.save(input.token, input.folder);
+    return true;
+  } catch (error) {
+    if (!(error instanceof StagedTooLarge)) throw error;
+    const said = notHeld(error);
+    renderReleases(input.req, input.res, input.frame, { ...input.base, problem: said.words }, said.status);
+    return false;
+  }
+}
+
 async function continueSteps(input: {
   req: Request;
   res: Response;
@@ -629,7 +647,7 @@ async function continueSteps(input: {
       return;
     }
     folder.check = { clean: (answer.plan.refused ?? []).length === 0, ownDraftVersion: answer.plan.own_draft_version ?? null, confirmed };
-    await held.save(token, folder);
+    if (!(await saveChecked({ req, res, frame, held, token, folder, base }))) return;
     renderReleases(req, res, frame, shown({ check: checkView(answer.plan, folder), clean: folder.check.clean }));
     return;
   }
@@ -649,7 +667,7 @@ async function continueSteps(input: {
     // A refusal at the write (a draft someone opened since the check, say) wrote nothing: it is shown as a refused check, so a
     // new check goes on from it.
     folder.check = { clean: false, ownDraftVersion: answer.plan.own_draft_version ?? null, confirmed };
-    await held.save(token, folder);
+    if (!(await saveChecked({ req, res, frame, held, token, folder, base }))) return;
     renderReleases(req, res, frame, shown({ check: checkView(answer.plan, folder), clean: false }));
     return;
   }

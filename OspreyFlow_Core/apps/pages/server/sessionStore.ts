@@ -19,7 +19,9 @@ export const LOGIN_KEY_PREFIX = "pages-login:";
 
 /**
  * A release folder held for a check and an import (slice IS5a), under its own prefix: a random token names it, the session that
- * staged it is the only one that can read it, and every key has a limit like the rest. Nothing is ever written to disk.
+ * staged it is the only one that can read it, and every key has a limit like the rest. It lives only in the pages process's own
+ * memory (`MemorySessionStore`): the deployment's Valkey keeps its built-in save points and writes snapshots to disk, so
+ * `ValkeySessionStore` refuses this prefix outright.
  */
 export const STAGED_KEY_PREFIX = "pages-staged:";
 
@@ -57,6 +59,13 @@ function guardKey(key: string): void {
   const ok = typeof key === "string" && PREFIXES.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
   if (!ok) {
     throw new StoreRefusal(`the key is not under this service's prefixes ${PREFIXES.join(" or ")}`);
+  }
+}
+
+/** The Valkey store never carries a held folder: Valkey saves its keys to disk, and a folder holds recipes and mappings. */
+function guardNotStaged(key: string): void {
+  if (typeof key === "string" && key.startsWith(STAGED_KEY_PREFIX)) {
+    throw new StoreRefusal("a held release folder is kept in the process's memory only: Valkey saves its keys to disk");
   }
 }
 
@@ -104,6 +113,9 @@ export class MemorySessionStore implements SessionStore {
     guardKey(key);
     guardTtl(ttlSeconds);
     guardValue(key, value);
+    // This store holds a release folder in the process's memory for a deployment, so a key nobody reads again must not stay:
+    // every write first removes what has expired.
+    for (const stored of [...this.entries.keys()]) this.live(stored);
     this.entries.set(key, { value, expiresAt: this.clock() + ttlSeconds * 1000 });
   }
 
@@ -156,12 +168,14 @@ export class ValkeySessionStore implements SessionStore {
 
   async get(key: string): Promise<string | null> {
     guardKey(key);
+    guardNotStaged(key);
     return this.client.get(key);
   }
 
   /** `SET key value EX ttl`: the value and its time limit in one command, so no key is ever without one. */
   async set(key: string, value: string, ttlSeconds: number): Promise<void> {
     guardKey(key);
+    guardNotStaged(key);
     guardTtl(ttlSeconds);
     guardValue(key, value);
     await this.client.set(key, value, "EX", ttlSeconds);
@@ -169,17 +183,20 @@ export class ValkeySessionStore implements SessionStore {
 
   async expire(key: string, ttlSeconds: number): Promise<boolean> {
     guardKey(key);
+    guardNotStaged(key);
     guardTtl(ttlSeconds);
     return (await this.client.expire(key, ttlSeconds)) === 1;
   }
 
   async del(key: string): Promise<void> {
     guardKey(key);
+    guardNotStaged(key);
     await this.client.del(key);
   }
 
   async take(key: string): Promise<string | null> {
     guardKey(key);
+    guardNotStaged(key);
     return this.client.getdel(key);
   }
 }
