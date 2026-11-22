@@ -1,0 +1,1 @@
+tests/services/api/test_bounded_source_reader.py	-	walks only its own temporary folder (it imports tests/services/api/test_studio_staging_routes.py, whose one rglob lists the files of a temporary root)
