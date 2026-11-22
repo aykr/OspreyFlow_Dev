@@ -52,6 +52,18 @@ What a mistake would do, and the case that catches it:
   `test_the_registration_check_sees_each_planted_fault`;
 - a BI tool able to read the record of removals —
   `test_the_reader_role_is_never_given_the_record_of_removals`;
+- the real Keycloak adapter reads a refused DELETE (a 5xx, a 409) or a failed lookup as done, so
+  the route audits a completed removal and answers 204 for an identity still registered with its
+  working secret, or answers a bare 500 with no words —
+  `test_a_refused_delete_at_the_real_keycloak_adapter_is_a_refusal_in_words`,
+  `test_a_failed_lookup_at_the_real_keycloak_adapter_is_a_refusal_in_words`, the adapter-level
+  cases beside them, and `test_the_keycloak_check_sees_each_planted_fault` (the old
+  `delete_dashboard` and `_uuid` put back);
+- the row security that hides a stamped identity's rows is right only in the fake's model of it: it
+  is run as a real, non-owner login on a real Postgres in
+  `tests/services/report_sync/test_report_sync.py` (`test_a_stamped_dashboards_rows_are_not_
+  returned_to_the_readers_role` and its neighbours), a live file; the reader cases here are the
+  pure model of the same behaviour;
 - the next sync does not prune what is no longer configured, or prunes only one table, or prunes
   what is still configured — `test_the_next_sync_prunes_a_dashboard_no_longer_configured` and
   `test_the_sync_s_check_sees_each_planted_fault`;

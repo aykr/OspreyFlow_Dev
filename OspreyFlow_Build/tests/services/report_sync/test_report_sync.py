@@ -12,23 +12,32 @@ What a mistake would do, and the case that catches it:
 - two sync instances pulling the same case twice — `test_one_pull_across_two_instances`;
 - a deregistered dashboard's figures left behind — `test_a_dashboard_no_longer_configured_is_removed`;
 - a BI tool able to write the mart — `test_the_readers_role_cannot_write`;
-- a hung loop reported healthy — `test_health_needs_a_recent_pass`.
+- a hung loop reported healthy — `test_health_needs_a_recent_pass`;
+- a removed dashboard identity's rows (N19, slice SE6b) still returned to a BI tool's role, on a real
+  Postgres, not on the pure fake's model of row-level security — `test_a_stamped_dashboards_rows_are_
+  not_returned_to_the_readers_role`, `test_every_table_with_a_dashboard_column_hides_a_stamped_
+  dashboard`, `test_a_restart_of_the_sync_keeps_a_stamped_dashboard_hidden`, and
+  `test_the_live_reader_check_sees_each_planted_fault` (policy dropped, security disabled).
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import secrets
 import threading
 import time
 import uuid
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import asyncpg
 import pytest
 from services.api.config import PostgresConfig, ValkeyConfig
-from services.report_sync.mart import Mart
+from services.api.report_freshness import ReportFreshness
+from services.report_sync.mart import CONTROL_SCHEMA, DASHBOARD_TABLES, Mart
 from services.report_sync.sync import Dashboard, SyncRefused, TokenSource, sync_once
 from valkey.asyncio import Valkey
 
@@ -285,3 +294,210 @@ async def test_a_pass_on_entra_asks_with_the_scope(world: tuple[str, _World], st
     mart, valkey = stores
     summary = await sync_once([board], mart, valkey, slot=1)
     assert summary.failed == 0 and summary.pulled == 1 and w.tokens == 1, (summary, w.tokens)
+
+
+# --- N19 (slice SE6b): a removed identity's rows are not returned to a BI tool's role -----
+#
+# The pure tests in `tests/services/api/test_removed_identity_mart_rows.py` run the real `Mart` and
+# `ReportFreshness` over a stand-in for the driver, whose model of row-level security is the
+# author's reading of Postgres. These run the same statements on a real Postgres and read as a real
+# login role that is not the tables' owner (what Superset connects as), so a refusal or a bypass the
+# stand-in does not model (the policy not applying to that role, the function not executable by it,
+# the policy not surviving a second bootstrap) fails here.
+
+
+def _as_reader(role: str, password: str) -> str:
+    return dataclasses.replace(PostgresConfig.from_env(), user=role, password=password).dsn
+
+
+@pytest.fixture
+async def reader(stores: tuple[Mart, Valkey]) -> Iterator[str]:
+    """A login role that may read the mart and nothing else, and its DSN."""
+    mart, _ = stores
+    role, password = f"reader_{new_id().lower()}", secrets.token_urlsafe(12)
+    await mart.ensure_reader(role, password)
+    yield _as_reader(role, password)  # type: ignore[misc]
+    await mart.drop_reader(role)
+
+
+@pytest.fixture
+async def removals(stores: tuple[Mart, Valkey]) -> Iterator[list[str]]:
+    """The removal record is shared by every mart schema (its own schema), so a test that stamps a
+    dashboard takes its stamp away again."""
+    mart, _ = stores
+    stamped: list[str] = []
+    yield stamped  # type: ignore[misc]
+    async with mart._pool.acquire() as conn:  # noqa: SLF001
+        await conn.execute(
+            f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = ANY($1::text[])",
+            stamped,
+        )
+
+
+async def _two_dashboards(mart: Mart) -> tuple[str, str]:
+    """A dashboard to remove and one to keep, each with a figure row and a pull row of a refusal."""
+    gone, kept = (f"osprey-dashboard-{new_id().lower()}" for _ in range(2))
+    for board in (gone, kept):
+        at = datetime.now(UTC)
+        feed = [("total", "alerts", "", "", 3)]
+        await mart.replace(board, "case-1", "Operation Ledger", 12, feed, at)
+        await mart.record_failure(board, "case-2", "the feed was refused (403)", at)
+    return gone, kept
+
+
+async def _what_the_reader_returns(
+    dsn: str, schema: str, *boards: str
+) -> dict[str, dict[str, int]]:
+    """Per dashboard, per table, how many rows a read by the reader's role returns; and, under the
+    empty name, how many rows an unfiltered read returns (a hidden row is not counted there)."""
+    conn = await asyncpg.connect(dsn)
+    try:
+        found = {
+            board: {
+                table: await conn.fetchval(
+                    f"SELECT count(*) FROM {schema}.{table} WHERE dashboard = $1", board
+                )
+                for table in DASHBOARD_TABLES
+            }
+            for board in boards
+        }
+        found[""] = {
+            table: await conn.fetchval(f"SELECT count(*) FROM {schema}.{table}")
+            for table in DASHBOARD_TABLES
+        }
+        return found
+    finally:
+        await conn.close()
+
+
+async def _reader_leaks(dsn: str, schema: str, hidden: str, shown: str) -> list[str]:
+    """What is wrong with what the reader returns, as a list: a hidden dashboard's row in any table
+    (counted, filtered or not), a shown one's missing."""
+    got = await _what_the_reader_returns(dsn, schema, hidden, shown)
+    wrong = [f"{hidden}: {n} row(s) read from {t}" for t, n in got[hidden].items() if n]
+    wrong += [f"{shown}: no row read from {t}" for t, n in got[shown].items() if not n]
+    if got[""] != got[shown]:
+        wrong.append(f"an unfiltered read counts {got['']}, not {got[shown]}: a hidden row counts")
+    return wrong
+
+
+async def test_a_stamped_dashboards_rows_are_not_returned_to_the_readers_role(
+    stores: tuple[Mart, Valkey], reader: str, removals: list[str]
+) -> None:
+    """Before the stamp the reader reads both dashboards in both tables. From the stamp, whether or
+    not the rows are deleted yet, it reads none of the stamped one's (by name or in a count), the
+    owner's own read still holds them (hidden, not deleted), the reader's grant on the control
+    schema is nil, and a present identity's rows are still read (rule 4)."""
+    mart, _ = stores
+    gone, kept = await _two_dashboards(mart)
+    freshness = ReportFreshness(mart._pool, mart.schema)  # noqa: SLF001
+    before = await _what_the_reader_returns(reader, mart.schema, gone, kept)
+    assert before[gone] == before[kept] == {"pulls": 2, "figures": 1}, before
+
+    removals.append(gone)
+    assert await freshness.stamp(gone) is True
+    assert await _reader_leaks(reader, mart.schema, gone, kept) == []
+    assert await mart.figures(gone) and await mart.pulls(gone), "the stamp hides, never deletes"
+
+    conn = await asyncpg.connect(reader)
+    try:
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            await conn.fetch(f"SELECT * FROM {CONTROL_SCHEMA}.removed_dashboards")
+    finally:
+        await conn.close()
+
+    assert await freshness.purge(gone) > 0
+    assert await _reader_leaks(reader, mart.schema, gone, kept) == []
+    assert await mart.figures(gone) == [] and await mart.pulls(gone) == []
+    assert await mart.purge_removed() == 0, "a second purge finds nothing and harms nothing"
+    assert await _reader_leaks(reader, mart.schema, gone, kept) == []
+
+
+class _ClaimsAlways:
+    """The claim in Valkey is not what these cases are about: every claim is ours."""
+
+    async def set(self, *_: object, **__: object) -> bool:
+        return True
+
+
+async def test_the_next_sync_pass_purges_a_stamped_dashboard_and_the_reader_never_sees_it(
+    world: tuple[str, _World], stores: tuple[Mart, Valkey], reader: str, removals: list[str]
+) -> None:
+    """A stamped identity still in the environment's list (its deletion at the provider failed, its
+    secret works): the pass writes nothing for it, deletes what the Conduit could not, and a reader
+    reads none of its rows before, during or after."""
+    base, _ = world
+    mart, _ = stores
+    valkey = _ClaimsAlways()
+    board, kept = _dashboard(base), _dashboard(base)
+    await sync_once([board, kept], mart, valkey, slot=1)  # type: ignore[arg-type]
+    assert len(await mart.figures(board.client_id)) == 2
+    removals.append(board.client_id)
+    assert await ReportFreshness(mart._pool, mart.schema).stamp(board.client_id)  # noqa: SLF001
+    assert await _reader_leaks(reader, mart.schema, board.client_id, kept.client_id) == []
+    await sync_once([board, kept], mart, valkey, slot=2)  # type: ignore[arg-type]
+    assert await mart.figures(board.client_id) == [] and await mart.pulls(board.client_id) == []
+    assert len(await mart.figures(kept.client_id)) == 2
+    assert await _reader_leaks(reader, mart.schema, board.client_id, kept.client_id) == []
+
+
+async def test_every_table_with_a_dashboard_column_hides_a_stamped_dashboard(
+    stores: tuple[Mart, Valkey],
+) -> None:
+    """From Postgres's own catalogue, not from the code's list: every table in the mart's schema
+    that names a dashboard has row-level security on and the policy that asks the stamp, so a table
+    added later without the hiding fails here."""
+    mart, _ = stores
+    async with mart._pool.acquire() as conn:  # noqa: SLF001
+        found = await conn.fetch(
+            """SELECT c.relname, c.relrowsecurity,
+                      (SELECT count(*) FROM pg_policies p WHERE p.schemaname = $1
+                       AND p.tablename = c.relname AND p.policyname = 'hide_removed') AS policies
+               FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+               WHERE n.nspname = $1 AND c.relkind = 'r' AND EXISTS (
+                   SELECT 1 FROM information_schema.columns k WHERE k.table_schema = $1
+                   AND k.table_name = c.relname AND k.column_name = 'dashboard')""",
+            mart.schema,
+        )
+    assert {r["relname"] for r in found} == set(DASHBOARD_TABLES)
+    assert [r["relname"] for r in found if not r["relrowsecurity"] or r["policies"] != 1] == []
+
+
+async def test_a_restart_of_the_sync_keeps_a_stamped_dashboard_hidden(
+    stores: tuple[Mart, Valkey], reader: str, removals: list[str]
+) -> None:
+    """`CREATE POLICY` is re-run on every bootstrap (every start of `report-sync` and of any process
+    that opens the mart): it must not widen what the reader reads, nor fail on what exists."""
+    mart, _ = stores
+    gone, kept = await _two_dashboards(mart)
+    removals.append(gone)
+    assert await ReportFreshness(mart._pool, mart.schema).stamp(gone)  # noqa: SLF001
+    await mart._bootstrap()  # noqa: SLF001
+    again = await Mart.connect(PostgresConfig.from_env().dsn, schema=mart.schema)
+    try:
+        assert await _reader_leaks(reader, mart.schema, gone, kept) == []
+    finally:
+        await again.close()
+
+
+@pytest.mark.parametrize("plant", ["drop the policy on figures", "switch security off on pulls"])
+async def test_the_live_reader_check_sees_each_planted_fault(
+    stores: tuple[Mart, Valkey], reader: str, removals: list[str], plant: str
+) -> None:
+    """Rule 15: the same check, with the hiding undone on one table at a time, names the rows the
+    reader then reads. A check that stayed empty here could not have found a leak."""
+    mart, _ = stores
+    gone, kept = await _two_dashboards(mart)
+    removals.append(gone)
+    assert await ReportFreshness(mart._pool, mart.schema).stamp(gone)  # noqa: SLF001
+    assert await _reader_leaks(reader, mart.schema, gone, kept) == []
+    async with mart._pool.acquire() as conn:  # noqa: SLF001
+        if plant.startswith("drop"):
+            await conn.execute(f"DROP POLICY hide_removed ON {mart.schema}.figures")
+            # With no policy, row security denies every row to a non-owner: the reader reads none of
+            # `figures`, the shown dashboard's included. The check says so, from the other side.
+            expected = f"{kept}: no row read from figures"
+        else:
+            await conn.execute(f"ALTER TABLE {mart.schema}.pulls DISABLE ROW LEVEL SECURITY")
+            expected = f"{gone}: 2 row(s) read from pulls"
+    assert expected in await _reader_leaks(reader, mart.schema, gone, kept)
