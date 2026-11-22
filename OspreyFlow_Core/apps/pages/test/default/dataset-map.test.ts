@@ -318,9 +318,11 @@ describe("the dataset map (Scenario DM)", () => {
     const w = await make(person({ pipelines: [recipe({ label: "Visible only with the right" })] }), [secret]);
     const unknown = await w.get(`${PATH}&dataset=no-such-dataset`);
     const forbidden = await w.get(`${PATH}&dataset=secret-ds`);
-    // A dataset that exists for someone else and one that does not are one page, byte for byte: nothing of the id is echoed.
+    // A dataset that exists for someone else and one that does not are one page, byte for byte but for the nonce: nothing of the id is echoed.
     expect(forbidden.status).toBe(unknown.status);
-    expect(forbidden.text).toBe(unknown.text);
+    // (Each response carries its own script nonce, which is the only thing allowed to differ.)
+    const unnonced = (html: string): string => html.replace(/nonce="[^"]*"/g, 'nonce="-"');
+    expect(unnonced(forbidden.text)).toBe(unnonced(unknown.text));
     for (const page of [unknown, forbidden]) {
       expect(textOf(placeOf(page.text))).toContain(REFUSED);
       expect(page.text).not.toContain("<table");

@@ -474,8 +474,8 @@ def tmp_core(tmp_path: Path) -> Path:
     return core
 
 
-def _rel(path: Path) -> str:
-    return path.relative_to(CORE).as_posix()
+def _rel(path: Path, core: Path) -> str:
+    return path.relative_to(core).as_posix()
 
 
 #: Each gate, the violation it must find, written the way each of the page's two files writes a string.
@@ -534,7 +534,7 @@ def test_the_words_gate_reads_the_page_s_own_files(
     target = _plant(tmp_core, source, "ui_words")
     code, out = _words(tmp_core, capsys, monkeypatch)
     assert code == 1, out
-    assert f"{_rel(target)}:" in out, out
+    assert f"{_rel(target, tmp_core)}:" in out, out
 
 
 @pytest.mark.parametrize("source", [WORDS, TEMPLATE], ids=lambda p: p.name)
@@ -549,7 +549,7 @@ def test_the_colour_gate_reads_the_page_s_own_files(
     target = _plant(tmp_core, source, "colour_drift")
     code, out = _colour(tmp_core, capsys, monkeypatch)
     assert code == 1, out
-    assert f"{_rel(target)}:" in out, out
+    assert f"{_rel(target, tmp_core)}:" in out, out
 
 
 @pytest.mark.parametrize("source", [WORDS, TEMPLATE], ids=lambda p: p.name)
@@ -562,7 +562,7 @@ def test_the_branches_gate_reads_the_page_s_own_files(source: Path, tmp_core: Pa
 
     assert found() == []
     target = _plant(tmp_core, source, "no_branches")
-    assert found() == [_rel(target)]
+    assert found() == [_rel(target, tmp_core)]
 
 
 def test_the_design_detector_reads_the_page_s_template(
