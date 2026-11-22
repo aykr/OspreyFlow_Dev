@@ -69,7 +69,6 @@ EXPECTED_FUNCTIONS = 47
 KNOWN_WITHOUT_SCENARIO = {
     "studio-model-text",
     "studio-model-proposals",
-    "studio-frame",
     "studio-screening-lists",
     "studio-dataset-map",
     "studio-pipeline-canvas",
@@ -78,7 +77,6 @@ KNOWN_WITHOUT_SCENARIO = {
     "studio-runs-promotions",
     "studio-runs-drawn-merge",
     "studio-runs-external-orchestration",
-    "studio-releases",
     "working-set",
     "ask-chat",
     "drawing-boards",

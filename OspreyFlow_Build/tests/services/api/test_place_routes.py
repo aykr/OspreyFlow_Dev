@@ -17,7 +17,7 @@ offer a place a body check then refuses, never the reverse (rule 15). Each route
 place whose screens call it (`PLACE_RULES`), and:
 
 1. a place is offered for the rights that reach its entry screen's first read (`ENTRY`; the Glass's
-   case list is everyone's, so any of its routes). `shell/placesByRole.json` records that for every
+   case list is everyone's, so any of its routes). `packages/glass-shared/src/shell/placesByRole.json` records that for every
    role, legacy role and right granted singly, and the Glass's `placesFor` is held to it
    (`shell/places.test.tsx`); `shell/places.json`'s rights are exactly the single rights that open a
    place, and each reaches a screen of that place (read from the workspace's source);
@@ -51,7 +51,7 @@ WORKSPACE_SRC = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/apps/work
 SHARED_SRC = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/packages/glass-shared/src"
 PACKAGE_NAME = "@ospreyflow/glass-shared"
 PLACES_JSON = WORKSPACE_SRC / "shell/places.json"
-BY_ROLE_JSON = WORKSPACE_SRC / "shell/placesByRole.json"
+BY_ROLE_JSON = SHARED_SRC / "shell/placesByRole.json"
 
 # (path pattern, the places whose screens call it, which screen). First match wins.
 PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
@@ -405,9 +405,27 @@ def _chunk_fragments(rel: str, chunk: str) -> list[str]:
     return found
 
 
+class Exporter(dict):
+    """A name the package exports, to the file that exports it. Where two files write one name (`listDatasets`, in the
+    Admin client and in the cases client), the index gives one of them another (`listDatasets as listAdminDatasets`) and
+    `aliases` takes the name an importer writes back to the one its file wrote, so a screen's call is read in the right
+    function."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aliases: dict[str, str] = {}
+
+    def original(self, name: str) -> str:
+        return self.aliases.get(name, name)
+
+
+#: A braced export of the package's index: `export { a, type B, c as d } from "./x/y";`.
+_INDEX_BRACED = re.compile(r"^export\s+(?:type\s+)?\{([^}]*)\}\s*from\s*[\"']\./([^\"']+)[\"'];", re.M)
+
+
 def read_package(
     shared: Path, taken: Iterable[str]
-) -> tuple[dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], Exporter]:
     """The shared package's sources, for a scan of the workspace to read as if they were its own:
     `(files, own, key_of, exporter)`. A file is keyed by its path under `src`, or by `shared:` and
     that path where the workspace (`taken`) holds a file of the same name (the layout stores and the
@@ -418,7 +436,7 @@ def read_package(
     files: dict[str, str] = {}
     own: dict[str, str] = {}
     key_of: dict[str, str] = {}
-    exporter: dict[str, str] = {}
+    exporter = Exporter()
     for p in sorted(shared.rglob("*.ts*")):
         if ".test." in p.name or p.name.endswith(".d.ts") or p.name == "index.ts":
             continue
@@ -427,6 +445,29 @@ def read_package(
         files[key], own[key], key_of[rel] = p.read_text(), rel, key
         for found in _EXPORTED.finditer(files[key]):
             exporter.setdefault(found.group(1) or found.group(2), key)
+    # Where two files write one name, the index says which the package exports under it and which it gives another.
+    index = shared / "index.ts"
+    renamed: set[tuple[str, str]] = set()  # (file's key, the name it wrote) that the index gives another name
+    for listed, module in _INDEX_BRACED.findall(index.read_text() if index.is_file() else ""):
+        key = key_of.get(module + ".ts") or key_of.get(module + ".tsx")
+        for item in listed.split(","):
+            written, _, given = re.sub(r"^\s*type\s+", "", item.strip()).partition(" as ")
+            if key is None or not written:
+                continue
+            exporter[given.strip() or written] = key
+            if given.strip():
+                exporter.aliases[given.strip()] = written
+                renamed.add((key, written))
+    for key, text in files.items():  # a name the index gives away is not the package's under its old name
+        for found in _EXPORTED.finditer(text):
+            name = found.group(1) or found.group(2)
+            if (key, name) in renamed and exporter.get(name) == key:
+                del exporter[name]
+    for key, text in files.items():  # ... where another file writes it, that file is the one the package exports
+        for found in _EXPORTED.finditer(text):
+            name = found.group(1) or found.group(2)
+            if (key, name) not in renamed:
+                exporter.setdefault(name, key)
     return files, own, key_of, exporter
 
 
@@ -455,7 +496,7 @@ def screen_places(root: Path, shared: Path | None = None) -> dict[str, set[str]]
     own = {key: key for key in files}
     base = dict.fromkeys(files, root)
     in_shared: dict[str, str] = {}
-    exporter: dict[str, str] = {}
+    exporter = Exporter()
     if shared is not None:
         shared = shared.resolve()
         package, package_own, in_shared, exporter = read_package(shared, files)
@@ -475,7 +516,7 @@ def screen_places(root: Path, shared: Path | None = None) -> dict[str, set[str]]
         for names in _PACKAGE_IMPORT.findall(text):
             for name in _names_in(names):
                 if name in exporter:
-                    users.setdefault((exporter[name], name), set()).add(key)
+                    users.setdefault((exporter[name], exporter.original(name)), set()).add(key)
     places: dict[str, set[str]] = {f: ({p} if (p := _own_place(own[f])) else set()) for f in files}
     reached: dict[str, set[str]] = {}
     for key, text in files.items():

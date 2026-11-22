@@ -47,6 +47,7 @@ import { MemorySessionStore } from "../../server/sessionStore.js";
 import { main } from "../../server/start.js";
 import type { Running } from "../../server/start.js";
 import { captureOutput } from "../support/capture.js";
+import { noSessionEvents } from "../support/noSessionEvents.js";
 import { testClock } from "../support/clock.js";
 import type { TestClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request as pageRequest, TEST_SESSION_SECRET } from "../support/http.js";
@@ -537,7 +538,7 @@ async function startPages(options: StartOptions = {}): Promise<Pages> {
   const running = await main(
     env,
     { log: (m) => void io.logs.push(m), error: (m) => void io.errors.push(m), exit: (c) => void io.exits.push(c) },
-    { store: memory, identityProvider: provider, host: "127.0.0.1", clock },
+    { store: memory, identityProvider: provider, host: "127.0.0.1", clock, sessionEvents: noSessionEvents },
   );
   if (!running) throw new Error(`the service did not start: ${io.errors.join(" / ")}`);
   everyone.push(running);
@@ -1042,6 +1043,15 @@ describe("path hygiene: the path is decoded once, made canonical, checked, and f
     ["the stream's path with a trailing slash", "/v1/investigations/inv-1/stream/"],
     ["the ticket route, pointless once the page service holds the bearer", "/v1/ws-ticket"],
     ["the ticket route with a trailing slash", "/v1/ws-ticket/"],
+    ["the session-events route, which only the page service's own report may use (SE8c)", "/v1/session-events"],
+    ["the session-events route with a trailing slash", "/v1/session-events/"],
+    ["the session-events route in mixed case", "/v1/Session-Events"],
+    ["the session-events route in capitals with a trailing slash", "/v1/SESSION-EVENTS/"],
+    ["a letter encoded in the session-events route's name", "/v1/session-ev%65nts"],
+    ["a capital encoded in the session-events route's name", "/v1/%53ession-events"],
+    ["a double-encoded letter in the session-events route", "/v1/session-ev%2565nts"],
+    ["a dot segment, encoded, in the session-events route", "/v1/%2e/session-events"],
+    ["a path parameter after the session-events route's name", "/v1/session-events;x=1"],
     ["a path that only begins like /v1", "/v1x/ok"],
     ["a path in capitals", "/V1/ok"],
     ["a path off /v1", "/api/v1/ok"],
@@ -1091,6 +1101,8 @@ describe("path hygiene: the path is decoded once, made canonical, checked, and f
       ["/v1/echo/a%3ab%40c", "/v1/echo/a:b@c"],
       ["/v1/echo/", "/v1/echo/"],
       ["/v1/ws-ticket-not", "/v1/ws-ticket-not"],
+      ["/v1/session-events-not", "/v1/session-events-not"],
+      ["/v1/session-events/x", "/v1/session-events/x"],
       ["/v1/investigations/inv-1/streams", "/v1/investigations/inv-1/streams"],
     ];
     for (const [sent, expected] of cases) {

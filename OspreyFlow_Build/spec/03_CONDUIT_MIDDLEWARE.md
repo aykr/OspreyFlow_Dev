@@ -840,7 +840,17 @@ a watch has nothing to newly fire on.
 
 ```
 POST   /v1/resolution/{entity_type}/run   re-run resolution for one entity type across the whole corpus
+GET    /v1/resolution/jobs/{job_id}       what became of a matching job a run queued, in words (C249, L06)
 ```
+
+`GET /v1/resolution/jobs/{job_id}` is a read of the job queue, not of the graph: it needs the right
+to read reports, is not investigation-scoped (as the run that queued the job is not), and its answer
+is in the server's own words and carries no node, count or value. A job that is waiting, running,
+overdue (running past the matching lock's life, which is not the same as lost), finished, failed or
+gone is each said in words. Records a run left out are not said to a reader, not even as a yes or no
+(rule 3: the run reads the whole corpus as the service principal); the run's own result names them
+for an operator. An id with no record, an expired one and another kind of job's id get the same
+answer, so the route is no oracle for which ids exist.
 
 `ADR-025`'s own mechanism for a resolution comparison config that changed, or a backlog that never
 ran — this acts on every entity of the given type regardless of which investigation's working set
@@ -1649,6 +1659,24 @@ query, pattern run, document view and export records principal, timestamp, the r
 result cardinality, and — where the action crosses a handling boundary — the justification the
 analyst supplied. Audit write failure fails the request; an unaudited read in this domain is
 worse than a refused one.
+
+**Sign-ins and sign-outs are recorded by the product, never by a change to an identity provider**
+(SE8c). The Conduit writes `sign_in_seen` the first time it sees a session, whatever client the
+person signed in through; the page service reports its own callback and sign-out by the one route
+below:
+
+```
+POST   /v1/session-events                 the page service's report of a person's sign-in or sign-out
+```
+
+The body is one field, `kind`, from a closed list (`sign_in`, `sign_out`); any other field is a 422
+and nothing in the body is stored. The event is recorded for the person the token names and no one
+else, once for each report, at most a fixed number a person a minute. It needs no right, because it
+is accepted **only from the page service's own client** (the token's own client claim against the
+page service's configured client, for Keycloak and Entra ID alike): a token issued to any other
+client, a person's own workspace token among them, is refused with one 403 in the same words
+whatever the reason, and writes nothing. Like every audit write it fails closed (503). Refused
+sign-in attempts never reach the Conduit and are in the identity provider's own log.
 
 **Export gate.** `POST /export` evaluates every node and edge in the selection against the
 handling scheme. A `consult_originator` item blocks the export and is named specifically.

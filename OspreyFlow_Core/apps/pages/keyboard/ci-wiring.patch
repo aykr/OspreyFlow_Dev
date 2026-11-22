@@ -1,0 +1,24 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1296,6 +1296,21 @@
+       - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
+         working-directory: OspreyFlow_Core/apps/workspace
+
++  # ADR-152 decision 12 and `CLAUDE.md` rule 13 (slice IS5a): the server-rendered Studio pages' own keyboard runner. Playwright
++  # against the real pages server started inside each case (a free port, the in-memory store, a fake Conduit, the assets built
++  # to a scratch folder), so it needs no Valkey, no stack and no Python. The same Releases flows run with scripts and with
++  # scripts switched off (`apps/pages/keyboard/studio-releases.spec.ts`). A separate job, as the workspace's and the harness's are.
++  pages-keyboard:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with: { node-version: "22" }
++      - run: npm ci
++      - run: npx playwright install --with-deps chromium
++        working-directory: OspreyFlow_Core/apps/pages
++      - run: npm run test:keyboard --workspace apps/pages
++
+   # `06_DECISIONS.md` ADR-049 Stage 2 §6 part A, amendment 21 — the setup screens' own keyboard
+   # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s
+   # own `webServer` array starts it alongside Vite). A separate job from `glass-perf-a11y-keyboard`

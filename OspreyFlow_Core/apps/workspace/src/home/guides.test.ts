@@ -4,7 +4,7 @@
 // is said in words and its tab closed; the promise never rejects.
 import { describe, expect, it, vi } from "vitest";
 
-import { GUIDE_FOR_PLACE, SAVED_KEPT_MS, TAB_CHECK_MS, WORDS, openGuide, type OpenGuideDeps } from "./guides";
+import { GUIDE_FOR_PLACE, SAVED_KEPT_MS, TAB_CHECK_MS, WORDS, openGuide, type OpenGuideDeps } from "@ospreyflow/glass-shared";
 
 type FakeTab = Window & { close: ReturnType<typeof vi.fn>; closed: boolean };
 function fakeTab(): FakeTab {
@@ -19,6 +19,7 @@ const PDF = "%PDF-1.7 synthetic";
 const pdf = (type = "application/pdf", body = PDF) => new Response(body, { status: 200, headers: { "Content-Type": type } });
 const deps = (over: Partial<OpenGuideDeps> = {}): OpenGuideDeps => ({
   apiBaseUrl: "https://conduit.example", bearerToken: "secret-token", showsPdf: true,
+  openTab: () => fakeTab(), save: vi.fn(),
   createUrl: () => "blob:https://glass.example/1", revokeUrl: vi.fn(), later: vi.fn(), every: vi.fn(() => vi.fn()), ...over,
 }); // prettier-ignore
 

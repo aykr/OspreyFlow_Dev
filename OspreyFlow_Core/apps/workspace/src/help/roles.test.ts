@@ -7,11 +7,15 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import BY_ROLE from "../shell/placesByRole.json";
-import * as ROLES_MODULE from "./roles";
-import { RIGHT_WORDS, ROLE_WORDS, rightSays } from "./roles";
+import * as PACKAGE from "@ospreyflow/glass-shared";
+import { PLACES_BY_ROLE as BY_ROLE, RIGHT_WORDS, rightSays, ROLE_WORDS } from "@ospreyflow/glass-shared";
 
-const RIGHTS_PY = join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/schemas/rights.py");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const RIGHTS_PY = join(HERE, "../../../../packages/schemas/rights.py");
+// The roles' words moved to the shared package (`packages/glass-shared/src/help/roles.ts` there): its exports are what `ROLES_MODULE` holds, found
+// by reading the file so that an export added later is held to the rule below too.
+const ROLES_EXPORTS = [...readFileSync(join(HERE, "..", "..", "..", "..", "packages", "glass-shared", "src", "help", "roles.ts"), "utf8").matchAll(/^export (?:async )?(?:function|const) (\w+)/gm)].map((m) => m[1]!);
+const ROLES_MODULE: Record<string, unknown> = Object.fromEntries(ROLES_EXPORTS.map((name) => [name, (PACKAGE as Record<string, unknown>)[name]]));
 
 /** The rights `rights.py` declares, read from its `Right` enum. */
 function declaredRights(source = readFileSync(RIGHTS_PY, "utf8")): string[] {
@@ -64,6 +68,7 @@ describe("the words for roles, teams and Authors", () => {
   it("name no person who holds a right: no refusal here takes people", () => {
     // The owner's ruling (c) on ADR-145 Amendment 4 decision 12: a refusal names the roles that hold the
     // right, never people (studio-b's `whyNotByRole`, L1.8). No export of these words takes holders.
+    expect(ROLES_EXPORTS).toContain("whyNotByRole");
     const takesPeople = Object.entries(ROLES_MODULE).filter(([, v]) => typeof v === "function" && /holders|people/.test(String(v)));
     expect(takesPeople.map(([k]) => k)).toEqual([]);
   });

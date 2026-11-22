@@ -1,5 +1,5 @@
 """The guides' words for places, roles, rights and levels are the Glass's own (ADR-145 Amendment 4
-decision 12): `apps/workspace/src/help/roles.ts` holds them, and the guides, the README and the welcome
+decision 12): `packages/glass-shared/src/help/roles.ts` holds them, and the guides, the README and the welcome
 page copy them by hand. This test holds every copy to that file, so a copy cannot drift from it.
 
 What a drift would do, and the case that catches it:
@@ -30,9 +30,12 @@ import pytest
 BUILD = Path(__file__).resolve().parents[1]
 CORE = BUILD.parent / "OspreyFlow_Core"
 WORKSPACE = CORE / "apps" / "workspace" / "src"
-ROLES_TS = WORKSPACE / "help" / "roles.ts"
+#: The roles' words and the record of the places each role opens live in the shared package (ADR-152 R2, PL4 slice D3e);
+#: the welcome page is a React file and stays in the workspace.
+SHARED = CORE / "packages" / "glass-shared" / "src"
+ROLES_TS = SHARED / "help" / "roles.ts"
 WELCOME = WORKSPACE / "welcome" / "WelcomeAbout.tsx"
-PLACES_BY_ROLE = WORKSPACE / "shell" / "placesByRole.json"
+PLACES_BY_ROLE = SHARED / "shell" / "placesByRole.json"
 
 COPIES = [
     CORE / "docs" / "user-guide.md",

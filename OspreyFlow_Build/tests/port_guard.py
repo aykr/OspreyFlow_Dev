@@ -394,9 +394,46 @@ def guard_socket(sock_cls: type[socket.socket] = socket.socket) -> Callable[[], 
     sock_cls.connect = connect  # type: ignore[method-assign]
     sock_cls.connect_ex = connect_ex  # type: ignore[method-assign]
 
+    # A listener on port 0 takes any free port the system hands it, and that range (49152 to 65535 on macOS) holds the
+    # stacks' ports and the closed ones, free on this Mac because the stacks run on the server. A test that then
+    # connects to its own listener meets the lease refusal above, in one run and not the next: LR1's gate on 20
+    # November 2026 (test_platform_backup.py, 55433 and 55439) and BL1b's on 21 November (test_s3_standin.py, 55438),
+    # both from the S3 stand-in's `serve()`. `outside_reserved` mends one server at a time; this mends every bind to
+    # port 0 made while the guard is on: the system's choice is taken by a probe, a reserved port is passed over (its
+    # probe held open until the search ends, so it is not handed back), and the socket binds to the first port that is
+    # not reserved. A port named outright binds as named.
+    original_bind = getattr(sock_cls, "bind", None)
+
+    def bind(self: socket.socket, address: Any) -> None:
+        if not (isinstance(address, tuple) and len(address) >= 2 and address[1] == 0):
+            return original_bind(self, address)  # type: ignore[misc]
+        reserved, held = reserved_ports(), []
+        try:
+            for _ in range(64):
+                probe = type(self)(self.family, self.type)
+                original_bind(probe, address)  # type: ignore[misc]
+                port = probe.getsockname()[1]
+                if port in reserved:
+                    held.append(probe)
+                    continue
+                probe.close()
+                try:
+                    return original_bind(self, (address[0], port, *address[2:]))  # type: ignore[misc]
+                except OSError:
+                    continue  # taken between the probe and the bind: ask again
+            raise OSError(f"no port outside the guard's reserved ones in 64 tries for {address[0]}")
+        finally:
+            for probe in held:
+                probe.close()
+
+    if original_bind is not None:
+        sock_cls.bind = bind  # type: ignore[method-assign]
+
     def restore() -> None:
         sock_cls.connect = original_connect  # type: ignore[method-assign]
         sock_cls.connect_ex = original_connect_ex  # type: ignore[method-assign]
+        if original_bind is not None:
+            sock_cls.bind = original_bind  # type: ignore[method-assign]
 
     return restore
 

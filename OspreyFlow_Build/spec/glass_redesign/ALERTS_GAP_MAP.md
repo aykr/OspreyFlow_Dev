@@ -130,14 +130,14 @@ decisions plus the high-severity close.
 
 1. **Where they start.** They sign in and land on Home.
    - *Needs your attention* lists open and own-claimed queue alerts, titled "<typology> alert in
-     <case>" (`apps/workspace/src/home/homeData.ts` 101–127).
+     <case>" (`packages/glass-shared/src/home/homeData.ts` 101–127).
    - A hotlist or monitor alert has no typology, so it reads **"Alert alert in Kestrel"**
      (`packages/glass-shared/src/alerts/names.ts` 46–48).
    - Choosing a row **opens the case, not the alert** (`apps/workspace/src/home/HomePage.tsx`
      214–235).
 2. **Finding the alert.** The rail's *Monitoring* entry (`apps/workspace/src/App.tsx` 1410) carries
    a count of open and claimed alerts. Alerts proposed for closing are not counted
-   (`apps/workspace/src/home/homeData.ts` 90–91).
+   (`packages/glass-shared/src/home/homeData.ts` 90–91).
    - It opens on *Queue*.
    - Filters: status, kind and severity. There is no filter for mine, team, age or sort.
 3. **Opening it.** It shows "What fired this alert": the summary in words, and the transactions
@@ -198,8 +198,8 @@ not this lane (see the report).
 | G6 | **"Alert goes to: my team" does nothing to who sees it.** A sentence rule's team is written but never read for a typology alert. | Contradicted (ADR-133 decision 1, "the team the alert goes to") | `services/api/alerts.py` 223; `services/api/alert_queue.py` 96 |
 | G7 | **No way back** from the canvas or the case to the alert. Home opens the case, not the alert. There is no link to an alert. | Not built (no ADR asks) | `apps/workspace/src/alerts/AlertQueue.tsx` 112; `apps/workspace/src/home/HomePage.tsx` 214–235 |
 | G8 | **A team lead has no team view**: no filters for assignee, team or age; no cross-case queue; team and owner alerts cannot be given; and the monitoring dashboard has no Glass screen. | Partly (ADR-134 decision 2: Conduit built, Glass not) | `apps/workspace/src/alerts/AlertQueue.tsx` 128–153; `tests/services/api/test_monitoring_dashboard.py` |
-| G9 | **`closing` is said wrongly or left out.** A pack's status sentence has no `closing` branch ("Closed without an outcome"). Trends count it as open. The rail badge and Home leave it out. | Contradicted | `packages/glass-shared/src/reports/packText.ts` 120–130; `services/api/alerts.py` 287–290; `apps/workspace/src/home/homeData.ts` 90–91 |
-| G10 | **Hotlist and monitor alerts are titled "Alert alert in …"** on Home. | Contradicted (rule 7's spirit: say what it is) | `apps/workspace/src/home/homeData.ts` 120; `packages/glass-shared/src/alerts/names.ts` 46–48 |
+| G9 | **`closing` is said wrongly or left out.** A pack's status sentence has no `closing` branch ("Closed without an outcome"). Trends count it as open. The rail badge and Home leave it out. | Contradicted | `packages/glass-shared/src/reports/packText.ts` 120–130; `services/api/alerts.py` 287–290; `packages/glass-shared/src/home/homeData.ts` 90–91 |
+| G10 | **Hotlist and monitor alerts are titled "Alert alert in …"** on Home. | Contradicted (rule 7's spirit: say what it is) | `packages/glass-shared/src/home/homeData.ts` 120; `packages/glass-shared/src/alerts/names.ts` 46–48 |
 | G11 | **Suppression with an expiry** (ADR-133 decision 7) is not built. `services/api/suppression.py` is node suppression, unrelated. | Recorded | ADR-133 decision 7 |
 | G12 | **Taken back by a revert**: closed with no outcome, said only in reports ("Closed, no outcome"). Nothing in the queue explains it. ADR-134 Amendment 2 leaves how to say it to the owner. | Partly | `services/api/alerts.py` 617–683; `apps/workspace/src/reports/ReportsView.tsx` 16–23 |
 | G13 | **Coverage gaps (rules 13 and 15).** Held rows and Audit are not axe-scanned in any theme: the harness switches only rules, watches and lists. The alerts and watch-panel harnesses have no GOV.UK scan. These actions have no keyboard case: *Withdraw the close*, *Read a saved pattern as a sentence*, Home's attention rows. | Partly | `apps/workspace/keyboard/monitoring-harness.tsx` 281; `apps/workspace/a11y/every-harness.spec.ts` |

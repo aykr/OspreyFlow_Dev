@@ -177,7 +177,8 @@ ADMINISTRATION_RIGHTS = frozenset({
     R.MANAGE_ONTOLOGY, R.MANAGE_GEOSPATIAL, R.READ_AUDIT, R.READ_EXPORT_LEDGER, R.MANAGE_MODELS,
 })  # fmt: skip
 
-#: A right whose name on screen is not its id with spaces (the Glass's `help/roles.ts` RIGHT_NAMES).
+#: A right whose name on screen is not its id with spaces (RIGHT_NAMES in the Glass's
+#: `packages/glass-shared/src/help/roles.ts`).
 RIGHT_NAMES: dict[str, str] = {"edit_target_model": "Edit domain model"}
 
 

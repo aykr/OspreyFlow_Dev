@@ -12,7 +12,7 @@ import type {
 
 type QuotaScope = RunQuota["scope"];
 import { Button, Input, Select } from "../design/primitives";
-import type { AdminApi } from "./api";
+import type { AdminApi } from "@ospreyflow/glass-shared";
 
 export const OPERATIONS_WORDS = {
   withheld: "withheld",

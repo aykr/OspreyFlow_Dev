@@ -21,9 +21,7 @@ import pytest
 
 import time
 
-from test_gates import bash, refused, sh, world  # noqa: F401  (world is a fixture)
-
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY, bash, refused, sh, world  # noqa: F401  (world is a fixture; TODAY the run's one date: 9)
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
 PROPOSALS = f"{V062}/slice-line/proposals"
@@ -240,3 +238,36 @@ def test_the_conductor_may_still_look_at_a_diff(spec):
     for cmd in (f"git apply --check {PROPOSALS}/X.diff", f"git apply --stat {PROPOSALS}/X.diff"):
         p = bash(spec, cmd, seat="conductor")
         assert p.returncode == 0, (cmd, p.stderr)
+
+
+def test_while_a_merge_runs_the_approval_is_recorded_and_the_diff_waits_for_the_merge_then_lands(spec):
+    """LINE_FIXES_5_BRIEF.md, 2 (the owner, 21 November 2026: a running merge blocked two decision commits). The owner's
+    word is recorded at once; the diff, which changes files the gate reads, lands when the merge is done, unasked."""
+    import fcntl
+    import subprocess
+
+    w = spec
+    text = "# Decisions\n\n## ADR-001\n\nThe first.\n\n## ADR-002\n\nThe second.\n"
+    held = (w["data"] / "merge.lock").open("w")
+    fcntl.flock(held, fcntl.LOCK_EX)
+    (w["data"] / "merge.running.json").write_text(json.dumps({"slice": "S9"}))
+    try:
+        h = approved(w, "ADR002", {DECISIONS: text})  # a records commit: goes on during the merge
+        before = heads(w)
+        p = ms(w, "apply-approved", "ADR002", "--wait", "0.02")
+        assert p.returncode != 0 and "a merge (S9) is still running" in p.stdout + p.stderr, p.stdout + p.stderr
+        nothing_changed(w, before)
+        later = subprocess.Popen([w["py"], str(w["lines"] / "merge_slice.py"), "apply-approved", "ADR002"],
+                                 cwd=w["repo"], env=w["env"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        time.sleep(3)
+        assert later.poll() is None  # still waiting for the merge
+        nothing_changed(w, before)
+    finally:
+        (w["data"] / "merge.running.json").unlink(missing_ok=True)
+        fcntl.flock(held, fcntl.LOCK_UN)
+        held.close()
+    out, err = later.communicate(timeout=120)
+    assert later.returncode == 0 and "Applied the owner's approved ADR002" in out, out + err
+    assert "a merge (S9) is running: apply-approved ADR002 waits for it" in err
+    assert (w["repo"] / DECISIONS).read_text() == text
+    assert h in sh("git log -2 --format=%B", w["repo"]).stdout

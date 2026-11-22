@@ -17,7 +17,7 @@ import {
   runScheduleNow,
   scheduleRuns,
   type AdminApi,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 
 const OUTCOME: Record<ScheduleRunView["outcome"], string> = {
   running: "Running",

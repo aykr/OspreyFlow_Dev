@@ -1,0 +1,20 @@
+#!/usr/sbin/nft -f
+# The summary account's own shield (010): an outbound restriction on @SUMMARY_USER@ only. That account may open one
+# connection and no other: TCP to 127.0.0.1 port 11434, the host's own Ollama. No other loopback port (so none of the
+# demo's), no other address, no DNS, nothing on the internet. Every other account is accepted at the first rule, as if
+# the table were not there, and nothing inbound is matched. One table of its own (inet osprey_summary): the job's
+# shield (inet osprey_early) is not changed by it. osprey-summary.service loads it before every run; cleanup.sh
+# deletes it.
+table inet osprey_summary
+delete table inet osprey_summary
+
+table inet osprey_summary {
+	chain output {
+		type filter hook output priority filter; policy accept;
+		meta skuid != "@SUMMARY_USER@" accept
+		ct state established,related accept
+		oifname "lo" ip daddr 127.0.0.1 tcp dport 11434 accept
+		meta l4proto tcp reject with tcp reset
+		reject
+	}
+}

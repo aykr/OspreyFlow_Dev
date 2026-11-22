@@ -420,7 +420,7 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(package_copy: Pa
         'import { useEffect } from "react";\n',
         'import { WITHHELD_SENTENCE } from "../statusbar/StatusBar";\n',
         'import { create } from "zustand";\n',
-        'import BY_ROLE from "../../../../apps/workspace/src/shell/placesByRole.json";\n',
+        'import BY_ROLE from "../../../../apps/workspace/src/shell/places.json";\n',
         'import type { Node } from "../../../../packages/schemas/generated";\n',
     )
     for rel in WHOLE:

@@ -206,8 +206,10 @@ async def declared_markings(
         if not default or default not in levels:
             continue
         own = source.handling.get("classification")
-        if isinstance(own, str) and own and (
-            own not in levels or levels.index(default) < levels.index(own)
+        if (
+            isinstance(own, str)
+            and own
+            and (own not in levels or levels.index(default) < levels.index(own))
         ):
             continue
         kept[source.location] = default
@@ -242,13 +244,9 @@ def source_tables(
         chosen = branch_location(node, location)  # the run's file choice, as Verify's
         if chosen:
             reader = reader.model_copy(update={"source_location": chosen})
-        rows = _read_rows(reader)
-        if limit is not None:
-            rows = rows[:limit]
+        rows = _read_rows(reader, limit=limit)  # the reader stops at `limit`: never a whole read
         table = source_table(node.id, rows, load_id=f"{load_id}:{node.id}")
-        carried = carry_declared_marking(
-            table, default, marked=marked, classification=classified
-        )
+        carried = carry_declared_marking(table, default, marked=marked, classification=classified)
         if carried is not table and default is not None:
             rows = [row | dict.fromkeys(sorted(classified), default) for row in rows]
         raw[node.id] = rows
@@ -393,15 +391,11 @@ def preview_staging(
             step=body.step, problems=[*problems, LISTS_WITHHELD], values_masked=True
         )
     # ADR-140 Amendment 19: the sources' declared default markings, as the run reads them.
-    read = source_tables(
-        draft, pipeline, load_id="preview", limit=PREVIEW_ROWS, declared=declared
-    )
+    read = source_tables(draft, pipeline, load_id="preview", limit=PREVIEW_ROWS, declared=declared)
     every_row = [r for rows in read.raw.values() for r in rows]
     sample = sample_markings(draft, scheme, every_row)
     if not sample.readable_by(principal, scheme):
-        return StagingPreview(
-            step=body.step, problems=[*problems, WITHHELD], values_masked=True
-        )
+        return StagingPreview(step=body.step, problems=[*problems, WITHHELD], values_masked=True)
     try:
         lists = lists_for_run(
             wanted, references, dataset_id=draft.dataset_id or "", storage=storage,

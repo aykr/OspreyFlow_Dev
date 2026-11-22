@@ -48,6 +48,7 @@ from tests.services.api.test_place_routes import (
     _PACKAGE_IMPORT,
     SHARED_SRC,
     WORKSPACE_SRC,
+    Exporter,
     _checks,
     _chunk_fragments,
     _names_in,
@@ -106,7 +107,7 @@ def screen_fragments(root: Path, screen: str, shared: Path | None = None) -> lis
     base = dict.fromkeys(files, root)
     own = {key: key for key in files}
     in_shared: dict[str, str] = {}
-    exporter: dict[str, str] = {}
+    exporter = Exporter()
     if shared is not None:
         shared = shared.resolve()
         package, package_own, in_shared, exporter = read_package(shared, files)
@@ -143,19 +144,19 @@ def screen_fragments(root: Path, screen: str, shared: Path | None = None) -> lis
         for names in _PACKAGE_IMPORT.findall(text):
             for name in _names_in(names):
                 if name in exporter and not exporter[name].startswith(NOT_WALKED):
-                    take(exporter[name], {name})
+                    take(exporter[name], {exporter.original(name)})
     found: list[str] = []
     for rel, names in wanted.items():
         text = files[rel]
         starts = [(m.start(), m.group(1) or m.group(2)) for m in _EXPORTED.finditer(text)]
         if names is None:
-            found += _chunk_fragments(own[rel], text) + _helper_fragments(root, own[rel], text)
+            found += _chunk_fragments(own[rel], text) + _helper_fragments(text, own[rel], text)
             continue
         for i, (start, name) in enumerate(starts):
             if name in names:
                 end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
                 found += _chunk_fragments(own[rel], text[start:end]) + _helper_fragments(
-                    root, own[rel], text[start:end]
+                    text, own[rel], text[start:end]
                 )
     return found
 
@@ -168,10 +169,11 @@ _HELPER = re.compile(
 _HELPER_CALL = re.compile(r"\bcall<[^>]*>\(\s*api,\s*(\w+)\([^,()]+,\s*\"([a-z-]+)\"\)")
 
 
-def _helper_fragments(root: Path, rel: str, chunk: str) -> list[str]:
+def _helper_fragments(whole: str, rel: str, chunk: str) -> list[str]:
+    """`whole` is the file's own text: `admin/api.ts` is in the shared package now (PL4 slice D3e), not under the root."""
     if rel != "admin/api.ts":
         return []
-    helpers = dict(_HELPER.findall((root / rel).read_text()))
+    helpers = dict(_HELPER.findall(whole))
     return [
         f"/v1/admin/{helpers[name]}/{{x}}/{tail}"
         for name, tail in _HELPER_CALL.findall(chunk)
@@ -413,7 +415,7 @@ def test_each_shared_read_is_read_by_exactly_the_sections_named() -> None:
 def test_a_planted_screen_calling_another_section_s_route_is_found(tmp_path: Path) -> None:
     """A Datasets screen that also lists the people, as the real files are laid out."""
     (tmp_path / "admin/sections").mkdir(parents=True)
-    (tmp_path / "admin/api.ts").write_text((WORKSPACE_SRC / "admin/api.ts").read_text())
+    (tmp_path / "admin/api.ts").write_text((SHARED_SRC / "admin/api.ts").read_text())
     (tmp_path / "admin/sections/Datasets.tsx").write_text(
         'import { listDatasets, listPeople, type AdminApi } from "../api";\n'
         "export function Datasets({ api }: { api: AdminApi }) {\n"

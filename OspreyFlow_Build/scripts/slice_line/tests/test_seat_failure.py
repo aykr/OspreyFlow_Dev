@@ -21,7 +21,7 @@ from test_finding_kind import FAULT, GAP, at_verifier, finding
 from test_gates import bash, main_sha, merge, refused, sh, world  # noqa: F401  (world is a fixture)
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 REFUSED = json.loads((Path(__file__).resolve().parent / "fixtures/refused_403_result.json").read_text())
 WORDS = "Your organization has disabled Claude subscription access for Claude Code"
 

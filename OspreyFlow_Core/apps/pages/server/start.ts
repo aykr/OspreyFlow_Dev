@@ -17,6 +17,7 @@ import { unconfiguredProvider } from "./identity.js";
 import type { CodeFlowProvider, IdentityProvider } from "./identity.js";
 import { createOidcFlow } from "./oidc.js";
 import { PAGES } from "./pageList.js";
+import type { SessionEventReporter } from "./sessionEvents.js";
 import { ValkeySessionStore } from "./sessionStore.js";
 import { attachStreamProxy } from "./stream.js";
 import type { SessionStore } from "./sessionStore.js";
@@ -44,6 +45,8 @@ export interface StartDeps {
   streamCheckMs?: number;
   /** How long a browser may send nothing mid-body before it is ended, in milliseconds (default 60 s). A test shortens it. */
   bodyStallMs?: number;
+  /** Reports a sign-in and a sign-out to the Conduit, in place of the real one (a test's own, or one that reports nothing). */
+  sessionEvents?: SessionEventReporter;
 }
 
 export interface Running {
@@ -112,6 +115,7 @@ export async function main(
     ...(deps.clock ? { clock: deps.clock } : {}),
     ...(config.forward ? { forward: config.forward } : {}),
     ...(deps.bodyStallMs === undefined ? {} : { bodyStallMs: deps.bodyStallMs }),
+    ...(deps.sessionEvents ? { sessionEvents: deps.sessionEvents } : {}),
     log: (message) => {
       io.error(message);
     },

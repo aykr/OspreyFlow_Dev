@@ -6,8 +6,8 @@ import { CasePicker } from "../investigation/CasePicker";
 import { startFor, startPlaces, type Rights, type StartPlace } from "../rights/visibility";
 import { AdminWithoutCase } from "./AdminWithoutCase";
 import { HomePage, type AlertJourneyStart, type HomePerson } from "../home/HomePage";
-import { openGuide } from "../home/guides";
-import type { HomeSummary } from "../home/homeData";
+import { openGuide } from "../home/guideDownloads";
+import type { HomeSummary } from "@ospreyflow/glass-shared";
 import { PlaceSwitcher } from "./PlaceSwitcher";
 import { StartBar } from "./StartPage";
 

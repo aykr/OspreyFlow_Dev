@@ -162,6 +162,73 @@ def strip_harmless(cmd: str) -> str:
     return cmd
 
 
+def top_segments(cmd: str) -> List[str]:
+    """The command's parts at its top-level ; && || | and newlines, quotes and backslashes honoured (a backslash-newline
+    joins its lines): each part's own text."""
+    cmd = cmd.replace("\\\n", " ")
+    out, cur, quote, i = [], [], "", 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if quote:
+            cur.append(ch)
+            if ch == "\\" and quote == '"' and i + 1 < len(cmd):
+                cur.append(cmd[i + 1])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "'\"":
+            quote = ch
+        elif ch == "\\" and i + 1 < len(cmd):
+            cur.append(ch + cmd[i + 1])
+            i += 2
+            continue
+        elif cmd.startswith("&&", i) or cmd.startswith("||", i):
+            out.append("".join(cur))
+            cur = []
+            i += 2
+            continue
+        elif ch in ";|\n":
+            out.append("".join(cur))
+            cur = []
+            i += 1
+            continue
+        cur.append(ch)
+        i += 1
+    out.append("".join(cur))
+    return [s for s in out if s.strip()]
+
+
+ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_]\w*)=(\"[^\"$`]*\"|'[^']*'|[^\s;&|$`'\"()<>]*)\s*$")
+VARIABLE = re.compile(r"\$\{?([A-Za-z_]\w*)\}?")
+
+
+def resolved(cmd: str, seat: str) -> str:
+    """The command as the conductor's write checks read it (LINE_FIXES_5_BRIEF.md, 8.3): each part that only runs one
+    of the line's scripts whole (ALLOWED_SCRIPT: no redirect, no subshell) left out, since it writes nothing itself; and
+    each simple variable set earlier in the same command (`D=path`, `export D=path`) and $HOME put in where it is used.
+    A write into a variable it cannot put in is refused, naming the shape."""
+    known = {"HOME": str(Path.home())}
+    kept = []
+    for seg in top_segments(cmd):
+        m = ASSIGNMENT.match(seg)
+        if m:
+            known[m.group(1)] = m.group(2).strip("'\"")
+            continue  # an assignment writes nothing: its value is read where it is used
+        if seat in ("", "conductor") and ALLOWED_SCRIPT.match(re.sub(r"'[^']*'|\"[^\"$`]*\"", "''", seg)):
+            continue  # a quoted message (-m 'docs(process): ...') is no redirect or subshell
+        seg = VARIABLE.sub(lambda v: known.get(v.group(1), v.group(0)), seg)
+        if WRITE_MARKERS.search(seg):
+            left = [v.group(1) for v in VARIABLE.finditer(seg)]
+            if left:
+                raise Refuse("a write in a command that names a shell variable the guard cannot resolve ($" + left[0] +
+                             "): write the path out, or set it as " + left[0] + "=<path> earlier in the same command.")
+        kept.append(seg)
+    return " ; ".join(kept)
+
+
 def is_temp(path: str) -> bool:
     """A scratch path: under a temporary root and inside no git checkout (a checkout in /tmp is still a checkout)."""
     p = str(Path(path).resolve()) + "/"
@@ -267,6 +334,7 @@ def check_path_edit(path: str, seat: str, cwd: str) -> None:
 def check_bash(cmd: str, seat: str, cwd: str) -> None:
     raw = cmd
     cmd = strip_harmless(cmd)
+    writes = resolved(cmd, seat) if seat in ("", "conductor") else cmd  # 8.3: what the write checks below read
     if re.search(r"\bOSPREY_(SLICE\w*|SEAT\w*|STATUS_FILE|PUSH\w*|CLAUDE_BIN|ACCOUNT)\b", cmd):
         raise Refuse("the slice line's settings (OSPREY_SLICE_*, OSPREY_SEAT*, OSPREY_STATUS_FILE) are never set "
                      "from a command: records, seats and the status file are fixed by the launcher.")
@@ -292,16 +360,16 @@ def check_bash(cmd: str, seat: str, cwd: str) -> None:
         raise Refuse("nothing is changed on the test server by hand: test stacks go through stack_lease.sh.")
     if SEAT_LAUNCH.search(cmd):
         raise Refuse("a Claude Code session is started only by run_seat.py, with the guard loaded.")
-    if "slice-line" in cmd and ".ospreyflow" in cmd and WRITE_MARKERS.search(cmd):
+    if "slice-line" in writes and ".ospreyflow" in writes and WRITE_MARKERS.search(writes):
         raise Refuse("the slice line's records and guard are written only by its own scripts.")
-    if (DASHBOARD in cmd or "status.js" in cmd) and WRITE_MARKERS.search(cmd):
+    if (DASHBOARD in writes or "status.js" in writes) and WRITE_MARKERS.search(writes):
         raise Refuse("status.js is written only by board.py.")
-    if WRITE_MARKERS.search(cmd):
+    if WRITE_MARKERS.search(writes):
         for p in PROTECTED + OWNER_ONLY:
-            if names_path(cmd, cwd, p):
+            if names_path(writes, cwd, p):
                 raise Refuse(p + " is the owner's: an agent never writes it (changes go to the owner as a diff).")
     for prefix in LINE_PREFIXES:
-        if prefix in cmd and WRITE_MARKERS.search(cmd):
+        if prefix in writes and WRITE_MARKERS.search(writes):
             raise Refuse(prefix + " is part of the slice line itself: it changes only by the owner's hand.")
     check_git(cmd, seat, cwd)
     if seat == "builder":
@@ -317,8 +385,8 @@ def check_bash(cmd: str, seat: str, cwd: str) -> None:
         if any(seg and seg[0] in ("patch",) or (seg and seg[0].endswith("/patch")) for seg in segments(cmd)):
             raise Refuse("the conductor applies no diff itself: an owner-approved diff goes through merge_slice.py "
                          "apply-approved <name>.")
-    if seat == "conductor" and WRITE_MARKERS.search(cmd):
-        if re.search(r"OspreyFlow_(Core|Build)/(?!process/lanes/v062/)", cmd) or re.search(r"\b(apps|services|packages|tests)/", cmd):
+    if seat == "conductor" and WRITE_MARKERS.search(writes):
+        if re.search(r"OspreyFlow_(Core|Build)/(?!process/lanes/v062/)", writes) or re.search(r"\b(apps|services|packages|tests)/", writes):
             raise Refuse("the conductor writes no product code: its shell writes stay in " + RECORDS_ROOT + ".")
 
 

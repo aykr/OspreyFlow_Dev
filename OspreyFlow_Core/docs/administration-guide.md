@@ -15,10 +15,11 @@ is made from the deployment's own schema, and is checked against it on every cha
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.34** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 2.35** · 2026-11-22 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.35 | 2026-11-22 | Appendix A: `pages.enabled`, whether the deployment runs the page service (the server-rendered pages), from the schema (ADR-152 Amendment 3): false by default, turned on for one deployment at a time by the owner, and nothing reads it yet. |
 | 2.34 | 2026-11-21 | §6a.1's tables: the model gateway (`litellm`) is OspreyFlow's own image, `ospreyflow/litellm`, built from `deploy/litellm/Dockerfile`, no longer a copy of the publisher's image (the owner's ruling of 21 November 2026: built from the publisher's MIT files alone, without its commercially licensed folder or package). PDF made again. |
 | 2.33 | 2026-11-21 | §6a: the GOV.UK install sentences now follow the cloud-platform paragraph, introduced as being about the modes `ospreyflow install` does take, so they are not credited to ADR-148 and not read as advice for `cloud-platform`. PDF made again. |
 | 2.32 | 2026-11-21 | §1a, §4.1, §6a and the README's *Installing and running it* say one thing, in the same words: use the command line (`ospreyflow install`) where the installing computer must itself run no React either, and a GOV.UK install from the command line is headless; the guided page (`ospreyflow install --gui`) also installs a GOV.UK starter, runs only on the computer doing the installing and leaves nothing in the deployment (the owner's ruling of 21 November 2026; ADR-152 Amendment 1, decision 5, "headless from the command line", which is being corrected). The claims about the `apps/harness` application and the `pages` service's rule are dropped from §4.1. PDF made again. |
@@ -3470,6 +3471,8 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
 | `appearance.banner_text` | str or none | none | The banner's own words, in place of "This is a new service.", in the Glass and on the sign-in page: after the phase's tag at alpha or beta, alone at live or none. One line of at most 200 characters. |
+| `pages` | section | — | Whether the deployment runs the page service (the server-rendered pages): off, and turned on for one deployment at a time by the owner. |
+| `pages.enabled` | bool | false | Whether this deployment runs the page service, the server-rendered pages. true or false, nothing else: it is turned on for one deployment at a time, by the owner, in that deployment's own file. |
 | `grading` | section | — | The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `ospreyflow grading change`. |
 | `grading.scheme` | str | `5x5x5` | The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades. |
 | `external` | section | — | What a cloud runs for the deployment instead of a container (Small). |

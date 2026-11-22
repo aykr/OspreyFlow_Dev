@@ -139,26 +139,29 @@ def preflight(account: str, cwd: Path) -> dict:
 
 def record_limits(account: str, info: dict) -> None:
     windows = info.get("unifiedWindows") or {info.get("rateLimitType", "window"): info}
-    st = c.account_state(account)
-    st.setdefault("windows", {}).update({k: {"utilization": v.get("utilization"), "resetsAt": v.get("resetsAt"),
-                                             "status": v.get("status")} for k, v in windows.items()})
-    st["at"] = c.now()
-    c.write_json(c.DATA / "accounts" / f"{account}.json", st)
+    f = c.DATA / "accounts" / f"{account}.json"
+    with c.file_lock(f"account-{account}"):  # read and written by every seat of the account: one at a time (6)
+        st = c.read_json(f) or {}
+        st.setdefault("windows", {}).update({k: {"utilization": v.get("utilization"), "resetsAt": v.get("resetsAt"),
+                                                 "status": v.get("status")} for k, v in windows.items()})
+        st["at"] = c.now()
+        c.write_json(f, st)
 
 
 def append_usage(slice_id: str, build: str, seat: str, account: str, model: str, effort: str, result: dict) -> None:
     u = result.get("usage") or {}
     st = c.account_state(account).get("windows", {})
     f = c.DATA / "usage.tsv"
-    if not f.exists():
-        f.write_text("at\tslice\tbuild\tseat\taccount\tmodel\teffort\tsession\tinput\tcache_create\tcache_read\toutput\t"
-                     "cost_usd\tfive_hour\tseven_day\n")
     row = [c.now(), slice_id, build, seat, account, model, effort, result.get("session_id", ""),
            u.get("input_tokens", 0), u.get("cache_creation_input_tokens", 0), u.get("cache_read_input_tokens", 0),
            u.get("output_tokens", 0), result.get("total_cost_usd", ""),
            (st.get("five_hour") or {}).get("utilization", ""), (st.get("seven_day") or {}).get("utilization", "")]
-    with f.open("a") as fh:
-        fh.write("\t".join(str(x) for x in row) + "\n")
+    with c.file_lock("usage"):  # the header once, each row whole, whichever seat comes first (6)
+        if not f.exists() or f.stat().st_size == 0:
+            f.write_text("at\tslice\tbuild\tseat\taccount\tmodel\teffort\tsession\tinput\tcache_create\tcache_read\t"
+                         "output\tcost_usd\tfive_hour\tseven_day\n")
+        with f.open("a") as fh:
+            fh.write("\t".join(str(x) for x in row) + "\n")
 
 
 def seat_command(seat: str, account: str, model: str, effort: str, env_extra: dict, token: str,
@@ -374,6 +377,11 @@ def builder(slice_id: str) -> int:
     st, frozen = c.state(slice_id), c.read_json(c.rec_dir(slice_id) / "frozen.json")
     if not frozen or st.get("phase") != "building":
         raise SystemExit(f"{slice_id} is not in the building phase ({st.get('phase')}): slice_start.py first.")
+    if st.get("round", 1) >= c.TABLE_ROUND and not c.round_table(slice_id):
+        raise SystemExit(f"{slice_id} is at round {st['round']}: no round from {c.TABLE_ROUND} on starts without the "
+                         f"scout's table of every open case ({c.V062_REL}/slices/{slice_id}_ROUND{st['round']}_TABLE.md, "
+                         "the owner's word of 21 November 2026). The conductor has a read-only scout write it, then runs "
+                         "the builder again; nothing changed.")
     seat = c.seat_settings("builder", st["setting"])
     findings = last_findings(slice_id)
     prompt = (f"You are the builder for slice {slice_id} (build {frozen['build']}), round {st['round']} of "
@@ -383,6 +391,10 @@ def builder(slice_id: str) -> int:
               f"- checks: {frozen['checks']}{findings}")
     wt = Path(frozen["worktree"])
     prompt += rulings_note(wt)
+    table = c.round_table(slice_id) if st.get("round", 1) >= c.TABLE_ROUND else None
+    if table:
+        prompt += (f"\n\nThis round is judged against the scout's table of every open case, {table} (read it whole): "
+                   "close its open rows; nothing outside it is this round's work.")
     tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
     try:
         res = launch_seat(
@@ -484,8 +496,11 @@ def verifier(slice_id: str) -> int:
         board()
         print(f"{slice_id}: the verifier passed {tip[:10]}. The conductor runs merge_slice.py merge {slice_id}.")
         return 0
-    if standing_accept(slice_id):
+    taken = standing_accept(slice_id)
+    if taken:
         return 0
+    if taken is None:  # held behind a lock past the limit: stopped for the conductor, never another round
+        return 1
     if st["round"] >= st["rounds_limit"]:
         first = record["findings"][0]["what"] if record["findings"] else "no verdict"
         stop_slice(slice_id, f"findings after {st['round']} round(s) ({kinds_said(record['kinds'])}; first: "
@@ -511,18 +526,40 @@ def self_clear(slice_id: str) -> bool:
     return True
 
 
-def standing_accept(slice_id: str) -> bool:
+#: How long a standing accept that a lock refuses is held, tried again each time the lock may have freed, before the
+#: slice stops for the conductor (minutes; the owner's word of 21 November 2026: held, never lost).
+STANDING_HOLD_MINUTES = 180
+
+
+def standing_accept(slice_id: str) -> bool | None:
     """The owner's standing accept (standing.tsv; resume.py accept), tried after a verifier record with findings; it
-    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit)."""
+    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit).
+    Refused by a lock alone (resume.Busy), it is held and tried again when the lock frees, before any other round; still
+    held after STANDING_HOLD_MINUTES, the slice stops (None) and the conductor runs resume.py <ID> accept later."""
     import resume  # here, not at the top: resume.py imports this module
-    try:
-        said = resume.act(slice_id, "accept", standing_only=True)
-    except (resume.Refused, resume.ms.Refused) as e:
-        print(f"{slice_id}: not accepted on the standing word: {e}")
-        return False
-    board()
-    print("\n".join(said))
-    return True
+    minutes = float(os.environ.get("OSPREY_STANDING_HOLD_MINUTES") or STANDING_HOLD_MINUTES)
+    until = None
+    while True:
+        try:
+            said = resume.act(slice_id, "accept", standing_only=True)
+        except resume.Busy as e:
+            if until is None:
+                until = time.monotonic() + minutes * 60
+                print(f"{slice_id}: the standing accept is held: {e} It is tried again when the lock frees, before any "
+                      "other round.", flush=True)
+            if time.monotonic() >= until:
+                stop_slice(slice_id, f"the owner's standing accept was held {minutes:g} minutes behind a lock and the "
+                                     f"lock is still held ({e}); no other round was started. When it frees, the "
+                                     f"conductor runs resume.py {slice_id} accept (the standing word).")
+                return None
+            time.sleep(resume.ms.WAIT_POLL_SECONDS)
+            continue
+        except (resume.Refused, resume.ms.Refused) as e:
+            print(f"{slice_id}: not accepted on the standing word: {e}")
+            return False
+        board()
+        print("\n".join(said))
+        return True
 
 
 def conductor_usage(session: str, account: str) -> None:

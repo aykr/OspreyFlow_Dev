@@ -25,6 +25,7 @@ import { main } from "../../server/start.js";
 import type { Running } from "../../server/start.js";
 import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request as pageRequest, TEST_SESSION_SECRET } from "../support/http.js";
+import { noSessionEvents } from "../support/noSessionEvents.js";
 import { generateSecret } from "../support/secret.js";
 
 vi.setConfig({ testTimeout: 20_000 });
@@ -87,7 +88,14 @@ async function boot(): Promise<{ port: number; cookie: string; csrf: string }> {
       OSPREY_PAGES_PUBLIC_ORIGIN: "https://osprey.test",
     },
     { log: () => undefined, error: () => undefined, exit: () => undefined },
-    { store: new MemorySessionStore({ clock }), identityProvider: provider, host: "127.0.0.1", clock, bodyStallMs: STALL_MS },
+    {
+      store: new MemorySessionStore({ clock }),
+      identityProvider: provider,
+      host: "127.0.0.1",
+      clock,
+      bodyStallMs: STALL_MS,
+      sessionEvents: noSessionEvents,
+    },
   );
   if (!running) throw new Error("the service did not start");
   const base = `http://127.0.0.1:${running.port}`;

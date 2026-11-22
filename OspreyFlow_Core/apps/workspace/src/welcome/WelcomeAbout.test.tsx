@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 // The welcome page's About says what the guides say (D2a, 9 November 2026): the four places by the names
-// `help/roles.ts` gives them, with nothing of what is not built (releases, one queue), and drawing boards
+// `packages/glass-shared/src/help/roles.ts` gives them, with nothing of what is not built (releases, one queue), and drawing boards
 // as built, promotion among them (L3.4), with nothing of what is not (the alert when new data meets a
 // drawn item, a drawn dataset merged into another).
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { PLACE_WORDS } from "../help/roles";
+import { PLACE_WORDS } from "@ospreyflow/glass-shared";
 import { WelcomeAbout } from "./WelcomeAbout";
 
 describe("WelcomeAbout", () => {

@@ -9,6 +9,13 @@ Red: the stop is blocked and the builder gets the failure lines only, not the pa
 also red (what is not committed is not on the slice's branch). Green: a test record for the commit is
 written for the board and the verifier, and the builder may stop. After MAX_RED blocked stops the builder
 is let go, the slice is recorded as stopped on red, and it never shows as verifying or done.
+
+Beside the frozen commands and the scans, the files the branch changed against its base meet CI's lint and the scan
+map (LINE_FIXES_5_BRIEF.md, 4; SE7, PL4c and PL4d2 each lost a round or a merge to them at the pre-merge check):
+`ruff check` and `ruff format --check` on OspreyFlow_Core's Python (where CI lints it, with Core's settings), eslint on
+OspreyFlow_Core's and OspreyFlow_Build/tools' JavaScript and TypeScript (CI's `npm run lint` and `lint-tools`), and
+every new test under OspreyFlow_Build/tests that walks a folder needs its row (scan_map.tsv, or the slice's rows
+waiting on main in scan_rows/<ID>.tsv). Red there is red like any other: the same round, the finding sent back.
 Standard library only; Python 3.9 compatible.
 """
 from __future__ import annotations
@@ -16,6 +23,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -26,7 +35,52 @@ BIN = Path.home() / ".ospreyflow" / "slice-line"
 DATA = Path(os.environ.get("OSPREY_SLICE_HOME") or str(BIN))
 MAX_RED = 6
 MAX_LINES = 80
-TIMEOUT_S = 1500
+TIMEOUT_S = 1500  # one command's most
+#: The Stop hook's limit as installed (install.sh reads it from here). Claude Code cancels a hook that runs past it, and
+#: the builder's session then ends with no record (the owner's word of 21 November 2026): so every command the hook
+#: runs shares ALLOWANCE_S, MARGIN_S under it, and each gets only what is left of it.
+HOOK_TIMEOUT_S = 1800
+MARGIN_S = 90
+ALLOWANCE_S = HOOK_TIMEOUT_S - MARGIN_S
+DEADLINE: float | None = None  # time.monotonic() by which every command has ended (set in main)
+CUT: list = []  # each command cut off or not run: name, command, after_s, by ("allowance" or "command")
+
+
+def allowance() -> float:
+    return float(os.environ.get("OSPREY_STOP_ALLOWANCE_SECONDS") or ALLOWANCE_S)
+
+
+def bounded(name: str, cmd, cwd: str, env: dict, shell: bool) -> tuple:
+    """(exit, output) of one command, ended with every process it started when the hook's allowance or one command's
+    limit runs out (124, and the words why, in CUT and the output)."""
+    said = cmd if shell else " ".join(map(str, cmd))
+    limit = TIMEOUT_S if DEADLINE is None else min(TIMEOUT_S, DEADLINE - time.monotonic())
+    by = "command" if limit >= TIMEOUT_S else "allowance"
+    if limit <= 0:
+        CUT.append({"name": name, "command": said, "after_s": 0, "by": by, "run": False})
+        return 124, (f"RED: {name} was not run: the Stop hook's allowance of {allowance():g} s was spent (it is "
+                     f"installed with a limit of {HOOK_TIMEOUT_S} s): {said}")
+    t0 = time.monotonic()
+    p = subprocess.Popen(cmd, shell=shell, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                         start_new_session=True)
+    try:
+        out, err = p.communicate(timeout=limit)
+        return p.returncode, (out or "") + "\n" + (err or "")
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)  # the command and every process it started (they hold its output)
+        except OSError:
+            p.kill()
+        try:
+            out, err = p.communicate(timeout=10)
+        except subprocess.TimeoutExpired:
+            out, err = "", ""
+        after = round(time.monotonic() - t0)
+        CUT.append({"name": name, "command": said, "after_s": after, "by": by, "run": True})
+        why = (f"the Stop hook's allowance of {allowance():g} s was spent (it is installed with a limit of "
+               f"{HOOK_TIMEOUT_S} s, and a hook past it is cancelled)" if by == "allowance"
+               else f"one command's limit of {TIMEOUT_S} s")
+        return 124, (out or "") + "\n" + (err or "") + f"\nRED: {name} was cut off after {after} s: {why}: {said}"
 
 FAIL_LINE = re.compile(
     r"^(FAILED|ERROR)\b|^E\s|^\s*(✗|×|✘)|\bFAIL\b|AssertionError|Error:|error:|^Traceback|"
@@ -58,18 +112,80 @@ def seat_env(cwd: str, slot=None) -> dict:
     return env
 
 
-def run(cmd: str, cwd: str, slot=None) -> tuple:
-    env = seat_env(cwd, slot)
-    try:
-        p = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, timeout=TIMEOUT_S, env=env)
-        return p.returncode, (p.stdout or "") + "\n" + (p.stderr or "")
-    except subprocess.TimeoutExpired:
-        return 124, "RED: timed out after " + str(TIMEOUT_S) + " s: " + cmd
+def run(cmd: str, cwd: str, slot=None, name: str = "a command") -> tuple:
+    return bounded(name, cmd, cwd, seat_env(cwd, slot), shell=True)
 
 
 def git(args: list, cwd: str) -> str:
     p = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
     return p.stdout.rstrip()
+
+
+CORE = "OspreyFlow_Core/"
+TOOLS = "OspreyFlow_Build/tools/"
+JS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+SCAN_ROWS = "OspreyFlow_Build/process/lanes/v062/scan_rows/"
+
+
+def tool(wt: str, env: dict, local: str, name: str):
+    """The worktree's own copy of a tool (its venv's, its node_modules'), else the one on the seat's PATH, else None."""
+    own = Path(wt) / local
+    return str(own) if own.is_file() else shutil.which(name, path=env.get("PATH"))
+
+
+def lint(wt: str, base: str, slice_id: str, slot=None) -> tuple:
+    """(problems, results) of CI's lint and the scan-map check on the files the branch changed against its base."""
+    env = seat_env(wt, slot)
+    changed = [f for f in git(["diff", "--name-only", "--no-renames", "--diff-filter=AMR", base + "...HEAD"], wt).splitlines()
+               if f.strip()]
+    added = set(git(["diff", "--name-only", "--no-renames", "--diff-filter=A", base + "...HEAD"], wt).splitlines())
+    problems, results = [], []
+
+    def one(name, cmd, cwd, files, why):
+        if not files:
+            return
+        if cmd[0] is None:  # fail closed: the builder installs it in its own worktree (both are gitignored)
+            results.append({"name": name, "command": why, "exit": None, "files": files})
+            problems.append("RED: " + name + ": " + why + " is not installed in the worktree or on PATH, and this branch "
+                            "changes " + ", ".join(files[:5]) + ". Install it in your worktree (cd OspreyFlow_Core && "
+                            + ("uv sync --frozen" if why.startswith("ruff") else "npm ci") + ") and stop again.")
+            return
+        code, out = bounded(name, [*cmd, *files], cwd, env, shell=False)
+        results.append({"name": name, "command": " ".join(cmd), "exit": code, "files": files})
+        if code != 0:
+            lines = [ln for ln in out.splitlines() if ln.strip()]
+            problems.append("RED: " + name + " (exit " + str(code) + ") on the files this branch changed: " +
+                            " ".join(cmd) + "\n" + "\n".join(lines[:MAX_LINES]))
+
+    core = str(Path(wt) / "OspreyFlow_Core")
+    py = [f[len(CORE):] for f in changed if f.startswith(CORE) and f.endswith(".py")]
+    ruff = tool(wt, env, CORE + ".venv/bin/ruff", "ruff")
+    one("ruff check", [ruff, "check", "--force-exclude"], core, py, "ruff check")
+    one("ruff format", [ruff, "format", "--check", "--force-exclude"], core, py, "ruff format --check")
+    eslint = tool(wt, env, CORE + "node_modules/.bin/eslint", "eslint")
+    one("eslint", [eslint], core, [f[len(CORE):] for f in changed if f.startswith(CORE) and f.endswith(JS)], "eslint")
+    one("eslint (tools)", [eslint, "-c", str(Path(core) / "eslint.config.js")], str(Path(wt) / "OspreyFlow_Build"),
+        [f[len("OspreyFlow_Build/"):] for f in changed if f.startswith(TOOLS) and f.endswith(JS)], "eslint")
+
+    new = {f[len("OspreyFlow_Build/"):] for f in added
+           if f.startswith("OspreyFlow_Build/tests/") and Path(f).name.startswith("test_") and f.endswith(".py")}
+    if new:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        import scan_select
+        table = scan_select.entries()
+        rows = subprocess.run(["git", "show", "main:" + SCAN_ROWS + slice_id + ".tsv"], cwd=wt, capture_output=True,
+                              text=True)
+        if rows.returncode == 0:
+            table += scan_select.load(rows.stdout)
+        missing = scan_select.unmapped(Path(wt) / "OspreyFlow_Build", table, only=new)
+        results.append({"name": "scan map", "command": "scan_select.unmapped (new tests)", "exit": 1 if missing else 0,
+                        "tests": sorted(new)})
+        if missing:
+            problems.append("RED: scan map: a new test walks a folder and has no row in scan_map.tsv (nor in "
+                            + SCAN_ROWS + slice_id + ".tsv on main): " + ", ".join(missing) + ". Say so in one line "
+                            "with the prefixes it walks: the verifier or the owner proposes its row, and the conductor "
+                            "commits it in records mode; you cannot add it yourself.")
+    return problems, results
 
 
 def main() -> int:
@@ -79,6 +195,8 @@ def main() -> int:
         event = json.loads(sys.stdin.read() or "{}")
     except ValueError:
         event = {}
+    global DEADLINE
+    DEADLINE = time.monotonic() + allowance()
     slice_id = os.environ.get("OSPREY_SLICE", "")
     wt = os.environ.get("OSPREY_SLICE_WORKTREE", "")
     rec = DATA / "records" / slice_id
@@ -106,7 +224,7 @@ def main() -> int:
         cmd = frozen.get(name) or ""
         if not cmd:
             continue
-        code, out = run(cmd, wt, slot)
+        code, out = run(cmd, wt, slot, name)
         results.append({"name": name, "command": cmd, "exit": code})
         if code != 0:
             problems.append("RED: " + name + " (exit " + str(code) + "): " + cmd + "\n" + failures_only(out))
@@ -124,13 +242,26 @@ def main() -> int:
                         "); the owner reinstalls the line (install.sh). Stop and say so in one line.")
     if scans:
         cmd = scan_select.command(wt, scans)
-        code, out = run(cmd, wt, slot)
+        code, out = run(cmd, wt, slot, "scans")
         results.append({"name": "scans", "command": cmd, "exit": code, "tests": scans})
         if code != 0:
             problems.append("RED: scans (exit " + str(code) + "): the pure tests that walk the files this slice "
                             "touches (scan_map.tsv): " + ", ".join(scans) + "\n" + failures_only(out))
 
+    try:  # LINE_FIXES_5_BRIEF.md, 4: CI's lint and the scan map, on what the branch changed
+        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)
+        problems += lp
+        results += lr
+    except Exception as e:  # fail closed, as for the scans
+        problems.append("RED: the lint and scan-map check could not run (" + type(e).__name__ + ": " + str(e) +
+                        "); the owner reinstalls the line (install.sh). Stop and say so in one line.")
+
     sha = git(["rev-parse", "HEAD"], wt)
+    if CUT:  # the slice's record says which command was cut off, after how long and why
+        (rec / ("stop-timeout-" + sha + ".json")).write_text(json.dumps(
+            {"slice": slice_id, "commit": sha, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+             "allowance_s": allowance(), "hook_timeout_s": HOOK_TIMEOUT_S, "command_limit_s": TIMEOUT_S, "cut": CUT},
+            indent=1))
     if not problems:
         record = {"slice": slice_id, "commit": sha, "green": True, "run": "stop-" + uuid.uuid4().hex[:12],
                   "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "results": results,

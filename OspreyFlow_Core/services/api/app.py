@@ -154,6 +154,7 @@ from principal_auth import (
     PrincipalLookupUnavailable,
     SigningKeysUnavailable,
     in_keys_thread,
+    is_application_identity,
 )
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
@@ -559,6 +560,7 @@ from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
 from . import reports as reports_module
 from . import resolution as resolution_module
+from . import resolution_job_status as resolution_job_status_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
@@ -958,6 +960,7 @@ from .release_version import deployment_version, release_version
 from .report_freshness import MartUnreachable, ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .resolution_job_status import ResolutionJobStatus
 from .resolution_trigger import ResolveNowAccepted
 from .review import (
     AcceptCandidateRequest,
@@ -1030,6 +1033,15 @@ from .service_identity import (
     ServiceIdentityRefused,
     ServiceIdentityVerifier,
     is_deployment_client,
+)
+from .sign_in_events import (
+    SESSION_EVENT_REFUSED,
+    SessionEvent,
+    SessionEventResponse,
+    SignInWatch,
+    claims_of,
+    from_page_service,
+    pages_client_for,
 )
 from .site_images import (
     object_key_for,
@@ -1347,6 +1359,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         graph, ValkeyWorkingSetStore(valkey), handling_scheme, valkey=valkey
     )
     app.state.audit = audit
+    # SE8c: the first time a session is seen is recorded, from `get_principal`, and the page service
+    # reports its sign-ins and sign-outs: both over the Valkey and the audit writer above.
+    app.state.sign_in_watch = SignInWatch(valkey, audit)
     app.state.investigations = investigations
     app.state.custom_roles = custom_roles
     app.state.admin_people = admin_people
@@ -2205,6 +2220,20 @@ class SignInRefused(Exception):
         self.words, self.error = words, error
 
 
+async def _note_session_seen(app_: Any, token: str, identity: Principal) -> None:
+    """SE8c: a session this Conduit has not seen is recorded, once, after the resolver has accepted
+    its token (a refused token writes nothing). **Called by each place that accepts a token from the
+    resolver**: `get_principal` for every HTTP route, and the delta socket's header bearer
+    (`_authenticate_websocket`), which does not go through it; a test reads `app.py` and fails for a
+    new one that skips it. A dashboard identity (an application, admitted to its own routes alone)
+    is not a person signing in; a person's token limited to named routes (Superset's, ADR-148
+    Amendment 9) is one. `note_seen` never raises: a store fault is counted and logged, never a
+    refused request."""
+    watch: SignInWatch | None = getattr(app_.state, "sign_in_watch", None)
+    if watch is not None and not is_application_identity(identity):
+        await watch.note_seen(token, identity)
+
+
 async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
@@ -2255,6 +2284,7 @@ async def get_principal(
                     + ", ".join(sorted(identity.routes)),
                 },
             )
+    await _note_session_seen(request.app, credentials.credentials, identity)
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
@@ -9140,6 +9170,22 @@ async def resolve_now_route(
         result_cardinality=1,
     )
     return accepted
+
+
+@app.get(
+    "/v1/resolution/jobs/{job_id}",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
+async def resolution_job_status_route(
+    job_id: str, principal: PrincipalDep, jobs: JobsDep
+) -> ResolutionJobStatus:
+    """What became of a matching job a run or "Resolve now" queued, in words (C249, L06;
+    `resolution_job_status.py` has the reasoning). A read of the job queue, not of the graph: the
+    answer carries no node, count or value (rule 7), and an id with no record, an expired one and
+    another kind of job's answer alike. Not investigation-scoped, as the run that queued it is
+    not: the right is a reader of reports."""
+    del principal
+    return await resolution_job_status_module.resolution_job_status(jobs, job_id)
 
 
 # --- ontology -----------------------------------------------------------------
@@ -20334,6 +20380,52 @@ async def me_route(principal: PrincipalDep) -> MeResponse:
     )
 
 
+async def page_service_only(
+    request: Request,
+    principal: PrincipalDep,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> None:
+    """SE8c: `POST /v1/session-events` is the page service's own report, and its claim check is
+    here, at the route, whichever door the request came in by (the workspace's `/v1/` proxy, the
+    front proxy, the Conduit's own port). The resolver has accepted the token (a refused one is the
+    401 it always was); this asks which client it was issued to (`from_page_service`: `azp`,
+    `appid` on Entra ID v1.0, against `pages_client_for`). Every token that is not the page
+    service's gets the same 403 and the same words, whatever the reason, and a route-level
+    dependency runs before the body is read, so a refused caller learns nothing of its shape,
+    counts no rate window and writes nothing."""
+    mapping = request.app.state.principal_resolver.claim_mapping
+    if not from_page_service(claims_of(credentials.credentials), pages_client_for(mapping)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SESSION_EVENT_REFUSED)
+
+
+@app.post(
+    "/v1/session-events",
+    response_model=SessionEventResponse,
+    dependencies=[Depends(page_service_only)],
+)
+async def record_session_event(
+    body: SessionEvent,
+    request: Request,
+    principal: PrincipalDep,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> Any:
+    """SE8c: the page service reports a person's sign-in (its callback) or sign-out, with that
+    person's own token. The event is recorded for the person the token names and no one else (the
+    body is one field, `kind`, from a closed list; any other field is a 422), once for each report,
+    at most `RATE_LIMIT_PER_MINUTE` a person a minute. Fails closed like every audit write (503
+    `audit_unavailable`); the page service carries on when it is refused. Not a place anyone may
+    send words to: nothing in the body is stored."""
+    watch: SignInWatch | None = getattr(request.app.state, "sign_in_watch", None)
+    if watch is None:
+        return JSONResponse(status_code=503, content={"error": "session_events_unavailable"})
+    if not await watch.allow(principal):
+        return JSONResponse(
+            status_code=429, content={"error": "rate_limited"}, headers={"Retry-After": "60"}
+        )
+    recorded = await watch.record_event(credentials.credentials, principal, body.kind)
+    return SessionEventResponse(recorded=recorded)
+
+
 @app.get("/v1/me/rights")
 async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
@@ -21439,7 +21531,10 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     if header.lower().startswith("bearer "):
         token = header[len("bearer ") :]
         resolver: PrincipalResolver = websocket.app.state.principal_resolver
-        return await resolver.resolve_principal(token)
+        identity = await resolver.resolve_principal(token)
+        # SE8c: a session whose only authenticated use is this socket is still a session seen.
+        await _note_session_seen(websocket.app, token, identity)
+        return identity
 
     ticket = websocket.query_params.get("ticket", "")
     if not ticket:

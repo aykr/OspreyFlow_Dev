@@ -14,6 +14,10 @@
 4. **L06, the dead batch job's status** (`OspreyFlow_Core/services/api/recipe_run.py` discards job ids; read the full row): a run whose batch job has died reports that, with the job's own status in words, instead of staying "running". Test red first against a stand-in job source that **refuses what the real one refuses** (rule 15's second worked example: an unknown job id, a job already gone), not only the happy path.
 5. **Rule 12 and 15 in the report:** for each invariant (a Preview never reads more than N rows of a source; a bad date does not fail a type's run; a failed run is readable; a dead job is reported dead) the test that fails if it is violated and the planted fault that shows it red. **List what only a live run can show** (C043's seven, C068's slow seed, a real worker failure) as owed to RS1.
 
+## Round 4 (the conductor, 22 November 2026, after the merge gate refused `a001458ca0`)
+
+**The merge's `make -k ci` refused with one error and `make test` passed:** `make typecheck` (mypy, `.venv/bin/mypy packages services harness`) reports `services/ingest/connectors/csv_connector.py:40: error: "Iterator[dict[str, str]]" has no attribute "close"  [attr-defined]`. The bounded reader stops reading by closing the file's iterator, and the type of what `csv_connector.py` hands back has no `close`. **Fix it in the code, not by a `type: ignore`:** give the iterator a type that carries `close` (a generator type or a small protocol: say which), so the type checker proves the stop, and **run `mypy packages services harness` (the whole command, from `OspreyFlow_Core`) before your report and say its result: your checks command does not include it, and a slice that changes types in `packages` or `services` runs it as its own check from now on.** Nothing else changed: do not touch the other rounds' work. The two accepted test gaps stay backlog rows.
+
 ## Acceptance test
 
 `OspreyFlow_Build/tests/services/api/test_bounded_source_reader.py` (new, pure, red first on main; the plants red). **Say which folders it walks** (a scan row is written from that).

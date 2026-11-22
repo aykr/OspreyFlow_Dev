@@ -6,7 +6,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { whyNotByRole } from "../help/roles";
+import { whyNotByRole } from "@ospreyflow/glass-shared";
 import { AdminPlace } from "./AdminPlace";
 import { Connections } from "./sections/Connections";
 
