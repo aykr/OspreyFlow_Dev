@@ -41,10 +41,10 @@
 {% endif %}
 {% if f.pipelinesProblem %}<p role="alert">{{ words.pipelinesUnreadable }}</p>{% endif %}
 {% if f.openingNote %}<p class="caption" role="status">{{ f.openingNote }}</p>{% endif %}
-{% if f.reminder %}<p class="caption studio-proposals-reminder"><a class="btn" href="{{ f.reminder.href }}" aria-describedby="studio-proposals-tip">{{ f.reminder.text }}</a> <span id="studio-proposals-tip" role="note">{{ f.reminder.tip }}</span></p>
+{% if f.reminder %}<p class="caption studio-proposals-reminder"><a class="btn" href="{{ f.reminder.href }}"{% if f.reminder.opensModel %} data-opens-model="{{ f.reminder.opensModel }}"{% endif %} aria-describedby="studio-proposals-tip">{{ f.reminder.text }}</a> <span id="studio-proposals-tip" role="note">{{ f.reminder.tip }}</span></p>
 {% endif %}
 {% if f.needsUnread %}<p class="caption" role="status">{{ needsWords.unreadProposals }}</p>{% endif %}
-<nav aria-label="{{ words.placesLabel }}"><ul class="tabs">{% for t in f.tabs %}<li><a class="tabs__tab" href="{{ t.href }}"{% if t.current %} aria-current="page"{% endif %}>{{ t.label }}</a></li>{% endfor %}</ul></nav>
+<nav aria-label="{{ words.placesLabel }}"><ul class="tabs">{% for t in f.tabs %}<li><a class="tabs__tab" href="{{ t.href }}"{% if t.opensModel %} data-opens-model="{{ t.opensModel }}"{% endif %}{% if t.current %} aria-current="page"{% endif %}>{{ t.label }}</a></li>{% endfor %}</ul></nav>
 <div class="studio-place">
 {% block place %}<p class="label">{{ words.choosePlace }}</p>{% endblock %}
 </div>

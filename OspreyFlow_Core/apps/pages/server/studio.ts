@@ -89,8 +89,9 @@ interface Frame {
   needsUnread: boolean;
   strip: string[] | null;
   pipelinesProblem: boolean;
-  tabs: { id: string; label: string; href: string; current: boolean }[];
-  reminder: { text: string; tip: string; href: string } | null;
+  /** `opensModel` is the dataset the workspace is asked to open Model on when the link is followed (the Model place only). */
+  tabs: { id: string; label: string; href: string; current: boolean; opensModel: string | null }[];
+  reminder: { text: string; tip: string; href: string; opensModel: string | null } | null;
 }
 
 /** A read the page makes, or `undefined` when it did not work: a failed read is never an empty answer (rule 2), the caller says so. */
@@ -221,10 +222,11 @@ async function loadFrame(
     label: place.id === "model" && frame.proposed > 0 ? `${place.label} · ${frame.proposed} proposed` : place.label,
     href: placeHref(place, caseId),
     current: place.id === frame.place,
+    opensModel: place.id === "model" ? frame.datasetId : null,
   }));
   const model = PLACES[0];
   if (frame.proposed > 0 && frame.place !== "model" && model) {
-    frame.reminder = { text: NEEDS_YOU_WORDS.reminder(frame.proposed), tip: NEEDS_YOU_WORDS.reminderTip, href: placeHref(model, caseId) };
+    frame.reminder = { text: NEEDS_YOU_WORDS.reminder(frame.proposed), tip: NEEDS_YOU_WORDS.reminderTip, href: placeHref(model, caseId), opensModel: frame.datasetId };
   }
   return frame;
 }

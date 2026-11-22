@@ -2,8 +2,8 @@
  * A release folder held between the Studio's Releases steps (slice IS5a).
  *
  * The React screen keeps the folder's files in component state across choose, check and import. A server-rendered page has no
- * such memory, so the folder is held on the server, in the store the session itself lives in, and the page's forms carry only
- * an opaque token.
+ * such memory, so the folder is held on the server, in the pages process's own memory (not in the session's store: see NEVER WRITTEN TO
+ * DISK), and the page's forms carry only an opaque token.
  *
  * WHAT IS HELD. For one folder: the person's subject, the case and dataset it was read for, the folder's files (path and text,
  * the folder's own name taken off), and the result of the last check (whether it was clean, the version of the person's own
