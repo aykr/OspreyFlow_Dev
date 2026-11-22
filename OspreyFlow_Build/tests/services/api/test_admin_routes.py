@@ -4,6 +4,8 @@ clearance of the administrator who registers it (rule 3)."""
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
@@ -149,9 +151,11 @@ class _Freshness:
     def __init__(self) -> None:
         self.removed: list[str] = []
 
-    async def remove_dashboard(self, client_id: str) -> int:
+    @asynccontextmanager
+    async def removal(self, client_id: str) -> AsyncIterator[None]:
+        """Like the real one: the rows go only if the body (the identity's deletion) succeeds."""
+        yield
         self.removed.append(client_id)
-        return 0
 
     async def by_dashboard(self) -> dict[str, Freshness]:
         from datetime import UTC, datetime

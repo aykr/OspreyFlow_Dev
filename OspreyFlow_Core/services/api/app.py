@@ -18191,36 +18191,43 @@ async def remove_dashboard_route(
     registered revokes nothing and is refused by the identity provider's own answer. The audit row
     counts the grants revoked; it never names their cases.
 
-    Its figures go from the reporting mart next, in every table the sync writes (ADR-111
+    Its figures go from the reporting mart with it, in every table the sync writes (ADR-111
     Amendment 2, backlog N19): Superset's Admin and Alpha read the whole mart, and `report-sync`
     prunes only against a list nothing here updates, so a removed identity's rows would otherwise
-    stay readable.
-    That comes before the identity is deleted for the same reason as the grants: if the mart cannot
-    be reached the dashboard stays registered, the administrator is told in words (503), and
-    removing it again retries; removal is never reported done with the rows still there."""
+    stay readable. The rows' removal and the identity's deletion are one transaction in the mart
+    (`ReportFreshness.removal`): if the identity provider refuses, the rows come back; if it
+    deletes, the removal is stamped and a `report-sync` pull already running may not write them
+    back.
+    If the mart cannot be reached the dashboard stays registered, the administrator is told in
+    words (503, under `message`, which the Admin screen shows), and removing it again retries;
+    removal is never reported done with the rows still there."""
     registered = [d for d in await identity_admin.list_dashboards() if d.client_id == client_id]
     revoked = [
         case
         for d in registered
         for case in await investigations.revoke_everywhere(d.account_id, by=principal)
     ]
-    if registered:
-        try:
-            await freshness.remove_dashboard(client_id)
-        except MartUnreachable as unreachable:
-            logger.warning("remove_dashboard: the mart refused the removal: %s", unreachable)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={
-                    "error": "reporting_mart_unreachable",
-                    "detail": (
-                        f"The reporting mart could not be reached, so {client_id} was not removed "
-                        "and its figures are still there. Its case grants have been revoked and it "
-                        "is still registered: removing it again will try again."
-                    ),
-                },
-            ) from unreachable
-    await identity_admin.delete_dashboard(client_id)
+    try:
+        async with freshness.removal(client_id):
+            await identity_admin.delete_dashboard(client_id)
+    except MartUnreachable as unreachable:
+        logger.warning("remove_dashboard: the mart refused the removal: %s", unreachable)
+        if unreachable.identity_removed:
+            words = (
+                f"{client_id} was removed from the identity provider, but the reporting mart did "
+                "not confirm that its figures went, so they may still be there. It can no longer "
+                "be removed again: tell the person who runs the platform."
+            )
+        else:
+            words = (
+                f"The reporting mart could not be reached, so {client_id} was not removed and its "
+                "figures are still there. Its case grants have been revoked and it is still "
+                "registered: removing it again will try again."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "reporting_mart_unreachable", "message": words},
+        ) from unreachable
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
                        result_cardinality=1)  # fmt: skip

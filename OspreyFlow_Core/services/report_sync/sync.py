@@ -26,7 +26,7 @@ import asyncpg
 import httpx
 from valkey.asyncio import Valkey
 
-from .mart import FigureRow, Mart
+from .mart import DashboardRemoved, FigureRow, Mart
 
 
 class SyncRefused(Exception):
@@ -99,9 +99,19 @@ def parse_feed(text: str) -> list[FigureRow]:
     ]
 
 
+def _removed(board: Dashboard, summary: Summary) -> None:
+    """Said in words; the caller has already counted the pull as failed."""
+    summary.failures.append(
+        f"{board.client_id}: removed in the Admin while this pull ran; nothing was written for it"
+    )
+
+
 async def _pull_dashboard(
     board: Dashboard, mart: Mart, valkey: Valkey, slot: int, summary: Summary
 ) -> None:
+    # Taken before anything is fetched: an identity removed after this point may not be written for
+    # (`DashboardRemoved`), so a pull already running cannot put back what the Admin removed.
+    began = await mart.begin_pass()
     tokens = TokenSource(board.token_url, board.client_id, board.secret, scope=board.scope)
     http = httpx.AsyncClient(base_url=board.conduit_url, timeout=60.0)
     try:
@@ -112,8 +122,14 @@ async def _pull_dashboard(
         except SyncRefused as refused:
             summary.failed += 1
             summary.failures.append(f"{board.client_id}: {refused}")
-            for case_id in [p["case_id"] for p in await mart.pulls(board.client_id)]:
-                await mart.record_failure(board.client_id, case_id, str(refused), datetime.now(UTC))
+            try:
+                for case_id in [p["case_id"] for p in await mart.pulls(board.client_id)]:
+                    await mart.record_failure(
+                        board.client_id, case_id, str(refused), datetime.now(UTC),
+                        pass_started=began,
+                    )  # fmt: skip
+            except DashboardRemoved:
+                _removed(board, summary)
             return
         if listed.status_code != 200:
             summary.failed += 1
@@ -144,12 +160,23 @@ async def _pull_dashboard(
                     board.weeks,
                     parse_feed(feed.text),
                     datetime.now(UTC),
+                    pass_started=began,
                 )
                 summary.pulled += 1
+            except DashboardRemoved:
+                summary.failed += 1
+                _removed(board, summary)
+                return
             except (SyncRefused, httpx.HTTPError, ValueError, KeyError) as e:
                 summary.failed += 1
                 summary.failures.append(f"{board.client_id} / {case_name}: {e}")
-                await mart.record_failure(board.client_id, case_id, str(e), datetime.now(UTC))
+                try:
+                    await mart.record_failure(
+                        board.client_id, case_id, str(e), datetime.now(UTC), pass_started=began
+                    )  # fmt: skip
+                except DashboardRemoved:
+                    _removed(board, summary)
+                    return
     finally:
         await tokens.aclose()
         await http.aclose()

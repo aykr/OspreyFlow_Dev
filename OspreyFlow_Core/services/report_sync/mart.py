@@ -6,6 +6,12 @@ the feed's own CSV columns — upserted so a re-pull changes only what changed (
 only then), and a figure the feed no longer carries is removed. `pulls`: per dashboard and case,
 when it was last truly pulled and the last failure in words, so the Admin area can say a feed is
 stale. A BI tool reads through `ensure_reader`'s role, which may select and nothing else.
+
+`removed_dashboards` is not in that schema. It lives in a schema of its own (`CONTROL_SCHEMA`) that
+`ensure_reader` never grants, so a BI tool cannot read it: it records when an identity was removed
+in the Admin, and a pull that began before then may not write (`DashboardRemoved`). Without it a
+pull already running when the identity is removed writes its rows back after the Conduit removed
+them, and nothing would ever remove them again (`services/api/report_freshness.py`).
 """
 
 from __future__ import annotations
@@ -23,6 +29,8 @@ FigureRow = tuple[str, str, str, str, int]  # section, label, typology, week_sta
 #: (`services/api/report_freshness.py`): a table added to the schema is added here, and
 #: `tests/services/api/test_removed_identity_mart_rows.py` fails if it is not.
 DASHBOARD_TABLES = ("pulls", "figures")
+#: Where a removal is recorded: beside the mart, never in it and never granted to a reader.
+CONTROL_SCHEMA = "osprey_report_control"
 _NAME = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 
 
@@ -30,6 +38,38 @@ def _identifier(name: str) -> str:
     if not _NAME.match(name):
         raise ValueError(f"not a plain identifier: {name!r}")
     return name
+
+
+class DashboardRemoved(Exception):
+    """The identity was removed in the Admin after the pull that wanted to write began: nothing is
+    written for it."""
+
+
+async def lock_dashboard(conn: Any, dashboard: str) -> None:
+    """Held to the end of the transaction. A removal and a write for one dashboard take it in turn,
+    so a write either lands before the removal (which then deletes it) or sees the removal."""
+    await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", dashboard)
+
+
+async def ensure_control(conn: Any) -> None:
+    await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {CONTROL_SCHEMA}")
+    await conn.execute(
+        f"""CREATE TABLE IF NOT EXISTS {CONTROL_SCHEMA}.removed_dashboards (
+            dashboard TEXT NOT NULL, removed_at TIMESTAMPTZ NOT NULL, PRIMARY KEY (dashboard))"""
+    )
+
+
+async def refuse_if_removed(conn: Any, dashboard: str, pass_started: datetime | None) -> None:
+    """Called with the dashboard's lock held. A pull that began before the removal is refused; one
+    that began after it belongs to an identity registered again, and writes."""
+    if pass_started is None:
+        return
+    removed_at = await conn.fetchval(
+        f"SELECT removed_at FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = $1",
+        dashboard,
+    )
+    if removed_at is not None and removed_at >= pass_started:
+        raise DashboardRemoved(dashboard)
 
 
 class Mart:
@@ -65,6 +105,12 @@ class Mart:
                     dashboard TEXT NOT NULL, case_id TEXT NOT NULL, last_pulled TIMESTAMPTZ,
                     last_failure TEXT, failed_at TIMESTAMPTZ, PRIMARY KEY (dashboard, case_id))"""
             )
+            await ensure_control(conn)
+
+    async def begin_pass(self) -> datetime:
+        """The database's own clock, which a removal is stamped with: read before a pull begins."""
+        async with self._pool.acquire() as conn:
+            return await conn.fetchval("SELECT clock_timestamp()")  # type: ignore[no-any-return]
 
     async def replace(
         self,
@@ -74,13 +120,18 @@ class Mart:
         weeks: int,
         rows: Sequence[FigureRow],
         at: datetime,
+        *,
+        pass_started: datetime | None = None,
     ) -> int:
         """The case's figures for this dashboard and period, as the feed now has them: changed rows
         updated, new ones added, rows no longer fed removed — in one transaction. Returns how many
-        rows changed or were added."""
+        rows changed or were added. `pass_started` is `begin_pass()` from before the pull began:
+        an identity removed since then raises `DashboardRemoved` and nothing is written."""
         s = self.schema
         changed = 0
         async with self._pool.acquire() as conn, conn.transaction():
+            await lock_dashboard(conn, dashboard)
+            await refuse_if_removed(conn, dashboard, pass_started)
             for section, label, typology, week, value in rows:
                 result = await conn.execute(
                     f"""INSERT INTO {s}.figures VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -111,11 +162,21 @@ class Mart:
             )  # fmt: skip
         return changed
 
-    async def record_failure(self, dashboard: str, case_id: str, words: str, at: datetime) -> None:
+    async def record_failure(
+        self,
+        dashboard: str,
+        case_id: str,
+        words: str,
+        at: datetime,
+        *,
+        pass_started: datetime | None = None,
+    ) -> None:
         """A pull that failed, in words; the rows and their last good pull are left as they were.
-        Only rows that exist are kept: a dashboard removed in the Admin has none left (the Conduit
-        removes them with it), and a refusal writes none for it."""
-        async with self._pool.acquire() as conn:
+        A refusal never keeps or makes a removed identity's row: one removed since `pass_started`
+        raises `DashboardRemoved` and writes nothing."""
+        async with self._pool.acquire() as conn, conn.transaction():
+            await lock_dashboard(conn, dashboard)
+            await refuse_if_removed(conn, dashboard, pass_started)
             await conn.execute(
                 f"""INSERT INTO {self.schema}.pulls (dashboard, case_id, last_failure, failed_at)
                     VALUES ($1, $2, $3, $4) ON CONFLICT (dashboard, case_id) DO UPDATE
