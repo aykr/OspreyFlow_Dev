@@ -4,6 +4,7 @@
  */
 import { PAGES } from "../../server/pageList.js";
 import type { IdentityProvider } from "../../server/identity.js";
+import type { MemorySessionStore, SessionStore } from "../../server/sessionStore.js";
 import { build } from "./build.js";
 import type { Built } from "./build.js";
 import { fakeConduit } from "./fakeConduit.js";
@@ -71,6 +72,11 @@ export interface World extends Built {
 export interface WorldOptions {
   /** How long the sign-in lasts by the app's own clock, in seconds, when a test wants the session's end to be near. */
   sessionSeconds?: number;
+  /**
+   * Keep the held folder apart from the session store, as a deployment does, and write down the key of every `set` the
+   * session store is given into this list, so a test can show that no folder reaches it (the deployment's Valkey saves to disk).
+   */
+  sessionStoreWrites?: string[];
 }
 
 export async function world(me: Person = person(), others: Person[] = [], options: WorldOptions = {}): Promise<World> {
@@ -90,6 +96,24 @@ export async function world(me: Person = person(), others: Person[] = [], option
   const built = build({
     clock,
     pages: PAGES,
+    ...(options.sessionStoreWrites
+      ? {
+          stagedApart: true,
+          wrapStore: (inner: MemorySessionStore): SessionStore => {
+            const writes = options.sessionStoreWrites as string[];
+            return {
+              get: (key) => inner.get(key),
+              set: (key, value, ttl) => {
+                writes.push(key);
+                return inner.set(key, value, ttl);
+              },
+              expire: (key, ttl) => inner.expire(key, ttl),
+              del: (key) => inner.del(key),
+              take: (key) => inner.take(key),
+            };
+          },
+        }
+      : {}),
     identityProvider,
     forward: { conduitUrl: conduit.url, bodyMaxBytes: 1024 * 1024, uploadMaxBytes: 8 * 1024 * 1024, upstreamTimeoutSeconds: 5 },
     log: (message) => logs.push(message),

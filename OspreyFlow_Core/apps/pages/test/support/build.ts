@@ -45,6 +45,12 @@ export interface BuildOptions {
   functionIds?: ReadonlySet<string>;
   /** The Conduit's address and limits (the `/v1` forwarder's settings, which the Studio pages' own calls use too). */
   forward?: ForwardSettings;
+  /**
+   * By default the folder a Studio page holds is kept in the same in-memory store the test reads, so a test can see its keys.
+   * With this set the app keeps it where it keeps it in a deployment: its own in-process store, apart from the session store
+   * (the deployment's Valkey), which a test then watches through `wrapStore`.
+   */
+  stagedApart?: boolean;
   /** Where the app says what went wrong: a test that reads the log passes a collector. */
   log?: (message: string) => void;
 }
@@ -55,6 +61,7 @@ export function build(options: BuildOptions = {}): Built {
   const store = new MemorySessionStore({ clock: options.storeClock ?? clock });
   const app = createApp({
     store: options.wrapStore ? options.wrapStore(store) : store,
+    ...(options.stagedApart ? {} : { stagedStore: store }),
     identityProvider: options.identityProvider ?? fakeProvider({ now: clock, ...options.provider }),
     ...(options.codeFlow ? { codeFlow: options.codeFlow } : {}),
     clock,

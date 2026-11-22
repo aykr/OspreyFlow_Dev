@@ -6,11 +6,11 @@
  * keeps the copies honest: each is run on the same inputs as the shared one, and a copy that drifts is red.
  *
  * Which test fails if a copy drifts (rule 12): `studioDatasets`, `currentDataset`, `caseForDataset`, `modelInWords` and
- * `releaseName`, each by name below; the planted case at the end shows the comparison itself can fail (rule 15).
+ * `releaseName` and the Needs-you words (`reminder`, `reminderTip`, `unreadProposals`), each by name below; the planted case at the end shows the comparison itself can fail (rule 15).
  */
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { caseForDataset, currentDataset, modelInWords, releaseName, studioDatasets } from "../../server/views/studioWords.js";
+import { NEEDS_YOU_WORDS, caseForDataset, currentDataset, modelInWords, releaseName, studioDatasets } from "../../server/views/studioWords.js";
 import type { CaseListing as SharedCase } from "../../server/views/studioWords.js";
 
 /**
@@ -24,6 +24,7 @@ interface Shared {
   modelInWords(packs: readonly string[] | undefined): string;
   releaseName(datasetName: string): string;
   studioDatasets(cases: readonly SharedCase[], currentId: string | null): { id: string; name: string }[];
+  NEEDS_YOU_WORDS: { reminder(n: number): string; reminderTip: string; unreadProposals: string };
 }
 const SHARED = "@ospreyflow/glass-shared";
 let shared: Shared;
@@ -70,6 +71,18 @@ describe("the pages' helpers answer as the shared package's do", () => {
     for (const name of ["Prison Intelligence — 2026", "  ", "Harbour prison extract (synthetic)", "x".repeat(90), "A.b-C"]) {
       expect(releaseName(name)).toBe(shared.releaseName(name));
     }
+  });
+
+  it("NEEDS_YOU_WORDS: the reminder for any count, its tip, and the line for a count that could not be read", () => {
+    for (const n of [0, 1, 2, 7, 120]) expect(NEEDS_YOU_WORDS.reminder(n)).toBe(shared.NEEDS_YOU_WORDS.reminder(n));
+    expect(NEEDS_YOU_WORDS.reminderTip).toBe(shared.NEEDS_YOU_WORDS.reminderTip);
+    expect(NEEDS_YOU_WORDS.unreadProposals).toBe(shared.NEEDS_YOU_WORDS.unreadProposals);
+  });
+
+  it("a Needs-you word that drifted would be caught: the comparison can fail", () => {
+    const drifted = { ...NEEDS_YOU_WORDS, reminderTip: `${NEEDS_YOU_WORDS.reminderTip} Changed.` };
+    expect(drifted.reminderTip).not.toBe(shared.NEEDS_YOU_WORDS.reminderTip);
+    expect(drifted.reminder(2)).toBe(shared.NEEDS_YOU_WORDS.reminder(2));
   });
 
   it("a copy that drifted would be caught: the comparison can fail", () => {

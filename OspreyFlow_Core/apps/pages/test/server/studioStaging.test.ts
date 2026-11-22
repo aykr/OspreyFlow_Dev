@@ -15,7 +15,15 @@ import { describe, expect, it } from "vitest";
 import { registerPages } from "../../server/pages.js";
 import type { PageModule } from "../../server/pages.js";
 import { newRecord, randomToken } from "../../server/sessionPolicy.js";
-import { MAX_STAGED_VALUE_BYTES, MAX_VALUE_BYTES, MemorySessionStore, SESSION_KEY_PREFIX, STAGED_KEY_PREFIX, StoreRefusal } from "../../server/sessionStore.js";
+import {
+  MAX_STAGED_VALUE_BYTES,
+  MAX_VALUE_BYTES,
+  MemorySessionStore,
+  SESSION_KEY_PREFIX,
+  STAGED_KEY_PREFIX,
+  StoreRefusal,
+  ValkeySessionStore,
+} from "../../server/sessionStore.js";
 import { MAX_HELD, STAGED_TTL_SECONDS, StagedTooLarge, endStaged, heldBy } from "../../server/staging.js";
 import type { Staged } from "../../server/staging.js";
 import { testClock } from "../support/clock.js";
@@ -38,6 +46,31 @@ function setup(subject = "sub-a") {
   const session: { auth: ReturnType<typeof newRecord>; staged?: string[] } = { auth: newRecord(provided(subject), clock()) };
   return { clock, store, session, held: heldBy(store, session, clock) };
 }
+
+describe("the Valkey store and the held folder", () => {
+  // The deployment's Valkey keeps its built-in save points and writes a snapshot to disk, so a release folder (recipes and
+  // mappings) must never be given to it: the folder is held in the pages process's memory, and the Valkey store refuses its key.
+  it("refuses the held folder's key on every call, before it reaches the client", async () => {
+    const calls: unknown[][] = [];
+    const record =
+      (name: string) =>
+      async (...args: unknown[]): Promise<never> => {
+        calls.push([name, ...args]);
+        return null as never;
+      };
+    const store = new ValkeySessionStore({ set: record("set"), get: record("get"), expire: record("expire"), del: record("del"), getdel: record("getdel") });
+    const key = `${STAGED_KEY_PREFIX}${randomToken()}`;
+    await expect(store.set(key, "x", 60)).rejects.toBeInstanceOf(StoreRefusal);
+    await expect(store.get(key)).rejects.toBeInstanceOf(StoreRefusal);
+    await expect(store.expire(key, 60)).rejects.toBeInstanceOf(StoreRefusal);
+    await expect(store.del(key)).rejects.toBeInstanceOf(StoreRefusal);
+    await expect(store.take(key)).rejects.toBeInstanceOf(StoreRefusal);
+    expect(calls).toEqual([]);
+    // The planted fault's other side: a session key goes through, so the refusal is the folder's own.
+    await store.set(`${SESSION_KEY_PREFIX}${randomToken()}`, "x", 60);
+    expect(calls).toHaveLength(1);
+  });
+});
 
 describe("the store's value limit", () => {
   it("allows a staged folder what a session may not hold, and still refuses a session value over its own limit", async () => {
