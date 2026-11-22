@@ -45,7 +45,7 @@
     }
   ],
   "budget": {
-    "what": "The performance budget figures taken on the owner's Mac before PL4's slice E moved anything (ADR-152 I11; the owner's ruling of 20 November and file 014). Carried forward by dist_compare's re-record. The full paper is OspreyFlow_Build/process/lanes/v062/PL4_BUDGET_FIGURES_2026-11-22.md.",
+    "what": "The performance budget figures taken on the owner's Mac before PL4's slice E moved anything (ADR-152 I11; the owner's ruling of 20 November and file 014). Carried forward by dist_compare's re-record. The conductor's paper of 22 November 2026 (PL4_BUDGET_FIGURES_2026-11-22) has the figures as taken.",
     "date": "2026-11-22",
     "taken": "08:21:07 to 08:23:03 UTC (a pause of 1 minute 56 seconds: no seat, no merge, no builder of the line running; load average 6.3 at the start)",
     "machine": "the owner's Mac, with nothing else of the conductor's running (main checkout at 2f6388c: the code of PL4d3e's merge, f4d1634, plus docs-only commits)",

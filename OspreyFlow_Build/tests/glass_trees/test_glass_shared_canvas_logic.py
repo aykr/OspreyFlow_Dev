@@ -144,6 +144,9 @@ HISTORY = ("OspreyFlow_Build/spec/06_DECISIONS.md", "OspreyFlow_Build/process/")
 NAMED = {
     # This file: it spells out the old paths to look for them.
     "OspreyFlow_Build/tests/glass_trees/test_glass_shared_canvas_logic.py": "this test",
+    # The citation allowlist names the old path of the one file the build record cites in full, on purpose: records that stay as
+    # written cite it, and it is now absent (its own comment says so).
+    "OspreyFlow_Build/tests/fixtures/citation_allowlist.txt": "the old path, deliberately absent and cited by records",
 }
 
 # ---------------------------------------------------------------------------------------------- the old paths, found
@@ -352,7 +355,7 @@ def test_a_forbidden_import_in_a_moved_file_is_found(package_copy: Path) -> None
         'import { createNodeImageProgram } from "@sigma/node-image";\n',
         'import maplibregl from "maplibre-gl";\n',
         'import { cachedNodeSvgDataUri } from "../../../../apps/workspace/src/color/nodeVisual";\n',
-        'import { glyphMarkup } from "../../../../apps/workspace/src/color/nodeGlyphs";\n',
+        'import { thumbnailFromFile } from "../../../../apps/workspace/src/canvas/iconImage";\n',
         'import type { Node } from "../../../../packages/schemas/generated";\n',
         'import { glyphMarkup } from "@ospreyflow/glass-shared";\n',
         'import lodash from "lodash";\n',
@@ -513,7 +516,7 @@ def test_a_moved_file_changed_in_more_than_its_imports_is_found() -> None:
         "export const WILDCARD = \"*\";\n"
     )
     moved = was.replace("../../../../packages/schemas/generated", "../../../schemas/generated").replace(
-        "@ospreyflow/glass-shared", "../color/nodeGlyphs"
+        "@ospreyflow/glass-shared", "./nodeGlyphs"
     )
     assert earlier.only_import_lines_changed(was, moved) == []
     assert earlier.only_import_lines_changed(was, moved.replace('"*"', '"?"')) != []
