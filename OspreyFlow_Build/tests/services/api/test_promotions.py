@@ -1347,7 +1347,7 @@ async def test_the_commands_layer_withdrawal_records_the_operator_it_was_given(
     `withdraw_layer` in `revert_promotion`."""
     board, made, link_item, _ = _drawn()
     promoted = _promote(board, made["item_id"], link_item).json()
-    pw.store.deleted_layers.add(pw.store.records[promoted["id"]].layer_id)
+    await pw.store.mark_layer_deleted(pw.store.records[promoted["id"]].layer_id, datetime.now(UTC))
     assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 0
     assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [("layer", "ops")]
     assert all(at is not None for _kind, _by, at in pw.graph.deleted_by)
