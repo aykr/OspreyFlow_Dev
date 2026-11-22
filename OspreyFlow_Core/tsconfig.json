@@ -36,6 +36,9 @@
     "apps/harness/keyboard/**/*.tsx",
     "apps/pages/server/**/*.ts",
     "apps/pages/test/**/*.ts",
+    // The pages' keyboard runner (rule 13): its Playwright cases are read by the compiler too, so a case that names a helper
+    // that is not there fails `make typecheck`, not only a run.
+    "apps/pages/keyboard/**/*.ts",
     // The pages' client modules (ADR-152 decision 6) run in a browser: the DOM library and the bundler's resolution, as the
     // workspace's code has. `apps/pages/scripts/assets.mjs` bundles them; this reads their types, imports of the shared package included.
     "apps/pages/modules/**/*.ts",

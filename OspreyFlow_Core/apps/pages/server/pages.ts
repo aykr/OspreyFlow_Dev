@@ -23,6 +23,12 @@ export interface PageModule {
   path: string;
   methods: readonly PageMethod[];
   handler: RequestHandler;
+  /**
+   * The page takes a browser's file upload as a `multipart/form-data` POST (slice IS5a). Its handler must read the body
+   * with `readUploadForm` (`upload.ts`), which checks the anti-forgery token as the form's first part before any file is
+   * read: the check in `csrf.ts` leaves a multipart body of exactly these paths to it. Needs POST among `methods`.
+   */
+  upload?: boolean;
 }
 
 /** A page list that cannot be served: the message says which page and what is wrong, in words. */
@@ -79,6 +85,9 @@ function check(pages: readonly PageModule[], known: ReadonlySet<string>): void {
     if (owned(page.path)) {
       throw new PageRegistrationError(`${where} takes a path the server answers itself (the home page, /session, /healthz, /assets/pages and /v1).`);
     }
+    if (page.upload === true && !page.methods.includes("POST")) {
+      throw new PageRegistrationError(`${where} takes an upload but does not answer POST: a file is sent by a POST.`);
+    }
     if (page.methods.length === 0) throw new PageRegistrationError(`${where} lists no method: say which of GET, POST, PUT, PATCH and DELETE it answers.`);
     for (const method of page.methods) {
       if (!METHODS.includes(method)) {
@@ -98,6 +107,11 @@ function check(pages: readonly PageModule[], known: ReadonlySet<string>): void {
     byId.set(page.id, page);
     byPath.set(page.path, page);
   }
+}
+
+/** The paths of the pages that take a file upload: the anti-forgery check leaves a multipart body there to the page's own reader. */
+export function uploadPathsOf(pages: readonly PageModule[]): ReadonlySet<string> {
+  return new Set(pages.filter((page) => page.upload === true).map((page) => page.path));
 }
 
 /** Sends a request with no session to sign-in, as the home page does, before the page's handler is reached. */
