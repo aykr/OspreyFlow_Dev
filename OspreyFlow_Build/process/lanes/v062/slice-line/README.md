@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (428 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (346 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (437 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (349 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -246,6 +246,7 @@ says that cost is a list-price estimate, not a bill.
 - **Records, the owner's lines and standing accepts while a merge runs** (2): `merge_slice.py records` commits while a merge runs (`records.lock`: one commit at a time), unpushed until the merge pushes. The merge lands its tested result on a main moved only by records commits (each `Slice-Records`, one parent, only records-folder files that are not its scan rows, the owner's files or a file the slice changed): made again there with `git merge-tree`, kept only when it differs from the tested tree in exactly those files; `merged.json` names `base`, `tested_merge`, `landed_on` and `records_under_gate`. Anything else moving main is refused as before. For a slice other than the one being merged (`merge.running.json` names it), `add-round`, `clear-stop`, `send-back`, `accept` (the standing accept with it), `refreeze`, `undo-seat-failure` and `self-clear` go on; a refreeze's (or self-clear's) slices.tsv commit takes the records lock and lands beneath the merge. `correct-command` and `move-seat`, and any action on the merging slice, wait. `approve-diff` is a records commit and goes on; `apply-approved` changes files the gate reads, so it waits for the merge (saying so once; `--wait <minutes>`, 120 by default) and then applies, unasked.
 - **The standing accept before another round** (3): applied where the verifier's record is read, as before, and now also while another slice merges (2); a finding that names a key, a credential or a security rule is never accepted on the standing word.
 - **A test's listener on port 0 is never given a reserved port** (9b): with the port guard on (outside CI), a bind to port 0 passes over every port `tests/port_guard.py` reserves (each stack's, the closed ones), so a test's own stand-in no longer lands on a leased stack's port and is refused at its own connection (LR1, 20 November, 55433 and 55439; BL1b, 21 November, 55438).
+- **No fifth round without the scout's table** (D): `run_seat.py builder` refuses a round from 5 on until `slices/<ID>_ROUND<N>_TABLE.md` (N 5 or more, not empty) is in the main checkout, and names it in the builder's prompt (the owner, 21 November: rounds 5 to 8 are judged against it).
 
 ## Files outside the repository
 

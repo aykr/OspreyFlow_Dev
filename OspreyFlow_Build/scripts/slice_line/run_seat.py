@@ -374,6 +374,11 @@ def builder(slice_id: str) -> int:
     st, frozen = c.state(slice_id), c.read_json(c.rec_dir(slice_id) / "frozen.json")
     if not frozen or st.get("phase") != "building":
         raise SystemExit(f"{slice_id} is not in the building phase ({st.get('phase')}): slice_start.py first.")
+    if st.get("round", 1) >= c.TABLE_ROUND and not c.round_table(slice_id):
+        raise SystemExit(f"{slice_id} is at round {st['round']}: no round from {c.TABLE_ROUND} on starts without the "
+                         f"scout's table of every open case ({c.V062_REL}/slices/{slice_id}_ROUND{st['round']}_TABLE.md, "
+                         "the owner's word of 21 November 2026). The conductor has a read-only scout write it, then runs "
+                         "the builder again; nothing changed.")
     seat = c.seat_settings("builder", st["setting"])
     findings = last_findings(slice_id)
     prompt = (f"You are the builder for slice {slice_id} (build {frozen['build']}), round {st['round']} of "
@@ -383,6 +388,10 @@ def builder(slice_id: str) -> int:
               f"- checks: {frozen['checks']}{findings}")
     wt = Path(frozen["worktree"])
     prompt += rulings_note(wt)
+    table = c.round_table(slice_id) if st.get("round", 1) >= c.TABLE_ROUND else None
+    if table:
+        prompt += (f"\n\nThis round is judged against the scout's table of every open case, {table} (read it whole): "
+                   "close its open rows; nothing outside it is this round's work.")
     tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
     try:
         res = launch_seat(

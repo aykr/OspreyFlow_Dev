@@ -371,6 +371,10 @@ M = [
  ("run_seat.py", '    if standing_accept(slice_id):\n        return 0\n', '', "gaps_only_at_round_3_are_accepted"),
  ("resume.py", '    if rnd < rule["from_round"]:\n', '    if False:\n', "gaps_only_at_round_2_go_round"),
  ("resume.py", '    if faults or other:\n', '    if other:\n', "fault_and_a_gap_go_round"),
+ # LINE_FIXES_5_BRIEF.md, D: no fifth round without the scout's table
+ ("run_seat.py", '    if st.get("round", 1) >= c.TABLE_ROUND and not c.round_table(slice_id):', '    if False:', "round_5_without_the_table"),
+ ("common.py", '        if m and int(m.group(1)) >= TABLE_ROUND and f.read_text().strip():', '        if m:', "only_a_round_5_or_later_table"),
+ ("common.py", 'TABLE_ROUND = 5\n', 'TABLE_ROUND = 4\n', "rounds_1_to_4_need_no_table"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
