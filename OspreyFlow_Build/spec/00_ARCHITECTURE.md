@@ -1184,6 +1184,29 @@ otherwise reach for by reflex. Two of them appear in the input documents.
 | Grafana (9+) | AGPLv3 | Perses, or Grafana as a separate unbundled deployment | AGPL is acceptable for an unmodified separate service, not for bundling |
 | Stanford CoreNLP | GPL-3.0 | **Stanza** (Apache-2.0), held at 1.10.1 | Stanza 1.11.0 to 1.15.0 pull in `udtools` (GPL-2.0-or-later) and `udapi` (GPL-3.0-or-later). ADR-098 |
 
+**The avoided components, as the architecture guide's section 9 stated them (DC1c, 20 November 2026; the owner's
+ruling of the same day, point 5).** The architecture guide is public-facing and names no product, so the
+eleven-row table it carried moved here, complete and unchanged; its section 9 now says the rule in words
+(the allowlist, the three kinds of licence avoided) and points to this register. It sits directly beneath the
+rejections table above because that table is the fuller record (the same components with their notes and
+ADRs, and Terraform's row is the one this table adds: its BSL-licensed core is not used, per the
+OpenTofu paragraph earlier in this section). `tests/test_intent_in_the_guides.py` holds this table to its
+eleven rows and holds the guide's section 9 to naming none of them.
+
+| Avoided | Its licence | Used instead |
+| --- | --- | --- |
+| Redis 7.4 and later | RSAL / SSPL | Valkey (BSD-3-Clause) |
+| Elasticsearch | SSPL / Elastic Licence | OpenSearch (Apache-2.0) |
+| Neo4j Community | GPL-3.0 | ArcadeDB |
+| ArangoDB | BSL 1.1 | ArcadeDB |
+| FalkorDB | SSPL | rustworkx for in-memory algorithms |
+| Mapbox GL JS 2 and later | Proprietary | MapLibre GL JS (BSD-3-Clause) |
+| MongoDB | SSPL | PostgreSQL, and an S3-protocol object store |
+| Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table |
+| Grafana 9 and later | AGPL-3.0 | Never bundled; acceptable only as an unmodified separate service |
+| Stanford CoreNLP | GPL-3.0 | Stanza (Apache-2.0), held at a version with no GPL dependency |
+| Terraform | BSL 1.1 | OpenTofu (MPL-2.0) |
+
 Fonts: Atkinson Hyperlegible Next and IBM Plex Mono are both SIL OFL 1.1. Self-host them; do not
 load from a CDN — an air-gapped deployment must render correctly.
 

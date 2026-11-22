@@ -11,6 +11,37 @@ ADR-110 for schedules, ADR-111 for dashboards); this guide only says how to use 
 when it differs; another test fails when a command, a flag or an answers-file setting is missing
 from this guide (`tests/test_admin_guide.py`).
 
+## Why OspreyFlow is built this way
+
+You are the person who decides what leaves the deployment and who may do what in it, so here is what
+OspreyFlow is built to, and what each part means for your installation. The
+[architecture guide](../../OspreyFlow_Core/docs/architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
+fullest account, with what holds each constraint today and what is "coming".
+
+- **Software sovereignty.** You can inspect, modify, host and replace what you install. The software
+  dependencies are under open-source licences, and a gate checks the build's package list against an
+  allowlist on every change; it does not yet reach every package inside the images. Model weights, map
+  data, fonts and base images are outside the gate; a register and a gate for them are coming.
+- **Data sovereignty.** The deployment runs on your network, and its containers have no route out except
+  for the downloads an install makes and the features you configure. A hosted model engine is an opt-in
+  (`models.local_only` is true until you change it). A first install needs the internet, a default
+  install fetches its model files on every start, and a Small deployment on an https address fetches
+  a certificate unless you give it yours. Superset's usage-tracking image, which the person's
+  browser asks for, is not stopped in v0.6.1 and earlier; v0.6.2 stops it with a content policy that
+  allows no outside address.
+- **Privacy control.** What each person sees is meant to be bounded by handling markings and case
+  membership, so the clearances and case levels you give people are what set the limit of what they can
+  read. Some gaps on the read side are known (the architecture guide lists them). One is yours to manage:
+  where Superset signs people in through Entra ID, a person who may build dashboards reads the whole
+  reporting store in their own session, so give that right only to people cleared for all of it
+  (section 6a.7).
+- **Security management.** Case reads, refusals of access to a case and changes are audited
+  (section 9.11, *Operations and Audit*), and report, assessment, pack and feed exports go in a ledger.
+  Some other exports write an audit row but no ledger row, and a platform backup writes neither; a ledger
+  row for every export is coming, as is recording every model call and every sign-in.
+- **Analytical accountability.** Judgements carry their evidence and a probability band, and what a model
+  suggests stays *inferred* until a person confirms it.
+
 ---
 
 ## 1. Choosing a mode
@@ -2830,6 +2861,10 @@ reads the same figures:
 3. a case's Author gives the dashboard's account Viewer on the case.
 
 Each pull is made as that account, at its clearance, audited and recorded in the export ledger.
+
+**A Superset chart that needs Mapbox tiles will not load**: Superset's content policy allows no address
+outside the deployment, so the browser refuses to fetch them, and no map key is set. A chart that needs
+a tile server or a map key the deployment does not provide is the same.
 
 ### The monitoring board
 

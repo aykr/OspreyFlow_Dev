@@ -382,6 +382,8 @@ sol is at about 89% of its week (the board read 88% at 05:30 UTC; default 56%) a
 
 **Patch 22 (line fault 17: a refusal on the merge result is recorded, so `send-back` works), patch 23 (line fault 12: the git-identity test carries its own identity) and the log summary patch are on main. The hold of file 017 is lifted.** **Order: run SE6b's merge once more so its refusal is recorded; then send it back as a fix-up for the one test path; then carry on by the algorithm (file 015).** **The ruling above (the git-identity test counts as green for the server-first rule) is no longer needed once a server run confirms that test passes; until a server run shows it passing, it stands.**
 
+**A server run has now confirmed the git-identity test passes (22 November 15:13 UTC): DC1c's run (`early_warning/DC1c-404ebc75.md`, started 14:40:24, id `0e99deddb61c89cd`) is GREEN, with `slice-line-check` among the targets it ran. The ruling below that counts that one red as green is therefore no longer needed and ends here (the owner's own condition).**
+
 ## 22 November 2026: the git-identity test counts as green for the server-first rule (the owner, in chat, about 12:20 UTC)
 
 **While the git-identity test (`test_accept_any_round.py::test_the_owners_accept_is_refused_when_the_builder_committed_after_the_verifiers_record`, line fault 12) is unfixed: a server result whose only red is that one test counts as green for the server-first rule (file 015, step 3 and 4). Any other red is handled as the algorithm says.** IS5a's result (run `1248d5f15a762da1`, the only red that test) is the first case; its merge started 12:14 on that reading.
