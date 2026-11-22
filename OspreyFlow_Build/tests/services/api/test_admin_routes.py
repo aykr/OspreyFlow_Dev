@@ -27,7 +27,7 @@ from services.api.identity_admin import (
     UnknownRoleError,
     allowed_role,
 )
-from services.api.report_freshness import Freshness
+from services.api.report_freshness import Freshness, Removal
 
 from ontology.handling import load_uk_le_scheme
 from schemas.admin import (
@@ -152,10 +152,13 @@ class _Freshness:
         self.removed: list[str] = []
 
     @asynccontextmanager
-    async def removal(self, client_id: str) -> AsyncIterator[None]:
-        """Like the real one: the rows go only if the body (the identity's deletion) succeeds."""
-        yield
-        self.removed.append(client_id)
+    async def removal(self, client_id: str) -> AsyncIterator[Removal]:
+        """Like the real one: the rows go only if the body (the identity's deletion) succeeds. This
+        fake holds no rows, so one the provider did not know purges nothing."""
+        removal = Removal()
+        yield removal
+        if not removal.identity_already_gone:
+            self.removed.append(client_id)
 
     async def by_dashboard(self) -> dict[str, Freshness]:
         from datetime import UTC, datetime

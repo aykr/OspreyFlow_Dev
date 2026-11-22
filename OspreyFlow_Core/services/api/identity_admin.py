@@ -76,6 +76,12 @@ class IdentityAdminRefused(Exception):
     """The identity provider refused or could not be reached; said in words, never swallowed."""
 
 
+class NoSuchDashboard(IdentityAdminRefused):
+    """The identity provider holds no dashboard identity of that name (never registered, or
+    already deleted). Told apart from its other refusals because a removal whose first attempt
+    deleted the identity and then failed in the mart is finished by removing it again."""
+
+
 class PersonActionRefused(Exception):
     """An Admin -> People action OspreyFlow refuses, before the identity provider is changed
     (ADR-112 Amendment 3): `error` is the answer's code, `words` what the administrator reads."""
@@ -761,13 +767,13 @@ class IdentityAdmin:
             raise UnknownRoleError(f"{client_id} is not a dashboard identity")
         uuid = await self._uuid(client_id)
         if uuid is None:
-            raise IdentityAdminRefused("no such dashboard")
+            raise NoSuchDashboard("no such dashboard")
         await self._call("DELETE", f"/clients/{uuid}")
 
 
 __all__ = [
     "CONDUIT_ACCOUNTS", "DashboardExistsError", "DashboardIdentity", "IdentityAdmin",
-    "IdentityAdminRefused", "OrganisationArrival", "PersonAccount", "PersonActionRefused",
-    "RegisteredDashboard",
+    "IdentityAdminRefused", "NoSuchDashboard", "OrganisationArrival", "PersonAccount",
+    "PersonActionRefused", "RegisteredDashboard",
     "UnknownRoleError", "allowed_role",
 ]  # fmt: skip

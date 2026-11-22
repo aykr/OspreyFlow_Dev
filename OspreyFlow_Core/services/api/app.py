@@ -769,6 +769,7 @@ from .identity_admin import (
     DashboardExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    NoSuchDashboard,
     PeopleDirectory,
     PersonActionRefused,
     PersonExistsError,
@@ -18201,16 +18202,30 @@ async def remove_dashboard_route(
     If the mart cannot be reached the dashboard stays registered, the administrator is told in
     words (503, under `message`, which the Admin screen shows), and removing it again retries;
     removal is never reported done with the rows still there. A deletion that did happen is audited
-    even when the mart then fails (the row carries `mart_confirmed: false`)."""
+    even when the mart then fails (the row carries `mart_confirmed: false`), and removing it again
+    finishes the job: an identity the provider no longer holds still has its rows taken out and the
+    removal stamped (204, audited), and only one with no row left in the mart is refused as one not
+    registered."""
     registered = [d for d in await identity_admin.list_dashboards() if d.client_id == client_id]
     revoked = [
         case
         for d in registered
         for case in await investigations.revoke_everywhere(d.account_id, by=principal)
     ]
+    not_registered: Exception | None = None
     try:
-        async with freshness.removal(client_id):
-            await identity_admin.delete_dashboard(client_id)
+        async with freshness.removal(client_id) as removal:
+            try:
+                await identity_admin.delete_dashboard(client_id)
+            except (NoSuchDashboard, PersonActionRefused) as refused:
+                if getattr(refused, "error", "no_such_dashboard") != "no_such_dashboard":
+                    raise
+                # The provider holds no such identity: the rows are still taken out and the removal
+                # stamped (so finishing a removal that failed in the mart is a retry, not a dead
+                # end), and the refusal is answered below.
+                removal.identity_was_not_registered()
+                not_registered = refused
+            purged = removal.purged
     except MartUnreachable as unreachable:
         logger.warning("remove_dashboard: the mart refused the removal: %s", unreachable)
         if unreachable.identity_removed:
@@ -18223,8 +18238,8 @@ async def remove_dashboard_route(
                                result_cardinality=1)  # fmt: skip
             words = (
                 f"{client_id} was removed from the identity provider, but the reporting mart did "
-                "not confirm that its figures went, so they may still be there. It can no longer "
-                "be removed again: tell the person who runs the platform."
+                "not confirm that its figures went, so they may still be there. Remove it again to "
+                "clear them."
             )
         else:
             words = (
@@ -18236,6 +18251,8 @@ async def remove_dashboard_route(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"error": "reporting_mart_unreachable", "message": words},
         ) from unreachable
+    if not_registered is not None and not purged:
+        raise not_registered  # not registered and no row of it left: the provider's own refusal
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
                        result_cardinality=1)  # fmt: skip

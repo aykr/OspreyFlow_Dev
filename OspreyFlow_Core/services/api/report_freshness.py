@@ -55,6 +55,21 @@ class MartUnreachable(Exception):
         self.identity_removed = identity_removed
 
 
+class Removal:
+    """What a removal in progress holds for its body: how many rows it took out, and whether the
+    body (the identity's deletion) found the identity already gone."""
+
+    def __init__(self) -> None:
+        self.purged = 0
+        self.identity_already_gone = False
+
+    def identity_was_not_registered(self) -> None:
+        """The body tells the removal the identity provider holds no such identity. The rows are
+        then still taken out and the removal still stamped (an identity the provider does not
+        hold should hold no rows), instead of the whole removal rolling back."""
+        self.identity_already_gone = True
+
+
 class ReportFreshness:
     def __init__(self, pool: asyncpg.Pool, schema: str = MART_SCHEMA) -> None:
         self._pool = pool
@@ -93,30 +108,35 @@ class ReportFreshness:
         }
 
     @asynccontextmanager
-    async def removal(self, client_id: str) -> AsyncIterator[None]:
+    async def removal(self, client_id: str) -> AsyncIterator[Removal]:
         """Takes this identity's rows out of every table the sync writes, then runs the body (the
         identity's deletion at the identity provider), then stamps the removal and commits: all in
         one transaction, under the dashboard's lock, which `report-sync`'s writes also take.
 
-        A body that raises rolls the rows back and raises as it did. A deployment with no mart has
+        A body that raises rolls the rows back and raises as it did, except that a body which says
+        the identity was not registered (`Removal.identity_was_not_registered`) and returns still
+        commits: that is how a removal whose first attempt deleted the identity and then failed in
+        the mart is finished by removing it again. A deployment with no mart has
         nothing to remove and the body still runs. Any other failure of the mart is
         `MartUnreachable`, never a quiet success."""
         s = self._schema
         body_ran = body_failed = False
         no_mart = False
+        removal = Removal()
         try:
             async with self._pool.acquire() as conn, conn.transaction():
                 try:
                     await lock_dashboard(conn, client_id)
                     for table in DASHBOARD_TABLES:
-                        await conn.execute(
+                        done = await conn.execute(
                             f"DELETE FROM {s}.{table} WHERE dashboard = $1", client_id
                         )
+                        removal.purged += _rows_in(done)
                 except (asyncpg.UndefinedTableError, asyncpg.InvalidSchemaNameError):
                     raise _NoMart from None
                 await ensure_control(conn)
                 try:
-                    yield
+                    yield removal
                 except BaseException:
                     body_failed = True
                     raise
@@ -134,7 +154,13 @@ class ReportFreshness:
                 raise
             raise MartUnreachable(str(e) or type(e).__name__, identity_removed=body_ran) from e
         if no_mart:
-            yield
+            yield removal
+
+
+def _rows_in(status: object) -> int:
+    """The row count of a command tag (`DELETE 3`); 0 when it carries none."""
+    tail = str(status).rsplit(" ", 1)[-1]
+    return int(tail) if tail.isdigit() else 0
 
 
 class _NoMart(Exception):
