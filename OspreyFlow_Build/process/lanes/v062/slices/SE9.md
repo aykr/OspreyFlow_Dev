@@ -31,6 +31,10 @@
 
 The new tests; `OspreyFlow_Build/tests/services/api/test_case_view_counts.py`, `test_case_views.py`; the conformance suite's stand-in cases; `tests/test_doc_citations_check.py`; `ruff check .`; **`mypy packages services harness`, `route-coverage-check` and `test-file-coverage-check` (the gate runs them and every slice that skipped them was refused)**. Before your final report run what the conductor runs again (ruff, the scan-map check, those three) and the whole pure Python sweep for the folders you touched, with counts and time.
 
+## Round 4 (22 November 2026, the conductor): nothing to change
+
+The merge was refused at 19:59 because **one test failed in `make test` on the merge result: `test_pl4d3d_declared_units.py::test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not`** ("two builds in one tree never collided in five tries": a test that depends on chance, backlog row 21; it passed by hand on main the same afternoon). It is not about SE9. **The send-back that brought you here was the conductor's mistake (a read-only check that sent you back).** **Change no file. Do not touch that test.** Take main in only if the line asks you to; confirm your checks are green and say so in one line. The verifier then reads nothing new.
+
 ## Out of scope
 
 `apps/workspace` and `apps/pages`; the decision log and the specification files themselves (diffs only); any change to what the Glass sees beyond the number; the boards' own count; Gremlin; starting a stack or taking the lease; any change to a key, token or address.

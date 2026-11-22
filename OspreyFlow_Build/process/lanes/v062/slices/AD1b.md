@@ -24,6 +24,14 @@
 
 The two acceptance tests; `npm run lint`, `npm run typecheck`, `npm test --workspace apps/workspace`, `node scripts/dist_compare.mjs verify --build` is **not** required here (the screen legitimately changes the bundle: say what changed); `OspreyFlow_Build/tests/services/api/test_model_key_paths.py` (on AD1a's branch), `test_admin_sections.py`, the two place tests in `test_place_routes.py`; `tests/test_doc_citations_check.py`; `ruff check .`. **No `tests/test_layout.py`.** Before your final report run by hand what the conductor runs again: ruff and eslint on every file changed and the scan-map check for each new test.
 
+## Scan-map rows for your new tests (the owner, 22 November 2026, for the night)
+
+**If a new test of yours walks a folder** (a directory walk, a glob over repository folders, `git ls-files`, reading files by pattern), **write its scan-map row yourself, in your own file `OspreyFlow_Build/process/lanes/v062/scan_rows/AD1b.tsv`** (one line per test: the test path relative to `OspreyFlow_Build`, a tab, the prefixes it walks, a tab, one sentence saying what it walks), **and say so in your report** (which test, which prefixes). Do not stop on the hook's "has no row" line for a test of your own; add the row and carry on. A test that only reads its own `tmp_path` still gets a row, saying so. **The tests that exist already (`test_admin_sections`, `test_place_routes`, `test_doc_citations_check`) have their rows; add none for them.** AD1a's own tests (`test_model_engine_checks`, `test_model_key_review`, `test_model_keys_commands`) have theirs on main too.
+
+## Merge order (the owner's ruling, restated 22 November)
+
+**AD1a is not merged until AD1b is verified; they merge back to back.** AD1b's builder works while the rest of the line goes on; the conductor does not hurry it past the verifier.
+
 ## Out of scope
 
 Any change to `services/api` (AD1a's); AD1c's items; a clearing route for stale engine tokens (the owner ruled none); rendering or deployment changes; the protected files.
