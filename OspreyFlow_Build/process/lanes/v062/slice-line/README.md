@@ -266,6 +266,7 @@ says that cost is a list-price estimate, not a bill.
 - **A refusal on the merge result is recorded** (008, fault 17): the slice's acceptance or checks red on main with the slice merged in is recorded for the builder (refused for `gate`, a findings record naming which), so `resume.py <ID> send-back` returns it, as after the full gate.
 - **No machine git** (006): the suite runs as on a machine with no git identity (`tests/conftest.py`), and the test world keeps its own identity in its repository's config.
 - **Before the slot** (004, 1): with the owner's switch `server_counts` on, a slice whose demo-server result (fetched by run id, never read from the note) is red for its tip is not given the merge slot until `merge_slice.py server-rerun <ID>` reruns the named tests (or targets) on the Mac: green, it queues; red, it goes back to its builder.
+- **The server's green counts** (004, 2): for a finished pass with the same main tip, slice tip and candidate tree hash, the gate runs only each `ci` target (and Core `check` target) the result does not name as passed, and `make test` whole unless passed (then only the test files the server did not run); anything else, the whole gate. `merged.json` says what was taken and why not.
 
 ## Files outside the repository
 

@@ -53,9 +53,11 @@ GH = (Path(__file__).resolve().parent / "fake_gh.py").read_text()
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
 #: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
 #: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them; TEST_GATE_SLEEP:
-#: seconds the gate runs, writing nothing.
-STAND_IN_GATE = """def _stand_in_gate(t, b, l):
+#: seconds the gate runs, writing nothing; TEST_GATE_PLAN: the targets it was given (null: the whole gate).
+STAND_IN_GATE = """def _stand_in_gate(t, b, l, targets=None):
     Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
+    if os.environ.get('TEST_GATE_PLAN'):  # the targets it was given: None for the whole gate (004, 2)
+        Path(os.environ['TEST_GATE_PLAN']).write_text(json.dumps(targets))
     l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
     if os.environ.get('TEST_GATE_LOG'):
         l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())

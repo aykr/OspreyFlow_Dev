@@ -378,7 +378,7 @@ def wait_for_queue(tree: Path, wait_minutes: int, log: Path) -> str | None:
         time.sleep(QUEUE_POLL_SECONDS)
 
 
-def full_gate(tree: Path, base: str, log: Path) -> int:
+def full_gate(tree: Path, base: str, log: Path, targets: list | None = None) -> int:
     """Today's full gate on the merge result, in its own CI-built environment: make -k ci and make test, then the
     live step: the live files the change itself reaches, on the test server through the lease, as they need stores
     (live_step.yaml: off, or on after the server's run queue clears)."""
@@ -399,7 +399,7 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
         log.open("a").write(f"\nREFUSED: the gate's environment: {e}\n")
         return 3
     codes = []
-    for target in FULL_GATE_TARGETS:
+    for target in (FULL_GATE_TARGETS if targets is None else targets):  # targets: the server's remainder (004, 2)
         started = time.monotonic()
         if PROGRESS:
             PROGRESS.part(" ".join(target))
@@ -1134,6 +1134,24 @@ def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> 
     return next((x for x in codes if x), 0)
 
 
+def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> dict:
+    """The server's green for this merge (item 2): counted only with the owner's switch on and a finished pass for the
+    same main tip, slice tip and candidate tree as `after`; then the gate runs only server_gate.remainder's targets.
+    Otherwise the whole gate runs as before, and the record says why."""
+    rid, e = server_gate.server_result(slice_id, tip)
+    tree = c.git(["rev-parse", "HEAD^{tree}"], after)
+    why = server_gate.matches(e, base, tip, tree)
+    out = {"run_id": rid, "counted": False, "tree": tree}
+    if not server_gate.counting():
+        return {**out, "why": "the owner's switch (server_counts) is off"}
+    if why:
+        return {**out, "why": why}
+    plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"))
+    log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}; the Mac runs: "
+                        f"{'; '.join(plan['mac']) or 'nothing of the full gate'}\n")
+    return {**out, "counted": True, "taken": plan["taken"], "mac_ran": plan["mac"], "plan": plan}
+
+
 #: The Mac's rerun of a server's red; the line's tests stand it in, as they stand in FULL_GATE.
 SERVER_RERUN = rerun_named
 
@@ -1316,7 +1334,9 @@ def merge(slice_id: str) -> dict:
 
         # 7. today's full gate on the merge result
         prog.step(5)
-        code = FULL_GATE(after, base, log)
+        server = counted_gate(slice_id, tip, base, after, log)  # the owner's file 004, item 2
+        code = FULL_GATE(after, base, log, targets=server["plan"]["targets"]) if server.get("counted") else \
+            FULL_GATE(after, base, log)
         retried = c.read_json(log.with_suffix(".retries.json"))
         if code == NETWORK:  # 1d: a registry or download unreachable twice: the slice's fault in nothing
             c.write_json(rec / f"refusal-network-{uuid.uuid4().hex[:8]}.json",
@@ -1337,6 +1357,8 @@ def merge(slice_id: str) -> dict:
         done = {"slice": slice_id, "build": frozen["build"], "merge": landed, "tip": tip, "base": base,
                 "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"),
                 "github_at_merge": github, "at": c.now()}
+        if server.get("run_id") or server.get("counted"):
+            done["server"] = {k: v for k, v in server.items() if k != "plan"}
         if under:  # 2: records commits that moved main under the gate, landed beneath the tested result
             done.update(tested_merge=merged, landed_on=c.git(["rev-parse", f"{landed}^1"], c.REPO), records_under_gate=under)
         if retried:

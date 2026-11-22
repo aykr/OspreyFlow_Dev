@@ -27,7 +27,7 @@ SWITCH = "server_counts"
 RUN_ID = re.compile(r"\A[0-9a-f]{16}\Z")
 NOTES_REL = f"{c.V062_REL}/early_warning"
 NOTE_RUN_ID = re.compile(r"^- Run id: `([0-9a-f]{16})`\s*$", re.M)
-FETCH_SECONDS = 300
+FETCH_SECONDS = 120
 
 
 def counting() -> bool:
@@ -133,3 +133,77 @@ def slot_hold(slice_id: str, tip: str) -> str | None:
     return (f"the demo server's run {rid} was red for {slice_id} at {tip[:10]} ({named}): it is not given the merge "
             f"slot until those are rerun on the Mac: merge_slice.py server-rerun {slice_id}. Green there, it queues as "
             "before; red there, it goes back to its builder.")
+
+
+# ------------------------------------------------------------------ item 2: the server's green counts
+
+
+def prerequisites(makefile: Path, target: str) -> list[str]:
+    """The prerequisites of `target:` in a Makefile, as written on its rule line (continuations joined); [] if none."""
+    try:
+        text = makefile.read_text().replace("\\\n", " ")
+    except OSError:
+        return []
+    m = re.search(rf"^{re.escape(target)}:([^=\n]*)$", text, re.M)
+    return m.group(1).split() if m else []
+
+
+#: A test file the server may name as not run, as make test's own pytest is given one (from OspreyFlow_Core).
+TEST_FILE = re.compile(r"\A(?:\.\./)?(OspreyFlow_Build/tests/[A-Za-z0-9_./-]+\.py)\Z")
+
+
+def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
+    """Why the server's green does not stand for this merge (None when it does): the runner's finished pass, for the same
+    main tip, the same slice tip and the same candidate tree hash as the Mac's own merge result."""
+    if not e:
+        return "no result from the server for this slice at this tip"
+    if e.get("state") != "done" or e.get("verdict") != "pass":
+        return f"the server's run is not a finished pass ({e.get('state')}, {e.get('verdict')})"
+    if e.get("main") != base:
+        return f"main has moved since the server's run (it ran on {str(e.get('main'))[:10]}, main is {base[:10]})"
+    if e.get("tip") != tip:
+        return "the server's run is for another tip of the slice"
+    if e.get("tree") != tree:
+        return f"the server's candidate tree {str(e.get('tree'))[:10]} is not the Mac's {tree[:10]}"
+    if not isinstance(e.get("passed_targets"), list):
+        return "the server's result names no target it ran and passed"
+    return None
+
+
+def remainder(e: dict, tree: Path, mk: Path) -> dict:
+    """What the Mac still runs of today's full gate when the server's green counts, and what is taken from the server:
+    each `ci` prerequisite the server does not name as run and passed (core-check by Core's own `check` targets, each
+    named), and `make test` whole unless the server names it passed, then only the test files it did not run (written
+    as a second makefile, `mk`, for make test's own pytest command). Anything the server names but the Mac cannot place
+    runs on the Mac whole: never weaker than today on a path the server did not prove."""
+    passed = {t for t in e.get("passed_targets") or [] if isinstance(t, str)}
+    ci = prerequisites(tree / "OspreyFlow_Build/Makefile", "ci")
+    core = prerequisites(tree / "OspreyFlow_Core/Makefile", "check")
+    targets, taken, mac = [], [], []
+    ci_left = [t for t in ci if t != "core-check" and t not in passed]
+    taken += [t for t in ci if t != "core-check" and t in passed]
+    if "core-check" in ci:
+        core_left = [t for t in core if t not in passed] if core else ["check"]
+        taken += [f"core:{t}" for t in core if t in passed]
+        if core_left:
+            targets.append(["make", "-k", "-C", "../OspreyFlow_Core", *core_left])
+            mac += [f"core:{t}" for t in core_left]
+    if ci_left:
+        targets.insert(0, ["make", "-k", *ci_left])
+        mac = ci_left + mac
+    nr = e.get("not_run") or {}
+    names = [x.get("name") if isinstance(x, dict) else x for x in (nr.get("test_files") or [])]
+    names += [x for x in (nr.get("docker_skipped") or [])]
+    files = [TEST_FILE.match(str(n)) for n in names]
+    if "test" in passed and all(files):
+        taken.append("test")
+        files = sorted({"../" + m.group(1) for m in files})
+        if files:
+            mk.write_text("server-test-files:\n\t$(IN_CORE) $(PYTEST) $(SERVER_TEST_FILES)\n")
+            targets.append(["make", "-f", "Makefile", "-f", str(mk), "server-test-files",
+                            "SERVER_TEST_FILES=" + " ".join(files)])
+            mac.append("test files the server did not run: " + ", ".join(f[len("../"):] for f in files))
+    else:
+        targets.append(["make", "test"])
+        mac.append("test")
+    return {"targets": targets, "taken": taken, "mac": mac}

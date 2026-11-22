@@ -479,6 +479,17 @@ M = [
  ("merge_slice.py", "    refuse_to_builder(slice_id, tip, \"the demo server's red, rerun on the Mac", "    (lambda *a: None)(slice_id, tip, \"the demo server's red, rerun on the Mac", "red_on_the_mac_too"),
  ("server_gate.py", '    bare = [t for t in f.get("targets") or [] if isinstance(t, str) and t and not by_target.get(t)]', '    bare = []', "failing_target_with_no_test"),
  ("merge_slice.py", '["git", "merge", "--no-ff", "-q", "-m", f"rerun {slice_id}", tip]', '["git", "status"]', "shows_red_is_not_given_the_slot"),
+ # the owner's file 004, item 2: the server's green counts only for exactly this tree; the Mac runs the rest
+ ("server_gate.py", '    if e.get("tree") != tree:\n', '    if False:\n', "short_of_a_pass"),
+ ("server_gate.py", '    if e.get("main") != base:\n', '    if False:\n', "short_of_a_pass"),
+ ("server_gate.py", '    if e.get("state") != "done" or e.get("verdict") != "pass":\n', '    if e.get("state") != "done":\n', "short_of_a_pass"),
+ ("server_gate.py", '    if not isinstance(e.get("passed_targets"), list):\n', '    if False:\n', "short_of_a_pass"),
+ ("server_gate.py", '    ci_left = [t for t in ci if t != "core-check" and t not in passed]\n', '    ci_left = [t for t in ci if t == "client-name-check"]\n', "target_missing"),
+ ("server_gate.py", '        core_left = [t for t in core if t not in passed] if core else ["check"]\n', '        core_left = []\n', "exactly_this_tree_counts"),
+ ("server_gate.py", '    if "test" in passed and all(files):\n', '    if all(files):\n', "make_test_runs_whole"),
+ ("server_gate.py", 'TEST_FILE = re.compile(r"\\A(?:\\.\\./)?(OspreyFlow_Build/tests/[A-Za-z0-9_./-]+\\.py)\\Z")', 'TEST_FILE = re.compile(r"\\A(?:\\.\\./)?(.+)\\Z")', "make_test_runs_whole"),
+ ("merge_slice.py", '    if not server_gate.counting():\n        return {**out, "why": "the owner', '    if False:\n        return {**out, "why": "the owner', "switch_off_the_whole_gate"),
+ ("merge_slice.py", '        code = FULL_GATE(after, base, log, targets=server["plan"]["targets"]) if server.get("counted") else', '        code = FULL_GATE(after, base, log) if server.get("counted") else', "exactly_this_tree_counts"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
