@@ -10,6 +10,7 @@
     "test:keyboard": "playwright test --config keyboard/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@fontsource/atkinson-hyperlegible-next": "5.3.0",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@types/express": "^5.0.6",

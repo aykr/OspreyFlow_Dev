@@ -307,4 +307,31 @@ test.describe("scripts off", () => {
       await s.stop();
     }
   });
+
+  // Not one of Scenario S's rows: the same task as SO3 by the other way a person with scripts off may take it, which a
+  // screen-reader user is most likely to (the button says what it does, so nothing else need be reached). The button alone
+  // replaces the draft, and the main Check button after it keeps what was confirmed, as the React screen's `onCheck` does.
+  test("scripts off: the button that says it replaces my draft does so on its own, and the next Check keeps it", async ({ page }) => {
+    const s = await studio({ ownDraft: 3 });
+    try {
+      await open(page, s);
+      await page.getByLabel("Choose the release's folder").setInputFiles(releaseFolder());
+      await press(page.getByRole("button", { name: "Read the folder" }));
+      await expect(page.getByText("Read 2 files from the folder.")).toBeVisible();
+      await press(page.getByRole("button", { name: "Check the release" }));
+      await expect(page.getByText(/your own in-progress draft/)).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: "Replace my draft of the domain model" })).not.toBeChecked();
+      await press(page.getByRole("button", { name: "Check again, replacing my draft" }));
+      await expect(page.getByText("Would write Wing phone calls as the draft, in place of the one open now.")).toBeVisible();
+      expect(importCalls(s).at(-1)?.query.get("replace_own_draft")).toBe("3");
+      await press(page.getByRole("button", { name: "Check the release" }));
+      await expect(page.getByRole("checkbox", { name: "Replace my draft of the domain model" })).toBeChecked();
+      expect(importCalls(s).at(-1)?.query.get("replace_own_draft")).toBe("3");
+      await press(page.getByRole("button", { name: "Import as drafts" }));
+      await expect(page.getByText("Everything imported is a draft. Make the model live in 1 Model when it is ready.")).toBeVisible();
+      expect(s.conduit.written[0]?.replace).toBe("3");
+    } finally {
+      await s.stop();
+    }
+  });
 });

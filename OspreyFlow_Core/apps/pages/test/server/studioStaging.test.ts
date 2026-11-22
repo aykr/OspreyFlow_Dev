@@ -105,7 +105,7 @@ describe("lifetime", () => {
     const token = await heldBy(store, session, clock).put(folder());
     expect(store.ttl(`${STAGED_KEY_PREFIX}${token}`)).toBe(600);
     clock.advance(599.5);
-    await expect(heldBy(store, session, clock).put(folder())).rejects.toBeInstanceOf(StagedTooLarge);
+    await expect(heldBy(store, session, clock).put(folder())).rejects.toMatchObject({ reason: "session" });
   });
 
   it("a session holds at most three, the oldest going from the store and the list", async () => {
@@ -130,6 +130,7 @@ describe("lifetime", () => {
   it("a folder over what the store holds is refused in a way the page can word", async () => {
     const { held } = setup();
     // JSON turns each control character into six, so a folder under the file cap can still be over the store's limit.
+    await expect(held.put(folder("sub-a", { "release.yaml": "\u0001".repeat(1024 * 1024) }))).rejects.toMatchObject({ reason: "size" });
     await expect(held.put(folder("sub-a", { "release.yaml": "\u0001".repeat(1024 * 1024) }))).rejects.toBeInstanceOf(StagedTooLarge);
   });
 });

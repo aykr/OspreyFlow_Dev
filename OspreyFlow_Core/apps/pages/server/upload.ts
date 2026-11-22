@@ -48,6 +48,8 @@ export interface UploadOptions {
   stallMs: number;
   /** The words for a form that is over `maxBytes`. */
   tooLarge: string;
+  /** The words for a form that has more than `maxFiles` files. */
+  tooMany: string;
   /** Asked once the fields are in and before the first file's first byte: throw an `UploadRefusal` to refuse the upload. */
   beforeFiles?: (fields: Readonly<Record<string, string>>) => Promise<void>;
 }
@@ -98,7 +100,7 @@ export async function readUploadForm(req: Request, options: UploadOptions): Prom
             throw error;
           }
         }
-        if (files.length >= options.maxFiles) throw new MultipartRefusal(413, options.tooLarge);
+        if (files.length >= options.maxFiles) throw new MultipartRefusal(413, options.tooMany);
         const chunks: Buffer[] = [];
         finish = (): void => {
           files.push({ filename, data: Buffer.concat(chunks) });

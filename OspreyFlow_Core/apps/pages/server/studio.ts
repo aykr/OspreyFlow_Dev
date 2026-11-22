@@ -497,6 +497,7 @@ async function releasesPost(req: Request, res: Response): Promise<void> {
         maxFiles: MAX_FOLDER_FILES,
         stallMs: st.bodyStallMs,
         tooLarge: RELEASE_WORDS.tooLarge,
+        tooMany: RELEASE_WORDS.tooMany,
         // Before a byte of the folder is taken in: a person without the right is refused, with their folder unread.
         beforeFiles: async (found) => {
           early.frame = await frameFor(found["case"]);
@@ -565,7 +566,9 @@ async function releasesPost(req: Request, res: Response): Promise<void> {
       token = await held.put(folder);
     } catch (error) {
       if (!(error instanceof StagedTooLarge)) throw error;
-      renderReleases(req, res, frame, { ...base, problem: RELEASE_WORDS.tooLarge }, 413);
+      // A folder over what is held is said as large; a session with under a second left is said as ending, not as a folder fault.
+      const ending = error.reason === "session";
+      renderReleases(req, res, frame, { ...base, problem: ending ? RELEASE_WORDS.sessionEnding : RELEASE_WORDS.tooLarge }, ending ? 503 : 413);
       return;
     }
     renderReleases(req, res, frame, { ...base, ...stagedView(token, folder) });
@@ -574,7 +577,7 @@ async function releasesPost(req: Request, res: Response): Promise<void> {
 
   // ---- the steps after it: a form with the held folder's token
   const action = fields["action"];
-  if (action !== "check" && action !== "import") {
+  if (action !== "check" && action !== "import" && action !== "replace") {
     renderReleases(req, res, frame, { ...base, problem: "That request was not understood." }, 400);
     return;
   }
@@ -585,7 +588,19 @@ async function releasesPost(req: Request, res: Response): Promise<void> {
     renderReleases(req, res, frame, { ...base, problem: RELEASE_WORDS.gone }, 410);
     return;
   }
-  await continueSteps({ req, res, frame, conduit, held, token, folder, base, action, replace: fields["replace"] === "1" });
+  // "replace" is the replace form's own button: a check, with the importer's confirmation given by pressing it.
+  await continueSteps({
+    req,
+    res,
+    frame,
+    conduit,
+    held,
+    token,
+    folder,
+    base,
+    action: action === "import" ? "import" : "check",
+    replace: action === "replace" || fields["replace"] === "1",
+  });
 }
 
 async function continueSteps(input: {

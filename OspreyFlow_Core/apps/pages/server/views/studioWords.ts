@@ -243,6 +243,7 @@ export const RELEASE_WORDS = {
   notInRelease: "That file is not in the release.",
   tooLarge: "That folder is larger than the Studio holds for a check (2 MB).",
   tooMany: "That folder has more files than the Studio holds for a check (200).",
+  sessionEnding: "Your sign-in is about to end, so the folder could not be held. Sign in again and choose the folder again.",
   folderRead: (n: number) => `Read ${n} ${n === 1 ? "file" : "files"} from the folder.`,
   exported: (n: number) => `The release has ${n} ${n === 1 ? "file" : "files"}.`,
   leftOut: (n: number) => ` ${n} published pipeline(s) are marked above what you may view, so they are not in it.`,

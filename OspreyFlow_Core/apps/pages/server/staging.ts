@@ -48,8 +48,18 @@ export interface Staged {
   check?: StagedCheck;
 }
 
-/** A folder over what the page holds: said in words, nothing held. */
-export class StagedTooLarge extends Error {}
+/**
+ * A folder that cannot be held: said in words, nothing held. `reason` says which words: "size" is a folder over what the store
+ * holds; "session" is a session with under a second left, which is not a fault of the folder.
+ */
+export class StagedTooLarge extends Error {
+  constructor(
+    message: string,
+    readonly reason: "size" | "session" = "size",
+  ) {
+    super(message);
+  }
+}
 
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
@@ -94,7 +104,7 @@ export function heldBy(
   const lifetime = (): number => Math.min(STAGED_TTL_SECONDS, ttlSeconds(auth(), clock()));
   const write = async (token: string, folder: Staged): Promise<void> => {
     const ttl = lifetime();
-    if (ttl < 1) throw new StagedTooLarge("the session is about to end");
+    if (ttl < 1) throw new StagedTooLarge("the session is about to end", "session");
     const text = JSON.stringify(folder);
     if (Buffer.byteLength(text, "utf8") > MAX_STAGED_VALUE_BYTES) throw new StagedTooLarge("over the store's limit");
     await store.set(keyFor(token), text, ttl);

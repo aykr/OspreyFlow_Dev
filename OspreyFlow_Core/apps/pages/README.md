@@ -47,6 +47,7 @@ Needs-you reminder, the five places as links); a page fills its `place` block. T
 - **An upload page** says `upload: true` in its `PageModule`; its handler reads the form with `server/upload.ts`, which checks the
   anti-forgery token as the form's first part before any file is read.
 - **The keyboard runner** is `apps/pages/keyboard/` (`npm run test:keyboard --workspace apps/pages`): Playwright against this
-  service started in the test with a fake Conduit, with scripts and without. It resolves `@playwright/test` from the workspace's
-  hoisted copy.
+  service started in the test with a fake Conduit, with scripts and without. `@playwright/test` is a dev dependency of this
+  workspace at the same version as the others'. The root `tsconfig.json` compiles the cases (`npm run typecheck`), and the job that
+  runs them in CI is `keyboard/ci-wiring.patch` (the owner's to apply to the workflow file: an agent never writes it).
 

@@ -54,9 +54,10 @@
 <input type="hidden" name="action" value="upload">
 <label>
 <span>The release's folder</span>
-<input type="file" name="folder" multiple webkitdirectory aria-label="Choose the release's folder"{% if not rel.mayImport %} disabled{% endif %}>
+<input type="file" name="folder" multiple webkitdirectory aria-label="Choose the release's folder"{% if not rel.mayImport %} disabled aria-describedby="why-import"{% endif %}>
 </label>
-<button type="submit" class="btn"{% if not rel.mayImport %} disabled{% endif %}>Read the folder</button>
+<button type="submit" class="btn"{% if not rel.mayImport %} disabled aria-describedby="why-import"{% endif %}>Read the folder</button>
+{% if rel.whyImport %}<span id="why-import" class="label" data-why-not>{{ rel.whyImport }}</span>{% endif %}
 </form>
 <p class="caption">{{ release.checkFirst }}</p>
 {% if rel.staged %}<p role="status">{{ release.folderRead(rel.staged.count) }}</p>{% endif %}
@@ -65,8 +66,9 @@
 <input type="hidden" name="_csrf" value="{{ csrfToken }}">
 <input type="hidden" name="case" value="{{ f.caseId }}">
 {% if rel.token %}<input type="hidden" name="staged" value="{{ rel.token }}">
-{% endif %}<button type="submit" class="btn" name="action" value="check"{% if not rel.token or not rel.mayImport %} disabled{% endif %}>Check the release</button>
-<button type="submit" class="btn btn--primary" name="action" value="import"{% if not rel.clean or not rel.mayImport %} disabled{% endif %}>Import as drafts</button>
+{% endif %}{% if rel.check and rel.check.confirmed %}<input type="hidden" name="replace" value="1">
+{% endif %}<button type="submit" class="btn" name="action" value="check"{% if not rel.token or not rel.mayImport %} disabled{% endif %}{% if not rel.mayImport %} aria-describedby="why-import"{% endif %}>Check the release</button>
+<button type="submit" class="btn btn--primary" name="action" value="import"{% if not rel.clean or not rel.mayImport %} disabled{% endif %}{% if not rel.mayImport %} aria-describedby="why-import"{% endif %}>Import as drafts</button>
 {% if not rel.token %}<span class="label">{{ release.chooseFolder }}</span>{% endif %}
 </form>
 {% endif %}
@@ -80,7 +82,7 @@
 <span>{{ release.replaceOwn }}</span>
 </label>
 <p class="caption">{{ release.replaceOwnHint }}</p>
-<button type="submit" class="btn" name="action" value="check">{% if rel.check.confirmed %}Check again{% else %}Check again, replacing my draft{% endif %}</button>
+<button type="submit" class="btn" name="action" value="{% if rel.check.confirmed %}check{% else %}replace{% endif %}">{% if rel.check.confirmed %}Check again{% else %}Check again, replacing my draft{% endif %}</button>
 </form>
 {% endif %}
 {% if rel.check and not rel.written %}{{ plan(rel.check.view) }}{% endif %}
