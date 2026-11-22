@@ -1016,13 +1016,11 @@ def test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not(tmp_pa
 
     Unlocked, in one copy of the tree (the real tree's shape, but a copy, so no other test's build is harmed):
     one of the two fails in `sync_govuk_assets.mjs`'s `rmSync`/`cpSync` of the shared `public/assets/govuk`, as at the merge
-    (tried up to fifteen times, since a race is not certain: it was six in six on an idle Mac, and five tries were not
-    enough once, on a loaded merge gate, 22 November 2026; a try that collides stops the loop, so the extra tries cost
-    nothing when the race shows). Then two `build_to`s at once,
+    (tried up to five times, since a race is not certain: it was six in six on an idle Mac). Then two `build_to`s at once,
     each in its own copy: both succeed, every time. The two collide because they share a tree, and they do not once they
     share none; no lock is needed, and none is taken."""
     failures: list[str] = []
-    for attempt in range(15):
+    for attempt in range(5):
         shared = scratch_tree(tmp_path / f"shared{attempt}")
         results = race([
             lambda out=tmp_path / f"s{attempt}a": run_build(shared, out),
@@ -1031,7 +1029,7 @@ def test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not(tmp_pa
         failures = [r.stdout + r.stderr for r in results if r.returncode != 0]
         if failures:
             break
-    assert failures, "two builds in one tree never collided in fifteen tries: the plant does not show the race"
+    assert failures, "two builds in one tree never collided in five tries: the plant does not show the race"
     assert re.search(r"ENOTEMPTY|ENOENT|EEXIST|sync_govuk_assets", failures[0]), failures[0][-1500:]
 
     outcomes: list[object] = []
