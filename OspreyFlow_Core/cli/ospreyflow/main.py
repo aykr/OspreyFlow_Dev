@@ -444,9 +444,7 @@ def _print_checks(checks: list[Check]) -> bool:
     return all(check.ok for check in checks)
 
 
-def _doctor(
-    args: argparse.Namespace, probes: Probes, product: Path, env: Mapping[str, str]
-) -> int:
+def _doctor(args: argparse.Namespace, probes: Probes, product: Path, env: Mapping[str, str]) -> int:
     server = None
     base = _product_config(product)
     made: Mapping[str, Any] = base
