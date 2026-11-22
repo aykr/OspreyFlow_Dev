@@ -497,6 +497,14 @@ M = [
  ("server_gate.py", '        c.write_json(c.rec_dir(sid) / "server-again.json",', '        (lambda *a, **k: None)(c.rec_dir(sid) / "server-again.json",', "refused_slice_under_the_stack"),
  ("merge_slice.py", '                server_gate.stack_refused(slice_id, prog.rec["tip"])', '                pass', "refused_slice_under_the_stack"),
  ("server_gate.py", '"above": [(x.get("slice"), x.get("tip")) for x in stack[i + 1:]]}', '"above": []}', "refused_slice_under_the_stack"),
+ # the owner's file 004, item 4: the shadow, on from the first day: agree or differ for every merge
+ ("server_gate.py", '        result = "agree" if srv == mac else "differ"\n', '        result = "agree"\n', "differ_when_the_server_was_green"),
+ ("server_gate.py", '    elif not server.get("same"):\n', '    elif False:\n', "another_candidate_is_no_comparison"),
+ ("merge_slice.py", '            server["shadow"] = server_gate.shadow(slice_id, tip, server, code,', '            server["shadow"] = server_gate.shadow(slice_id, tip, server, 0,', "differ_when_the_server_was_green"),
+ ("server_gate.py", '    if server.get("counted"):\n        result, why = "counted"', '    if False:\n        result, why = "counted"', "marked_counted_not_compared"),
+ ("server_gate.py", '        if not f.exists():\n            f.write_text(SHADOW_HEAD)\n', '        if False:\n            f.write_text(SHADOW_HEAD)\n', "both_green"),
+ ("server_gate.py", '        if len(parts) >= 7 and parts[6] in out:\n', '        if False:\n', "both_green"),
+ ("server_gate.py", '    srv = {"pass": "green", "fail": "red"}.get(', '    srv = {"pass": "green", "fail": "green"}.get(', "red_from_both_agrees"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

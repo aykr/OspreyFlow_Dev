@@ -157,13 +157,11 @@ def prerequisites(makefile: Path, target: str) -> list[str]:
 TEST_FILE = re.compile(r"\A(?:\.\./)?(OspreyFlow_Build/tests/[A-Za-z0-9_./-]+\.py)\Z")
 
 
-def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
-    """Why the server's green does not stand for this merge (None when it does): the runner's finished pass, for the same
-    main tip, the same slice tip and the same candidate tree hash as the Mac's own merge result."""
+def same_candidate(e: dict | None, base: str, tip: str, tree: str) -> str | None:
+    """Why the server's run is not for the Mac's own candidate (None when it is): the same main tip (for a slice stacked
+    on others, main exactly the tree the server ran it on), the same slice tip and the same candidate tree hash."""
     if not e:
         return "no result from the server for this slice at this tip"
-    if e.get("state") != "done" or e.get("verdict") != "pass":
-        return f"the server's run is not a finished pass ({e.get('state')}, {e.get('verdict')})"
     if e.get("index"):  # stacked: main must be exactly the tree the server ran it on (those below landed as tested)
         if c.git(["rev-parse", base + "^{tree}"], c.REPO) != e.get("base_tree"):
             return (f"stacked on {', '.join(e.get('below') or [])}: main is not the tree the server ran it on (one "
@@ -174,6 +172,17 @@ def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
         return "the server's run is for another tip of the slice"
     if e.get("tree") != tree:
         return f"the server's candidate tree {str(e.get('tree'))[:10]} is not the Mac's {tree[:10]}"
+    return None
+
+
+def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
+    """Why the server's green does not stand for this merge (None when it does): the runner's finished pass, for the same
+    main tip, the same slice tip and the same candidate tree hash as the Mac's own merge result."""
+    why = same_candidate(e, base, tip, tree)
+    if why:
+        return why
+    if e.get("state") != "done" or e.get("verdict") != "pass":
+        return f"the server's run is not a finished pass ({e.get('state')}, {e.get('verdict')})"
     if not isinstance(e.get("passed_targets"), list):
         return "the server's result names no target it ran and passed"
     return None
@@ -234,3 +243,60 @@ def stack_refused(slice_id: str, tip: str) -> list[str]:
                       "was refused at merge", "at": c.now()})
         marked.append(sid)
     return marked
+
+
+# ------------------------------------------------------------------ item 4: the shadow
+
+SHADOW_LOG = "server-shadow.tsv"
+SHADOW_HEAD = "at\tslice\ttip\trun_id\tserver\tmac\tresult\twhy\n"
+
+
+def shadow(slice_id: str, tip: str, server: dict, code: int, network: bool, failing: list[str]) -> dict:
+    """The server's result beside the Mac's whole gate for the same candidate (item 4: on from the first day, whatever
+    the switch): agree, differ, or no comparison and why. Written to records/<ID>/server-shadow-<run id>.json and one
+    line of server-shadow.tsv in the data folder. Never changes the merge."""
+    rid = server.get("run_id")
+    srv = {"pass": "green", "fail": "red"}.get(server.get("server_verdict") or "")
+    mac = "green" if code == 0 else "red"
+    if server.get("counted"):
+        result, why = "counted", "the switch is on and the server's green counted: the Mac ran the remainder only"
+    elif not rid:
+        result, why = "no comparison", "no server result named for this slice at this tip"
+    elif not server.get("same"):
+        result, why = "no comparison", server.get("same_why") or "not the same candidate"
+    elif network:
+        result, why = "no comparison", "the Mac's gate could not reach a registry or a download (network)"
+    elif srv is None:
+        result, why = "no comparison", f"the server's run has no verdict ({server.get('server_verdict')})"
+    else:
+        result = "agree" if srv == mac else "differ"
+        why = "" if result == "agree" else (f"the server said {srv}, the Mac's whole gate {mac}"
+                                            + (f" ({', '.join(failing[:5])})" if failing else ""))
+    row = {"at": c.now(), "slice": slice_id, "tip": tip, "run_id": rid, "server": srv, "mac": mac,
+           "result": result, "why": why, "mac_failing": failing[:20]}
+    if rid:
+        c.write_json(c.rec_dir(slice_id) / f"server-shadow-{rid}.json", row)
+    f = c.DATA / SHADOW_LOG
+    try:
+        if not f.exists():
+            f.write_text(SHADOW_HEAD)
+        with f.open("a") as fh:
+            fh.write("\t".join(str(row[k] or "") for k in ("at", "slice", "tip", "run_id", "server", "mac", "result",
+                                                            "why")) + "\n")
+    except OSError:
+        pass
+    return row
+
+
+def shadow_tally() -> dict:
+    """How many merges the server agreed and differed on (server-shadow.tsv), for the board and the owner's switch."""
+    out = {"agree": 0, "differ": 0, "no comparison": 0, "counted": 0}
+    try:
+        lines = (c.DATA / SHADOW_LOG).read_text().splitlines()[1:]
+    except OSError:
+        return out
+    for ln in lines:
+        parts = ln.split("\t")
+        if len(parts) >= 7 and parts[6] in out:
+            out[parts[6]] += 1
+    return out

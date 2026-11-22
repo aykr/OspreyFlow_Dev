@@ -1141,7 +1141,10 @@ def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> 
     rid, e = server_gate.server_result(slice_id, tip)
     tree = c.git(["rev-parse", "HEAD^{tree}"], after)
     why = server_gate.matches(e, base, tip, tree)
-    out = {"run_id": rid, "counted": False, "tree": tree}
+    same = server_gate.same_candidate(e, base, tip, tree)
+    out = {"run_id": rid, "counted": False, "tree": tree, "same": same is None, "server_verdict": (e or {}).get("verdict")}
+    if same:
+        out["same_why"] = same
     if not server_gate.counting():
         return {**out, "why": "the owner's switch (server_counts) is off"}
     if why:
@@ -1338,6 +1341,11 @@ def merge(slice_id: str) -> dict:
         code = FULL_GATE(after, base, log, targets=server["plan"]["targets"]) if server.get("counted") else \
             FULL_GATE(after, base, log)
         retried = c.read_json(log.with_suffix(".retries.json"))
+        try:  # item 4: the server's result beside the Mac's whole gate, on from the first day; never changes the merge
+            server["shadow"] = server_gate.shadow(slice_id, tip, server, code, code == NETWORK, gate_findings(
+                log.read_text(errors="replace"))[0] if code not in (0, NETWORK) and log.exists() else [])["result"]
+        except Exception as e:  # noqa: BLE001 -- best effort, said in the log
+            log.open("a").write(f"\n(the server shadow could not be recorded: {type(e).__name__})\n")
         if code == NETWORK:  # 1d: a registry or download unreachable twice: the slice's fault in nothing
             c.write_json(rec / f"refusal-network-{uuid.uuid4().hex[:8]}.json",
                          {"kind": "network", "slice": slice_id, "tip": tip, "merge_log": log.name, "retried": retried,
