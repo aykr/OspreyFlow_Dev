@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import csv
 import itertools
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
 
 
 def read_csv(
     path: str | Path, *, delimiter: str = ",", encoding: str = "utf-8"
-) -> Iterator[dict[str, str]]:
+) -> Generator[dict[str, str], None, None]:
+    # A generator type, not `Iterator`: `read_csv_head` stops reading by calling `close`, which only
+    # a generator has, and the type checker proves it.
     with Path(path).open(encoding=encoding, newline="") as handle:
         yield from csv.DictReader(handle, delimiter=delimiter)
 
