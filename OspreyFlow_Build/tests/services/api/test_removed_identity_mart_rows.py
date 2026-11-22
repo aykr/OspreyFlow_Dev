@@ -74,6 +74,7 @@ from services.api.app import (
 from services.api.identity_admin import (
     IdentityAdmin,
     IdentityAdminRefused,
+    NoSuchDashboard,
     PersonActionRefused,
 )
 from services.api.report_freshness import ReportFreshness
@@ -123,6 +124,10 @@ class FakeMartPool:
         self.depth = 0  # transactions open
         self.locks: set[str] = set()  # dashboards locked in the open transaction
         self.clock = datetime(2026, 11, 21, 10, 0, tzinfo=UTC)  # the database's own clock
+        # Row-level security, as a BI tool's role meets it (the owner, which writes, bypasses it).
+        self.rls: set[str] = set()  # tables with row security enabled
+        self.policies: dict[str, list[tuple[str, str]]] = {}  # table -> (name, function it calls)
+        self.functions: dict[str, tuple[str, bool]] = {}  # name -> (body shape, security definer)
 
     # asyncpg's pool surface
     def acquire(self) -> Any:
@@ -183,6 +188,44 @@ class FakeMartPool:
                 )  # fmt: skip
             rows.append(made)
 
+    def stamp(self, dashboard: str) -> None:
+        """A removal stamp written directly (a removal some earlier Conduit committed)."""
+        table = f"{CONTROL_SCHEMA}.removed_dashboards"
+        self.rows[table] = [r for r in self.rows[table] if r["dashboard"] != dashboard]
+        self.rows[table].append({"dashboard": dashboard, "removed_at": self.tick()})
+
+    # What a BI tool's login role reads. Not the owner, so row security applies to it: a table with
+    # it enabled shows a row only if some policy on the table allows it, and none allows nothing.
+    def reader_sees(self) -> dict[str, list[dict[str, Any]]]:
+        seen = {}
+        for table in self.tables():
+            rows = self.rows[table]
+            if table in self.rls:
+                policies = self.policies.get(table, [])
+                rows = [r for r in rows if any(self._allows(fn, r["dashboard"]) for _, fn in policies)]
+            seen[table] = [dict(r) for r in rows]
+        return seen
+
+    def reader_left(self, dashboard: str) -> dict[str, int]:
+        found = {
+            t: len([r for r in rows if r["dashboard"] == dashboard])
+            for t, rows in self.reader_sees().items()
+        }
+        return {t: n for t, n in found.items() if n}
+
+    def _allows(self, function: str, dashboard: str) -> bool:
+        body, definer = self.functions[function]
+        if body == "true":
+            return True
+        # The body reads the control schema, which the reader's role is never granted: only a
+        # function that runs as its owner may.
+        if not definer:
+            raise asyncpg.InsufficientPrivilegeError(
+                f"permission denied for schema {CONTROL_SCHEMA}"
+            )
+        return all(r["dashboard"] != dashboard
+                   for r in self.rows[f"{CONTROL_SCHEMA}.removed_dashboards"])  # fmt: skip
+
     # the statements
     def _table(self, schema: str, name: str) -> str:
         full = f"{schema}.{name}"
@@ -232,6 +275,44 @@ class FakeMartPool:
             self.rows.setdefault(full, [])
             self.columns[full], self.key[full] = columns, key
             return "CREATE TABLE"
+        if m := re.fullmatch(
+            r"CREATE OR REPLACE FUNCTION (\w+)\.(\w+)\(d text\) RETURNS boolean LANGUAGE sql "
+            r"STABLE (SECURITY DEFINER )?SET search_path = pg_catalog AS \$\$ (.*) \$\$",
+            text,
+        ):
+            if m[1] not in self.schemas:
+                raise asyncpg.InvalidSchemaNameError(f'schema "{m[1]}" does not exist')
+            if m[4] == "SELECT true":
+                shape = "true"
+            elif re.fullmatch(
+                rf"SELECT NOT EXISTS \(SELECT 1 FROM {CONTROL_SCHEMA}\.removed_dashboards r "
+                r"WHERE r\.dashboard = d\)",
+                m[4],
+            ):
+                # A language-sql function's body is checked when it is made: its table must exist.
+                self._table(CONTROL_SCHEMA, "removed_dashboards")
+                shape = "not removed"
+            else:
+                raise AssertionError(f"the fake mart does not model this function body: {m[4]}")
+            self.functions[f"{m[1]}.{m[2]}"] = (shape, bool(m[3]))
+            return "CREATE FUNCTION"
+        if m := re.fullmatch(r"ALTER TABLE (\w+)\.(\w+) ENABLE ROW LEVEL SECURITY", text):
+            self.rls.add(self._table(m[1], m[2]))
+            return "ALTER TABLE"
+        if m := re.fullmatch(r"DROP POLICY IF EXISTS (\w+) ON (\w+)\.(\w+)", text):
+            table = self._table(m[2], m[3])
+            self.policies[table] = [p for p in self.policies.get(table, []) if p[0] != m[1]]
+            return "DROP POLICY"
+        if m := re.fullmatch(
+            r"CREATE POLICY (\w+) ON (\w+)\.(\w+) FOR SELECT USING \((\w+\.\w+)\(dashboard\)\)", text
+        ):
+            table = self._table(m[2], m[3])
+            if m[4] not in self.functions:
+                raise asyncpg.UndefinedFunctionError(f"function {m[4]}(text) does not exist")
+            if any(name == m[1] for name, _ in self.policies.get(table, [])):
+                raise asyncpg.DuplicateObjectError(f'policy "{m[1]}" already exists')
+            self.policies.setdefault(table, []).append((m[1], m[4]))
+            return "CREATE POLICY"
         if m := re.match(r"INSERT INTO (\w+)\.figures VALUES \(\$1,", text):
             return self._upsert_figure(self._table(m[1], "figures"), args)
         if m := re.match(r"INSERT INTO (\w+)\.pulls \((.*?)\) VALUES", text):
@@ -314,6 +395,9 @@ class FakeMartPool:
 
     def select(self, sql: str, args: tuple[Any, ...]) -> list[dict[str, Any]]:
         text = " ".join(sql.split())
+        if text == f"SELECT dashboard FROM {CONTROL_SCHEMA}.removed_dashboards ORDER BY dashboard":
+            table = self._table(CONTROL_SCHEMA, "removed_dashboards")
+            return [{"dashboard": r["dashboard"]} for r in self.rows[table]]
         m = re.match(r"SELECT \* FROM (\w+)\.(\w+) WHERE dashboard = \$1 ORDER BY", text)
         if not m:
             raise AssertionError(f"the fake mart does not model this query: {text}")
@@ -323,6 +407,10 @@ class FakeMartPool:
         text = " ".join(sql.split())
         if text == "SELECT clock_timestamp()":
             return self.tick()
+        if text == "SELECT to_regclass($1)":
+            return args[0] if args[0] in self.rows else None  # NULL for a table not made
+        if m := re.fullmatch(r"SELECT EXISTS \(SELECT 1 FROM (\w+)\.(\w+) WHERE dashboard = \$1\)", text):
+            return any(r["dashboard"] == args[0] for r in self.rows[self._table(m[1], m[2])])
         if text == (
             f"SELECT removed_at FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = $1"
         ):
@@ -379,26 +467,43 @@ async def _mart_with_two_identities() -> tuple[FakeMartPool, Mart]:
 # --- The route, as it is really called ------------------------------------------------------------
 
 
+#: What each identity provider answers for a dashboard it does not hold, and what the route answers
+#: for one that is neither held nor left any row. Keycloak (the default) raises `NoSuchDashboard`, an
+#: `IdentityAdminRefused` with no `error` attribute; Entra raises `PersonActionRefused` carrying
+#: `no_such_dashboard`. Every route case that depends on the difference runs for both.
+PROVIDERS = ["entra", "keycloak"]
+UNKNOWN_STATUS = {"entra": 409, "keycloak": 502}
+
+
 class _Identity:
     """The identity provider's side of the Admin: two registered dashboards. It refuses what
-    the real one refuses: removing one that is not registered."""
+    the real one refuses: removing one that is not registered, in the provider's own words and
+    type (`provider`)."""
 
-    def __init__(self) -> None:
+    def __init__(self, provider: str = "entra") -> None:
+        self.provider = provider
         self.registered = [
             DashboardIdentity(client_id=REMOVED, account_id="sa-leaver"),
             DashboardIdentity(client_id=KEPT, account_id="sa-stayer"),
         ]
         self.deleted: list[str] = []
         self.refuses: Exception | None = None  # the identity provider's own refusal, when planted
+        self.at_delete: Callable[[str], None] = lambda client_id: None  # what the world is as it acts
+
+    def not_held(self, client_id: str) -> Exception:
+        if self.provider == "keycloak":
+            return NoSuchDashboard("no such dashboard")
+        return PersonActionRefused("no_such_dashboard", f"{client_id} is not registered.")
 
     async def list_dashboards(self) -> list[DashboardIdentity]:
         return list(self.registered)
 
     async def delete_dashboard(self, client_id: str) -> None:
+        self.at_delete(client_id)
         if self.refuses is not None:
             raise self.refuses
         if client_id not in {d.client_id for d in self.registered}:
-            raise PersonActionRefused("no_such_dashboard", f"{client_id} is not registered.")
+            raise self.not_held(client_id)
         self.registered = [d for d in self.registered if d.client_id != client_id]
         self.deleted.append(client_id)
 
@@ -416,20 +521,42 @@ class _Audit:
         self.records.append(kwargs)
 
 
+class _Freshness(ReportFreshness):
+    """The real removal code; only the Admin list's freshness figures (a query this fake does not
+    model, and not what any case here is about) are left out."""
+
+    async def by_dashboard(self) -> dict[str, Any]:
+        return {}
+
+
 class _World:
-    def __init__(self, pool: FakeMartPool) -> None:
-        self.pool, self.identity, self.audit = pool, _Identity(), _Audit()
+    def __init__(self, pool: FakeMartPool, provider: str = "entra") -> None:
+        self.pool, self.identity, self.audit = pool, _Identity(provider), _Audit()
         self.client = TestClient(app, raise_server_exceptions=False)
 
     def remove(self, client_id: str = REMOVED) -> Any:
         return self.client.delete(f"/v1/admin/dashboards/{client_id}")
 
+    def listed(self) -> list[str]:
+        """What the Admin's Dashboards list offers a Remove button for: the provider's own list."""
+        response = self.client.get("/v1/admin/dashboards")
+        assert response.status_code == 200, response.text
+        return [d["client_id"] for d in response.json()]
+
+    def removal_rows(self) -> list[dict[str, Any]]:
+        return [r for r in self.audit.records if r["action"] == "remove_dashboard"]
+
 
 @pytest.fixture
-async def world() -> Iterator[_World]:
+def provider() -> str:
+    return "entra"
+
+
+@pytest.fixture
+async def world(provider: str) -> Iterator[_World]:
     pool, _ = await _mart_with_two_identities()
-    state = _World(pool)
-    reader = ReportFreshness(pool, SCHEMA)  # type: ignore[arg-type]
+    state = _World(pool, provider)
+    reader = _Freshness(pool, SCHEMA)  # type: ignore[arg-type]
     app.dependency_overrides[get_principal] = lambda: ADMIN
     app.dependency_overrides[get_audit] = lambda: state.audit
     app.dependency_overrides[get_identity_admin] = lambda: state.identity
@@ -478,7 +605,10 @@ def test_the_check_sees_a_removal_that_misses_a_table(
 def test_a_removal_the_mart_refuses_is_a_refusal_the_administrator_sees(
     world: _World, error: Exception
 ) -> None:
-    world.pool.fail(f"DELETE FROM {SCHEMA}", error)
+    """Step 1 fails: the stamp that hides the rows cannot be committed, so the identity provider is
+    never called (a removal that could not hide the rows must not take the only Remove button
+    away). Nothing completed, so nothing is audited; the identity stays registered and listed."""
+    world.pool.fail(f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards", error)
     before = world.pool.left_for(REMOVED)
     refused = world.remove()
     assert refused.status_code == 503, refused.text
@@ -486,22 +616,25 @@ def test_a_removal_the_mart_refuses_is_a_refusal_the_administrator_sees(
     assert body["error"] == "reporting_mart_unreachable"
     assert "reporting mart" in body["message"] and "removing it again" in body["message"]
     assert world.identity.deleted == [], "not removed: it stays registered, so a retry finds it"
-    assert not [r for r in world.audit.records if r["action"] == "remove_dashboard"]
+    assert REMOVED in world.listed()
+    assert world.removal_rows() == []
     assert world.pool.left_for(REMOVED) == before
     world.pool.heal()
     assert world.remove().status_code == 204
     assert world.pool.left_for(REMOVED) == {}
 
 
-def test_a_removal_that_fails_part_way_leaves_nothing_half_removed(world: _World) -> None:
-    """One transaction: a refusal on the last table does not leave the others emptied alone."""
+def test_a_purge_that_fails_part_way_leaves_nothing_half_removed(world: _World) -> None:
+    """One transaction for the purge: a refusal on the last table does not leave the others emptied
+    alone (and the stamp, committed before it, still hides every row)."""
     from services.report_sync.mart import DASHBOARD_TABLES
 
     last = DASHBOARD_TABLES[-1]
     world.pool.fail(f"DELETE FROM {SCHEMA}.{last}", asyncpg.PostgresConnectionError("lost"))
     before = world.pool.left_for(REMOVED)
-    assert world.remove().status_code == 503
+    assert world.remove().status_code == 204
     assert world.pool.left_for(REMOVED) == before
+    assert world.pool.reader_left(REMOVED) == {}
 
 
 def test_a_deployment_with_no_mart_removes_a_dashboard_as_before() -> None:
@@ -521,11 +654,14 @@ def test_a_deployment_with_no_mart_removes_a_dashboard_as_before() -> None:
         app.dependency_overrides.clear()
 
 
-def test_one_not_registered_is_refused_and_touches_no_mart_row(world: _World) -> None:
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_one_not_registered_is_refused_and_touches_no_mart_row(world: _World, provider: str) -> None:
     before = world.pool.left_for(KEPT)
     refused = world.remove("osprey-dashboard-gone")
-    assert refused.status_code == 409
+    assert refused.status_code == UNKNOWN_STATUS[provider], refused.text
     assert world.pool.left_for(KEPT) == before and world.pool.left_for(REMOVED) != {}
+    assert world.pool.removed_at("osprey-dashboard-gone") is None, "a mistyped id is not stamped"
+    assert world.removal_rows() == []
 
 
 # --- The sync side --------------------------------------------------------------------------------
@@ -649,6 +785,241 @@ async def test_a_failed_prune_is_said_in_words_and_the_pass_goes_on() -> None:
     assert pool.left_for(REMOVED) != {}, "nothing was pruned, and the words say so"
 
 
+# --- The sync pass finishes a purge the Conduit could not ------------------------------------------
+
+
+async def _stamped_world() -> tuple[FakeMartPool, Mart]:
+    """Both identities hold rows; REMOVED's removal was stamped and its purge never happened."""
+    pool, mart = await _mart_with_two_identities()
+    pool.stamp(REMOVED)
+    return pool, mart
+
+
+async def _stamped_sync_verdict(
+    configured: list[str], plant: Callable[[Mart], Callable[..., Any]] | None = None
+) -> list[str]:
+    """One pass over `configured` with REMOVED stamped and not purged: what is wrong afterwards."""
+    pool, mart = await _stamped_world()
+    if plant is not None:
+        mart.purge_removed = plant(mart)  # type: ignore[method-assign]
+    await sync_once([_board(c) for c in configured], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    wrong = []
+    if pool.left_for(REMOVED):
+        wrong.append(f"a stamped identity kept rows in {sorted(pool.left_for(REMOVED))}")
+    if set(pool.left_for(KEPT)) != set(pool.tables()):
+        wrong.append("an identity that was not removed lost its rows")
+    if pool.removed_at(REMOVED) is None:
+        wrong.append("the stamp was dropped by the purge, so a refused pull may write again")
+    return wrong
+
+
+def _purge_never_called(mart: Mart) -> Callable[..., Any]:
+    async def purge_removed() -> int:
+        return 0
+
+    return purge_removed
+
+
+def _purge_one_table_only(mart: Mart) -> Callable[..., Any]:
+    async def purge_removed() -> int:
+        async with mart._pool.acquire() as conn, conn.transaction():
+            await mart_module.lock_dashboard(conn, REMOVED)
+            await conn.execute(f"DELETE FROM {mart.schema}.pulls WHERE dashboard = $1", REMOVED)
+        return 0
+
+    return purge_removed
+
+
+def _purge_every_dashboard(mart: Mart) -> Callable[..., Any]:
+    async def purge_removed() -> int:
+        async with mart._pool.acquire() as conn, conn.transaction():
+            for client in (REMOVED, KEPT):
+                await mart_module.lock_dashboard(conn, client)
+                for table in mart_module.DASHBOARD_TABLES:
+                    await conn.execute(f"DELETE FROM {mart.schema}.{table} WHERE dashboard = $1", client)
+        return 0
+
+    return purge_removed
+
+
+@pytest.mark.parametrize(
+    "configured", [[KEPT], [REMOVED, KEPT]], ids=["not configured", "still configured"]
+)
+async def test_a_stamped_identity_loses_its_rows_at_the_next_sync(configured: list[str]) -> None:
+    """The identity is absent from the provider and stamped; the sync pass takes its rows out of every
+    table whether or not the environment's list still names it (its pull is refused), and leaves the
+    stamp, so a refusal cannot write it again. Another identity's rows are left alone."""
+    assert await _stamped_sync_verdict(configured) == []
+
+
+@pytest.mark.parametrize(
+    ("plant", "said"),
+    [
+        (_purge_never_called, "stamped identity kept rows"),
+        (_purge_one_table_only, "stamped identity kept rows"),
+        (_purge_every_dashboard, "was not removed lost its rows"),
+    ],
+)
+async def test_the_stamped_sync_check_sees_each_planted_fault(
+    plant: Callable[[Mart], Callable[..., Any]], said: str
+) -> None:
+    """Rule 15: red for the purge call removed, a purge that takes one table of two, and a purge that
+    takes an identity nobody removed. `sync_once` calls `purge_removed()` as each plant is called."""
+    assert any(said in w for w in await _stamped_sync_verdict([KEPT], plant))
+
+
+async def test_a_failed_purge_in_the_sync_is_said_in_words_and_the_pass_goes_on() -> None:
+    pool, mart = await _stamped_world()
+    pool.fail("WHERE dashboard = $1", OSError("the mart dropped the connection"))
+    summary = await sync_once([_board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    purging = [f for f in summary.failures if "could not be purged" in f]
+    assert len(purging) == 1 and "dropped the connection" in purging[0], summary.failures
+    assert summary.failed == 2, "the failed purge is counted, and the other dashboard was still tried"
+    assert pool.left_for(REMOVED) != {} and pool.reader_left(REMOVED) == {}, "still hidden"
+    pool.heal()
+    await sync_once([_board(KEPT)], mart, _NoValkey(), slot=2)  # type: ignore[arg-type]
+    assert pool.left_for(REMOVED) == {}, "the next pass tries again"
+
+
+async def test_a_refusal_never_writes_a_stamped_identitys_row() -> None:
+    """`record_failure` keeps what it finds and writes what it is given; for a stamped identity it
+    does neither, at whatever moment the pull began (a pull that began after the stamp and before the
+    identity provider deleted the identity is still the removed identity's)."""
+    pool, mart = await _mart_with_two_identities()
+    pool.stamp(REMOVED)
+    later = await mart.begin_pass()
+    for began in (later, None):
+        with pytest.raises(mart_module.DashboardRemoved):
+            await mart.record_failure(REMOVED, "case-3", "refused", NOW, pass_started=began)
+    assert not [r for r in pool.rows_of(REMOVED)[f"{SCHEMA}.pulls"] if r["case_id"] == "case-3"]
+    # an identity that was not removed is written as before
+    await mart.record_failure(KEPT, "case-3", "refused", NOW, pass_started=later)
+    assert [r for r in pool.rows_of(KEPT)[f"{SCHEMA}.pulls"] if r["case_id"] == "case-3"]
+
+
+async def test_a_pull_after_the_stamp_for_an_identity_registered_again_purges_before_it_writes() -> None:
+    """A stamped identity registered again under the same name: its first good pull clears the stamp,
+    but never leaves the earlier identity's rows readable beside its own (they are taken out first)."""
+    pool, mart = await _stamped_world()
+    began = await mart.begin_pass()
+    await mart.replace(REMOVED, "case-9", "Operation Nine", 12, FEED, NOW, pass_started=began)
+    assert pool.removed_at(REMOVED) is None
+    assert {r["case_id"] for r in pool.rows_of(REMOVED)[f"{SCHEMA}.pulls"]} == {"case-9"}
+    assert {r["case_id"] for r in pool.rows_of(REMOVED)[f"{SCHEMA}.figures"]} == {"case-9"}
+    assert pool.reader_left(REMOVED), "its own rows are read again"
+
+
+async def test_a_write_with_no_pass_start_is_refused_for_a_stamped_identity() -> None:
+    pool, mart = await _stamped_world()
+    with pytest.raises(mart_module.DashboardRemoved):
+        await mart.replace(REMOVED, "case-9", "Operation Nine", 12, FEED, NOW)
+
+
+async def test_a_refused_pull_after_a_failed_purge_does_not_rewrite_the_rows(world: _World) -> None:
+    """The consequence the earlier rounds' finding named: the purge failed, the identity is still in
+    the environment's list, its token is refused. Nothing is rewritten, and the next pass purges."""
+    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+    assert world.remove().status_code == 204
+    world.pool.heal()
+    mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    summary = await sync_once([_board(REMOVED), _board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    assert summary.failed == 2
+    assert world.pool.left_for(REMOVED) == {}
+    assert set(world.pool.left_for(KEPT)) == set(world.pool.tables())
+
+
+# --- What a reader can see: rule 4, the read path ---------------------------------------------------
+#
+# Superset's Admin and Alpha read the whole mart through one login role that is not the table's owner
+# (ADR-148 Amendment 21), so row security on the tables is what they meet. A stamped identity's rows
+# are not returned to them, at any step, and a present identity's rows still are.
+
+
+def _reader_verdict(pool: FakeMartPool, *, hidden: tuple[str, ...], shown: tuple[str, ...]) -> list[str]:
+    wrong = []
+    tables = set(pool.tables())
+    for client in hidden:
+        if pool.reader_left(client):
+            wrong.append(f"the reader still reads {client}'s rows in {sorted(pool.reader_left(client))}")
+    for client in shown:
+        if set(pool.reader_left(client)) != tables:
+            wrong.append(f"the reader no longer reads all of {client}'s rows")
+    return wrong
+
+
+def test_every_mart_table_is_hidden_from_a_reader_behind_row_security(world: _World) -> None:
+    """Rule 12: a table added to the mart that nobody told to hide a removed identity's rows would
+    leave them readable. Every table the real bootstrap makes in the reporting schema has row
+    security enabled and a policy calling the function that reads the stamp."""
+    assert world.pool.tables()
+    for table in world.pool.tables():
+        assert table in world.pool.rls, f"{table} has no row security"
+        assert world.pool.policies.get(table), f"{table} has no policy for a reader"
+    assert f"{SCHEMA}.dashboard_is_current" in world.pool.functions
+    assert world.pool.functions[f"{SCHEMA}.dashboard_is_current"] == ("not removed", True)
+
+
+async def test_a_stamped_identitys_rows_are_not_returned_to_a_reader_at_any_step(
+    world: _World,
+) -> None:
+    """Admin and Alpha, through the one reader role, at every point of a removal: before it (they read
+    the rows), with the stamp committed and the provider refusing, with the provider done and the
+    purge failing, and after the sync purged. Never the removed identity's; always the other's."""
+    steps: list[tuple[str, list[str]]] = []
+    both = (REMOVED, KEPT)
+    steps.append(("before", _reader_verdict(world.pool, hidden=(), shown=both)))
+    world.identity.refuses = PersonActionRefused("identity_provider_refused", "refused")
+    world.remove()
+    steps.append(("provider failed", _reader_verdict(world.pool, hidden=(REMOVED,), shown=(KEPT,))))
+    world.identity.refuses = None
+    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+    world.remove()
+    steps.append(("purge failed", _reader_verdict(world.pool, hidden=(REMOVED,), shown=(KEPT,))))
+    world.pool.heal()
+    mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    await sync_once([_board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    steps.append(("purged", _reader_verdict(world.pool, hidden=(REMOVED,), shown=(KEPT,))))
+    assert all(not wrong for _, wrong in steps), steps
+
+
+@pytest.mark.parametrize(
+    ("plant", "said"),
+    [
+        ("no row security", "still reads"),
+        ("a function that says yes", "still reads"),
+        ("one table left out", "still reads"),
+        ("a function that cannot read the stamp", "permission denied"),
+    ],
+)
+async def test_the_reader_check_sees_each_planted_fault(
+    monkeypatch: pytest.MonkeyPatch, plant: str, said: str
+) -> None:
+    """Rule 15: the verdict above is red for a bootstrap that never enables row security, a function
+    that always allows, a table with no row security, and a function that runs as the reader (who is
+    never granted the stamp's schema). Each is made by changing the real bootstrap's statements."""
+    real = mart_module.hiding_statements
+
+    def planted(schema: str) -> list[str]:
+        statements = real(schema)
+        if plant == "no row security":
+            return [s for s in statements if "ROW LEVEL SECURITY" not in s and "POLICY" not in s]
+        if plant == "a function that says yes":
+            return [re.sub(r"\$\$ SELECT NOT EXISTS.*? \$\$", "$$ SELECT true $$", " ".join(s.split()))
+                    for s in statements]  # fmt: skip
+        if plant == "one table left out":
+            return [s for s in statements if ".figures" not in s]
+        return [s.replace("SECURITY DEFINER ", "") for s in statements]
+
+    monkeypatch.setattr(mart_module, "hiding_statements", planted)
+    pool, mart = await _mart_with_two_identities()
+    pool.stamp(REMOVED)
+    try:
+        wrong = _reader_verdict(pool, hidden=(REMOVED,), shown=(KEPT,))
+    except asyncpg.InsufficientPrivilegeError as refused:
+        wrong = [str(refused)]
+    assert any(said in w for w in wrong), wrong
+
+
 # --- What the administrator sees ------------------------------------------------------------------
 
 ADMIN_API = Path(__file__).parents[4] / "OspreyFlow_Core/apps/workspace/src/admin/api.ts"
@@ -662,114 +1033,169 @@ def test_the_refusal_is_in_the_shape_the_admin_screen_reads(world: _World) -> No
     assert 'typeof (detail as { message?: unknown }).message === "string"' in source, (
         "the Admin screen no longer reads an object detail's message: this test's premise is gone"
     )
-    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart is unreachable"))
+    world.pool.fail(f"INSERT INTO {CONTROL_SCHEMA}", OSError("the mart is unreachable"))
     detail = world.remove().json()["detail"]
     assert isinstance(detail, dict) and isinstance(detail.get("message"), str), detail
     assert detail["message"].strip(), "the words are not empty"
     assert set(detail) == {"error", "message"}, "no second copy of the words under another key"
 
 
-def test_the_identity_provider_refusing_the_deletion_puts_the_rows_back(world: _World) -> None:
-    """One transaction with the identity's deletion: a refusal there leaves the rows where they were
-    and the dashboard registered, so nothing is half removed (and the mart is not told it is gone)."""
-    world.identity.refuses = PersonActionRefused("identity_provider_refused", "refused")
-    before = world.pool.left_for(REMOVED)
-    assert world.remove().status_code == 409
-    assert world.pool.left_for(REMOVED) == before
-    assert world.pool.removed_at(REMOVED) is None, "a removal that did not happen is not recorded"
-    world.identity.refuses = None
+# --- The removal's order: stamp, then the identity provider, then the purge, audited once ---------
+#
+# Round 5's one design. The stamp (a row in the control schema, committed in a transaction of its own
+# before the provider is called, never rolled back with the purge) is what makes a removed
+# identity's rows unreadable; the purge is repeatable and the next sync pass finishes it. For every
+# step that can fail, what a reader (Superset's role) can see afterwards is nothing of the removed
+# identity's, and what the administrator sees is in words.
+
+#: The identity provider's failures that are not "I hold no such identity": a refusal, and a
+#: provider that cannot be reached; and the status the route has always answered each with.
+PROVIDER_FAILURES = [
+    pytest.param(
+        lambda: PersonActionRefused("identity_provider_refused", "the provider refused"),
+        409,
+        id="refused",
+    ),
+    pytest.param(
+        lambda: IdentityAdminRefused("the identity provider could not be reached"),
+        502,
+        id="unreachable",
+    ),
+]
+
+
+def _steps_done(row: dict[str, Any]) -> list[str]:
+    return list(row["resolved_query"]["completed"])
+
+
+def test_the_removal_runs_stamp_then_provider_then_purge(world: _World) -> None:
+    """The order itself: when the identity provider is asked, the removal is already stamped and the
+    rows are already hidden from a reader, and none of them has been purged yet."""
+    seen: dict[str, Any] = {}
+
+    def at_delete(client_id: str) -> None:
+        seen["stamped"] = world.pool.removed_at(client_id) is not None
+        seen["reader sees"] = world.pool.reader_left(client_id)
+        seen["still held"] = world.pool.left_for(client_id)
+
+    world.identity.at_delete = at_delete
+    held = world.pool.left_for(REMOVED)
     assert world.remove().status_code == 204
+    assert seen == {"stamped": True, "reader sees": {}, "still held": held}
     assert world.pool.left_for(REMOVED) == {}
 
 
-def test_a_mart_that_fails_after_the_identity_went_says_so_in_words(world: _World) -> None:
-    """The one place two systems cannot be made atomic: the identity provider has deleted the
-    identity and the mart's last statement fails. The administrator is told the truth (figures may
-    remain, it cannot be removed again), never "not removed" and never a quiet 204."""
-    world.pool.fail(
-        f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards", asyncpg.PostgresConnectionError("lost")
-    )
+@pytest.mark.parametrize("fail, status", PROVIDER_FAILURES)
+def test_a_provider_that_fails_after_the_stamp_leaves_the_rows_hidden_and_the_button_there(
+    world: _World, fail: Callable[[], Exception], status: int
+) -> None:
+    """Step 2 fails. The stamp is committed and stays: the rows are hidden at once, the identity is
+    still registered and so still listed (its Remove button is there), the refusal is in words, the
+    removal is audited once with what completed, and removing it again finishes it."""
+    world.identity.refuses = fail()
+    held = world.pool.left_for(REMOVED)
     refused = world.remove()
-    assert refused.status_code == 503
-    message = refused.json()["detail"]["message"]
-    assert world.identity.deleted == [REMOVED]
-    assert "was removed from the identity provider" in message and "may still be there" in message
-    assert "can no longer be removed again" not in message, "it can: see the next case"
-    assert "remove it again" in message.lower(), "the administrator is told how to finish"
-    # The identity is gone at the provider, so who removed it is on the record all the same, with
-    # the grants it revoked, and the row says the mart did not confirm its figures went.
-    rows = [r for r in world.audit.records if r["action"] == "remove_dashboard"]
-    assert len(rows) == 1, "a deletion that happened is audited even when the mart then fails"
-    assert rows[0]["resolved_query"]["client_id"] == REMOVED
-    assert rows[0]["resolved_query"]["mart_confirmed"] is False
+    assert refused.status_code == status, refused.text
+    detail = refused.json()["detail"]
+    words = detail["message"] if isinstance(detail, dict) else detail
+    assert "hidden" in words and "remove it again" in words.lower(), refused.text
+    assert world.pool.removed_at(REMOVED) is not None, "the stamp was rolled back with the failure"
+    assert world.pool.reader_left(REMOVED) == {}, "a reader can read the rows of an identity being removed"
+    assert world.pool.left_for(REMOVED) == held, "the purge waits for the provider"
+    assert REMOVED in world.listed(), "no Remove button would be left to retry with"
+    (row,) = world.removal_rows()
+    assert row["resolved_query"]["client_id"] == REMOVED
+    assert row["resolved_query"]["mart_confirmed"] is False
+    assert _steps_done(row) == ["case_grants_revoked", "rows_hidden"]
+    assert world.pool.reader_left(KEPT), "a present identity's rows are still read"
+    world.identity.refuses = None
+    assert world.remove().status_code == 204, "a retry on a still-listed identity finishes it"
+    assert world.pool.left_for(REMOVED) == {} and world.pool.reader_left(REMOVED) == {}
+    assert REMOVED not in world.listed()
+    assert len(world.removal_rows()) == 2
+    assert world.removal_rows()[1]["resolved_query"] == {"client_id": REMOVED, "grants_revoked": 0}
 
 
-def test_a_mart_that_failed_after_the_identity_went_is_finished_by_removing_it_again(
-    world: _World,
+@pytest.mark.parametrize("provider", PROVIDERS)
+async def test_a_purge_that_fails_after_the_provider_is_a_warning_and_the_next_sync_finishes_it(
+    world: _World, provider: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The finding this closes: the stamp fails after the provider has deleted the identity, the
-    transaction rolls the rows back, and a retry found the identity unknown, was refused, rolled
-    back again, and the rows stayed for good (the next refused pull then rewrote them). A retry now
-    commits the purge and the stamp, because an identity the provider does not hold should hold no
-    rows, and the administrator is told it is done."""
-    before = world.pool.left_for(REMOVED)
-    world.pool.fail(
-        f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards", asyncpg.PostgresConnectionError("lost")
-    )
-    assert world.remove().status_code == 503
+    """Step 3 fails. The identity is gone at the provider, so there is no button and none is
+    needed: the rows are hidden (the stamp was committed first and is not undone), the failure is a
+    logged and audited warning, never a 503 that tells a person to retry a button that is gone, and
+    the next sync pass purges them."""
+    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+    held = world.pool.left_for(REMOVED)
+    with caplog.at_level("WARNING"):
+        answer = world.remove()
+    assert answer.status_code == 204, answer.text
     assert world.identity.deleted == [REMOVED]
-    assert world.pool.left_for(REMOVED) == before, "rolled back: the rows are certainly still there"
+    assert REMOVED not in world.listed()
+    assert world.pool.removed_at(REMOVED) is not None, "the purge's rollback took the stamp with it"
+    assert world.pool.reader_left(REMOVED) == {}
+    assert world.pool.left_for(REMOVED) == held
+    assert any(REMOVED in r.getMessage() and r.levelname == "WARNING" for r in caplog.records)
+    (row,) = world.removal_rows()
+    assert row["resolved_query"]["mart_confirmed"] is False
+    assert _steps_done(row) == ["case_grants_revoked", "rows_hidden", "identity_removed"]
     world.pool.heal()
-    again = world.remove()
-    assert again.status_code == 204, again.text
-    assert world.pool.left_for(REMOVED) == {}, "the retry did not clear the rows"
-    assert world.pool.removed_at(REMOVED) is not None, "the retry did not stamp the removal"
-    rows = [r for r in world.audit.records if r["action"] == "remove_dashboard"]
-    assert [r["resolved_query"].get("mart_confirmed", True) for r in rows] == [False, True]
-
-
-async def test_a_refused_pull_after_the_retry_does_not_rewrite_the_rows(world: _World) -> None:
-    """The consequence the finding named: after the failed removal and its retry, the identity is
-    still in the environment's list, its token is refused, and `record_failure` finds nothing to
-    keep and a stamp that stops any write of a pull that began before it."""
-    world.pool.fail(
-        f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards", asyncpg.PostgresConnectionError("lost")
-    )
-    assert world.remove().status_code == 503
-    world.pool.heal()
-    assert world.remove().status_code == 204
     mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
-    await sync_once([_board(REMOVED), _board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
-    assert world.pool.left_for(REMOVED) == {}
-    assert set(world.pool.left_for(KEPT)) == set(world.pool.tables())
+    await sync_once([_board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    assert world.pool.left_for(REMOVED) == {}, "the sync pass did not finish the purge"
+    assert world.pool.reader_left(REMOVED) == {}
+    assert len(world.removal_rows()) == 1, "audited once"
 
 
-def test_an_identity_the_provider_does_not_hold_loses_leftover_rows_and_one_with_none_is_refused(
-    world: _World,
-) -> None:
-    """Not registered and rows left in the mart (a removal that never finished): done, 204. Not
-    registered and none left (a mistyped id): still the provider's refusal, as before, and no other
-    identity's row is touched either way."""
-    world.identity.registered = [d for d in world.identity.registered if d.client_id != REMOVED]
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_removing_it_again_after_a_failed_purge_also_finishes_it(world: _World, provider: str) -> None:
+    """Not needed (the sync finishes it), but possible: an identity the provider no longer holds,
+    with rows still in the mart, is answered done (204) in the provider's own way of saying "not
+    registered", Keycloak's `NoSuchDashboard` and Entra's `PersonActionRefused`; and one the mart
+    holds nothing of is still the provider's refusal."""
+    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+    assert world.remove().status_code == 204
+    world.pool.heal()
     kept_before = world.pool.left_for(KEPT)
     assert world.remove().status_code == 204
     assert world.pool.left_for(REMOVED) == {}
     assert world.pool.left_for(KEPT) == kept_before
-    assert world.remove("osprey-dashboard-mistyped").status_code == 409
+    assert world.remove().status_code == UNKNOWN_STATUS[provider], "nothing left: not registered"
     assert world.pool.left_for(KEPT) == kept_before
 
 
-def test_the_identity_provider_s_refusal_of_one_it_does_not_hold_is_told_apart_from_other_refusals(
-    world: _World, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("provider", PROVIDERS)
+def test_an_identity_the_provider_does_not_hold_loses_leftover_rows_and_one_with_none_is_refused(
+    world: _World, provider: str
 ) -> None:
-    """Only "not registered" finishes the purge: any other refusal (here a provider that cannot be
-    reached) still rolls the rows back, so a removal that did not happen takes nothing."""
+    """Not registered and rows left in the mart (a removal that never finished): done, 204. Not
+    registered and none left (a mistyped id): still the provider's refusal, as before, and no other
+    identity's row is touched either way. Run for the error each provider raises: Keycloak's
+    `NoSuchDashboard` has no `error` attribute, which the route must still read as "not held"."""
+    world.identity.registered = [d for d in world.identity.registered if d.client_id != REMOVED]
+    kept_before = world.pool.left_for(KEPT)
+    assert world.remove().status_code == 204
+    assert world.pool.left_for(REMOVED) == {}
+    assert world.pool.reader_left(REMOVED) == {}
+    assert world.pool.left_for(KEPT) == kept_before
+    assert world.remove("osprey-dashboard-mistyped").status_code == UNKNOWN_STATUS[provider]
+    assert world.pool.left_for(KEPT) == kept_before
+    (row,) = world.removal_rows()
+    assert row["resolved_query"]["client_id"] == REMOVED
+
+
+def test_the_identity_provider_s_refusal_of_one_it_does_not_hold_is_told_apart_from_other_refusals(
+    world: _World,
+) -> None:
+    """Only "not registered" finishes the removal: any other refusal (here a provider that cannot be
+    reached) leaves the rows hidden and in place, and says so, so the removal that did not complete
+    does not read as done."""
     world.identity.registered = [d for d in world.identity.registered if d.client_id != REMOVED]
     world.identity.refuses = IdentityAdminRefused("the identity provider could not be reached")
-    before = world.pool.left_for(REMOVED)
+    held = world.pool.left_for(REMOVED)
     assert world.remove().status_code == 502
-    assert world.pool.left_for(REMOVED) == before
-    assert world.pool.removed_at(REMOVED) is None
+    assert world.pool.left_for(REMOVED) == held
+    assert world.pool.reader_left(REMOVED) == {}
+    assert world.pool.removed_at(REMOVED) is not None
 
 
 async def test_the_keycloak_admin_says_not_registered_in_a_way_the_route_can_tell(
