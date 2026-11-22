@@ -9,6 +9,7 @@ import type { Built } from "./build.js";
 import { fakeConduit } from "./fakeConduit.js";
 import type { CaseRow, FakeConduit, Person } from "./fakeConduit.js";
 import { csrfFromPage, request, signIn } from "./http.js";
+import { testClock } from "./clock.js";
 import { generateSecret } from "./secret.js";
 import type { Signed } from "./http.js";
 
@@ -67,12 +68,29 @@ export interface World extends Built {
   stop(): Promise<void>;
 }
 
-export async function world(me: Person = person(), others: Person[] = []): Promise<World> {
+export interface WorldOptions {
+  /** How long the sign-in lasts by the app's own clock, in seconds, when a test wants the session's end to be near. */
+  sessionSeconds?: number;
+}
+
+export async function world(me: Person = person(), others: Person[] = [], options: WorldOptions = {}): Promise<World> {
   const conduit = await fakeConduit([me, ...others]);
   const logs: string[] = [];
+  const clock = testClock();
+  const base = providerFor(me.token);
+  const identityProvider: IdentityProvider =
+    options.sessionSeconds === undefined
+      ? base
+      : {
+          async signIn(...args) {
+            const session = await base.signIn(...args);
+            return { ...session, idpSessionExpiresAt: clock() + (options.sessionSeconds as number) * 1000 };
+          },
+        };
   const built = build({
+    clock,
     pages: PAGES,
-    identityProvider: providerFor(me.token),
+    identityProvider,
     forward: { conduitUrl: conduit.url, bodyMaxBytes: 1024 * 1024, uploadMaxBytes: 8 * 1024 * 1024, upstreamTimeoutSeconds: 5 },
     log: (message) => logs.push(message),
   });
