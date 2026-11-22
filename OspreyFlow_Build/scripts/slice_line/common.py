@@ -5,7 +5,9 @@ import this: they run from the fixed place with the system python.
 """
 from __future__ import annotations
 
+import contextlib
 import csv
+import fcntl
 import io
 import json
 import os
@@ -144,7 +146,8 @@ def signed_in(account: str) -> bool:
 
 def account_state(account: str) -> dict:
     f = DATA / "accounts" / f"{account}.json"
-    return json.loads(f.read_text()) if f.exists() else {}
+    with file_lock(f"account-{account}", shared=True):
+        return json.loads(f.read_text()) if f.exists() else {}
 
 
 def account_stop(account: str) -> dict | None:
@@ -201,10 +204,26 @@ def read_json(p: Path) -> dict | None:
 
 
 def write_json(p: Path, data: dict) -> None:
+    """Written whole, then renamed into place, through a temporary name of this writer's own: two writers never share
+    one (two seats of one account did, and renamed each other's half-written file: LINE_FIXES_5_BRIEF.md, 6)."""
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(p.name + ".tmp")
-    tmp.write_text(json.dumps(data, indent=1))
-    os.replace(tmp, p)
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")
+    try:
+        tmp.write_text(json.dumps(data, indent=1))
+        os.replace(tmp, p)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+@contextlib.contextmanager
+def file_lock(name: str, shared: bool = False):
+    """A lock in the data folder's locks/, held for a read (shared) or a read-and-write (exclusive); a second holder
+    waits for it, never fails (6)."""
+    d = DATA / "locks"
+    d.mkdir(parents=True, exist_ok=True)
+    with (d / f"{name}.lock").open("a") as fh:
+        fcntl.flock(fh, fcntl.LOCK_SH if shared else fcntl.LOCK_EX)
+        yield
 
 
 def state(slice_id: str) -> dict:

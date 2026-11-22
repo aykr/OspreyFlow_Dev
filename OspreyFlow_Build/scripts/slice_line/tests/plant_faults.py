@@ -389,6 +389,10 @@ M = [
  ("common.py", '    dest = rulings_copy(tree)\n', '    dest = Path(tree) / OLD_RULINGS_COPY_REL\n', "worktree_made_by_the_line_passes"),
  ("common.py", '    if old.is_file():  # the copy the line used to leave', '    if False:  # the copy the line used to leave', "old_place_is_removed"),
  ("common.py", '        old.unlink()\n', '        old.unlink()\n        [q.unlink() for q in old.parent.parent.rglob("*") if q.is_file()]\n', "old_folder_stays"),
+ # LINE_FIXES_5_BRIEF.md, 6: two seats of one account at once
+ ("common.py", '    tmp = p.with_name(f".{p.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")', '    tmp = p.with_name(p.name + ".tmp")', "two_writers_of_one_record"),
+ ("run_seat.py", '    with c.file_lock(f"account-{account}"):  # read and written', '    with contextlib.nullcontext():  # read and written', "two_seats_of_one_account_at_once"),
+ ("usage_hook.py", '        write_whole(d / (account + ".stopped.json"), json.dumps({', '        (d / (account + ".stopped.json")).write_text(json.dumps({', "stopped_at_once"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

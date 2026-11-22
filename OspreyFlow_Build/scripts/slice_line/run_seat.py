@@ -139,26 +139,29 @@ def preflight(account: str, cwd: Path) -> dict:
 
 def record_limits(account: str, info: dict) -> None:
     windows = info.get("unifiedWindows") or {info.get("rateLimitType", "window"): info}
-    st = c.account_state(account)
-    st.setdefault("windows", {}).update({k: {"utilization": v.get("utilization"), "resetsAt": v.get("resetsAt"),
-                                             "status": v.get("status")} for k, v in windows.items()})
-    st["at"] = c.now()
-    c.write_json(c.DATA / "accounts" / f"{account}.json", st)
+    f = c.DATA / "accounts" / f"{account}.json"
+    with c.file_lock(f"account-{account}"):  # read and written by every seat of the account: one at a time (6)
+        st = c.read_json(f) or {}
+        st.setdefault("windows", {}).update({k: {"utilization": v.get("utilization"), "resetsAt": v.get("resetsAt"),
+                                                 "status": v.get("status")} for k, v in windows.items()})
+        st["at"] = c.now()
+        c.write_json(f, st)
 
 
 def append_usage(slice_id: str, build: str, seat: str, account: str, model: str, effort: str, result: dict) -> None:
     u = result.get("usage") or {}
     st = c.account_state(account).get("windows", {})
     f = c.DATA / "usage.tsv"
-    if not f.exists():
-        f.write_text("at\tslice\tbuild\tseat\taccount\tmodel\teffort\tsession\tinput\tcache_create\tcache_read\toutput\t"
-                     "cost_usd\tfive_hour\tseven_day\n")
     row = [c.now(), slice_id, build, seat, account, model, effort, result.get("session_id", ""),
            u.get("input_tokens", 0), u.get("cache_creation_input_tokens", 0), u.get("cache_read_input_tokens", 0),
            u.get("output_tokens", 0), result.get("total_cost_usd", ""),
            (st.get("five_hour") or {}).get("utilization", ""), (st.get("seven_day") or {}).get("utilization", "")]
-    with f.open("a") as fh:
-        fh.write("\t".join(str(x) for x in row) + "\n")
+    with c.file_lock("usage"):  # the header once, each row whole, whichever seat comes first (6)
+        if not f.exists() or f.stat().st_size == 0:
+            f.write_text("at\tslice\tbuild\tseat\taccount\tmodel\teffort\tsession\tinput\tcache_create\tcache_read\t"
+                         "output\tcost_usd\tfive_hour\tseven_day\n")
+        with f.open("a") as fh:
+            fh.write("\t".join(str(x) for x in row) + "\n")
 
 
 def seat_command(seat: str, account: str, model: str, effort: str, env_extra: dict, token: str,

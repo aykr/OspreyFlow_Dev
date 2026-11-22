@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (452 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (360 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (456 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (363 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -250,6 +250,7 @@ says that cost is a list-price estimate, not a bill.
 - **Plan ids of two to four letters** (1): `common.plan_ids()` reads `[A-Z]{2,4}\d+` (PLAN_ID_PATTERN.diff).
 - **CI's lint and the scan map at Stop** (4): the Stop hook runs `ruff check` and `ruff format --check` on the branch's changed OspreyFlow_Core Python, eslint on its changed OspreyFlow_Core and OspreyFlow_Build/tools JavaScript and TypeScript, and the scan-map check on each new test under OspreyFlow_Build/tests (scan_map.tsv or the slice's waiting rows); red in the same round. A tool not in the worktree or on PATH is red, with how to install it there.
 - **The rulings copy in the worktree's git folder** (5): `git rev-parse --git-path slice-line/RULINGS.md`, no entry of the tree, so `test_layout` passes in a builder's worktree; a copy left at `Claude outputs/slice-line/` is removed when the new one is written.
+- **Two seats of one account at once** (6): `common.write_json` writes through a temporary name of its own; the account's windows are read and written under `locks/account-<account>.lock`, usage.tsv under `locks/usage.lock`; the StopFailure hook writes the stop file whole. A second seat waits, never fails.
 
 ## Files outside the repository
 
