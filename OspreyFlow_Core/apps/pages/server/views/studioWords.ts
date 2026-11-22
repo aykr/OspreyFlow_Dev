@@ -217,7 +217,7 @@ export function rightName(right: string): string {
  * Why a person cannot take an action needing every one of `needs`, or `null` when they can (or when their rights are not
  * known: the action is then offered, and the Conduit answers for itself). The right's name only: the roles that hold a right
  * are not in any answer the Conduit gives a person (`GET /v1/me` has their own roles, `GET /v1/me/rights` their rights), and
- * the table that names them is the workspace's (`help/roles.ts`) until it moves to the shared package. This is words, not
+ * the table that names them is now in the shared package (the role words, under `packages/glass-shared/src`), which this page does not use. This is words, not
  * access control: the Conduit refuses all the same (rule 3).
  */
 export function whyNot(held: ReadonlySet<string> | null, needs: readonly string[]): string | null {
