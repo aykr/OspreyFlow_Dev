@@ -116,6 +116,7 @@ paths = [
   "apps/pages/server",
   "apps/pages/scripts",
   "apps/pages/test",
+  "apps/pages/keyboard",
   "apps/pages/Dockerfile",
   "apps/pages/FUNCTIONS.yaml",
   "apps/pages/PARITY_EXCEPTIONS.yaml",
