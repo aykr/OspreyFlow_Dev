@@ -12,6 +12,9 @@
  *  - the release routes' parameters: `name` and `version` are required (FastAPI's own 422, `detail` a list); the name is a
  *    Kubernetes name; `dry_run` is `true` or `false`; `replace_own_draft` is a whole number; the body is JSON with `files`
  *    an object of text (422, `detail` a list);
+ *  - an import into a composite or a drawn dataset is 409 with a string `detail` (`composite_read_only`, `drawn_not_loaded`),
+ *    after the rights; the export has no such refusal;
+ *  - the export's `name` is 1 to 253 characters and `version` 1 to 64: more or fewer is FastAPI's 422, `detail` a list;
  *  - an import with no `release.yaml` is 422 with the plan's `refused` words, as a refused plan comes back.
  */
 import { createServer } from "node:http";
@@ -50,7 +53,18 @@ export interface Person {
   datasetsDenied?: string[];
   /** Published pipelines the export left out as marked above what the person may view. */
   leftOut?: number;
+  /**
+   * What kind of dataset the person's case loads into, when it is not an ordinary one: the real import route refuses a
+   * composite (`composite_read_only`) and a drawn dataset (`drawn_not_loaded`) with a 409 whose `detail` is words, after the
+   * dataset's own gate and the rights (`refuse_loading_a_composite`, `services/api/app.py`).
+   */
+  datasetKind?: "composite" | "drawn";
 }
+
+/** The words the real Conduit sends with those 409s, as `dataset_scope.py` and `app.py` word them (the composite named: past the gate). */
+export const COMPOSITE_WORDS = "This is the composite “Harbour prison extract (synthetic)”, which is read-only for now: do this in a case that reads that dataset.";
+export const DRAWN_WORDS =
+  "a drawn dataset is drawn on its board, not loaded: nothing is loaded or run into it, and it reaches another dataset by being merged into it";
 
 export interface Seen {
   method: string;
@@ -182,6 +196,11 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
       const version = target.searchParams.get("version");
       const absent = [name === null ? "name" : "", version === null ? "version" : ""].filter(Boolean);
       if (absent.length > 0) return json(res, 422, missing(absent));
+      if ((name as string).length < 1 || (name as string).length > 253 || (version as string).length < 1 || (version as string).length > 64) {
+        return json(res, 422, {
+          detail: [{ type: "string_too_long", loc: ["query", (name as string).length > 253 ? "name" : "version"], msg: "String should have at most 253 characters" }],
+        });
+      }
       if (!K8S_NAME.test(name as string)) {
         return json(res, 422, { error: "release_refused", problems: [`the release name "${name}" is not a name Kubernetes takes`] });
       }
@@ -194,6 +213,10 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
       if (!has("edit_target_model", "edit_pipelines")) {
         return json(res, 403, { detail: "Missing right: edit_target_model, edit_pipelines" });
       }
+      if (person.datasetKind === "composite") {
+        return json(res, 409, { error: "composite_read_only", detail: COMPOSITE_WORDS });
+      }
+      if (person.datasetKind === "drawn") return json(res, 409, { error: "drawn_not_loaded", detail: DRAWN_WORDS });
       const dry = target.searchParams.get("dry_run");
       if (dry !== "true" && dry !== "false") return json(res, 422, missing(["dry_run"]));
       const replace = target.searchParams.get("replace_own_draft");
