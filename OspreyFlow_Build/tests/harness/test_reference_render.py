@@ -772,6 +772,20 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
         ),
         # Switched on in the chart's own defaults: a page service rendered by default.
         ("values.yaml", lambda t: t + "pages:\n  enabled: true\n", "'pages:'"),
+        # On, with a sub-toggle that is off (the shape PL7a2b is likely to write): the section's
+        # own `enabled` is true, so it is not off, whatever a key nested in it says. This reaches
+        # the filter's own branch; the bare case above passes through its fallthrough.
+        (
+            "values.yaml",
+            lambda t: t + "pages:\n  enabled: true\n  ingress:\n    enabled: false\n",
+            "'pages:'",
+        ),
+        # The same, with the sub-toggle written first and the section's own key after it.
+        (
+            "values.yaml",
+            lambda t: t + "pages:\n  ingress:\n    enabled: false\n  enabled: true\n",
+            "'pages:'",
+        ),
     ],
     ids=[
         "a section guard",
@@ -780,6 +794,8 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
         "an else",
         "never closed",
         "on by default",
+        "on by default with a sub-toggle off",
+        "on by default, sub-toggle first",
     ],
 )
 def test_a_pages_change_that_renders_while_off_is_red(
@@ -799,6 +815,21 @@ def test_a_pages_change_that_renders_while_off_is_red(
         message
     )
     assert line_has in message, f"red for another reason:\n{message}"
+
+
+@pytest.mark.parametrize(
+    "section",
+    [
+        "pages:\n  enabled: false\n",
+        "pages:\n  enabled: false\n  ingress:\n    enabled: true\n",
+        "pages:\n  ingress:\n    enabled: true\n  enabled: false  # off\n",
+    ],
+    ids=["off", "off with a sub-toggle on", "off, sub-toggle first"],
+)
+def test_a_pages_section_that_is_off_in_its_own_key_is_not_in_the_view(section: str) -> None:
+    """The other side of the nested-key plants: a section whose own `enabled` is false is off
+    whatever its sub-keys say, and is not in the chart as it renders off."""
+    assert ref.without_pages_section_when_off("a: 1\n\n" + section + "b: 2\n") == "a: 1\nb: 2\n"
 
 
 # ---- the regenerate command --------------------------------------------------------------------
