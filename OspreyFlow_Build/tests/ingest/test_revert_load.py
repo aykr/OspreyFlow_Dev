@@ -688,7 +688,7 @@ async def test_a_cancelled_graph_step_with_a_failing_rollback_is_still_the_cance
     world = World(_record("load-1"))
     rolled: list[str] = []
 
-    async def cancelled(node_ids: Any, edge_ids: Any, tx: str) -> None:
+    async def cancelled(node_ids: Any, edge_ids: Any, tx: str, **_recorded: object) -> None:
         raise asyncio.CancelledError
 
     async def rollback(tx: str) -> None:
