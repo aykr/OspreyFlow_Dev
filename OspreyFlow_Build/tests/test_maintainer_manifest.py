@@ -1131,13 +1131,13 @@ def test_images_a_dockerfile_whose_name_is_not_plain_dockerfile_is_read_when_the
         f"svc/{name}.dockerignore": "svc/skipped.py\n",
         "svc/own.py": "",
         "svc/skipped.py": "",
-        "svc/Dockerfile.other": "FROM x\nCOPY svc/never.py ./\n",
-        "svc/never.py": "",
+        "other/Dockerfile.other": "FROM x\nCOPY other/never.py ./\n",
+        "other/never.py": "",
     }
     got = images(tmp_path, files, f"service: web, dockerfile: svc/{name}")
     assert got["svc/own.py"] == "web", name
     assert got["svc/skipped.py"] == "none", "the Dockerfile's own ignore file applies"
-    assert got["svc/never.py"] == "none (not released)", (
+    assert got["other/never.py"] == "none (not released)", (
         "a Dockerfile of another name that the release does not name"
     )
 

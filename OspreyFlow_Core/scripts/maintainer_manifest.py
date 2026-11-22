@@ -887,6 +887,9 @@ def analyse_image(
             if match:
                 found = stage_index(match.group(1), index)
                 if found is not None:
+                    # A COPY that could not be read statically never built the stage it names;
+                    # build it now so what it leaves undetermined is counted.
+                    build(found)
                     walk(found, seen)
 
     used: set[int] = set()
@@ -1031,9 +1034,21 @@ class Manifest:
     rows: list[Row]
 
 
+def is_dockerfile_name(path: str) -> bool:
+    """Docker's conventional names for a Dockerfile: `Dockerfile`, `Dockerfile.<x>` and
+    `<x>.Dockerfile`, in any case. The release matrix may name another file; those are read too
+    (see `build_manifest`)."""
+    name = path.rsplit("/", 1)[-1].lower()
+    return name == "dockerfile" or name.startswith("dockerfile.") or name.endswith(".dockerfile")
+
+
 def needs_content(path: str) -> bool:
     name = path.rsplit("/", 1)[-1]
-    return name == "Dockerfile" or name.endswith(".dockerignore") or path == RELEASE_WORKFLOW
+    return (
+        (is_dockerfile_name(path) and not name.endswith(".dockerignore"))
+        or name.endswith(".dockerignore")
+        or path == RELEASE_WORKFLOW
+    )
 
 
 def images_column(
@@ -1048,16 +1063,18 @@ def images_column(
         return {p: NOT_DETERMINED for p in paths}, [], {}
     # A build argument the release workflow mentions may be overridden there: its default is then
     # not the value.
-    overridden = frozenset(name for name in _all_args(files) if name and name in release.text)
+    named = {dockerfile for _, dockerfile, _, _ in release.images}
+    overridden = frozenset(
+        name for name in _all_args(files, named) if name and name in release.text
+    )
     results = [
         analyse_image(name, dockerfile, context, target, files, paths, overridden)
         for name, dockerfile, context, target in release.images
     ]
-    released_dockerfiles = {dockerfile for _, dockerfile, _, _ in release.images}
     unreleased = sorted(
         posixpath.dirname(p)
         for p in paths
-        if p.rsplit("/", 1)[-1] == "Dockerfile" and p not in released_dockerfiles
+        if is_dockerfile_name(p) and not p.endswith(".dockerignore") and p not in named
     )
     unreleased = [folder for folder in unreleased if folder]
     values: dict[str, str] = {}
@@ -1086,11 +1103,14 @@ def images_column(
     return values, results, undetermined
 
 
-def _all_args(files: dict[str, bytes]) -> Iterator[str]:
+def _all_args(files: dict[str, bytes], named: set[str]) -> Iterator[str]:
     """The name of every build argument a Dockerfile in the tree declares with a default, before
-    its first FROM."""
+    its first FROM. A Dockerfile is one by its conventional name or because the release matrix
+    names it."""
     for path, data in files.items():
-        if path.rsplit("/", 1)[-1] != "Dockerfile":
+        if path not in named and not (
+            is_dockerfile_name(path) and not path.endswith(".dockerignore")
+        ):
             continue
         for ins in parse_dockerfile(data.decode("utf-8", "replace")):
             if ins.op == "FROM":
@@ -1117,6 +1137,11 @@ def build_manifest(
         if needs_content(entry.path):
             kept[entry.path] = data
     release = read_release(kept)
+    # The release matrix may name a Dockerfile whatever it is called: read what it names.
+    by_path = {e.path: e for e in entries}
+    wanted = sorted(d for _, d, _, _ in release.images if d in by_path and d not in kept)
+    for path, data in zip(wanted, read_blobs(repo, [by_path[p].oid for p in wanted]), strict=True):
+        kept[path] = data
     images, results, undetermined = images_column(release, kept, paths)
     rows: list[Row] = []
     for path in paths:
