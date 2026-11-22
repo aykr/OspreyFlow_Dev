@@ -1261,9 +1261,9 @@ async def test_the_keycloak_admin_says_not_registered_in_a_way_the_route_can_tel
 
 
 class _Keycloak:
-    """The realm's admin API for dashboard clients, with its refusals: no bearer or another is 401, an
-    unknown client is 404, and the answers a planted fault gives (`delete_status` for the DELETE of a
-    client it holds, `lookup_status` for the exact lookup by client id, `list_status` for the list)."""
+    """The realm's admin API for dashboard clients, with its refusals: no bearer or another is
+    401, an unknown client is 404, and the answers a planted fault gives (`delete_status` for the
+    DELETE of a client it holds, `lookup_status` for the exact lookup by client id)."""
 
     BEARER = "a-token-made-for-this-test"
 
@@ -1271,7 +1271,6 @@ class _Keycloak:
         self.held = {REMOVED: "uuid-leaver", KEPT: "uuid-stayer"}
         self.delete_status = 204
         self.lookup_status = 200
-        self.list_status = 200
         self.deleted: list[str] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -1286,11 +1285,8 @@ class _Keycloak:
         if request.method == "GET" and rest == "":
             wanted = request.url.params["clientId"]
             if request.url.params.get("search") == "true":
-                if self.list_status != 200:
-                    return httpx.Response(self.list_status, text="<html>upstream error</html>")
-                return httpx.Response(
-                    200, json=[{"id": u, "clientId": c} for c, u in self.held.items() if wanted in c]
-                )
+                found = [{"id": u, "clientId": c} for c, u in self.held.items() if wanted in c]
+                return httpx.Response(200, json=found)
             if self.lookup_status != 200:
                 return httpx.Response(self.lookup_status, text="<html>upstream error</html>")
             return httpx.Response(
@@ -1348,7 +1344,7 @@ async def test_the_keycloak_adapter_refuses_a_delete_the_realm_did_not_make(stat
 
 async def test_the_keycloak_adapter_says_not_registered_when_the_realm_answers_not_found() -> None:
     """A client that went between the lookup and the DELETE: 404 is `NoSuchDashboard`, as a lookup
-    that finds nothing is, so the route reads one answer for "the provider holds no such identity"."""
+    that finds nothing is, so the route reads one answer for "the provider holds no such one"."""
     realm = _Keycloak()
     realm.delete_status = 404
     with pytest.raises(NoSuchDashboard):
