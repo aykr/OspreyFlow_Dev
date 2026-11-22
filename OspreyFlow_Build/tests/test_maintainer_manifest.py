@@ -947,6 +947,27 @@ def test_images_stages_chain_by_from_and_by_copy_from_and_the_base_stage_is_part
     assert got["a.txt"] == got["b.txt"] == got["with space.txt"] == "app"
 
 
+def test_images_a_build_argument_the_workflow_mentions_may_override_a_default_and_is_not_assumed(
+    tmp_path: Path,
+) -> None:
+    dockerfile = (
+        "ARG KIND=included\nFROM base AS runtime-included\nCOPY inc.txt /inc.txt\n"
+        "FROM base AS runtime-omitted\nCOPY omit.txt /omit.txt\nFROM runtime-${KIND}\n"
+    )
+    files = {"svc/Dockerfile": dockerfile, "inc.txt": "", "omit.txt": ""}
+    plain = images(tmp_path, files, "service: app, dockerfile: svc/Dockerfile")
+    assert plain["inc.txt"] == "app" and plain["omit.txt"] == "none", (
+        "the default, nothing overrides it"
+    )
+    passed = release_yml("service: app, dockerfile: svc/Dockerfile") + (
+        "  other:\n    steps:\n      - run: docker build --build-arg KIND=omitted .\n"
+    )
+    got = images(tmp_path, {**files, ".github/workflows/release.yml": passed}, name="r2")
+    assert got["inc.txt"] == got["omit.txt"] == "not determined", (
+        "the workflow may pass another value"
+    )
+
+
 def test_images_a_wildcard_source_is_resolved_as_docker_does_a_star_stays_in_its_folder(
     tmp_path: Path,
 ) -> None:
@@ -1097,13 +1118,43 @@ def no_react_line(md: str) -> str:
     return next(line for line in md.splitlines() if line.startswith("no_react_check:"))
 
 
+ISOLATION_TREE = {"apps/pages/a.ts": "export {};\n", "packages/glass-shared/b.ts": "export {};\n"}
+
+
+def test_the_summary_says_not_run_when_the_bundler_is_not_installed_beside_the_script(
+    tmp_path: Path,
+) -> None:
+    """The check bundles with the product's own bundler, found in the `node_modules` beside the script: a checkout
+    that has not installed them cannot run it, and says so (it must not read the missing bundler as a pass)."""
+    if shutil.which("node") is None:
+        pytest.skip(
+            "node is needed: the case is the one where node is there and the bundler is not"
+        )
+    checkout = tmp_path / "checkout"
+    (checkout / "scripts").mkdir(parents=True)
+    shutil.copy(SCRIPT, checkout / "scripts" / SCRIPT.name)
+    shutil.copy(RULES, checkout / "scripts" / RULES.name)
+    repo = make_repo(
+        tmp_path, "r", {**ISOLATION_TREE, "scripts/no_react_check.mjs": "// the check\n"}
+    )
+    made = generate(repo, tmp_path, extra_env={"PYTHONPATH": str(checkout)})
+    line = no_react_line(made.md)
+    assert "not run" in line and "node_modules" in line and "PASS" not in line, line
+
+
+def test_the_summary_says_not_run_and_never_a_pass_when_the_ref_has_no_check(
+    tmp_path: Path,
+) -> None:
+    made = generate(make_repo(tmp_path, "r", ISOLATION_TREE), tmp_path, rules=RULES)
+    line = no_react_line(made.md)
+    assert "not run" in line and "scripts/no_react_check.mjs" in line and "PASS" not in line
+
+
 def test_the_summary_says_not_run_and_never_a_pass_when_node_is_not_available(
     tmp_path: Path,
 ) -> None:
     repo = make_repo(
-        tmp_path,
-        "r",
-        {"apps/pages/a.ts": "export {};\n", "packages/glass-shared/b.ts": "export {};\n"},
+        tmp_path, "r", {**ISOLATION_TREE, "scripts/no_react_check.mjs": "// the check\n"}
     )
     rules = write_rules(tmp_path / "r.toml", SMALL_RULES)
     bin_dir = tmp_path / "only-git"

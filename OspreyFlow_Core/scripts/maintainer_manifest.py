@@ -859,8 +859,10 @@ def analyse_image(
             if not hits:
                 # Nothing tracked is there: built output (or content fetched or installed), which
                 # came from the stage.
-                label = stages[origin].name or str(origin)
-                fs.built_from.append(label)
+                if (
+                    theirs.contrib
+                ):  # a stage that took no tracked file in has nothing to make undetermined
+                    fs.built_from.append(stages[origin].name or str(origin))
                 fs.contrib |= theirs.contrib
                 continue
             absolute, folder = _dest_for(fs, dest, single and len(sources) == 1, len(sources))
