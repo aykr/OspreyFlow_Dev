@@ -3,7 +3,7 @@
  * strip, the rights gate) and Releases (`ReleasesTab.tsx`), re-expressed for the Default tree's pages. Nothing here is a page
  * or a call: a word, or a function from what the Conduit answered to words, so each is a test's to read.
  *
- * Why this is not `packages/glass-shared`: the dataset and pack helpers (`ingest/studio/datasets.ts`, `packs.ts`), the
+ * Why this is not `packages/glass-shared`: the dataset and pack helpers (in `packages/glass-shared/src/ingest/studio`), the
  * Needs-you words and `releaseName` are shared plain TypeScript, but the server compiles under `NodeNext`, which wants a file
  * extension on every relative import, and the shared package's files have none, so a server file cannot import them (a module
  * the browser build bundles can). The few functions the server needs are written once here and held to the shared ones'
