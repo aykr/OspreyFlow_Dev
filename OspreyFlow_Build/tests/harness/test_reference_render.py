@@ -357,7 +357,7 @@ def _chart_copy(tmp_path: Path) -> Path:
             # service, unguarded by any value.
             "---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pages\nspec:\n"
             "  replicas: 1\n",
-            "name: pages",
+            "the rendered text goes on",  # the file is longer: the reference ends where it did
         ),
         (
             "ingress.yaml",
@@ -663,4 +663,6 @@ def test_the_scan_of_the_stored_files_is_red_on_each_thing_it_names(
     assert ref.stored_text_findings(real) == []
     planted_files = {**real, "compose.yaml": real["compose.yaml"] + planted.encode("utf-8")}
     found = ref.stored_text_findings(planted_files)
-    assert found and all(expect in line for line in found), found
+    assert any(expect in line for line in found), found
+    # A plant may be two things at once (an address's own domain is a host); nothing else is named.
+    assert all(expect in line or "host" in line for line in found), found

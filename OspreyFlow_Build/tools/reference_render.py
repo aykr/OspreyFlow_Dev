@@ -59,6 +59,10 @@ REFERENCE = BUILD / "tests" / "fixtures" / "reference_render"
 MANIFEST = "MANIFEST.json"
 #: The cloud-platform configurations `make cp-policy-check` and the render tests read.
 CLOUD_PLATFORM_FIXTURES = BUILD / "tests" / "fixtures" / "cloud_platform"
+#: The chart the three Helm shapes (`cluster`, `cloud-platform`, `cloud-platform-poc`) install, and
+#: the folder of it stored beside their values: `chart/` in each of their reference folders.
+CHART = CORE / "deploy" / "helm" / "ospreyflow"
+CHART_PREFIX = "chart/"
 
 #: The two brands the renderers read (`appearance.brand`). `ospreyflow` is the default.
 BRANDS = ("ospreyflow", "govuk")
@@ -156,6 +160,8 @@ def render_files(config: Any, *, render_fn: Callable[..., Any] | None = None) ->
     `harness.apply.stage_deployment` writes beside them from the same configuration: the realm
     import, the model gateway's routing table and the sign-in theme. `deployment.env` is the
     rendered one; the secrets `apply` appends to it are minted after the render and are not here.
+    For a Helm shape, the chart's own sources (`chart_files`: `Chart.yaml`, the chart's default
+    `values.yaml`, `.helmignore` and every template) are among the files, under `chart/`.
     `osprey.yaml` (the input, copied) and `.rendered` (the list of the files) are not rendered
     content and are not stored."""
     import harness.keycloak_theme as keycloak_theme
@@ -177,7 +183,18 @@ def render_files(config: Any, *, render_fn: Callable[..., Any] | None = None) ->
             )
             for name, text in theme.items():
                 files[f"keycloak-theme/osprey/{name}"] = text.encode("utf-8")
+        else:
+            files.update(chart_files())
     return dict(sorted(files.items()))
+
+
+def chart_files() -> dict[str, bytes]:
+    """The chart's files, as bytes, keyed `chart/<path in the chart>`. Not rendered (`helm template`
+    needs the `helm` binary, which a pure test does not assume): the sources, which are what
+    `helm template` would render from, so a template that changes (a workload, an Ingress path, a
+    NetworkPolicy) changes the file stored here and the manifest's hash of it. Read by a plain
+    recursion over the one chart folder."""
+    return {f"{CHART_PREFIX}{path}": data for path, data in read_folder(CHART).items()}
 
 
 def render_shape(shape: str, brand: str, **settings: Any) -> dict[str, bytes]:
@@ -343,15 +360,45 @@ _SECRET_SHAPES = (
 _PLACEHOLDER_ADDRESSES = ("name@organisation.gov.uk",)
 _ADDRESS = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _URL_HOST = re.compile(r"\bhttps?://([A-Za-z0-9.-]+)")
-#: The hosts a stored file may name: this reference's own synthetic ones, and the public hosts of
-#: the software and standards the renderers name (a registry, a cloud's API, a model provider).
-SYNTHETIC_HOST_SUFFIXES = (".example.org", ".localhost", ".internal")
+#: A host written bare, as the renderers write the database, cache, search and object-store hosts and
+#: an image registry: a dotted name whose last label is a top-level domain a real host could end in
+#: (the file extensions that are also domains, `.sh`, `.py`, `.md` and `.zip`, are left out).
+_BARE_HOST = re.compile(
+    r"(?<![\w.-])((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+"
+    r"(?:com|org|net|uk|io|gov|edu|int|eu|co|dev|app|cloud|info|biz|us|ie|de|fr|nl|ca|au|in|ai"
+    r"|tech|online|site|xyz|local|internal|localhost))(?![\w-])(?!\.\w)",
+    re.IGNORECASE,
+)
+#: A host in the place a setting names one, whatever its top-level domain: a key that says `host`,
+#: `endpoint`, `registry`, `server`, `domain`, `origin`, `address` or `url`, given a dotted value.
+_KEYED_HOST = re.compile(
+    r"(?im)\b[\w.-]*(?:host|endpoint|registry|server|domain|origin|address|url)[\w-]*"
+    r"\s*[:=]\s*['\"]?([A-Za-z][A-Za-z0-9+.-]*://)?([A-Za-z0-9][A-Za-z0-9.-]*)(?![A-Za-z0-9.(_-])"
+)
+#: The hosts a stored file may name: this reference's own synthetic ones (`example.org` and
+#: `example.internal`, which are reserved or ours, and `.localhost`), and the public hosts of the
+#: software and standards the renderers name (a registry, a cloud's API, a model provider). A host
+#: is allowed when it is one of these or a subdomain of one: `evilghcr.io` is neither.
+SYNTHETIC_HOST_SUFFIXES = ("example.org", "example.internal", "localhost")
 PUBLIC_HOST_SUFFIXES = (
     "amazonaws.com", "ghcr.io", "quay.io", "docker.io", "gov.uk", "w3.org", "kubernetes.io",
     "k8s.io", "projectcalico.org", "login.microsoftonline.com", "api.anthropic.com",
-    "api.openai.com", "googleapis.com", "github.com",
+    "api.openai.com", "googleapis.com", "github.com", "svc.cluster.local", "ospreyflow.io",
 )  # fmt: skip
 _SYNTHETIC_ACCOUNT = "123456789012"
+
+
+def host_allowed(host: str) -> bool:
+    """Whether a stored file may name `host`: a service on the internal network (no dot), the
+    loopback address, a synthetic host or a public software or standards host, or a subdomain of
+    one of those."""
+    if "." not in host or host == "127.0.0.1":
+        return True
+    if re.fullmatch(r"[0-9.]+", host) or re.fullmatch(r"[\w-]+-\d+\.[\w-]+-headless", host):
+        return True  # a version number; a pod's name under its StatefulSet's headless service
+    return any(
+        host == s or host.endswith("." + s) for s in SYNTHETIC_HOST_SUFFIXES + PUBLIC_HOST_SUFFIXES
+    )
 
 
 def stored_text_findings(files: dict[str, bytes]) -> list[str]:
@@ -368,10 +415,11 @@ def stored_text_findings(files: dict[str, bytes]) -> list[str]:
         for m in _ADDRESS.finditer(text):
             if m.group(0) not in _PLACEHOLDER_ADDRESSES and not m.group(0).endswith("sha256"):
                 found.append(f"{path}: address {m.group(0)!r}")
-        for m in _URL_HOST.finditer(text):
-            host = m.group(1).rstrip(".")
-            internal = "." not in host or host == "127.0.0.1"
-            if not (internal or host.endswith(SYNTHETIC_HOST_SUFFIXES + PUBLIC_HOST_SUFFIXES)):
+        hosts = [m.group(1) for m in _URL_HOST.finditer(text)]
+        hosts += [m.group(1) for m in _BARE_HOST.finditer(text)]
+        hosts += [m.group(2) for m in _KEYED_HOST.finditer(text) if "." in m.group(2)]
+        for host in sorted({h.rstrip(".").lower() for h in hosts}):
+            if not host_allowed(host):
                 found.append(f"{path}: host {host!r}")
         for m in re.finditer(r"\b(\d{12})\.dkr\.ecr\.", text):
             if m.group(1) != _SYNTHETIC_ACCOUNT:
