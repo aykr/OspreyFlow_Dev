@@ -46,10 +46,11 @@ rendered one: the identity provider's addresses, the stores' hosts and the page 
 secrets (`OSPREY_PAGES_CLIENT_SECRET`, `OSPREY_PAGES_SESSION_SECRET`), each minted value
 `PINNED_<n>` (numbered by the order the render mints them; not one word, because
 `harness.cloud_platform` mints twice and compares to tell a fixed value from a fresh one). An
-enable flag added beside them, or the two secrets made conditional, is a changed `deployment.env`. `osprey.yaml` (the input, copied)
-and `.rendered` (the list of what was written) are not rendered content and are not stored. There
-is no `deployment.json` among the files: the renderers write `glass.json` (ADR-114 Amendment 4),
-which is stored; `/deployment.json` is what the Glass is served from it.
+enable flag added beside them, or the two secrets made conditional, is a changed
+`deployment.env`. `osprey.yaml` (the input, copied) and `.rendered` (the list of what was written)
+are not rendered content and are not stored. There is no `deployment.json` among the files: the
+renderers write `glass.json` (ADR-114 Amendment 4), which is stored; `/deployment.json` is what
+the Glass is served from it.
 
 **No network, no docker, no real secret, no clock; nothing from the shell.** The renders take their
 digests from a hash of the image reference (`tools.reference_render.resolver`: the registry is never
