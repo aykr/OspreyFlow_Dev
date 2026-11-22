@@ -22,6 +22,9 @@ Which test fails if the invariant is broken (rule 12):
   deployment loader: that file is the owner's)
 * an unknown sibling taken in -> `test_an_unknown_sibling_still_fails`
 * the setting read by anything yet -> `test_nothing_reads_the_setting_yet`
+* a render that gains a `pages` block while the file omits the setting (Amendment 3 point 2, off
+  or absent means byte for byte unchanged) -> `test_an_absent_setting_is_not_in_the_dump_the_renderers_write`,
+  `test_the_renderers_own_dump_calls_carry_no_pages_block`, shown red by `test_a_dump_that_adds_pages_is_caught`
 """
 
 from __future__ import annotations
@@ -172,3 +175,60 @@ def test_nothing_reads_the_setting_yet() -> None:
     for path in sorted((CORE / "harness").glob("*.py")):
         text = path.read_text(encoding="utf-8")
         assert ".pages.enabled" not in text and "config.pages" not in text, path.name
+
+
+# The three call sites that write `osprey.yaml` (harness/cluster.py, harness/render.py,
+# harness/cloud_platform/__init__.py) all dump the validated config with exactly these arguments.
+def _the_renderers_dump(config: OspreyConfig) -> dict[str, Any]:
+    return config.model_dump(mode="json", exclude_none=True)
+
+
+def _adds_pages(dump: dict[str, Any]) -> bool:
+    return "pages" in dump
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        {},
+        {"profile": "local-lite"},
+        {"profile": "small", "network": {"hostname": "example.test"}},
+        {"appearance": {"brand": "govuk"}},
+    ],
+)
+def test_an_absent_setting_is_not_in_the_dump_the_renderers_write(raw: dict[str, Any]) -> None:
+    """Amendment 3 point 2: with the setting absent a render is byte for byte what it was, so
+    the dump the renderers write carries no `pages` key. `exclude_none` does not drop `False`,
+    so a field defaulting to a model would put `pages: {enabled: false}` in every file."""
+    config = OspreyConfig.model_validate(raw)
+    assert not _adds_pages(_the_renderers_dump(config))
+
+
+def test_a_dump_that_adds_pages_is_caught() -> None:
+    """The check above, run on the shape the leak had (rule 15): the dump a plain `default_factory`
+    field produces, `pages: {enabled: false}` with nothing in the operator's file."""
+
+    class Leaky(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        pages: PagesConfig = Field(default_factory=PagesConfig)
+
+    assert _adds_pages(Leaky().model_dump(mode="json", exclude_none=True))
+
+
+def test_what_the_file_names_is_kept_in_the_dump() -> None:
+    """A deployment that writes the setting keeps it, so an on stays on at the next render and a
+    written `false` is not silently dropped."""
+    on = OspreyConfig.model_validate({"pages": {"enabled": True}})
+    off = OspreyConfig.model_validate({"pages": {"enabled": False}})
+    empty = OspreyConfig.model_validate({"pages": {}})
+    assert _the_renderers_dump(on)["pages"] == {"enabled": True}
+    assert _the_renderers_dump(off)["pages"] == {"enabled": False}
+    assert _the_renderers_dump(empty)["pages"] == {"enabled": False}
+    assert OspreyConfig.model_validate(_the_renderers_dump(on)).pages.enabled is True
+
+
+def test_the_renderers_own_dump_calls_carry_no_pages_block(tmp_path: Path) -> None:
+    """The local-lite render with no `osprey.yaml` writes the dump of a bare `OspreyConfig()`:
+    the real call site (harness/render.py), not a hand-written approximation of it."""
+    assert "pages" not in yaml.safe_dump(_the_renderers_dump(OspreyConfig()))
+    assert "pages" not in OspreyConfig().model_dump()  # the plain dump too
