@@ -428,6 +428,12 @@ ROUTE_RIGHTS = {
     "release_held_rows_route": "decide_held_rows",
     "reject_held_rows": "decide_held_rows",
     "issue_ws_ticket": None,
+    # SE8c: the page service's own report of a sign-in or sign-out. `None` names no person's right
+    # (none exists for it): the route's gate is `page_service_only`, a client check, not a right:
+    # the bearer token must resolve to a person (401 if not), and must have been issued to the page
+    # service's own client (`azp`, `appid` on Entra ID v1.0), or every caller is the same 403.
+    # Held by `test_sign_in_events_ingress.py`, not by this table.
+    "record_session_event": None,
     "my_rights_route": None,
     # ADR-148 Amendment 8: the caller's own principal as resolved, which the Glass shows.
     "me_route": None,
