@@ -72,6 +72,9 @@ class BoardGraph(FakeGraphPort):
         self.edge_writes: list[EdgeWrite] = []
         #: Each element `regrade_drawn` changed, in order.
         self.regrades: list[str] = []
+        #: SE9: who and when each deletion write was told to record, as (kind, by, at) in call
+        #: order, so a test can see what the Conduit's own caller passed (rule 12).
+        self.deleted_by: list[tuple[str, str | None, datetime | None]] = []
 
         #: L3.4: each element a promotion stamped, by its load (the adapter's `promoted_by_load`).
         self.promoted_by: dict[str, str] = {}
@@ -285,9 +288,16 @@ class BoardGraph(FakeGraphPort):
         return new_id
 
     async def revert_elements(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], tx: str, **_recorded: object
+        self,
+        node_ids: Sequence[str],
+        edge_ids: Sequence[str],
+        tx: str,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
     ) -> None:
         """As the adapter: each set reverted at commit, with no withdrawing load stamped."""
+        self.deleted_by.append(("revert", by, at))
         self._pending[tx][2].append((list(node_ids), list(edge_ids), None))
 
     async def withdraw_elements(
@@ -296,8 +306,11 @@ class BoardGraph(FakeGraphPort):
         edge_ids: Sequence[str],
         load_id: str,
         tx: str,
-        **_recorded: object,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
     ) -> None:
+        self.deleted_by.append(("withdraw", by, at))
         self._pending[tx][2].append((list(node_ids), list(edge_ids), load_id))
 
     # --- promotion (L3.4) ----------------------------------------------------------------------
@@ -374,8 +387,15 @@ class BoardGraph(FakeGraphPort):
         return PromotionReverted(nodes=len(node_ids), edges=len(edge_ids))
 
     async def withdraw_layer(
-        self, dataset_id: str, withdrawal: str, tx: str, **_recorded: object
+        self,
+        dataset_id: str,
+        withdrawal: str,
+        tx: str,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
     ) -> PromotionReverted:
+        self.deleted_by.append(("layer", by, at))
         nodes = [
             n.id for n in self._graph_nodes.values()
             if not n.audit.reverted and list(n.datasets) == [dataset_id]

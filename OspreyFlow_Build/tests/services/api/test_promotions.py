@@ -1140,6 +1140,26 @@ def test_an_administrator_deletes_a_removed_cases_layer_and_never_an_open_ones(
     assert "delete_layer" in [r["action"] for r in pw.audit.records]
 
 
+def test_a_layers_deletion_records_the_person_who_made_it_on_each_route(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SE9, rule 12 at the real call site: the layer route and Admin's both hand the graph the
+    deleting person's id (`by=principal.id`), never the item's author (the board is alice's) and
+    never nothing. The plant: a route that drops `by` or passes the author leaves `deleted_by`
+    with another name, and this fails."""
+    monkeypatch.setitem(PEOPLE, "ada", Principal(
+        id="ada", clearance="SECRET", org_unit=UNIT, roles=["osprey-admin"]
+    ))  # fmt: skip
+    _item(_board())  # alice's own layer
+    pw.removed.add(K)
+    assert _as("dana").delete(f"/v1/datasets/src/removed-cases/{K}/layer").status_code == 200
+    assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [("layer", "dana")]
+    assert _as("ada").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 200
+    assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [
+        ("layer", "dana"), ("layer", "ada")
+    ]
+
+
 def test_admin_delete_is_scoped_to_the_datasets_unit(pw: SimpleNamespace) -> None:
     """Rule 4 at the unit boundary (the independent review's round 2, item 1; the owner's ruling
     of 9 November 2026): Admin's Delete is a destructive write with no undo, so only an administrator
