@@ -81,7 +81,8 @@ def test_a_value_that_is_not_true_or_false_is_refused_in_words(value: Any) -> No
         OspreyConfig.model_validate({"pages": {"enabled": value}})
 
 
-SPELLINGS_YAML_1_1 = ["yes", "Yes", "YES", "on", "On", "ON", "y", "Y", "no", "No", "off", "OFF", "n"]
+# What PyYAML's own bool resolver reads as a boolean besides true and false.
+SPELLINGS_YAML_1_1 = ["yes", "Yes", "YES", "on", "On", "ON", "no", "No", "NO", "off", "Off", "OFF"]
 
 
 def _file(value: str) -> str:

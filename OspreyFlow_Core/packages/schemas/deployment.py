@@ -1753,11 +1753,40 @@ class PagesConfig(BaseModel):
     @field_validator("enabled", mode="before")
     @classmethod
     def _true_or_false(cls, value: object) -> object:
-        # `yes`, `on`, a quoted "true" and 1 are not booleans here: a setting that turns a service
-        # on is not guessed at.
+        # A quoted "true", 1 and a string "yes" are not booleans here: a setting that turns a
+        # service on is not guessed at. An *unquoted* `yes` or `on` in a file is a different case:
+        # `yaml.safe_load` (YAML 1.1) turns it into a real `True` before this runs, so it can only
+        # be refused where the file is read: `load_osprey_yaml` below reads such a spelling as the
+        # text it is, and this check then refuses it.
         if not isinstance(value, bool):
             raise ValueError("pages.enabled must be true or false")
         return value
+
+
+class _DeploymentYamlLoader(yaml.SafeLoader):
+    """`yaml.SafeLoader` with one change: only `true` and `false` (in the three cases YAML 1.2
+    allows) are booleans. YAML 1.1, which PyYAML follows, also reads an unquoted `yes`, `on`,
+    `no` and `off` (in any of three cases) as booleans, so a person who writes `enabled: yes`
+    turns a service on by a spelling nothing downstream can tell from `true`. Here those stay
+    strings, and a boolean setting's own validation refuses them in words."""
+
+
+_BOOL_TAG = "tag:yaml.org,2002:bool"
+_DeploymentYamlLoader.yaml_implicit_resolvers = {
+    first: [(tag, pattern) for tag, pattern in resolvers if tag != _BOOL_TAG]
+    for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+_DeploymentYamlLoader.add_implicit_resolver(
+    _BOOL_TAG, re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"), list("tTfF")
+)
+
+
+def load_osprey_yaml(text: str) -> Any:
+    """Read `osprey.yaml`'s text for `OspreyConfig.model_validate`: `yaml.safe_load`, except that
+    YAML 1.1's other boolean spellings (`yes`, `on`, ...) are left as strings (ADR-152 Amendment 3
+    point 1: a value that is not `true` or `false` is refused in words). An empty file is an empty
+    document, as it is with `yaml.safe_load`."""
+    return yaml.load(text, Loader=_DeploymentYamlLoader) or {}  # noqa: S506 - a SafeLoader subclass
 
 
 class GradingConfig(BaseModel):
