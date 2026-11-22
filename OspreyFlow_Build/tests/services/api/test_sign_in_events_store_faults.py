@@ -27,9 +27,9 @@ import asyncio
 import logging
 from typing import Any
 
-import asyncpg
 import pytest
 from schemas.domain import Principal
+from services.api import audit as audit_module
 
 from tests.services.api import test_sign_in_events as base
 from tests.services.api.test_sign_in_events import (  # noqa: F401 - fixtures, found by name
@@ -55,7 +55,7 @@ def _fail_with(monkeypatch: pytest.MonkeyPatch, rig_: Rig, make: Any) -> dict[st
 
 
 def _closing() -> BaseException:
-    return asyncpg.InterfaceError("pool is closing")
+    return audit_module.asyncpg.InterfaceError("pool is closing")
 
 
 def test_the_pool_closing_leaves_a_first_sight_to_be_written_by_the_next_request(

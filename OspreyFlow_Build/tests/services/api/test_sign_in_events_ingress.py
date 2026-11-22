@@ -490,9 +490,9 @@ def _plant(monkeypatch: pytest.MonkeyPatch, make: Any) -> dict[str, bool]:
 
 
 def _interface_error() -> BaseException:
-    import asyncpg
+    from services.api import audit as audit_module
 
-    return asyncpg.InterfaceError("pool is closing")
+    return audit_module.asyncpg.InterfaceError("pool is closing")
 
 
 def _runtime_error() -> BaseException:
