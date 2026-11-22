@@ -18200,7 +18200,8 @@ async def remove_dashboard_route(
     back.
     If the mart cannot be reached the dashboard stays registered, the administrator is told in
     words (503, under `message`, which the Admin screen shows), and removing it again retries;
-    removal is never reported done with the rows still there."""
+    removal is never reported done with the rows still there. A deletion that did happen is audited
+    even when the mart then fails (the row carries `mart_confirmed: false`)."""
     registered = [d for d in await identity_admin.list_dashboards() if d.client_id == client_id]
     revoked = [
         case
@@ -18213,6 +18214,13 @@ async def remove_dashboard_route(
     except MartUnreachable as unreachable:
         logger.warning("remove_dashboard: the mart refused the removal: %s", unreachable)
         if unreachable.identity_removed:
+            # The identity is gone at the provider, so who removed it is recorded all the same; the
+            # row says the mart did not confirm that its figures went.
+            await audit.record(principal=principal, action="remove_dashboard",
+                               resolved_query={"client_id": client_id,
+                                               "grants_revoked": len(revoked),
+                                               "mart_confirmed": False},
+                               result_cardinality=1)  # fmt: skip
             words = (
                 f"{client_id} was removed from the identity provider, but the reporting mart did "
                 "not confirm that its figures went, so they may still be there. It can no longer "
