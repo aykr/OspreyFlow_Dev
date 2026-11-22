@@ -350,6 +350,11 @@ def main() -> int:
     if a.self_clears:
         print("\n".join(self_clear_lines()) or "The line has cleared no stop itself.")
         return 0
+    try:  # the owner's word of 21 November 2026: a verified slice's conflict with main, seen before the merge
+        import merge_slice
+        conflicts = merge_slice.check_conflicts()
+    except Exception as e:  # the look never stops the board; it says why
+        conflicts = [f"the look for conflicts with main could not run ({type(e).__name__}: {e})"]
     try:
         slices = c.load_slices(None if a.slices_from == "working" else a.slices_from)
     except RuntimeError:
@@ -370,6 +375,8 @@ def main() -> int:
             print(f"main's GitHub run cannot be read ({ci['why']}): not a gate; merges go on")
         if c.GITHUB_STOP.exists():
             print("merging stopped: " + c.github_stop_words(c.read_json(c.GITHUB_STOP)))
+        for line in conflicts:
+            print(line)
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")

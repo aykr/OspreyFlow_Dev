@@ -730,6 +730,70 @@ def merge_conflicts(base: str, tip: str) -> list[str]:
     return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []
 
 
+#: The early look for a conflict with main (the owner's word of 21 November 2026; LINE_FAULTS_2026-11-21.md, 8): for
+#: each verified slice, the main commit and the tip it was last merged with in git merge-tree, and what that named.
+CONFLICT_SEEN = "conflict-check.json"
+
+
+def check_conflicts() -> list[str]:
+    """Each verified slice merged with main in git merge-tree, read-only (it writes objects alone: no branch, ref, index
+    or worktree), once for each pair of main and tip it has not seen. A conflict is recorded as the merge records one
+    (refuse_to_builder: refused for `conflict`, or `records` when only the records folder conflicts), so resume.py
+    send-back returns the slice with no round spent, and the board shows "verified, conflicts with main in <files>".
+    Nothing while a merge runs (the next look after it sees the moved main) or a resume.py action holds the slice.
+    What it found, in words."""
+    try:
+        held = lock()
+    except Refused:
+        return []
+    said = []
+    try:
+        base = c.git(["rev-parse", "main"], c.REPO)
+        seen_f = c.DATA / CONFLICT_SEEN
+        seen = c.read_json(seen_f) or {}
+        records = c.DATA / "records"
+        for d in sorted(records.iterdir()) if records.is_dir() else []:
+            sid = d.name
+            st = c.read_json(d / "state.json") or {}
+            tip = st.get("tip") or ""
+            if st.get("phase") != "verified" or not tip or seen.get(sid, {}).get("main") == base and \
+                    seen.get(sid, {}).get("tip") == tip:
+                continue
+            one = (c.DATA / "locks" / f"resume-{sid}.lock")
+            one.parent.mkdir(parents=True, exist_ok=True)
+            fh = one.open("w")
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                fh.close()
+                continue
+            try:
+                files = merge_conflicts(base, tip)
+                seen[sid] = {"main": base, "tip": tip, "files": files}
+                if files:
+                    named = ", ".join(files)
+                    kind = "records" if all(f.startswith(c.V062_REL + "/") for f in files) else "conflict"
+                    what = (f"The branch conflicts with main only in the records folder ({named}): resume.py send-back "
+                            "merges main into it, taking main's records." if kind == "records" else
+                            f"The branch conflicts with main in {named}. Your one task: merge main into this branch "
+                            "(git merge main) and resolve each conflict keeping both sides of an append-only change "
+                            "(both rows of a table, both entries of a list: main's first, then yours); change nothing "
+                            "else, then run the checks and the acceptance command. A conflict that is not such an "
+                            "append is not yours to settle alone: say so in your final message.")
+                    refuse_to_builder(sid, tip, f"verified, conflicts with main in {named}", [{
+                        "file": files[0], "what": what,
+                        "evidence": f"git merge-tree --write-tree --name-only on main {base[:10]} and the tip names "
+                                    f"{named} (the line's look when a verifier passes and when main moves)"}], 0, kind)
+                    said.append(f"{sid}: verified, conflicts with main in {named}: recorded; resume.py {sid} send-back "
+                                "returns it to the builder (no round spent).")
+            finally:
+                fh.close()
+        c.write_json(seen_f, seen)
+    finally:
+        held.close()
+    return said
+
+
 def records_only_conflict(base: str, tip: str) -> list[str]:
     """The files the tip conflicts with main in, when every one is in the records folder; [] otherwise."""
     files = merge_conflicts(base, tip)

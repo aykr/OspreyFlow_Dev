@@ -439,6 +439,15 @@ M = [
  ("stop_check.py", '    if CUT:  # the slice', '    if True:  # the slice', "writes_no_timeout_record"),
  ("stop_check.py", '    by = "command" if limit >= TIMEOUT_S else "allowance"\n', '    by = "command"\n', "record_says_so"),
  ("stop_check.py", '    if limit <= 0:\n', '    if False:\n', "left_with_no_time_is_not_run"),
+ # the owner's word of 21 November, 20: a verified slice's conflict with main, seen before the merge, read-only
+ ("board.py", '        conflicts = merge_slice.check_conflicts()\n', '        conflicts = []\n', "when_main_moves_a_verified_slice"),
+ ("merge_slice.py", '                if files:\n                    named = ", ".join(files)\n                    kind =', '                if False:\n                    named = ", ".join(files)\n                    kind =', "when_main_moves_a_verified_slice"),
+ ("merge_slice.py", '                    kind = "records" if all(f.startswith(c.V062_REL + "/") for f in files) else "conflict"\n', '                    kind = "conflict"\n', "records_only_conflict_found_early"),
+ ("merge_slice.py", '    try:\n        held = lock()\n    except Refused:\n        return []\n    said = []', '    held = open("/dev/null")\n    said = []', "look_waits_for_the_next_board_run"),
+ ("merge_slice.py", 'seen.get(sid, {}).get("main") == base and \\', 'True or \\', "when_main_moves_a_verified_slice"),
+ ("merge_slice.py", '        c.write_json(seen_f, seen)\n', '', "looked_at_once_per_main"),
+ ("merge_slice.py", '                files = merge_conflicts(base, tip)\n                seen[sid]', '                files = merge_conflicts(base, tip)\n                c.git(["update-ref", "refs/conflict-look", base], c.REPO)\n                seen[sid]', "when_main_moves_a_verified_slice"),
+ ("run_seat.py", '        c.set_state(slice_id, phase="verified", tip=tip)\n        board()\n', '        c.set_state(slice_id, phase="verified", tip=tip)\n', "verifier_passes_a_conflict"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
