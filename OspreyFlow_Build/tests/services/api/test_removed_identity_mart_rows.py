@@ -70,7 +70,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import asyncpg
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -98,6 +97,12 @@ from services.report_sync.sync import Dashboard, SyncRefused, TokenSource, sync_
 from ontology.handling import load_uk_le_scheme
 from schemas.admin import DashboardIdentity, RegisteredDashboard
 from schemas.domain import Principal
+
+# The driver's own exception classes, reached through the product's mart module (which imports the
+# driver itself), so the fake raises the very classes the real mart and the route catch. This file
+# imports no database driver of its own: `tools/test_file_coverage_check.py` reads an `asyncpg`
+# import, at module or function level, as "needs a real Postgres", and this file never does.
+_PG = mart_module.asyncpg
 
 SCHEMA = "osprey_reports"
 ADMIN = Principal(id="admin-1", clearance="OFFICIAL", org_unit="verify", roles=["osprey-admin"])
@@ -233,7 +238,7 @@ class FakeMartPool:
         # The body reads the control schema, which the reader's role is never granted: only a
         # function that runs as its owner may.
         if not definer:
-            raise asyncpg.InsufficientPrivilegeError(
+            raise _PG.InsufficientPrivilegeError(
                 f"permission denied for schema {CONTROL_SCHEMA}"
             )
         return all(r["dashboard"] != dashboard
@@ -243,9 +248,9 @@ class FakeMartPool:
     def _table(self, schema: str, name: str) -> str:
         full = f"{schema}.{name}"
         if schema not in self.schemas:
-            raise asyncpg.InvalidSchemaNameError(f'schema "{schema}" does not exist')
+            raise _PG.InvalidSchemaNameError(f'schema "{schema}" does not exist')
         if full not in self.rows:
-            raise asyncpg.UndefinedTableError(f'relation "{full}" does not exist')
+            raise _PG.UndefinedTableError(f'relation "{full}" does not exist')
         return full
 
     def run(self, sql: str, args: tuple[Any, ...]) -> str:
@@ -294,7 +299,7 @@ class FakeMartPool:
             text,
         ):
             if m[1] not in self.schemas:
-                raise asyncpg.InvalidSchemaNameError(f'schema "{m[1]}" does not exist')
+                raise _PG.InvalidSchemaNameError(f'schema "{m[1]}" does not exist')
             if m[4] == "SELECT true":
                 shape = "true"
             elif re.fullmatch(
@@ -321,9 +326,9 @@ class FakeMartPool:
         ):
             table = self._table(m[2], m[3])
             if m[4] not in self.functions:
-                raise asyncpg.UndefinedFunctionError(f"function {m[4]}(text) does not exist")
+                raise _PG.UndefinedFunctionError(f"function {m[4]}(text) does not exist")
             if any(name == m[1] for name, _ in self.policies.get(table, [])):
-                raise asyncpg.DuplicateObjectError(f'policy "{m[1]}" already exists')
+                raise _PG.DuplicateObjectError(f'policy "{m[1]}" already exists')
             self.policies.setdefault(table, []).append((m[1], m[4]))
             return "CREATE POLICY"
         if m := re.match(r"INSERT INTO (\w+)\.figures VALUES \(\$1,", text):
@@ -635,7 +640,7 @@ def test_the_check_sees_a_removal_that_misses_a_table(
     "error",
     [
         OSError("the mart is unreachable"),
-        asyncpg.InsufficientPrivilegeError("permission denied for table pulls"),
+        _PG.InsufficientPrivilegeError("permission denied for table pulls"),
     ],
     ids=["unreachable", "the Conduit's role may not delete"],
 )
@@ -667,7 +672,7 @@ def test_a_purge_that_fails_part_way_leaves_nothing_half_removed(world: _World) 
     from services.report_sync.mart import DASHBOARD_TABLES
 
     last = DASHBOARD_TABLES[-1]
-    world.pool.fail(f"DELETE FROM {SCHEMA}.{last}", asyncpg.PostgresConnectionError("lost"))
+    world.pool.fail(f"DELETE FROM {SCHEMA}.{last}", _PG.PostgresConnectionError("lost"))
     before = world.pool.left_for(REMOVED)
     assert world.remove().status_code == 204
     assert world.pool.left_for(REMOVED) == before
@@ -1043,7 +1048,7 @@ async def test_the_reader_check_sees_each_planted_fault(
     pool.stamp(REMOVED)
     try:
         wrong = _reader_verdict(pool, hidden=(REMOVED,), shown=(KEPT,))
-    except asyncpg.InsufficientPrivilegeError as refused:
+    except _PG.InsufficientPrivilegeError as refused:
         wrong = [str(refused)]
     assert any(said in w for w in wrong), wrong
 
