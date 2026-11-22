@@ -1,23 +1,23 @@
-"""The theme-rule check (`tools/theme_rule_check.py`; build id PL12, slice PL12b; ADR-152 Amendment 4).
+"""The theme-rule check (`tools/theme_rule_check.py`; build id PL12, slice PL12b; ADR-152 Am. 4).
 
-A theme's CSS rule outside its own folder (`OspreyFlow_Core/packages/themes/<name>/`) is found. Today's
-GOV.UK rules outside any theme folder are the allowlist (`tests/fixtures/theme_rule_allowlist.txt`), and the
-allowlist may only shrink: an entry added, an entry whose rule is gone, and a recorded count that is not the
-number of entries each fail. Nothing is moved by this slice; the check is not in `make ci` until the owner
-applies the Makefile diff, so this file is where it is shown red (rule 15).
+A theme's CSS rule outside its own folder (`OspreyFlow_Core/packages/themes/<name>/`) is found.
+Today's GOV.UK rules outside any theme folder are the allowlist
+(`tests/fixtures/theme_rule_allowlist.txt`), and the allowlist may only shrink: an entry added, an
+entry whose rule is gone, and a recorded count that is not the number of entries each fail. Nothing
+is moved by this slice; the check is not in `make ci` until the owner applies the Makefile diff, so
+this file is where it is shown red (rule 15).
 
 **Which folders this file walks (the scan row is written from this).** Only to build a *copy* of the
-style-bearing files the check reads, in a temporary folder: under `OspreyFlow_Core`, `packages/design`,
-`packages/glass-shared/src`, `apps/workspace/src`, `apps/workspace/scripts`, `apps/pages` and
-`apps/harness/src` (the stylesheets, the templates, `fonts*.json`; `node_modules` and `dist` pruned by name),
-and the two sign-in theme files in `harness/` by name. Every plant is written into that copy under `tmp_path`;
-no real file is written. The real-tree cases run the check itself over `OspreyFlow_Core`, which reads the
-same folders (and `packages/themes`, absent today).
+style-bearing files the check reads, in a temporary folder: under `OspreyFlow_Core`,
+`packages/design`, `packages/glass-shared/src`, `apps/workspace/src`, `apps/workspace/scripts`,
+`apps/pages` and `apps/harness/src` (the stylesheets, the templates, `fonts*.json`; `node_modules`
+and `dist` pruned by name), and the two sign-in theme files in `harness/` by name. Every plant is
+written into that copy under `tmp_path`; no real file is written. The real-tree cases run the check
+itself over `OspreyFlow_Core`, which reads the same folders (and `packages/themes`, absent today).
 
-Every plant takes the shape the check really meets: the real brand rules are `[data-brand="govuk"]` blocks
-and `.…--govuk` modifier classes in stylesheets, and `[data-brand="govuk"]` rules inside a Python
-triple-quoted string (`harness/keycloak_theme.py`).
-"""
+Every plant takes the shape the check really meets: the real brand rules are `[data-brand="govuk"]`
+blocks and `.…--govuk` modifier classes in stylesheets, and `[data-brand="govuk"]` rules inside a
+Python triple-quoted string (`harness/keycloak_theme.py`)."""
 
 from __future__ import annotations
 
@@ -32,8 +32,8 @@ from tools.layout import BUILD, CORE
 
 ALLOWLIST = BUILD / "tests" / "fixtures" / "theme_rule_allowlist.txt"
 
-#: The folders under `OspreyFlow_Core` this file copies from, named here and not read from the tool, so
-#: a tool that drops a root cannot also drop it from the copy the plants are written into.
+#: The folders under `OspreyFlow_Core` this file copies from, named here and not read from the
+#: tool, so a tool that drops a root cannot also drop it from the copy the plants go into.
 WALKED = (
     "packages/design",
     "packages/glass-shared/src",
@@ -109,7 +109,7 @@ def test_the_real_tree_passes_with_the_allowlist(capsys: pytest.CaptureFixture[s
 
 
 def test_the_real_tree_holds_the_rules_the_scouts_read() -> None:
-    """The scan reaches each place today's GOV.UK rules are, so an empty finding is never a blind one."""
+    """The scan reaches each place today's GOV.UK rules are: an empty finding is never blind."""
     found = {f.path for f in trc.find_theme_rules(CORE)}
     assert {
         "packages/design/tokens.css",
@@ -139,7 +139,7 @@ def test_the_allowlist_header_says_how_it_reaches_zero_and_who_may_lower_it() ->
     assert "react gov.uk look" in lowered and "retired" in lowered
     assert "any slice that removes a rule" in lowered
     assert "owner" in lowered and "raise" in lowered
-    # No text this slice writes may say a Default build is free of GOV.UK (ADR-152 Amendment 4, item 8).
+    # No text this slice writes may say a Default build is free of GOV.UK (ADR-152 Am. 4, item 8).
     assert "free of gov.uk" not in lowered and "no gov.uk" not in lowered
 
 
@@ -159,13 +159,15 @@ def test_i_a_brand_rule_in_the_shared_scale_is_found(
     # Through the entry point the gate is run by: the file and the rule are named, and it fails.
     assert trc.main(core=core, allowlist_path=ALLOWLIST) == 1
     out = capsys.readouterr().out
-    assert 'packages/design/scale.css' in out and '[data-brand="govuk"] .x' in out
+    assert "packages/design/scale.css" in out and '[data-brand="govuk"] .x' in out
     scale.write_text(original, encoding="utf-8")
     assert_clean(core)
 
 
 @pytest.mark.parametrize("family", ['"GDS Transport"', "GDS-Transport", "'gds transport'"])
-def test_ii_gds_transport_as_a_font_face_under_the_pages_app_is_found(core: Path, family: str) -> None:
+def test_ii_gds_transport_as_a_font_face_under_the_pages_app_is_found(
+    core: Path, family: str
+) -> None:
     face = (
         f"@font-face {{ font-family: {family}; font-weight: 700;\n"
         '  src: url("/assets/govuk/bold-affa96571d-v2.woff2") format("woff2"); }\n'
@@ -197,7 +199,9 @@ def test_iii_a_govuk_rule_in_a_second_themes_folder_is_found(core: Path) -> None
     )
     result = judged(core)
     # The rule of theme `other` is at home there; the GOV.UK rule is not.
-    assert triples(result.new) == [("packages/themes/other/tokens.css", '[data-brand="govuk"]', "rule")]
+    assert triples(result.new) == [
+        ("packages/themes/other/tokens.css", '[data-brand="govuk"]', "rule")
+    ]
 
 
 def test_iii_a_second_themes_rule_in_the_govuk_folder_is_found_too(core: Path) -> None:
@@ -295,7 +299,7 @@ def test_vi_an_entry_added_without_raising_the_count_fails(core: Path, tmp_path:
     )
     edited = _write_allowlist(tmp_path / "allow.txt", real.recorded, [*real.entries, entry])
     result = judged(core, edited)
-    # The rule is excused by its entry, and nothing is stale: only the count says an entry was added.
+    # The rule is excused by its entry and nothing is stale: only the count says one was added.
     assert result.new == [] and result.stale == []
     assert len(result.count_problems) == 1
     assert "added" in result.count_problems[0]
@@ -331,8 +335,10 @@ def test_vi_a_recorded_count_that_is_not_the_entry_count_fails(
     assert not result.ok
 
 
-def test_the_count_may_fall_when_an_entry_is_deleted_with_its_rule(core: Path, tmp_path: Path) -> None:
-    """The ratchet's own good path: a slice removes a rule, deletes its line and lowers the count."""
+def test_the_count_may_fall_when_an_entry_is_deleted_with_its_rule(
+    core: Path, tmp_path: Path
+) -> None:
+    """The ratchet's good path: a slice removes a rule, deletes its line and lowers the count."""
     sheet = core / "apps/workspace/src/admin/admin.css"
     sheet.write_text(
         sheet.read_text(encoding="utf-8").replace(".admin-nav--govuk { width: 220px; }\n", ""),
@@ -352,13 +358,15 @@ def test_the_count_may_fall_when_an_entry_is_deleted_with_its_rule(core: Path, t
     ]
 
 
-def test_vii_a_rule_inside_the_govuk_theme_folder_for_the_govuk_theme_is_allowed(core: Path) -> None:
+def test_vii_a_rule_inside_the_govuk_theme_folder_for_the_govuk_theme_is_allowed(
+    core: Path,
+) -> None:
     """The check must not forbid the move it exists to allow (PL12d)."""
     plant(
         core,
         "packages/themes/govuk/tokens.css",
         '[data-brand="govuk"] { --ui: "GDS Transport", arial, sans-serif; --govuk-gutter: 30px; }\n'
-        "@media (max-width: 640px) { [data-brand=\"govuk\"] { --govuk-gutter: 15px; } }\n"
+        '@media (max-width: 640px) { [data-brand="govuk"] { --govuk-gutter: 15px; } }\n'
         '[data-brand="govuk"] :is(.govuk-header, .govuk-footer) a { border-bottom: 0; }\n'
         '@font-face { font-family: "GDS Transport"; src: url("/assets/govuk/bold.woff2"); }\n',
     )
@@ -380,7 +388,7 @@ def test_vii_a_rule_of_theme_b_inside_its_own_folder_is_allowed_for_any_name(cor
     assert_clean(core)
 
 
-# ---------------------------------------------------------------- the shapes the sign-in theme takes
+# ----------------------------------------------------------- the shapes the sign-in theme takes
 
 
 def test_a_rule_inside_a_python_triple_quoted_string_is_found(core: Path) -> None:
@@ -389,7 +397,8 @@ def test_a_rule_inside_a_python_triple_quoted_string_is_found(core: Path) -> Non
     assert_clean(core)
     file.write_text(
         original
-        + '\n\n_ZZ_RULES = """\n[data-brand="govuk"] .zz-plant,\n[data-brand="govuk"] #zz { display: none; }\n"""\n',
+        + '\n\n_ZZ_RULES = """\n[data-brand="govuk"] .zz-plant,\n'
+        + '[data-brand="govuk"] #zz { display: none; }\n"""\n',
         encoding="utf-8",
     )
     result = judged(core)
@@ -409,7 +418,8 @@ def test_a_comment_or_a_docstring_naming_a_brand_is_not_a_rule(core: Path) -> No
     original = file.read_text(encoding="utf-8")
     file.write_text(
         original
-        + '\n\ndef zz() -> None:\n    """A brand is one `[data-brand="govuk"]` block { in tokens.css }."""\n'
+        + "\n\ndef zz() -> None:\n"
+        + '    """A brand is one `[data-brand="govuk"]` block { in tokens.css }."""\n'
         + '    # [data-brand="govuk"] .x { display: none; }\n',
         encoding="utf-8",
     )
@@ -421,13 +431,12 @@ def test_a_rule_in_a_javascript_string_in_the_chrome_script_is_found(core: Path)
     original = file.read_text(encoding="utf-8")
     assert_clean(core)
     file.write_text(
-        original + '\nvar ZZ = ".govuk-header, .zz { display: none; }";\n// .govuk-footer { x: y }\n',
+        original
+        + '\nvar ZZ = ".govuk-header, .zz { display: none; }";\n// .govuk-footer { x: y }\n',
         encoding="utf-8",
     )
     result = judged(core)
-    assert triples(result.new) == [
-        ("harness/govuk_chrome.js", ".govuk-header, .zz", "string-rule")
-    ]
+    assert triples(result.new) == [("harness/govuk_chrome.js", ".govuk-header, .zz", "string-rule")]
     file.write_text(original, encoding="utf-8")
     assert_clean(core)
 
@@ -455,12 +464,18 @@ def test_one_theme_name_in_a_selector_list_makes_the_whole_rule_a_theme_rule() -
 
 
 def test_a_rule_in_a_media_block_is_found_and_keyed_with_its_condition() -> None:
-    css = '@media (max-width: 640px) { [data-brand="govuk"] { --govuk-gutter: 15px; } .a { margin: 0; } }'
+    css = (
+        "@media (max-width: 640px) "
+        '{ [data-brand="govuk"] { --govuk-gutter: 15px; } .a { margin: 0; } }'
+    )
     assert found_in(css) == [('@media (max-width: 640px) :: [data-brand="govuk"]', "rule")]
 
 
 def test_a_modifier_class_and_a_govuk_package_class_are_theme_names() -> None:
-    css = ".admin-nav--govuk { width: 1px; } .govuk-places__item { margin: 0; } .osprey-govuk-top { margin: 0; }"
+    css = (
+        ".admin-nav--govuk { width: 1px; } .govuk-places__item { margin: 0; } "
+        ".osprey-govuk-top { margin: 0; }"
+    )
     assert [k for k, _ in found_in(css)] == [
         ".admin-nav--govuk",
         ".govuk-places__item",
@@ -484,6 +499,19 @@ def test_a_font_naming_gds_transport_in_a_shared_rule_is_found() -> None:
 def test_a_word_in_a_value_or_a_comment_is_not_a_theme_rule() -> None:
     css = '/* govuk */ .a { content: "govuk"; background: url(/x/govuk.png); }'
     assert found_in(css) == []
+    assert found_in('.a::after { content: "--govuk-gutter"; }') == []
+
+
+def test_a_style_block_in_a_template_is_read_as_a_stylesheet(core: Path) -> None:
+    plant(
+        core,
+        "apps/pages/tree-default/zz_plant.njk",
+        '{% extends "layout.njk" %}\n<style>\n[data-brand="govuk"] .zz { margin: 0; }\n</style>\n'
+        '<p>[data-brand="govuk"] .not-a-rule { margin: 0; }</p>\n',
+    )
+    assert triples(judged(core).new) == [
+        ("apps/pages/tree-default/zz_plant.njk", '[data-brand="govuk"] .zz', "rule")
+    ]
 
 
 def test_nested_rules_inside_a_theme_rule_are_one_rule_and_inside_another_are_found() -> None:
