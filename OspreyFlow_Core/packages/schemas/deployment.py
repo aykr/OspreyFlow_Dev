@@ -2148,7 +2148,8 @@ class OspreyConfig(BaseModel):
         `False`, so a `pages` section the operator never wrote would appear in every rendered
         file. It is dumped only when the file named it (as `AppearanceConfig.told()` does for
         `banner_text`); `config.pages.enabled` still reads `False` when it is absent."""
-        dumped = handler(self)
+        # pydantic types the wrapped handler's answer as `Any`; it is the dict the plain dump makes.
+        dumped: dict[str, object] = handler(self)
         if "pages" not in self.model_fields_set:
             dumped.pop("pages", None)
         return dumped
