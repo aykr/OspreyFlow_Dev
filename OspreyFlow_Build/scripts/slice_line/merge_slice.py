@@ -909,7 +909,7 @@ def merge(slice_id: str) -> dict:
     rec = c.rec_dir(slice_id)
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
     try:
-        base = main_ready()
+        base = main_ready(records=True)  # 9: the conductor's uncommitted records do not hold a merge (below)
         note(watch_github())  # 1c: a test of ours red twice stops merging
         github_stop()
         github = github_at_merge()  # a record, never a decision (1a: GitHub is a second opinion, not a gate)
@@ -930,6 +930,12 @@ def merge(slice_id: str) -> dict:
         bad = [p for p in touched if p.startswith(PROTECTED_PREFIXES)]
         if bad:
             raise Refused("the branch touches protected paths: " + ", ".join(bad[:8]))
+        dirty = [ln[3:] for ln in c.git(["status", "--porcelain", "--untracked-files=no"], c.REPO).splitlines()
+                 if not ln[3:].startswith(OWNERS_LOCAL)]
+        both = sorted(set(dirty) & set(touched))
+        if both:  # 9: main's fast-forward would meet them: commit them (records) first
+            raise Refused("the main checkout has uncommitted changes to files the branch changes: " + ", ".join(both[:5])
+                          + ". Commit them with merge_slice.py records (or set them aside), then merge.")
 
         # 5. red before the slice: the base, with only the slice's acceptance files from the tip
         before = temp_tree(base, f"{slice_id}-before")
@@ -1284,6 +1290,19 @@ def apply_approved(name: str, wait: float = 120) -> str:
         fh.close()
 
 
+def wait_idle(minutes: float) -> str:
+    """Wait until no merge runs (LINE_FIXES_5_BRIEF.md, 9: a wait that polled `pgrep -f 'merge_slice.py merge'` matched its
+    own command line). The merge lock itself is the answer: free is idle. Refused after `minutes`."""
+    end = time.time() + minutes * 60
+    while True:
+        busy = merging()
+        if busy is None:
+            return "no merge is running."
+        if time.time() >= end:
+            raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes.")
+        time.sleep(WAIT_POLL_SECONDS)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1294,6 +1313,8 @@ def main() -> int:
     r.add_argument("paths", nargs="+")
     sub.add_parser("push-pending")
     sub.add_parser("watch-github")
+    wi = sub.add_parser("wait-idle")
+    wi.add_argument("--minutes", type=float, default=120)
     ad = sub.add_parser("approve-diff")
     ad.add_argument("name")
     ad.add_argument("hash8")
@@ -1309,6 +1330,8 @@ def main() -> int:
             print(push_pending())
         elif a.cmd == "watch-github":
             print(watch_github())
+        elif a.cmd == "wait-idle":
+            print(wait_idle(a.minutes))
         elif a.cmd == "approve-diff":
             print(approve_diff(a.name, a.hash8))
         elif a.cmd == "apply-approved":

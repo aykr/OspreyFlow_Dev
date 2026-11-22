@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (486 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (376 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (492 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (380 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -254,6 +254,7 @@ says that cost is a list-price estimate, not a bill.
 - **The owner's line is in** (7): a stopped or refused slice with an unapplied resume.tsv line that answers its stop shows "the owner's line is in: <action> (<date>), waiting to be applied" (the board's row, the entry's note and `owner_line`); it goes when the line is used.
 - **Found on 21 November** (8): `records` ignores a slices.tsv change an unapplied refreeze line covers (and leaves slices.tsv to the refreeze), and the refreeze leaves other uncommitted briefs under slices/ alone; `clear-stop` is refused while a refreeze line waits; `add-round` on a slice refused by the gate names `send-back`; the guard reads a chain's line-script runs and simple variables apart (and refuses a write into a variable it cannot resolve).
 - **The run's one date** (9): the line's suite takes today's date once (`TEST_TODAY`), and the scripts it runs read that date, so a run that crosses 00:00 UTC no longer writes yesterday's line and reads today's.
+- **The night's faults** (9): a merge is no longer held by the conductor's own uncommitted records (an uncommitted file the branch changes, or anything else uncommitted outside the records folder, still refuses, before the gate); `merge_slice.py wait-idle [--minutes N]` waits on the merge lock itself (no `pgrep` that matches its own command line).
 
 ## Files outside the repository
 

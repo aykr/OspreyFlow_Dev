@@ -409,6 +409,11 @@ M = [
  ("guard.py", '            if left:\n', '            if False:\n', "same_shapes_writing_elsewhere"),
  # LINE_FIXES_5_BRIEF.md, 9: the run's one date
  ("tests/test_gates.py", '    day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))\n', '', "the_run_has_one_date"),
+ # LINE_FIXES_5_BRIEF.md, 9: the night's faults (the dirty checkout, wait-idle)
+ ("merge_slice.py", '        base = main_ready(records=True)  # 9:', '        base = main_ready()  # 9:', "uncommitted_records_do_not_hold_a_merge"),
+ ("merge_slice.py", '        if both:  # 9:', '        if False:  # 9:', "branch_changes_still_refuses_before_the_gate"),
+ ("merge_slice.py", '        if busy is None:\n            return "no merge is running."', '        if True:\n            return "no merge is running."', "wait_idle_returns_when_the_merge_ends"),
+ ("merge_slice.py", '        if time.time() >= end:\n            raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes.")', '        if False:\n            raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes.")', "wait_idle_says_which_merge_still_runs"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
