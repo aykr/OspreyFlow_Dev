@@ -145,6 +145,10 @@ class DashboardIdentity(BaseModel):
     last_failure: str | None = None
     failed_at: datetime | None = None
     cases_pulled: int = 0
+    #: The identity's removal is under way: it was stamped in the Admin and the identity provider
+    #: has not yet finished deleting it, so the four figures above are left out (they would be
+    #: worked out from rows the stamp hides). Removing it again finishes it.
+    removal_pending: bool = False
 
 
 class RegisteredDashboard(BaseModel):
@@ -637,10 +641,20 @@ class TeamCoverInput(BaseModel):
 
 
 OwnedKind = Literal[
-    "case_author", "home_case_author", "team_lead", "hotlist", "monitor", "saved_pattern",
-    "typology_rule", "pipeline_schedule", "list_schedule",
+    "case_author",
+    "home_case_author",
+    "team_lead",
+    "hotlist",
+    "monitor",
+    "saved_pattern",
+    "typology_rule",
+    "pipeline_schedule",
+    "list_schedule",
     # L2.5b: the kinds L3.8's ownership route reads (`person_ownership.py`, ADR-145 Amendment 8).
-    "view", "board", "link_type_proposal", "drawn_watch",
+    "view",
+    "board",
+    "link_type_proposal",
+    "drawn_watch",
 ]
 
 

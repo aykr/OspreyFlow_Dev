@@ -15,8 +15,8 @@ from datetime import UTC, datetime
 
 import pytest
 from services.api.config import PostgresConfig
-from services.api.report_freshness import ReportFreshness
-from services.report_sync.mart import Mart
+from services.api.report_freshness import Freshness, ReportFreshness
+from services.report_sync.mart import CONTROL_SCHEMA, Mart
 
 from conduit_common.identity import new_id
 
@@ -32,6 +32,21 @@ async def pair() -> AsyncIterator[tuple[Mart, ReportFreshness]]:
     await freshness.close()
     await mart.drop()
     await mart.close()
+
+
+@pytest.fixture
+async def removals(pair: tuple[Mart, ReportFreshness]) -> AsyncIterator[list[str]]:
+    """The removal record is shared by every mart schema (its own schema, which `Mart.drop` leaves in
+    place), so a test that stamps a dashboard takes its stamp away again, whether it passes or not;
+    otherwise the next run's writes of the same name are refused and every schema's list shows it."""
+    mart, _ = pair
+    stamped: list[str] = []
+    yield stamped
+    async with mart._pool.acquire() as conn:  # noqa: SLF001
+        await conn.execute(
+            f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = ANY($1::text[])",
+            stamped,
+        )
 
 
 async def test_each_dashboard_is_counted_on_its_own(pair: tuple[Mart, ReportFreshness]) -> None:
@@ -64,3 +79,25 @@ async def test_no_mart_means_never_pulled_not_an_error() -> None:
         assert await freshness.by_dashboard() == {}
     finally:
         await freshness.close()
+
+
+async def test_a_stamped_dashboard_has_no_figures_in_the_list_and_is_pending(
+    pair: tuple[Mart, ReportFreshness], removals: list[str]
+) -> None:
+    """Round 9 against the real query: the Conduit connects as the tables' owner, which row security
+    does not bind, so the stamp must be asked in the query itself. The pure model of this is
+    `test_removed_identity_mart_rows.py`; this runs it on a real Postgres (a live file). The names
+    are made per run and the stamp is taken away afterwards (the `removals` fixture), because the
+    removal record outlives the test's own schema."""
+    mart, freshness = pair
+    gone, kept = f"osprey-dashboard-{new_id().lower()}", f"osprey-dashboard-{new_id().lower()}"
+    when = datetime(2026, 10, 11, 9, tzinfo=UTC)
+    await mart.replace(gone, "case-1", "One", 12, ROW, when)
+    await mart.record_failure(gone, "case-2", "the feed was refused (403)", when)
+    await mart.replace(kept, "case-1", "One", 12, ROW, when)
+    removals.append(gone)
+    assert await freshness.stamp(gone)
+    seen = await freshness.by_dashboard()
+    assert seen[gone] == Freshness(removal_pending=True)
+    assert (seen[kept].cases_pulled, seen[kept].last_pulled) == (1, when)
+    assert seen[kept].removal_pending is False

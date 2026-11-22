@@ -10,6 +10,7 @@ export type LastPulled = string | null;
 export type LastFailure = string | null;
 export type FailedAt = string | null;
 export type CasesPulled = number;
+export type RemovalPending = boolean;
 export type Secret = string | null;
 
 export interface RegisteredDashboard {
@@ -28,5 +29,6 @@ export interface DashboardIdentity {
   last_failure?: LastFailure;
   failed_at?: FailedAt;
   cases_pulled?: CasesPulled;
+  removal_pending?: RemovalPending;
   [k: string]: unknown;
 }
