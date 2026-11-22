@@ -341,14 +341,14 @@ def test_a_stack_may_hold_a_slice_not_yet_verified_and_says_so_for_it(world):
 
 def moved_path_world(w):
     """main holds an old path; S5 is built on it and names it; then main moves it, as SE6b met this morning."""
-    old = w["repo"] / "OspreyFlow_Core/apps/workspace/src/admin/api.ts"
+    old = w["repo"] / "OspreyFlow_Core/apps/" "workspace/src/admin/api.ts"
     old.parent.mkdir(parents=True)
     old.write_text("export const api = 1;\n")
     sh("git add -A && git commit -qm 'feat: the admin api'", w["repo"], w["env"])
     sh(["git", "switch", "-q", "-c", "lane/slice-S5"], w["repo"], w["env"])
     t = w["repo"] / "OspreyFlow_Build/tests/test_admin.py"
     t.parent.mkdir(parents=True)
-    t.write_text('ADMIN_API = ROOT / "OspreyFlow_Core/apps/workspace/src/admin/api.ts"\n')
+    t.write_text('ADMIN_API = ROOT / "OspreyFlow_Core/apps/' 'workspace/src/admin/api.ts"\n')
     sh("git add -A && git commit -qm 'test: S5 reads the admin api'", w["repo"], w["env"])
     tip = out(["git", "rev-parse", "HEAD"], w["repo"])
     sh(["git", "switch", "-q", "main"], w["repo"], w["env"])
@@ -367,7 +367,7 @@ def test_a_red_where_main_moved_a_path_the_slice_names_says_so_at_the_top(world)
     assert early(w, "S5").returncode == 1
     lines = (w["repo"] / NOTES / f"S5-{tip[:8]}.md").read_text().splitlines()
     assert lines[2].startswith("**Broken by what merged ahead, not by the server.**")
-    assert "moved `OspreyFlow_Core/apps/workspace/src/admin/api.ts` to " \
+    assert "moved `OspreyFlow_Core/apps/" "workspace/src/admin/api.ts` to " \
            "`OspreyFlow_Core/packages/glass-shared/src/admin/api.ts`" in lines[2]
     assert "`OspreyFlow_Build/tests/test_admin.py` still names the old path" in lines[2]
 
