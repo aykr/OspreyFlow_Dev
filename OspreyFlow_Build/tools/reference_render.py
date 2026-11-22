@@ -158,7 +158,7 @@ def render_files(config: Any, *, render_fn: Callable[..., Any] | None = None) ->
     rendered one; the secrets `apply` appends to it are minted after the render and are not here.
     `osprey.yaml` (the input, copied) and `.rendered` (the list of the files) are not rendered
     content and are not stored."""
-    from harness.keycloak_theme import login_theme_options, read_tokens, render_login_theme
+    import harness.keycloak_theme as keycloak_theme
     from harness.realm import render_realm_json
     from harness.render import render, render_litellm_config
 
@@ -170,7 +170,11 @@ def render_files(config: Any, *, render_fn: Callable[..., Any] | None = None) ->
         if config.profile in (Profile.LOCAL_LITE, Profile.SMALL):
             files["realm.json"] = render_realm_json(config, demo_analyst=False).encode("utf-8")
             files["litellm.yaml"] = render_litellm_config(config).encode("utf-8")
-            theme = render_login_theme(read_tokens(), **login_theme_options(config))
+            # Through the module, inside the block: `pinned_inputs` patches the module's attribute,
+            # and a name imported before it would still be the real function (the real tokens).
+            theme = keycloak_theme.render_login_theme(
+                keycloak_theme.read_tokens(), **keycloak_theme.login_theme_options(config)
+            )
             for name, text in theme.items():
                 files[f"keycloak-theme/osprey/{name}"] = text.encode("utf-8")
     return dict(sorted(files.items()))
@@ -380,15 +384,21 @@ def main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--write", action="store_true", help="rewrite the reference from a render")
     mode.add_argument("--check", action="store_true", help="list what differs; exit 1 if any")
+    parser.add_argument(
+        "--reference",
+        type=Path,
+        default=REFERENCE,
+        help="the folder to write or compare (default: tests/fixtures/reference_render)",
+    )
     args = parser.parse_args(argv)
     if args.write:
-        written = write_reference()
-        print(f"reference_render: wrote {len(written)} files under {REFERENCE}")
+        written = write_reference(args.reference)
+        print(f"reference_render: wrote {len(written)} files under {args.reference}")
         return 0
     found = [
         line
         for shape, brand in all_folders()
-        for line in differences(shape, brand, render_shape(shape, brand))
+        for line in differences(shape, brand, render_shape(shape, brand), args.reference)
     ]
     for line in found:
         print(line)

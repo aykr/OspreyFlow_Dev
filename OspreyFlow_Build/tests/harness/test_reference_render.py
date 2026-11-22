@@ -58,7 +58,9 @@ is what the owner reads):
 **What this test reads.** The folder `OspreyFlow_Build/tests/fixtures/reference_render/` (each
 shape's folder, by a recursion over those folders only), the cloud-platform fixtures
 `OspreyFlow_Build/tests/fixtures/cloud_platform/{development,poc}.yaml` (and the platform settings
-they name, through the renderer), and, by importing the renderers, `OspreyFlow_Core/harness/` and
+they name, through the renderer), the design tokens `OspreyFlow_Core/packages/design/tokens.css`
+(read once, to plant a change to them in a temporary copy, and to show no fixture holds them), and,
+by importing the renderers, `OspreyFlow_Core/harness/` and
 `OspreyFlow_Core/packages/schemas/`. It walks no other folder.
 """
 
@@ -391,11 +393,81 @@ def test_writing_the_reference_removes_a_file_a_shape_no_longer_writes(tmp_path:
     assert _tree(root) == _tree(REFERENCE)
 
 
-def test_the_check_command_reports_clean_and_names_a_difference(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_the_check_command_reports_clean(capsys: pytest.CaptureFixture[str]) -> None:
     assert ref.main(["--check"]) == 0
     assert "0 difference(s)" in capsys.readouterr().out
+
+
+def test_the_check_command_names_a_difference_and_exits_one(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`--check` on a reference that differs lists the file and the first differing line, and
+    returns 1 (the clean run above is the same command on the real reference, so the red is the
+    copy's)."""
+    copy = tmp_path / "reference"
+    shutil.copytree(REFERENCE, copy)
+    assert ref.main(["--check", "--reference", str(copy)]) == 0
+    capsys.readouterr()
+    target = copy / "local-lite-govuk" / "Caddyfile"
+    target.write_bytes(target.read_bytes() + b"handle /studio {\n}\n")
+    assert ref.main(["--check", "--reference", str(copy)]) == 1
+    out = capsys.readouterr().out
+    assert "local-lite-govuk/Caddyfile" in out, out
+    assert "first differing line" in out, out
+    assert "reference_render: 0 difference(s)" not in out, out
+
+
+# ---- the design tokens are pinned, in every shape ---------------------------------------------
+
+
+def _with_real_tokens_changed(root: Path) -> Any:
+    """The real token source changed on disk: the function both renderers call, read from a copy
+    of the tokens file with one more line (its default `repo_root` pointed at the copy)."""
+    from harness import keycloak_theme
+
+    source = keycloak_theme.REPO_ROOT / keycloak_theme.TOKENS_RELATIVE_PATH
+    target = root / keycloak_theme.TOKENS_RELATIVE_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(source.read_text(encoding="utf-8") + "\n:root { --n0: #123456; }\n")
+    return mock.patch.object(keycloak_theme.read_tokens, "__defaults__", (root,))
+
+
+def test_a_change_to_the_design_tokens_moves_no_fixture(tmp_path: Path) -> None:
+    """The tokens are the design package's business, not a deployment's shape: with the real
+    tokens changed, every shape (the compose shapes' sign-in theme and the cluster shapes' values)
+    still renders the reference. Shown red first: with the pinning removed, the same change moves a
+    compose shape and a cluster shape."""
+    from harness import keycloak_theme
+
+    original = keycloak_theme.read_tokens
+    with _with_real_tokens_changed(tmp_path):
+        assert "#123456" in original()
+        for shape, brand in SHAPE_BRANDS:
+            found = ref.differences(shape, brand, ref.render_shape(shape, brand))
+            assert not found, "a token change moved the reference:\n" + "\n".join(found)
+        # The plant: no pinning, so the changed tokens reach the render.
+        with mock.patch.object(ref, "pinned_inputs", contextlib.nullcontext):
+            for shape, brand in (("small", "govuk"), ("cluster", "govuk")):
+                red = ref.differences(shape, brand, ref.render_shape(shape, brand))
+                assert red, f"{shape}-{brand} did not move with the tokens unpinned"
+    # And clean again once the real source is back.
+    assert not ref.differences("small", "govuk", ref.render_shape("small", "govuk"))
+
+
+def test_no_stored_file_holds_the_real_tokens() -> None:
+    """The pinned marker is what every stored copy of the tokens carries, not the design package's
+    own file (the head of the real file is in none of them)."""
+    from harness import keycloak_theme
+
+    real_head = keycloak_theme.read_tokens().splitlines()[0]
+    assert real_head and real_head != ref.PINNED_TOKENS.splitlines()[0]
+    holders = [
+        f"{folder}/{path}"
+        for folder in ref.stored_folders()
+        for path, data in ref.read_folder(REFERENCE / folder).items()
+        if real_head.encode() in data
+    ]
+    assert not holders, f"stored files hold the real tokens: {holders}"
 
 
 # ---- the fixtures hold nothing they must not --------------------------------------------------
