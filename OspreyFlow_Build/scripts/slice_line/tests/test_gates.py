@@ -138,7 +138,11 @@ def world(tmp_path):
     dash = repo / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard"
     dash.mkdir(parents=True)
     (dash / "index.html").write_text('const N=[\n["BL1",9,1,"None","x",[],""],\n["CO1",6,1,"None","y",["BL2"],""]\n];')
-    sh("git init -q -b main && git add -A && git commit -q -m init", repo, env)
+    # The world's own git identity, in its repository's config (every worktree shares it): no git command a test runs,
+    # with the world's environment or without it, reaches the machine's configuration (the owner's file 006: GitHub's
+    # runner has no identity, and a commit run without the world's environment failed there).
+    sh("git init -q -b main && git config user.name t && git config user.email t@t.invalid && "
+       "git config commit.gpgsign false && git config tag.gpgsign false && git add -A && git commit -q -m init", repo, env)
     sh(["git", "remote", "add", "origin", str(origin)], repo, env)
     sh("git push -q origin main", repo, env)
     (data / "origin.url").write_text(str(origin) + "\n")

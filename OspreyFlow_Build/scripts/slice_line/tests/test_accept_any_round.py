@@ -85,7 +85,7 @@ def test_the_owners_accept_is_refused_when_the_builder_committed_after_the_verif
     w = world
     wt, tip = stopped_with_findings(w, round_=1, limit=3)
     (wt / "OspreyFlow_Build/round2.txt").write_text("round 2\n")
-    sh("git add -A && git commit -qm 'round 2'", wt)
+    sh("git add -A && git commit -qm 'round 2'", wt, w["env"])
     owner_line(w, f"S1\taccept\t{TODAY}")
     before = snapshot(w)
     p = resume(w)

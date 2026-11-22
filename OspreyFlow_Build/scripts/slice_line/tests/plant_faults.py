@@ -464,6 +464,9 @@ M = [
  # the owner's file 008, line fault 17: a refusal on the merge result (step 4) is recorded, so send-back works
  ("merge_slice.py", "                refuse_to_builder(slice_id, tip, f\"the slice's {name} was red on the merge result\"", "                (lambda *a: None)(slice_id, tip, f\"the slice's {name} was red on the merge result\"", "red_on_the_merge_result_is_recorded"),
  ("merge_slice.py", "                if not names:\n                    findings = [{\"file\": \"\", \"what\": f\"The slice's {name} command", "                if False:\n                    findings = [{\"file\": \"\", \"what\": f\"The slice's {name} command", "red_on_the_merge_result_is_recorded"),
+ # the owner's file 006 (line fault 12): the suite never depends on the machine's git configuration
+ ("tests/test_gates.py", 'git config user.name t && git config user.email t@t.invalid && ', '', "world_commits_with_its_own_identity"),
+ ("tests/conftest.py", '"GIT_CONFIG_VALUE_0": "true"', '"GIT_CONFIG_VALUE_0": "false"', "suite_runs_as_on_a_machine"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
