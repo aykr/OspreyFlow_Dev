@@ -1,0 +1,64 @@
+{
+  "files": [
+    {
+      "path": "images.yaml",
+      "sha256": "c11397a353a03b2f025270702699a9aa5210afbad71ca88cd96a574b9f73eeda",
+      "size": 1874
+    },
+    {
+      "path": "terraform/backups.tf",
+      "sha256": "34b4b57dba9d075560cc8adf3a7f88cdfb53f562a293198dd70078dfc1e44fa8",
+      "size": 10681
+    },
+    {
+      "path": "terraform/ecr.tf",
+      "sha256": "f27b23b3bcd98c75d753b29ae2c942702de3edab02711a60fdacc631970e886a",
+      "size": 717
+    },
+    {
+      "path": "terraform/elasticache.tf",
+      "sha256": "e65678f02930a4e9cac8e5aed7903bbc667825e1336453d8b6145e9c5ce19dce",
+      "size": 1540
+    },
+    {
+      "path": "terraform/irsa.tf",
+      "sha256": "ed5e1b0d53325b8aef056abee25b28beebb982b58bdfedfddf88575b8e7b3f29",
+      "size": 1675
+    },
+    {
+      "path": "terraform/opensearch.tf",
+      "sha256": "1e0001f9bb8400a44f1a27b4f2a66264564974d87428b5e51ac40fe749a55ddb",
+      "size": 1975
+    },
+    {
+      "path": "terraform/rds.tf",
+      "sha256": "04575c9a4992bd24cb00fe0ce88aaba8f03aa7caa04a3f388202ee2ac96e8757",
+      "size": 2396
+    },
+    {
+      "path": "terraform/s3.tf",
+      "sha256": "acf852f24004b53c074f3f69f1ec244960eb91012d6b2ecbf52ce648ed0c9289",
+      "size": 1359
+    },
+    {
+      "path": "terraform/secrets.tf",
+      "sha256": "d35d3c3a1583ec735bb345979b555ee8af93d1ee6cc465119f8ad322c9bf2fb2",
+      "size": 1770
+    },
+    {
+      "path": "terraform/variables.tf",
+      "sha256": "71336cd27c8902a383c2bbbef4cccd00405541cda188be21ce1ee53b41b31174",
+      "size": 712
+    },
+    {
+      "path": "values.yaml",
+      "sha256": "999df793451ef2d7d1818a0b2f989fd8135022792ec8eca9fff0bdf52b857c77",
+      "size": 39868
+    },
+    {
+      "path": "versions.lock",
+      "sha256": "4b8d75705c731ce669c6cf2a261a6b6c7abe3b0ccfb5981bd5782e0f99df1af9",
+      "size": 2252
+    }
+  ]
+}

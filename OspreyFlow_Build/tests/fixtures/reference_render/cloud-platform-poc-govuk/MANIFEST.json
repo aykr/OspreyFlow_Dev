@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "path": "DECOMMISSION.md",
+      "sha256": "fb233bbd184462423491e7f88192a995a2e31dfab7901573b5de01adadcb33cb",
+      "size": 20040
+    },
+    {
+      "path": "INSTALL.md",
+      "sha256": "06d2676cb085d7a1b13ca7a0a78918bccc31727c243a42d7eb4697d7acee1886",
+      "size": 19619
+    },
+    {
+      "path": "images.yaml",
+      "sha256": "b0d8c947dc161677fca6a9481e1069e3dbc9df39d91ba8676c3cfec54016dd58",
+      "size": 1861
+    },
+    {
+      "path": "terraform/backups.tf",
+      "sha256": "34b4b57dba9d075560cc8adf3a7f88cdfb53f562a293198dd70078dfc1e44fa8",
+      "size": 10681
+    },
+    {
+      "path": "terraform/ecr.tf",
+      "sha256": "e35c7999c5ccb0985919c3c7fc0dd58fdbd9d93eea03ba55b6ee1e0e79b21d08",
+      "size": 707
+    },
+    {
+      "path": "terraform/elasticache.tf",
+      "sha256": "e65678f02930a4e9cac8e5aed7903bbc667825e1336453d8b6145e9c5ce19dce",
+      "size": 1540
+    },
+    {
+      "path": "terraform/irsa.tf",
+      "sha256": "ed5e1b0d53325b8aef056abee25b28beebb982b58bdfedfddf88575b8e7b3f29",
+      "size": 1675
+    },
+    {
+      "path": "terraform/opensearch.tf",
+      "sha256": "1e0001f9bb8400a44f1a27b4f2a66264564974d87428b5e51ac40fe749a55ddb",
+      "size": 1975
+    },
+    {
+      "path": "terraform/rds.tf",
+      "sha256": "04575c9a4992bd24cb00fe0ce88aaba8f03aa7caa04a3f388202ee2ac96e8757",
+      "size": 2396
+    },
+    {
+      "path": "terraform/s3.tf",
+      "sha256": "acf852f24004b53c074f3f69f1ec244960eb91012d6b2ecbf52ce648ed0c9289",
+      "size": 1359
+    },
+    {
+      "path": "terraform/secrets.tf",
+      "sha256": "d35d3c3a1583ec735bb345979b555ee8af93d1ee6cc465119f8ad322c9bf2fb2",
+      "size": 1770
+    },
+    {
+      "path": "terraform/variables.tf",
+      "sha256": "e11206bd0ef3af40b36e117e697f94c630ccb8e68e4920ec6350785988636528",
+      "size": 712
+    },
+    {
+      "path": "values.yaml",
+      "sha256": "bfe63ddb7100730f9a0cdc0b74c83b2f5a10d3443239c7b8b343340cd5bf938c",
+      "size": 41278
+    },
+    {
+      "path": "versions.lock",
+      "sha256": "4706546bc75ee09843935fb2b1e32d8eb7e8f9c85b4980fb93e055c0b96c1d9f",
+      "size": 2308
+    }
+  ]
+}

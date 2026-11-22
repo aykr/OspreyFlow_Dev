@@ -1,0 +1,14 @@
+{
+  "files": [
+    {
+      "path": "values.yaml",
+      "sha256": "62de0242ed7c23672300772094cb165d8d5091fbddef09f7ca8afd7e62db2f4a",
+      "size": 73208
+    },
+    {
+      "path": "versions.lock",
+      "sha256": "4cc1691109b4dd92a67f984b7739a010b46afe97a922cf83aae0ed3e2c3e1248",
+      "size": 3723
+    }
+  ]
+}

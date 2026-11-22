@@ -321,15 +321,18 @@ def _prune_empty(folder: Path) -> None:
 
 #: A string shaped like a credential, in the shapes the renderers could emit one: a provider key, a
 #: bearer token, a private key block, a cloud access key, and a secret-named setting given a literal
-#: value (a reference to a variable, `''`, or a Terraform `random_password` is the right shape).
+#: value (a reference to a variable by `${...}` or by its ALL-CAPS name, `''`, or a Terraform
+#: `random_password` is the right shape).
 _SECRET_SHAPES = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{16,}"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(
-        r"(?i)\b[A-Z_]*(?:PASSWORD|SECRET|TOKEN)[A-Z_]*\s*[:=]\s*['\"]?"
-        r"(?![$'\"\s]|random_password|OSPREY_|http|true|false)[^\s'\"]{8,}"
+        r"(?im)\b[A-Z_]*(?:PASSWORD|SECRET|TOKEN)[A-Z_]*\s*[:=]\s*['\"]?"
+        r"(?![$'\"\s]|random_password|OSPREY_|http|true|false)"
+        r"(?!(?-i:[A-Z][A-Z0-9_]*['\"]?[ \t]*$))"
+        r"[A-Za-z0-9+/_=-]{8,}['\"]?[ \t]*$"
     ),
 )
 #: The one address-shaped string the product's own sign-in script carries as a placeholder.

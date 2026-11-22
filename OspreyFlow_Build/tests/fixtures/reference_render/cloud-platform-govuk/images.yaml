@@ -1,0 +1,32 @@
+# What `ospreyflow images push --registry` copies (ADR-148 decision 8).
+registry: 123456789012.dkr.ecr.eu-west-2.amazonaws.com
+images:
+- source: arcadedata/arcadedb:26.10.1@sha256:18617b571058d689f329df7d77595fdccfb1ef613e5fc3a183184b2982636560
+  target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/arcadedata/arcadedb:26.10.1
+- source: clickhouse/clickhouse-keeper:25.8.33.6@sha256:d7c644fb1da570a58f35edd6b2d4c11c4bc2772496bb8d079cd096e49854472c
+  target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-keeper:25.8.33.6
+- source: clickhouse/clickhouse-server:25.8.33.6@sha256:a61692d36a11c18ec07d6c2ce8fd9ba337b96f6d4acf4cf05f0218374677c596
+  target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/clickhouse/clickhouse-server:25.8.33.6
+- target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/api:0123456789abcdef0123456789abcdef01234567
+  dockerfile: services/api/Dockerfile
+  context: .
+  build_args:
+    CONDUIT_JAVA: omitted
+- target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/litellm:0123456789abcdef0123456789abcdef01234567
+  dockerfile: deploy/litellm/Dockerfile
+  context: deploy/litellm
+  build_args: {}
+- target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/ner:0123456789abcdef0123456789abcdef01234567
+  dockerfile: services/ner/Dockerfile
+  context: .
+  build_args: {}
+- target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/worker:0123456789abcdef0123456789abcdef01234567
+  dockerfile: services/worker/Dockerfile
+  context: .
+  build_args: {}
+- target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/ospreyflow/workspace:0123456789abcdef0123456789abcdef01234567
+  dockerfile: apps/workspace/Dockerfile
+  context: .
+  build_args: {}
+- source: postgres:16.4@sha256:96d71e7844cd87255fe8cd99e2f2fa95579cde47435ef6d970b3339093b661b2
+  target: 123456789012.dkr.ecr.eu-west-2.amazonaws.com/postgres:16.4

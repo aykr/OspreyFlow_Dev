@@ -1,0 +1,466 @@
+@import url("/assets/govuk/govuk-frontend.css");
+/* OspreyFlow design tokens.
+   Extracted verbatim from OspreyFlow_Brand_Foundations v0.1.
+   Authoritative. Do not introduce a colour that is not defined here.
+
+   Rules that the tokens alone do not express:
+   - Hue encodes entity type. Every channel is paired with a shape, so hue never
+     carries a distinction on its own.
+   - Provenance is carried by stroke, not colour, so it composes with all nine channels:
+     asserted = 1px solid border-strong; inferred = 1.5px dashed 4 3, channel colour;
+     unresolved = 1.5px dotted 1 3, channel colour (DESIGN.md v0.3 §3.8).
+   - State is an oklab mix toward the panel surface: dimmed 32%, filtered out 12%.
+   - Hairline or shadow, never both. Docked panels get a hairline; overlays get a shadow.
+   - Brass is struck out of the data palette permanently. It is the accent, not a channel.
+   - Tritanopia separation is a known limit at nine hues. Shape and label pairing is the
+     recorded mitigation; it is not optional.
+*/
+
+:root {
+  /* Neutral ramp — dark theme, the working default */
+  --n0:#090d0e;  --n1:#101314;  --n2:#161a1b;  --n3:#202425;
+  --n4:#2b2f30;  --n5:#3a3e3f;  --n6:#4d5051;  --n7:#66696a;
+  --n8:#848788;  --n9:#a2a5a6;  --n10:#c1c5c6; --n11:#e8eced;
+
+  --surface-sunken:var(--n0);
+  --surface-app:var(--n1);
+  --surface-panel:var(--n2);
+  --surface-raised:var(--n3);
+  --surface-hover:var(--n4);
+  /* A menu item's hover/focus: one step further up the ramp than --surface-hover, because a menu
+     item already sits on --surface-raised (n3) and n3→n4 was imperceptible (the owner, 9 October
+     2026: "the options I am hovering over do not highlight"). */
+  --surface-menu-hover:var(--n5);
+
+  --border-subtle:var(--n5);
+  --border:var(--n6);
+  --border-strong:var(--n7);
+
+  --text-disabled:var(--n8);
+  --text-tertiary:var(--n9);
+  --text-secondary:var(--n10);
+  --text-primary:var(--n11);
+
+  /* Accent — one only */
+  --brass:#c08a34;
+  --brass-hover:#d49c44;
+  --brass-press:#a97427;
+  --brass-ink:#141517;
+
+  /* Semantic */
+  --error:#e2695f;
+  --warning:#d9a63f;
+  --success:#6bab7e;
+
+  /* Data palette — nine categorical channels.
+     Channel-to-entity assignment is per deployment, set in the ontology. */
+  --ch-ochre:#b34917;   /* default: Location   · shape pin      */
+  --ch-rose:#b74b5e;    /* default: Asset      · shape diamond  */
+  --ch-plum:#916384;    /* default: Device     · shape square   */
+  --ch-violet:#8364a6;  /* default: Document   · shape page     */
+  --ch-indigo:#677bd6;  /* default: Person     · shape circle   */
+  --ch-azure:#61b1e6;   /* default: Organisation · shape square */
+  --ch-cyan:#35b9c0;    /* default: Endpoint   · shape hexagon  */
+  --ch-jade:#72b99a;    /* default: Vehicle    · shape triangle */
+  --ch-moss:#90b667;    /* default: Event      · shape diamond  */
+
+  /* Chart palette — one set for both themes (the owner's ruling of 12 October 2026, ADR-111
+     Amendment 4). A dashboard's chart keeps its series colours whichever mode it is shown in, so
+     these are the nine channels moved into the lightness band that reads on both panels: each holds
+     at least 3.1:1 against the dark panel (n2) and the light panel, keeps its channel's hue within
+     a few degrees and its chroma near the brand's, and the set separates further than either
+     per-theme set under normal vision and simulated deutan, protan and tritan vision. Not redefined
+     in the light theme's block: it is the same in both. Brass is not among them. */
+  --chart-ochre:#ac4a06;  --chart-rose:#ba3457;   --chart-plum:#b16ca6;
+  --chart-violet:#804dc3; --chart-indigo:#6574eb; --chart-azure:#2290c8;
+  --chart-cyan:#0a7376;   --chart-jade:#369974;   --chart-moss:#629136;
+
+  /* Sequential ramp — magnitude. Monotonic in lightness, survives greyscale print. */
+  --seq-1:#0a3537; --seq-2:#1d575a; --seq-3:#2d787c;
+  --seq-4:#3b999e; --seq-5:#4abbc1; --seq-6:#5de1e8;
+
+  /* Diverging ramp — signed change, on the warm-cool axis dichromats keep. */
+  --div-1:#b54e21; --div-2:#bf775b; --div-3:#c49e8f; --div-4:#828788;
+  --div-5:#8cadc4; --div-6:#4e94c3; --div-7:#0079b8;
+
+  --overlay-shadow:0 8px 24px -8px rgba(0,0,0,.7);
+
+  /* Focus (ADR-132): the ring every interactive element draws, read from tokens so a deployment
+     brand can replace it. Under the OspreyFlow brand it is the brass at 2px, 2px out (DESIGN.md §8). */
+  --focus:var(--brass);
+  --focus-width:2px;
+  --focus-offset:2px;
+
+  /* Type */
+  --ui:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,monospace;
+
+  --fs-40:40px; --lh-40:46px;  /* brand surfaces only, 700 */
+  --fs-30:30px; --lh-30:36px;  /* document headings, 700 */
+  --fs-23:23px; --lh-23:30px;  /* screen title, 700 */
+  --fs-19:19px; --lh-19:26px;  /* section heading, 600 */
+  --fs-16:16px; --lh-16:22px;  /* panel title, 600 */
+  --fs-14:14px; --lh-14:20px;  /* panel body, 400 */
+  --fs-13:13px; --lh-13:18px;  /* UI base — controls, rows, 400 */
+  --fs-12:12px; --lh-12:16px;  /* table header, secondary label, 600 */
+  --fs-11:11px; --lh-11:14px;  /* dense meta, axis ticks, 400 */
+
+  /* Spacing — 4 to 6 inside a control, 8 to 12 between related controls,
+     20 to 24 between groups, 32 to 40 between regions. Floor is 3px. */
+  --sp-2:2px;  --sp-4:4px;  --sp-6:6px;  --sp-8:8px;   --sp-12:12px; --sp-16:16px;
+  --sp-20:20px; --sp-24:24px; --sp-32:32px; --sp-40:40px; --sp-56:56px;
+
+  /* Radii */
+  --r-canvas:0;      /* canvas, cells   */
+  --r-control:2px;   /* controls        */
+  --r-panel:4px;     /* panels          */
+  --r-overlay:6px;   /* overlays        */
+  --r-chip:999px;    /* status chips    */
+  /* The same radii under DESIGN.md §5's names (ADR-115 E1). */
+  --r-0:var(--r-canvas); --r-1:var(--r-control); --r-2:var(--r-panel); --r-3:var(--r-overlay); --r-pill:var(--r-chip);
+
+  /* Layout dimensions (DESIGN.md v0.3 §5a). A size not listed there is drift. */
+  --h-marking:20px;
+  --h-top-bar:44px;            /* the workspace            */
+  --h-top-bar-page:48px;       /* the welcome page and Home */
+  --w-rail:48px; --h-rail-button:36px;
+  --h-canvas-toolbar:36px;
+  --w-right-panel:340px; --w-right-panel-min:300px; --w-right-panel-max:480px; --h-panel-tabs:36px;
+  --h-timeline:34px; --h-timeline-plot:96px; --w-inspector-key:96px;
+  --h-status-bar:26px;
+  --w-welcome-panel:320px; --w-welcome-panel-narrow:280px;
+  --w-sign-in-card:360px; --w-sign-in-card-min:300px;
+  /* Control heights: 24 a toolbar toggle, 26 a toolbar control, 28 the selection bar and zoom, 30 the
+     top bar, 32 a text input, 34 a secondary full-width button, 36 a primary full-width button. */
+  --h-control-24:24px; --h-control-26:26px; --h-control-28:28px; --h-control-30:30px;
+  --h-control-32:32px; --h-control-34:34px; --h-control-36:36px;
+  /* The canvas grid's line (DESIGN.md §9 exception 4): border-subtle mixed to 40% toward transparent. */
+  --grid-line:color-mix(in oklab, var(--border-subtle) 40%, transparent);
+
+  /* Motion — spent on one thing: keeping track of where a node went. */
+  --dur-fast:90ms;    /* control state change                    */
+  --dur-base:140ms;   /* menu, tooltip, toast                    */
+  --dur-panel:180ms;  /* drawer and panel open                   */
+  --dur-graph:420ms;  /* graph re-layout, position interpolation */
+  --ease:cubic-bezier(.2,0,.3,1);        /* everything except the canvas */
+  --ease-graph:cubic-bezier(.25,.1,.25,1); /* node position only        */
+}
+
+/* Light theme — a separately tuned ramp, not an inversion.
+   Exists for screenshots pasted into reports and for print.
+   Exports destined for an intelligence product should default to this. */
+[data-theme="light"] {
+  --n0:#ffffff;  --n1:#f7fbfc;  --n2:#f1f4f5;  --n3:#e8eced;
+  --n4:#dde0e1;  --n5:#ced2d2;  --n6:#bbbebf;  --n7:#a2a5a6;
+  --n8:#a2a5a6;  --n9:#66696a;  --n10:#4b4e4e; --n11:#191b1c;
+
+  --brass:#8a6318; --brass-hover:#6f4e10; --brass-press:#573c08; --brass-ink:#ffffff;
+  --error:#a82f22; --warning:#8f6410; --success:#2f6c4a;
+
+  --ch-ochre:#83330d; --ch-rose:#7e032c; --ch-plum:#632a55;
+  --ch-violet:#562182; --ch-indigo:#5367cb; --ch-azure:#3682b2;
+  --ch-cyan:#2b9095; --ch-jade:#2f8364; --ch-moss:#6c8c4a;
+
+  --seq-1:#cfebec; --seq-2:#a0ced0; --seq-3:#6eaeb2;
+  --seq-4:#358f94; --seq-5:#007177; --seq-6:#00535b;
+
+  --div-1:#a24112; --div-2:#b97155; --div-3:#caa090; --div-4:#d5d8d9;
+  --div-5:#8cb0ca; --div-6:#478ebc; --div-7:#006aaa;
+
+  --overlay-shadow:0 6px 20px -6px rgba(25,27,28,.18);
+}
+
+/* Deployment brand: GOV.UK (ADR-132, DESIGN.md §11). Chosen per deployment in osprey.yaml
+   (appearance.brand), never per viewer, and always shown light. GOV.UK Frontend 6.6.0's own
+   palette. Chrome only: every --ch-*, --chart-*, --seq-* and --div-* token is deliberately NOT
+   redefined here. The Design System does not govern data visualisation, and the nine channels
+   with their shape pairing are the product (DESIGN.md §3). After the light block, so it wins. */
+[data-brand="govuk"] {
+  --n0:#ffffff;  --n1:#ffffff;  --n2:#f4f8fb;  --n3:#f4f8fb;
+  --n4:#cecece;  --n5:#cecece;  --n6:#cecece;  --n7:#484949;
+  --n8:#484949;  --n9:#484949;  --n10:#0b0c0c; --n11:#0b0c0c;
+
+  /* The single accent becomes GOV.UK blue; the brass never appears on a GOV.UK page. */
+  --brass:#1d70b8; --brass-hover:#0f385c; --brass-press:#0f385c; --brass-ink:#ffffff;
+  --error:#ca3535; --success:#0f7a52;
+
+  /* A 3px yellow outline with a 2px dark inner shadow, the Design System's focus state. */
+  --focus:#ffdd00; --focus-ink:#0b0c0c; --focus-width:3px; --focus-offset:0;
+
+  --ui:"GDS Transport",arial,sans-serif;
+  --r-control:0; --r-panel:0; --r-overlay:0;
+  /* GOV.UK tags are square too (ADR-132). */
+  --r-chip:0;
+}
+
+/* GOV.UK type on the GOV.UK brand's pages (ADR-132, the owner's ruling 3; DESIGN.md §11): the
+   welcome, start and Admin pages take GOV.UK's scale, 19px body. The workspace keeps the 13px base
+   (DESIGN.md §9 exception 1): density across monitors is the analyst's job there. The tokens are
+   redefined for these pages' subtrees, so every component inside them follows. */
+[data-brand="govuk"] :is(.welcome, .home, .admin-place) {
+  --fs-11:14px; --lh-11:20px; --fs-12:16px; --lh-12:20px;
+  --fs-13:19px; --lh-13:25px; --fs-14:19px; --lh-14:25px;
+  --fs-16:19px; --lh-16:25px; --fs-19:24px; --lh-19:30px;
+  --fs-23:36px; --lh-23:40px; --fs-30:48px; --lh-30:50px;
+  font-size: var(--fs-13); line-height: var(--lh-13);
+}
+
+/* GOV.UK page width (ADR-132 Amendment 4; DESIGN.md §11): the sign-in and start pages' rows hold
+   their content in GOV.UK's width container, 960px with 30px gutters (15px on a phone), so it starts
+   on the logo's edge as on every GOV.UK page. A row's rule still runs the full width. */
+[data-brand="govuk"] { --govuk-gutter: 30px; }
+@media (max-width: 640px) { [data-brand="govuk"] { --govuk-gutter: 15px; } }
+[data-brand="govuk"] :is(.welcome-header, .welcome-hero, .welcome-section, .welcome-footer, .home-header, .home-main) {
+  max-width: none;
+  padding-left: max(var(--govuk-gutter), calc((100% - 960px) / 2));
+  padding-right: max(var(--govuk-gutter), calc((100% - 960px) / 2));
+}
+/* GOV.UK's own header, phase banner and footer keep GOV.UK's link styling: no Glass border. */
+[data-brand="govuk"] :is(.govuk-header, .govuk-footer, .govuk-phase-banner) a { border-bottom: 0; }
+
+html, body { margin:0; padding:0; }
+
+body {
+  background: var(--surface-app);
+  color: var(--text-primary);
+  font-family: var(--ui);
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+  -webkit-font-smoothing: antialiased;
+}
+
+*:focus-visible { outline: var(--focus-width) solid var(--focus); outline-offset: var(--focus-offset); }
+[data-brand="govuk"] *:focus-visible { box-shadow: inset 0 0 0 2px var(--focus-ink); }
+
+a { color: var(--brass); text-decoration: none; border-bottom: 1px solid var(--border); }
+a:hover { color: var(--brass-hover); border-bottom-color: var(--brass-hover); }
+
+p { margin: 0; text-wrap: pretty; }
+
+/* Every identifier, hash, timestamp and account number is set in mono.
+   Mono means: this is a value you can copy. */
+.value, .identifier, td.numeric { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* ADR-097 Amendment 3 (the owner, 13 November 2026): a heading is never a value to copy. A heading
+   classed `.value` (a card's title, a section's) is in the page's own face, in both looks; its figures
+   stay tabular. */
+:is(h1, h2, h3, h4, h5, h6).value { font-family: var(--ui); }
+
+/* Graph node states — implement once, in the Sigma node program.
+   These declarations document the contract; the renderer is the implementation. */
+.node--default      { /* channel fill, 1px var(--border-subtle) */ }
+.node--hovered      { /* 1.5px var(--text-primary) */ }
+.node--selected     { /* 2px var(--brass), 1px surface gap via outline-offset */ }
+.node--on-path      { /* 2px var(--text-primary), incident edges thickened */ }
+.node--dimmed       { /* color-mix(in oklab, <channel> 32%, var(--surface-panel)) */ }
+.node--filtered-out { /* color-mix(in oklab, <channel> 12%, var(--surface-panel)); label dropped */ }
+.node--asserted     { /* 1px solid var(--border-strong) */ }
+.node--inferred     { /* 1.5px dashed 4 3, channel colour */ }
+.node--unresolved   { /* 1.5px dotted 1 3, channel colour */ }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0s !important; animation-duration: 0s !important; }
+  /* Graph re-layout becomes an instant move with a persistent control showing
+     previous positions. Removing the animation removes the only cue for what moved,
+     so something must replace it. */
+}
+
+/* --- Keycloak sign-in page, restyled from the tokens above. ------------------------------- */
+html, body, .login-pf, .login-pf-page, .pf-v5-c-login {
+  background-color: var(--surface-app) !important;
+  background-image: none !important;
+  color: var(--text-primary);
+  font-family: var(--ui);
+}
+/* The page is centred, so the card does not sit high on a tall window. */
+.pf-v5-c-login {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+.pf-v5-c-login__container {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 26rem;
+  margin-inline: auto;
+  padding: var(--sp-40) var(--sp-24);
+}
+/* Keycloak's own sheet puts the header in a second grid column from 1200px up, which left the name
+   floating to the right of the card. One column, header first, above the card, a set distance
+   away. */
+.pf-v5-c-login__header {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0 0 var(--sp-24);
+  padding: 0;
+  text-align: left;
+}
+/* The brand's horizontal lockup (spec/design/OspreyFlow_Brand_Foundations.html): the mark, a gap of
+   a third of its width, then the wordmark at the screen-title size, Osprey bold and Flow regular.
+   Keycloak 26 prints the header into `#kc-header-wrapper`; the mark is a mask over a block, so its
+   colour is a token and it follows light and dark. */
+#kc-header-wrapper {
+  --lockup-mark: 36px;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--lockup-mark) / 3);
+  padding: 0;
+  color: var(--text-primary);
+  font: 400 var(--fs-23) / var(--lh-23) var(--ui);
+  letter-spacing: -0.01em;
+  text-align: left;
+}
+#kc-header-wrapper b { font-weight: 700; }
+#kc-header-wrapper::before {
+  content: "";
+  flex: none;
+  display: block;
+  width: var(--lockup-mark);
+  height: var(--lockup-mark);
+  background-color: var(--text-primary);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2048%2048'%3E%3Cpath%20d='M4.9%206.7L6.4%2017.2L23.9%2011.1Z'/%3E%3Cpath%20d='M6.8%2017.9L24.3%2019.9L24.2%2011.7Z'/%3E%3Cpath%20d='M6.6%2018.6L8%2029.1L24.2%2020.7Z'/%3E%3Cpath%20d='M8.4%2030.1L9.4%2041L24.4%2021.2Z'/%3E%3Cpath%20d='M9.8%2041.2L24.4%2030.2L24.7%2021.5Z'/%3E%3Cpath%20d='M25.6%2011.9L26.2%2029.2L43.9%2025.7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2048%2048'%3E%3Cpath%20d='M4.9%206.7L6.4%2017.2L23.9%2011.1Z'/%3E%3Cpath%20d='M6.8%2017.9L24.3%2019.9L24.2%2011.7Z'/%3E%3Cpath%20d='M6.6%2018.6L8%2029.1L24.2%2020.7Z'/%3E%3Cpath%20d='M8.4%2030.1L9.4%2041L24.4%2021.2Z'/%3E%3Cpath%20d='M9.8%2041.2L24.4%2030.2L24.7%2021.5Z'/%3E%3Cpath%20d='M25.6%2011.9L26.2%2029.2L43.9%2025.7Z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.pf-v5-c-login__main {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-panel);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+.pf-v5-c-login__main-header, .pf-v5-c-login__main-body, .pf-v5-c-login__main-footer {
+  background: transparent;
+  color: var(--text-primary);
+}
+.pf-v5-c-login__main-header { padding: var(--sp-32) var(--sp-32) 0; }
+.pf-v5-c-login__main-body { padding: var(--sp-16) var(--sp-32) var(--sp-32); }
+.pf-v5-c-title, #kc-page-title, h1 {
+  color: var(--text-primary);
+  font: 700 var(--fs-23) / var(--lh-23) var(--ui);
+}
+.pf-v5-c-form { --pf-v5-c-form--GridGap: var(--sp-20); row-gap: var(--sp-20); }
+.pf-v5-c-form__label { padding-block-end: var(--sp-8); }
+.pf-v5-c-form__label-text, label {
+  color: var(--text-secondary);
+  font: 600 var(--fs-13) / var(--lh-13) var(--ui);
+}
+.pf-v5-c-form-control {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  color: var(--text-primary);
+}
+.pf-v5-c-form-control::before, .pf-v5-c-form-control::after { display: none; }
+.pf-v5-c-form-control input, .pf-v5-c-form-control select {
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--ui);
+}
+/* One ring. The tokens give every focused element an outline of its own; the input inside the box
+   would wear it as a second ring, so it carries none and the box shows a single one. */
+.pf-v5-c-form-control input:focus-visible, .pf-v5-c-form-control select:focus-visible {
+  outline: none;
+}
+.pf-v5-c-form-control:focus-within {
+  border-color: var(--brass);
+  box-shadow: 0 0 0 1px var(--brass);
+}
+/* The password box and its show button are one control: equal height, no seam, no underline. */
+.pf-v5-c-input-group { display: flex; align-items: stretch; }
+.pf-v5-c-input-group .pf-v5-c-form-control { flex: 1 1 auto; min-width: 0; }
+.pf-v5-c-input-group .pf-v5-c-button {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-left: 0;
+  border-radius: 0 var(--r-control) var(--r-control) 0;
+  color: var(--text-secondary);
+}
+.pf-v5-c-input-group .pf-v5-c-button::before, .pf-v5-c-input-group .pf-v5-c-button::after {
+  display: none;
+}
+.pf-v5-c-input-group .pf-v5-c-form-control:not(:last-child) {
+  border-radius: var(--r-control) 0 0 var(--r-control);
+}
+.pf-v5-c-button.pf-m-primary {
+  background: var(--brass);
+  border: 1px solid var(--brass);
+  border-radius: var(--r-control);
+  color: var(--brass-ink);
+  font: 600 var(--fs-14) / var(--lh-14) var(--ui);
+  padding: var(--sp-12) var(--sp-16);
+  transition: background var(--dur-fast) var(--ease);
+}
+.pf-v5-c-button.pf-m-primary:hover {
+  background: var(--brass-hover);
+  border-color: var(--brass-hover);
+}
+.pf-v5-c-button.pf-m-primary:active { background: var(--brass-press); }
+#kc-form-buttons { margin-top: var(--sp-8); }
+.pf-v5-c-button.pf-m-control, .pf-v5-c-button.pf-m-plain {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.pf-v5-c-alert {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+}
+.pf-v5-c-alert.pf-m-danger { border-color: var(--error); }
+.pf-v5-c-alert.pf-m-warning { border-color: var(--warning); }
+.pf-v5-c-alert.pf-m-success { border-color: var(--success); }
+.pf-v5-c-helper-text__item-text, .pf-m-error { color: var(--error); }
+.pf-v5-c-login__main-footer-links a, .pf-v5-c-login__main-footer-band a { color: var(--brass); }
+a { color: var(--brass); }
+a:hover { color: var(--brass-hover); }
+
+/* --- ADR-115 E2: the handoff's sign-in card. ----------------------------------------------- */
+.pf-v5-c-login__main-header .pf-v5-c-title, #kc-page-title {
+  font: 700 var(--fs-19) / var(--lh-19) var(--ui);
+}
+.pf-v5-c-form-control {
+  background: var(--surface-sunken);
+  min-height: var(--h-control-32);
+}
+.pf-v5-c-form-control input {
+  font: 400 var(--fs-13) / var(--lh-13) var(--mono); letter-spacing: -0.005em;
+}
+.pf-v5-c-form-control:has(input[aria-invalid="true"]) { border-color: var(--error); }
+.pf-v5-c-button.pf-m-primary { min-height: var(--h-control-36); width: 100%; font-weight: 700; }
+/* The reset page's "Back to sign in": the handoff's quiet text button, not PatternFly's outline. */
+.pf-v5-c-button.pf-m-secondary {
+  align-self: flex-start; width: auto; min-height: 0; padding: 0;
+  background: none; border: 0; border-bottom: 1px solid var(--border-strong); border-radius: 0;
+  color: var(--text-secondary); font: 400 var(--fs-13) / var(--lh-13) var(--ui);
+}
+.pf-v5-c-button.pf-m-secondary::after { display: none; }
+.pf-v5-c-button.pf-m-secondary:hover { color: var(--brass); border-bottom-color: var(--brass); }
+.osprey-lead {
+  margin: 0 0 var(--sp-16); color: var(--text-tertiary);
+  font: 400 var(--fs-13) / var(--lh-13) var(--ui);
+}
+/* Keycloak's sheet gives the form `display: grid`, which beats the `hidden` attribute. */
+#kc-form-login[hidden] { display: none !important; }
+.osprey-field-error {
+  display: block; margin-top: var(--sp-6);
+  color: var(--error); font: 400 var(--fs-12) / var(--lh-12) var(--ui);
+}
+.osprey-no-reset, .osprey-card-foot {
+  margin: var(--sp-8) 0 0; color: var(--text-tertiary);
+  font: 400 var(--fs-12) / var(--lh-12) var(--ui);
+}
+.osprey-card-foot {
+  margin-top: var(--sp-16); padding-top: var(--sp-4); border-top: 1px solid var(--border-subtle);
+}
+.osprey-back {
+  width: 100%; min-height: var(--h-control-34); margin-top: var(--sp-16);
+  background: var(--surface-raised); border: 1px solid var(--border);
+  border-radius: var(--r-control);
+  color: var(--text-primary); font: 600 var(--fs-13) / var(--lh-13) var(--ui);
+}
+
+[data-brand="govuk"] .osprey-wordmark,
+[data-brand="govuk"] #kc-header-wrapper::before { display: none; }
+[data-brand="govuk"] #kc-header { display: none; }
