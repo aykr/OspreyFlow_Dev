@@ -43,9 +43,10 @@ the same block unguarded, guarded by anything that does not name `pages.enabled`
 .Values.pages` is true of a mapping that says `enabled: false`), or switched on by default, is red
 (each case is below). That is the guard's name from the owner's ruling of 21 November 2026 (answer
 6: `pages.enabled`); if PL7a2b names it otherwise, the guard it uses is a deliberate change to
-`chart_off_view`, in a diff he reads. **What this cannot see** without `helm`: a template that renders a page service while off
-by a guard it does not read (a `lookup`, an `include` of a helper), or a workload the renderer
-writes into the values (that one is in the stored values, and is red).
+`chart_off_view`, in a diff he reads. **What this cannot see** without `helm`: a template that
+renders a page service while off by a guard it does not read (a `lookup`, an `include` of a
+helper), or a workload the renderer writes into the values (that one is in the stored values, and
+is red).
 
 **The compose shapes' `deployment.env` is the one `apply` writes.** The shapes `local-lite` and
 `small` are rendered through `harness.apply.stage_deployment`, run into a temporary folder with its
@@ -1275,24 +1276,24 @@ def test_a_guard_removed_from_the_view_is_the_one_accepted_form() -> None:
 
 
 @pytest.mark.parametrize(
-    "template",
+    ("template", "line"),
     [
         # The guard's own end trims what follows it: off, `b: 2` loses its line break and joins
         # `a: 1` (the render is `a: 1b: 2`).
-        "a: 1\n" + GUARD + "x: 1\n{{- end -}}\n  b: 2\n",
+        ("a: 1\n" + GUARD + "x: 1\n{{- end -}}\n  b: 2\n", 4),
         # The same where the end is the last thing in the template.
-        "a: 1\n" + GUARD + "x: 1\n{{- end -}}\n",
+        ("a: 1\n" + GUARD + "x: 1\n{{- end -}}\n", 4),
         # No dash before `if`.
-        "a: 1\n" + DASHLESS_GUARD + "x: 1\n{{- end }}\nb: 2\n",
+        ("a: 1\n" + DASHLESS_GUARD + "x: 1\n{{- end }}\nb: 2\n", 2),
         # A trailing trim on the guard, an indented guard.
-        "a: 1\n{{- if .Values.pages.enabled -}}\nx: 1\n{{- end }}\nb: 2\n",
-        "a: 1\n  " + GUARD + "x: 1\n{{- end }}\nb: 2\n",
-        # The one the round-7 verifier found: an indented, trailing-trimmed guard, closed by `{{ end }}`.
-        "a: 1\n  {{- if .Values.pages.enabled -}}\nx: 1\n{{ end }}\nb: 2\n",
+        ("a: 1\n{{- if .Values.pages.enabled -}}\nx: 1\n{{- end }}\nb: 2\n", 2),
+        ("a: 1\n  " + GUARD + "x: 1\n{{- end }}\nb: 2\n", 2),
+        # The round-7 verifier's example: indented, trailing-trimmed, closed by `{{ end }}`.
+        ("a: 1\n  {{- if .Values.pages.enabled -}}\nx: 1\n{{ end }}\nb: 2\n", 2),
         # Nested: two guards, the inner inside the outer (the pair of ends nests too).
-        "a: 1\n" + GUARD + GUARD + "x: 1\n{{- end }}\n{{- end }}\nb: 2\n",
+        ("a: 1\n" + GUARD + GUARD + "x: 1\n{{- end }}\n{{- end }}\nb: 2\n", 3),
         # Carriage returns: not the exact line.
-        "a: 1\r\n{{- if .Values.pages.enabled }}\r\nx: 1\r\n{{- end }}\r\nb: 2\r\n",
+        ("a: 1\r\n{{- if .Values.pages.enabled }}\r\nx: 1\r\n{{- end }}\r\nb: 2\r\n", 2),
     ],
     ids=[
         "an end that trims what follows",
@@ -1305,14 +1306,14 @@ def test_a_guard_removed_from_the_view_is_the_one_accepted_form() -> None:
         "carriage returns",
     ],
 )
-def test_a_guard_that_is_not_the_exact_form_builds_no_view(template: str) -> None:
+def test_a_guard_that_is_not_the_exact_form_builds_no_view(template: str, line: int) -> None:
     """`without_pages_guard` accepts one form and refuses the rest, whatever the whitespace around
     it would do in Go's lexer (it does not model that). A trim marker on the guard's left, on the
     end's right, or none where there should be one, a second guard inside the first: no view, the
     file and the line named."""
     with pytest.raises(ref.UnsupportedGuard) as refused:
         ref.without_pages_guard(template, "chart/templates/x.yaml")
-    assert "chart/templates/x.yaml:2:" in str(refused.value), str(refused.value)
+    assert f"chart/templates/x.yaml:{line}:" in str(refused.value), str(refused.value)
 
 
 def test_a_mention_outside_any_guard_is_refused_and_the_other_pages_guards_are_not() -> None:

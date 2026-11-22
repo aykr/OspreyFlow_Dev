@@ -248,95 +248,95 @@ def staged_files(config: Any, render_fn: Callable[..., Any]) -> dict[str, bytes]
     return dict(sorted((n, d) for n, d in found.items() if n not in _NOT_RENDERED))
 
 
+#: The one guard form the view reads: these two lines, each exactly, each on a line of its own. The
+#: setting is `pages.enabled`, the missing entry of the deployment schema (the owner's ruling of 21
+#: November 2026, answer 6). Anything else that mentions it is refused, not read.
+GUARD_LINE = "{{- if .Values.pages.enabled }}"
+END_LINE = "{{- end }}"
+_MENTIONS_SETTING = re.compile(r"pages\.enabled")
 #: One line of a template that opens a block (`if`, `range`, `with`, `define`, `block`), one that
-#: closes it, one that is an `else`, and the guard this module reads: the page service's own
-#: setting, `pages.enabled` (the missing entry of the deployment schema, the owner's ruling of 21
-#: November 2026, answer 6), tested alone on a line of its own.
+#: closes it, one that is an `else`; and an action anywhere in a line that does any of these, to
+#: tell a line whose block count cannot be trusted (an action that is not the whole of its line).
 _BLOCK_OPEN = re.compile(r"^\s*\{\{-?\s*(?:if|range|with|define|block)\b")
 _BLOCK_END = re.compile(r"^\s*\{\{-?\s*end\s*-?\}\}\s*$")
 _BLOCK_ELSE = re.compile(r"^\s*\{\{-?\s*else\b")
-_PAGES_GUARD = re.compile(r"^\s*\{\{-\s*if\s+\.Values\.pages\.enabled\s*-?\}\}\s*$")
-#: An end that trims what follows it (`{{- end -}}`): Go's lexer removes the line break and the
-#: indentation after the action whether or not the `if` was taken.
-_TRIMS_AFTER = re.compile(r"\s-\}\}\s*$")
-#: An action anywhere in a line that opens a block, closes one, or is an `else`: a line that holds
-#: one of these other than as the whole of the line (`_BLOCK_OPEN`, `_BLOCK_END`, `_BLOCK_ELSE`
-#: matched, and no second one) is a line whose block count cannot be trusted.
 _BLOCK_ACTION = re.compile(r"\{\{-?\s*(?:if|range|with|define|block|end|else)\b")
 
 
-def _guarded_block_end(lines: list[str], start: int) -> int | None:
-    """The index of the line that closes the block opened at `start`, or None when it cannot be
-    told: the block is not closed, an action that opens or closes a block (or is an `else`) is
-    anywhere in a line but as the whole of it (`{{- if .X }}a{{- end }}`, `  x: 1 {{- end }}`, two
-    on one line), so the count is off, the guard has an `else` (what is in it renders while the
-    setting is off), or the guard's own end trims what follows it (`{{- end -}}`: off, the line
-    after the block is joined to the one before the guard). None leaves the block in what is
-    stored, which is the cautious side: it shows as a change."""
-    depth = 0
-    for index in range(start, len(lines)):
+class UnsupportedGuard(ValueError):
+    """A template mentions `pages.enabled` in a form the view does not read. No view is built: the
+    message names the file and the line, so the render fails (the invariant case, `--write`,
+    `--check`) instead of storing a text whose off render may not be what it is taken for."""
+
+    def __init__(self, path: str, line: int, why: str) -> None:
+        super().__init__(f"{path}:{line}: {why}")
+
+
+def _is(line: str, wanted: str) -> bool:
+    return line.removesuffix("\n") == wanted
+
+
+def _guarded_block_end(lines: list[str], start: int, path: str) -> int:
+    """The index of the line that closes the guard opened at `start`. Raises `UnsupportedGuard`
+    when the block is not closed by the exact end line, holds an `else` of the guard's own, holds
+    another mention of the setting (a nested guard included), or holds an action that opens or
+    closes a block that is not the whole of its line (the count cannot be told)."""
+    depth = 1
+    for index in range(start + 1, len(lines)):
         line = lines[index]
-        actions = len(_BLOCK_ACTION.findall(line))
-        if actions > 1:
-            return None
+        number = index + 1
+        if _MENTIONS_SETTING.search(line):
+            raise UnsupportedGuard(path, number, "a second mention of pages.enabled inside a guard")
+        if len(_BLOCK_ACTION.findall(line)) > 1:
+            raise UnsupportedGuard(path, number, "more than one block action on a line")
         if _BLOCK_OPEN.match(line):
             depth += 1
         elif _BLOCK_END.match(line):
             depth -= 1
             if depth == 0:
-                # The guard's own end. An end nested inside is skipped text while the setting is
-                # off, and its trim marker changes nothing; this one's does.
-                return None if _TRIMS_AFTER.search(line) else index
+                if not _is(line, END_LINE):
+                    raise UnsupportedGuard(
+                        path, number, f"the guard's end is not exactly the line {END_LINE!r}"
+                    )
+                return index
         elif _BLOCK_ELSE.match(line):
             if depth == 1:
-                return None
-        elif actions:
-            return None
-    return None
+                raise UnsupportedGuard(path, number, "an else in a guard")
+        elif _BLOCK_ACTION.search(line):
+            raise UnsupportedGuard(path, number, "a block action that is not the whole of its line")
+    raise UnsupportedGuard(path, start + 1, "the guard is not closed")
 
 
-def _left_trim_is_harmless(lines: list[str], start: int, end: int) -> bool:
-    """Whether the guard at `start` (always `{{- if`, which trims all whitespace before it, line
-    breaks and blank lines included) leaves the template as the view has it, when its block is
-    taken out: the line before it is content with nothing trailing, so the trim takes only that
-    line's own break, which the line after the block's end puts back. A guard first in the template
-    is harmless only when nothing but whitespace follows the block (the off render is then a line
-    break: no manifest)."""
-    if start == 0:
-        return not "".join(lines[end + 1 :]).strip()
-    before = lines[start - 1]
-    return (
-        before.endswith("\n") and bool(before[:-1].strip()) and before[:-1] == before[:-1].rstrip()
-    )
+def without_pages_guard(text: str, path: str = "template") -> str:
+    """A template as it renders with `pages.enabled` off: every block opened by the line
+    `{{- if .Values.pages.enabled }}` and closed by the line `{{- end }}`, each on a line of its
+    own, removed. Not a Helm renderer: it reads that one form and fails closed on the rest.
 
-
-def without_pages_guard(text: str) -> str:
-    """A template as it renders with `pages.enabled` off: every block opened by
-    `{{- if .Values.pages.enabled }}` on a line of its own and closed by `{{- end }}` on one of its
-    own, with no `else`, removed. Not a Helm renderer: it understands that one guard and nothing
-    else, and a guard of any other shape (`if .Values.pages`, which is true of a mapping that says
-    `enabled: false`; `if or .Values.pages.enabled ...`; a guard and its end on one line) is left
-    where it is and shows as a changed template.
-
-    Go's lexer applies a trim marker whether or not an `if` is taken, so the view is the off render
-    only where the markers leave the whitespace around the block alone: the guard must have the dash
-    on its left (`{{ if` leaves its indentation and line break in the render), the line before it
-    must be content with nothing trailing (blank lines and trailing spaces are eaten), and its own
-    end must not trim what follows (`{{- end -}}` joins the next line to the one before). Write the
-    guard as `{{- if .Values.pages.enabled }}` ... `{{- end }}`, after a line of content; any other
-    form shows as a change, which is the cautious side."""
+    Any other line that mentions `pages.enabled` (a trailing `-}}`, no leading dash, an indent, an
+    inline guard, a close that is `{{ end }}` or `{{- end -}}`, an `else`, a second guard inside the
+    first, a block never closed, a setting read as a value, a comment) raises `UnsupportedGuard`
+    naming `path` and the line. Helm's trim markers apply whether or not an `if` is taken, so those
+    forms' off render is not the text without the block, and this does not model them: it refuses.
+    The whitespace around the accepted form is not modelled either; write the guard after a line of
+    content. `if .Values.pages` does not mention the setting and is left as text, so it shows as a
+    change."""
     lines = text.splitlines(keepends=True)
     kept: list[str] = []
     index = 0
     while index < len(lines):
-        end = _guarded_block_end(lines, index) if _PAGES_GUARD.match(lines[index]) else None
-        if end is not None and not _left_trim_is_harmless(lines, index, end):
-            end = None
-        if end is None:
-            kept.append(lines[index])
-            index += 1
-        else:
-            index = end + 1
+        line = lines[index]
+        if _is(line, GUARD_LINE):
+            index = _guarded_block_end(lines, index, path) + 1
+            continue
+        if _MENTIONS_SETTING.search(line):
+            raise UnsupportedGuard(
+                path,
+                index + 1,
+                f"pages.enabled in a form the view does not read (only the line {GUARD_LINE!r}, "
+                f"closed by the line {END_LINE!r}, each on a line of its own, is read)",
+            )
+        kept.append(line)
+        index += 1
     return "".join(kept)
 
 
@@ -396,7 +396,7 @@ def chart_off_view(path: str, data: bytes) -> bytes | None:
     (a template that renders nothing: Helm writes no manifest for it)."""
     text = data.decode("utf-8")
     if path.startswith("templates/"):
-        text = without_pages_guard(text)
+        text = without_pages_guard(text, f"{CHART_PREFIX}{path}")
         return text.encode("utf-8") if text.strip() else None
     if path == "values.yaml":
         return without_pages_section_when_off(text).encode("utf-8")
@@ -529,10 +529,12 @@ def write_reference(reference: Path = REFERENCE) -> list[str]:
     paths written. Running it twice leaves the same bytes."""
     written: list[str] = []
     wanted = {folder_name(shape, brand) for shape, brand in all_folders()}
+    # Every shape is rendered before anything is touched: a render that raises (an
+    # `UnsupportedGuard`) leaves the reference as it was.
+    rendered = {(shape, brand): render_shape(shape, brand) for shape, brand in all_folders()}
     for stale in set(stored_folders(reference)) - wanted:
         _remove(reference / stale)
-    for shape, brand in all_folders():
-        files = render_shape(shape, brand)
+    for (shape, brand), files in rendered.items():
         folder = reference / folder_name(shape, brand)
         for path in set(read_folder(folder)) - files.keys():
             (folder / path).unlink()
@@ -663,6 +665,14 @@ def main(argv: list[str] | None = None) -> int:
         help="the folder to write or compare (default: tests/fixtures/reference_render)",
     )
     args = parser.parse_args(argv)
+    try:
+        return _run(args)
+    except UnsupportedGuard as refused:
+        print(f"reference_render: refused, {refused}", file=sys.stderr)
+        return 2
+
+
+def _run(args: argparse.Namespace) -> int:
     if args.write:
         written = write_reference(args.reference)
         print(f"reference_render: wrote {len(written)} files under {args.reference}")
