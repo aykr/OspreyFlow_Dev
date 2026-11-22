@@ -1,0 +1,126 @@
+# The early-warning runner's named list (the owner's ruling 1, 21 November 2026). Re-derive with lists.py; the
+# check (tests/test_lists.py) fails on a candidate in neither verdict, or a stale row. Tab-separated.
+kind	name	verdict	reason	evidence	note
+ci	core-check	run	split		run as Core's check targets one by one (the core rows below)
+ci	slice-line-check	run	-
+ci	lint-tools	run	-
+ci	licence-check	run	-	OspreyFlow_Build/tools/packaging_gate.py:10	tools/packaging_gate.py:10 names docker build in its docstring only; the target runs no container
+ci	design-check	run	-
+ci	ui-words-check	run	-
+ci	opentofu-check	not-run	container	OspreyFlow_Build/Makefile:240; OspreyFlow_Build/Makefile:242; OspreyFlow_Build/Makefile:243
+ci	chart-check	not-run	container	OspreyFlow_Build/Makefile:253
+ci	cp-policy-check	not-run	container	OspreyFlow_Build/tools/helm_chart.py:24
+ci	schemas-check	run	-
+ci	authorized-query-check	run	-
+ci	demo-guide-check	run	-
+ci	domain-model-coverage-check	run	-
+ci	route-coverage-check	run	-
+ci	product-tree-link-check	run	-
+ci	decision-log-publication-check	run	-
+ci	provenance-annotation-check	run	-
+ci	test-file-coverage-check	run	-
+ci	citation-check	run	-
+ci	conformance-guard	run	-
+ci	lanes-check	run	-
+ci	confinement-check	run	-
+ci	no-branches-check	run	-
+ci	no-langchain-check	run	-	OspreyFlow_Build/tools/no_langchain_check.py:16; OspreyFlow_Build/tools/no_langchain_check.py:157	the docker run is the --image leg (tools/no_langchain_check.py:157), which the target does not pass (Makefile comment: carried, no CI step runs it)
+ci	client-name-check	not-run	client-names	OspreyFlow_Build/Makefile:57	the hashed client-name list stays on the Mac (the owner's ruling 2): not run on the server, never passed
+ci	bundle	run	-	OspreyFlow_Build/tools/osprey_bundle.py:135; OspreyFlow_Build/tools/osprey_bundle.py:144; OspreyFlow_Build/tools/osprey_bundle.py:155	the docker calls are --images only (tools/osprey_bundle.py:135-155); the target runs manifest only
+core	lint	run	-
+core	typecheck	run	-
+core	no-react-check	run	-
+core	version-isolation-check	run	-
+core	trivy	run	no-tool		trivy fs starts no container and binds no port; reported not run when trivy is not installed on the machine (install.sh does not install it)
+core	trivy-image-ingest	not-run	container	OspreyFlow_Core/Makefile:52
+core	trivy-image-api	not-run	container	OspreyFlow_Core/Makefile:58
+core	trivy-image-workspace	not-run	container	OspreyFlow_Core/Makefile:66
+core	trivy-image-harness	not-run	container	OspreyFlow_Core/Makefile:72
+core	trivy-image-ner	not-run	container	OspreyFlow_Core/Makefile:79
+core	trivy-image-worker	not-run	container	OspreyFlow_Core/Makefile:82
+core	trivy-image-report-sync	not-run	container	OspreyFlow_Core/Makefile:85
+core	trivy-image-superset	not-run	container	OspreyFlow_Core/Makefile:88
+core	trivy-image-laurium	not-run	container	OspreyFlow_Core/Makefile:93
+core	harness-a11y	not-run	fixed-port	OspreyFlow_Core/apps/harness/a11y/playwright.config.ts:45
+test	OspreyFlow_Build/tests/cli/test_compose_lockout.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_compose_lockout.py:81
+test	OspreyFlow_Build/tests/cli/test_doctor.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_doctor.py:129
+test	OspreyFlow_Build/tests/cli/test_grading_verb.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_grading_verb.py:30
+test	OspreyFlow_Build/tests/cli/test_images_verb.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_images_verb.py:46
+test	OspreyFlow_Build/tests/cli/test_lifecycle.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_lifecycle.py:42
+test	OspreyFlow_Build/tests/cli/test_map_verb.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_map_verb.py:28
+test	OspreyFlow_Build/tests/cli/test_models_verb.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_models_verb.py:62
+test	OspreyFlow_Build/tests/cli/test_named_deployments.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_named_deployments.py:54
+test	OspreyFlow_Build/tests/cli/test_run.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_run.py:70
+test	OspreyFlow_Build/tests/cli/test_uninstall.py	run	container-guarded	OspreyFlow_Build/tests/cli/test_uninstall.py:19
+test	OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py	run	container-guarded	OspreyFlow_Build/tests/cloud_platform_backup/test_backups_chart.py:141
+test	OspreyFlow_Build/tests/cloud_platform_backup/test_restore_graph.py	run	container-guarded	OspreyFlow_Build/tests/cloud_platform_backup/test_restore_graph.py:40
+test	OspreyFlow_Build/tests/connectors/test_s3_connector_live.py	run	container-guarded	OspreyFlow_Build/tests/connectors/test_s3_connector_live.py:9
+test	OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py	run	container-guarded	OspreyFlow_Build/tests/cp_policy_check/test_cp_policy_check.py:90
+test	OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py	run	container-guarded	OspreyFlow_Build/tests/cp_policy_check/test_rendered_terraform.py:45
+test	OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py	run	fixed-port	OspreyFlow_Build/tests/fixtures/cloud_platform/s3_standin.py:29	its --port 9000 is the in-pod command line (line 1181); the tests start it through serve(), port 0 (line 1159)
+test	OspreyFlow_Build/tests/glass_trees/test_pages_image_carries_no_react.py	run	container-guarded	OspreyFlow_Build/tests/glass_trees/test_pages_image_carries_no_react.py:4
+test	OspreyFlow_Build/tests/harness/deployment_guard.py	run	container-guarded	OspreyFlow_Build/tests/harness/deployment_guard.py:4
+test	OspreyFlow_Build/tests/harness/run_owned.py	run	container-guarded	OspreyFlow_Build/tests/harness/run_owned.py:28
+test	OspreyFlow_Build/tests/harness/test_access_key_proxy.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_access_key_proxy.py:78
+test	OspreyFlow_Build/tests/harness/test_apply_changed_settings.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_apply_changed_settings.py:95
+test	OspreyFlow_Build/tests/harness/test_apply_env.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_apply_env.py:73
+test	OspreyFlow_Build/tests/harness/test_backup_fresh_deployment.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_backup_fresh_deployment.py:39
+test	OspreyFlow_Build/tests/harness/test_backup_object_ownership.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_backup_object_ownership.py:65
+test	OspreyFlow_Build/tests/harness/test_bundle.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_bundle.py:67
+test	OspreyFlow_Build/tests/harness/test_bundle_exit_test.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_bundle_exit_test.py:106
+test	OspreyFlow_Build/tests/harness/test_compose_lockout.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_compose_lockout.py:88
+test	OspreyFlow_Build/tests/harness/test_deployment_guard.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_deployment_guard.py:3
+test	OspreyFlow_Build/tests/harness/test_first_admin.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_first_admin.py:78
+test	OspreyFlow_Build/tests/harness/test_harness_image.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_harness_image.py:1
+test	OspreyFlow_Build/tests/harness/test_harness_main.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_harness_main.py:29; OspreyFlow_Build/tests/harness/test_harness_main.py:42	main() refuses --port 7217 and the webapp is patched out (line 40): nothing binds
+test	OspreyFlow_Build/tests/harness/test_helm_chart.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_helm_chart.py:29
+test	OspreyFlow_Build/tests/harness/test_image_references.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_image_references.py:5
+test	OspreyFlow_Build/tests/harness/test_ingest_uploads.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_ingest_uploads.py:204
+test	OspreyFlow_Build/tests/harness/test_install_page.py	run	fixed-port	OspreyFlow_Build/tests/harness/test_install_page.py:367	uvicorn.Server is replaced by a FakeServer (line 364): nothing binds 49555
+test	OspreyFlow_Build/tests/harness/test_preflight.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_preflight.py:210
+test	OspreyFlow_Build/tests/harness/test_proxy_health.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_proxy_health.py:27
+test	OspreyFlow_Build/tests/harness/test_proxy_tls_caddy.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_proxy_tls_caddy.py:270
+test	OspreyFlow_Build/tests/harness/test_render.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_render.py:958
+test	OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_restore_drawn_layer.py:83
+test	OspreyFlow_Build/tests/harness/test_restore_exit_test.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_restore_exit_test.py:62
+test	OspreyFlow_Build/tests/harness/test_restore_identity_provider.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_restore_identity_provider.py:147
+test	OspreyFlow_Build/tests/harness/test_signatures.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_signatures.py:133
+test	OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_six_screen_live_exit.py:70
+test	OspreyFlow_Build/tests/harness/test_start_needs_no_network.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_start_needs_no_network.py:5
+test	OspreyFlow_Build/tests/harness/test_store_volumes.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_store_volumes.py:393
+test	OspreyFlow_Build/tests/harness/test_sustained_load.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_sustained_load.py:132
+test	OspreyFlow_Build/tests/harness/test_update_apply.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_update_apply.py:109
+test	OspreyFlow_Build/tests/harness/test_webapp_geospatial.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_webapp_geospatial.py:92
+test	OspreyFlow_Build/tests/harness/test_workspace_bundle.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_workspace_bundle.py:192
+test	OspreyFlow_Build/tests/harness/test_workspace_proxy.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_workspace_proxy.py:30; OspreyFlow_Build/tests/harness/test_workspace_proxy.py:79	the 8000 and 8080 are inside the stand-in containers, which the docker guard skips
+test	OspreyFlow_Build/tests/harness/tls_fixtures.py	run	container-guarded	OspreyFlow_Build/tests/harness/tls_fixtures.py:214
+test	OspreyFlow_Build/tests/licence_check/test_java_runtime_check.py	run	container-guarded	OspreyFlow_Build/tests/licence_check/test_java_runtime_check.py:259
+test	OspreyFlow_Build/tests/local_docker_guard.py	run	container-guarded	OspreyFlow_Build/tests/local_docker_guard.py:4
+test	OspreyFlow_Build/tests/perf/test_search_budget_live.py	run	container-guarded	OspreyFlow_Build/tests/perf/test_search_budget_live.py:172
+test	OspreyFlow_Build/tests/services/api/test_model_gateway_live.py	run	container-guarded	OspreyFlow_Build/tests/services/api/test_model_gateway_live.py:139
+test	OspreyFlow_Build/tests/test_basemap_build_stages.py	run	container-guarded	OspreyFlow_Build/tests/test_basemap_build_stages.py:161
+test	OspreyFlow_Build/tests/test_connector_profile_settings_reach_the_recipe.py	run	container-guarded	OspreyFlow_Build/tests/test_connector_profile_settings_reach_the_recipe.py:198
+test	OspreyFlow_Build/tests/test_core_stands_alone.py	run	container-guarded	OspreyFlow_Build/tests/test_core_stands_alone.py:94
+test	OspreyFlow_Build/tests/test_dockerignore.py	run	container-guarded	OspreyFlow_Build/tests/test_dockerignore.py:10
+test	OspreyFlow_Build/tests/test_image_imports_are_carried.py	run	container-guarded	OspreyFlow_Build/tests/test_image_imports_are_carried.py:14
+test	OspreyFlow_Build/tests/test_images_built_fresh.py	run	container-guarded	OspreyFlow_Build/tests/test_images_built_fresh.py:8
+test	OspreyFlow_Build/tests/test_live_driver_own_tags.py	run	container-guarded	OspreyFlow_Build/tests/test_live_driver_own_tags.py:180
+test	OspreyFlow_Build/tests/test_local_docker_guard.py	run	container-guarded	OspreyFlow_Build/tests/test_local_docker_guard.py:32
+test	OspreyFlow_Build/tests/test_measure_search.py	run	container-guarded	OspreyFlow_Build/tests/test_measure_search.py:927
+test	OspreyFlow_Build/tests/test_no_langchain_check.py	run	container-guarded	OspreyFlow_Build/tests/test_no_langchain_check.py:7
+test	OspreyFlow_Build/tests/test_osprey_bundle.py	run	container-guarded	OspreyFlow_Build/tests/test_osprey_bundle.py:352
+test	OspreyFlow_Build/tests/test_r1_kind_remake.py	run	container-guarded	OspreyFlow_Build/tests/test_r1_kind_remake.py:9
+test	OspreyFlow_Build/tests/test_r1_kind_upgrade.py	run	container-guarded	OspreyFlow_Build/tests/test_r1_kind_upgrade.py:82
+test	OspreyFlow_Build/tests/test_refresh.py	run	container-guarded	OspreyFlow_Build/tests/test_refresh.py:4
+test	OspreyFlow_Build/tests/test_refresh_before_the_gateway.py	run	container-guarded	OspreyFlow_Build/tests/test_refresh_before_the_gateway.py:245
+test	OspreyFlow_Build/tests/test_release_local_matrix.py	run	container-guarded	OspreyFlow_Build/tests/test_release_local_matrix.py:35
+test	OspreyFlow_Build/tests/test_seed_internal.py	run	container-guarded	OspreyFlow_Build/tests/test_seed_internal.py:95
+test	OspreyFlow_Build/tests/test_step4_stack.py	run	container-guarded	OspreyFlow_Build/tests/test_step4_stack.py:202
+test	OspreyFlow_Build/tests/test_test_file_coverage_check.py	run	container-guarded	OspreyFlow_Build/tests/test_test_file_coverage_check.py:277
+test	OspreyFlow_Build/tests/test_upgrade_stamp.py	run	container-guarded	OspreyFlow_Build/tests/test_upgrade_stamp.py:73
+test	OspreyFlow_Build/tests/test_worker_isolation.py	run	container-guarded	OspreyFlow_Build/tests/test_worker_isolation.py:232
+test	OspreyFlow_Build/tests/licence_check/test_register_docker_run.py	run	container-guarded	OspreyFlow_Build/tests/licence_check/test_register_docker_run.py:1	pending: PL11. A static check of the licence register: its docker words are text (its docstring, line 1; the source strings it plants, lines 56, 72, 82 and 84), and it starts no container
+test	OspreyFlow_Build/tests/licence_check/test_register_round2.py	run	container-guarded	OspreyFlow_Build/tests/licence_check/test_register_round2.py:1	pending: PL11. A static check of the licence register: its docker words are text (its docstring, line 1; the source strings it plants, lines 95 to 103), and it starts no container
+test	OspreyFlow_Build/tests/harness/test_own_gateway_image.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_own_gateway_image.py:83	A static check of the gateway's Dockerfile: its docker words are text (the image's own folder names, lines 76 and 83); its one child process is git ls-files (line 727). It starts no container.
+test	OspreyFlow_Build/tests/licence_check/test_gateway_install_inputs.py	run	container-guarded	OspreyFlow_Build/tests/licence_check/test_gateway_install_inputs.py:9	A static check of the gateway's install inputs: its docker words are text (its docstring, line 9); it reads the Dockerfile and starts no process or container.
+test	OspreyFlow_Build/tests/test_port_guard.py	run	fixed-port	OspreyFlow_Build/tests/test_port_guard.py:541	the port is bound on _BindingSocket, a stand-in for socket.socket that never touches the network (line 499): nothing binds 55433

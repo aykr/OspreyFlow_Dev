@@ -369,6 +369,10 @@ sol is at about 89% of its week (the board read 88% at 05:30 UTC; default 56%) a
 
 **With about 12% between two browser runs, the comparison after slice E is: three runs on the Mac after it has merged, the middle value compared with the middle of the before-runs; only a move larger than the run-to-run spread counts as a change. The Matrix view's first frame already sitting at its limit (about 2,480 to 2,550 ms against 2,500) is a backlog row, not slice E's fault.** (The before-runs are in `PL4_BUDGET_FIGURES_2026-11-22.md`: three unit runs and two browser runs; **the conductor takes a third browser before-run at the next quiet moment before slice E merges, so both sides have a middle value**.) Backlog row 18.
 
+## 22 November 2026: a hold on merges while three patches go in (the owner, in chat, about 09:10 UTC)
+
+**When SE8c's merge finishes, hold the next merge until he says; he has three patches to apply and will say when they are in.** Only merges are held (seats and records commits go on unless he says otherwise): DC1c, IS5a (which also needs an `add-round` line for one mypy line) and anything else verified wait.
+
 ## 22 November 2026: GitHub's `slice-line-check` job (the owner, in chat)
 
 **If the rerun of `slice-line-check` fails again, that does not stop merging: it is the line's own test failing in its set-up (`test_accept_any_round.py::test_the_owners_accept_is_refused_when_the_builder_committed_after_the_verifiers_record`), not a product test. This is his ruling for this one test only. A release still needs GitHub green on every job.** He also asked whether the conductor's watcher reads every job of a run: **it does not** (line fault 13): until the line-fix session changes it, the conductor reads every job of main's last eight runs by hand before each merge and at each report.
