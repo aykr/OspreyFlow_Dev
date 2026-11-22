@@ -20,7 +20,8 @@ synthetic settings.
 
 **The chart is pinned by its sources.** `helm template` output is not stored: it needs the `helm`
 binary, which a pure test does not assume (`make chart-check` and `make cp-policy-check` template
-the chart). So each Helm shape (`cluster`, `cloud-platform`, `cloud-platform-poc`) stores, beside its
+the chart). So each Helm shape (`cluster`, `cloud-platform`, `cloud-platform-poc`) stores, beside
+its
 values, a copy of the chart's own files under `chart/` (`Chart.yaml`, the chart's default
 `values.yaml`, `.helmignore` and every template), byte for byte and in the manifest with their
 SHA-256: what `helm template` renders from, so a template that changes (a workload, an Ingress
@@ -47,9 +48,11 @@ the slice is wrong. It checks `model_fields_set`, so it still means "not set" on
 called in place of the real one (the real renderer files are never edited): a `pages:` service in
 the compose services; a `handle /studio` block in the Caddyfile; a changed Helm value (on both Helm
 shapes); a file dropped from a shape (on a compose shape and on the Terraform one); one byte changed
-in a stored fixture (a copy of it); and, in a temporary copy of the chart (`tools.reference_render.CHART`
+in a stored fixture (a copy of it); and, in a temporary copy of the chart
+(`tools.reference_render.CHART`
 pointed at it), a `pages` workload added to `templates/workloads.yaml`, a `/studio` path added to
-the Ingress in `templates/ingress.yaml`, and a template file dropped. Each is shown clean first (so the red is the plant's), red with
+the Ingress in `templates/ingress.yaml`, and a template file dropped. Each is shown clean first (so
+the red is the plant's), red with
 a message naming the shape, the file and the first differing line, and clean again after.
 
 **Regenerate the reference** (a deliberate change; the diff of `tests/fixtures/reference_render/`
@@ -65,7 +68,8 @@ is what the owner reads):
 shape's folder, by a recursion over those folders only), the cloud-platform fixtures
 `OspreyFlow_Build/tests/fixtures/cloud_platform/{development,poc}.yaml` (and the platform settings
 they name, through the renderer), the chart `OspreyFlow_Core/deploy/helm/ospreyflow/` (one recursion
-over that folder, its files only, for the Helm shapes), the design tokens `OspreyFlow_Core/packages/design/tokens.css`
+over that folder, its files only, for the Helm shapes), the design tokens
+`OspreyFlow_Core/packages/design/tokens.css`
 (read once, to plant a change to them in a temporary copy, and to show no fixture holds them), and,
 by importing the renderers, `OspreyFlow_Core/harness/` and
 `OspreyFlow_Core/packages/schemas/`. It walks no other folder.
@@ -77,6 +81,7 @@ import contextlib
 import hashlib
 import importlib
 import json
+import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -91,7 +96,8 @@ SHAPE_BRANDS = ref.all_folders()
 IDS = [ref.folder_name(shape, brand) for shape, brand in SHAPE_BRANDS]
 #: The compose shapes (a compose file and a Caddyfile).
 COMPOSE = ("local-lite", "small")
-#: The shapes installed from the chart, and the chart files that matter most to "unchanged when off".
+#: The shapes installed from the chart, and the chart files that matter most to "unchanged when
+#: off".
 HELM = ("cluster", "cloud-platform", "cloud-platform-poc")
 CHART_PINS = {
     "chart/Chart.yaml",
@@ -135,10 +141,10 @@ def test_every_shape_and_brand_has_a_stored_folder_and_nothing_else_is_stored() 
 def test_the_set_of_files_each_shape_writes_is_the_set_in_the_manifest(
     shape: str, brand: str, rendered: dict[tuple[str, str], dict[str, bytes]]
 ) -> None:
-    chart_now = ref.chart_files()
     """No file added and none dropped, and the manifest is true of the files beside it: the paths
     the manifest lists are the paths the shape renders and the paths stored, and each entry's
     SHA-256 and size are those of the stored bytes (so a changed byte shows as a changed hash)."""
+    chart_now = ref.chart_files()
     folder = REFERENCE / ref.folder_name(shape, brand)
     listed = json.loads((folder / ref.MANIFEST).read_text(encoding="utf-8"))["files"]
     paths = [entry["path"] for entry in listed]
@@ -467,6 +473,251 @@ def test_a_change_that_only_removes_the_last_newline_is_red(tmp_path: Path) -> N
     assert "local-lite-ospreyflow/Caddyfile:" in found, found
 
 
+# ---- every input that is not configuration is pinned -----------------------------------------
+
+#: Read by the renderers from the process environment (`harness.render._owned` names every owned
+#: image from the first; `git_sha` falls back to the second): the shell a test or `--write` runs in
+#: must not reach the stored bytes.
+SHELL_INPUTS = ("OSPREY_IMAGE_REGISTRY", "OSPREY_BUILT_FROM_SHA")
+
+
+def test_the_real_renderer_does_read_the_image_registry_from_the_shell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not vacuous: with the commit fixed and nothing else touched, the same configuration renders
+    different compose bytes under a different `OSPREY_IMAGE_REGISTRY`. So the pin below is doing
+    something, and a render that is not pinned would carry the shell into the reference."""
+    from harness.render import render
+
+    config = ref.config_for("small", "ospreyflow")
+
+    def compose() -> str:
+        with mock.patch("harness.render.git_sha", lambda *_a, **_k: ref.PINNED_SHA):
+            return render(config, resolver=ref.resolver).artefacts["compose.yaml"]
+
+    monkeypatch.delenv("OSPREY_IMAGE_REGISTRY", raising=False)
+    without = compose()
+    monkeypatch.setenv("OSPREY_IMAGE_REGISTRY", "registry.other.example/elsewhere")
+    assert compose() != without
+
+
+@pytest.mark.parametrize(("shape", "brand"), SHAPE_BRANDS, ids=IDS)
+@pytest.mark.parametrize("variable", SHELL_INPUTS)
+def test_a_variable_in_the_shell_moves_no_fixture(
+    variable: str, shape: str, brand: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every shape renders the reference with the variable set to something else, and the variable
+    is as it was after the render (the pin is for the length of the render)."""
+    monkeypatch.setenv(variable, "registry.other.example/elsewhere")
+    found = ref.differences(shape, brand, ref.render_shape(shape, brand))
+    assert not found, f"{variable} in the shell moved the reference:\n" + "\n".join(found)
+    assert os.environ[variable] == "registry.other.example/elsewhere"
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", COMPOSE)
+def test_a_minted_secret_is_pinned(shape: str, brand: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`apply` mints each secret with `secrets.token_urlsafe` (the realm's and the reporting
+    module's call it too); a generator that returns something new each time moves no fixture."""
+    import secrets
+
+    counter = iter(range(1_000_000))
+    monkeypatch.setattr(secrets, "token_urlsafe", lambda *_a, **_k: f"fresh-{next(counter)}")
+    found = ref.differences(shape, brand, ref.render_shape(shape, brand))
+    assert not found, "\n".join(found)
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", COMPOSE)
+def test_the_stored_deployment_env_is_the_one_apply_writes(shape: str, brand: str) -> None:
+    """The compose shapes' `deployment.env` is what `harness.apply.stage_deployment` leaves in the
+    folder, not only what the render writes: the lines `apply` adds are pinned, among them the page
+    service's two secrets (which every deployment holds today), with a synthetic value."""
+    from harness.apply import PAGES_CLIENT_SECRET_KEY, PAGES_SESSION_SECRET_KEY
+
+    env = ref.read_folder(REFERENCE / ref.folder_name(shape, brand))["deployment.env"].decode()
+    for line in (
+        f"{PAGES_CLIENT_SECRET_KEY}={ref.PINNED_SECRET}\n",
+        f"{PAGES_SESSION_SECRET_KEY}={ref.PINNED_SECRET}\n",
+        "OSPREY_OIDC_CLIENT_SECRET=" + ref.PINNED_SECRET + "\n",
+        "OIDC_JWKS_URL=http://keycloak:8080/realms/osprey/protocol/openid-connect/certs\n",
+        "ARCADEDB_HOST=arcadedb\n",
+        "VALKEY_HOST=valkey\n",
+    ):
+        assert line in env, f"{shape}-{brand} deployment.env lacks {line!r}"
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", COMPOSE)
+@pytest.mark.parametrize(
+    ("replacement", "line_has"),
+    [
+        # A page-service secret made conditional (gone while the service is off).
+        (lambda real: "", "PAGES_CLIENT_SECRET_KEY"),
+        # A new line, as an enable flag would be, beside the secrets.
+        (lambda real: real() + "PAGES_ENABLED=false\n", "PAGES_ENABLED"),
+    ],
+    ids=["the page secrets made conditional", "an enable flag added"],
+)
+def test_a_changed_page_service_line_in_the_deployment_env_is_red(
+    shape: str, brand: str, replacement: Callable[[Any], str], line_has: str
+) -> None:
+    """The lines `apply` appends to `deployment.env` are pinned: a change to the page service's own,
+    made in the function that writes them, is a changed `deployment.env`, naming the line."""
+    import harness.apply as apply_module
+
+    real = apply_module.pages_secret_lines
+    message = _plant_red_then_green(
+        shape,
+        brand,
+        lambda: mock.patch.object(apply_module, "pages_secret_lines", lambda: replacement(real)),
+        names="deployment.env",
+        first_line_has=line_has,
+    )
+    assert message.count("first differing line") == 1, message
+
+
+# ---- "unchanged when off" in the chart: a block guarded by `pages.enabled` is not rendered ----
+
+GUARD = "{{- if .Values.pages.enabled }}\n"
+A_PAGES_WORKLOAD = (
+    "---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pages\nspec:\n  replicas: 1\n"
+)
+
+
+def _differences_with_chart(shape: str, brand: str, chart: Path) -> list[str]:
+    with mock.patch.object(ref, "CHART", chart):
+        return ref.differences(shape, brand, ref.render_shape(shape, brand))
+
+
+def _edit(chart: Path, relative: str, edit: Callable[[str], str]) -> None:
+    target = chart / relative
+    target.write_text(edit(target.read_text(encoding="utf-8")), encoding="utf-8")
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", HELM)
+@pytest.mark.parametrize(
+    "guarded_edit",
+    [
+        # A workload appended to the template, wrapped in the guard.
+        lambda c: (
+            "templates/workloads.yaml",
+            lambda t: t + GUARD + A_PAGES_WORKLOAD + "{{- end }}\n",
+        ),
+        # The same with a branch of its own inside the guard.
+        lambda c: (
+            "templates/workloads.yaml",
+            lambda t: (
+                t + GUARD + A_PAGES_WORKLOAD + "{{- if .Values.global }}\n  x: 1\n{{- end }}\n"
+                "{{- end }}\n"
+            ),
+        ),
+        # A path in the Ingress's own loop, guarded.
+        lambda c: (
+            "templates/ingress.yaml",
+            lambda t: t.replace(
+                "          {{- end }}\n    {{- end }}\n",
+                GUARD + "          - path: /studio\n            pathType: Prefix\n"
+                "{{- end }}\n          {{- end }}\n    {{- end }}\n",
+                1,
+            ),
+        ),
+        # The chart's default values gain a page-service section, off.
+        lambda c: ("values.yaml", lambda t: t + "\npages:\n  enabled: false\n"),
+    ],
+    ids=["a guarded workload", "a guarded workload with a branch", "a guarded path", "values off"],
+)
+def test_a_pages_block_guarded_by_the_setting_is_not_a_change_while_it_is_off(
+    shape: str,
+    brand: str,
+    guarded_edit: Callable[[Path], tuple[str, Callable[[str], str]]],
+    tmp_path: Path,
+) -> None:
+    """The chart as it renders with `pages.enabled` off: a template block under
+    `{{- if .Values.pages.enabled }}` ... `{{- end }}` is not in what is stored or compared, so the
+    chart PL7a2b changes (a pages workload, a pages Ingress path, a default `pages: enabled:
+    false`) is the reference unchanged, and the render-with-setting-absent case stays green. The
+    unguarded version of each is red (`test_a_changed_helm_template_is_red`)."""
+    copy = _chart_copy(tmp_path)
+    relative, edit = guarded_edit(copy)
+    _edit(copy, relative, edit)
+    assert (copy / relative).read_text(encoding="utf-8") != (CHART_REAL / relative).read_text(
+        encoding="utf-8"
+    ), "the plant changed nothing"
+    assert _differences_with_chart(shape, brand, copy) == []
+
+
+CHART_REAL = ref.CHART
+
+
+@pytest.mark.parametrize("shape", HELM)
+def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
+    shape: str, tmp_path: Path
+) -> None:
+    """Helm writes nothing for a manifest that renders empty: a new `templates/pages.yaml` that is
+    one guarded block is no new file in the reference. Unguarded it is red (the added-file case)."""
+    copy = _chart_copy(tmp_path)
+    (copy / "templates" / "pages.yaml").write_text(
+        GUARD + A_PAGES_WORKLOAD + "{{- end }}\n", encoding="utf-8"
+    )
+    assert _differences_with_chart(shape, "govuk", copy) == []
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", HELM)
+@pytest.mark.parametrize(
+    ("relative", "edit", "line_has"),
+    [
+        # A guard on the section, not its `enabled`: a mapping is true whether or not it is off, so
+        # this block renders while the setting is off.
+        (
+            "templates/workloads.yaml",
+            lambda t: t + "{{- if .Values.pages }}\n" + A_PAGES_WORKLOAD + "{{- end }}\n",
+            "{{- if .Values.pages }}",
+        ),
+        # The guard, then the body after the end: the workload is outside it.
+        (
+            "templates/workloads.yaml",
+            lambda t: t + GUARD + "{{- end }}\n" + A_PAGES_WORKLOAD,
+            "the rendered text goes on",
+        ),
+        # Guard and end on one line: not a block this reads, so it stays in view.
+        (
+            "templates/workloads.yaml",
+            lambda t: t + "{{- if .Values.pages.enabled }}x{{- end }}\n",
+            "pages.enabled",
+        ),
+        # A guard that is never closed: nothing is removed.
+        (
+            "templates/workloads.yaml",
+            lambda t: t + GUARD + A_PAGES_WORKLOAD,
+            "{{- if .Values.pages",
+        ),
+        # Switched on in the chart's own defaults: a page service rendered by default.
+        ("values.yaml", lambda t: t + "pages:\n  enabled: true\n", "'pages:'"),
+    ],
+    ids=["a section guard", "the body after the end", "one line", "never closed", "on by default"],
+)
+def test_a_pages_change_that_renders_while_off_is_red(
+    shape: str,
+    brand: str,
+    relative: str,
+    edit: Callable[[str], str],
+    line_has: str,
+    tmp_path: Path,
+) -> None:
+    """The other side: what the guard does not cover is red, so the green above is the guard's."""
+    copy = _chart_copy(tmp_path)
+    _edit(copy, relative, edit)
+    found = _differences_with_chart(shape, brand, copy)
+    message = "\n".join(found)
+    assert f"{ref.folder_name(shape, brand)}/chart/{relative}: first differing line" in message, (
+        message
+    )
+    assert line_has in message, f"red for another reason:\n{message}"
+
+
 # ---- the regenerate command --------------------------------------------------------------------
 
 
@@ -643,8 +894,8 @@ def test_the_scan_is_red_on_a_host_written_without_a_scheme(real: str, planted: 
 
 
 def test_the_scan_leaves_the_hosts_the_renderers_write_alone() -> None:
-    """Its own green: the synthetic and public hosts, a service name, a pod's name under its headless
-    service and a version are not findings (so the red above is the plant's)."""
+    """Its own green: the synthetic and public hosts, a service name, a pod's name under its
+    headless service and a version are not findings (so the red above is the plant's)."""
     ok = (
         "VALKEY_HOST: cache.example.internal\nimage: ghcr.io/ospreyflow/api:1\n"
         "endpoint: s3.eu-west-2.amazonaws.com\nhost: arcadedb-0.arcadedb-headless\n"
