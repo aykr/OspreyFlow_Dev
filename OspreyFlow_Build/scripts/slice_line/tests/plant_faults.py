@@ -461,6 +461,9 @@ M = [
  ("merge_slice.py", '            except OSError as e:\n                if not self.said_failure:', '            except ZeroDivisionError as e:\n                if not self.said_failure:', "cannot_be_written_never_fails"),
  ("merge_slice.py", '                if not self.said_failure:\n', '                if True:\n', "cannot_be_written_never_fails"),
  ("merge_slice.py", '            shutil.copyfile(self.f, self.f.with_name(f"merge-progress-', '            (lambda *a: None)(self.f, self.f.with_name(f"merge-progress-', "records_never_mix"),
+ # the owner's file 008, line fault 17: a refusal on the merge result (step 4) is recorded, so send-back works
+ ("merge_slice.py", "                refuse_to_builder(slice_id, tip, f\"the slice's {name} was red on the merge result\"", "                (lambda *a: None)(slice_id, tip, f\"the slice's {name} was red on the merge result\"", "red_on_the_merge_result_is_recorded"),
+ ("merge_slice.py", "                if not names:\n                    findings = [{\"file\": \"\", \"what\": f\"The slice's {name} command", "                if False:\n                    findings = [{\"file\": \"\", \"what\": f\"The slice's {name} command", "red_on_the_merge_result_is_recorded"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
