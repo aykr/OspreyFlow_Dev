@@ -53,6 +53,7 @@ import { captureOutput } from "../support/capture.js";
 import { testClock } from "../support/clock.js";
 import type { TestClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request, signedCookie, TEST_SESSION_SECRET } from "../support/http.js";
+import { noSessionEvents } from "../support/noSessionEvents.js";
 import { generateSecret } from "../support/secret.js";
 
 const SECRET_NAME = "OSPREY_PAGES_SESSION_SECRET";
@@ -389,6 +390,7 @@ async function startPages(options: StartOptions = {}): Promise<Pages> {
       host: "127.0.0.1",
       clock,
       streamCheckMs: CHECK_MS,
+      sessionEvents: noSessionEvents,
     },
   );
   if (!running) throw new Error(`the service did not start: ${io.errors.join(" / ")}`);
