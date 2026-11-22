@@ -549,6 +549,10 @@ export type Phase = "alpha" | "beta" | "live" | "none";
  */
 export type BannerText = string | null;
 /**
+ * Default: false. Whether this deployment runs the page service, the server-rendered pages. true or false, nothing else: it is turned on for one deployment at a time, by the owner, in that deployment's own file.
+ */
+export type Enabled = boolean;
+/**
  * Default: 5x5x5. The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades.
  */
 export type Scheme = string;
@@ -670,6 +674,7 @@ export interface OspreyConfig {
   welcome?: WelcomeConfig;
   deployment?: DeploymentConfig;
   appearance?: AppearanceConfig;
+  pages?: PagesConfig;
   grading?: GradingConfig;
   external?: ExternalConfig;
   resources?: ResourcesConfig;
@@ -1076,6 +1081,18 @@ export interface AppearanceConfig {
   organisation?: Organisation;
   phase?: Phase;
   banner_text?: BannerText;
+}
+/**
+ * Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the
+ * server-rendered pages (`apps/pages`, the Ingest Studio's frame and Releases first). Off by
+ * default, and turned on for one deployment at a time, by the owner, in that deployment's own
+ * `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
+ * the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
+ * theirs. A render is exactly what it was while the setting is absent because `OspreyConfig`
+ * leaves this section out of its dump unless the file wrote it (Amendment 3 point 2).
+ */
+export interface PagesConfig {
+  enabled?: Enabled;
 }
 /**
  * The deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6): the

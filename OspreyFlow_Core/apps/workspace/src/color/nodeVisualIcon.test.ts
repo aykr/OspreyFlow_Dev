@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { cachedNodeSvgDataUri, renderNodeSvg, type NodeShape, type NodeVisualSpec } from "./nodeVisual";
+import {
+  cachedNodeSvgDataUri,
+  renderNodeSvg,
+  type NodeShape,
+  type NodeVisualSpec,
+} from "@ospreyflow/glass-shared";
 
 // ADR-079: a node's icon is drawn inside its shape, in the same generated picture, so the shape and
 // the colour still carry the type and the icon adds to them.

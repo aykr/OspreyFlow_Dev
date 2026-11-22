@@ -3,7 +3,12 @@
 // gap reads as a solid line once rasterised), so the ratio is the contract's and the size twice it.
 import { describe, expect, it } from "vitest";
 
-import { DASH_LENGTH_PX, DASH_PERIOD_PX, DOT_LENGTH_PX, DOT_PERIOD_PX } from "./provenancePatterns";
+import {
+  DASH_LENGTH_PX,
+  DASH_PERIOD_PX,
+  DOT_LENGTH_PX,
+  DOT_PERIOD_PX,
+} from "@ospreyflow/glass-shared";
 
 describe("a link's provenance pattern", () => {
   it("inferred is DESIGN.md's 4 3, doubled", () => {

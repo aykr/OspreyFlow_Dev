@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
-import { edgeTypesOfferedFor } from "./edgeTypeMenu";
+import { edgeTypesOfferedFor } from "@ospreyflow/glass-shared";
 
 const SAME_AS: EdgeTypeDef = { name: "SAME_AS", from: ["*"], to: ["*"], system: true };
 const ASSOCIATE_OF: EdgeTypeDef = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeEmptyExpansion } from "./expansionOutcome";
+import { describeEmptyExpansion } from "@ospreyflow/glass-shared";
 
 // A relationship chosen from a node's menu can add nothing: everything it leads to is already in
 // view, or it leads nowhere. Doing nothing and saying nothing looks like a fault (seen 3 October

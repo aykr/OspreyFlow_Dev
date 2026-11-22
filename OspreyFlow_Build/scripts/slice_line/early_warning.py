@@ -10,6 +10,9 @@
     early_warning.py fetch <id>               the runner's own result for run <id>, as `result <id>` returns it, on
                                               one line (012 a); exit 0, non-zero when it cannot be fetched. Never
                                               read from a note.
+    early_warning.py summary <id>             a red run's summary (010), as the server's `summary <id>` gives it: the
+                                              failures' extract by script, the model's advice marked as advice;
+                                              exit 0, non-zero when it cannot be fetched
     early_warning.py <slice> --trust <id>|auto --tree <hash>
                                               for the merge (009): ask the server itself for run <id>, never a note,
                                               and say in JSON whether it proves the candidate tree <hash>: every
@@ -492,9 +495,11 @@ def stack_notes(s: dict, found: list, ids: list, stack_id: str, order: list) -> 
 
 
 def fetch(argv: list) -> int:
-    """`early_warning.py fetch <id>` (012 a): the runner's own result line for that run, unchanged, from the server."""
+    """`early_warning.py fetch <id>` (012 a): the runner's own result line for that run, unchanged, from the server.
+    `early_warning.py summary <id>` (010): the same for the server's summary of a red run."""
     if len(argv) != 2 or not re.fullmatch(proto.ID_PATTERN, argv[1]):
-        print(f"Refused: fetch takes one run id ({proto.ID_LENGTH} lower-case hexadecimal characters).", file=sys.stderr)
+        print(f"Refused: {argv[0]} takes one run id ({proto.ID_LENGTH} lower-case hexadecimal characters).",
+              file=sys.stderr)
         return REFUSED_HERE
     try:
         s = load_setting()
@@ -502,7 +507,7 @@ def fetch(argv: list) -> int:
         print(f"Refused: {e}", file=sys.stderr)
         return REFUSED_HERE
     LAST_LINE[0] = ""
-    code, data = ssh(s, ["result", argv[1]], timeout=120)
+    code, data = ssh(s, ["result" if argv[0] == "fetch" else "summary", argv[1]], timeout=120)
     if data is None:
         print(f"No answer: the server could not be reached or gave no answer (ssh exit {code}).", file=sys.stderr)
         return NO_RESULT
@@ -515,7 +520,7 @@ def fetch(argv: list) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["fetch"]:
+    if argv[:1] in (["fetch"], ["summary"]):
         return fetch(argv)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("slices", nargs="+", metavar="slice")

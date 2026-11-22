@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { EDGE_HIT_PX, nearestEdge, nextLink, type ScreenSegment } from "./edgeSelection";
+import { EDGE_HIT_PX, nearestEdge, nextLink, type ScreenSegment } from "@ospreyflow/glass-shared";
 
 const seg = (id: string, ax: number, ay: number, bx: number, by: number): ScreenSegment => ({ id, ax, ay, bx, by });
 

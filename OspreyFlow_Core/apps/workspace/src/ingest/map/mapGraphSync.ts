@@ -8,7 +8,7 @@ import type { OntologySchema, RowTemplate } from "../../../../../packages/schema
 import type { Palette } from "@ospreyflow/glass-shared";
 import type { MapSelection } from "./MapCanvas";
 import { mapCanvasColours, mapNodeColour } from "./mapCanvasColours";
-import { linkTypeName } from "../../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 
 export const NODE_SIZE = 14;
 

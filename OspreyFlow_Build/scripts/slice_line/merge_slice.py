@@ -1201,7 +1201,17 @@ def merge(slice_id: str) -> dict:
             raise Refused(f"the merge result's environment could not be built: {e}. See {log}")
         for name in ("acceptance", "checks"):
             if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:
-                raise Refused(f"the slice's {name} is red on the merge result. See {log}")
+                # line fault 17 (the owner's file 008, SE6b): recorded for the builder, so send-back works, as a
+                # refusal at the full gate and at the scans is; left at `verified`, no action could move the slice
+                names, findings = gate_findings(log.read_text(errors="replace"))
+                if not names:
+                    findings = [{"file": "", "what": f"The slice's {name} command is red on the merge result (main with the "
+                                 f"slice merged in), though green on the slice's own tip: {frozen[name][:200]}",
+                                 "evidence": "the merge log (a merge-*.log in this slice's records)"}]
+                refuse_to_builder(slice_id, tip, f"the slice's {name} was red on the merge result", findings, len(names),
+                                  "gate")
+                raise Refused(f"the slice's {name} is red on the merge result. Recorded: resume.py {slice_id} send-back "
+                              f"returns it to the builder. See {log}")
         # the pure tests that scan what the slice touched (scan_map.tsv), on the merge result
         scans = scan_select.not_named(scan_select.select(touched, scan_select.load((after / LINE_MAP_REL).read_text())),
                                       frozen.get("checks") or "", frozen.get("acceptance") or "")

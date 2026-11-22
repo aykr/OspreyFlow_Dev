@@ -1,6 +1,5 @@
-import type { NarrowingOption } from "./expansionGate";
-import { linkTypeName, type NamedType } from "./linkLabel";
-import type { PreviewCount } from "./nodeGestures";
+import type { NarrowingOption, PreviewCount } from "@ospreyflow/glass-shared";
+import { linkTypeName, type NamedType } from "@ospreyflow/glass-shared";
 
 /** What a relationship would add, as both expansion prompts say it. */
 export function wouldAddFigure(count: PreviewCount): string {

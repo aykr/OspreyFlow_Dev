@@ -12,13 +12,41 @@ The other guides in this folder are the [administration guide](administration-gu
 whoever installs and runs OspreyFlow, the [developer guide](developer-guide.md), for data
 engineers, and the [architecture guide](architecture-guide.md), for how it is built. The screenshots show the synthetic demonstration cases; no real data appears in them.
 
+## Why OspreyFlow is built this way
+
+Your work is only as sound as the tool that holds it, so here is what OspreyFlow is built to and what each
+part means for you. The [architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built
+this way") gives the fullest account, with what holds each constraint today and what is "coming".
+
+- **Software sovereignty.** Your organisation can inspect, modify, host and replace the software you work
+  in. The software dependencies are under open-source licences, and a gate checks the build's package list
+  against an allowlist on every change; it does not yet reach every package inside the images. Model
+  weights, map data, fonts and base images are outside that check; a register and a gate for them are coming.
+- **Data sovereignty.** The deployment is run by your organisation, on its own network, with no route out
+  except the few an install and an administrator set up. A hosted model engine is an opt-in; ask your
+  administrator whether one is on.
+- **Privacy control.** What you see is meant to be bounded by handling markings and case membership, so a
+  record you may not see is meant to be left out of what you are shown, and no count is meant to reveal it
+  either. Known gaps on the read side remain, and the architecture guide lists them. One touches you if you
+  can build reports: in the boards' editor a builder sees the figures behind every board, for every case and
+  clearance, so that right is for people cleared for all of them.
+- **Security management.** Case reads, your changes and your report, assessment and pack exports are
+  recorded and traceable to you. Recording every model call, and every sign-in, is coming.
+- **Analytical accountability.** A judgement carries its evidence and a probability band, and what a model
+  suggests stays *inferred* until you confirm it (section 10).
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.77** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
+**Version 1.82** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.82 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says the gate checks the build's package list against an allowlist on every change and does not yet reach every package inside the images, in place of saying every software dependency is under an open-source licence; model weights, map data, fonts and base images stay outside that check, with a register and a gate for them coming (DC1c, round 5). PDF made again. |
+| 1.81 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line says what you see is *meant to be* bounded by handling markings and case membership, and no longer states it as fact; it names the one gap that touches an analyst who can build reports, that the boards' editor shows the figures behind every board for every case and clearance (DC1c, the verifier's finding). PDF made again. |
+| 1.80 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says model weights, map data, fonts and base images are outside the check that holds it, with a register and a gate for them coming (DC1c, verifier's finding). PDF made again. |
+| 1.79 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line no longer says a count is always hidden; it says the aim and that known gaps on the read side remain (DC1c, verifier's finding). PDF made again. |
+| 1.78 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to an analyst: the five constraints and what each means for the person working in a case (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.77 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.76 | 2026-11-16 | §6, Ask & Chat's drawer as reviewed (ADR-145 Amendment 20): Esc closes it as it closes other drawers; a marker or *Show all on graph* shows the graph with the drawer kept beside it; closing returns focus to what you opened it from. |
 | 1.75 | 2026-11-16 | v0.6.1 (the owner, 16 Nov): Ask & Chat (§6) opens as a drawer beside the view again, with **Expand** to make it the page and **Show as a drawer** to turn it back, keeping your question, engine and place; Esc closes the drawer, as other drawers; a marker or *Show all on graph* keeps the drawer; each opening is the drawer, and the results' *Ask a question about '…' instead* opens the page; §3's rail row and §5.5's Ask line say so (ADR-145 Amendment 20). |

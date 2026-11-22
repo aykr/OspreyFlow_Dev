@@ -2,8 +2,7 @@
 // unchanged.
 import { describe, expect, it } from "vitest";
 
-import { communityGroupOf } from "./communityLinks";
-import { packBubbles } from "./layoutModes";
+import { communityGroupOf, packBubbles } from "@ospreyflow/glass-shared";
 
 describe("packBubbles at the size of a large working set (ADR-119)", () => {
   it("places 50,000 nodes in 40 communities, each node once, quickly", () => {

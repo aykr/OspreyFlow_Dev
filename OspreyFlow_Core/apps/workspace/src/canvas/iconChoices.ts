@@ -5,10 +5,18 @@
 // choice is a way of looking, so, like the label choice (ADR-076) and the theme (ADR-070), it is kept
 // in this browser only, never sent to the server and not part of the case. The canvas cannot read it
 // from a component's state, so it is a small store the canvas listens to.
-import { glyphMarkup, hasGlyph, readableTextOn } from "@ospreyflow/glass-shared";
-import { MAX_IMAGE_ICON_CHARS, isSafeImageDataUrl, type NodeIcon } from "../color/nodeVisual";
+import {
+  glyphMarkup,
+  hasGlyph,
+  readableTextOn,
+  MAX_IMAGE_ICON_CHARS,
+  isSafeImageDataUrl,
+  type NodeIcon,
+  valueIconFor,
+  type IconByValueRule,
+  type ValueIcon,
+} from "@ospreyflow/glass-shared";
 import { entityPictureFor } from "./entityPictures";
-import { valueIconFor, type IconByValueRule, type ValueIcon } from "./valueIcons";
 
 export const ICON_CHOICES_KEY = "ospreyflow.node-icons";
 

@@ -23,12 +23,16 @@
 import { useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
 import type { StrengthLegend } from "../../../../packages/schemas/generated";
-import { activePalette } from "@ospreyflow/glass-shared";
+import {
+  activePalette,
+  linkTypeName,
+  type NamedType,
+  describeValueIcon,
+  glyphImageUri,
+} from "@ospreyflow/glass-shared";
 import { andList, compositionWords, influencerWords, layerWords } from "../strength/words";
 import { TypeChip } from "../inspector/TypeChip";
-import type { EntityVisual } from "../ontology/schema";
-import { linkTypeName, type NamedType } from "./linkLabel";
-import { describeValueIcon, glyphImageUri } from "./valueIcons";
+import type { EntityVisual } from "@ospreyflow/glass-shared";
 
 export interface LegendType {
   type: string;

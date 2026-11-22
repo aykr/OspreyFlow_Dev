@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (528 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (422 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (532 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (426 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -263,6 +263,8 @@ says that cost is a list-price estimate, not a bill.
 - **The Stop hook ends inside its installed limit** (the owner, 21 November 2026): the hook is installed with `stop_check.HOOK_TIMEOUT_S` (1800 s; `install.sh` reads it), and every command it runs (checks, acceptance, scans, lint) shares one allowance 90 s under it, each getting only what is left (and 1500 s at most). A command cut off is ended with every process it started (one that held the output pipe kept the old hook waiting), is red, and is named with how long it ran and why in the builder's words and in `stop-timeout-<commit>.json`; a command left with no time is named as not run. `stop_check.py` is installed: run install.sh.
 - **A conflict with main is seen before the merge** (the owner, 21 November 2026; DC1c): each board run (so after every verifier pass, merge, records commit and approved diff, and whenever main has moved) merges each verified slice with main in `git merge-tree`, once per pair of main and tip (`conflict-check.json` beside the records). It writes no branch, ref, index or worktree, and does not look while a merge runs. A conflict is recorded as the merge records one (refused for `conflict`, or `records` for the records folder alone): the board shows "verified, conflicts with main in <files>", and `resume.py <ID> send-back` returns it to the builder with no round spent.
 - **The merge reports its progress** (MERGE_PROGRESS_BRIEF.md; the owner, 19 November 2026): `merge_slice.py merge` writes `records/<ID>/merge-progress.json` (beside it, then renamed) at each of its seven steps' start and end and every 30 s while one runs: the slice, the tip, the merge's id (its log's name), the process id, the step and "n of 7" with when it began and the full gate's part (`make -k ci`, `make test`), the steps done with their result (passed, red as expected, red) and seconds, the log's size and last write, and an estimate left from this slice's previous attempt or else the last three merges of any slice, or "no estimate". Names, numbers and times only. A finished record (merged, refused, or ended with an error) is kept as `merge-progress-<id>.json`. The board shows "merging: step 5 of 7, today's full gate, 4 minutes in, about 3 left", "stalled" when the log has not grown for 10 minutes with the process alive, and "merge stopped without a result" when the process is gone or no merge holds the lock. A record that cannot be written never fails or slows the merge (said once in its log). The seats' progress (the brief's point 5) is not in this change.
+- **A refusal on the merge result is recorded** (008, fault 17): the slice's acceptance or checks red on main with the slice merged in is recorded for the builder (refused for `gate`, a findings record naming which), so `resume.py <ID> send-back` returns it, as after the full gate.
+- **No machine git** (006): the suite runs as on a machine with no git identity (`tests/conftest.py`), and the test world keeps its own identity in its repository's config.
 
 ## Files outside the repository
 

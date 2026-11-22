@@ -13,13 +13,101 @@ The other guides in this folder are the [administration guide](administration-gu
 installs and runs OspreyFlow, the [user guide](user-guide.md), for analysts, and the
 [developer guide](developer-guide.md), for data engineers.
 
+## Why OspreyFlow is built this way
+
+Intelligence mapping sits at the centre of sensitive work, and an organisation is only in charge of that
+work if it is in charge of the software that holds it. OspreyFlow starts from that. A tool for this work
+should be one you can read, change, host and replace, and one in which it is plain who did what. Open
+source is what makes the first of those possible; it is not enough on its own. So the platform is built
+to five constraints. Each is named below, said in plain words, and followed by what holds it today and
+what does not yet. Where something is not built, this guide says "coming".
+
+**Software sovereignty.** You can inspect, modify, host and replace the software that holds your
+knowledge. Software you can read lets you check for yourself what it does with your data, without asking
+anyone else. Software you can change lets you fix or adapt it on your own timetable. Software you can host
+runs where your rules say it must, and software you can replace lets you change one part without
+rebuilding the rest. Here that means the software dependencies are under open-source licences. The graph
+store, the analytics store, graph algorithms, the model engines, the media store and the recognition pass
+sit behind ports (section 2), so for each of them replacing the engine is one adapter and one line of
+configuration. The relational store (the audit table and the export ledger), the working-set store and the
+search index are not behind a port: they are open-source software you can read and host, but there is no
+port for them, so replacing one is not an adapter's work. What holds it: a licence gate runs on every change and reads the Python and Node package
+metadata of the build, the runtime each image carries and each demonstration dataset's licence (the Python
+packages inside an image are checked for two images only); a package under the GPL
+or AGPL never passes, and an LGPL one only with a recorded exception (section 9). The statement covers
+software dependencies. Model weights, map data, fonts and base images are outside the gate; a register and
+a gate for them are coming, and until they land their licences are not all stated in the repository.
+
+**Data sovereignty.** The aim is a deployment that runs on your own network, with nothing leaving it
+unless an administrator allows it. What holds it: every container sits on an internal network with no route out,
+only the front proxy is published, and a container is given a route out only when what it does needs
+one: the model downloads and, on an https address, the proxy's certificate fetch (both on by default), and the
+features an administrator configures (section 3 lists them). The models run inside the deployment.
+A hosted model engine is an opt-in: it is off while `models.local_only` is true, which is the default,
+and when an administrator turns one on, what may be sent is bounded by each dataset's egress setting and
+its handling codes. What does not yet hold: a first install needs the internet (the command, the images and
+the model files are fetched on the way in), and a default install fetches its model files from outside on
+every start; an offline bundle serves updates (administration guide, section 14). Superset's navigation
+bar draws a small usage-tracking image from an address outside the deployment, and it is the person's browser that asks
+for it, so the deployment's internal network does not stand in its way. Superset's content policy in
+v0.6.1 and earlier allowed that address, so a browser that could reach the internet could send the request
+(read in the image's code, not measured in a browser). The fix is in v0.6.2: a content policy for
+Superset that allows no outside address, so a browser refuses the image before it asks. A Small deployment on an https
+address fetches a certificate by default, unless the administrator gives it one. The model gateway's own
+cost-map fetch is switched off, and the speech server runs with its model hub offline, but its download step
+still reaches outside; the other stores and servers are kept in by the network, not by a setting of
+their own. No test yet proves that no page
+requests anything outside the deployment; a browser test that does is coming.
+
+**Privacy control.** What each person sees is meant to be bounded by handling markings and by case membership. This
+guide and the screens call it need-to-know, access control, clearance and *withheld*. What holds it:
+access is applied inside the store's own query, in the graph traversal and in the analytics query, and
+search has a filter of its own (section 6). The aim is that a record a person may not see is absent, and so is any degree,
+path length, histogram bucket or figure that would reveal it. Each adapter's conformance suite, and a
+test that walks every GET route as a person with no role, hold the store's queries to that. What does not
+yet: an independent penetration test is planned, not done; the project's backlog lists known gaps on the
+read side (for example, a pulls figure shown to an administrator who may not see those cases, and the
+search index's own fine-grained access setting, which is not yet set, so the index is reachable below the
+Conduit's filter); the reporting feed's access path has no clearance test of its own; and where Superset signs people
+in through Entra ID, a person who may build dashboards reads the whole reporting store in their own
+session, so that right is for people cleared for all of it (administration guide, section 6a.7).
+
+**Security management.** What people do in the platform is recorded and can be traced to them. Here,
+*access* means every read and write of case data. The reference reads that carry none, such as the type
+list and map tiles, are outside it, and so is deployment metadata. What holds it: case reads, refusals of
+access to a case and changes are written to an audit table, with who, when and what, and a failed
+write fails the request. The export ledger records who, when, which case, the handling level and whether
+anything was withheld, for report, assessment, pack and feed exports. What does not yet: model calls are
+recorded with the person and the case for some jobs (asking, extraction and document designation), not for
+all, and asking does not record the engine, so one record of every model call, with who asked, for which
+case and to which engine, is coming; sign-in events are not recorded by the platform, and recording them
+is coming; some exports (a dataset release, a rule file, a source file)
+write an audit row but no ledger row, and a platform backup and an object transfer write neither, so a
+ledger row for every export is coming. No test yet checks that each route that changes data writes an audit row. The audit table is append-only in intent, not yet refused by the
+database to another role, and carries no hash chain. Section 6 lists what is not audited, by design.
+
+**Analytical accountability.** A judgement carries its evidence and its uncertainty with it. What holds
+it: the Inspector's Judgements records a statement, how likely it is on a seven-band probability
+yardstick, and the evidence for and against; a judgement cannot be saved without at least one supporting
+reference, checked on the screen and again on the server; citations are verified when it is saved and
+again at each export; anything a model produces stays *inferred* until a person confirms it (section 5);
+and every drawn item carries a grading and a source. What does not yet: the uncertainty a judgement
+carries is its probability band and nothing finer, and a judgement has no inferred or confirmed status of
+its own.
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.7** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
+**Version 1.13** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.13 | 2026-11-21 | §2: the first sentence no longer says everything between the Conduit and the Vault crosses one of four ports. It says what crosses the four typed ports (the graph store, the analytics store, graph algorithms and the model engines), that the media store, the recognition pass and the search index's feed each have a narrower one, and that the relational store, the working-set store and the search index are not behind a port (the owner's sentence, DC1c round 7). §6: the person is passed into every read, through the ports for the graph store, the analytics store and graph algorithms and in the query itself for the search index. PDF made again. |
+| 1.12 | 2026-11-21 | *Why OspreyFlow is built this way*, held to the truth check a fourth time (DC1c, round 5). Software sovereignty: the line no longer says replaceable software keeps a record from being held hostage, and no longer says each store or engine sits behind a port; it argues for software you can read, change, host and replace on its merits, says which stores and engines are behind a port (the graph store, the analytics store, graph algorithms, the model engines, the media store and the recognition pass) and says the relational store, the working-set store and the search index are not, so replacing one is not an adapter's work. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 1.11 | 2026-11-21 | *Why OspreyFlow is built this way* and §6, held to the truth check a third time (DC1c, the verifier's findings): the audit sentences say case reads, refusals of access to a case and *changes* are audited, not "every change", and §6 adds that no test yet checks that each route that changes data writes a row; the privacy sentence says what each person sees is *meant to be* bounded. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 1.10 | 2026-11-21 | *Why OspreyFlow is built this way* and §9, corrected to the truth check (DC1c, verifier's second findings): §9 says an open-source alternative is used or the component is not bundled, since the register's Grafana row records no alternative. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 1.9 | 2026-11-21 | *Why OspreyFlow is built this way*, corrected to the truth check (DC1c, verifier's findings): a container's route out is described as what the model downloads, the proxy's certificate fetch and the configured features need, not as configured alone; the speech server's download step and the certificate fetch are named among what does not yet hold; the licence gate is described as reading the build's package metadata, with the Python packages inside an image checked for two images only; Superset's tracking image is from "an address outside the deployment"; the privacy sentence is an aim held by the store's queries, with two named read-side gaps. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 1.8 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening: the intent and the five constraints (software sovereignty, data sovereignty, privacy control, security management, analytical accountability), each with what holds it today and what is "coming" (DC1c). §6: the audit sentence said to cover case data, with what is not audited by design, the export ledger's contents and the two records still to come, instead of "every read and write". §9: the licence rule and the allowlist in words, naming no product; the table of avoided components moved to the specification's licence register (the owner's ruling of 20 November 2026). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.7 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.6 | 2026-11-15 | The header names v0.6.0, the one release v0.5.2's work ships in (the owner's plan of 15 November). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.5 | 2026-11-15 | The header names v0.5.2, the release this guide describes (step 5's sweep, §2, at the cut). Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -65,8 +153,9 @@ organisation's sign-in, and the cloud's managed services.
 | **The Conduit** | The API (FastAPI), stateless and horizontally scaled. Every request is checked against the person making it, and access control is applied inside each query to the stores, never after |
 | **The Vault** | The stores: the graph store (ArcadeDB), the analytics database (DuckDB inside the Conduit, or ClickHouse shared by several Conduits), search (OpenSearch; where a deployment has none, `postgres-fulltext`, the graph store's own reads, and the results page says search is limited to exact identifiers), PostgreSQL, the object store, and the models |
 
-Everything that passes between the Conduit and the Vault crosses one of four typed **ports**. A port
-is a narrow interface (a Python `Protocol`) that everything above it may call and nothing else may.
+What passes between the Conduit and the graph store, the analytics store, graph algorithms and the model engines crosses one of four typed **ports**; the media store, the recognition pass and the search index's feed each have a narrower one beside them. The relational store (the audit table and the export ledger), the working-set store and the search index are not behind a port.
+
+A port is a narrow interface (a Python `Protocol`) that everything above it may call and nothing else may.
 Each has a conformance suite, written before any adapter, and an adapter is supported only once it
 passes it. Swapping the engine behind a port, say a laptop's in-process DuckDB for a cluster's
 ClickHouse, means writing one adapter and changing one line of configuration.
@@ -178,7 +267,8 @@ person confirms it. No confidence threshold promotes it on anyone's behalf.
 - **Every record carries its handling**: a classification, handling codes, an action code and a
   sanitisation code, set at load and checked again, item by item, at export.
 - **The person travels with every read.** The Conduit resolves who is asking from the token and passes
-  them into every read through the ports, counts included. The adapter puts the filter into the
+  them into every read, counts included: through the ports for the graph store, the analytics store and graph
+  algorithms, and in the query itself for the search index. The adapter puts the filter into the
   traversal or the `WHERE` clause. A record the reader may not see is absent, and so is any degree,
   path length, histogram bucket or figure that would reveal it. Each adapter's conformance suite
   holds it to that.
@@ -189,8 +279,20 @@ person confirms it. No confidence threshold promotes it on anyone's behalf.
 - **Nothing is cut silently.** A result over the working set's limit is refused with a typed
   `limit_exceeded` and three choices (save a smaller view, filter first, or run it as a batch job),
   never truncated.
-- **Every read and write is audited**, with who, when and what; an expansion that crosses a handling
-  boundary needs a justification.
+- **Reads and writes of case data are audited**, with who, when and what. Case reads, refusals of access
+  to a case and changes are recorded; an expansion that crosses a handling boundary needs a
+  justification, which is recorded with it. A failed audit write fails the request. Here *access* means
+  every read and write of case data. The reference reads that carry none, the type list and map tiles,
+  are outside it.
+- **Exports are recorded in a ledger.** It holds who, when, which case, the handling level and a
+  withheld flag for report, assessment, pack and feed exports.
+- **What is not audited, by design:** deployment metadata (the ontology, map providers, ingest
+  connectors, packs and transforms, the tile proxy), some reads on a case (link types, promotable
+  items, link history and the case brief) and the export ledger's own listing. Refusals other than
+  refusals of case access, connector reads and Studio recipes are not audited either.
+- **Coming:** one record of every model call, with who asked, for which case and to which engine, and a
+  record of sign-in events. Until then the audit holds model calls for some jobs only (the passage
+  *Why OspreyFlow is built this way*, above, says which), and sign-in events are not recorded by the platform.
 
 ## 7. Where the data lives during analysis
 
@@ -230,22 +332,17 @@ is built* gives the same table with each interface's transport.
 
 The build fails if a dependency's licence is not on the allowlist (Apache-2.0, MIT, the BSD
 licences, ISC, MPL-2.0 and a short list of others). GPL and AGPL never pass; an LGPL package passes
-only with a recorded exception, for dynamic linking alone. Several well-known components were
-avoided for their licence:
+only with a recorded exception, for dynamic linking alone.
 
-| Avoided | Its licence | Used instead |
-| --- | --- | --- |
-| Redis 7.4 and later | RSAL / SSPL | Valkey (BSD-3-Clause) |
-| Elasticsearch | SSPL / Elastic Licence | OpenSearch (Apache-2.0) |
-| Neo4j Community | GPL-3.0 | ArcadeDB |
-| ArangoDB | BSL 1.1 | ArcadeDB |
-| FalkorDB | SSPL | rustworkx for in-memory algorithms |
-| Mapbox GL JS 2 and later | Proprietary | MapLibre GL JS (BSD-3-Clause) |
-| MongoDB | SSPL | PostgreSQL, and an S3-protocol object store |
-| Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table |
-| Grafana 9 and later | AGPL-3.0 | Never bundled; acceptable only as an unmodified separate service |
-| Stanford CoreNLP | GPL-3.0 | Stanza (Apache-2.0), held at a version with no GPL dependency |
-| Terraform | BSL 1.1 | OpenTofu (MPL-2.0) |
+The same rule decides what is chosen in the first place. Several well-known components were
+avoided for their licence, in one of three ways: a licence that limits who may host or resell the
+software, a commercial or proprietary licence that makes its use depend on a supplier's agreement, or
+a licence that would bind the whole platform to the same terms, so that distributing it would mean
+distributing everything built on it.
+Where a component's licence was of one of these kinds, OspreyFlow uses an open-source alternative
+instead, or does not bundle the component. The avoided components, their licences and what is used in their place are recorded in the
+internal specification's licence register (`spec/00_ARCHITECTURE.md`, section 7), beside the allowlist
+itself.
 
 **Data has licences too.** A screening list's licence is recorded before its connector ships. Two are
 not confirmed for a customer's screening (the UN list; OpenSanctions, which is non-commercial only),

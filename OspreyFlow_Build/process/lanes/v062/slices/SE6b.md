@@ -47,6 +47,10 @@ Removing a dashboard identity in the Admin does not remove what that identity's 
 
 The new test; `tests/services/api/test_admin_routes.py`; the report-sync tests (`tests/services/report_sync/`); `tests/test_doc_citations_check.py`; `ruff check .` in `OspreyFlow_Core`. Before your final report run what the conductor runs again (ruff on every file changed, the scan-map check for the test you add) and the whole pure sweep for the folders you touched.
 
+## Round 11 (22 November 2026, the owner added a round; read `slices/SE6b_ROUND11_TABLE.md` first)
+
+One open case, in one live test: `test_a_stamped_dashboard_has_no_figures_in_the_list_and_is_pending` stamps the fixed name `osprey-dashboard-a` in the shared control schema and never removes it, so the next run against the same Postgres refuses the file's earlier tests with `DashboardRemoved`. **Fix only that test:** a stamp name unique to the run and the test's own schema, or the stamp removed in teardown (whichever the file's other tests do for their own state). **Change no product code and no other test.** Say how you read that a second run no longer refuses the earlier tests (there is no stack here) and that a live run is owed.
+
 ## Out of scope
 
 N18 (the guest role's read of `pulls`), N16 and N17 (SE6 and the security builds' own rows), N20 and N21 (platform), any Superset configuration change, the whole-mart reader decision (ADR-148 Amendment 21: it is accepted and not reopened here), any change to a key, token or password handling.

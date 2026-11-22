@@ -28,7 +28,7 @@
 // (shape+fill+stroke), not by node id, and stays tiny regardless of
 // working-set size.
 
-import { glyphMarkup } from "@ospreyflow/glass-shared";
+import { glyphMarkup } from "./nodeGlyphs";
 
 export type NodeShape =
   | "circle"

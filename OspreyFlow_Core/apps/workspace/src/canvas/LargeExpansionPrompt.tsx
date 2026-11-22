@@ -1,9 +1,7 @@
 import { Popover } from "../design/primitives/Popover";
-import { linkTypeName, type NamedType } from "./linkLabel";
+import { linkTypeName, type NamedType, EXPANSION_CONFIRM_ABOVE } from "@ospreyflow/glass-shared";
 import { NarrowingChoices, wouldAddFigure as figure } from "./NarrowingChoices";
-import type { NarrowingOption } from "./expansionGate";
-import { EXPANSION_CONFIRM_ABOVE } from "./expansionGate";
-import type { PreviewCount } from "./nodeGestures";
+import type { NarrowingOption, PreviewCount } from "@ospreyflow/glass-shared";
 
 export interface LargeExpansionPromptProps {
   x: number;

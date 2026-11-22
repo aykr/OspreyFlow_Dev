@@ -4,7 +4,7 @@ import {
   expandOnDoubleClick,
   menuRequestForRightClick,
   previewCountFrom,
-} from "./nodeGestures";
+} from "@ospreyflow/glass-shared";
 
 /** Seen 3 October 2026: the browser's own right-click menu opened on top of the Glass menu; a
  * left click seemed to do nothing; a failed count preview sat as `(…)` for ever. */

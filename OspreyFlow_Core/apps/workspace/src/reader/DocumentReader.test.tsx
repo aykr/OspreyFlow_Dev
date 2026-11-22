@@ -5,7 +5,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { OntologyRegistry } from "../ontology/schema";
+import { OntologyRegistry } from "@ospreyflow/glass-shared";
 import { actOnAppear } from "../testing/actOnAppear";
 import { DocumentReader } from "./DocumentReader";
 import type { DocumentReaderView } from "@ospreyflow/glass-shared";

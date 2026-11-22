@@ -8,11 +8,11 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Node } from "../../../../packages/schemas/generated";
 import { AccordionSection } from "../design/primitives/AccordionSection";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { linkCaption, linkTypeName, type NamedType } from "../canvas/linkLabel";
-import { eventsNoun } from "@ospreyflow/glass-shared";
-import { AddFromList } from "../search/AddFromList";
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 import {
+  linkCaption,
+  linkTypeName,
+  type NamedType,
+  eventsNoun,
   loadBusiestDays,
   loadBusiestLinks,
   loadGroups,
@@ -30,6 +30,8 @@ import {
   type RankedNode,
   type TypeCounts,
 } from "@ospreyflow/glass-shared";
+import { AddFromList } from "../search/AddFromList";
+import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 /** How many the overall ranking shows first, and how many each type shows when opened. */
 export const TOP = 10;

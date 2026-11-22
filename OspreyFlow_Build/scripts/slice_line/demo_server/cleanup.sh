@@ -6,13 +6,15 @@
 #
 # It removes only what install.sh and the runner made: the runner's containers, networks, volumes and images (those
 # whose name starts osprey-early- AND that carry the label osprey.early=1; nothing else, whatever its name), the
-# runner's jobs (its account's processes), the shield (its unit and its nftables table), the key's line in authorized_keys (by its marker comment), the systemd
+# runner's jobs (its account's processes), the shield (its unit and its nftables table), the summary's units, table and
+# account (010), the key's line in authorized_keys (by its marker comment), the systemd
 # drop-in, linger, the account, and the folder (the source copy, the jobs, the tools, the caches). Run twice, the
 # second run lists nothing.
 set -euo pipefail
 
 ROOT="${OSPREY_EARLY_ROOT:-/var/lib/osprey-early}"
 USER_NAME="${OSPREY_EARLY_USER:-osprey-early}"
+SUMMARY_USER="${OSPREY_EARLY_SUMMARY_USER:-osprey-summary}"
 DROPIN_BASE="${OSPREY_EARLY_DROPIN_BASE:-/etc/systemd/system}"
 UNIT_DIR="${OSPREY_EARLY_UNIT_DIR:-/etc/systemd/system}"
 PREFIX=osprey-early-
@@ -66,6 +68,18 @@ if [ -f "$shield_unit" ]; then
 fi
 if command -v nft >/dev/null 2>&1 && nft list table inet osprey_early >/dev/null 2>&1; then
   gone "the shield (nftables table inet osprey_early)" nft delete table inet osprey_early
+fi
+
+for unit in osprey-summary.path osprey-summary.timer osprey-summary.service; do
+  if [ -f "$UNIT_DIR/$unit" ]; then
+    gone "the summary's unit ($UNIT_DIR/$unit)" sh -c 'systemctl disable --now "$2" >/dev/null 2>&1 || true; rm -f "$1"; systemctl daemon-reload 2>/dev/null || true' _ "$UNIT_DIR/$unit" "$unit"
+  fi
+done
+if command -v nft >/dev/null 2>&1 && nft list table inet osprey_summary >/dev/null 2>&1; then
+  gone "the summary's shield (nftables table inet osprey_summary)" nft delete table inet osprey_summary
+fi
+if id -u "$SUMMARY_USER" >/dev/null 2>&1; then
+  gone "the account $SUMMARY_USER" userdel "$SUMMARY_USER"
 fi
 
 keys="$ROOT/home/.ssh/authorized_keys"
