@@ -19,12 +19,21 @@ What this file proves, and the planted fault for each (rule 15):
   record that is not a job's is refused when read. A stand-in that only ever held what was put in
   would have said "running" for a job it had lost.
   - failed: said as failed, in this module's words and never the exception's (rule 7);
-  - a worker that stopped: a job still "running" past the matching lock's own life is said
-    abandoned, not running (the plant: the same record read with no such test says "running");
+  - a job running past the matching lock's own life: said overdue, and **not** said lost. Nothing
+    stops a run when its lock expires (`resolve.trigger`: a run may outlive `LOCK_TTL_SECONDS`, and
+    the overlap lock is not then held), and the worker has no limit on a job and sends no
+    heartbeat, so age cannot tell a lost worker from a long run. The words therefore say "may still
+    be working" and never "run it again", which would start the overlap the lock exists to stop
+    (plant: the earlier words, "the worker was lost ... run it again", red). A live worker past the
+    lock's life is modelled: the same job, read overdue, is read done once it finishes;
   - an expired or unknown id and another kind of job's id: the same "no record" answer, so the
     route is no oracle for which ids exist;
-  - done with records left out: said, without a count (rules 3 and 7: a count of the corpus's
-    records is not a number every reader may have).
+  - done with records left out: **said exactly as a done job that left none out.** The run is of the
+    whole corpus as the service principal sees it (`trigger.py`), not as the reader does, so "some
+    were left out" is a yes or no about records the reader may not see, a one-bit count (rule 3).
+    The left-out records are counted and named in the run's own result, on the job's record, for an
+    operator (plant: the flag and the words put back, red; a reader with an OFFICIAL clearance and
+    a corpus whose only bad date is above it reads the same words as one with none).
 - the route (`GET /v1/resolution/jobs/{job_id}`): a reader without the right is refused; one with
   it is answered; and what it says carries no id of a node, no count and no value.
 
@@ -163,19 +172,41 @@ async def test_a_failed_job_is_said_failed_in_our_words_never_the_exceptions(
         )
 
 
-async def test_a_job_still_running_past_the_matching_locks_life_is_said_abandoned(
+async def test_a_job_still_running_past_the_matching_locks_life_is_said_overdue_not_lost(
     world: SimpleNamespace,
 ) -> None:
-    """Its worker stopped: nothing reclaims a stream entry, so it will never finish. The plant is
-    the same record read as `running`, the status it kept until this was read (ADR-151's own cost,
-    A8): the case below shows it is the age that says abandoned, not the state."""
+    """Age alone cannot say the worker was lost: a run may outlive its lock and still be writing.
+    So it is said overdue, with the two things it may be, and a reader is not told to run it again
+    (a second run is not refused once the lock has expired, so that would overlap the live one)."""
     job = await _submit(world)
-    started = _now(world)
-    await _started_at(world, job, started)
+    await _started_at(world, job, _now(world))
     world.clock.advance(LOCK_TTL_SECONDS + 61)
     said = await _status(world, job)
-    assert said.state == "abandoned"
-    assert "stopped" in said.words and "run it again" in said.words
+    assert said.state == "overdue"
+    assert "longer than" in said.words and "may still be working" in said.words
+    for claim in ("lost", "run it again", "none of its results were saved", "stopped"):
+        assert claim not in said.words, f"age alone does not show {claim!r}"
+    assert "administrator" in said.words, "who can read the worker's own log"
+
+
+async def test_a_live_worker_past_the_locks_life_is_not_told_it_was_lost(
+    world: SimpleNamespace,
+) -> None:
+    """The case the age rule got wrong: the worker is alive, the run outlasts the lock's life, and
+    it finishes. Read in the overdue window it says it may still be working; read after, done."""
+    job = await _submit(world)
+    await _started_at(world, job, _now(world))
+    await world.jobs.mark_progress(job, "Comparing 400,000 pairs")
+    world.clock.advance(LOCK_TTL_SECONDS + 120)
+    during = await _status(world, job)
+    assert during.state == "overdue" and "may still be working" in during.words
+    assert "Comparing 400,000 pairs" in during.words, "its stage is still said"
+    await world.jobs.mark_done(
+        job, {"skipped": False, "nodes_processed": 9, "same_as_written": 2,
+              "records_left_out": 0, "left_out": []},
+    )  # fmt: skip
+    after = await _status(world, job)
+    assert after.state == "done" and "finished" in after.words
 
 
 async def test_a_job_running_within_the_locks_life_is_still_running(
@@ -187,34 +218,44 @@ async def test_a_job_running_within_the_locks_life_is_still_running(
     assert (await _status(world, job)).state == "running"
 
 
+_CLEAN = {"skipped": False, "nodes_processed": 9, "same_as_written": 2, "records_left_out": 0,
+          "left_out": []}  # fmt: skip
+_WITH_LEFT_OUT = {
+    "skipped": False, "nodes_processed": 9, "same_as_written": 2, "records_left_out": 3,
+    "left_out": [{"node_id": "n-1", "property": "date_of_birth", "reason": "not_an_iso_date"}],
+}  # fmt: skip
+
+
 async def test_a_finished_job_is_said_finished(world: SimpleNamespace) -> None:
     job = await _submit(world)
-    await world.jobs.mark_done(
-        job,
-        {"skipped": False, "nodes_processed": 9, "same_as_written": 2, "records_left_out": 0,
-         "left_out": []},
-    )  # fmt: skip
+    await world.jobs.mark_done(job, _CLEAN)
     said = await _status(world, job)
     assert said.state == "done" and "finished" in said.words
-    assert said.records_left_out is False
     assert "9" not in said.words, "rule 7: no count of the corpus's records in a reader's words"
 
 
-async def test_a_finished_job_that_left_records_out_says_so_without_a_count(
+async def test_a_job_that_left_records_out_reads_exactly_as_one_that_left_none(
     world: SimpleNamespace,
 ) -> None:
-    job = await _submit(world)
-    await world.jobs.mark_done(
-        job,
-        {"skipped": False, "nodes_processed": 9, "same_as_written": 2, "records_left_out": 3,
-         "left_out": [
-             {"node_id": "n-1", "property": "date_of_birth", "reason": "not_an_iso_date"}
-         ]},
-    )  # fmt: skip
-    said = await _status(world, job)
-    assert said.state == "done" and said.records_left_out is True
-    assert "left out" in said.words and "date" in said.words
-    assert "3" not in said.words and "n-1" not in said.words
+    """Rule 3. The run reads the whole corpus as the service principal, so whether it left a record
+    out says whether a record the reader may not see is malformed. A reader of OFFICIAL whose own
+    records all have good dates, reading a run whose one bad date is above their clearance, must
+    read what they would read if there were none: the same state, the same words, the same body.
+    The left-out records stay on the job's own record, counted and named, for an operator."""
+    clean = await _submit(world)
+    await world.jobs.mark_done(clean, _CLEAN)
+    left_out = await _submit(world)
+    await world.jobs.mark_done(left_out, _WITH_LEFT_OUT)
+    said_clean = (await _status(world, clean)).model_dump()
+    said_left_out = (await _status(world, left_out)).model_dump()
+    said_clean.pop("job_id"), said_left_out.pop("job_id")
+    assert said_clean == said_left_out
+    for told in ("left out", "date", "3", "n-1", "not_an_iso_date"):
+        assert told not in said_left_out["words"]
+    assert "records_left_out" not in said_left_out, "no yes-or-no field either"
+    kept = (await world.jobs.get_status(left_out)).result
+    assert kept is not None and kept["records_left_out"] == 3
+    assert kept["left_out"][0]["node_id"] == "n-1", "the operator's record still names it"
 
 
 async def test_a_job_the_overlap_guard_turned_away_is_said_not_to_have_run(
@@ -396,7 +437,7 @@ async def test_the_route_answers_a_reader_who_holds_the_right(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["state"] == "failed" and "failed" in body["words"]
-    assert set(body) == {"job_id", "state", "words", "records_left_out"}, (
+    assert set(body) == {"job_id", "state", "words"}, (
         "nothing of the job's payload or result: no ids, counts or values (rule 7)"
     )
     assert "boom" not in response.text

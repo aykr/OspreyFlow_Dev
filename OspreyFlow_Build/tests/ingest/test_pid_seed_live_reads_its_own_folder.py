@@ -1,5 +1,11 @@
-"""C068 (and, by the same cause, the live ingest tests of C043 that name `SourceUnreadableError`):
-the live seed tests read the seed's files in the process, and the in-process read refused them.
+"""C068: the live seed tests read the seed's files in the process, and the in-process read refused them.
+
+**This explains C068 only, not C043.** C043's live tests (the studio-load and run-now case-dataset
+stamping tests; two files holding four test functions, where the row says seven, so three are not
+found by reading) are not this module's: they write their sources by
+`tests/ingest/test_row_keys.py::_published_draft`, into the ingest root itself, the root conftest
+sets, so the refusal proved below cannot be their cause, and nothing here shows what is.
+C043 stays open: see "Owed to RS1" at the end for its own command.
 
 **The cause, found by reading** (the failing run itself is the evidence seat's, RS1). The seed's
 files live in `<scratch>/ingest/uploaded/pid/` and `tests/ingest/test_pid_seed_live.py` gives the
@@ -18,7 +24,13 @@ and the live module sets the root for in-process reads to the seed's folder. The
 module without that setting: the second case then fails with the real refusal. A read that is
 refused for a file outside the dataset's folders stays refused (`test_source_confinement.py`).
 
-Owed to RS1: the slow seed's two cases run on a leased stack, to see them pass.
+Owed to RS1 (the evidence seat, on a leased stack; nothing here runs them):
+  - C068: the slow seed's two cases, `tests/ingest/test_pid_seed_live.py`, to see them pass.
+  - C043, still open and unexplained: `cd OspreyFlow_Core && uv run pytest -c ../OspreyFlow_Build/pytest.ini
+    ../OspreyFlow_Build/tests/services/api/test_studio_load_stamps_its_case_dataset_live.py
+    ../OspreyFlow_Build/tests/services/api/test_studio_run_now_stamps_its_case_dataset_live.py`
+    with the failure's own traceback kept, to see which `SourceUnreadableError` words it raises
+    ("not in the ingest folder", or "not one of this dataset's files") and from which read.
 """
 
 from __future__ import annotations
