@@ -16,7 +16,8 @@ any statement. The tables are whatever the real `Mart._bootstrap` creates in the
 (read from its own `CREATE TABLE` text), never a list written here, so a table added to the mart
 later without the removal reaching it fails the first test. The record of a removal lives in a
 schema of its own, which a BI tool is never granted. It walks no folder; it reads one file by its
-path (`apps/workspace/src/admin/api.ts`, to show the screen reads the words the route sends).
+path (`packages/glass-shared/src/admin/api.ts`, the Admin client, in the shared package since
+PL4d3e; it shows the screen reads the words the route sends).
 
 What a mistake would do, and the case that catches it:
 - the removal route never touches the mart (the fault on main) —
@@ -1101,12 +1102,12 @@ async def test_the_reader_check_sees_each_planted_fault(
 
 # --- What the administrator sees ------------------------------------------------------------------
 
-ADMIN_API = Path(__file__).parents[4] / "OspreyFlow_Core/apps/workspace/src/admin/api.ts"
+ADMIN_API = Path(__file__).parents[4] / "OspreyFlow_Core/packages/glass-shared/src/admin/api.ts"
 
 
 def test_the_refusal_is_in_the_shape_the_admin_screen_reads(world: _World) -> None:
-    """`apps/workspace/src/admin/api.ts` `failure()` shows an object `detail`'s `message` when it is a
-    string (ADR-145 Amendment 5) and otherwise only "could not complete that (503)". The route's
+    """`failure()` in the Admin client (`packages/glass-shared/src/admin/api.ts`, the shared package)
+    shows an object `detail`'s `message` when it is a string (ADR-145 Amendment 5) and otherwise only "could not complete that (503)". The route's
     words are in `message`, so the screen shows them; under any other key they were never seen."""
     source = ADMIN_API.read_text(encoding="utf-8")
     assert 'typeof (detail as { message?: unknown }).message === "string"' in source, (
