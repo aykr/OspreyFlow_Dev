@@ -19,10 +19,12 @@ can be believed (rule 12: the sentence, then the test that fails if it is untrue
   and `test_the_repositorys_rules_file_has_no_maintained_under_mapping`.
 
 **What it walks (the scan row).** Every case but the real-tree ones builds its own git repositories in `tmp_path`.
-The real-tree cases (`test_the_real_tree_*`) read `OspreyFlow_Core` at `HEAD` of this repository through
+The real-tree cases (`test_the_real_tree_*`) read the whole of `OspreyFlow_Core` at `HEAD` of this repository through
 `git ls-tree` and `git cat-file` (read-only, nothing from the working tree), once, and run the script's no-React
-step on an extracted archive of it in a temporary folder. They also read `OspreyFlow_Core/scripts/manifest_areas.toml`.
-Its prefixes: `OspreyFlow_Core/`.
+step on an extracted archive of it in a temporary folder; they also read `OspreyFlow_Core/scripts/manifest_areas.toml`
+and the release workflow at `HEAD`. One case (`copy_reduced_core`) walks the working tree's `OspreyFlow_Core/apps/pages`
+and `OspreyFlow_Core/packages/glass-shared` with `rglob`, reading them into a temporary repository for the planted React
+import. Prefixes for the scan map: `OspreyFlow_Core/`.
 """
 
 from __future__ import annotations
@@ -1285,17 +1287,21 @@ def test_the_real_tree_images_come_from_the_release_matrix_and_the_dockerfiles(r
 
 def test_the_real_tree_generated_evidence(real: Made) -> None:
     by = real.by_path()
-    assert by["packages/schemas/release.schema.json"]["is_generated"] == "yes"
-    assert by["packages/schemas/generate_ts.py"]["is_generated"] == "no"
+
+    def named(name: str) -> dict[str, str]:
+        """The one file of that name, wherever a move puts it: the case is about its evidence, not its folder."""
+        found = [row for path, row in by.items() if path.rsplit("/", 1)[-1] == name]
+        assert len(found) == 1, (name, [r["path"] for r in found])
+        return found[0]
+
+    assert named("release.schema.json")["is_generated"] == "yes", "generate_ts.py writes it"
+    assert named("generate_ts.py")["is_generated"] == "no", "the generator is not itself generated"
     generated = [r for p, r in by.items() if p.startswith("packages/schemas/generated/")]
     assert len(generated) > 100 and {r["is_generated"] for r in generated} == {"yes"}
-    assert by["docs/pdf/user-guide.pdf"]["is_generated"] == "no evidence in this tree"
-    assert (
-        by["packages/glass-shared/src/shell/placesByRole.json"]["is_generated"]
-        == "no evidence in this tree"
-    )
-    assert by["apps/workspace/PL4_BASELINE.json"]["is_generated"] == "yes"
-    assert by["deploy/superset/osprey_theme.json"]["is_generated"] == "yes"
+    assert named("user-guide.pdf")["is_generated"] == "no evidence in this tree"
+    assert named("placesByRole.json")["is_generated"] == "no evidence in this tree"
+    assert named("PL4_BASELINE.json")["is_generated"] == "yes"
+    assert named("osprey_theme.json")["is_generated"] == "yes"
 
 
 def test_the_real_summary_carries_the_counts_the_two_trees_and_the_no_react_result(
