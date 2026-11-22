@@ -3,7 +3,7 @@
 // an analyst who hid the toolbar can find it again, and each says what it controls and whether it is shown.
 import { forwardRef, useContext } from "react";
 
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { CanvasToolbarCompact } from "./toolbarCompact";
 import { VIEW_TOOLBAR_ID } from "./toolbarVisibility";
 

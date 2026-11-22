@@ -20,9 +20,9 @@ import type Graph from "graphology";
 import { useState } from "react";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import { listAssumptions, listGaps, listJudgements, getYardstick } from "../assessment/api";
+import { listAssumptions, listGaps, listAssessmentJudgements as listJudgements, getYardstick } from "@ospreyflow/glass-shared";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { caseLabel, listCases } from "../investigation/cases";
+import { caseLabel, listCases } from "@ospreyflow/glass-shared";
 import { Button } from "../design/primitives/Button";
 import { Drawer } from "../design/primitives/Drawer";
 import { Input } from "../design/primitives/Input";
@@ -37,7 +37,7 @@ import {
   manifestSentence,
   type ExportMark,
   type ExportResult,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import { buildReportArtefact } from "./reportExport";
 import { buildSubgraphArtefact, serialiseSubgraphArtefact } from "./subgraphExport";
 import { triggerDownload } from "./triggerDownload";

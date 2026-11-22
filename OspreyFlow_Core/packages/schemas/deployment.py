@@ -40,9 +40,11 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    SerializerFunctionWrapHandler,
     ValidationError,
     ValidationInfo,
     field_validator,
+    model_serializer,
     model_validator,
 )
 
@@ -254,6 +256,14 @@ VISION_MODELS: dict[str, str] = {"moondream:1.8b-v2-q4_K_M": "c865c80afc38"}
 EMBEDDING_MODELS: dict[str, str] = {"all-minilm:22m-l6-v2-fp16": "1b226e2802db"}
 #: Served by the whisper container, pinned by its image, not by Ollama.
 TRANSCRIPTION_MODELS: tuple[str, ...] = ("Systran/faster-whisper-tiny.en",)
+#: The Hugging Face commit each transcription model is fetched at (`06_DECISIONS.md` ADR-020's
+#: Stage 2 addendum names the same commit). The `whisper-models` job checks the snapshot it holds is
+#: this one and refuses to start otherwise, as the Ollama pull does with a manifest id
+#: (`harness/render.py`, `_whisper_download_script`). Held to the licence register's pin by
+#: `tests/licence_check/test_register.py`.
+TRANSCRIPTION_MODEL_REVISIONS: dict[str, str] = {
+    "Systran/faster-whisper-tiny.en": "0d3d19a32d3338f10357c0889762bd8d64bbdeba",
+}
 
 ExtractionModel = Literal["qwen2.5:7b-instruct", "qwen2.5:14b-instruct"]
 #: ADR-135 Amendment 1 decision 3: the extraction model on an NVIDIA GPU when none is named.
@@ -1748,6 +1758,65 @@ class AppearanceConfig(BaseModel):
         return dumped
 
 
+class PagesConfig(BaseModel):
+    """Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the
+    server-rendered pages (`apps/pages`, the Ingest Studio's frame and Releases first). Off by
+    default, and turned on for one deployment at a time, by the owner, in that deployment's own
+    `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
+    the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
+    theirs. A render is exactly what it was while the setting is absent because `OspreyConfig`
+    leaves this section out of its dump unless the file wrote it (Amendment 3 point 2)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Default: false. Whether this deployment runs the page service, the server-rendered "
+            "pages. true or false, nothing else: it is turned on for one deployment at a time, "
+            "by the owner, in that deployment's own file."
+        ),
+    )
+
+    @field_validator("enabled", mode="before")
+    @classmethod
+    def _true_or_false(cls, value: object) -> object:
+        # A quoted "true", 1 and a string "yes" are not booleans here: a setting that turns a
+        # service on is not guessed at. An *unquoted* `yes` or `on` in a file is a different case:
+        # `yaml.safe_load` (YAML 1.1) turns it into a real `True` before this runs, so it can only
+        # be refused where the file is read: `load_osprey_yaml` below reads such a spelling as the
+        # text it is, and this check then refuses it.
+        if not isinstance(value, bool):
+            raise ValueError("pages.enabled must be true or false")
+        return value
+
+
+class _DeploymentYamlLoader(yaml.SafeLoader):
+    """`yaml.SafeLoader` with one change: only `true` and `false` (in the three cases YAML 1.2
+    allows) are booleans. YAML 1.1, which PyYAML follows, also reads an unquoted `yes`, `on`,
+    `no` and `off` (in any of three cases) as booleans, so a person who writes `enabled: yes`
+    turns a service on by a spelling nothing downstream can tell from `true`. Here those stay
+    strings, and a boolean setting's own validation refuses them in words."""
+
+
+_BOOL_TAG = "tag:yaml.org,2002:bool"
+_DeploymentYamlLoader.yaml_implicit_resolvers = {
+    first: [(tag, pattern) for tag, pattern in resolvers if tag != _BOOL_TAG]
+    for first, resolvers in yaml.SafeLoader.yaml_implicit_resolvers.items()
+}
+_DeploymentYamlLoader.add_implicit_resolver(
+    _BOOL_TAG, re.compile(r"^(?:true|True|TRUE|false|False|FALSE)$"), list("tTfF")
+)
+
+
+def load_osprey_yaml(text: str) -> Any:
+    """Read `osprey.yaml`'s text for `OspreyConfig.model_validate`: `yaml.safe_load`, except that
+    YAML 1.1's other boolean spellings (`yes`, `on`, ...) are left as strings (ADR-152 Amendment 3
+    point 1: a value that is not `true` or `false` is refused in words). An empty file is an empty
+    document, as it is with `yaml.safe_load`."""
+    return yaml.load(text, Loader=_DeploymentYamlLoader) or {}  # noqa: S506 - a SafeLoader subclass
+
+
 class GradingConfig(BaseModel):
     """The deployment's grading scheme (`06_DECISIONS.md` ADR-143 decision 11 and Amendment 6): the
     scheme every drawn node and link is graded in, chosen at install (`install.yaml`'s
@@ -2090,9 +2159,25 @@ class OspreyConfig(BaseModel):
     welcome: WelcomeConfig = Field(default_factory=WelcomeConfig)
     deployment: DeploymentConfig = Field(default_factory=DeploymentConfig)
     appearance: AppearanceConfig = Field(default_factory=AppearanceConfig)
+    pages: PagesConfig = Field(default_factory=PagesConfig)
     grading: GradingConfig = Field(default_factory=GradingConfig)
     external: ExternalConfig = Field(default_factory=ExternalConfig)
     resources: ResourcesConfig = Field(default_factory=ResourcesConfig)
+
+    @model_serializer(mode="wrap")
+    def _leave_out_pages_unless_the_file_wrote_it(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        """ADR-152 Amendment 3 point 2: off or absent renders byte for byte what it did. The
+        renderers write `osprey.yaml` from `model_dump(exclude_none=True)`, which keeps a
+        `False`, so a `pages` section the operator never wrote would appear in every rendered
+        file. It is dumped only when the file named it (as `AppearanceConfig.told()` does for
+        `banner_text`); `config.pages.enabled` still reads `False` when it is absent."""
+        # pydantic types the wrapped handler's answer as `Any`; it is the dict the plain dump makes.
+        dumped: dict[str, object] = handler(self)
+        if "pages" not in self.model_fields_set:
+            dumped.pop("pages", None)
+        return dumped
 
     @model_validator(mode="after")
     def _external_services_belong_to_a_cloud(self) -> OspreyConfig:

@@ -1184,6 +1184,11 @@ class LoadReport(BaseModel):
     #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
     #: so another owner's match is neither counted nor said: rules 3 and 7).
     drawn_watch_alerts: int = 0
+    #: C249 and L06: the ids of the matching jobs this run queued after its load (one per
+    #: resolvable type its recipe writes), so what became of each can be read in words
+    #: (`GET /v1/resolution/jobs/{job_id}`, `services/api/resolution_job_status.py`). An id is an
+    #: opaque reference, not a count or a value; it is not given where the counts are withheld.
+    resolution_jobs: list[str] = Field(default_factory=list)
     #: Rule 3, ADR-127 Amendment 23: every distinct marking this load's rows were written at (each
     #: element the engine resolved for a row, once), in the order first met. A count of what the
     #: load wrote includes rows at each of them, so a reader who may not view one of them is shown
@@ -1295,6 +1300,11 @@ class LoadReportView(BaseModel):
     #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
     #: so another owner's match is neither counted nor said: rules 3 and 7).
     drawn_watch_alerts: int = 0
+    #: C249 and L06: the ids of the matching jobs this run queued after its load (one per
+    #: resolvable type its recipe writes), so what became of each can be read in words
+    #: (`GET /v1/resolution/jobs/{job_id}`, `services/api/resolution_job_status.py`). An id is an
+    #: opaque reference, not a count or a value; it is not given where the counts are withheld.
+    resolution_jobs: list[str] = Field(default_factory=list)
     #: ADR-110 Amendment 8: what a full snapshot's refresh withdrew, as counts and words.
     rows_withdrawn: int = 0
     links_kept_an_occurrence: int = 0
@@ -1390,6 +1400,11 @@ class PipelineRunReport(BaseModel):
     #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
     #: so another owner's match is neither counted nor said: rules 3 and 7).
     drawn_watch_alerts: int = 0
+    #: C249 and L06: the ids of the matching jobs this run queued after its load (one per
+    #: resolvable type its recipe writes), so what became of each can be read in words
+    #: (`GET /v1/resolution/jobs/{job_id}`, `services/api/resolution_job_status.py`). An id is an
+    #: opaque reference, not a count or a value; it is not given where the counts are withheld.
+    resolution_jobs: list[str] = Field(default_factory=list)
     #: The union of the branches' `markings`, each once (rule 3, ADR-127 Amendment 23).
     markings: list[Handling] = Field(default_factory=list)
     #: Metering, part 1, for the whole run (`run_recipe_as`).
@@ -1428,6 +1443,11 @@ class PipelineRunReportView(BaseModel):
     #: run's own principal, the only ones they may read (a drawn watch's alert is its owner's alone,
     #: so another owner's match is neither counted nor said: rules 3 and 7).
     drawn_watch_alerts: int = 0
+    #: C249 and L06: the ids of the matching jobs this run queued after its load (one per
+    #: resolvable type its recipe writes), so what became of each can be read in words
+    #: (`GET /v1/resolution/jobs/{job_id}`, `services/api/resolution_job_status.py`). An id is an
+    #: opaque reference, not a count or a value; it is not given where the counts are withheld.
+    resolution_jobs: list[str] = Field(default_factory=list)
     metering: RunMetering | None = None
     #: ADR-140 decision 16: the expert steps the run's branches ran, in words, whether or not the
     #: counts are withheld: the pipeline's own settings, never a row's value.

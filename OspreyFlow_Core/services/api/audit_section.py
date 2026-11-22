@@ -238,6 +238,12 @@ READS_AND_OTHER: tuple[str, ...] = (
     "export_rule_file",
     # Rules-b's v052D (ADR-098 Amendment 7): what a question would read, before it is asked.
     "will_read_question",
+    # SE8a: one row for each model call, with who asked, the case, the engine and the model
+    # (names only; `services/api/model_calls.py`). Its words are withheld like any read's.
+    "model_call",
+    # SE8c: a session the Conduit saw for the first time, and the page service's report of a
+    # sign-in and a sign-out (`services/api/sign_in_events.py`). Names and a keyed reference only.
+    "sign_in_seen", "sign_in", "sign_out",
     # Rules' L2.11 (ADR-146 decision 3, Amendment 6): the rule editor's datasets read, a draft
     # saved, tested, made live or asked to go live; with the other rule actions.
     "read_rule_datasets", "rule_draft_saved", "rule_tested", "rule_made_live",
@@ -590,6 +596,7 @@ def _named(value: str, names: dict[str, str]) -> str:
         return A_TEAM
     return names.get(value, NO_NAME)
 
+
 #: The words of a shown entry that name a person, by action: each is served as that person's name,
 #: never as the account's id. `user_id` and `account` name one wherever they are written.
 _PERSON_KEYS = ("user_id", "account")
@@ -603,25 +610,55 @@ _PERSON_WORDS: dict[str, dict[str, str]] = {
 #: The only other words a shown entry may carry. Anything else is left out, so an identifier a
 #: later action writes (an identity provider's `subject`, a `username`, an `email`) is never served
 #: by default: a new word is shown only once it is named here.
-_PLAIN_WORDS = frozenset({
-    "roles", "clearance", "org_unit", "receivable_handling_codes", "delivery", "transferred",
-    "name", "version", "rights", "display_name", "mailbox", "level", "unit_level",
-    "dataset_id", "member_ids", "source_id", "pack", "highest_marking", "kind", "id",
-})
+_PLAIN_WORDS = frozenset(
+    {
+        "roles",
+        "clearance",
+        "org_unit",
+        "receivable_handling_codes",
+        "delivery",
+        "transferred",
+        "name",
+        "version",
+        "rights",
+        "display_name",
+        "mailbox",
+        "level",
+        "unit_level",
+        "dataset_id",
+        "member_ids",
+        "source_id",
+        "pack",
+        "highest_marking",
+        "kind",
+        "id",
+    }
+)
 #: Never shown, though *Datasets* shows its words: a source's governance edit writes its handling,
 #: its legal basis (free text) and what follows from them, which no Admin read serves
 #: (`test_a_sources_governance_words_stay_withheld`).
-_WITHHELD_WORDS = frozenset({
-    "handling_before", "handling_after", "legal_basis_before", "legal_basis_after",
-    "pipelines_needing_attention", "drafts_following",
-})
+_WITHHELD_WORDS = frozenset(
+    {
+        "handling_before",
+        "handling_after",
+        "legal_basis_before",
+        "legal_basis_after",
+        "pipelines_needing_attention",
+        "drafts_following",
+    }
+)
 #: Actions whose `before` and `after` are settings, not people.
-_SETTING_CHANGES = frozenset({
-    "change_custom_role", "set_dataset_egress", "set_dataset_promotion_policy",
-    "set_dataset_owner_setting", "set_case_datasets",
-    # ADR-148 Amendment 17: whether guest accounts are admitted, false or true.
-    "set_guest_sign_in",
-})
+_SETTING_CHANGES = frozenset(
+    {
+        "change_custom_role",
+        "set_dataset_egress",
+        "set_dataset_promotion_policy",
+        "set_dataset_owner_setting",
+        "set_case_datasets",
+        # ADR-148 Amendment 17: whether guest accounts are admitted, false or true.
+        "set_guest_sign_in",
+    }
+)
 
 
 def _person_values(action: str, key: str, value: Any) -> list[str]:

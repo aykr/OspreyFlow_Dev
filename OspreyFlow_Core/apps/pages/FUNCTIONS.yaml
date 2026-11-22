@@ -24,14 +24,14 @@
 functions:
   - id: studio-model-text
     name: "Studio: Model step, domain model text"
-    where: "apps/workspace/src/ingest/studio/ModelTab.tsx (20, a placeholder: \"thin until phase 5\", :1), studio/packs.ts"
+    where: "apps/workspace/src/ingest/studio/ModelTab.tsx (20, a placeholder: \"thin until phase 5\", :1), packages/glass-shared/src/ingest/studio/packs.ts"
     slice: "IS2"
     scenario: ""
     route: ""
     status: "planned"
   - id: studio-model-proposals
     name: "Studio: Model step, proposed link types"
-    where: "apps/workspace/src/linktypes/ModelProposals.tsx, modelProposalsApi.ts, mounted apps/workspace/src/ingest/IngestStudio.tsx:20,219 (shares linktypes/http.ts 53 and linkTypesApi.ts 171)"
+    where: "apps/workspace/src/linktypes/ModelProposals.tsx, packages/glass-shared/src/linktypes/modelProposalsApi.ts, mounted apps/workspace/src/ingest/IngestStudio.tsx:20,219 (shares packages/glass-shared/src/linktypes/http.ts 53 and packages/glass-shared/src/linktypes/linkTypesApi.ts 171)"
     slice: "IS2"
     scenario: ""
     route: ""
@@ -56,7 +56,7 @@ functions:
     name: "Studio frame: tabs, readiness strip, rights gate, dataset switch, Needs-you reminder"
     where: "apps/workspace/src/ingest/IngestStudio.tsx (tabs :44–51), studio/{ReadinessStrip,rightsGate,useStudioData,datasets,vocabulary}"
     slice: "IS5a"
-    scenario: ""
+    scenario: "SF1, SF2, SF3, SF4, SF5, SF6, SF7, SF8, SF9, SF10, SF11"
     route: ""
     status: "planned"
   - id: studio-sources
@@ -174,13 +174,13 @@ functions:
     name: "Studio: Releases"
     where: "apps/workspace/src/ingest/releases/"
     slice: "IS5a"
-    scenario: ""
+    scenario: "SR1, SR2, SR3, SR4, SR5, SR6, SR7, SR8, SR9, SR10, SR11, SR12, SR13, SR14, SR15, SR16, SK1, SK2, SK3, SK4, SO1, SO2, SO3"
     route: ""
     status: "planned"
   # Plain shared code with no screen. A whole-function line in PARITY_EXCEPTIONS.yaml.
   - id: studio-api-helpers
     name: "Studio API and helpers"
-    where: "apps/workspace/src/ingest/api.ts (757), handlingParts.ts, alreadyLoaded.ts, fileSize.ts, percent.ts"
+    where: "packages/glass-shared/src/ingest/api.ts (757); apps/workspace/src/ingest: handlingParts.ts, alreadyLoaded.ts, fileSize.ts, percent.ts"
     slice: "none named"
     scenario: ""
     route: ""

@@ -1,6 +1,6 @@
 import { useCallback, useState } from "react";
 
-import type { BatchExpansionRequest } from "./batchExpansionApi";
+import type { BatchExpansionRequest } from "@ospreyflow/glass-shared";
 
 /** One choice of *Run as a batch job* (ADR-151): the expansion handed up, with the case and the person it was
  * asked in and for. `n` counts the choices, so each has its own panel (its own `key`). */

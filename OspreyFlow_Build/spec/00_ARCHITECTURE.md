@@ -29,7 +29,7 @@
    │  JanusGraph       ClickHouse        rustworkx /        Ollama / vLLM      │   │ a read-only login  │
    │                                     GraphFrames        + Whisper + VLM    │   └────────────────────┘
    │                                                        Recogniser: Stanza │
-   │  Working-set cache: Valkey     Object store: MinIO     Index: OpenSearch  │
+   │  Working-set cache: Valkey   Object store: SeaweedFS   Index: OpenSearch  │
    │  Conduit stores: Postgres (cases, grants, alerts, audit, export ledger)   │
    └───────────────────────────────────────────────────────────────────────────┘
 ```
@@ -937,6 +937,28 @@ exception below. Before this the gate passed any text containing "lgpl" — `AGP
 with it — and every LGPL package (`tests/licence_check/test_licence_expressions.py`,
 `test_licence_check_mjs.test.mjs`).
 
+**What the allowlist does not see: model weights, map data, font files and base images (PL11; the
+owner's rulings of 21 November 2026).** The gate above reads the licences packages declare; a
+weight, a map dataset, a font file and an image's contents are not packages. They are held to
+`spec/LICENCE_REGISTER.yaml`, a row for each the code names (re-derived from the Dockerfiles, the
+renderer's image and pull lists, the closed model lists, `fonts.json` and the map entries, so a new one
+with no row fails `make licence-check`: `tools/licence_register.py`,
+`tests/licence_check/test_register.py`). **The register applies a different definition from the
+allowlist, which stays as it is for code:** software and base images are open source when their licence
+is approved by the Open Source Initiative (which includes GPL-2.0 with the Classpath exception);
+model weights, by the same test on the weights' own licence; data, by a recognised open-data
+licence, which covers ODbL and OGL. Each row names the test it passed (`osi-software`,
+`osi-weights`, `open-data`, or `restricted`), where its licence was read (the source, at the pinned
+version), and its pin. A row that fails the definition is admitted only as `conditional`, citing the
+owner's ruling (GDS Transport, which ships only with `appearance.govuk_identity`; the owner, 21
+November 2026: not a sovereignty gap). A row whose licence could not be read is `unconfirmed`, and a
+name whose licence does not pass is held for the owner (`HELD_FOR_OWNER`): the gate allows both so
+`make ci` stays green, and `tools/release_local.py` refuses a release while either is left. For an
+image the row is the *project's* licence; whether the operating-system packages inside are covered is
+a column of its own, and no existing scan reads those licences. This section's allowlist now reads
+`OFL-1.1` and `Python-2.0` (the spellings the Node half already read), in the Python gate and in the
+copies the `ner` and Laurium images carry.
+
 **Requires review:** LGPL-3.0, LGPL-2.1. Not on the allowlist, because the condition that makes
 them acceptable here — dynamic linking only — is not something `pip-licenses` or
 `license-checker` can see. Both tools read declared metadata; neither inspects linkage. So an
@@ -1157,10 +1179,33 @@ otherwise reach for by reflex. Two of them appear in the input documents.
 | ArangoDB | BSL 1.1 | ArcadeDB | Relicensed 2024 |
 | FalkorDB | SSPLv1 | rustworkx for in-memory algorithms | Correctly rejected by the Gemini spec; retained here |
 | Mapbox GL JS v2+ | Proprietary | **MapLibre GL JS** (BSD-3) | The v1 fork is the maintained open path |
-| MongoDB | SSPL | PostgreSQL / MinIO | |
+| MongoDB | SSPL | PostgreSQL / SeaweedFS | Documents and files are in the object store (SeaweedFS; ADR-114 Amendment 9) |
 | Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table | |
 | Grafana (9+) | AGPLv3 | Perses, or Grafana as a separate unbundled deployment | AGPL is acceptable for an unmodified separate service, not for bundling |
 | Stanford CoreNLP | GPL-3.0 | **Stanza** (Apache-2.0), held at 1.10.1 | Stanza 1.11.0 to 1.15.0 pull in `udtools` (GPL-2.0-or-later) and `udapi` (GPL-3.0-or-later). ADR-098 |
+
+**The avoided components, as the architecture guide's section 9 stated them (DC1c, 20 November 2026; the owner's
+ruling of the same day, point 5).** The architecture guide is public-facing and names no product, so the
+eleven-row table it carried moved here, complete and unchanged; its section 9 now says the rule in words
+(the allowlist, the three kinds of licence avoided) and points to this register. It sits directly beneath the
+rejections table above because that table is the fuller record (the same components with their notes and
+ADRs, and Terraform's row is the one this table adds: its BSL-licensed core is not used, per the
+OpenTofu paragraph earlier in this section). `tests/test_intent_in_the_guides.py` holds this table to its
+eleven rows and holds the guide's section 9 to naming none of them.
+
+| Avoided | Its licence | Used instead |
+| --- | --- | --- |
+| Redis 7.4 and later | RSAL / SSPL | Valkey (BSD-3-Clause) |
+| Elasticsearch | SSPL / Elastic Licence | OpenSearch (Apache-2.0) |
+| Neo4j Community | GPL-3.0 | ArcadeDB |
+| ArangoDB | BSL 1.1 | ArcadeDB |
+| FalkorDB | SSPL | rustworkx for in-memory algorithms |
+| Mapbox GL JS 2 and later | Proprietary | MapLibre GL JS (BSD-3-Clause) |
+| MongoDB | SSPL | PostgreSQL, and an S3-protocol object store |
+| Highcharts, AG Grid Enterprise | Commercial | Apache ECharts, TanStack Table |
+| Grafana 9 and later | AGPL-3.0 | Never bundled; acceptable only as an unmodified separate service |
+| Stanford CoreNLP | GPL-3.0 | Stanza (Apache-2.0), held at a version with no GPL dependency |
+| Terraform | BSL 1.1 | OpenTofu (MPL-2.0) |
 
 Fonts: Atkinson Hyperlegible Next and IBM Plex Mono are both SIL OFL 1.1. Self-host them; do not
 load from a CDN — an air-gapped deployment must render correctly.
@@ -1200,6 +1245,33 @@ are on the allowlist. `jose` is also a direct dependency of `apps/pages`: the li
 signature (it relies on the token having come straight from the token endpoint), and the service checks it against
 the realm's key set, which is `jose`'s own `createRemoteJWKSet` and `jwtVerify`. No flow is hand-written. The service
 calls no address but the identity provider's own (`OSPREY_PAGES_OIDC_ISSUER`).
+
+**ADR-152 addition (21 November 2026; slice IS5a0) — the `pages` service builds its browser assets.** Build time only: all
+three are `devDependencies` of `apps/pages`, so the image's run-time stage (`npm ci --omit=dev`) installs none of them and the
+service serves only what they built. `esbuild` 0.28.2 (MIT; ADR-152 decision 2 names it) bundles the page modules to ES2018
+and the one stylesheet from `packages/design`; the lockfile held it before only as an optional peer of `vite` that was not
+installed. Its 26 platform packages, `@esbuild/<platform>` (each MIT, each only the binary for its own platform), are its
+optional dependencies and are in the lockfile as npm writes them. `@fontsource/atkinson-hyperlegible-next` 5.3.0 and
+`@fontsource/ibm-plex-mono` 5.3.0 (both OFL-1.1, already run-time dependencies of `apps/workspace`) are now also build-time
+dependencies of `apps/pages`: the build reads them for the faces `packages/design/fonts.json` names for the Default tree
+(ADR-152 Amendment 2 point 2), and serves the font files from the service's own address. No GDS Transport and no
+`govuk-frontend` file is among them (that is the GOV.UK tree's). `make licence-check`'s Node half passes with them, offline.
+
+**The Glass's sign-in library, named (20 November 2026; slice LR1).** `oidc-client-ts` has been a run-time
+dependency of `apps/workspace` since the sign-in was built, and `apps/workspace/src/auth/userManager.ts` has said
+since then that this section is its allowlist for what it relies on rather than hand-rolls; this section had no
+entry naming it. The register is by licence and `make licence-check` already read it (Apache-2.0 is on the
+allowlist at the head of this section), so nothing changes in what the gate allows; this entry names it, in the shape of the
+table above, with the licence as the package's own metadata and licence file give it (version 3.5.0, `license`
+in its `package.json` and in `package-lock.json`; the `LICENSE` file is the Apache License, Version 2.0):
+
+| Package | Range | Licence (as its metadata gives it) | Why | Workspace |
+| --- | --- | --- | --- | --- |
+| `oidc-client-ts` | `^3.5.0` | Apache-2.0 | the Glass's OpenID Connect sign-in (the authorisation-code flow with PKCE, the user's session and its renewal), rather than a hand-written one: `apps/workspace/src/auth/userManager.ts` and `apps/workspace/src/auth/oidcConfig.ts`; named by the owner, 20 November 2026, because it ships in the product without a register entry | `apps/workspace`, in the workspace bundle (its one dependency, `jwt-decode`, MIT, is named under ADR-111 Amendment 3 above) |
+
+`tests/test_licence_register_names_oidc.py` fails if this row goes, its licence or range stops matching the lockfile's
+and the workspace's, or its reason stops naming the two sign-in files. The other run-time dependencies of
+`apps/workspace` that have no entry of their own are not named here; that is the owner's to decide.
 
 **ADR-138 addition (2 November 2026) — public datasets an administrator downloads: the IEEE VAST
 Challenge catalogue.** OspreyFlow ships a manifest and an Ingest Studio recipe for each, never the

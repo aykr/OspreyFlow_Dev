@@ -17,7 +17,7 @@ import type {
   TypologyRule,
 } from "../../../../packages/schemas/generated";
 import { Button, Input, Select } from "../design/primitives";
-import type { AccessLevel } from "../investigation/cases";
+import type { AccessLevel } from "@ospreyflow/glass-shared";
 import {
   compileSentence,
   deploySentence,
@@ -27,7 +27,7 @@ import {
   readSentence,
   saveRuleDraft,
   type AlertsApi,
-} from "./api";
+} from "@ospreyflow/glass-shared";
 import {
   MAX_CONDITIONS,
   OP_WORDS,

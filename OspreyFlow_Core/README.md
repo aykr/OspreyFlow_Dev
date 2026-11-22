@@ -9,6 +9,30 @@ sources, persists them in a property graph, and gives an analyst a single worksp
 network, social-network, pattern, temporal and geospatial analysis are five views of one working
 set rather than five separate tools.
 
+## Why OspreyFlow is built this way
+
+Intelligence mapping holds sensitive work, and an organisation is only in charge of that work if it is
+in charge of the software that holds it. OspreyFlow is open source so that you can read, change, host and
+replace it, and it is built to five constraints on top of that. The
+[architecture guide](docs/architecture-guide.md) sets each out in full, with what holds it today and what
+is "coming".
+
+- **Software sovereignty:** the software dependencies are under open-source licences, and a gate checks the
+  build's package list against an allowlist on every change; it does not yet reach every package inside the
+  images. Model weights, map data, fonts and base images are outside that check; a register and a gate
+  for them are coming.
+- **Data sovereignty:** the deployment's containers have no route out except the few that an install or a configured
+  feature needs, such as the model downloads. A hosted model engine is an opt-in that an administrator
+  turns on. A first install needs the internet.
+- **Privacy control:** what a person sees is meant to be bounded by handling markings and case membership,
+  applied inside the store's own query. Some gaps on the read side are known and are listed in the
+  architecture guide.
+- **Security management:** case reads, refusals of access to a case and changes are audited, and
+  report, assessment, pack and feed exports go in a ledger (some other exports do not yet, and a ledger row
+  for every export is coming). Recording every model call, and every sign-in, is coming.
+- **Analytical accountability:** a judgement is saved with its evidence and a probability band, and what a
+  model suggests stays *inferred* until a person confirms it.
+
 ## What it does
 
 - **Intelligence mapping.** One case, read as a network, a map, a timeline and reports, with a
@@ -59,8 +83,8 @@ install it.
 
 ## How it is built
 
-Three tiers, separated by four typed ports so any one of them can be swapped without touching the
-others:
+Three tiers, with four typed ports (and three narrower ones beside them) between the Conduit and the
+Vault:
 
 - **The Glass** — the analyst workspace: canvas, timeline, map, dossier, query.
 - **The Conduit** — stateless middleware: API, working-set service, extraction orchestration,
@@ -72,8 +96,10 @@ A port is a narrow interface (a Python `Protocol`) that everything above it is a
 nothing else. Swapping the engine behind a port — a laptop's in-process DuckDB for ClickHouse shared
 by a cluster's Conduits, say — means writing one adapter and changing one line of configuration;
 nothing above the port changes, and the adapter is only supported once it passes the same
-conformance suite every other adapter behind that port passes. The guides above describe the
-architecture each reader needs.
+conformance suite every other adapter behind that port passes. Not every store is behind a port: the
+relational database (the audit table and the export ledger), the working-set store and the search index are
+not, so replacing one of those is not an adapter's work. The architecture guide's section 2 says which is
+which. The guides above describe the architecture each reader needs.
 
 ## Before you install
 
@@ -113,6 +139,8 @@ rebuild from this checkout), `stop`, `logs`, `demo list` and `demo add`, `backup
 Every operator task is an `ospreyflow`
 verb; `make` targets are for developers working on OspreyFlow itself.
 
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment. The administration guide's sections 1a, 4.1 and 6a say the same.
+
 **Demo packs** load into cases of their own: three synthetic ones generated here, and two you
 download — PaySim (simulated) and the **Enron email corpus, which is real people's data**: you fetch
 it from Carnegie Mellon University yourself, and `ospreyflow demo add enron --file <file>` checks it,
@@ -148,7 +176,7 @@ checking they are signed by this repository's release workflow; any other checko
 source (`install --build` builds on a tag too). Each release's notes are its section of
 `CHANGELOG.md`.
 
-**Is there a newer release?** Nothing checks on its own — the deployment never calls out. Ask:
+**Is there a newer release?** Nothing checks on its own: an administrator asks, from the host. Ask:
 
 ```
 ospreyflow update --check     # asks the repository's releases; Admin → System shows the answer

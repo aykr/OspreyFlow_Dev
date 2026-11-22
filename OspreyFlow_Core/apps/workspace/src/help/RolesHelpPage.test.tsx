@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RolesHelpPage } from "./RolesHelpPage";
-import { HELP_TITLE, RIGHT_WORDS, rightName, rightSays } from "./roles";
+import { HELP_TITLE, RIGHT_WORDS, rightName, rightSays } from "@ospreyflow/glass-shared";
 
 afterEach(cleanup);
 

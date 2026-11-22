@@ -45,12 +45,17 @@ from schemas.rights import Right
 from tests.services.api.test_place_routes import (
     _EXPORTED,
     _IMPORT,
+    _PACKAGE_IMPORT,
+    SHARED_SRC,
     WORKSPACE_SRC,
+    Exporter,
     _checks,
     _chunk_fragments,
+    _names_in,
     _path,
     _resolve,
     _routes,
+    read_package,
 )
 
 SECTIONS_JSON = WORKSPACE_SRC / "admin/sections.json"
@@ -96,42 +101,71 @@ def _sources(root: Path) -> dict[str, str]:
             if ".test." not in p.name and not p.name.endswith(".d.ts")}  # fmt: skip
 
 
-def screen_fragments(root: Path, screen: str) -> list[str]:
+def screen_fragments(root: Path, screen: str, shared: Path | None = None) -> list[str]:
     """The API path fragments a screen's walk names: the screen and every component module it
-    imports, whole; a lower-case module only in the chunks of the names imported from it."""
+    imports, whole; a lower-case module only in the chunks of the names imported from it.
+
+    The shared package's source (`shared`, the real package when `root` is the real workspace) is
+    walked as part of the workspace: the Conduit clients of Maps, Models and the Studio live there
+    (PL4 slice D2) and a screen takes their functions from the package by its name, each from the
+    file that exports it (`test_a_section_s_call_through_the_shared_package_is_found`)."""
     root = root.resolve()
+    if shared is None and root == WORKSPACE_SRC.resolve():
+        shared = SHARED_SRC
     files = _sources(root)
+    base = dict.fromkeys(files, root)
+    own = {key: key for key in files}
+    in_shared: dict[str, str] = {}
+    exporter = Exporter()
+    if shared is not None:
+        shared = shared.resolve()
+        package, package_own, in_shared, exporter = read_package(shared, files)
+        files |= package
+        own |= package_own
+        base |= dict.fromkeys(package, shared)
     wanted: dict[str, set[str] | None] = {screen: None}  # None: the whole file
     queue = [screen]
+
+    def take(target: str, imported: set[str]) -> None:
+        component = Path(target).name[0].isupper()
+        if component:
+            if wanted.get(target, set()) is not None:
+                wanted[target] = None
+                queue.append(target)
+        elif target not in wanted:
+            wanted[target] = imported
+            queue.append(target)
+        elif wanted[target] is not None:
+            wanted[target] |= imported  # type: ignore[operator]
+
     while queue:
         rel = queue.pop()
-        for names, spec in _IMPORT.findall(files.get(rel, "")):
-            target = _resolve(root / rel, spec, root)
+        if rel not in files:
+            continue
+        text = files[rel]
+        for names, spec in _IMPORT.findall(text):
+            target = _resolve(base[rel] / own[rel], spec, base[rel])
+            if target is not None and base[rel] is shared:
+                target = in_shared.get(target)
             if target is None or target not in files or target.startswith(NOT_WALKED):
                 continue
-            component = Path(target).name[0].isupper()
-            imported = set(re.findall(r"(?:type\s+)?(\w+)(?:\s+as\s+\w+)?\s*(?:,|$)", names or ""))
-            if component:
-                if wanted.get(target, set()) is not None:
-                    wanted[target] = None
-                    queue.append(target)
-            elif target not in wanted:
-                wanted[target] = imported
-                queue.append(target)
-            elif wanted[target] is not None:
-                wanted[target] |= imported  # type: ignore[operator]
+            take(target, set(_names_in(names)))
+        for names in _PACKAGE_IMPORT.findall(text):
+            for name in _names_in(names):
+                if name in exporter and not exporter[name].startswith(NOT_WALKED):
+                    take(exporter[name], {exporter.original(name)})
     found: list[str] = []
     for rel, names in wanted.items():
         text = files[rel]
         starts = [(m.start(), m.group(1) or m.group(2)) for m in _EXPORTED.finditer(text)]
         if names is None:
-            found += _chunk_fragments(rel, text) + _helper_fragments(root, rel, text)
+            found += _chunk_fragments(own[rel], text) + _helper_fragments(text, own[rel], text)
             continue
         for i, (start, name) in enumerate(starts):
             if name in names:
                 end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
-                found += _chunk_fragments(rel, text[start:end]) + _helper_fragments(
-                    root, rel, text[start:end]
+                found += _chunk_fragments(own[rel], text[start:end]) + _helper_fragments(
+                    text, own[rel], text[start:end]
                 )
     return found
 
@@ -144,10 +178,11 @@ _HELPER = re.compile(
 _HELPER_CALL = re.compile(r"\bcall<[^>]*>\(\s*api,\s*(\w+)\([^,()]+,\s*\"([a-z-]+)\"\)")
 
 
-def _helper_fragments(root: Path, rel: str, chunk: str) -> list[str]:
+def _helper_fragments(whole: str, rel: str, chunk: str) -> list[str]:
+    """`whole` is the file's own text: `admin/api.ts` is in the shared package now (PL4 slice D3e), not under the root."""
     if rel != "admin/api.ts":
         return []
-    helpers = dict(_HELPER.findall((root / rel).read_text()))
+    helpers = dict(_HELPER.findall(whole))
     return [
         f"/v1/admin/{helpers[name]}/{{x}}/{tail}"
         for name, tail in _HELPER_CALL.findall(chunk)
@@ -187,14 +222,18 @@ SHARED: dict[str, tuple[frozenset[str], str]] = {
 
 
 def section_routes(
-    root: Path, screen: str, routes: list[APIRoute], section: str | None = None
+    root: Path,
+    screen: str,
+    routes: list[APIRoute],
+    section: str | None = None,
+    shared: Path | None = None,
 ) -> list[APIRoute]:
     """The routes a section's screen calls that are its own: all but what `SHARED` names for it."""
     if section is None:
         section = next((s["id"] for s in built() if s["screen"] == screen), "")
     return [
         r
-        for r in _reached(screen_fragments(root, screen), routes)
+        for r in _reached(screen_fragments(root, screen, shared), routes)
         if section not in SHARED.get(r.name, (frozenset(), ""))[0]
     ]
 
@@ -385,7 +424,7 @@ def test_each_shared_read_is_read_by_exactly_the_sections_named() -> None:
 def test_a_planted_screen_calling_another_section_s_route_is_found(tmp_path: Path) -> None:
     """A Datasets screen that also lists the people, as the real files are laid out."""
     (tmp_path / "admin/sections").mkdir(parents=True)
-    (tmp_path / "admin/api.ts").write_text((WORKSPACE_SRC / "admin/api.ts").read_text())
+    (tmp_path / "admin/api.ts").write_text((SHARED_SRC / "admin/api.ts").read_text())
     (tmp_path / "admin/sections/Datasets.tsx").write_text(
         'import { listDatasets, listPeople, type AdminApi } from "../api";\n'
         "export function Datasets({ api }: { api: AdminApi }) {\n"
@@ -405,3 +444,50 @@ def test_a_planted_screen_calling_another_section_s_route_is_found(tmp_path: Pat
         )
         == []
     )
+
+
+def test_a_section_s_call_through_the_shared_package_is_found(tmp_path: Path) -> None:
+    """The Maps, Models and Connections clients live in the shared package (PL4 slice D2) and a
+    screen takes their functions by the package's name. A Datasets screen that also reads the
+    models, with the real client in a temporary copy of the package: found when it takes
+    `readModels` (the file is walked whole, as it was before it moved: its name is capitalised),
+    nothing when it takes a name the package does not export, and nothing from a scan that does not
+    read the package. The real tree's Connections screen reaches `/v1/admin/connections` only
+    through it."""
+    shared = tmp_path / "shared"
+    client = next(
+        SHARED_SRC.rglob("Models*.ts")
+    )  # the models client, wherever the package keeps it
+    (shared / client.relative_to(SHARED_SRC)).parent.mkdir(parents=True)
+    (shared / client.relative_to(SHARED_SRC)).write_text(client.read_text())
+    workspace = tmp_path / "workspace"
+    (workspace / "admin/sections").mkdir(parents=True)
+    screen = workspace / "admin/sections/Datasets.tsx"
+
+    def written(name: str) -> str:
+        return (
+            f'import {{ {name} }} from "@ospreyflow/glass-shared";\n'
+            "export function Datasets({ api }: { api: ModelsApi }) {\n"
+            f"  void {name}(api); return null;\n}}\n"
+        )
+
+    screen.write_text(written("readModels"))
+    routes = section_routes(workspace, "admin/sections/Datasets.tsx", _routes(), shared=shared)
+    assert ("GET", "/v1/admin/models", ["manage_models"]) in unguarded("administer_system", routes)
+    assert section_routes(workspace, "admin/sections/Datasets.tsx", _routes()) == []
+    screen.write_text(written("somethingElse"))
+    assert section_routes(workspace, "admin/sections/Datasets.tsx", _routes(), shared=shared) == []
+
+    connections = {
+        r.path for r in section_routes(WORKSPACE_SRC, "admin/sections/Connections.tsx", _routes())
+    }
+    assert "/v1/admin/connections" in connections
+    nowhere = tmp_path / "nowhere"
+    nowhere.mkdir()
+    without = {
+        r.path
+        for r in section_routes(
+            WORKSPACE_SRC, "admin/sections/Connections.tsx", _routes(), shared=nowhere
+        )
+    }
+    assert "/v1/admin/connections" not in without

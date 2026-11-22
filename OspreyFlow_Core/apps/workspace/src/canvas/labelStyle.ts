@@ -3,9 +3,10 @@
 // Sigma paints a label in black unless it is told otherwise, and the box it draws behind the label
 // of the node under the pointer is white. On the dark canvas that left every label unreadable. The
 // graph is painted by a canvas that cannot read the page's CSS variables, so the colours come from
-// the palette (`color/palette.ts`) and are pushed into Sigma's settings, again when the theme changes.
+// the palette (`packages/glass-shared/src/color/palette.ts`) and are pushed into Sigma's settings, again when the
+// theme changes.
 import type { NodeHoverDrawingFunction, NodeLabelDrawingFunction } from "sigma/rendering";
-import type { Palette } from "../color/palette";
+import type { Palette } from "@ospreyflow/glass-shared";
 import { labelStartX, middleTruncate, NODE_LABEL_FONT, NODE_LABEL_MONO_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 
 export interface LabelColours {

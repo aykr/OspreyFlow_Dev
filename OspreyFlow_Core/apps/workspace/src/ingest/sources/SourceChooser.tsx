@@ -7,8 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { SourceTable, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives/Button";
 import { Select } from "../../design/primitives/Select";
-import { updateDraft } from "../api";
-import { listSources } from "./api";
+import { updateDraft, listSources } from "@ospreyflow/glass-shared";
 
 export interface SourceChooserProps {
   apiBaseUrl: string;

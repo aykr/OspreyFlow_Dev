@@ -9,7 +9,7 @@ import {
   countSentence,
   listFromFile,
   type IdentifierCounts,
-} from "./addFromListApi";
+} from "@ospreyflow/glass-shared";
 
 export interface AddFromListProps {
   apiBaseUrl: string;

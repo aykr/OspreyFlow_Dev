@@ -54,7 +54,10 @@ async def test_a_view_round_trips_with_its_lens(store: PostgresCaseViewStore) ->
     read = await store.get(CASE, saved.id, "alice")
     assert read == saved
     assert read.node_ids == ["n-1", "n-2"] and read.layout["n-1"].x == 1
-    assert read.wire().chosen == 2
+    # The count on the wire is the one the caller supplies (SE7: what *this reader* may see, from
+    # `visible_chosen`), never the stored ids': a reader who may see one of the two is told one.
+    assert read.wire(chosen=2).chosen == 2
+    assert read.wire(chosen=1).chosen == 1
 
 
 async def test_a_private_view_is_invisible_to_another_member_on_postgres(
@@ -102,8 +105,13 @@ async def test_the_postgres_question_store_never_mixes_a_views_conversation(dsn:
         for entry_id, view_id in (("q-case", None), ("q-view", "v-1")):
             await store.add(
                 QuestionEntry(
-                    id=entry_id, investigation_id=CASE, author="alice", question="Who?",
-                    answer="Dana.", model="local-model", view_id=view_id,
+                    id=entry_id,
+                    investigation_id=CASE,
+                    author="alice",
+                    question="Who?",
+                    answer="Dana.",
+                    model="local-model",
+                    view_id=view_id,
                     created_at=datetime(2026, 11, 8, tzinfo=UTC),
                 )  # fmt: skip
             )
@@ -128,9 +136,15 @@ async def _a_views_proposal(dsn: str) -> tuple[Any, str]:
     (record,) = await store.store(
         [
             ExtractionCandidate(
-                id=new_id(), document_id="doc-1", entity_type="Person",
-                properties={"family_name": "MERCER"}, confidence=0.9, model="local-model",
-                locator="char span 0-6", excerpt_hash="", handling=handling,
+                id=new_id(),
+                document_id="doc-1",
+                entity_type="Person",
+                properties={"family_name": "MERCER"},
+                confidence=0.9,
+                model="local-model",
+                locator="char span 0-6",
+                excerpt_hash="",
+                handling=handling,
             )  # fmt: skip
         ],
         alice,
@@ -198,7 +212,11 @@ async def test_postgres_turns_a_drawings_boards_into_views_and_back(
         False, "promotion-1", ["p1", "d1", "d2"], ["d1", "d2"],
     )  # fmt: skip
     assert held.layout == {"d1": NodePosition(x=0.1, y=0.2)}
-    assert held.wire().merged_load == "promotion-1"
+    # The merge's load is this assertion's subject. The count is a reader's visible one, and a
+    # merged drawing's added nodes (d1, d2) are never counted (L3.9; rule 7: `visible_chosen`
+    # counts `creators_choice()`, which leaves them out), so the most any caller could send here
+    # is the one node its creator chose, p1; not the three stored.
+    assert held.wire(chosen=1).merged_load == "promotion-1"
     assert [v.id for v in await store.visible_in("case-d", "alice")] == [board.id]
     assert await store.boards_in("case-d", "alice") == []
     assert (await store.get("case-x", elsewhere.id, "alice")).drawing

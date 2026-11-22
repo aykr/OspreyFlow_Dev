@@ -17,7 +17,7 @@ import {
   needsYouCount,
   proposedIn,
   type NeedsYou as Needs,
-} from "./needsYouApi";
+} from "@ospreyflow/glass-shared";
 
 afterEach(() => cleanup());
 
@@ -163,13 +163,13 @@ describe("Needs you", () => {
     const fetcher = vi.fn(
       async () => new Response(JSON.stringify({ promotions_overdue: [], proposals: [], schedule_notices: [], schedule_notices_total: "3" })),
     );
-    const { readNeedsYou } = await import("./needsYouApi");
+    const { readNeedsYou } = await import("@ospreyflow/glass-shared");
     await expect(readNeedsYou("http://x", "t", fetcher as unknown as typeof fetch)).rejects.toThrow(/not the reader's Needs you/);
   });
 
   it("reads a Conduit from before the amendment as no notices, not a failed read", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({ promotions_overdue: [], proposals: [] })));
-    const { readNeedsYou } = await import("./needsYouApi");
+    const { readNeedsYou } = await import("@ospreyflow/glass-shared");
     const read = await readNeedsYou("http://x", "t", fetcher as unknown as typeof fetch);
     expect(read.schedule_notices).toEqual([]);
     expect(needsYouCount(read)).toBe(0);

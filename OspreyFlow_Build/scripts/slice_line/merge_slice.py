@@ -31,7 +31,9 @@ board.py writes the board and the dashboard's status file. Nothing is changed on
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -39,6 +41,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -397,6 +400,8 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
     codes = []
     for target in FULL_GATE_TARGETS:
         started = time.monotonic()
+        if PROGRESS:
+            PROGRESS.part(" ".join(target))
         codes.append(run_step(" ".join(target), list(target), tree / "OspreyFlow_Build", log, env, retries))
         log.open("a").write(f"\n{' '.join(target)}: exit {codes[-1]} in {time.monotonic() - started:.0f} s\n")
         if codes[-1] == NETWORK:
@@ -465,6 +470,103 @@ def lock():
     except BlockingIOError:
         raise Refused("another merge is running: one branch at a time.")
     return fh
+
+
+#: Which slice the running merge is merging (LINE_FIXES_5_BRIEF.md, 2): written under the merge lock, removed with it.
+#: resume.py lets an action on any other slice go on meanwhile.
+RUNNING = "merge.running.json"
+
+
+def merging() -> str | None:
+    """The slice a running merge holds the lock for; None when no merge runs. A merge that runs but whose record cannot
+    be read gives "?" (every slice is then taken as the merging one)."""
+    fh = (c.DATA / "merge.lock").open("a")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return str((c.read_json(c.DATA / RUNNING) or {}).get("slice") or "?")
+    else:
+        fcntl.flock(fh, fcntl.LOCK_UN)
+        return None
+    finally:
+        fh.close()
+
+
+#: How often a wait for the merge lock looks again (seconds).
+WAIT_POLL_SECONDS = 2
+
+
+def lock_after_merge(minutes: float, doing: str):
+    """The merge lock, waited for while a merge runs (LINE_FIXES_5_BRIEF.md, 2; the owner, 21 November 2026: a running
+    merge blocked two decision commits). For what must land on a tree no merge is testing: an owner-approved diff
+    changes files the gate reads, so it is never landed beneath a merge's tested result, but it no longer needs asking
+    again: it waits, says so once, and goes on when the merge is done. Refused, nothing changed, after `minutes`."""
+    end, said = time.time() + minutes * 60, False
+    while True:
+        try:
+            return lock()
+        except Refused:
+            busy = (c.read_json(c.DATA / RUNNING) or {}).get("slice") or "?"
+            if time.time() >= end:
+                raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes: {doing} waits for it. "
+                              "Nothing changed; run it again when the merge is done.") from None
+            if not said:
+                print(f"a merge ({busy}) is running: {doing} waits for it, then goes on.", file=sys.stderr, flush=True)
+                said = True
+            time.sleep(WAIT_POLL_SECONDS)
+
+
+@contextlib.contextmanager
+def records_lock():
+    """Commits to the main checkout one at a time: a records commit, and a merge's landing (2). Waits; held seconds."""
+    c.DATA.mkdir(parents=True, exist_ok=True)
+    with (c.DATA / "records.lock").open("w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        yield
+
+
+def land(slice_id: str, base: str, merged: str, tip: str, touched: list[str]) -> tuple[str, list[str]]:
+    """What main is fast-forwarded to, and the commits that moved main under the gate (2). When main is still the base
+    the gate tested: the tested merge commit. When records commits moved it (each a Slice-Records commit with one
+    parent, together changing only files in the records folder that are not the merge's scan rows, the owner's files or
+    a file the slice changed): the tested merge made again on the moved main, by git merge-tree with the base as the
+    merge base, kept only when its tree differs from the tested one in exactly those files, each as main has it; its
+    message names the merge commit tested. Anything else moving main refuses, as before: nothing tested is ever
+    landed on a tree it was not tested on, and no records commit is lost (main keeps it; the merge waits)."""
+    now = c.git(["rev-parse", "HEAD"], c.REPO)
+    if now == base:
+        return merged, []
+    moved_words = f"main moved while the merge was being tested (from {base[:10]} to {now[:10]})"
+    if subprocess.run(["git", "merge-base", "--is-ancestor", base, now], cwd=c.REPO).returncode != 0:
+        raise Refused(f"{moved_words}, and not forward. Nothing landed; run the merge again.")
+    commits = c.git(["rev-list", "--reverse", f"{base}..{now}"], c.REPO).split()
+    for sha in commits:
+        parents = c.git(["rev-list", "--parents", "-n", "1", sha], c.REPO).split()[1:]
+        trailers = c.git(["log", "-1", "--format=%(trailers:only,unfold)", sha], c.REPO)
+        if len(parents) != 1 or "Slice-Records: yes" not in trailers:
+            raise Refused(f"{moved_words} by {sha[:10]}, which is not a records commit. Nothing landed; run the merge "
+                          "again.")
+    paths = sorted(c.git(["diff", "--name-only", "--no-renames", base, now], c.REPO).split())
+    tested = [f for f in paths if not f.startswith(c.V062_REL + "/") or f.startswith(SCAN_ROWS_REL + "/")
+              or f in OWNER_FILES or f in touched]
+    if tested:
+        raise Refused(f"{moved_words}, in a path the gate tested or the merge reads ({', '.join(tested[:5])}). "
+                      "Nothing landed; run the merge again.")
+    p = subprocess.run(["git", "merge-tree", "--write-tree", "--merge-base", base, merged, now], cwd=c.REPO,
+                       capture_output=True, text=True)
+    tree = p.stdout.split("\n", 1)[0].strip()
+    if p.returncode != 0 or not tree:
+        raise Refused(f"{moved_words}, and the records commits do not merge cleanly with the tested result. Nothing "
+                      "landed; run the merge again.")
+    differ = sorted(c.git(["diff", "--name-only", "--no-renames", merged, tree], c.REPO).split())
+    same = all(c.git(["rev-parse", f"{tree}:{f}"], c.REPO, check=False) == c.git(["rev-parse", f"{now}:{f}"], c.REPO,
+                                                                                    check=False) for f in paths)
+    if differ != paths or not same:
+        raise Refused(f"{moved_words}, and the tested result on the moved main differs from it in more than the records "
+                      f"commits' files ({', '.join(differ[:5])}). Nothing landed; run the merge again.")
+    msg = c.git(["log", "-1", "--format=%B", merged], c.REPO).rstrip() + f"\nSlice-Tested: {merged}"
+    landed = c.git(["commit-tree", tree, "-p", now, "-p", tip, "-m", msg], c.REPO)
+    return landed, commits
 
 
 OWNERS_LOCAL = ("OspreyFlow_Core/osprey.yaml", *OWNER_FILES)
@@ -629,6 +731,70 @@ def merge_conflicts(base: str, tip: str) -> list[str]:
     p = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, tip], cwd=c.REPO,
                        capture_output=True, text=True)
     return [ln for ln in p.stdout.splitlines()[1:] if ln.strip()] if p.returncode == 1 else []
+
+
+#: The early look for a conflict with main (the owner's word of 21 November 2026; LINE_FAULTS_2026-11-21.md, 8): for
+#: each verified slice, the main commit and the tip it was last merged with in git merge-tree, and what that named.
+CONFLICT_SEEN = "conflict-check.json"
+
+
+def check_conflicts() -> list[str]:
+    """Each verified slice merged with main in git merge-tree, read-only (it writes objects alone: no branch, ref, index
+    or worktree), once for each pair of main and tip it has not seen. A conflict is recorded as the merge records one
+    (refuse_to_builder: refused for `conflict`, or `records` when only the records folder conflicts), so resume.py
+    send-back returns the slice with no round spent, and the board shows "verified, conflicts with main in <files>".
+    Nothing while a merge runs (the next look after it sees the moved main) or a resume.py action holds the slice.
+    What it found, in words."""
+    try:
+        held = lock()
+    except Refused:
+        return []
+    said = []
+    try:
+        base = c.git(["rev-parse", "main"], c.REPO)
+        seen_f = c.DATA / CONFLICT_SEEN
+        seen = c.read_json(seen_f) or {}
+        records = c.DATA / "records"
+        for d in sorted(records.iterdir()) if records.is_dir() else []:
+            sid = d.name
+            st = c.read_json(d / "state.json") or {}
+            tip = st.get("tip") or ""
+            if st.get("phase") != "verified" or not tip or seen.get(sid, {}).get("main") == base and \
+                    seen.get(sid, {}).get("tip") == tip:
+                continue
+            one = (c.DATA / "locks" / f"resume-{sid}.lock")
+            one.parent.mkdir(parents=True, exist_ok=True)
+            fh = one.open("w")
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                fh.close()
+                continue
+            try:
+                files = merge_conflicts(base, tip)
+                seen[sid] = {"main": base, "tip": tip, "files": files}
+                if files:
+                    named = ", ".join(files)
+                    kind = "records" if all(f.startswith(c.V062_REL + "/") for f in files) else "conflict"
+                    what = (f"The branch conflicts with main only in the records folder ({named}): resume.py send-back "
+                            "merges main into it, taking main's records." if kind == "records" else
+                            f"The branch conflicts with main in {named}. Your one task: merge main into this branch "
+                            "(git merge main) and resolve each conflict keeping both sides of an append-only change "
+                            "(both rows of a table, both entries of a list: main's first, then yours); change nothing "
+                            "else, then run the checks and the acceptance command. A conflict that is not such an "
+                            "append is not yours to settle alone: say so in your final message.")
+                    refuse_to_builder(sid, tip, f"verified, conflicts with main in {named}", [{
+                        "file": files[0], "what": what,
+                        "evidence": f"git merge-tree --write-tree --name-only on main {base[:10]} and the tip names "
+                                    f"{named} (the line's look when a verifier passes and when main moves)"}], 0, kind)
+                    said.append(f"{sid}: verified, conflicts with main in {named}: recorded; resume.py {sid} send-back "
+                                "returns it to the builder (no round spent).")
+            finally:
+                fh.close()
+        c.write_json(seen_f, seen)
+    finally:
+        held.close()
+    return said
 
 
 def records_only_conflict(base: str, tip: str) -> list[str]:
@@ -803,13 +969,147 @@ def github_at_merge() -> dict:
     return ci
 
 
+#: The merge's progress record (MERGE_PROGRESS_BRIEF.md; the owner, 19 November 2026: "intermediate status outputs ...
+#: to track progress in the dashboard"): records/<ID>/merge-progress.json, rewritten whole (beside it, then renamed) at
+#: each step's start and end and every PROGRESS_SECONDS while one runs. Names, numbers and times only; never test output.
+PROGRESS_FILE = "merge-progress.json"
+PROGRESS_SECONDS = 30
+STEPS = ("checks before the gate", "red before: the acceptance on the base", "the merge onto main",
+         "the acceptance, checks and scans on the merge result", "today's full gate", "landing on main", "the push")
+PROGRESS = None  # the running merge's Progress, for full_gate's parts
+
+
+def progress_history(slice_id: str) -> tuple[dict, str]:
+    """Seconds per step from this slice's previous attempt (its newest finished record), else the mean of the last
+    three finished merges of any slice; ({}, "no estimate") when there is nothing to go on. Never invented."""
+    def secs(f: Path) -> dict:
+        r = c.read_json(f) or {}
+        return {d["name"]: d["seconds"] for d in r.get("done") or [] if isinstance(d.get("seconds"), (int, float))}
+    own = sorted(c.rec_dir(slice_id).glob("merge-progress-*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    for f in own:
+        if secs(f):
+            return secs(f), "this slice's previous attempt"
+    every = sorted((c.DATA / "records").glob("*/merge-progress-*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    runs = [x for x in (secs(f) for f in every) if x][:3]
+    if not runs:
+        return {}, "no estimate"
+    names = {n for r in runs for n in r}
+    return ({n: sum(r[n] for r in runs if n in r) / sum(1 for r in runs if n in r) for n in names},
+            f"the last {len(runs)} merge(s) of any slice")
+
+
+class Progress:
+    """The record one merge writes as it goes. Best effort: a write that fails never fails or slows the merge, and says
+    so once in the merge log."""
+
+    def __init__(self, slice_id: str, log: Path):
+        self.f = c.rec_dir(slice_id) / PROGRESS_FILE
+        self.log = log
+        self.t0 = time.time()
+        self.step_t0 = self.t0
+        self.said_failure = False
+        self.mutex = threading.Lock()
+        self.history, self.source = progress_history(slice_id)
+        self.rec = {"slice": slice_id, "tip": "", "merge_id": log.stem, "pid": os.getpid(), "started": c.now(),
+                    "state": "running", "result": None, "step": None, "done": [], "log": {"path": str(log)},
+                    "estimate_left_s": None, "estimate_from": "no estimate"}
+        self.board = None
+        self.stop = threading.Event()
+        self.beat = threading.Thread(target=self._beat, daemon=True)
+        self.beat.start()
+
+    def _beat(self) -> None:
+        every = float(os.environ.get("OSPREY_PROGRESS_SECONDS") or PROGRESS_SECONDS)
+        while not self.stop.wait(every):
+            self.write()
+
+    def _estimate(self) -> None:
+        st = self.rec["step"]
+        left = STEPS[st["n"] - 1:] if st else ()
+        if not st or self.rec["state"] != "running" or any(n not in self.history for n in left):
+            self.rec["estimate_left_s"], self.rec["estimate_from"] = None, "no estimate"
+            return
+        now_in = time.time() - self.step_t0
+        self.rec["estimate_left_s"] = round(max(self.history[left[0]] - now_in, 0) + sum(self.history[n] for n in left[1:]))
+        self.rec["estimate_from"] = self.source
+
+    def write(self) -> None:
+        with self.mutex:
+            try:
+                st = self.log.stat() if self.log.exists() else None
+                self.rec["log"] = {"path": str(self.log), "size": st.st_size if st else 0,
+                                   "mtime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(st.st_mtime)) if st else None}
+                self._estimate()
+                self.rec["updated"] = c.now()
+                tmp = self.f.with_name(self.f.name + ".tmp")
+                tmp.write_text(json.dumps(self.rec, indent=1))
+                os.replace(tmp, self.f)
+            except OSError as e:
+                if not self.said_failure:
+                    self.said_failure = True
+                    try:
+                        with self.log.open("a") as fh:
+                            fh.write(f"\n(the progress record could not be written: {e}; the merge goes on without it)\n")
+                    except OSError:
+                        pass
+
+    def _close_step(self, result: str) -> None:
+        st = self.rec["step"]
+        if st:
+            self.rec["done"].append({"name": st["name"], "result": result, "seconds": round(time.time() - self.step_t0)})
+
+    def _board(self) -> None:
+        """board.py --quiet, so status.js carries the step: one at a time, and never waited for by a step."""
+        try:
+            if self.board and self.board.poll() is None:
+                return
+            self.board = subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"],
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+
+    def step(self, n: int) -> None:
+        prev = self.rec["step"]
+        self._close_step("red as expected" if prev and prev["n"] == 2 else "passed")
+        self.step_t0 = time.time()
+        self.rec["step"] = {"name": STEPS[n - 1], "n": n, "of": len(STEPS), "began": c.now(), "part": ""}
+        self.write()
+        self._board()
+
+    def part(self, name: str) -> None:
+        if self.rec["step"]:
+            self.rec["step"]["part"] = name
+            self.write()
+
+    def finish(self, result: str, why: str = "") -> None:
+        if self.rec["state"] != "running":
+            return
+        self._close_step("passed" if result == "merged" else "red")
+        self.rec.update(state="finished", result=result, why=why[:300], finished=c.now())
+        self.stop.set()
+        self.write()
+        try:  # kept beside it, for the next merge's estimate
+            shutil.copyfile(self.f, self.f.with_name(f"merge-progress-{self.rec['merge_id'].removeprefix('merge-')}.json"))
+        except OSError:
+            pass
+        if self.board:
+            try:
+                self.board.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                pass
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
+    c.write_json(c.DATA / RUNNING, {"slice": slice_id, "pid": os.getpid(), "at": c.now()})
     trees: list[Path] = []
     rec = c.rec_dir(slice_id)
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
+    global PROGRESS
+    prog = PROGRESS = Progress(slice_id, log)
     try:
-        base = main_ready()
+        prog.step(1)
+        base = main_ready(records=True)  # 9: the conductor's uncommitted records do not hold a merge (below)
         note(watch_github())  # 1c: a test of ours red twice stops merging
         github_stop()
         github = github_at_merge()  # a record, never a decision (1a: GitHub is a second opinion, not a gate)
@@ -822,6 +1122,7 @@ def merge(slice_id: str) -> dict:
                           "a change needs the owner's word (refreeze.py).")
         branch = frozen["branch"]
         tip = c.git(["rev-parse", branch], c.REPO)
+        prog.rec["tip"] = tip
         if subprocess.run(["git", "merge-base", "--is-ancestor", tip, base], cwd=c.REPO).returncode == 0:
             raise Refused(f"{branch} is already on main.")
         accepted = acceptance(slice_id, tip)
@@ -830,8 +1131,15 @@ def merge(slice_id: str) -> dict:
         bad = [p for p in touched if p.startswith(PROTECTED_PREFIXES)]
         if bad:
             raise Refused("the branch touches protected paths: " + ", ".join(bad[:8]))
+        dirty = [ln[3:] for ln in c.git(["status", "--porcelain", "--untracked-files=no"], c.REPO).splitlines()
+                 if not ln[3:].startswith(OWNERS_LOCAL)]
+        both = sorted(set(dirty) & set(touched))
+        if both:  # 9: main's fast-forward would meet them: commit them (records) first
+            raise Refused("the main checkout has uncommitted changes to files the branch changes: " + ", ".join(both[:5])
+                          + ". Commit them with merge_slice.py records (or set them aside), then merge.")
 
         # 5. red before the slice: the base, with only the slice's acceptance files from the tip
+        prog.step(2)
         before = temp_tree(base, f"{slice_id}-before")
         trees.append(before)
         files = [f for f in (frozen.get("acceptance_files") or "").split(",") if f.strip()]
@@ -853,6 +1161,7 @@ def merge(slice_id: str) -> dict:
             raise Refused("the acceptance test passes without the slice's code: it was never red. See " + str(log))
 
         # 6. green on the merge result
+        prog.step(3)
         after = temp_tree(base, f"{slice_id}-merge")
         trees.append(after)
         msg = f"merge: slice {slice_id} ({frozen['build']}) {branch} {tip[:10]}\n\nSlice-Merge: {slice_id}\nSlice-Tip: {tip}"
@@ -883,6 +1192,7 @@ def merge(slice_id: str) -> dict:
             raise Refused(f"{branch} does not merge cleanly onto main, and git merge-tree names no conflicting file: not "
                           "recorded as the slice's fault, and the slice is left where it was; the conductor looks at the "
                           f"merge (a hook, a lock, the tree). See {log}")
+        prog.step(4)
         scan_rows = apply_scan_rows(slice_id, after, base, tip)  # 1b: in the merge commit itself
         merged = c.git(["rev-parse", "HEAD"], after)
         try:
@@ -891,7 +1201,17 @@ def merge(slice_id: str) -> dict:
             raise Refused(f"the merge result's environment could not be built: {e}. See {log}")
         for name in ("acceptance", "checks"):
             if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:
-                raise Refused(f"the slice's {name} is red on the merge result. See {log}")
+                # line fault 17 (the owner's file 008, SE6b): recorded for the builder, so send-back works, as a
+                # refusal at the full gate and at the scans is; left at `verified`, no action could move the slice
+                names, findings = gate_findings(log.read_text(errors="replace"))
+                if not names:
+                    findings = [{"file": "", "what": f"The slice's {name} command is red on the merge result (main with the "
+                                 f"slice merged in), though green on the slice's own tip: {frozen[name][:200]}",
+                                 "evidence": "the merge log (a merge-*.log in this slice's records)"}]
+                refuse_to_builder(slice_id, tip, f"the slice's {name} was red on the merge result", findings, len(names),
+                                  "gate")
+                raise Refused(f"the slice's {name} is red on the merge result. Recorded: resume.py {slice_id} send-back "
+                              f"returns it to the builder. See {log}")
         # the pure tests that scan what the slice touched (scan_map.tsv), on the merge result
         scans = scan_select.not_named(scan_select.select(touched, scan_select.load((after / LINE_MAP_REL).read_text())),
                                       frozen.get("checks") or "", frozen.get("acceptance") or "")
@@ -905,6 +1225,7 @@ def merge(slice_id: str) -> dict:
         drop_env(after)  # the full gate builds its own, fresh
 
         # 7. today's full gate on the merge result
+        prog.step(5)
         code = FULL_GATE(after, base, log)
         retried = c.read_json(log.with_suffix(".retries.json"))
         if code == NETWORK:  # 1d: a registry or download unreachable twice: the slice's fault in nothing
@@ -919,12 +1240,15 @@ def merge(slice_id: str) -> dict:
             refuse_to_builder(slice_id, tip, "today's full gate was red on the merge result", findings, len(names), "gate")
             raise Refused(f"today's full gate is red on the merge result. See {log}")
 
-        if c.git(["rev-parse", "HEAD"], c.REPO) != base:
-            raise Refused("main moved while the merge was being tested.")
-        c.git(["merge", "--ff-only", merged], c.REPO)
-        done = {"slice": slice_id, "build": frozen["build"], "merge": merged, "tip": tip, "base": base,
+        prog.step(6)
+        with records_lock():  # no records commit between the check and the fast-forward
+            landed, under = land(slice_id, base, merged, tip, touched)
+            c.git(["merge", "--ff-only", landed], c.REPO)
+        done = {"slice": slice_id, "build": frozen["build"], "merge": landed, "tip": tip, "base": base,
                 "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"),
                 "github_at_merge": github, "at": c.now()}
+        if under:  # 2: records commits that moved main under the gate, landed beneath the tested result
+            done.update(tested_merge=merged, landed_on=c.git(["rev-parse", f"{landed}^1"], c.REPO), records_under_gate=under)
         if retried:
             done["retried"] = retried  # 1d: steps run once more after a network failure, and green the second time
         if scan_rows:
@@ -942,20 +1266,27 @@ def merge(slice_id: str) -> dict:
                 # each gap in a test, for the conductor to turn into a backlog row (the owner's order, 19 November)
                 "backlog_rows": accepted.get("gaps_in_a_test", [])}
         c.write_json(rec / "merged.json", done)
-        c.set_state(slice_id, phase="merged", merge=merged)
+        c.set_state(slice_id, phase="merged", merge=landed)
+        prog.step(7)
         push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO,
                               capture_output=True, text=True)
         done["push"] = {"exit": push.returncode, "said": (push.stdout + push.stderr).strip()[-400:]}
         c.write_json(rec / "merged.json", done)
+        prog.finish("merged")
         return done
-    except Refused:
+    except Refused as e:
         c.set_state(slice_id, last_merge_refusal=c.now())
+        prog.finish("refused", str(e))
+        raise
+    except BaseException as e:
+        prog.finish("ended with an error", type(e).__name__)
         raise
     finally:
         for t in trees:
             drop_tree(t)
             shutil.rmtree(t, ignore_errors=True)
             shutil.rmtree(gate_pytest_base(t), ignore_errors=True)  # the full gate's pytest base (1e)
+        (c.DATA / RUNNING).unlink(missing_ok=True)
         fh.close()
 
 
@@ -989,39 +1320,209 @@ def push_pending() -> str:
 
 
 def records(message: str, paths: list[str]) -> str:
-    fh = lock()
+    """A commit of the records folder alone. While a merge runs it goes on (LINE_FIXES_5_BRIEF.md, 2): the merge's
+    landing takes it beneath the tested result (land()); commits are one at a time (records_lock)."""
     try:
-        if not paths:
-            raise Refused("name the record files to commit.")
-        for p in paths:
-            rel = os.path.relpath(os.path.abspath(p), c.REPO) if os.path.isabs(p) else p
-            if not rel.startswith(c.V062_REL + "/") or ".." in rel:
-                raise Refused(f"records mode commits only {c.V062_REL}/: not {rel}.")
-            if rel in OWNER_FILES:
-                raise Refused(f"{rel} is the owner's file: records mode never commits it.")
-        main_ready(records=True)
-        working = c.load_slices(None) if (c.REPO / c.SLICES_REL).exists() else []
-        rows = {r["id"]: r for r in working}
-        for d in c.RECORDS.glob("*/frozen.json") if c.RECORDS.exists() else []:
-            fr = c.read_json(d) or {}
-            if fr.get("slice") in rows and not c.frozen_matches(fr, rows[fr["slice"]]) and \
-                    not (c.read_json(d.parent / "merged.json")):
-                raise Refused(f"slices.tsv changes the frozen acceptance or checks of started slice {fr['slice']}: "
-                              "that needs the owner's word (refreeze.py).")
-        c.git(["add", "--", *paths], c.REPO)
-        staged = c.git(["diff", "--cached", "--name-only"], c.REPO).splitlines()
-        outside = [p for p in staged if not p.startswith(c.V062_REL + "/")]
-        if outside:
-            c.git(["reset", "-q", "--", *paths], c.REPO)
-            raise Refused("something outside the records folder is staged: " + ", ".join(outside))
-        if not staged:
-            raise Refused("nothing to commit.")
-        c.git(["commit", "-q", "-m", f"{message}\n\nSlice-Records: yes"], c.REPO)
-        sha = c.git(["rev-parse", "HEAD"], c.REPO)
-        subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO)
-        return sha
+        fh = lock()
+    except Refused:
+        fh = None  # a merge runs: its landing handles main having moved by this commit
+    try:
+        with records_lock():
+            return _records(message, paths, push=fh is not None)
     finally:
+        if fh:
+            fh.close()
+
+
+def _records(message: str, paths: list[str], push: bool = True) -> str:
+    if not paths:
+        raise Refused("name the record files to commit.")
+    rels = []
+    for p in paths:
+        rel = os.path.relpath(os.path.abspath(p), c.REPO) if os.path.isabs(p) else p
+        rels.append(os.path.normpath(rel))
+        if not rel.startswith(c.V062_REL + "/") or ".." in rel:
+            raise Refused(f"records mode commits only {c.V062_REL}/: not {rel}.")
+        if rel in OWNER_FILES:
+            raise Refused(f"{rel} is the owner's file: records mode never commits it.")
+    main_ready(records=True)
+    working = c.load_slices(None) if (c.REPO / c.SLICES_REL).exists() else []
+    rows = {r["id"]: r for r in working}
+    refreezes = {ln["slice"] for ln in c.unapplied_lines() if ln["action"] == "refreeze"}
+    for d in c.RECORDS.glob("*/frozen.json") if c.RECORDS.exists() else []:
+        fr = c.read_json(d) or {}
+        if fr.get("slice") in rows and not c.frozen_matches(fr, rows[fr["slice"]]) and \
+                not (c.read_json(d.parent / "merged.json")):
+            if fr["slice"] in refreezes and c.SLICES_REL not in rels:
+                continue  # 8.1: the owner's refreeze line covers it, and resume.py refreeze commits slices.tsv itself
+            if fr["slice"] in refreezes:
+                raise Refused(f"slices.tsv waits for the owner's refreeze of {fr['slice']} (resume.tsv), which commits it: "
+                              "leave it out of this records commit, then run resume.py " + fr["slice"] + " refreeze.")
+            raise Refused(f"slices.tsv changes the frozen acceptance or checks of started slice {fr['slice']}: "
+                          "that needs the owner's word (refreeze.py).")
+    c.git(["add", "--", *paths], c.REPO)
+    staged = c.git(["diff", "--cached", "--name-only"], c.REPO).splitlines()
+    outside = [p for p in staged if not p.startswith(c.V062_REL + "/")]
+    if outside:
+        c.git(["reset", "-q", "--", *paths], c.REPO)
+        raise Refused("something outside the records folder is staged: " + ", ".join(outside))
+    if not staged:
+        raise Refused("nothing to commit.")
+    c.git(["commit", "-q", "-m", f"{message}\n\nSlice-Records: yes"], c.REPO)
+    sha = c.git(["rev-parse", "HEAD"], c.REPO)
+    if push:  # while a merge runs, its own push carries this commit
+        subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO)
+    return sha
+
+
+# ------------------------------------------------------------------ the owner's approved diffs (LINE_FIXES_5_BRIEF.md, 10)
+
+#: Where the conductor's proposed diffs are (the owner names one by its file name, without or with `.diff`).
+PROPOSALS_REL = f"{c.V062_REL}/slice-line/proposals"
+#: The approvals (the conductor's attestation of the owner's "approved: <name> <hash8>" in chat) and the list of applied
+#: diffs the board prints and the conductor copies to the top of each report: committed records, beside the rest.
+APPROVED_REL = f"{c.V062_REL}/approved"
+APPLIED_REL = f"{APPROVED_REL}/applied.tsv"
+#: The only files an approved diff may touch (the owner, 21 November 2026).
+APPROVED_FILES = ("OspreyFlow_Build/spec/06_DECISIONS.md", "OspreyFlow_Build/spec/ADR_RESERVATIONS.md",
+                  "OspreyFlow_Build/spec/design/DESIGN.md", "OspreyFlow_Core/DESIGN.md", "OspreyFlow_Build/process/CLAUDE.md")
+#: Never, named in the refusal's words (anything not in APPROVED_FILES is refused anyway).
+NEVER_APPROVED = ("OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/harness/signatures.py", *OWNER_FILES)
+#: The decision checks run on the result before it is committed (OspreyFlow_Build/Makefile's targets of the same names).
+DECISION_CHECKS = ("tools.adr_reservations_check", "tools.doc_citations_check", "tools.decision_log_publication_check")
+OWNER_TRAILER = "Owner-Approved-Diff"
+
+
+def today() -> str:
+    """The line's one date (resume.today(), UTC), imported here as resume.py imports this module."""
+    import resume
+    return resume.today()
+
+
+def diff_file(name: str) -> tuple[str, Path]:
+    """The diff's name (its file name without .diff) and path in the main checkout's proposals folder."""
+    stem = name[:-5] if name.endswith(".diff") else name
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", stem):
+        raise Refused(f"{name!r} is not a diff's name (the file name in {PROPOSALS_REL}, no folder).")
+    return stem, c.REPO / PROPOSALS_REL / f"{stem}.diff"
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def approve_diff(name: str, hash8: str) -> str:
+    """The conductor's record of the owner's "approved: <name> <hash8>": refused unless hash8 is the first 8 characters
+    of the diff file's SHA-256 now; committed in records mode as approved/<name>.json."""
+    stem, f = diff_file(name)
+    if not f.is_file():
+        raise Refused(f"there is no diff {stem} ({f}). Nothing recorded.")
+    digest = sha256(f)
+    if not re.fullmatch(r"[0-9a-f]{8}", hash8 or "") or digest[:8] != hash8:
+        raise Refused(f"the owner's hash8 {hash8!r} is not {stem}.diff's ({digest[:8]}): the diff is not the one he approved, "
+                      "or the hash was copied wrong. Ask him again. Nothing recorded.")
+    rel = f"{APPROVED_REL}/{stem}.json"
+    c.write_json(c.REPO / rel, {"name": stem, "file": f"{PROPOSALS_REL}/{stem}.diff", "sha256": digest, "hash8": hash8,
+                                "date": today(), "at": c.now(),
+                                "by": "the conductor, on the owner's word in chat: approved: " + f"{stem} {hash8}"})
+    sha = records(f"docs(process): the owner's approval of {stem} ({hash8})", [rel])
+    return f"Recorded the owner's approval of {stem} ({hash8}) in {rel}, committed {sha[:10]}."
+
+
+def diff_paths(diff: Path, cwd: Path) -> list[str]:
+    """The files the diff touches (git apply --numstat), refused for a rename, a copy or a mode change."""
+    summary = subprocess.run(["git", "apply", "--summary", str(diff)], cwd=str(cwd), capture_output=True, text=True)
+    numstat = subprocess.run(["git", "apply", "--numstat", str(diff)], cwd=str(cwd), capture_output=True, text=True)
+    if summary.returncode or numstat.returncode:
+        raise Refused(f"git cannot read the diff: {(summary.stderr or numstat.stderr).strip()[:300]}. Nothing changed.")
+    odd = [ln.strip() for ln in summary.stdout.splitlines() if re.match(r"\s*(rename|copy|mode change)\b", ln)]
+    if odd:
+        raise Refused("the diff renames, copies or changes a file's mode (" + "; ".join(odd[:3]) + "): never an approved "
+                      "diff's. Nothing changed.")
+    paths = [ln.split("\t", 2)[2] for ln in numstat.stdout.splitlines() if ln.count("\t") >= 2]
+    if not paths or any("=>" in q for q in paths):
+        raise Refused("the diff names no file, or a renamed one. Nothing changed.")
+    return paths
+
+
+def apply_approved(name: str, wait: float = 120) -> str:
+    """The owner-approved diff applied, checked and committed to main with its trailer, then pushed; refused in words,
+    with nothing staged or committed, unless every rule holds (LINE_FIXES_5_BRIEF.md, 10)."""
+    stem, f = diff_file(name)
+    fh = lock_after_merge(wait, f"apply-approved {stem}")
+    tree = None
+    try:
+        rec = c.read_json(c.REPO / APPROVED_REL / f"{stem}.json")
+        if not rec or rec.get("name") != stem:
+            raise Refused(f"no approval of {stem} is recorded ({APPROVED_REL}/{stem}.json): the conductor records the owner's "
+                          f"word first (merge_slice.py approve-diff {stem} <hash8>). Nothing changed.")
+        if not f.is_file():
+            raise Refused(f"the approved diff {stem}.diff is not there any more: the approval is stale. Nothing changed.")
+        if sha256(f) != rec.get("sha256"):
+            raise Refused(f"{stem}.diff has changed since the owner approved it ({rec.get('hash8')} then, "
+                          f"{sha256(f)[:8]} now): ask him again. Nothing changed.")
+        base = main_ready()
+        paths = diff_paths(f, c.REPO)
+        never = [q for q in paths if q.startswith(NEVER_APPROVED) or q in NEVER_APPROVED]
+        outside = [q for q in paths if q not in APPROVED_FILES]
+        if never or outside:
+            raise Refused(f"the diff touches {', '.join(never or outside)}: an approved diff touches only "
+                          f"{', '.join(APPROVED_FILES)}" + (" and never the Makefile, a workflow, harness/signatures.py or "
+                                                           "the owner's lanes files" if never else "")
+                          + ". The whole diff is refused. Nothing changed.")
+        tree = temp_tree(base, f"approved-{stem}")
+        check = subprocess.run(["git", "apply", "--check", str(f)], cwd=str(tree), capture_output=True, text=True)
+        if check.returncode:
+            raise Refused(f"{stem}.diff does not apply to main ({base[:10]}): {check.stderr.strip()[:300]}. Nothing changed.")
+        c.git(["apply", "--index", str(f)], tree)
+        py = c.REPO / "OspreyFlow_Core/.venv/bin/python"
+        py = str(py) if py.is_file() else sys.executable
+        env = {**os.environ, "PYTHONPATH": str(tree / "OspreyFlow_Build"), "PYTHONDONTWRITEBYTECODE": "1"}
+        for mod in DECISION_CHECKS:
+            q = subprocess.run([py, "-m", mod], cwd=str(tree / "OspreyFlow_Core"), env=env, capture_output=True, text=True)
+            if q.returncode:
+                said = "\n".join([ln for ln in (q.stdout + q.stderr).splitlines() if ln.strip()][-8:])
+                raise Refused(f"{stem}.diff applied, but {mod} is red on the result: nothing committed.\n{said}")
+        date = today()
+        c.git(["commit", "-q", "-m", f"docs(spec): {stem} (approved by the owner, {date})\n\nThe owner's approved diff "
+               f"{stem}.diff, sha256 {rec['sha256'][:8]} ({rec['sha256']}), applied by merge_slice.py apply-approved.\n\n"
+               f"Slice-Records: yes\n{OWNER_TRAILER}: {stem}"], tree)
+        commit = c.git(["rev-parse", "HEAD"], tree)
+        with records_lock():
+            if c.git(["rev-parse", "HEAD"], c.REPO) != base:
+                raise Refused("main moved while the approved diff was being checked: nothing landed; run it again.")
+            c.git(["merge", "-q", "--ff-only", commit], c.REPO)
+            listed = c.REPO / APPLIED_REL
+            listed.parent.mkdir(parents=True, exist_ok=True)
+            if not listed.exists():
+                listed.write_text("date\tname\thash8\tcommit\n")
+            with listed.open("a") as out:
+                out.write(f"{date}\t{stem}\t{rec['sha256'][:8]}\t{commit}\n")
+            c.git(["add", "--", APPLIED_REL], c.REPO)
+            c.git(["commit", "-q", "-m", f"docs(process): {stem} applied ({commit[:10]}), for the owner's next report"
+                   "\n\nSlice-Records: yes", "--", APPLIED_REL], c.REPO)
+        push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True,
+                              text=True)
+        return (f"Applied the owner's approved {stem} ({rec['sha256'][:8]}): commit {commit[:10]} on main, listed in "
+                f"{APPLIED_REL}. Push: {(push.stdout + push.stderr).strip()[-200:]}")
+    finally:
+        if tree:
+            drop_tree(tree)
+            shutil.rmtree(tree, ignore_errors=True)
         fh.close()
+
+
+def wait_idle(minutes: float) -> str:
+    """Wait until no merge runs (LINE_FIXES_5_BRIEF.md, 9: a wait that polled `pgrep -f 'merge_slice.py merge'` matched its
+    own command line). The merge lock itself is the answer: free is idle. Refused after `minutes`."""
+    end = time.time() + minutes * 60
+    while True:
+        busy = merging()
+        if busy is None:
+            return "no merge is running."
+        if time.time() >= end:
+            raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes.")
+        time.sleep(WAIT_POLL_SECONDS)
 
 
 def main() -> int:
@@ -1034,6 +1535,14 @@ def main() -> int:
     r.add_argument("paths", nargs="+")
     sub.add_parser("push-pending")
     sub.add_parser("watch-github")
+    wi = sub.add_parser("wait-idle")
+    wi.add_argument("--minutes", type=float, default=120)
+    ad = sub.add_parser("approve-diff")
+    ad.add_argument("name")
+    ad.add_argument("hash8")
+    aa = sub.add_parser("apply-approved")
+    aa.add_argument("name")
+    aa.add_argument("--wait", type=float, default=120, metavar="MINUTES", help="how long to wait for a running merge")
     a = ap.parse_args()
     try:
         if a.cmd == "merge":
@@ -1043,6 +1552,12 @@ def main() -> int:
             print(push_pending())
         elif a.cmd == "watch-github":
             print(watch_github())
+        elif a.cmd == "wait-idle":
+            print(wait_idle(a.minutes))
+        elif a.cmd == "approve-diff":
+            print(approve_diff(a.name, a.hash8))
+        elif a.cmd == "apply-approved":
+            print(apply_approved(a.name, a.wait))
         else:
             print("Committed", records(a.message, a.paths))
     except Refused as e:

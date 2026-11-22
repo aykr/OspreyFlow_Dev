@@ -1,0 +1,22 @@
+PL11's change to the Makefile, for the owner (the Makefile is protected; the slice does not edit it).
+
+What it does: the `licence-check` target already runs `tools.licence_check` on its first line, and that now
+includes the register leg (weights, map data, fonts and base images held to spec/LICENCE_REGISTER.yaml), so the
+leg needs no new line. What the target lacked is the Python tests under tests/licence_check/ (test_register.py
+and the files beside it), which only ci.yml's licence-check job ran. This adds them, as ci.yml's job does.
+
+Apply from the repository root: git apply OspreyFlow_Build/process/lanes/v062/PL11_MAKEFILE.diff
+
+--- a/OspreyFlow_Build/Makefile
++++ b/OspreyFlow_Build/Makefile
+@@ -91,8 +91,9 @@
+ licence-check:
+ 	$(IN_CORE) $(TOOLS) $(PY) -m tools.licence_check
+ 	$(IN_CORE) node $(BUILD)/tools/licence_check.mjs
++	$(IN_CORE) $(PYTEST) $(BUILD)/tests/licence_check
+ 	$(IN_CORE) node --test $(BUILD)/tests/licence_check/*.test.mjs
+-	@echo "licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof"
++	@echo "licence-check: tests/licence_check/test_gpl_rejection.py and test_licence_check_mjs.test.mjs hold the proof; test_register.py holds it for the register leg (weights, map data, fonts, base images), which the first line above runs"
+ 
+ # ADR-115 (E1): the design detector against DESIGN.md §9, Core's DESIGN.md held to the contract, and
+ # no colour literal in the Glass that DESIGN.md does not hold. tests/test_design_check.py and

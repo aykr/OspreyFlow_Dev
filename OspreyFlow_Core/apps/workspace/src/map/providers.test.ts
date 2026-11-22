@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PublicMapConfig, PublicMapProvider } from "../../../../packages/schemas/generated";
-import { defaultProvider, switchableProviders } from "./providers";
+import { defaultProvider, switchableProviders } from "@ospreyflow/glass-shared";
 
 function provider(id: string): PublicMapProvider {
   return {

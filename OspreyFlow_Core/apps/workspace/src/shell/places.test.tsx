@@ -5,12 +5,11 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyBrand } from "../brand/brand";
+import { applyBrand, PLACES_BY_ROLE as BY_ROLE } from "@ospreyflow/glass-shared";
 import { GovukHeader } from "../brand/govuk/GovukHeader";
 import { ContextBanner, crossLinkFor } from "./ContextBanner";
 import { PlaceSwitcher } from "./PlaceSwitcher";
 import { PLACES, placesFor } from "./places";
-import BY_ROLE from "./placesByRole.json";
 
 afterEach(() => {
   cleanup();

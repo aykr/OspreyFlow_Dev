@@ -115,8 +115,17 @@ def test_the_merge_runs_acceptance_and_checks_with_a_ci_built_environment_outsid
     calls = ci_repo(w)
     checks = ('sh tools/keyboard.sh && test -n "$VIRTUAL_ENV" && case "$VIRTUAL_ENV" in "$PWD"*) exit 7;; esac '
               '&& test -x "$VIRTUAL_ENV/bin/python" && test -d OspreyFlow_Core/node_modules')
-    row(w, checks=checks)
+    # These checks hold the merge's environment to CI's; the builder's Stop hook gives an env: none slice no venv, so
+    # slice_start.py (B) refuses to start them as written. The slice starts on the first step and they reach it as the
+    # owner's refreeze brings a row in: main's row and the frozen record changed together.
+    row(w, checks="sh tools/keyboard.sh")
     wt, tip = built(w)
+    tsv = w["repo"] / "OspreyFlow_Build/process/lanes/v062/slices.tsv"
+    tsv.write_text(tsv.read_text().replace("\tsh tools/keyboard.sh\n", f"\t{checks}\n"))
+    sh("git add -A . ':!OspreyFlow_Core/osprey.yaml' && git commit -qm 'docs: S1 refrozen' --trailer 'Slice-Records: yes'",
+       w["repo"], w["env"])
+    fz = w["data"] / "records/S1/frozen.json"
+    fz.write_text(json.dumps({**json.loads(fz.read_text()), "checks": checks}))
     verified(w, wt, tip)
     sees = w["tmp"] / "gate-sees.txt"
     w["env"]["TEST_GATE_SEES"] = str(sees)

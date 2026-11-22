@@ -1,5 +1,5 @@
 // Turn a saved pattern into a monitor — `02_GLASS_FRONTEND.md` §3.3: "A saved visual query run on
-// a schedule against new data." Reuses `patterns/api.ts::listPatterns` rather than duplicating it —
+// a schedule against new data." Reuses `packages/glass-shared/src/patterns/api.ts::listPatterns` rather than duplicating it —
 // the pattern list `QueryBuilderPanel`'s own "Load" select already fetches is exactly the
 // ownership-filtered population `MonitorStore.create` requires a `pattern_id` from
 // (`app.py::create_monitor_route`'s own `PatternStore.get_authorized` check).
@@ -12,8 +12,8 @@ import type { Monitor, MonitorScheduleInput, SavedPattern } from "../../../../pa
 import { Button } from "../design/primitives/Button";
 import { Panel } from "../design/primitives/Panel";
 import { Select } from "../design/primitives/Select";
-import { listPatterns } from "../patterns/api";
-import { createMonitor, listMonitors, setMonitorSchedule } from "./api";
+import { listPatterns } from "@ospreyflow/glass-shared";
+import { createMonitor, listMonitors, setMonitorSchedule } from "@ospreyflow/glass-shared";
 import { StatusBadge } from "./StatusBadge";
 
 export interface MonitorPanelProps {

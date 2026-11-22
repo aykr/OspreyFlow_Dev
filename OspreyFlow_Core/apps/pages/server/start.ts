@@ -10,10 +10,14 @@ import type { AddressInfo } from "node:net";
 import { Redis } from "ioredis";
 
 import { createApp } from "./app.js";
+import { defaultAssets } from "./assets.js";
+import type { AssetsSetting } from "./assets.js";
 import { loadConfig } from "./config.js";
 import { unconfiguredProvider } from "./identity.js";
 import type { CodeFlowProvider, IdentityProvider } from "./identity.js";
 import { createOidcFlow } from "./oidc.js";
+import { PAGES } from "./pageList.js";
+import type { SessionEventReporter } from "./sessionEvents.js";
 import { ValkeySessionStore } from "./sessionStore.js";
 import { attachStreamProxy } from "./stream.js";
 import type { SessionStore } from "./sessionStore.js";
@@ -33,12 +37,16 @@ export interface StartDeps {
   /** The sign-in flow to use in place of the real one (`OSPREY_PAGES_OIDC_ISSUER` and the rest). */
   codeFlow?: CodeFlowProvider;
   host?: string;
+  /** The built browser assets, in place of `dist/assets` (a test's own folder); `null` says there are none, whatever is on disk. */
+  assets?: AssetsSetting | null;
   /** Milliseconds since the epoch, for the session and the live-updates proxy. A test moves it by hand. */
   clock?: () => number;
   /** How often the live-updates proxy looks at its open sockets, in milliseconds. */
   streamCheckMs?: number;
   /** How long a browser may send nothing mid-body before it is ended, in milliseconds (default 60 s). A test shortens it. */
   bodyStallMs?: number;
+  /** Reports a sign-in and a sign-out to the Conduit, in place of the real one (a test's own, or one that reports nothing). */
+  sessionEvents?: SessionEventReporter;
 }
 
 export interface Running {
@@ -76,6 +84,15 @@ export async function main(
     return undefined;
   }
 
+  // The service is a page service: with no built stylesheet its pages would go out bare. A production start refuses that, in
+  // words; a start from the sources (a test, a developer) goes on without, and the layout links nothing.
+  const assets = deps.assets === null ? undefined : (deps.assets ?? defaultAssets());
+  if (assets === undefined && env["NODE_ENV"] === "production") {
+    io.error("pages: cannot start: the built assets are missing (no dist/assets/manifest.json). Build the service with npm run build.");
+    io.exit(1);
+    return undefined;
+  }
+
   let client: Redis | undefined;
   let store = deps.store;
   if (store === undefined) {
@@ -91,11 +108,14 @@ export async function main(
   const app = createApp({
     store,
     identityProvider: deps.identityProvider ?? unconfiguredProvider,
+    ...(assets ? { assets } : {}),
+    pages: PAGES,
     ...(codeFlow ? { codeFlow } : {}),
     sessionSecret: config.sessionSecret.reveal(),
     ...(deps.clock ? { clock: deps.clock } : {}),
     ...(config.forward ? { forward: config.forward } : {}),
     ...(deps.bodyStallMs === undefined ? {} : { bodyStallMs: deps.bodyStallMs }),
+    ...(deps.sessionEvents ? { sessionEvents: deps.sessionEvents } : {}),
     log: (message) => {
       io.error(message);
     },

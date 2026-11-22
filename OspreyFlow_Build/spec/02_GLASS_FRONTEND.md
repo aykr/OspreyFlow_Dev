@@ -505,7 +505,7 @@ switcher's count, a report pack's alert items) and the held rows' list, rejectio
 and the Studio's Runs). The Conduit's place-routes test
 (`test_place_routes.py`, in the build tree) assigns every route to the place whose screens call it
 (`/v1/admin/screening-lists` is Rules and Monitoring's, called by its screening lists); records what the routes answer each role, legacy role and right granted
-singly (`shell/placesByRole.json`, which the Glass's `placesFor` is held to); checks that `places.json`
+singly (`packages/glass-shared/src/shell/placesByRole.json`, which the Glass's `placesFor` is held to); checks that `places.json`
 names exactly the single rights that open each place and that a screen of that place uses each; checks
 every call site the workspace's source names against its route's places; and calls every route of each
 hidden place, which must not answer. Exempt, with their reasons there: the reference catalogues, which
@@ -856,7 +856,7 @@ for the owner to accept, amend or reject as real spec.
 every load with no id) is gone. With no case resolved, and the analyst signed in, the Glass shows a
 **case picker**: the cases the caller holds a level on, each with the caller's own level, and a
 "New case" form. Each case is listed once (ADR-144 Amendment 1: no case is made from another;
-`orderCases` in `investigation/cases.ts`). The header carries a case switcher, and the Ingest Studio shows the same switcher
+`orderCases` in `packages/glass-shared/src/investigation/cases.ts`). The header carries a case switcher, and the Ingest Studio shows the same switcher
 above its tabs ("Data loaded from this studio goes into"), with "New case" in it. Choosing a case
 sets the sessionStorage key and reloads the page, because the working set, cross-filter store and
 delta stream are built once per case, and it signs back in by itself (`from=case`, ADR-052 Amendment 6). Steps 1 and 2 (query parameter, then session) are unchanged.
@@ -1728,7 +1728,7 @@ Home. Keyboard: `keyboard/alert-figures.spec.ts` (`ALERT_FIGURES_ACTIONS`); axe:
 in dark, light and GOV.UK.
 
 **Roles, teams and Authors (ADR-145 Amendment 4 decision 12).** One page of words (`help/RolesHelpPage.tsx`),
-every word from `help/roles.ts`, which says every right `rights.py` declares (`help/roles.test.ts`, red with
+every word from `packages/glass-shared/src/help/roles.ts`, which says every right `rights.py` declares (`help/roles.test.ts`, red with
 one missing). Admin's tips and its door to the page are held as a patch for the admin lane until the
 admin lane takes them; the Studio's door waits for its review, accept-type and merge screens.
 
@@ -1806,7 +1806,7 @@ fails is said. *The Glass* goes to *Choose a case*, *Ingest Studio* to *Choose t
 sub-headings set beneath its own title in every look. It is worked out from the person's own reads alone:
 their rights, their roles, their case list and `GET /v1/me/needs-you`. It holds four things:
 - *Places you can open*: the places their rights open;
-- what they can do, by place, in `help/roles.ts`'s words, each with *Why can I do this?* naming their own
+- what they can do, by place, in `packages/glass-shared/src/help/roles.ts`'s words, each with *Why can I do this?* naming their own
   role that gives it (or "a right given to you alone", or "a role your administrator made");
 - *Your access to each case*: one line a case, "<Level>: <case name>" ("Editor: Operation Ledger (synthetic
   demo)");

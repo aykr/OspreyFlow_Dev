@@ -287,7 +287,12 @@ services:
   # so swapping the backend model/engine is a config change to
   # `litellm_config.yaml`, not a code change.
   litellm:
-    image: ghcr.io/berriai/litellm@sha256:d295634e09c648dcdb72c4cc2dd226f5fb87823a73e88cbbed6f205e4deb044b
+    # OspreyFlow's own gateway image, built from the publisher's MIT files alone (the owner's ruling
+    # of 21 November 2026): the same folder the rendered deployment builds, so a developer and a
+    # deployment run the same gateway (`test_the_rendered_model_proxy_is_the_developer_stacks`).
+    build:
+      context: ../litellm
+    image: osprey/litellm:dev
     command: ["--config", "/app/config.yaml", "--port", "4000"]
     ports:
       - "4000:4000"
@@ -301,7 +306,7 @@ services:
       speaches:
         condition: service_healthy
     healthcheck:
-      # Not `curl` — found live, not assumed: `ghcr.io/berriai/litellm`'s image has no `curl`
+      # Not `curl` — found live, not assumed: the gateway's image has no `curl`
       # (or `wget`) on `PATH` at all, only the Python venv it ships its own server with, so every
       # other healthcheck in this file's `CMD`-array style fails here with "executable file not
       # found" regardless of whether the server itself is healthy.

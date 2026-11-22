@@ -3,7 +3,17 @@
 // part, lists beneath, and a way back that has focus when it opens (rule 13).
 import { useEffect, useRef } from "react";
 
-import { HELP_TITLE, LEVEL_WORDS, PLACE_WORDS, RIGHT_WORDS, ROLE_WORDS, TEAM_WORDS, rightName, rightSays, type Right } from "./roles";
+import {
+  HELP_TITLE,
+  LEVEL_WORDS,
+  PLACE_WORDS,
+  RIGHT_WORDS,
+  ROLE_WORDS,
+  TEAM_WORDS,
+  rightName,
+  rightSays,
+  type Right,
+} from "@ospreyflow/glass-shared";
 
 export interface RolesHelpPageProps {
   /** Where the page goes back to: "Admin" or "the Ingest Studio". */

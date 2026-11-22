@@ -80,7 +80,7 @@ def _rows(monkeypatch: pytest.MonkeyPatch) -> None:
         (studio_map, "_read_recipe_rows"),
         (studio_profile, "_read_rows"),
     ):
-        monkeypatch.setattr(module, name, lambda draft: [dict(r) for r in ROWS])
+        monkeypatch.setattr(module, name, lambda draft, limit=None: [dict(r) for r in ROWS[:limit]])
 
 
 async def _verify(principal: Principal, *, binds: bool = True) -> Any:
@@ -207,7 +207,7 @@ def _use_rows(monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, str]]) -> No
         (studio_map, "_read_recipe_rows"),
         (studio_profile, "_read_rows"),
     ):
-        monkeypatch.setattr(module, name, lambda draft: [dict(r) for r in rows])
+        monkeypatch.setattr(module, name, lambda draft, limit=None: [dict(r) for r in rows[:limit]])
 
 
 def _no_units_draft() -> StudioRecipeDraft:

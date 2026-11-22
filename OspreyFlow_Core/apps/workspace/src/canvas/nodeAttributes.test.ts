@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activePalette } from "../color/palette";
+import { activePalette } from "@ospreyflow/glass-shared";
 import { makeEdge, makeNode } from "../testing/fixtures";
 import {
   computeClusterGraphAttributes,

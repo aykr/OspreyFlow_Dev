@@ -27,10 +27,13 @@ apps/workspace/src/admin/Operations.tsx
 
 # Not yet written: the owner's records of 7 November (ADR-140 Amendment 9, ADR-144 Amendment 1, ADR-145
 # Amendment 4) name the gates and the one source of role wording their steps build: L1.8 builds
-# ui_words_check.py, L3.2 no_branches_check.py, L2.12 (with L2.7 and L1.8) help/roles.ts. Remove each
+# ui_words_check.py, L3.2 no_branches_check.py, L2.12 (with L2.7 and L1.8) the roles' words. Remove each
 # entry when its step lands.
 tools/ui_words_check.py
 tools/no_branches_check.py
+
+# Moved by PL4d3e (ADR-152 R2): the roles' words are `packages/glass-shared/src/help/roles.ts` now. The records that cite
+# the old path (the lane's patches and notes) are history and stay as written.
 apps/workspace/src/help/roles.ts
 
 # Removed by L2.10 (ADR-146 decision 1, Amendment 4): the Watches inbox merged into the one queue.
@@ -61,23 +64,23 @@ tests/glass_trees/test_import_boundaries.py
 tests/glass_trees/test_no_sigma_page_merges_in_the_window.py
 tests/glass_trees/test_same_drawing_versions.py
 tests/glass_trees/test_session_keys_expire.py
-tests/glass_trees/test_tree_parity.py
 tests/harness/test_govuk_renders_no_superset.py
 tests/harness/test_pages_tree_follows_the_brand.py
-tests/harness/test_realm_pages_client.py
 tests/ingest/test_dataset_load_order.py
 tests/ingest/test_job_file_schema.py
 
-# Named by ADR-152 Amendment 1 (accepted by the owner, 20 November 2026): the React workspace's function list, the
-# one function that derives the GOV.UK tree's state, and the gates for I22 and I23. Absent on purpose until the
-# slice that writes each: PL4 for `FUNCTIONS.yaml`; PL7 for the tree state, the render test and the release notes
-# test; PL6 for the image scan and its test. Each slice removes its own line in the change that writes the file, so
-# the list shrinks to nothing; a path left here after its slice has merged is a defect.
-scripts/pages_image_react_scan.py
-scripts/tree_parity.py
+# Named by ADR-152 Amendment 1 (accepted by the owner, 20 November 2026): the gates for I22 that remain to be written.
+# Absent on purpose until the slice that writes each: PL7 for the render test and the release notes test. (`FUNCTIONS.yaml`
+# came with PL4a, the image scan and its test with PL6, the tree state and its test with PL7a1.) Each slice removes its own
+# line in the change that writes the file, so the list shrinks to nothing; a path left here after its slice has merged is a
+# defect.
 tests/glass_trees/test_cutover_is_in_the_release_notes.py
-tests/glass_trees/test_pages_image_carries_no_react.py
 tests/harness/test_complete_govuk_renders_no_workspace.py
+
+# The GOV.UK tree's route list (ADR-152 Amendment 1, decision 1: "`tree-govuk`'s route list"). `scripts/tree_parity.py` reads it
+# at this path, and absent means the tree is partial. The tree does not exist yet, so the file is absent on purpose; the first
+# slice that gives the GOV.UK tree a page writes it and removes this line (PL7a1 chose the path: the ADR names the list, not its file).
+apps/pages/tree-govuk/routes.yaml
 
 # Moved by PL4 slice B to `packages/design/tokens.css`: the decision-log entries and other records that name the old place
 # are history and stay as written.
@@ -94,3 +97,11 @@ apps/workspace/src/design/panelType.css
 # decision-log entries that name the old places are history and stay as written; only these two are named in full there.
 apps/workspace/keyboard/actionRegistry.ts
 apps/workspace/src/workingset/store.ts
+
+# Moved by PL4 slice D1 to `packages/glass-shared/src/`: the theme (`theme/theme.ts`), the brand (`brand/brand.ts`), the product
+# statement (`welcome/statement.ts`) and the colour files `color/palette.ts`, `color/tokens.ts`, `color/oklab.ts` and
+# `color/nodeGlyphs.ts`. The build record and the decision-log entries that name the old places are history and stay as written;
+# only these three are named in full there.
+apps/workspace/src/welcome/statement.ts
+apps/workspace/src/brand/brand.ts
+apps/workspace/src/color/tokens.ts

@@ -7,7 +7,7 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { applyBrand } from "../brand/brand";
+import { applyBrand } from "@ospreyflow/glass-shared";
 import { SignInScreen, type WelcomeSettings } from "./SignInScreen";
 
 afterEach(() => {

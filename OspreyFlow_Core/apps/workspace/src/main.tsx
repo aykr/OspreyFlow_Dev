@@ -7,9 +7,8 @@ import "../../../packages/design/primitives.css";
 import { App } from "./App";
 import { answerTheWindowThatAsked } from "./auth/callbackFrame";
 import { deploymentAppearance, loadDeploymentSettings } from "./auth/oidcConfig";
-import { applyBrand, brandFromUrl, loadBrandStylesheet } from "./brand/brand";
+import { applyBrand, brandFromUrl, loadBrandStylesheet, applyTheme, readStoredTheme } from "@ospreyflow/glass-shared";
 import { BrandFrame } from "./brand/BrandFrame";
-import { applyTheme, readStoredTheme } from "./theme/theme";
 
 // The saved light or dark choice is on the page before anything is drawn (ADR-070).
 applyTheme(readStoredTheme());

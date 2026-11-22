@@ -12,8 +12,8 @@
 // applies before this function is ever called), so there is no unbounded server-side result to
 // cap in the first place.
 import type { Assumption, IntelligenceGap, Judgement } from "../../../../packages/schemas/generated";
-import type { Yardstick } from "../assessment/api";
-import { manifestSentence, type ExportManifest, type ExportMark } from "./api";
+import type { Yardstick } from "@ospreyflow/glass-shared";
+import { manifestSentence, type ExportManifest, type ExportMark } from "@ospreyflow/glass-shared";
 
 export interface ReportArtefactInput {
   judgements: Judgement[];

@@ -26,6 +26,7 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 
 #: An image reference as written in a compose file — `repository:tag`, never a bare repository.
 #: Tags match `deploy/compose/dev.yaml`'s own pins where the two overlap (ArcadeDB, MinIO, Valkey,
@@ -65,12 +66,36 @@ class ServiceImage:
     build_context: str | None = None
     #: False for the components a reduced or smaller profile drops.
     always: bool = True
+    #: Set for an owned image built from a folder of its own, not from the checkout's root
+    #: (Superset's and Laurium's way, and the model gateway's: the root's `.dockerignore` leaves
+    #: `deploy/` out of a root context): the folder, relative to the checkout. `dockerfile` stays
+    #: the checkout-relative path (it names the image everywhere), and the Dockerfile is that file
+    #: read from inside this folder. `None` for an image built from the root.
+    own_folder: str | None = None
+    #: Whether the service reads the deployment's whole `deployment.env` (`env_file`), as every
+    #: other owned service does. False for the model gateway: it is built by us, but it holds the
+    #: engines' keys, and is given the variables the renderer names for it and nothing else (ADR-135
+    #: decision 2: a key is read by the gateway alone, and the gateway reads no other secret).
+    reads_env_file: bool = True
 
     @property
     def owned(self) -> bool:
-        """An OspreyFlow service, built or pulled — env_file, the config mount and the
-        `depends_on` ordering all follow this identity, not whether this render builds it."""
+        """An OspreyFlow service, built or pulled — the config mount and the `depends_on` ordering
+        follow this identity, not whether this render builds it, and so does the `env_file` unless
+        `reads_env_file` says the service reads none."""
         return self.dockerfile is not None
+
+    def build_stanza(self) -> dict[str, str]:
+        """The `build:` a compose file gives this service (only when `building`): the checkout's
+        root and the Dockerfile's checkout-relative path, or, for an image built from a folder of
+        its own, that folder and the Dockerfile's name inside it."""
+        assert self.build_context is not None and self.dockerfile is not None
+        if self.own_folder is None:
+            return {"context": self.build_context, "dockerfile": self.dockerfile}
+        return {
+            "context": str(PurePosixPath(self.build_context) / self.own_folder),
+            "dockerfile": str(PurePosixPath(self.dockerfile).relative_to(self.own_folder)),
+        }
 
     @property
     def building(self) -> bool:

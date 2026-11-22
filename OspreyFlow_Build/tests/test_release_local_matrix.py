@@ -30,10 +30,13 @@ def test_it_follows_the_product_workflow() -> None:
 
 def test_it_builds_every_image_the_product_releases(monkeypatch: pytest.MonkeyPatch) -> None:
     services = {e["service"] for e in release_local.matrix(FLOW)}
-    assert services == {"workspace", "api", "ingest", "ner", "worker", "report-sync", "superset"}
+    base = {"workspace", "api", "ingest", "ner", "worker", "report-sync", "superset"}
+    # The model gateway joins the matrix with PL13b's release patch (its entry in `release.yml`);
+    # the list is held with it and without it, and nothing else may be there.
+    assert base <= services <= base | {"litellm"}
     assert {s for s, _d, _c in release_local.SERVICES} == services
     builds = [c for c in _calls(monkeypatch) if c[:3] == ["docker", "buildx", "build"]]
-    assert len(builds) == 7
+    assert len(builds) == len(services)
     superset = next(c for c in builds if "deploy/superset/Dockerfile" in c)
     assert superset[-1] == str(release_local.REPO_ROOT / "deploy/superset")  # its own folder
 
@@ -46,7 +49,7 @@ def test_each_build_is_the_scan_build_with_the_upgrade_stamp(monkeypatch: pytest
 
 def test_the_scan_uses_the_workflow_s_own_trivy_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     scans = [c for c in _calls(monkeypatch) if c[:2] == ["trivy", "image"]]
-    assert len(scans) == 7
+    assert len(scans) == len(release_local.matrix(FLOW))
     assert scans[0][2:9] == ["--scanners", "vuln", "--severity", "HIGH,CRITICAL", "--ignore-unfixed",
                              "--exit-code", "1"]  # fmt: skip
 

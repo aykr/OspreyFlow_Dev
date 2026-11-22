@@ -7,7 +7,7 @@ import {
   editLinkNote,
   listLinkNotes,
   removeLinkNote,
-} from "./linkNotesApi";
+} from "@ospreyflow/glass-shared";
 
 /** The same limit the server holds (`services/api/link_notes.py::MAX_NOTE_CHARS`). */
 export const MAX_NOTE_CHARS = 4000;

@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import "./app.css";
-import { applyTheme, readStoredTheme } from "../../workspace/src/theme/theme";
+import { applyTheme, readStoredTheme } from "@ospreyflow/glass-shared";
 import { App } from "./App";
 import { InstallApp } from "./InstallApp";
 

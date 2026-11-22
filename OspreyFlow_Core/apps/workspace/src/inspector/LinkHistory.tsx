@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { LinkChangeError, fetchLinkHistory, type LinkHistory as History } from "./linkChangeApi";
+import { LinkChangeError, fetchLinkHistory, type LinkHistory as History } from "@ospreyflow/glass-shared";
 import { describeChange } from "./describeChange";
 
 export interface LinkHistoryProps {

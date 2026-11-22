@@ -1,0 +1,25 @@
+The gate gap (the owner's choice (b), 22 November 2026), for the owner: the Makefile is protected, so this is a diff.
+
+What it does: `make test` leaves out every live file (the `--ignore` list), and `tests/services/api/test_route_rights.py`
+is one of them, so the access-control table's own test (`test_every_route_names_the_right_the_table_gives_it`) never ran on the
+Mac or on the demo server before a merge: SE8c's route `record_session_event` reached main missing from the table and was
+found only by GitHub's `conformance` job. This adds one recipe line that runs that one test node, and only that node, as its
+own part of the `test` target (each part is its own recipe line and a failure leaves $(TEST_FAILED), as the target's comment
+says). The test needs no stack: it ran red in 6 s with every store port pinned closed. The file stays in the `--ignore` list
+and in `live_select`'s set (that parser reads only `--ignore=` tokens, so the new line changes neither, and
+`test-file-coverage-check` and `live-collect` are unaffected). The rest of the file's tests, which do need a stack, still run
+only where there is one.
+
+Apply from the repository root: git apply --unidiff-zero OspreyFlow_Build/process/lanes/v062/GATE_GAP_ROUTE_RIGHTS.diff
+
+Rule 15 (a gate is shown red before it is wired): the node itself has been shown red and then green, but not through this
+Makefile line. Red: on main, in SE8d's start dry run (22 November, about 14:43), "in the app, not the table:
+['record_session_event']". Green: on SE8d's branch (its acceptance, passed by its verifier at 97753007a9). **Not shown: the
+line itself failing `make test`.** Show it once after applying and before relying on it: apply this diff while SE8d is
+unmerged and run `make test` on the first part only (or the line by hand); it must exit non-zero; then SE8d merges and it is
+green. The conductor has not applied it and has not run it.
+
+--- a/OspreyFlow_Build/Makefile
++++ b/OspreyFlow_Build/Makefile
+@@ -191,0 +192 @@
++	$(IN_CORE) $(PYTEST) "../OspreyFlow_Build/tests/services/api/test_route_rights.py::test_every_route_names_the_right_the_table_gives_it" || touch $(TEST_FAILED)

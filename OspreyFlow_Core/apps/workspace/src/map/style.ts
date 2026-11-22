@@ -2,7 +2,7 @@
 // tier-1 "Two MapLibre styles ship with it, dark and light, built
 // against `packages/design/tokens.css`".
 //
-// **Dark only for now.** Same deferral `color/tokens.ts`'s
+// **Dark only for now.** Same deferral `packages/glass-shared/src/color/tokens.ts`'s
 // `SURFACE_PANEL_DARK_HEX` already states for node rendering: Checkpoint 2
 // ships the dark theme as the working default; light-theme generation
 // (and the contrast-floor CI check against it) is a named follow-up, not
@@ -20,8 +20,7 @@
 // edges as a disclosed simplification rather than a silent one.
 import type { StyleSpecification } from "maplibre-gl";
 
-import { activePalette, type Palette } from "../color/palette";
-import { contrastRatio, NON_TEXT_FLOOR } from "@ospreyflow/glass-shared";
+import { activePalette, type Palette, contrastRatio, NON_TEXT_FLOOR } from "@ospreyflow/glass-shared";
 import type { PublicMapProvider } from "../../../../packages/schemas/generated";
 
 export const BUNDLED_DARK_STYLE_ID = "bundled:osprey-dark";
@@ -233,7 +232,7 @@ export function buildRasterStyle(
 
 /** `MapProvider.style`'s bundled ids (`00_ARCHITECTURE.md` §1.2's
  * `style: bundled:osprey-dark`) resolve here rather than to a static
- * asset file — a single tested source of truth against `color/tokens.ts`,
+ * asset file — a single tested source of truth against `packages/glass-shared/src/color/tokens.ts`,
  * not a JSON file that can drift from it unnoticed. `apiBaseUrl` is only
  * used by the raster-overlay case, to build the tile-proxy fallback URL
  * when the provider has no direct `source` (any `proxy != "none"`

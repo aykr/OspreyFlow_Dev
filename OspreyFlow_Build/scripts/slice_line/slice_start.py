@@ -5,8 +5,11 @@
 
 Refuses a slice whose build id is not in the owner's plan (it is reported, not added), one waiting on a slice
 not yet merged, one beyond the dial's builder count, one whose track's account is signed out, stopped, or
-near its limit, and one whose frozen commands do not run (dry_run.py: on main, in a scratch worktree, the checks
-reach the last step of their chain green and the acceptance is red for a reason no malformed command gives). Otherwise: the slice's worktree on its own branch from main, its acceptance and checks commands
+near its limit, and one whose frozen commands do not run (dry_run.py: on main, in a scratch worktree, the acceptance
+is red for a reason no malformed command gives; then in the slice's own worktree, made as the builder will have it
+(the rulings copy, the hashed client names, env: full's environment), every step of the checks is green with nothing
+built, the slice's own new test files stood in: LINE_FIXES_5_BRIEF.md, B). A red there removes the worktree and the
+branch and names the step and the failing tests. Otherwise: the slice's worktree on its own branch from main, its acceptance and checks commands
 frozen (a change needs the owner's word: refreeze.py), and its account, track, dial setting and rounds fixed
 for the whole slice (an account changes only between slices).
 """
@@ -83,7 +86,7 @@ def start(slice_id: str) -> dict:
     log = c.DATA / "dry-runs" / f"{slice_id}-start-{c.now().replace(':', '')}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     slot = c.allocate_slot(slice_id)
-    problems = dry_run.prove(row, slot=slot, log=log)
+    problems = dry_run.prove(row, slot=slot, log=log, checks=False)
     if problems:
         raise SystemExit(f"NOT STARTED: {slice_id}'s frozen commands do not run as written, proved on main in a scratch "
                          "worktree (nothing was created):\n- " + "\n- ".join(problems) + f"\nThe whole run: {log}")
@@ -101,7 +104,19 @@ def start(slice_id: str) -> dict:
             c.git(["branch", "-D", branch], c.REPO, check=False)
             raise SystemExit(f"NOT STARTED: {slice_id}'s environment (env: full) could not be built: {e}. "
                              f"The worktree was removed. See {log}")
-    hashes = bring_client_hashes(wt)
+    hashes = dry_run.builder_shaped(wt)[1]
+    problems = dry_run.checks_in_tree(row, wt, slot, log)
+    left = [ln for ln in c.git(["status", "--porcelain"], wt).splitlines()
+            if not ln[3:].startswith(("OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/"))]
+    if not problems and left:
+        problems = ["the checks leave files in the worktree that git does not ignore, which the Stop hook reads as "
+                    "uncommitted work: " + "; ".join(left[:10])]
+    if problems:
+        c.git(["worktree", "remove", "--force", str(wt)], c.REPO, check=False)
+        c.git(["branch", "-D", branch], c.REPO, check=False)
+        raise SystemExit(f"NOT STARTED: {slice_id}'s checks cannot pass in its own worktree on main ({wt}, made as the "
+                         "builder would have it; the worktree and the branch were removed, nothing was frozen):\n- "
+                         + "\n- ".join(problems) + f"\nThe whole run: {log}")
     rec = c.rec_dir(slice_id)
     frozen = {"slice": slice_id, "build": row["build"], "branch": branch, "worktree": str(wt), "base": base,
               **{k: row[k] for k in c.FROZEN_KEYS}, "frozen_at": c.now()}

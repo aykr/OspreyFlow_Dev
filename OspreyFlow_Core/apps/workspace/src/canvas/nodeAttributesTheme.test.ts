@@ -4,9 +4,8 @@
 // fades towards, and link colours come from the palette of the theme the page is showing.
 import { afterEach, describe, expect, it } from "vitest";
 
-import { paletteFor } from "../color/palette";
+import { paletteFor, applyTheme } from "@ospreyflow/glass-shared";
 import { makeEdge, makeNode } from "../testing/fixtures";
-import { applyTheme } from "../theme/theme";
 import { computeClusterGraphAttributes, computeEdgeAttributes, computeNodeGraphAttributes } from "./nodeAttributes";
 
 afterEach(() => applyTheme("dark"));

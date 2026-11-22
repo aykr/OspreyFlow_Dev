@@ -123,7 +123,7 @@ nodes and never names them or their positions (rules 3 and 7).
 ```
 GET    /v1/investigations/{id}/views                  the case's views the caller may see: their own, and those shared
 POST   /v1/investigations/{id}/views                  save a view, private to the caller (`CaseViewInput`: a name, exactly one of `node_ids` or `filter`, a layout, a window, a threshold)
-GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, a count naming none
+GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, which is 0 for everyone until the store records deletions; `chosen` on every `CaseView` is how many the caller may see (C045)
 POST   /v1/investigations/{id}/views/{view}/share     share it with the case's members, at their own levels (its creator only; 403 `not_the_views_creator` for a member who can see it)
 DELETE /v1/investigations/{id}/views/{view}           delete it, and nothing else (its creator only, as above)
 ```
@@ -840,7 +840,17 @@ a watch has nothing to newly fire on.
 
 ```
 POST   /v1/resolution/{entity_type}/run   re-run resolution for one entity type across the whole corpus
+GET    /v1/resolution/jobs/{job_id}       what became of a matching job a run queued, in words (C249, L06)
 ```
+
+`GET /v1/resolution/jobs/{job_id}` is a read of the job queue, not of the graph: it needs the right
+to read reports, is not investigation-scoped (as the run that queued the job is not), and its answer
+is in the server's own words and carries no node, count or value. A job that is waiting, running,
+overdue (running past the matching lock's life, which is not the same as lost), finished, failed or
+gone is each said in words. Records a run left out are not said to a reader, not even as a yes or no
+(rule 3: the run reads the whole corpus as the service principal); the run's own result names them
+for an operator. An id with no record, an expired one and another kind of job's id get the same
+answer, so the route is no oracle for which ids exist.
 
 `ADR-025`'s own mechanism for a resolution comparison config that changed, or a backlog that never
 ran — this acts on every entity of the given type regardless of which investigation's working set
@@ -1651,6 +1661,42 @@ query, pattern run, document view and export records principal, timestamp, the r
 result cardinality, and — where the action crosses a handling boundary — the justification the
 analyst supplied. Audit write failure fails the request; an unaudited read in this domain is
 worse than a refused one.
+
+**Scope of the audit (DC1c, 20 November 2026, from the DC1a truth check of that date;
+a note on the paragraph above, which it does not replace).** "Every read ... records" holds for reads and writes
+of case data, less what follows. *Unaudited by design:* deployment metadata (the ontology, map providers, ingest
+connectors, packs and transforms, the tile proxy); some reads on a case (link types, promotable items, link
+history, the case brief); the export ledger's own listing. *Refusals* other than refusals of case access,
+connector reads and Studio recipes are not audited (`06_DECISIONS.md` says so; a test holds that a refused removal
+is not audited). *Model calls:* asking, extraction, email extraction, document designation and the pattern ask
+record the person and the case, and asking does not record the engine; transcription, image description and
+embedding leave no audit row; the model gateway's own usage record is per engine and job per day, with no person
+or case. One record of every model call (who asked, for which case, to which engine) is SE8's, not built, and no test
+fails today when a model call is not recorded. *Sign-in:* the Conduit and the `pages` service record no sign-in
+or session event; recording them is SE8's, not built. *Exports:* the export
+ledger (`export_ledger`) records who, when, case, handling level and withheld flag for report, assessment, pack
+and report-feed exports; the dataset release export, the rule file export and a source file read write an audit
+row and no ledger row; a platform backup and an object transfer write neither. *The table:* append-only in
+intent: the database does not yet refuse an UPDATE or a DELETE from another role, and there is no hash chain.
+The guides say "coming" for the two unbuilt records, until SE8 merges.
+
+**Sign-ins and sign-outs are recorded by the product, never by a change to an identity provider**
+(SE8c). The Conduit writes `sign_in_seen` the first time it sees a session, whatever client the
+person signed in through; the page service reports its own callback and sign-out by the one route
+below:
+
+```
+POST   /v1/session-events                 the page service's report of a person's sign-in or sign-out
+```
+
+The body is one field, `kind`, from a closed list (`sign_in`, `sign_out`); any other field is a 422
+and nothing in the body is stored. The event is recorded for the person the token names and no one
+else, once for each report, at most a fixed number a person a minute. It needs no right, because it
+is accepted **only from the page service's own client** (the token's own client claim against the
+page service's configured client, for Keycloak and Entra ID alike): a token issued to any other
+client, a person's own workspace token among them, is refused with one 403 in the same words
+whatever the reason, and writes nothing. Like every audit write it fails closed (503). Refused
+sign-in attempts never reach the Conduit and are in the identity provider's own log.
 
 **Export gate.** `POST /export` evaluates every node and edge in the selection against the
 handling scheme. A `consult_originator` item blocks the export and is named specifically.

@@ -63,12 +63,13 @@ def test_tests_and_the_tokens_file_are_not_scanned(tmp_path: Path) -> None:
     assert {path for path, _, _ in unexempt} == {"tokens.css", "primitives.css"}
 
 
-def test_the_real_check_walks_the_workspace_the_design_package_and_the_shared_package_and_says_how_many(capsys) -> None:  # type: ignore[no-untyped-def]
+def test_the_real_check_walks_the_workspace_the_design_package_the_shared_package_and_the_pages_and_says_how_many(capsys) -> None:  # type: ignore[no-untyped-def]
     roots = [root for root, _ in colour_drift_check.SCANNED]
     assert roots == [
         colour_drift_check.GLASS_SRC,
         colour_drift_check.DESIGN_PACKAGE,
         colour_drift_check.SHARED_SRC,
+        *colour_drift_check.PAGES_ROOTS,  # the pages service's templates and modules (slice IS5a0)
     ]
     assert colour_drift_check.main() == 0
     assert f"scanned {colour_drift_check.scanned_count()} files" in capsys.readouterr().out

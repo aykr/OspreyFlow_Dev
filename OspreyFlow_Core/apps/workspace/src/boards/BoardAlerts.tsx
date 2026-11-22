@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 
 import type { MonitoringFigures } from "../../../../packages/schemas/generated";
-import { fetchReport, type ReportsApi } from "../reports/api";
+import { fetchReport, type ReportsApi } from "@ospreyflow/glass-shared";
 import { AlertsPanel } from "../reports/AlertsPanel";
 
 /** The period the case's figures are read over: the Figures tab's own default. */

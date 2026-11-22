@@ -12,15 +12,56 @@ The other guides in this folder are the [user guide](user-guide.md), for analyst
 [developer guide](developer-guide.md), for data engineers. Appendix A, every `osprey.yaml` setting,
 is made from the deployment's own schema, and is checked against it on every change.
 
+## Why OspreyFlow is built this way
+
+You are the person who decides what leaves the deployment and who may do what in it, so here is what
+OspreyFlow is built to, and what each part means for your installation. The
+[architecture guide](architecture-guide.md) (its section "Why OspreyFlow is built this way") gives the
+fullest account, with what holds each constraint today and what is "coming".
+
+- **Software sovereignty.** You can inspect, modify, host and replace what you install. The software
+  dependencies are under open-source licences, and a gate checks the build's package list against an
+  allowlist on every change; it does not yet reach every package inside the images. Model weights, map
+  data, fonts and base images are outside the gate; a register and a gate for them are coming.
+- **Data sovereignty.** The deployment runs on your network, and its containers have no route out except
+  for the downloads an install makes and the features you configure. A hosted model engine is an opt-in
+  (`models.local_only` is true until you change it). A first install needs the internet, a default
+  install fetches its model files on every start, and a Small deployment on an https address fetches
+  a certificate unless you give it yours. Superset's usage-tracking image, which the person's
+  browser asks for, is not stopped in v0.6.1 and earlier; v0.6.2 stops it with a content policy that
+  allows no outside address.
+- **Privacy control.** What each person sees is meant to be bounded by handling markings and case
+  membership, so the clearances and case levels you give people are what set the limit of what they can
+  read. Some gaps on the read side are known (the architecture guide lists them). One is yours to manage:
+  where Superset signs people in through Entra ID, a person who may build dashboards reads the whole
+  reporting store in their own session, so give that right only to people cleared for all of it
+  (section 6a.7).
+- **Security management.** Case reads, refusals of access to a case and changes are audited
+  (section 9.11, *Operations and Audit*), and report, assessment, pack and feed exports go in a ledger.
+  Some other exports write an audit row but no ledger row, and a platform backup writes neither; a ledger
+  row for every export is coming, as is recording every model call and every sign-in.
+- **Analytical accountability.** Judgements carry their evidence and a probability band, and what a model
+  suggests stays *inferred* until a person confirms it.
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.31** · 2026-11-20 · For OspreyFlow v0.6.1 · Issued
+**Version 2.41** · 2026-11-22 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
-| 2.31 | 2026-11-20 | §8 and §10's reference: the `models.provider.kind` and `models.providers.kind` rows say the organisation's own gateway is offered on every profile and Bedrock on the cloud platform only (ADR-135 Amendment 14), and the `ospreyflow models` row names its four answers (yes, no, lost after a restore, unknown while the Conduit does not answer). Version set at merge (slice AD1a), after main's 2.29. |
-| 2.30 | 2026-11-20 | §8 and §10: adding a model engine from Admin › Models (ADR-135 Amendment 14: a provider chosen from a list, a typed model name, the key and each name proved by one call before *Add*); a model key is write-only, managed in Admin › Models, kept by the model gateway alone, and `ospreyflow models` says "unknown" while the deployment is stopped, never reading `deployment.env`; prefer the hidden prompt, since `export` lands in shell history (the owner's key review, 15 November 2026). Version set at merge (slice AD1a), after main's 2.29. |
+| 2.41 | 2026-11-22 | §8 and §10's reference: the `models.provider.kind` and `models.providers.kind` rows say the organisation's own gateway is offered on every profile and Bedrock on the cloud platform only (ADR-135 Amendment 14), and the `ospreyflow models` row names its four answers (yes, no, lost after a restore, unknown while the Conduit does not answer). Version set at merge (slice AD1a), after main's 2.29. |
+| 2.40 | 2026-11-22 | §8 and §10: adding a model engine from Admin › Models (ADR-135 Amendment 14: a provider chosen from a list, a typed model name, the key and each name proved by one call before *Add*); a model key is write-only, managed in Admin › Models, kept by the model gateway alone, and `ospreyflow models` says "unknown" while the deployment is stopped, never reading `deployment.env`; prefer the hidden prompt, since `export` lands in shell history (the owner's key review, 15 November 2026). Version set at merge (slice AD1a), after main's 2.29. |
+| 2.39 | 2026-11-22 | "How OspreyFlow is built": the lead-in to the tiers and ports no longer says everything between the tiers crosses one of four ports. It says what crosses the four ports, that three narrower ports sit beside them, and that the relational store, the working-set store and the search index are not behind a port (DC1c round 7). The passage *Why OspreyFlow is built this way* is unchanged. PDF made again. |
+| 2.38 | 2026-11-22 | *Why OspreyFlow is built this way*, held to the truth check a third time (DC1c, the verifier's findings). Software sovereignty: the line says the licence gate checks the build's package list against an allowlist on every change and does not yet reach every package inside the images, in place of saying it checks every dependency; model weights, map data, fonts and base images are still outside the gate, with a register and a gate for them coming. Security management: case reads, refusals of access to a case and changes are audited, no longer "every change". The shipped guide and its copy in the specification (`spec/10_ADMINISTRATION_GUIDE.md`) carry the same passage word for word. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 2.37 | 2026-11-22 | *Why OspreyFlow is built this way*, held to the truth check a second time (DC1c, the verifier's findings). Privacy control: the line says what each person sees is meant to be bounded by handling markings and case membership, and no longer states it as fact; it names the one read-side gap an administrator controls, that where Superset signs people in through Entra ID a person who may build dashboards reads the whole reporting store in their own session (§6a.7), so that right is for people cleared for all of it, and it points to the architecture guide for the others (a pulls figure shown to an administrator who may not see those cases, and the search index's own access setting, which is not yet set). Security management: the line says report, assessment, pack and feed exports go in the export ledger, and that some other exports write an audit row but no ledger row, and a platform backup writes neither, so a ledger row for every export is coming; recording every model call and every sign-in is still coming, as before. §12's sentence on Superset charts that need outside map tiles is as it was. The architecture guide gives the fullest account of all five constraints, with what holds each today and what is coming. The shipped guide and its copy in the specification (`spec/10_ADMINISTRATION_GUIDE.md`) carry the same passage word for word, and `tests/test_admin_guide_copies.py` holds the two together. The passage still says that the deployment runs on your network and that its containers have no route out except for the downloads an install makes and the features you configure; that a hosted model engine is an opt-in, off while `models.local_only` is true; that a first install needs the internet, that a default install fetches its model files on every start, and that a Small deployment on an https address fetches a certificate unless you give it yours; and that Superset's usage-tracking image is not stopped in v0.6.1 and earlier, while v0.6.2 stops it with a content policy that allows no outside address. The licence line still says that model weights, map data, fonts and base images are outside the licence gate, with a register and a gate for them coming. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 2.36 | 2026-11-22 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to whoever installs it: the five constraints and what each means for an installation (DC1c). §12: a Superset chart that needs outside map tiles will not load, and why (SE6a). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 2.35 | 2026-11-22 | Appendix A: `pages.enabled`, whether the deployment runs the page service (the server-rendered pages), from the schema (ADR-152 Amendment 3): false by default, turned on for one deployment at a time by the owner, and nothing reads it yet. |
+| 2.34 | 2026-11-21 | §6a.1's tables: the model gateway (`litellm`) is OspreyFlow's own image, `ospreyflow/litellm`, built from `deploy/litellm/Dockerfile`, no longer a copy of the publisher's image (the owner's ruling of 21 November 2026: built from the publisher's MIT files alone, without its commercially licensed folder or package). PDF made again. |
+| 2.33 | 2026-11-21 | §6a: the GOV.UK install sentences now follow the cloud-platform paragraph, introduced as being about the modes `ospreyflow install` does take, so they are not credited to ADR-148 and not read as advice for `cloud-platform`. PDF made again. |
+| 2.32 | 2026-11-21 | §1a, §4.1, §6a and the README's *Installing and running it* say one thing, in the same words: use the command line (`ospreyflow install`) where the installing computer must itself run no React either, and a GOV.UK install from the command line is headless; the guided page (`ospreyflow install --gui`) also installs a GOV.UK starter, runs only on the computer doing the installing and leaves nothing in the deployment (the owner's ruling of 21 November 2026; ADR-152 Amendment 1, decision 5, "headless from the command line", which is being corrected). The claims about the `apps/harness` application and the `pages` service's rule are dropped from §4.1. PDF made again. |
+| 2.31 | 2026-11-20 | §4.1: the sentence on a GOV.UK install no longer points to §1a, which shows the guided page's GOV.UK starter; it says only what ADR-152 Amendment 1, decision 5 says. |
+| 2.30 | 2026-11-20 | §4.1 and §6a (and the README's *Installing and running it*): a GOV.UK install is done from the command line, headless, with `ospreyflow install`; the guided page is the `apps/harness` React application, served only on the installing computer while an install runs and never rendered into a deployment (ADR-152 Amendment 1, decision 5; slice PL7a1). §6a: it said `ospreyflow install` does not run `cloud-platform`; it now says why, which is that the command has the modes `lite`, `small` and `enterprise` and no other. PDF made again. |
 | 2.29 | 2026-11-20 | Appendix A: `resources.postgres_max_connections`, the connections a deployment's own PostgreSQL allows, from the schema (ADR-114 Amendment 49): none by default, which is the computed 660 as before; a whole number from 420 (the same sum with one Conduit) to 262121 (PostgreSQL 16's own limit on server processes, less its other 22), refused in words outside them; for Lite and a Small with every store in a container, and refused in words under `cluster` and `cloud-platform`, whose databases are set where they are run. The stale "at least 750" in version 1.90's row is the 1000 that row 1.92 gives. PDF made by the orchestrator at merge. |
 | 2.28 | 2026-11-20 | §3: the command says in one line when the recorded folder wins over a different checkout you are in, and a second run of the bootstrap records the checkout it installs (ADR-114 Amendment 50; slice PL1a). PDF made again. |
 | 2.27 | 2026-11-20 | Appendix A: `cloud_platform.claims.pages_client_id`, the `pages` service's own app registration, whose delegated token the Conduit admits as the person on every route their rights allow, as the Glass's (ADR-152 decision 11, X1); the Conduit half only, the `pages` service and its render's refusal come later. Version set at merge. |
@@ -167,7 +208,7 @@ fits; this is what an administrator needs.
 
 ![Level 0: the people who use OspreyFlow, its three tiers joined by four ports, and the identity provider, reporting, data in and the optional outside services beside it](images/architecture/level-0.svg)
 
-Three tiers; everything that passes between them crosses one of four typed ports:
+Three tiers. What passes between the Conduit and the graph store, the analytics store, graph algorithms and the model engines crosses one of four typed ports, listed below; the media store, the recognition pass and the search index's feed each have a narrower one beside them. The relational store (the audit table and the export ledger), the working-set store and the search index are not behind a port.
 
 | Tier | What it is |
 | --- | --- |
@@ -338,6 +379,8 @@ Ledger's case is the mistake this avoids. `blank` offers no name: a real service
 Mode, under **Starter (optional)**; a GOV.UK starter shows the service's name (filled in with the
 name above), organisation and phase there. The Demo packs screen then shows the starter's packs
 ticked, to change if you wish.
+
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.
 
 **In an answers file** (section 7): `starter: govuk-aml`, with `appearance.service_name`,
 `appearance.organisation` and `appearance.phase`.
@@ -578,6 +621,8 @@ Everything is worked on a draft copy of `osprey.yaml`; the page closes itself wh
 finishes, or after 30 idle minutes. On a release, the page is the release's own — fetched the first time,
 with its signature checked against the release; in a developer's checkout it is built with
 `cd apps/harness && npm ci && npm run build`, and the command says so if it is missing or out of date.
+
+**Command line or guided page.** Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment. The command's answers are given as flags, or in an answers file (`--config install.yaml --yes`, section 7).
 
 ## 5. Installing Small
 
@@ -1026,8 +1071,11 @@ cluster; it gets a **namespace**, created and changed only by pull request to th
 environments repository, and its AWS resources (RDS, ElastiCache, OpenSearch, S3, ECR and IAM
 roles for its service accounts) are asked for the same way. The `cloud-platform` profile writes what
 those pull requests need. It creates no cluster, no VPC and no namespace, and **it installs
-nothing**: the set-up console does not offer it, and `ospreyflow install` does not run it. The
+nothing**: `ospreyflow install` takes `lite`, `small` or `enterprise` and has no `cloud-platform` mode, so
+neither the command nor the guided page runs it. (Section 4.1.) The
 decisions are ADR-148's.
+
+The next three sentences are about the modes `ospreyflow install` does take (`lite`, `small` and `enterprise`), not about `cloud-platform`. Use the command line (`ospreyflow install`) where the installing computer must itself run no React either. A GOV.UK install from the command line is headless. The guided page (`ospreyflow install --gui`) also installs a GOV.UK starter; it runs only on the computer doing the installing and leaves nothing in the deployment.
 
 **Not yet installable end to end.** What is built is the render, the chart, its policy check, the
 backups and, for the proof-of-concept shape, the install and decommission runbooks. Nothing here
@@ -1308,7 +1356,7 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | worker | Deployment | 1 | `ospreyflow/worker` | 500m / 2 | 2Gi / 4Gi | none |
 | ner | Deployment | 1 | `ospreyflow/ner` | 250m / 1 | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
 | laurium | Deployment | 1 | `ospreyflow/laurium` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8000/healthz |
-| litellm | Deployment | 1 | `berriai/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
+| litellm | Deployment | 1 | `ospreyflow/litellm` | 250m / 500m | 512Mi / 1Gi | http://localhost:4000/health/liveliness |
 | arcadedb | StatefulSet | 1 | `arcadedata/arcadedb` | 1 / 2 | 12Gi / 12Gi | http://127.0.0.1:2480/api/v1/ready |
 | clickhouse | StatefulSet | 1 | `clickhouse/clickhouse-server` | 1 / 2 | 8Gi / 8Gi | http://localhost:8123/ping |
 | superset | Deployment | 1 | `ospreyflow/superset` | 250m / 500m | 1Gi / 2Gi | http://127.0.0.1:8088/health |
@@ -1340,9 +1388,9 @@ entry marked *pending* is one the release adds that is not yet rendered.
 | `ospreyflow/laurium` | ours | built from `services/laurium/Dockerfile` |
 | `ospreyflow/superset` | ours | built from `deploy/superset/Dockerfile` |
 | `ospreyflow/report-sync` | ours | built from `services/report_sync/Dockerfile` |
+| `ospreyflow/litellm` | ours | built from `deploy/litellm/Dockerfile` |
 | `arcadedata/arcadedb` | upstream | copied from `arcadedata/arcadedb:26.10.1` |
 | `clickhouse/clickhouse-server` | upstream | copied from `clickhouse/clickhouse-server:25.8.33.6` |
-| `berriai/litellm` | upstream | copied from `ghcr.io/berriai/litellm` |
 | `postgres` | upstream | copied from `postgres:16.4` |
 
 #### Managed services
@@ -3097,6 +3145,10 @@ reads the same figures:
 
 Each pull is made as that account, at its clearance, audited and recorded in the export ledger.
 
+**A Superset chart that needs Mapbox tiles will not load**: Superset's content policy allows no address
+outside the deployment, so the browser refuses to fetch them, and no map key is set. A chart that needs
+a tile server or a map key the deployment does not provide is the same.
+
 ![Admin → Dashboard identities: registering a dashboard's account and seeing when it last pulled](images/admin/03-dashboards.png)
 
 ![Superset at bi.: the boards and charts built on the reporting figures](images/admin/07-superset.png)
@@ -3505,6 +3557,8 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
 | `appearance.banner_text` | str or none | none | The banner's own words, in place of "This is a new service.", in the Glass and on the sign-in page: after the phase's tag at alpha or beta, alone at live or none. One line of at most 200 characters. |
+| `pages` | section | — | Whether the deployment runs the page service (the server-rendered pages): off, and turned on for one deployment at a time by the owner. |
+| `pages.enabled` | bool | false | Whether this deployment runs the page service, the server-rendered pages. true or false, nothing else: it is turned on for one deployment at a time, by the owner, in that deployment's own file. |
 | `grading` | section | — | The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `ospreyflow grading change`. |
 | `grading.scheme` | str | `5x5x5` | The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades. |
 | `external` | section | — | What a cloud runs for the deployment instead of a container (Small). |

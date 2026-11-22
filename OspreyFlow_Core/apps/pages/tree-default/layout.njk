@@ -1,0 +1,30 @@
+{#- The Default tree's layout (ADR-152 decisions 6 and 7). Nothing here that the specification does not name: a skip link,
+    the product's name with the sign-out form, the page's own content in the one main landmark, and the page's data block
+    and scripts. The stylesheet is `packages/design`'s, built; there is no inline script or style, and no footer. -#}
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if csrfToken %}<meta name="csrf-token" content="{{ csrfToken }}">{% endif %}
+<title>{% block title %}{{ title }}{% endblock %} · OspreyFlow</title>
+{% if stylesheet %}<link rel="stylesheet" href="{{ stylesheet }}">{% endif %}
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="app-header">
+<span class="brand-mark__name">OspreyFlow</span>
+{% if csrfToken %}<div class="app-header__account"><form method="post" action="/session/sign-out">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<button type="submit" class="btn">Sign out</button>
+</form></div>
+{% endif %}</header>
+<main id="main" tabindex="-1">
+{% block content %}{% endblock %}
+</main>
+{#- The data block a page's interactive module reads (ADR-152 decision 1). It is data, not code: nothing here needs a script to run. -#}
+{% block page_data %}<script type="application/json" id="page-data" nonce="{{ cspNonce }}">{"page":"{{ page }}"}</script>{% endblock %}
+{#- A page's modules go here, each a script element whose src is asset('modules/NAME.ts'), a file the build made. Never inline code. -#}
+{% block scripts %}{% endblock %}
+</body>
+</html>

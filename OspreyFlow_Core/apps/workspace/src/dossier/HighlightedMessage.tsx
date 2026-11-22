@@ -1,8 +1,8 @@
 import type { CSSProperties } from "react";
 
-import { CHANNEL_HEX, FALLBACK_CHANNEL_HEX } from "../color/tokens";
+import { CHANNEL_HEX, FALLBACK_CHANNEL_HEX } from "@ospreyflow/glass-shared";
 import type { OntologyRegistry } from "../ontology/schema";
-import type { DocumentView, MessageSpan } from "./models";
+import type { DocumentView, MessageSpan } from "@ospreyflow/glass-shared";
 
 /** A finding not yet accepted, shown where it sits (ADR-098 Amendment 1): no node to select,
  * so no `node_id` and nothing to click — `pending` in the drawing sense rule 5 already uses,

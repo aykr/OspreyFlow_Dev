@@ -6,6 +6,10 @@
  * set one, so a url-encoded form carries `_csrf` as a field and a multipart form as its FIRST part, and the forwarder
  * checks it (`csrfDeferred`) before anything is sent on, and before any byte of a file is read. A header that is sent must be
  * right: a wrong one is not rescued by a form field.
+ * A page route that takes a browser's file upload (a `PageModule` with `upload: true`, slice IS5a) is the one other place a
+ * form's token is read from a multipart body by the route itself: it too is "deferred", for exactly the paths such pages
+ * declare and for a multipart body only, and the route's reader (`upload.ts`) checks the token as the form's FIRST part before
+ * a byte of any file is read. Any other page, and any other body, is checked here as before.
  * Default-deny: every method but GET, HEAD and OPTIONS needs it.
  */
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -51,7 +55,8 @@ function bodyToken(req: Parameters<RequestHandler>[0]): unknown {
   return undefined;
 }
 
-export function csrfProtection(): RequestHandler {
+export function csrfProtection(options: { uploadPaths?: ReadonlySet<string> } = {}): RequestHandler {
+  const uploadPaths = options.uploadPaths ?? new Set<string>();
   return (req, res, next) => {
     if (SAFE_METHODS.has(req.method)) {
       next();
@@ -73,6 +78,11 @@ export function csrfProtection(): RequestHandler {
         next();
         return;
       }
+    } else if (auth && header === undefined && uploadPaths.has(rawPathOf(req)) && formKind(req.headers["content-type"]) === "multipart") {
+      // The upload page's own reader checks the token, as the form's first part, before reading any file.
+      deferred.add(req);
+      next();
+      return;
     } else if (auth && tokensMatch(header ?? bodyToken(req), auth.csrfToken)) {
       next();
       return;

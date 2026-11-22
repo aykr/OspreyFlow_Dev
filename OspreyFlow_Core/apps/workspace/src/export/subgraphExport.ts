@@ -4,7 +4,7 @@
 // with no visual rendering").
 import type Graph from "graphology";
 
-import type { ExportManifest, ExportMark } from "./api";
+import type { ExportManifest, ExportMark } from "@ospreyflow/glass-shared";
 
 export interface SubgraphArtefact {
   mark: ExportMark;

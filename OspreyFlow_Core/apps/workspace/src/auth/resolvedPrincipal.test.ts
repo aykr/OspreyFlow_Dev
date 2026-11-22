@@ -6,6 +6,21 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import {
+  LINK_CLIENTS,
+  movedClients,
+  plantedCopy,
+  ADMIN_CLIENTS,
+  CASE_CLIENTS,
+  PLAIN_CLIENTS,
+  plantedLinkClients,
+  plantedAdminClients,
+  plantedCaseClients,
+  plantedPlainClients,
+  plantedReportClients,
+  REPORT_CLIENTS,
+  SHARED_SRC,
+} from "../copyTextsTestKit";
 import { displayPrincipal, fetchResolvedPrincipal, sessionFromUser } from "./userManager";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -54,6 +69,8 @@ describe("GET /v1/me", () => {
 const CLAIMS = "roles|clearance|org_unit|receivable_handling_codes";
 const READ = new RegExp(String.raw`profile\??\.(${CLAIMS})\b|profile\??\[\s*["'\x60](${CLAIMS})["'\x60]\s*\]|\{[^}]*\b(${CLAIMS})\b[^}]*\}\s*=\s*[\w.?]*profile\b`);
 const SRC = join(__dirname, "..");
+// The shared package's source too: the Conduit clients, which carry the bearer token, live there now.
+const SHARED = SHARED_SRC;
 
 /** A claim read through a name the profile was given (`const c = user.profile; c.roles`), as well as
  * through `profile` itself (the lane-reviewer's finding 14). */
@@ -72,11 +89,111 @@ function sources(dir: string): string[] {
 }
 
 describe("no token claim of role or access is read in the Glass", () => {
-  it("is read nowhere in apps/workspace/src", () => {
-    const found = sources(SRC)
-      .filter((path) => readsAClaim(readFileSync(path, "utf8")))
-      .map((path) => relative(SRC, path));
+  it("is read nowhere in apps/workspace/src or packages/glass-shared/src", () => {
+    const found = [SRC, SHARED]
+      .flatMap((root) => sources(root).map((path) => [root, path] as const))
+      .filter(([, path]) => readsAClaim(readFileSync(path, "utf8")))
+      .map(([root, path]) => (root === SHARED ? `glass-shared/${relative(root, path)}` : relative(root, path)));
     expect(found).toEqual([]);
+  });
+
+  it("reads the Conduit clients that moved to packages/glass-shared/src, and finds a claim planted in one (rule 15)", () => {
+    const walked = sources(SHARED);
+    const clients = movedClients();
+    expect(clients.length).toBeGreaterThanOrEqual(6);
+    for (const client of clients) expect(walked, relative(SHARED, client)).toContain(client);
+    const planted = plantedCopy(
+      "api.ts",
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found).toEqual([planted.file]);
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the report, export, alert and pattern clients that moved (PL4d3a), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of REPORT_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedReportClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the link, inspector, question, reader, views and analytics clients that moved (PL4d3b), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of LINK_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedLinkClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the assessment, boards, connections, explore, map, metrics, ownership, search, site, strength and watches clients that moved (PL4d3c), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of PLAIN_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedPlainClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the cases, moment, needs-you, dataset, pack and external-orchestration files that moved (PL4d3d), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of CASE_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedCaseClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("reads the roles', admin, Home, rule-group and entity-picture files that moved (PL4d3e), and finds a claim planted in each (rule 15)", () => {
+    const walked = sources(SHARED);
+    for (const rel of ADMIN_CLIENTS) expect(walked, rel).toContain(join(SHARED, rel));
+    const planted = plantedAdminClients(
+      "export const PLANTED = (user: { profile: { roles: string[] } }) => user.profile.roles;",
+    );
+    try {
+      const found = sources(planted.root)
+        .filter((path) => readsAClaim(readFileSync(path, "utf8")))
+        .map((path) => relative(planted.root, path));
+      expect(found.sort()).toEqual([...planted.files].sort());
+    } finally {
+      planted.remove();
+    }
   });
 
   it.each([

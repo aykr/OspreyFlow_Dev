@@ -238,6 +238,8 @@ ROUTE_RIGHTS = {
     "paths_route": "investigate",
     "connections_route": "investigate",
     "resolve_now_route": "resolve_entities",
+    # C249, L06: what became of a matching job, in words; a reader of reports (run reports).
+    "resolution_job_status_route": "read_reports",
     "readiness_route": None,
     "liveness_route": None,
     # The API's OpenAPI document (`03_CONDUIT_MIDDLEWARE.md` §3.0a; GDS remediation O1): behind

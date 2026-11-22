@@ -2,9 +2,11 @@
 ADR-135 Amendment 2; `CLAUDE.md` rule 15: a fixture models the dependency's refusals, not only its
 grants).
 
-**Every behaviour below was measured** against the image the product pins
-(`ghcr.io/berriai/litellm@sha256:d295634e…`), on 8 November 2026 under the platform lease on test
-stack a, with its own database and a stand-in provider (ADR-135 Amendment 2, "Measured first"):
+**Every behaviour below was measured** against the image the product then pinned
+(the publisher's gateway image at the digest `sha256:d295634e…`, LiteLLM 1.101.0; the product's
+own image is now built from the same version's PyPI files), on 8 November 2026 under the platform
+lease on test stack a, with its own database and a stand-in provider (ADR-135 Amendment 2,
+"Measured first"):
 
 - the proxy's own token: none → 401 "No api key passed in."; a wrong one → 401 "Invalid proxy server
   token passed. Received API Key = sk-...WXYZ", echoing its last four characters;
@@ -544,8 +546,10 @@ class StandInGateway:
         self.received.append((virtual or "master", dict(body)))
         tags = _tags(body, request)
         model = str(body.get("model", ""))
-        if virtual is not None and self._keys[virtual].models and model not in (
-            allowed := self._keys[virtual].models
+        if (
+            virtual is not None
+            and self._keys[virtual].models
+            and model not in (allowed := self._keys[virtual].models)
         ):
             return _error(
                 403,

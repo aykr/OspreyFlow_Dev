@@ -14,7 +14,7 @@ import { flushSync } from "react-dom";
 
 import { DropdownPanel } from "../design/primitives/DropdownPanel";
 import { ThemeToggle } from "../theme/ThemeToggle";
-import { currentBrand } from "../brand/brand";
+import { currentBrand } from "@ospreyflow/glass-shared";
 import { BrandMark } from "./BrandMark";
 import { BAR_FOLD_ORDER, MORE_LABEL, MORE_NAME } from "./railLayout";
 import "./chrome.css";

@@ -4,7 +4,7 @@
 // threshold, placed where the view keeps them. The case's own working set is left as it is.
 import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { createWorkingSet, type DeltaSnapshot, type WorkingSet } from "@ospreyflow/glass-shared";
-import type { CaseViewOpened } from "./viewsApi";
+import type { CaseViewOpened } from "@ospreyflow/glass-shared";
 
 export interface Lens {
   opened: CaseViewOpened;

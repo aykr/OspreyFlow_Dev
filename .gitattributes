@@ -1,0 +1,25 @@
+# Merge drivers for the ledgers that slices append to (slice BL1b, 20 November 2026).
+#
+# ADR_RESERVATIONS.md takes git's union merge: two branches that each add a reservation row both
+# keep it, instead of bouncing the merge. This is safe for this file alone, because its changes are
+# added rows (in the Reservations table, above "## Baseline") and one in-place edit, a status flip of
+# a row from "reserved" to "written". What union does with that flip was measured with a real
+# `git merge` (tests/test_ledger_union_merge.py, the flip-and-append case): when one branch flips a
+# row and the other adds a row on the very next line (the usual shape: the orchestrator reserves a
+# row, the slice flips it, another slice appends after it), git does not combine the two changes and
+# union keeps both sides, so the merge is clean but leaves the flipped row TWICE (once reserved,
+# once written) beside the new row, in an order that depends on which branch is merged first. It is
+# not silently wrong: the duplicate check (tools/adr_reservations_check.py, "reserved 2 times", in
+# make lanes-check) reports it and so does the --against comparison, so the merge is bounced by the
+# checks, not by git. Any other edit to a row (a title, number, lane or date, a removed row) is
+# caught by the --against mode, which compares with the merge-base and allows only rows added above
+# "## Baseline" and that one flip (tests/test_adr_reservations.py).
+#
+# spec/06_DECISIONS.md is NOT listed. Its amendments are appended blocks, but it also has content edited
+# in place (the status register near the top, and amendment bodies edited more than once), and when two
+# branches edit the same line union keeps both versions, so the line would be doubled. Adding it needs
+# the duplicate-heading and doubled-line checks on main first, and the owner's word.
+#
+# The attributes are read from the tree being merged, so this applies to every merge into main once the
+# file is on main; a branch that brings the file in does not get it for its own merge of main.
+OspreyFlow_Build/spec/ADR_RESERVATIONS.md merge=union

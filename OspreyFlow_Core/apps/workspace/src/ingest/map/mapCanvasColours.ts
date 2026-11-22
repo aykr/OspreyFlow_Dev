@@ -1,7 +1,7 @@
 // The colours the Map stage's canvas paints with, from the themed palette (ADR-070). It once used
 // the dark theme's constants in either theme, so in the light theme the entity picked as a link's
 // start was painted #e8eced on #f7fbfc and vanished (9 October 2026).
-import type { Palette } from "../../color/palette";
+import type { Palette } from "@ospreyflow/glass-shared";
 
 export interface MapNodeState {
   selected: boolean;

@@ -10,7 +10,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AdminPlace } from "../AdminPlace";
-import { givableCodes, givableLevels } from "../inviter";
+import { givableCodes, givableLevels } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

@@ -28,7 +28,7 @@
 // into the workspace image), naming its identity provider — `id.` in front of the Glass's own name,
 // through the front proxy. `loadDeploymentSettings()` reads it before the Glass draws anything. The
 // default above remains only for the Vite development server, which serves no such file.
-import { PLAIN_APPEARANCE, readAppearance, type Appearance } from "../brand/brand";
+import { PLAIN_APPEARANCE, readAppearance, type Appearance } from "@ospreyflow/glass-shared";
 
 const DEFAULT_KEYCLOAK_PORT = 8081;
 

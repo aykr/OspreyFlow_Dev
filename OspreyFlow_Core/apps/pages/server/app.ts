@@ -9,14 +9,19 @@ import session from "express-session";
 import nunjucks from "nunjucks";
 import { fileURLToPath } from "node:url";
 
+import { ASSETS_PREFIX, assetUrl, assetsHandler } from "./assets.js";
+import type { AssetsSetting } from "./assets.js";
 import { DEFAULT_BODY_STALL_MS, pageBodyStall } from "./bodyStall.js";
+import { accessTokenFor } from "./accessToken.js";
 import type { ForwardSettings } from "./config.js";
 import { csrfProtection } from "./csrf.js";
 import { forwarder, v1Gate } from "./forward.js";
 import { PagesSessionStore } from "./expressStore.js";
+import { registerPages, uploadPathsOf } from "./pages.js";
+import type { PageModule } from "./pages.js";
 import { securityHeaders } from "./headers.js";
-import { IdentityProviderRefused, IdentityProviderUnavailable } from "./identity.js";
-import type { CodeFlowProvider, IdentityProvider } from "./identity.js";
+import { IdentityProviderRefused, IdentityProviderUnavailable, isRefusalReason } from "./identity.js";
+import type { CodeFlowProvider, IdentityProvider, RefusalReason } from "./identity.js";
 import {
   LOGIN_COOKIE_NAME,
   LOGIN_COOKIE_OPTIONS,
@@ -27,13 +32,23 @@ import {
   signLoginId,
 } from "./loginState.js";
 import type { LoginRecord } from "./loginState.js";
+import { createSessionEventReporter } from "./sessionEvents.js";
+import type { SessionEventReporter } from "./sessionEvents.js";
 import { COOKIE_NAME, IDLE_SECONDS, MIN_SECRET_LENGTH, newRecord, randomToken } from "./sessionPolicy.js";
 import { LOGIN_KEY_PREFIX } from "./sessionStore.js";
+import { STAGED_SWEEP_MS, endStaged } from "./staging.js";
+import { MemorySessionStore } from "./sessionStore.js";
 import type { SessionStore } from "./sessionStore.js";
 import { isV1Path, rawPathOf } from "./v1.js";
 
 export interface AppDeps {
   store: SessionStore;
+  /**
+   * Where a release folder is held between the Studio's Releases steps. By default the app's own in-process memory, which is
+   * what a deployment uses: the session store is Valkey, and Valkey saves its keys to disk (the folder holds recipes and
+   * mappings, and is never written to disk). A test passes the memory store it reads.
+   */
+  stagedStore?: SessionStore;
   /** The one-shot seam PL3 built (a fake, or `unconfiguredProvider`). Not used for sign-in when `codeFlow` is given. */
   identityProvider: IdentityProvider;
   /**
@@ -48,15 +63,34 @@ export interface AppDeps {
   clock?: () => number;
   /** Routes a later slice adds, after the core routes and behind the same session, headers and anti-forgery. */
   extraRoutes?: (router: Router) => void;
+  /**
+   * The built browser assets: the folder `/assets/pages/*` serves and the names the layout links to. Without it there is no
+   * asset route and the layout links no stylesheet (`start.ts` refuses to run a production service without it).
+   */
+  assets?: AssetsSetting;
+  /** Pages in the route-module convention (`pages.ts`): checked now, so a fault is a refusal to start, in words. */
+  pages?: readonly PageModule[];
+  /** The `FUNCTIONS.yaml` ids a page may name, when a test wants its own list instead of the file's. */
+  functionIds?: ReadonlySet<string>;
+  /** Template folders searched after the tree's own: a test's throw-away fixture page lives in one. */
+  viewDirs?: readonly string[];
   /** The `/v1` forwarder's settings (slice PL10). Absent: there is no forwarder, and every `/v1` path answers 404. */
   forward?: ForwardSettings;
   /** Where the forwarder says what went wrong: a fixed phrase and a status. */
   log?: (message: string) => void;
   /** How long a browser may send nothing mid-body before its connection is ended (default 60 s; a test shortens it). */
   bodyStallMs?: number;
+  /**
+   * Reports a sign-in and a sign-out to the Conduit (SE8c). Absent, one is made from `forward`'s address; with no
+   * address either, nothing is reported. A test gives its own to watch, or to take the call away.
+   */
+  sessionEvents?: SessionEventReporter;
+  /** How long one report may take before it is given up (default 3 s; a test shortens it). */
+  sessionEventTimeoutMs?: number;
 }
 
-const VIEWS = fileURLToPath(new URL("./views", import.meta.url));
+/** The Default tree's templates (ADR-152 decisions 6 and 7: one tree per deployment, the default today). `dist/tree-default` in the build. */
+const TREE = fileURLToPath(new URL("../tree-default", import.meta.url));
 
 /** `Secure` and `HttpOnly` always, `SameSite=Lax`, no `Domain`: the cookie holds one signed, opaque identifier. */
 const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax", path: "/" } as const;
@@ -76,17 +110,55 @@ export function createApp(deps: AppDeps): Express {
     throw new Error(`the session secret must be at least ${MIN_SECRET_LENGTH} characters`);
   }
   const clock = deps.clock ?? Date.now;
+  const log = deps.log ?? ((message: string): void => console.error(message));
+  // SE8c: a sign-in and a sign-out are reported to the Conduit, which records them. Never awaited by a response and never
+  // a reason to refuse one (`sessionEvents.ts`); with no Conduit address there is nothing to report to.
+  const sessionEvents =
+    deps.sessionEvents ??
+    (deps.forward
+      ? createSessionEventReporter({
+          conduitUrl: deps.forward.conduitUrl,
+          log,
+          ...(deps.sessionEventTimeoutMs === undefined ? {} : { timeoutMs: deps.sessionEventTimeoutMs }),
+        })
+      : undefined);
+  // Checked before anything is built: two pages on one path, or an id that is no row of FUNCTIONS.yaml, stops the start.
+  const mountPages = deps.pages ? registerPages(deps.pages, deps.functionIds) : undefined;
   const app = express();
 
+  if (sessionEvents) app.locals["sessionEvents"] = sessionEvents;
   app.disable("x-powered-by");
   app.disable("etag");
   // The front proxy terminates TLS and says so in `X-Forwarded-Proto`; `express-session` sends a `Secure`
   // cookie only on a request it believes arrived over TLS. Only a hop on a private address is believed.
   app.set("trust proxy", "loopback, linklocal, uniquelocal");
-  nunjucks.configure(VIEWS, { autoescape: true, express: app, noCache: false });
+  nunjucks.configure([TREE, ...(deps.viewDirs ?? [])], { autoescape: true, express: app, noCache: false });
   app.set("view engine", "njk");
+  // What the Studio pages (slice IS5a) read from the app: the Conduit's address and limits, the store that holds a staged
+  // release folder, the clock and the log. Settings, never a request's own.
+  const stagedStore = deps.stagedStore ?? new MemorySessionStore({ clock, sweepEveryMs: STAGED_SWEEP_MS });
+  app.locals["studio"] = {
+    forward: deps.forward,
+    store: stagedStore,
+    clock,
+    log: deps.log ?? ((): void => undefined),
+    bodyStallMs: deps.bodyStallMs ?? DEFAULT_BODY_STALL_MS,
+  };
 
   app.use(securityHeaders());
+
+  // The built assets, with no session: a sign-in page needs its stylesheet, and an asset is the same for everyone. Mounted
+  // before the session middleware so that nothing reads the store, and after the headers so that each carries the policy.
+  if (deps.assets) app.use(ASSETS_PREFIX, assetsHandler(deps.assets.dir));
+  // What the layout links to and a page's template names: the stylesheet, and `asset('modules/<name>.ts')` for a script.
+  const manifest = deps.assets?.manifest;
+  app.use((_req, res, next) => {
+    res.locals["stylesheet"] = manifest?.["pages.css"] === undefined ? undefined : assetUrl(manifest, "pages.css");
+    res.locals["asset"] = (name: string): string => assetUrl(manifest, name);
+    // A page's optional enhancement: its module's address when the build made it, else nothing (the page works without it).
+    res.locals["assetIfBuilt"] = (name: string): string => (manifest?.[name] === undefined ? "" : assetUrl(manifest, name));
+    next();
+  });
 
   // No session, no secret and no call to the store or the identity provider: a probe must answer
   // when either is down. It is mounted before the session middleware so that nothing reads the store.
@@ -124,7 +196,7 @@ export function createApp(deps: AppDeps): Express {
     res.locals["csrfToken"] = req.session?.auth?.csrfToken;
     next();
   });
-  app.use(csrfProtection());
+  app.use(csrfProtection({ uploadPaths: deps.pages ? uploadPathsOf(deps.pages) : new Set<string>() }));
 
   app.get("/", (req, res) => {
     const auth = req.session.auth;
@@ -145,8 +217,10 @@ export function createApp(deps: AppDeps): Express {
   };
 
   // The words never include the provider's, and say nothing of why: a person who was refused learns only
-  // that nothing about their access has changed. The reason goes to the log in our own words.
-  const refused = (res: Response, reason: string): void => {
+  // that nothing about their access has changed. The log says the class of the refusal, a word of ours from
+  // `REFUSAL_REASONS`, and never the provider's words nor an error's own message (SE8c). The attempt itself stays in
+  // the identity provider's own log; nothing is reported to the Conduit for it.
+  const refused = (res: Response, reason: RefusalReason): void => {
     console.error(`pages: sign-in refused: ${reason}`);
     res.status(403).render("error", {
       title: "Sign-in refused",
@@ -173,6 +247,8 @@ export function createApp(deps: AppDeps): Express {
     await callback((done) => {
       req.session.save(done);
     });
+    // Reported once the session exists, and not waited for: a sign-in is never held up or stopped by the record of it.
+    void sessionEvents?.report("sign_in", await accessTokenFor(record));
     res.redirect(302, returnTo);
   };
 
@@ -222,7 +298,7 @@ export function createApp(deps: AppDeps): Express {
     res.clearCookie(LOGIN_COOKIE_NAME, LOGIN_COOKIE_OPTIONS); // whatever the outcome, this sign-in is over
     const id = readLoginId(req.headers.cookie, deps.sessionSecret);
     if (id === null) {
-      refused(res, "no login cookie of ours");
+      refused(res, "no_login_cookie");
       return;
     }
     const raw = await deps.store.take(`${LOGIN_KEY_PREFIX}${id}`);
@@ -233,7 +309,7 @@ export function createApp(deps: AppDeps): Express {
       pending = undefined;
     }
     if (!isLoginRecord(pending)) {
-      refused(res, "no record of this sign-in");
+      refused(res, "no_login_record");
       return;
     }
     let provided;
@@ -241,30 +317,49 @@ export function createApp(deps: AppDeps): Express {
       provided = await codeFlow.complete({ query: new URL(req.originalUrl, "http://pages.invalid").search.slice(1) }, pending);
     } catch (error) {
       if (error instanceof IdentityProviderRefused) {
-        refused(res, error.message);
+        refused(res, isRefusalReason(error.reason) ? error.reason : "refused");
         return;
       }
       if (error instanceof IdentityProviderUnavailable) {
-        console.error(`pages: sign-in could not be completed: ${error.message}`);
+        console.error("pages: sign-in could not be completed: provider_unavailable");
         unavailable(res);
         return;
       }
-      throw error;
+      // Anything else came from the provider's side of the exchange and may carry its words: only the class is logged.
+      console.error("pages: sign-in failed: unexpected");
+      res.status(500).render("error", {
+        title: "Something went wrong",
+        message: "Something went wrong on our side. Try again in a few minutes.",
+      });
+      return;
     }
     await startSession(req, res, provided, safeReturnTo(pending.returnTo));
   });
 
   app.post("/session/sign-out", async (req, res) => {
-    // The anti-forgery check has already run, so there is a session here.
+    // The anti-forgery check has already run, so there is a session here. A release folder this session staged goes first.
+    await endStaged(stagedStore, req.session.staged);
+    // The session's token is read before the session goes, so that the Conduit can be told: reported (and not waited
+    // for) only if the Conduit accepts the token, which it checks itself; an expired one is refused there and costs
+    // a log line, and the session is deleted either way.
+    let token: string | undefined;
+    try {
+      const auth = req.session.auth;
+      token = auth ? await accessTokenFor(auth) : undefined;
+    } catch {
+      token = undefined;
+    }
     await callback((done) => {
       req.session.destroy(done);
     });
+    if (token !== undefined) void sessionEvents?.report("sign_out", token);
     res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
     res.redirect(303, "/");
   });
 
-  if (deps.extraRoutes || deps.forward) {
+  if (mountPages || deps.extraRoutes || deps.forward) {
     const router = express.Router();
+    mountPages?.(router);
     deps.extraRoutes?.(router);
     // Behind the same headers, session and anti-forgery as every page: nothing here is reached without them.
     if (deps.forward) router.use(forwarder({

@@ -5,7 +5,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import type { EntityTypeDef } from "../../../../packages/schemas/generated";
-import { GLYPH_NAMES } from "../color/nodeGlyphs";
+import { GLYPH_NAMES } from "@ospreyflow/glass-shared";
 import { getIconChoices, onIconChoicesChange, setIconChoice } from "./iconChoices";
 import { PICTURE_ACCEPT, thumbnailFromFile } from "./iconImage";
 

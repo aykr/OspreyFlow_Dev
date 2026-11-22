@@ -20751,7 +20751,7 @@ Decision.
 3. **GOV.UK is light only.** Under `govuk`, `applyTheme` holds `data-theme` at `light` and neither
    theme button is drawn: the GOV.UK Design System has no dark mode.
 4. **`tokens.css` stays the single colour authority** and gains one `[data-brand="govuk"]` block
-   after the light block. A brand block redefines chrome only: never a `--ch-*`, `--chart-*`,
+   after the light block (ADR-152 Amendment 4: a brand's block may live in its theme folder's own token file, loaded after the light block). A brand block redefines chrome only: never a `--ch-*`, `--chart-*`,
    `--seq-*` or `--div-*` token. The nine channels with their shapes, the charts and the ramps are
    the product's instrument and the Design System does not govern data visualisation.
    `DESIGN.md` §11 declares each brand's colours and this rule; `designContract.test.ts` holds the
@@ -41823,9 +41823,12 @@ served tree to the brand. Neither says what a GOV.UK deployment *installs*. Read
      the standard wording and the statement links join decision 14's list of Themes settings. X8's key-list
      test (`test_the_public_appearance_read_carries_only_the_presentational_settings`) is written with the new
      keys.
-5. **A GOV.UK install is done from the command line** (the owner's answer 5): `ospreyflow install`, headless.
-   - The guided page (`ospreyflow install --gui`) is the `apps/harness` React application. It is served only on
-     the installing computer while an install runs, is never rendered into a deployment, and is outside I23.
+5. **A GOV.UK install is done from the command line, or from the guided page** (the owner's answer 5 of 20 November,
+   corrected by his ruling of 21 November 2026): both routes are allowed, and both guides say so plainly.
+   - `ospreyflow install` is headless: use it where the installing computer must itself run no React either.
+   - The guided page (`ospreyflow install --gui`) is the `apps/harness` React application. It also installs a
+     GOV.UK starter. It is served only on the installing computer while an install runs, leaves nothing in the
+     deployment, is never rendered into a deployment, and is outside I23.
    - Both guides say this: the Installation and Administration Guide, `docs/administration-guide.md` (section
      4.1, the guided page, and section 6a, `cloud-platform`), and the repository's front page, `README.md`
      ("Installing and running it"). There is no separate install guide on `main`, and these two files are where
@@ -41998,3 +42001,79 @@ unlisted weight, bare, from the variable scope or in a package.json; a listed we
 workspace, the generated GOV.UK stylesheet or its fonts folder, a pages view or the pages' built output; GDS Transport in a pages stylesheet,
 as a listed `@font-face`, or by its assets path); `apps/workspace/src/design/fonts.test.ts` (the imports against the list, the families against
 `tokens.css`, and the package's own face and weight against the list).
+
+### ADR-152, Amendment 3 (21 November 2026) — the page service in a deployment is a deployment setting, off by default, turned on per deployment by the owner; while it is off no deployment's rendered output changes — Accepted by the owner, 21 November 2026
+
+Status: **Accepted by the owner, 21 November 2026**, in his ruling on slice PL7a2 (the page service in deployments). This amendment adds to
+decision 7, whose route table and `OSPREY_PAGES_TREE` setting describe a deployment that renders `pages`; it says when a deployment does.
+
+1. **One setting, off by default.** The setting `pages.enabled` in `OspreyFlow_Core/osprey.yaml` is a boolean whose default is `false`. A
+   value that is not `true` or `false` is refused in words by the same settings validation that refuses an unknown `appearance.brand`. It is
+   turned on for one deployment at a time, by the owner, in that deployment's own `osprey.yaml`. Nothing else turns it on: not a profile, not
+   a brand, not a release.
+2. **Off means unchanged, byte for byte.** With the setting off or absent, every renderer produces exactly the files it produced before this
+   amendment, in each of the four shapes (local-lite, small, cluster, cloud-platform), under each brand: no `pages` service, no route to it
+   in the front proxy, no secret or `OSPREY_PAGES_*` variable for it, no value in the cloud-platform chart. A deployment that does not set
+   the setting therefore changes nothing at its next re-render, and the GOV.UK demonstration is not touched until the owner sets it for that
+   deployment.
+3. **On adds what decision 7 describes, and only that.** With the setting on, the renderers add the `pages` service, its route table for the
+   deployment's brand, its secrets and its `OSPREY_PAGES_*` variables (including `OSPREY_PAGES_TREE`, passed from `appearance.brand` as
+   decision 7 says), in all four shapes. Which paths go to `pages` is still decision 7's route table; this amendment does not change it.
+4. **The cutover needs the setting.** Invariant I22 (a GOV.UK deployment whose derived tree state is complete renders no workspace service
+   and no route to it) applies to a deployment with the setting on. A render of a GOV.UK deployment whose derived tree state is complete and
+   whose setting is off is **refused in words** ("the GOV.UK tree is complete, so the workspace would be removed, and the page service is not
+   enabled for this deployment"), rather than rendering a deployment with neither front end.
+5. **What does not change.** The default stays off in every release until the owner changes it in a later amendment; no migration is
+   needed; the release notes say that the setting exists and is off; the guides say it in one sentence where they name the page service.
+
+Tests that would fail (rule 12; each shown red against a planted fault in the shape the renderer writes it, rule 15): the reference render of
+the four shapes (slice PL7a2a: every file each shape renders today, byte for byte, with the setting absent) fails if any renderer's output
+differs while the setting is off or absent; a case per shape, planted with a `pages` service block in the compose file, a studio handle in the
+front proxy's configuration and a chart value, fails each when the setting is off; a case per shape fails if the setting is on and the `pages`
+service, its route or its variables are missing; the settings validation fails a value that is not a boolean; and the render of a complete
+GOV.UK tree with the setting off fails unless it is refused in the words above. The slice that makes the renderers read the setting (PL7a2b)
+writes them, and does not start before this amendment is applied.
+
+### ADR-152, Amendment 4 (21 November 2026) — a theme's override block, fonts entry and sign-in theme live in the theme's own folder; the shared design package names no theme — Accepted by the owner, 21 November 2026
+
+Status: **Accepted by the owner, 21 November 2026**, in his rulings on slice family PL12 (each theme in one folder). It amends the places
+named in items 3 to 5 and leaves decisions 6 and 7 of this record as they are.
+
+1. **The theme folder.** A theme that is not the default has one folder, `OspreyFlow_Core/packages/themes/<name>/` (the GOV.UK theme:
+   `OspreyFlow_Core/packages/themes/govuk/`). `OspreyFlow_Core/packages/design` holds what every theme shares (the default tokens, the light
+   block, the primitives, the scale, the fonts every theme uses), and no rule in it names a theme. The default theme needs no folder: it is
+   the shared tokens and the light block, and it names no brand.
+2. **What moves into the GOV.UK theme folder, and when.** After slice E of PL4 has merged: the `[data-brand="govuk"]` block of
+   `tokens.css`, the GOV.UK rules in `primitives.css` and `panelType.css`, the GDS Transport files and their entry in the fonts list, and
+   the sign-in theme's stylesheet and `govuk_chrome.js`. **What does not move:** the React workspace's own GOV.UK look (the files under
+   `apps/workspace/src/brand/govuk/`, the component stylesheets that name the brand and the components that branch on the brand), which
+   decision 7 keeps until the GOV.UK tree passes the same acceptance and which decision 13 leaves for the owner to retire (F7); no
+   builder time goes on moving it. The GOV.UK page templates stay in `apps/pages/tree-govuk`, as decision 6 says. The order of the
+   stylesheets is unchanged: the theme's token file is loaded after the light block it overrides, so every computed style is the same.
+3. **ADR-132 decision 4.** "`tokens.css` stays the single colour authority and gains one `[data-brand="govuk"]` block after the light
+   block" now reads: `tokens.css` stays the single colour authority for the shared and the default tokens; a brand's override block is one
+   `[data-brand="<name>"]` block, after the light block, either in `tokens.css` or, for a brand with a theme folder, in that folder's own
+   token file loaded after it. The rule that a brand block redefines chrome only is unchanged.
+4. **Amendment 2 of this record, item 1 (the fonts entry).** The shared families are listed in `OspreyFlow_Core/packages/design/fonts.json`;
+   a theme's own families (GDS Transport, for the GOV.UK theme) are listed in the theme folder's own fonts list, with the same fields
+   (role, source, weights, licence, conditions). The test of Amendment 2, item 4, reads every list and applies the same rules to each.
+5. **The guard.** A check fails if a theme's rule appears outside its folder, with an allowlist of today's GOV.UK rules outside it. The
+   allowlist may only shrink, and it reaches zero when the React GOV.UK look is retired (item 8); the check is shown red first.
+6. **The baseline.** The Default build's comparison baseline (`scripts/dist_compare.mjs`) is re-recorded once, in slice PL12d, after slice E.
+   The difference between the old and the new baseline lists only GOV.UK files; anything else in it fails the slice. The visual, contrast
+   and accessibility suites pass unchanged for the default theme and for the GOV.UK theme with the identity switched on.
+7. **The typeface and the switch.** The GDS Transport files are left out of the default build and added only for a deployment that turns the
+   GOV.UK identity on (decision 14). A deployment with the GOV.UK brand set and the identity switch off fails loudly at start rather than
+   falling back silently; the identity switch (slice PL12e, which absorbs PL7c) ships in the same release as the move. A theme reaches a
+   deployment as a signed image and a template folder, and the Themes menu in Admin holds settings only.
+8. **The owner's answer to decision 13 (F7): when the React GOV.UK look is retired.** It is retired one release after the cutover, by a
+   build of its own, on the owner's word at that time. It stays as the fallback until the GOV.UK pages have run in a real deployment for
+   one release. Until then a Default build carries no GOV.UK token and no GOV.UK font, but it still carries the React workspace's GOV.UK
+   component rules. Nothing in this record, in the release notes or in the guides is to say that a Default build is free of GOV.UK
+   before that retirement.
+
+Tests that would fail (rule 12; each shown red against a planted fault in the shape the code writes it, rule 15): the theme-rule check
+(a planted `[data-brand="govuk"]` rule in the shared design package, in a second theme's folder, and in a component stylesheet outside the
+allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
+file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
+in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.

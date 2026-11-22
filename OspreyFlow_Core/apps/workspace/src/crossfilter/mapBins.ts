@@ -5,7 +5,7 @@
 import type { StoreApi } from "zustand/vanilla";
 
 import type { GeoBin } from "../../../../packages/schemas/generated";
-import { fetchGeoBins } from "../analytics/api";
+import { fetchGeoBins } from "@ospreyflow/glass-shared";
 import { buildEventFilter, type CrossFilterStoreState } from "./store";
 
 /** Reads the bins now and again whenever a filter input they depend on changes; returns the

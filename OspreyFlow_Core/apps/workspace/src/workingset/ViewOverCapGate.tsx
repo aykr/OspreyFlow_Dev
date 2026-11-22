@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "zustand/react";
 import type { StoreApi } from "zustand/vanilla";
 
-import type { CaseViewOpened } from "../views/viewsApi";
+import type { CaseViewOpened } from "@ospreyflow/glass-shared";
 import type { WorkingSetDelta, WorkingSetStoreState } from "@ospreyflow/glass-shared";
 import { ViewOverCapDialog } from "./ViewOverCapDialog";
 

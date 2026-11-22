@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { applyBrand } from "../brand";
+import { applyBrand } from "@ospreyflow/glass-shared";
 import { GovukHeader } from "./GovukHeader";
 
 afterEach(() => {

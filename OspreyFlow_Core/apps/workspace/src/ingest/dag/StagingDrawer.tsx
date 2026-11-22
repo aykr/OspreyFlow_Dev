@@ -11,7 +11,7 @@ import { Checkbox } from "../../design/primitives/Checkbox";
 import { Input } from "../../design/primitives/Input";
 import { Select } from "../../design/primitives/Select";
 import { Table, type TableColumn } from "../../design/primitives/Table";
-import { ProfileError, previewStaging } from "../api";
+import { ProfileError, previewStaging } from "@ospreyflow/glass-shared";
 import { DERIVE_OPERATIONS, STAGING_KIND_NAMES, type StagingKind, tablesFor } from "./stagingSteps";
 
 type Rec = Record<string, unknown>;

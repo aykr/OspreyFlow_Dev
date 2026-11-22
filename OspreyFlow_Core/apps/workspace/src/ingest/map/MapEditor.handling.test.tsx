@@ -23,8 +23,8 @@ const draftHandling: { current: Record<string, unknown> } = { current: {} };
 const saves: RowTemplate[] = [];
 const refusal: { current: Error | null } = { current: null };
 
-vi.mock("../api", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../api")>();
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@ospreyflow/glass-shared")>();
   return {
     ...actual,
     fetchDraft: vi.fn(async () => ({
@@ -105,7 +105,7 @@ describe("Map and the columns Connect declared", () => {
   });
 
   it("shows the server's cause for a refused save, word for word", async () => {
-    const { RowTemplateSaveError } = await import("../api");
+    const { RowTemplateSaveError } = await import("@ospreyflow/glass-shared");
     const cause =
       "element 'e1' does not bind classification, which the source declares in column 'marking'.";
     refusal.current = new RowTemplateSaveError("recipe_rule", cause);

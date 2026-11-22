@@ -13,7 +13,7 @@ import time
 from test_gates import built, main_sha, merge, sh, stop_gate, verified, world  # noqa: F401  (world is a fixture)
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
-TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+from test_gates import TODAY  # noqa: E402  (the run's one date: 9)
 #: GG6's table is OspreyFlow_Build/spec/ADR_RESERVATIONS.md; here the same table sits where no scanner of the real
 #: scan map is selected, so the Stop hook and the merge run only what the conflict is about.
 TABLE = "notes/ADR_RESERVATIONS.md"

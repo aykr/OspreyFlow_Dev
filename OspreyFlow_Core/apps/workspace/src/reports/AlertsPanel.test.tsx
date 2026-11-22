@@ -6,7 +6,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { MonitoringFigures } from "../../../../packages/schemas/generated";
-import { alertRuleGroup, groupName } from "./figureParts";
+import { groupName } from "./figureParts";
+import { alertRuleGroup } from "@ospreyflow/glass-shared";
 import { AlertsPanel } from "./AlertsPanel";
 
 afterEach(() => {

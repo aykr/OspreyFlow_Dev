@@ -2,7 +2,7 @@
 // `ontology.handling.merge_handling` so the Change form can say so, and ask for a confirmation,
 // before the server would refuse. The server's rule still decides.
 import type { Handling } from "../../../../packages/schemas/generated";
-import type { HandlingScheme } from "../ingest/api";
+import type { HandlingScheme } from "@ospreyflow/glass-shared";
 
 const DISSEMINATION = { permitted: 0, conditional: 1, restricted: 2 } as const;
 

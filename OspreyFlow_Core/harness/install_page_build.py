@@ -34,6 +34,7 @@ SOURCES = (
     "apps/workspace/src/design",
     "packages/design",
     "apps/workspace/src/theme",
+    "packages/glass-shared/src",
 )
 DIST = Path("apps/harness/dist")
 STAMP = "source.sha256"

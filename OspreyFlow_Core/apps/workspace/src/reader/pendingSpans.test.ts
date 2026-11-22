@@ -3,7 +3,7 @@
 // hash to its own excerpt_hash — never where the locator merely points.
 import { describe, expect, it } from "vitest";
 
-import type { EmailCandidate } from "../inspector/linkEventsApi";
+import type { EmailCandidate } from "@ospreyflow/glass-shared";
 import { pendingSpansIn } from "./pendingSpans";
 
 const TEXT = "Dana MERCER wrote to SRP about the plant.";

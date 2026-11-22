@@ -44,9 +44,13 @@ import type {
   PublicMapProvider,
   Sighting,
 } from "../../../../packages/schemas/generated";
-import { activePalette } from "../color/palette";
-import { currentTheme, onThemeChange } from "../theme/theme";
-import { conduitRequest, type WorkingSetGraph } from "@ospreyflow/glass-shared";
+import {
+  activePalette,
+  currentTheme,
+  onThemeChange,
+  conduitRequest,
+  type WorkingSetGraph,
+} from "@ospreyflow/glass-shared";
 import { BasemapUnavailableError, checkBasemapAvailable } from "./basemapAvailability";
 import { selfHostMaplibreWorker } from "./maplibreWorker";
 import {
@@ -181,7 +185,7 @@ export interface MapViewProps {
   provider: PublicMapProvider;
   nodeCoordinates: ReadonlyMap<string, { lat: number; lng: number }>;
   /** Attached to every request MapLibre makes to `apiBaseUrl` — currently
-   * only the site-image proxy route (`site/api.ts`'s `siteImageUrl`)
+   * only the site-image proxy route (`packages/glass-shared/src/site/api.ts`'s `siteImageUrl`)
    * needs this, since MapLibre's native `image` source has no other way
    * to carry a bearer token. Both optional: a caller with no site feature
    * mounted (or no `apiBaseUrl` to compare against) gets plain requests,
@@ -360,7 +364,7 @@ export function MapView({
       // reads `attrs.lat`/`attrs.lng` off nodes generically.
       // `transformRequest` attaches the bearer token to any request MapLibre
       // makes to this deployment's own API — currently only the site-image
-      // proxy route (`site/api.ts`'s `siteImageUrl`), since that is the one
+      // proxy route (`packages/glass-shared/src/site/api.ts`'s `siteImageUrl`), since that is the one
       // MapLibre-fetched resource this checkpoint puts behind auth. Inert
       // for the PMTiles basemap (fetched through the `pmtiles://` protocol
       // handler, never this callback) and for any tier 3/4 provider's URL,

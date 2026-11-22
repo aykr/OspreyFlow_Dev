@@ -6,7 +6,7 @@
 
    No service-name band under the header (ADR-132 Amendment 5, the owner's ruling of 4 November
    2026): the service is named in the page title, "<service> – GOV.UK", as on the Glass
-   (`brandTitle` in `apps/workspace/src/brand/brand.ts`, whose fallbacks this follows).
+   (`brandTitle` in `packages/glass-shared/src/brand/brand.ts`, whose fallbacks this follows).
 
    HEADER and FOOTER are the Glass's own components (`apps/workspace/src/brand/govuk/GovukHeader.tsx`
    and `GovukFooter.tsx`) rendered to static markup; `govukChrome.test.tsx` fails if they drift. The

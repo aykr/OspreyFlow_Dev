@@ -13,7 +13,7 @@ import {
   needsYouCount,
   readNeedsYou,
   type NeedsYou as Needs,
-} from "./needsYouApi";
+} from "@ospreyflow/glass-shared";
 
 export interface NeedsYouProps {
   apiBaseUrl: string;

@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { UpdateNotice } from "../../../../packages/schemas/generated";
-import { updateWords } from "./updateNotice";
+import { updateWords } from "@ospreyflow/glass-shared";
 
 const checked = (over: Partial<UpdateNotice>): UpdateNotice => ({
   current: "v0.4.1",

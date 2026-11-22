@@ -8,7 +8,13 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { packPrintHtml } from "./packExport";
 import { PackItemView } from "./PackItemView";
-import { alertMatchSentence, alertStatusSentence, itemShortTitle, KIND_LABEL, WITHHELD_ITEMS_SENTENCE } from "./packText";
+import {
+  alertMatchSentence,
+  alertStatusSentence,
+  itemShortTitle,
+  KIND_LABEL,
+  WITHHELD_ITEMS_SENTENCE,
+} from "@ospreyflow/glass-shared";
 import { ALERT_ITEM, CLOSED_ALERT_ITEM, manifest } from "./reportsTestKit";
 
 afterEach(cleanup);
@@ -92,7 +98,7 @@ describe("an alert item on the printed page", () => {
 
 describe("an alert trend in words", () => {
   it("counts alerts, not events", async () => {
-    const { trendSentence } = await import("./packText");
+    const { trendSentence } = await import("@ospreyflow/glass-shared");
     const { figures } = await import("./reportsTestKit");
     const f = figures({ source: "alerts", event_types: [], measure: "count", measure_field: null });
     expect(trendSentence({ ...f, result: { ...f.result, measure: "count", events: 1 } })).toBe("1 alert in 12 weeks");

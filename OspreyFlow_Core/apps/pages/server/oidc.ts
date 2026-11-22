@@ -21,7 +21,7 @@ import * as client from "openid-client";
 
 import type { OidcSettings } from "./config.js";
 import { IdentityProviderRefused, IdentityProviderUnavailable } from "./identity.js";
-import type { CodeFlowProvider, PendingLogin, ProviderSession } from "./identity.js";
+import type { CodeFlowProvider, PendingLogin, ProviderSession, RefusalReason } from "./identity.js";
 import { sameValue } from "./loginState.js";
 import { ABSOLUTE_SECONDS } from "./sessionPolicy.js";
 
@@ -97,9 +97,9 @@ function keySetFailed(error: unknown): boolean {
 }
 
 /** What a failure of the exchange is: unreachable (503) or refused (403). The words are ours, never the library's. */
-function classify(error: unknown, refusal: string): IdentityProviderRefused | IdentityProviderUnavailable {
+function classify(error: unknown, refusal: string, reason: RefusalReason): IdentityProviderRefused | IdentityProviderUnavailable {
   if (isUnreachable(error)) return new IdentityProviderUnavailable("the identity provider could not be reached or failed");
-  return new IdentityProviderRefused(refusal);
+  return new IdentityProviderRefused(refusal, reason);
 }
 
 export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions = {}): CodeFlowProvider {
@@ -157,9 +157,9 @@ export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions 
     async complete(callback: { query: string }, pending: PendingLogin): Promise<ProviderSession> {
       const params = new URLSearchParams(callback.query);
       // Everything that can be refused without asking the provider is refused first, so the code is never spent on it.
-      if (params.has("error")) throw new IdentityProviderRefused("the provider reported an error");
-      if (!sameValue(params.get("state"), pending.state)) throw new IdentityProviderRefused("the state is not this sign-in's own");
-      if (!params.get("code")) throw new IdentityProviderRefused("the callback carries no code");
+      if (params.has("error")) throw new IdentityProviderRefused("the provider reported an error", "provider_error");
+      if (!sameValue(params.get("state"), pending.state)) throw new IdentityProviderRefused("the state is not this sign-in's own", "state_mismatch");
+      if (!params.get("code")) throw new IdentityProviderRefused("the callback carries no code", "no_code");
 
       const { config, jwks } = await provider();
       const current = new URL(redirectUri);
@@ -173,11 +173,11 @@ export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions 
           idTokenExpected: true,
         });
       } catch (error) {
-        throw classify(error, "the provider refused the code, or its answer did not verify");
+        throw classify(error, "the provider refused the code, or its answer did not verify", "code_refused");
       }
 
       const idToken = tokens.id_token;
-      if (typeof idToken !== "string" || idToken === "") throw new IdentityProviderRefused("the answer carries no ID token");
+      if (typeof idToken !== "string" || idToken === "") throw new IdentityProviderRefused("the answer carries no ID token", "no_id_token");
       let claims;
       try {
         ({ payload: claims } = await jwtVerify(idToken, jwks, {
@@ -188,12 +188,12 @@ export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions 
         }));
       } catch (error) {
         if (keySetFailed(error)) throw new IdentityProviderUnavailable("the identity provider's key set could not be had");
-        throw classify(error, "the ID token does not verify");
+        throw classify(error, "the ID token does not verify", "id_token_invalid");
       }
       // The nonce again, on the token whose signature is now known to be the realm's.
-      if (!sameValue(claims["nonce"], pending.nonce)) throw new IdentityProviderRefused("the nonce is not this sign-in's own");
+      if (!sameValue(claims["nonce"], pending.nonce)) throw new IdentityProviderRefused("the nonce is not this sign-in's own", "nonce_mismatch");
       const subject = claims.sub;
-      if (typeof subject !== "string" || subject === "") throw new IdentityProviderRefused("the ID token names no subject");
+      if (typeof subject !== "string" || subject === "") throw new IdentityProviderRefused("the ID token names no subject", "no_subject");
 
       const named = [claims["name"], claims["preferred_username"], subject].find(
         (value): value is string => typeof value === "string" && value !== "",

@@ -14,8 +14,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { rightWords } from "../admin/sections/Roles";
-import BY_ROLE from "../shell/placesByRole.json";
-import { rightName, rolesHolding, ROLE_WORDS, whyNotByRole, type Right } from "./roles";
+import {
+  PLACES_BY_ROLE as BY_ROLE,
+  type Right,
+  rightName,
+  ROLE_WORDS,
+  rolesHolding,
+  whyNotByRole,
+} from "@ospreyflow/glass-shared";
 
 const RIGHTS_PY = join(dirname(fileURLToPath(import.meta.url)), "../../../../packages/schemas/rights.py");
 const DECLARED = (() => {

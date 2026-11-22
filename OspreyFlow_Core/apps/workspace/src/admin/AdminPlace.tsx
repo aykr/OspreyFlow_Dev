@@ -9,10 +9,8 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { fetchResolvedPrincipal } from "../auth/userManager";
-import { currentBrand } from "../brand/brand";
-import { whyNotByRole } from "../help/roles";
-import type { AdminApi } from "./api";
-import { InviterContext, type InviterRead } from "./inviter";
+import { type AdminApi, currentBrand, HELP_TITLE, type InviterRead, whyNotByRole } from "@ospreyflow/glass-shared";
+import { InviterContext } from "./inviter";
 import { onOpening, takeOpening } from "./needsYou/openings";
 import SECTIONS from "./sections.json";
 import { Audit } from "./sections/Audit";
@@ -28,7 +26,6 @@ import { People } from "./sections/People";
 import { Roles } from "./sections/Roles";
 import { System } from "./sections/System";
 import "./admin.css";
-import { HELP_TITLE } from "../help/roles";
 import { RolesHelpPage } from "../help/RolesHelpPage";
 
 export { feedFreshness } from "./sections/Dashboards";

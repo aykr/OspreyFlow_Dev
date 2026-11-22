@@ -8,7 +8,7 @@
 // enough to actually enclose an area.
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 
-import { BORDER_STRONG_DARK_HEX, BRASS_HEX } from "../color/tokens";
+import { BORDER_STRONG_DARK_HEX, BRASS_HEX } from "@ospreyflow/glass-shared";
 
 const BOUNDARY_SOURCE_ID = "ospreyflow-boundary-draw";
 const BOUNDARY_FILL_LAYER_ID = "ospreyflow-boundary-draw-fill";

@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 
 import type { MonitoringFigures } from "../../../../packages/schemas/generated";
-import { typologyLabel } from "../alerts/names";
+import { typologyLabel, type RuleGroup } from "@ospreyflow/glass-shared";
 
 export const NUMBER = new Intl.NumberFormat("en-GB");
 
@@ -27,25 +27,11 @@ export const AGE_BANDS = ["under a day", "1 to 7 days", "7 to 30 days", "over 30
 const _EVERY_BAND: Exclude<AgeBand, (typeof AGE_BANDS)[number]> extends never ? true : never = true;
 void _EVERY_BAND;
 
-/** A rule group as the feed labels it: `typology` with its typology, `hotlists` or `monitors`. */
-export interface RuleGroup {
-  label: string;
-  typology: string;
-}
-
 export const groupKey = (g: RuleGroup): string => `${g.label}:${g.typology}`;
 
-const KIND_GROUP: Record<string, string> = { typology: "typology", hotlist: "hotlists", monitor: "monitors", analyst: "analyst", drawn_watch: "drawn_items" };
 /** The non-typology groups' names; a kind added later (one the Conduit counts under its own name) is
  * said by that name, never folded into a typology or another kind. */
 const GROUP_NAMES: Record<string, string> = { hotlists: "Hotlists", monitors: "Monitors", analyst: "Raised by an analyst", drawn_items: "Drawn items" };
-
-/** The rule group a queued alert is counted under, as the Conduit's `_RULE_GROUP` names it: the Glass's one
- * copy, read by the Alerts panel and by Home's *Open the dashboard*, so the two cannot drift apart. */
-export function alertRuleGroup(row: { kind?: string | null; alert: { typology?: string | null } }): RuleGroup {
-  const kind = row.kind ?? "typology";
-  return { label: KIND_GROUP[kind] ?? kind, typology: kind === "typology" ? (row.alert.typology ?? "") : "" };
-}
 
 /** A rule group in words: a typology rule by its typology, never a rule's own analyst-written name. */
 export function groupName(g: RuleGroup): string {

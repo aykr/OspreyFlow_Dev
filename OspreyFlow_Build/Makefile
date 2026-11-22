@@ -31,9 +31,13 @@ ci: core-check slice-line-check lint-tools licence-check design-check ui-words-c
 slice-line-check:
 	../OspreyFlow_Build/scripts/slice_line/tests/run.sh
 
+# BL1b: the reservations table takes git's union merge (.gitattributes at the repository root). `--against`
+# compares the file with its merge-base with main and allows only appended rows and a reserved-to-written
+# flip; where there is no main to take a base from (a shallow clone) it says so and skips.
 lanes-check:
-	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
+	$(IN_CORE) $(PYTEST) ../OspreyFlow_Build/tests/test_stack_lease.py ../OspreyFlow_Build/tests/test_lanes_heartbeat.py ../OspreyFlow_Build/tests/test_lanes_heartbeat_route.py ../OspreyFlow_Build/tests/test_lanes_launch.py ../OspreyFlow_Build/tests/test_friction_assemble.py ../OspreyFlow_Build/tests/test_adr_reservations.py ../OspreyFlow_Build/tests/test_adr_reservations_against.py ../OspreyFlow_Build/tests/test_ledger_union_merge.py ../OspreyFlow_Build/tests/test_spec_doc_paths.py
 	$(IN_CORE) $(TOOLS) $(PY) -m tools.adr_reservations_check
+	$(IN_CORE) $(TOOLS) $(PY) -m tools.adr_reservations_check --against
 
 # Rule 3: each unfiltered internal graph lookup named only by the module allowed it (the revert's,
 # the engine's write path, the alert store's repoint settle). Static; shown red with a third caller

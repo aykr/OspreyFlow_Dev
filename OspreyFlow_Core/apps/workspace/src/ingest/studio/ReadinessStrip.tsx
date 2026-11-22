@@ -2,8 +2,8 @@
 // registered sources (ADR-140 Amendment 6), its pipelines with how many drafts have not passed Test,
 // and its last run.
 import type { ScheduleRunView, SourceTable, StudioRecipeDraft } from "../../../../../packages/schemas/generated";
-import type { DomainPack } from "../../investigation/cases";
-import { modelInWords } from "./packs";
+import type { DomainPack } from "@ospreyflow/glass-shared";
+import { modelInWords } from "@ospreyflow/glass-shared";
 
 export interface ReadinessStripProps {
   packs: readonly DomainPack[] | undefined;

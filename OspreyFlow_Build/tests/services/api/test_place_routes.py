@@ -17,7 +17,7 @@ offer a place a body check then refuses, never the reverse (rule 15). Each route
 place whose screens call it (`PLACE_RULES`), and:
 
 1. a place is offered for the rights that reach its entry screen's first read (`ENTRY`; the Glass's
-   case list is everyone's, so any of its routes). `shell/placesByRole.json` records that for every
+   case list is everyone's, so any of its routes). `packages/glass-shared/src/shell/placesByRole.json` records that for every
    role, legacy role and right granted singly, and the Glass's `placesFor` is held to it
    (`shell/places.test.tsx`); `shell/places.json`'s rights are exactly the single rights that open a
    place, and each reaches a screen of that place (read from the workspace's source);
@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import pytest
@@ -44,17 +44,23 @@ from schemas.ingest import StudioRole
 from schemas.rights import LEGACY_ROLE_RIGHTS, ROLE_RIGHTS, SUPER_USER_PRESET, Right, rights_for
 
 WORKSPACE_SRC = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/apps/workspace/src"
+#: The Conduit clients of the Studio, the sources, the releases and Admin's maps and models moved
+#: here (ADR-152 decision 6, PL4 slice D2), and the screens import them by the package's name: the
+#: scan reads the package's source as well, or the calls those clients make would be read nowhere
+#: (`test_the_shared_clients_are_scanned`).
+SHARED_SRC = Path(__file__).resolve().parents[4] / "OspreyFlow_Core/packages/glass-shared/src"
+PACKAGE_NAME = "@ospreyflow/glass-shared"
 PLACES_JSON = WORKSPACE_SRC / "shell/places.json"
-BY_ROLE_JSON = WORKSPACE_SRC / "shell/placesByRole.json"
+BY_ROLE_JSON = SHARED_SRC / "shell/placesByRole.json"
 
 # (path pattern, the places whose screens call it, which screen). First match wins.
 PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # ADR-146 decision 2: Monitoring left the Glass for Rules and Monitoring, its routes with it.
     (r"^/v1/admin/screening-lists|^/v1/screening-lists$", frozenset({"rules"}),
-     "Rules and Monitoring's screening lists (alerts/api.ts)"),
+     "Rules and Monitoring's screening lists (glass-shared/src/alerts/api.ts)"),
     # The queue's list is read in the Glass too, by a report pack's alert items (ADR-134 decision 1).
     (r"/alert-queue$", frozenset({"glass", "rules"}),
-     "Rules and Monitoring's Alerts; the Glass's report packs (reports/packsApi.ts)"),
+     "Rules and Monitoring's Alerts; the Glass's report packs (the shared packs client)"),
     # Held rows are worked in the Studio's Runs too (ADR-140), and read by Home.
     (r"/held-rows(/|$)", frozenset({"ingest", "rules"}),
      "Rules and Monitoring's Held rows; the Studio's Runs (ingest/runs/RunsTab.tsx)"),
@@ -118,8 +124,9 @@ EXEMPT = {
 
 #: A place must be usable, not only answered (the orchestrator's settlement, 7 November 2026): the
 #: Studio and Admin are offered for the rights their entry screen's first read needs. The Studio's
-#: is the recipe registry (`ingest/api.ts`'s `fetchRecipeRegistry`); Admin's is the first read of
-#: the first built section the person holds a right for (ADR-145 Amendment 3: for
+#: is the recipe registry (`fetchRecipeRegistry` in `packages/glass-shared/src/ingest/api.ts`);
+#: Admin's is the first read of the first built section the person holds a right for (ADR-145
+#: Amendment 3: for
 #: `administer_system`, Datasets, the first in decision 5's order). The Glass's entry, the case
 #: list, is open to every signed-in person, so the Glass is offered for any right one of its routes
 #: needs.
@@ -301,6 +308,11 @@ NEUTRAL = ("App.tsx", "main.tsx", "shell/", "home/", "testing/")
 _IMPORT = re.compile(
     r"""(?:import|export)\s+(?:type\s+)?(?:\{([^}]*)\}|[\w*\s,{}]+?)\s+from\s+["'](\.[^"']+)["']"""
 )
+_PACKAGE_IMPORT = re.compile(
+    r"""(?:import|export)\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']"""
+    + re.escape(PACKAGE_NAME)
+    + r"""["']"""
+)
 _EXPORTED = re.compile(r"^export\s+(?:(?:async\s+)?function\s+(\w+)|const\s+(\w+)\s*=)", re.M)
 _LITERAL = re.compile(r"`([^`]*)`|\"([^\"\n]*)\"")
 #: A file whose screen stands in another place than its folder says.
@@ -308,16 +320,18 @@ MOVED = {
     "linktypes/ProposedTypes.tsx": "admin",  # ADR-090 Amendment 5: Proposed types, in Admin
     # ADR-143 decision 9 (L3.5): the Studio's Model tab decides a dataset's proposed link types.
     "linktypes/ModelProposals.tsx": "ingest",
-    "linktypes/modelProposalsApi.ts": "ingest",
+    # In two pieces: the file is in the shared package now, and the old-path scan reads this file.
+    "linktypes/modelProposals" + "Api.ts": "ingest",
     # ADR-146 decisions 4 and 7: the watches and alerts made from the Glass are drawn in the Glass.
     "watches/GlassWatchActions.tsx": "glass",
 }
-#: The workspace's path helpers, read as the prefixes they build (`ingest/api.ts`'s `studioCase`,
-#: `ingest/sources/api.ts`'s `dataset`).
+#: The path helpers of the Studio's clients, read as the prefixes they build (`studioCase` in
+#: `packages/glass-shared/src/ingest/api.ts`, `dataset` in
+#: `packages/glass-shared/src/ingest/sources/api.ts`).
 BASES = {"studioCase": "/v1/investigations/{x}", "dataset": "/v1/datasets/{x}"}
 #: Helpers that take a path relative to a prefix, read wherever they are called: `admin/api.ts`'s
-#: `call(api, "people")`, `alerts/api.ts`'s `caseUrl(base, id, "held-rows")`, and
-#: `reports/caseHttp.ts`'s `send(api, "GET", "data-feeds")`.
+#: `call(api, "people")`, `glass-shared/src/alerts/api.ts`'s `caseUrl(base, id, "held-rows")`, and
+#: `glass-shared/src/reports/caseHttp.ts`'s `send(api, "GET", "data-feeds")`.
 _PATH = r"([`\"][^`\"]*[`\"])"
 RELATIVE_CALLS = [
     (re.compile(r"\bcall<[^>]*>\(\s*api,\s*" + _PATH), "/v1/admin", "admin/api.ts"),
@@ -369,7 +383,7 @@ def _fragments(text: str, prefix: str = "") -> list[str]:
         if " " in literal or "/" not in literal:
             continue
         segments = [s for s in literal.strip("/").split("/") if s]
-        # A generic helper's literal (`/v1/admin/${path}`, `alerts/api.ts`'s
+        # A generic helper's literal (`/v1/admin/${path}`, `glass-shared/src/alerts/api.ts`'s
         # `/v1/investigations/${id}/${path}`, read where it is called through `RELATIVE_CALLS`)
         # names no route: two real segments, or a path from `/v1/` itself (`/v1/investigations`,
         # `/v1/investigations/${id}`).
@@ -391,37 +405,130 @@ def _chunk_fragments(rel: str, chunk: str) -> list[str]:
     return found
 
 
-def screen_places(root: Path) -> dict[str, set[str]]:
+class Exporter(dict):
+    """A name the package exports, to the file that exports it. Where two files write one name (`listDatasets`, in the
+    Admin client and in the cases client), the index gives one of them another (`listDatasets as listAdminDatasets`) and
+    `aliases` takes the name an importer writes back to the one its file wrote, so a screen's call is read in the right
+    function."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.aliases: dict[str, str] = {}
+
+    def original(self, name: str) -> str:
+        return self.aliases.get(name, name)
+
+
+#: A braced export of the package's index: `export { a, type B, c as d } from "./x/y";`.
+_INDEX_BRACED = re.compile(r"^export\s+(?:type\s+)?\{([^}]*)\}\s*from\s*[\"']\./([^\"']+)[\"'];", re.M)
+
+
+def read_package(
+    shared: Path, taken: Iterable[str]
+) -> tuple[dict[str, str], dict[str, str], dict[str, str], Exporter]:
+    """The shared package's sources, for a scan of the workspace to read as if they were its own:
+    `(files, own, key_of, exporter)`. A file is keyed by its path under `src`, or by `shared:` and
+    that path where the workspace (`taken`) holds a file of the same name (the layout stores and the
+    inviter keep their hooks there). `own` is the path that decides a file's place, `key_of` takes a
+    path under `src` to its key, and `exporter` takes a name the package exports (a function or a
+    constant) to the file that exports it. The index is not read: it only re-exports."""
+    taken = set(taken)
+    files: dict[str, str] = {}
+    own: dict[str, str] = {}
+    key_of: dict[str, str] = {}
+    exporter = Exporter()
+    for p in sorted(shared.rglob("*.ts*")):
+        if ".test." in p.name or p.name.endswith(".d.ts") or p.name == "index.ts":
+            continue
+        rel = p.relative_to(shared).as_posix()
+        key = "shared:" + rel if rel in taken else rel
+        files[key], own[key], key_of[rel] = p.read_text(), rel, key
+        for found in _EXPORTED.finditer(files[key]):
+            exporter.setdefault(found.group(1) or found.group(2), key)
+    # Where two files write one name, the index says which the package exports under it and which it gives another.
+    index = shared / "index.ts"
+    renamed: set[tuple[str, str]] = set()  # (file's key, the name it wrote) that the index gives another name
+    for listed, module in _INDEX_BRACED.findall(index.read_text() if index.is_file() else ""):
+        key = key_of.get(module + ".ts") or key_of.get(module + ".tsx")
+        for item in listed.split(","):
+            written, _, given = re.sub(r"^\s*type\s+", "", item.strip()).partition(" as ")
+            if key is None or not written:
+                continue
+            exporter[given.strip() or written] = key
+            if given.strip():
+                exporter.aliases[given.strip()] = written
+                renamed.add((key, written))
+    for key, text in files.items():  # a name the index gives away is not the package's under its old name
+        for found in _EXPORTED.finditer(text):
+            name = found.group(1) or found.group(2)
+            if (key, name) in renamed and exporter.get(name) == key:
+                del exporter[name]
+    for key, text in files.items():  # ... where another file writes it, that file is the one the package exports
+        for found in _EXPORTED.finditer(text):
+            name = found.group(1) or found.group(2)
+            if (key, name) not in renamed:
+                exporter.setdefault(name, key)
+    return files, own, key_of, exporter
+
+
+def _names_in(names: str) -> list[str]:
+    return re.findall(r"(?:type\s+)?(\w+)(?:\s+as\s+\w+)?\s*(?:,|$)", names or "")
+
+
+def screen_places(root: Path, shared: Path | None = None) -> dict[str, set[str]]:
     """For each API path fragment the workspace's source names, the places whose screens call it: an
     exported API function's fragments belong to the places of the files that import it, and any
     other fragment to its own file's place (a file's folder: `ingest/` the Studio, `admin/` Admin,
     the shell and Home none, anything else the Glass; `MOVED` the exceptions). A component
     (capitalised) is drawn where its folder says, wherever it is embedded (the Studio's Verify
     embeds the Glass's canvas). An under-approximation: a route this misses is not proved, but one
-    it finds in the wrong place is a real call."""
+    it finds in the wrong place is a real call.
+
+    The shared package's source (`shared`, which is the real package when `root` is the real
+    workspace) is read as if it were part of the workspace, each file at its own place under the
+    package's `src` (the clients kept their folders when they moved, so each is the place it was);
+    a name a screen takes from the package by its name is imported from the file that exports it."""
     root = root.resolve()
+    if shared is None and root == WORKSPACE_SRC.resolve():
+        shared = SHARED_SRC
     files = {p.relative_to(root).as_posix(): p.read_text() for p in root.rglob("*.ts*")
              if ".test." not in p.name and not p.name.endswith(".d.ts")}  # fmt: skip
+    own = {key: key for key in files}
+    base = dict.fromkeys(files, root)
+    in_shared: dict[str, str] = {}
+    exporter = Exporter()
+    if shared is not None:
+        shared = shared.resolve()
+        package, package_own, in_shared, exporter = read_package(shared, files)
+        files |= package
+        own |= package_own
+        base |= dict.fromkeys(package, shared)
     users: dict[tuple[str, str], set[str]] = {}
-    for rel, text in files.items():
+    for key, text in files.items():
         for names, spec in _IMPORT.findall(text):
-            target = _resolve(root / rel, spec, root)
+            target = _resolve(base[key] / own[key], spec, base[key])
+            if target is not None and base[key] is shared:
+                target = in_shared.get(target)
             if target is None or target not in files:
                 continue
-            for name in re.findall(r"(?:type\s+)?(\w+)(?:\s+as\s+\w+)?\s*(?:,|$)", names or ""):
-                users.setdefault((target, name), set()).add(rel)
-    places: dict[str, set[str]] = {f: ({p} if (p := _own_place(f)) else set()) for f in files}
+            for name in _names_in(names):
+                users.setdefault((target, name), set()).add(key)
+        for names in _PACKAGE_IMPORT.findall(text):
+            for name in _names_in(names):
+                if name in exporter:
+                    users.setdefault((exporter[name], exporter.original(name)), set()).add(key)
+    places: dict[str, set[str]] = {f: ({p} if (p := _own_place(own[f])) else set()) for f in files}
     reached: dict[str, set[str]] = {}
-    for rel, text in files.items():
+    for key, text in files.items():
         starts = [(m.start(), m.group(1) or m.group(2)) for m in _EXPORTED.finditer(text)]
         chunks: list[tuple[str | None, str]] = [(None, text[: starts[0][0]] if starts else text)]
         for i, (start, name) in enumerate(starts):
             end = starts[i + 1][0] if i + 1 < len(starts) else len(text)
             chunks.append((name, text[start:end]))
         for name, chunk in chunks:
-            callers = users.get((rel, name), set()) if name and name[0].islower() else set()
-            where = set().union(*(places[c] for c in callers)) if callers else places[rel]
-            for fragment in _chunk_fragments(rel, chunk):
+            callers = users.get((key, name), set()) if name and name[0].islower() else set()
+            where = set().union(*(places[c] for c in callers)) if callers else places[key]
+            for fragment in _chunk_fragments(own[key], chunk):
                 reached.setdefault(fragment, set()).update(where)
     return reached
 
@@ -450,11 +557,11 @@ def _callers(route: APIRoute, reached: dict[str, set[str]]) -> set[str]:
     return where
 
 
-def _misplaced(root: Path) -> list[tuple[str, list[str], list[str]]]:
+def _misplaced(root: Path, shared: Path | None = None) -> list[tuple[str, list[str], list[str]]]:
     """Routes a screen of another place calls. The scan does not see methods, so a path shared with
     a route any signed-in person may call (`GET /v1/investigations`, the case list, beside
     `POST`, a new case) is left out: its call may be that one."""
-    reached = screen_places(root)
+    reached = screen_places(root, shared)
     open_paths = {r.path for r in _routes() if not _checks(r)}
     return [
         (route.path, sorted(where), sorted(places_of(route.path)))
@@ -476,16 +583,62 @@ def test_a_planted_call_from_another_place_is_found(tmp_path: Path) -> None:
     Studio API function, whose path is built through the Studio's own `dataset` helper."""
     (tmp_path / "admin").mkdir()
     (tmp_path / "ingest/sources").mkdir(parents=True)
-    (tmp_path / "ingest/sources/api.ts").write_text(
+    (tmp_path / "ingest/sources/calls.ts").write_text(
         "const dataset = (api: Api, id: string) => `${api.apiBaseUrl}/v1/datasets/${id}`;\n"
         "export const listSources = (api: Api, datasetId: string) =>\n"
         '  call<Source[]>(api, `${dataset(api, datasetId)}/sources`, "Reading the sources");\n'
     )
     (tmp_path / "admin/Planted.tsx").write_text(
-        'import { listSources } from "../ingest/sources/api";\n'
+        'import { listSources } from "../ingest/sources/calls";\n'
         "export function Planted() { void listSources(api, 'd'); return null; }\n"
     )
     assert [w[0] for w in _misplaced(tmp_path)] == ["/v1/datasets/{dataset_id}/sources"] * 2
+
+
+def test_a_planted_call_through_the_shared_package_is_found(tmp_path: Path) -> None:
+    """The same plant as above, with the Studio's client where it lives now (the shared package) and
+    the Admin screen taking its function by the package's name: found, where a scan of the workspace
+    alone reads neither. The same two files with the Admin screen in the Studio's folder are clean
+    first, so the plant is the place and not something else."""
+    shared = tmp_path / "shared"
+    (shared / "ingest/sources").mkdir(parents=True)
+    (shared / "ingest/sources/calls.ts").write_text(
+        "const dataset = (api: Api, id: string) => `${api.apiBaseUrl}/v1/datasets/${id}`;\n"
+        "export const listSources = (api: Api, datasetId: string) =>\n"
+        '  call<Source[]>(api, `${dataset(api, datasetId)}/sources`, "Reading the sources");\n'
+    )
+    workspace = tmp_path / "workspace"
+    (workspace / "ingest").mkdir(parents=True)
+    (workspace / "admin").mkdir()
+    screen = (
+        f'import {{ listSources }} from "{PACKAGE_NAME}";\n'
+        "export function Planted() { void listSources(api, 'd'); return null; }\n"
+    )
+    (workspace / "ingest/Planted.tsx").write_text(screen)
+    assert _misplaced(workspace, shared) == []
+    (workspace / "ingest/Planted.tsx").unlink()
+    (workspace / "admin/Planted.tsx").write_text(screen)
+    assert [w[0] for w in _misplaced(workspace, shared)] == [
+        "/v1/datasets/{dataset_id}/sources"
+    ] * 2
+    assert _misplaced(workspace, tmp_path / "nothing") == [], (
+        "a scan that does not read the package reads no call"
+    )
+
+
+def test_the_shared_clients_are_scanned() -> None:
+    """The Conduit clients that moved to the shared package (PL4 slice D2) are read where they are:
+    the routes they name are among the fragments the scan reaches, each at the place of the screens
+    that call it, and the same scan with the package left out reads none of them (so this case is
+    red the day the package's folder is not walked)."""
+    reached = screen_places(WORKSPACE_SRC)
+    studio = {"/v1/investigations/{x}/ingest/recipes", "/v1/datasets/{x}/sources"}
+    assert studio <= set(reached), sorted(studio - set(reached))
+    assert reached["/v1/datasets/{x}/sources"] >= {"ingest"}
+    assert reached["/v1/admin/maps"] == {"admin"}
+    assert reached["/v1/admin/models"] == {"admin"}
+    without = screen_places(WORKSPACE_SRC, shared=WORKSPACE_SRC.parent / "no-such-folder")
+    assert not (studio | {"/v1/admin/maps", "/v1/admin/models"}) & set(without)
 
 
 def test_a_dataset_base_is_not_taken_for_the_composites_route_but_a_call_to_it_is() -> None:

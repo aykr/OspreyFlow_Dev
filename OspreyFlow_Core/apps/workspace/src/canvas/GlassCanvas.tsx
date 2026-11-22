@@ -56,7 +56,6 @@ import type {
   Path as GraphPath,
   StrengthLegend,
 } from "../../../../packages/schemas/generated";
-import type { ExportMark } from "../export/api";
 import { captureChartImage } from "../export/chartExport";
 import { pointInPolygon } from "../map/geometry";
 import type { OntologyRegistry } from "../ontology/schema";
@@ -85,8 +84,8 @@ import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunity
 import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
 import { latestOnly, workerAssign } from "./communityAssigner";
 import { zoomBandForRatio } from "./zoomBands";
-import { emailsOutcomeText, showEmailsAsDocuments } from "../inspector/emailDocuments";
-import { eventsEntryLabel, eventsNoun, mayCarryText } from "../inspector/linkEventsApi";
+import { emailsOutcomeText, showEmailsAsDocuments } from "@ospreyflow/glass-shared";
+import { eventsEntryLabel, eventsNoun, mayCarryText } from "@ospreyflow/glass-shared";
 import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import {
   DashedArrowProgram,
@@ -113,9 +112,9 @@ import {
 import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { CapRefusalPrompt } from "./CapRefusalPrompt";
-import { type CaseView, saveView } from "../views/viewsApi";
+import { type CaseView, saveView } from "@ospreyflow/glass-shared";
 import { SaveViewForm } from "../views/SaveViewForm";
-import { fetchFirstSeen } from "../analytics/api";
+import { fetchFirstSeen } from "@ospreyflow/glass-shared";
 import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
 import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/selectLit";
 import type { TimeWindow, WeekdayHourCell } from "../crossfilter/store";
@@ -131,8 +130,17 @@ import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
 import { JudgementBadgeOverlay, type NodeBadge } from "./JudgementBadgeOverlay";
 import { AlertBadgeOverlay } from "../reports/alertBadges";
-import { activePalette } from "../color/palette";
-import { onThemeChange } from "../theme/theme";
+import {
+  activePalette,
+  onThemeChange,
+  outcomeDeltas,
+  type ClusterExplanation,
+  type ExpansionOutcome,
+  type LimitExceeded,
+  type ResolutionOutcome,
+  type WorkingSetDelta,
+  type ExportMark,
+} from "@ospreyflow/glass-shared";
 import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
 import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
@@ -172,7 +180,6 @@ import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
 import { describeEmptyExpansion } from "./expansionOutcome";
-import { outcomeDeltas, type ClusterExplanation, type ExpansionOutcome, type LimitExceeded, type ResolutionOutcome, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
@@ -2809,7 +2816,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         // search did not complete at all, and folding the two together would tell the analyst
         // something the system does not actually know (`06_DECISIONS.md` ADR-033's own "FIRST"
         // reasoning: this searches the whole access-filtered corpus, a real claim worth getting
-        // right). Matches `patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
+        // right). Matches `packages/glass-shared/src/patterns/api.ts`'s own `throw` shape, not `if (!response.ok) return;`.
         setPathError({
           x,
           y,

@@ -8,7 +8,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Histogram } from "../../../../packages/schemas/generated";
 
 const resolvers: Array<(value: { target_id: Histogram }) => void> = [];
-vi.mock("../analytics/api", () => ({
+vi.mock("@ospreyflow/glass-shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@ospreyflow/glass-shared")>()),
   fetchCrossFilter: () =>
     new Promise<{ target_id: Histogram }>((resolve) => {
       resolvers.push(resolve);

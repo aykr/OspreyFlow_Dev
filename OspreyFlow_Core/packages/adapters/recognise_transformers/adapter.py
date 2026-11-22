@@ -21,10 +21,20 @@ MAX_CHARS = 100_000
 
 _CANONICAL = {"PER": "PERSON", "ORG": "ORG", "LOC": "GPE"}
 
+#: The Hugging Face commit each model this adapter names is fetched at (PL11, 21 November 2026:
+#: the fetch was unpinned and followed the Hub's `main`). `dslim/bert-base-NER` at this commit is
+#: MIT on its model card (`spec/LICENCE_REGISTER.yaml` holds the row and where it was read). A
+#: model with no entry here is loaded as before, at the Hub's `main`; only the default is pinned.
+PINNED_REVISIONS: dict[str, str] = {
+    "dslim/bert-base-NER": "d1a3e8f13f8c3566299d95fcfc9a8d2382a9affc",
+}
+
 
 @dataclass
 class RecogniseTransformersAdapter:
     model_name: str = "dslim/bert-base-NER"
+    #: Overrides `PINNED_REVISIONS` for this model; `None` takes its pin, or `main` with no pin.
+    revision: str | None = None
     _pipeline: Any = field(default=None, repr=False)
 
     def _load(self) -> Any:
@@ -32,7 +42,10 @@ class RecogniseTransformersAdapter:
             from transformers import pipeline
 
             self._pipeline = pipeline(
-                "token-classification", model=self.model_name, aggregation_strategy="simple"
+                "token-classification",
+                model=self.model_name,
+                revision=self.revision or PINNED_REVISIONS.get(self.model_name),
+                aggregation_strategy="simple",
             )
         return self._pipeline
 

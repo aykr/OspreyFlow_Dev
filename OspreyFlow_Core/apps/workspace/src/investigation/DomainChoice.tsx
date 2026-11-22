@@ -2,7 +2,7 @@
 // labels them. None ticked is the POLE core model, said beside the boxes so an empty choice is not
 // mistaken for an unanswered one. Shared by a new case's form and a case's own "Domain models".
 import { Checkbox } from "../design/primitives/Checkbox";
-import { DOMAIN_PACKS, type DomainPack, POLE_LABEL, sortedDomains } from "./cases";
+import { DOMAIN_PACKS, type DomainPack, POLE_LABEL, sortedDomains } from "@ospreyflow/glass-shared";
 
 export interface DomainChoiceProps {
   chosen: readonly DomainPack[];

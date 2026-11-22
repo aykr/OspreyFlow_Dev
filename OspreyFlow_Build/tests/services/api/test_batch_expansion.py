@@ -495,9 +495,11 @@ def test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost(
     world: _World, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The cost of ADR-151's clearance snapshot, bounded: Alice (SECRET) saves the SECRET node in
-    her view; her clearance then drops to OFFICIAL, and her next open of the view does not show it,
-    counting it missing without naming it. ADR-144's own case proves a different reader; this is the
-    same reader later. Red with `open_view` returning the stored selection (the plant below)."""
+    her view; her clearance then drops to OFFICIAL, and her next open of the view does not show it
+    and counts it nowhere: `missing` is nothing, since a number of chosen nodes she can no longer
+    read is how many are above her (C045, `test_case_view_counts.py`). ADR-144's own case proves a
+    different reader; this is the same reader later. Red with `open_view` returning the stored
+    selection (the plant below)."""
     job_id = _started("alice")
     world.run_queued()
     view = _status(job_id, "alice")["view"]
@@ -506,7 +508,8 @@ def test_a_batch_view_opened_after_a_clearance_drop_hides_what_was_lost(
     monkeypatch.setitem(views_world.PEOPLE, "alice", lowered)
     opened = _as("alice").get(f"{VIEWS}/{view['id']}")
     assert sorted(n["id"] for n in opened.json()["nodes"]) == ["near", "open"]
-    assert opened.json()["missing"] == 1
+    assert opened.json()["missing"] == 0
+    assert opened.json()["view"]["chosen"] == 2
     assert "secret" not in opened.text
 
 

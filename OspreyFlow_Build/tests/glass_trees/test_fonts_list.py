@@ -446,7 +446,7 @@ def test_pages_loads_no_font_the_list_does_not_name_and_no_gds_transport() -> No
     """Nothing to find today, and shown to have looked: it read the service's own sources and views."""
     result = pages_violations(CORE, load_list())
     assert result.violations == []
-    assert "apps/pages/server/views/layout.njk" in result.read
+    assert "apps/pages/tree-default/layout.njk" in result.read
     assert "apps/pages/package.json" in result.read
 
 
@@ -510,7 +510,7 @@ def build_tree(root: Path) -> Path:
         "apps/harness/src/main.tsx": _real("apps/harness/src/main.tsx"),
         "apps/workspace/index.html": _real("apps/workspace/index.html"),
         "apps/harness/index.html": _real("apps/harness/index.html"),
-        "apps/pages/server/views/layout.njk": _real("apps/pages/server/views/layout.njk"),
+        "apps/pages/tree-default/layout.njk": _real("apps/pages/tree-default/layout.njk"),
         "apps/pages/package.json": _real("apps/pages/package.json"),
         "apps/workspace/public/assets/govuk/govuk-frontend.css": "/* GENERATED */\n" + REAL_GDS_FACES,
         "apps/workspace/public/assets/govuk/fonts/light-94a07e06a1-v2.woff2": "",
@@ -629,9 +629,9 @@ def test_the_workspace_scan_is_red_for_each_planted_fault(tmp_path: Path, case: 
 LAYOUT_HEAD = "</head>"
 PAGES_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     # An unlisted `@font-face` in a pages view, written into the layout's head.
-    ("an unlisted @font-face in a pages view", "apps/pages/server/views/layout.njk", (lambda t: t.replace(LAYOUT_HEAD, "<style>" + REAL_FONTSOURCE_FACE.replace("Atkinson Hyperlegible Next", "Comic Neue").replace("\n", "") + "</style>" + LAYOUT_HEAD, 1)), "an @font-face for 'Comic Neue', which the list does not name"),
+    ("an unlisted @font-face in a pages view", "apps/pages/tree-default/layout.njk", (lambda t: t.replace(LAYOUT_HEAD, "<style>" + REAL_FONTSOURCE_FACE.replace("Atkinson Hyperlegible Next", "Comic Neue").replace("\n", "") + "</style>" + LAYOUT_HEAD, 1)), "an @font-face for 'Comic Neue', which the list does not name"),
     # The same fault in the built output, which the image carries.
-    ("an unlisted @font-face in the built output", "apps/pages/dist/server/views/layout.njk", _append("<style>" + REAL_FONTSOURCE_FACE.replace("Atkinson Hyperlegible Next", "Comic Neue").replace("\n", "") + "</style>"), "an @font-face for 'Comic Neue'"),
+    ("an unlisted @font-face in the built output", "apps/pages/dist/tree-default/layout.njk", _append("<style>" + REAL_FONTSOURCE_FACE.replace("Atkinson Hyperlegible Next", "Comic Neue").replace("\n", "") + "</style>"), "an @font-face for 'Comic Neue'"),
     # An unlisted `@fontsource` import, in a pages source, and the package declared by the service's package.json.
     ("an unlisted @fontsource import in a pages source", "apps/pages/server/app.ts", _append('import "@fontsource/roboto/400.css";'), "loads @fontsource/roboto/400.css, a family the list does not name"),
     ("an unlisted @fontsource package in the pages' package.json", "apps/pages/package.json", _after('"express-session": "1.19.0",', '\n    "@fontsource/roboto": "5.3.0",'), "loads @fontsource/roboto, a family the list does not name"),
@@ -639,9 +639,9 @@ PAGES_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     ("an unlisted font file among the pages' static files", "apps/pages/server/static/fonts/comic-neue-latin-400-normal.woff2", _append("x"), "a font file that no listed family owns"),
     # A listed family's own file at a weight the list does not name, in a static folder and as a preload.
     ("a listed family's file at an unlisted weight among the pages' static files", "apps/pages/server/static/fonts/ibm-plex-mono-latin-500-normal.woff2", _append("x"), "a font file, weight 500 of IBM Plex Mono, which the list does not name"),
-    ("a listed family's file at an unlisted weight preloaded by a view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="preload" href="/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" crossorigin>' + LAYOUT_HEAD, 1), "names the font file /fonts/ibm-plex-mono-latin-500-normal.woff2, weight 500 of IBM Plex Mono"),
+    ("a listed family's file at an unlisted weight preloaded by a view", "apps/pages/tree-default/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="preload" href="/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" crossorigin>' + LAYOUT_HEAD, 1), "names the font file /fonts/ibm-plex-mono-latin-500-normal.woff2, weight 500 of IBM Plex Mono"),
     # A bare font URL, as a preload `<link>` in a view writes it.
-    ("an unlisted font preloaded by a view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="preload" href="/fonts/comic-neue-latin-400-normal.woff2" as="font" crossorigin>' + LAYOUT_HEAD, 1), "names the font file /fonts/comic-neue-latin-400-normal.woff2"),
+    ("an unlisted font preloaded by a view", "apps/pages/tree-default/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="preload" href="/fonts/comic-neue-latin-400-normal.woff2" as="font" crossorigin>' + LAYOUT_HEAD, 1), "names the font file /fonts/comic-neue-latin-400-normal.woff2"),
     # GDS Transport in a pages stylesheet, as the GOV.UK brand's own token writes it: a *listed* family, so the list passes it.
     ("GDS Transport in a pages stylesheet", "apps/pages/server/static/app.css", _append('body{font-family:"GDS Transport",arial,sans-serif}'), "names GDS Transport"),
     # GDS Transport as a listed `@font-face` (the list passes it; only the GDS rule can catch it), as the generator writes it.
@@ -651,9 +651,9 @@ PAGES_PLANTS: list[tuple[str, str, Callable[[str], str], str]] = [
     ("a GDS Transport font file among the pages' public files", "apps/pages/public/assets/govuk/fonts/bold-b542beb274-v2.woff2", _append("x"), "bold-b542beb274-v2.woff2: a font file of GDS Transport"),
     ("a GDS Transport font file in the pages' built output", "apps/pages/dist/public/assets/govuk/fonts/light-f591b13f7d-v2.woff", _append("x"), "light-f591b13f7d-v2.woff: a font file of GDS Transport"),
     # A hosted font stylesheet linked from the layout's head (the pages' CSP and page.test.ts also refuse it; this names the font).
-    ("a hosted Google Fonts stylesheet linked from a pages view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">' + LAYOUT_HEAD, 1), "loads https://fonts.googleapis.com/css2?family=IBM+Plex+Mono"),
+    ("a hosted Google Fonts stylesheet linked from a pages view", "apps/pages/tree-default/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">' + LAYOUT_HEAD, 1), "loads https://fonts.googleapis.com/css2?family=IBM+Plex+Mono"),
     # The font folder of the GOV.UK assets named from a view.
-    ("the GOV.UK fonts folder named from a view", "apps/pages/server/views/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="stylesheet" href="/assets/govuk/govuk-frontend.css">' + LAYOUT_HEAD, 1), "names GDS Transport"),
+    ("the GOV.UK fonts folder named from a view", "apps/pages/tree-default/layout.njk", lambda t: t.replace(LAYOUT_HEAD, '<link rel="stylesheet" href="/assets/govuk/govuk-frontend.css">' + LAYOUT_HEAD, 1), "names GDS Transport"),
 ]
 
 
@@ -694,7 +694,7 @@ def test_a_yaml_record_beside_the_pages_may_name_the_govuk_assets_but_a_view_may
     core = build_tree(tmp_path)
     _edit(core, "apps/pages/FUNCTIONS.yaml", _append("  # the proxy sends /assets/govuk/* to the workspace"))
     assert _pages(core) == []
-    _edit(core, "apps/pages/server/views/home.njk", _append('<link rel="stylesheet" href="/assets/govuk/govuk-frontend.css">'))
+    _edit(core, "apps/pages/tree-default/home.njk", _append('<link rel="stylesheet" href="/assets/govuk/govuk-frontend.css">'))
     assert len(_pages(core)) == 1
 
 
@@ -705,7 +705,8 @@ def test_a_test_of_the_pages_may_name_gds_transport_in_order_to_forbid_it(tmp_pa
 
 
 def test_the_pages_scan_is_red_when_the_list_names_nothing_of_the_face(tmp_path: Path) -> None:
-    """Remove Atkinson from the list: the same tree's own face, which was clean, is now unlisted."""
+    """Remove Atkinson from the list: the same tree's own face, which was clean, is now unlisted, and so is the package the
+    pages' `package.json` declares for it since the page foundation (slice IS5a0): each is one violation, both named."""
     core = build_tree(tmp_path)
     _edit(core, "apps/pages/server/static/fonts.css", _append(REAL_FONTSOURCE_FACE))
     data = load_list()
@@ -713,7 +714,9 @@ def test_the_pages_scan_is_red_when_the_list_names_nothing_of_the_face(tmp_path:
     data = copy.deepcopy(data)
     data["fonts"] = [e for e in data["fonts"] if e["family"] != "Atkinson Hyperlegible Next"]
     found = _pages(core, data)
-    assert len(found) == 1 and "an @font-face for 'Atkinson Hyperlegible Next', which the list does not name" in found[0]
+    assert len(found) == 2, found
+    assert any("an @font-face for 'Atkinson Hyperlegible Next', which the list does not name" in f for f in found)
+    assert any(f.startswith("apps/pages/package.json: loads @fontsource/atkinson-hyperlegible-next") for f in found)
 
 
 LIST_PLANTS: list[tuple[str, Callable[[dict], None], str]] = [

@@ -26,8 +26,7 @@
 // vs. not, which the token contract itself specifies).
 import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { cachedNodeSvgDataUri, type StrokeStyle } from "../color/nodeVisual";
-import { mixOklab } from "../color/oklab";
-import { activePalette } from "../color/palette";
+import { mixOklab, activePalette } from "@ospreyflow/glass-shared";
 import type { EntityVisual } from "../ontology/schema";
 import { resolveIconForNode } from "./iconChoices";
 import { valueIconFor } from "./valueIcons";

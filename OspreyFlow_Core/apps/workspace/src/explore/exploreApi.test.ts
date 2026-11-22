@@ -3,7 +3,7 @@
 // it was given and says a refusal in words.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { loadMostConnected, loadTypeCounts } from "./exploreApi";
+import { loadMostConnected, loadTypeCounts } from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

@@ -12,7 +12,41 @@ import type {
   Sighting,
   StrengthLegend,
 } from "../../../packages/schemas/generated";
-import { fetchSightings } from "./analytics/api";
+import {
+  bringFactIntoView,
+  type BusyDay,
+  caseForDataset,
+  caseIsOpenable,
+  type CaseLinkTypes,
+  type CaseView,
+  type CaseViewOpened,
+  createWorkingSet,
+  DEFAULT_TIMELINE_HEIGHT,
+  defaultProvider,
+  type DocumentReaderView,
+  fetchCaseInfluencers,
+  fetchCaseLinkTypes,
+  fetchHandlingScheme,
+  fetchMapConfig,
+  fetchSightings,
+  guideUrl,
+  type HandlingScheme,
+  type HistoryStepSummary,
+  type HomeSummary,
+  type LimitExceeded,
+  listAssessmentJudgements as listJudgements,
+  listCases,
+  listViews,
+  loadHome,
+  openInQueue,
+  openView,
+  type RankedLink,
+  saveView,
+  seedElements,
+  summariseHome,
+  switchableProviders,
+  type WorkingSetDelta,
+} from "@ospreyflow/glass-shared";
 import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
 import {
   clearRedirectCallbackParams,
@@ -40,9 +74,7 @@ import { deploymentMarking, deploymentReportsUrl, deploymentWelcome } from "./au
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
 import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
-import type { DocumentReaderView } from "./reader/readerApi";
 import { displayValue } from "./search/searchOptions";
-import { listJudgements } from "./assessment/api";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
 import {
   buildEventFilter,
@@ -65,7 +97,6 @@ import { ContextBanner, crossLinkFor, focusSavedViewsButton, useCaseContext } fr
 import { PlaceSwitcher } from "./shell/PlaceSwitcher";
 import { useLastGlassView } from "./shell/placeMemory";
 import { keepPlace, placeAtLoad, placeOnScreen, restorePlace } from "./auth/refreshPlace";
-import { fetchHandlingScheme, type HandlingScheme } from "./ingest/api";
 import { Button } from "./design/primitives/Button";
 import { AccountUnread } from "./auth/AccountUnread";
 import { Toast } from "./design/primitives/Toast";
@@ -81,7 +112,6 @@ import {
 import { computeCommunityHulls } from "./metrics/hulls";
 import { MetricsPanel } from "./metrics/MetricsPanel";
 import { QueryBuilderPanel } from "./patterns/QueryBuilderPanel";
-import { seedElements } from "./connections/connectionsApi";
 import { FindConnectionsPanel } from "./connections/FindConnectionsPanel";
 import { ResolutionThresholdControl } from "./resolution/ThresholdControl";
 import { HideToolbarButton, ShowToolbarButton } from "./canvas/ToolbarToggle";
@@ -91,17 +121,14 @@ import { placeableTypes, resolveNodeCoordinates } from "./map/geometries";
 import { HotspotHistogram, locationEdgeTypeNames } from "./map/HotspotHistogram";
 import { MapView } from "./map/MapView";
 import { MatrixView } from "./matrix/MatrixView";
-import { fetchCaseInfluencers } from "./strength/api";
 import { searchPlaces } from "./map/places";
 import { addGazetteer, caseGazetteers, removeGazetteer } from "./map/gazetteers";
 import type { GazetteerControls } from "./map/MapControls";
-import { defaultProvider, fetchMapConfig, switchableProviders } from "./map/providers";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
 import {
   fetchOntologyRegistry,
   type OntologyRegistry,
 } from "./ontology/schema";
-import { fetchCaseLinkTypes, type CaseLinkTypes } from "./linktypes/linkTypesApi";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { SearchResults } from "./search/SearchResults";
 import { useSearchResultsOverlay } from "./search/useSearchResultsOverlay";
@@ -118,31 +145,25 @@ import { CaseSettings } from "./investigation/CaseSettings";
 import { CaseBrief } from "./investigation/CaseBrief";
 import type { AttachmentKind } from "./investigation/briefApi";
 import { placeOf, revealPanel } from "./investigation/openAttachment";
-import { caseIsOpenable, listCases, openCase, openCaseView } from "./investigation/cases";
-import { caseForDataset } from "./ingest/studio/datasets";
+import { openCase, openCaseView } from "./investigation/caseNavigation";
 import { buildLens, type Lens, lensWindow } from "./views/lens";
 import { takeCaseView, withoutCaseView } from "./views/lensHandoff";
 import type { CaseState } from "./views/SavedViewOnTheLine";
 import { ViewsPanel } from "./views/ViewsPanel";
-import { type CaseView, type CaseViewOpened, listViews, openView, saveView } from "./views/viewsApi";
-import { bringFactIntoView } from "./questions/graphFacts";
 import { QuestionsPanel } from "./questions/QuestionsPanel";
 import type { AnswerIds } from "./questions/AnswerActions";
 import { showAnswerOnCanvas } from "./questions/showAnswer";
 import { exploreOverlayPlace } from "./explore/exploreOverlayPlace";
 import { ExplorePanel } from "./explore/ExplorePanel";
-import type { BusyDay, RankedLink } from "./explore/exploreApi";
 import { SiteCalibrationWizard } from "./site/SiteCalibrationWizard";
 import { StatusBar } from "./statusbar/StatusBar";
 import { emergence, type FirstSeen } from "./crossfilter/emergence";
-import { createWorkingSet, type HistoryStepSummary, type LimitExceeded, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 import { NO_FILTER, filterDimming, type MetricFilter } from "./metrics/filters";
 import { BottomPanelFrame, SidePanelFrame } from "./layout/PanelFrames";
-import { DEFAULT_TIMELINE_HEIGHT } from "./layout/layoutSizes";
 import { useOnReturn } from "./strength/useOnReturn";
 import { TimelineStrip } from "./timeline/TimelineStrip";
 import { lastChangeText } from "./history/lastChange";
-import { guideUrl, openGuide } from "./home/guides";
+import { openGuide } from "./home/guideDownloads";
 import { setWelcomeDismissed, useHelpKey, welcomeDismissed, WorkspaceWelcome } from "./welcome/WorkspaceWelcome";
 import { SidePanelStack } from "./layout/SidePanelStack";
 import { Timeline } from "./timeline/Timeline";
@@ -168,7 +189,6 @@ import {
   startPlaces,
 } from "./rights/visibility";
 import { startScreen } from "./shell/startScreen";
-import { loadHome, openInQueue, summariseHome, type HomeSummary } from "./home/homeData";
 import { OwnershipPlace } from "./ownership/OwnershipPlace";
 import {
   connectDeltaClient,
@@ -1698,7 +1718,7 @@ export function App() {
   // ADR-145 decision 11 (A2), L2.7: *Needs you*, before the account wherever the account is shown. An
   // overdue promotion opens Admin › Operations for a reader who holds `operate_schedules`; proposed
   // link types open the Studio's Model tab on their dataset, through a case of the reader's that
-  // loads into it (`ingest/studio/datasets.ts`), as the Studio's own switcher does.
+  // loads into it (`packages/glass-shared/src/ingest/studio/datasets.ts`), as the Studio's own switcher does.
   const openModelFor = async (datasetId: string): Promise<void> => {
     requestOpening({ kind: "studio", tab: "model", datasetId });
     let cases;

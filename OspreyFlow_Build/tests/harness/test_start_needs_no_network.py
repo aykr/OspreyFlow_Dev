@@ -37,6 +37,7 @@ from typing import Any
 import pytest
 import yaml
 from harness.render import render
+from schemas.deployment import TRANSCRIPTION_MODEL_REVISIONS
 
 from schemas.deployment import OspreyConfig
 from tests.harness.test_render import _fake_resolver
@@ -90,12 +91,15 @@ if [ "$NW_HF_REACHABLE" = 1 ]; then
   # whose snapshot entry or blob already exists, at any length, is returned as it is. Only
   # `--force-download` replaces it. A half-written blob is cleared only when its own file is fetched
   # again, and a stray one is never touched.
-  mkdir -p "$repo/refs" "$repo/blobs" "$snapshots/0123abc"
-  echo 0123abc > "$repo/refs/main"
+  # The snapshot folder is named for the commit the Hub's main is at: the pinned one unless a case
+  # says the model moved upstream (NW_HF_COMMIT).
+  commit="${NW_HF_COMMIT:-@PINNED_REVISION@}"
+  mkdir -p "$repo/refs" "$repo/blobs" "$snapshots/$commit"
+  echo "$commit" > "$repo/refs/main"
   for f in config.json model.bin tokenizer.json vocabulary.txt; do
-    if [ "$force" = 1 ] || [ ! -e "$snapshots/0123abc/$f" ]; then echo "$f" > "$snapshots/0123abc/$f"; fi
+    if [ "$force" = 1 ] || [ ! -e "$snapshots/$commit/$f" ]; then echo "$f" > "$snapshots/$commit/$f"; fi
   done
-  echo "$snapshots/0123abc"; exit 0
+  echo "$snapshots/$commit"; exit 0
 fi
 if [ "$force" = 1 ]; then
   echo "huggingface_hub.errors.LocalEntryNotFoundError: An error happened while trying to locate the file on the Hub and we cannot find the requested files in the local cache. Please check your connection and try again or make sure your Internet connection is on." >&2
@@ -141,6 +145,9 @@ def _local_lite_jobs() -> tuple[str, str, str]:
 
 
 OLLAMA_JOB, WHISPER_JOB, SPEECH_MODEL = _local_lite_jobs()
+#: The Hugging Face commit the job is rendered to require (PL11): a snapshot of any other commit is
+#: not "held".
+REVISION = TRANSCRIPTION_MODEL_REVISIONS[SPEECH_MODEL]
 FORCED_FETCH = f"{FORCED_FETCH_PREFIX}{SPEECH_MODEL}"
 #: (model, the id a deployment records for it): read from the rendered script, not restated.
 MODELS = re.findall(r"^pull_and_verify (\S+) (\S+)$", OLLAMA_JOB, re.M)
@@ -166,11 +173,13 @@ class _Machine:
         stubs = tmp_path / "bin"
         stubs.mkdir()
         _write_stub(stubs, "ollama", _OLLAMA_STUB)
-        _write_stub(stubs, "huggingface-cli", _HF_STUB)
+        _write_stub(stubs, "huggingface-cli", _HF_STUB.replace("@PINNED_REVISION@", REVISION))
         _write_stub(stubs, "sleep", _SLEEP_STUB)
         _write_stub(stubs, "chown", _CHOWN_STUB)
         self.stubs = stubs
         self.hf_reachable = False
+        #: The commit a reachable Hub's `main` is at, when it is not the pinned one.
+        self.hf_commit: str | None = None
 
     def hold_ollama_model(self, model: str, model_id: str) -> None:
         name, tag = model.split(":", 1)
@@ -188,17 +197,18 @@ class _Machine:
         without: tuple[str, ...] = (),
         empty: tuple[str, ...] = (),
         incomplete: bool = False,
+        commit: str = REVISION,
     ) -> None:
         """The cache as the real tool lays it out: a ref, a snapshot folder with the model's files
         (`faster_whisper.utils` requires these), and the blobs. `without` leaves files out, `empty`
         leaves them as zero-length files, `incomplete` leaves a half-written blob, as a download
         cut short does."""
         repo = self.hf_cache / "hub" / f"models--{SPEECH_MODEL.replace('/', '--')}"
-        snapshot = repo / "snapshots/0123abc"
+        snapshot = repo / "snapshots" / commit
         snapshot.mkdir(parents=True)
         (repo / "blobs").mkdir()
         (repo / "refs").mkdir()
-        (repo / "refs/main").write_text("0123abc", encoding="utf-8")
+        (repo / "refs/main").write_text(commit, encoding="utf-8")
         for name in SPEECH_FILES:
             if name not in without:
                 (snapshot / name).write_bytes(b"" if name in empty else b"x")
@@ -207,7 +217,7 @@ class _Machine:
 
     def speech_model_is_complete(self) -> bool:
         repo = self.hf_cache / "hub" / f"models--{SPEECH_MODEL.replace('/', '--')}"
-        snapshot = repo / "snapshots/0123abc"
+        snapshot = repo / "snapshots" / REVISION
         files_held = all(
             (snapshot / name).is_file() and (snapshot / name).stat().st_size
             for name in SPEECH_FILES
@@ -226,6 +236,7 @@ class _Machine:
             "NW_HF_CACHE": str(self.hf_cache),
             "NW_REGISTRY": str(self.registry),
             "NW_HF_REACHABLE": "1" if self.hf_reachable else "0",
+            **({"NW_HF_COMMIT": self.hf_commit} if self.hf_commit else {}),
         }
         (self.ollama_volume / "models").mkdir(parents=True, exist_ok=True)
         return subprocess.run(
@@ -331,6 +342,45 @@ def test_a_missing_speech_model_with_the_hub_refused_fails_in_words(machine: _Ma
     assert result.returncode != 0
     assert not any(line.startswith("chown") for line in machine.calls())
     _says_what_to_do(result, SPEECH_MODEL)
+
+
+# --- The speech model's pin (PL11): the snapshot must be the recorded commit -------------------
+
+OTHER_COMMIT = "f" * 40
+
+
+def test_a_speech_model_held_at_another_commit_is_not_held_and_a_refused_hub_says_so(
+    machine: _Machine,
+) -> None:
+    machine.hold_speech_model(commit=OTHER_COMMIT)
+    result = machine.run(WHISPER_JOB)
+    assert result.returncode != 0
+    assert not any(line.startswith("chown") for line in machine.calls())
+    assert machine.network_calls() == [FORCED_FETCH], "it must try to fetch the recorded one"
+    _says_what_to_do(result, REVISION)
+
+
+def test_a_speech_model_held_at_another_commit_is_fetched_again_when_the_hub_serves_the_pin(
+    machine: _Machine,
+) -> None:
+    machine.hold_speech_model(commit=OTHER_COMMIT)
+    machine.hf_reachable = True
+    result = machine.run(WHISPER_JOB)
+    assert result.returncode == 0, result.stderr
+    assert machine.network_calls() == [FORCED_FETCH]
+    assert any(line.startswith("chown -R 1000:1000") for line in machine.calls())
+
+
+def test_a_hub_whose_main_has_moved_off_the_pinned_commit_stops_the_start_in_words(
+    machine: _Machine,
+) -> None:
+    machine.hf_reachable = True
+    machine.hf_commit = OTHER_COMMIT
+    result = machine.run(WHISPER_JOB)
+    assert result.returncode != 0
+    assert not any(line.startswith("chown") for line in machine.calls())
+    said = _said(result)
+    assert REVISION in said and "moved upstream" in said, result.stderr
 
 
 # --- A speech model cut short: the folder is there, the weights are not -----------------------

@@ -14,34 +14,38 @@ import type {
   PersonCaseLevel,
   SignInDelivery,
 } from "../../../../../packages/schemas/generated";
-import { currentBrand } from "../../brand/brand";
-import { rightName } from "../../help/roles";
-import { PLACE_NAME, placesFor } from "../../shell/places";
-import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
-import { Button, Input, Select } from "../../design/primitives";
-import { givableCodes, givableLevels, useInviter, type Inviter, type InviterRead } from "../inviter";
 import {
+  addPersonByObjectId,
+  type AdminApi,
+  currentBrand,
   disablePlan,
   enablePerson,
-  addPersonByObjectId,
+  givableCodes,
+  givableLevels,
+  guestSignIn,
   invitePerson,
+  type Inviter,
+  type InviterRead,
   linkOrganisation,
   listArrivals,
   listPeople,
-  signInKind,
-  guestSignIn,
-  setGuestSignIn,
   listRoles,
   nameAnAuthor,
   peopleRows,
   personOwnership,
   removePerson,
   resetSignIn,
+  rightName,
   setAccess,
+  setGuestSignIn,
   setRoles,
+  signInKind,
   transferAndDisable,
-  type AdminApi,
-} from "../api";
+} from "@ospreyflow/glass-shared";
+import { PLACE_NAME, placesFor } from "../../shell/places";
+import { LEVELS_TIP_ID, RoleAndLevelTips, grantWords, roleTip, roleTipId } from "../tips";
+import { Button, Input, Select } from "../../design/primitives";
+import { useInviter } from "../inviter";
 
 const utc = (iso: string) => `${iso.slice(0, 16).replace("T", " ")} UTC`;
 

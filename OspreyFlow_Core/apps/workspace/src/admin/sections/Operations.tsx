@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import type { OperationsAgeing } from "../../../../../packages/schemas/generated";
 import { Button, Input } from "../../design/primitives";
-import { operationsAgeing, setPromotionAlertDays, type AdminApi } from "../api";
+import { operationsAgeing, setPromotionAlertDays, type AdminApi } from "@ospreyflow/glass-shared";
 import { Schedules } from "../Schedules";
 import { OperationsFigures } from "../OperationsFigures";
 

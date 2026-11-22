@@ -917,6 +917,15 @@ DASHBOARD_ROUTES = frozenset(
     {"GET /v1/investigations", "GET /v1/investigations/{investigation_id}/reports/feed"}
 )
 
+
+def is_application_identity(principal: Principal) -> bool:
+    """True for a dashboard identity (Amendment 10): an application, built from a stored
+    registration and admitted to `DASHBOARD_ROUTES` alone, with no person behind its token. False
+    for every person, including one whose delegated token is limited to named routes (Superset's,
+    `SUPERSET_ROUTES`, Amendment 9): that token carries the person's own identity."""
+    return principal.routes is not None and frozenset(principal.routes) == DASHBOARD_ROUTES
+
+
 #: ADR-148 Amendment 20 (v0.6.0 #18): the app role this API defines for an orchestrator, which
 #: the run API requires of an app-only token on Entra ID. Granted to the orchestrator's own
 #: registration as an application permission with admin consent; Entra then puts it in the
@@ -1156,7 +1165,8 @@ def out_of_date_next(error: PrincipalAccessOutOfDate, *, by_hand: bool = False) 
     """What happens next: at the next slot, or for a run asked for by hand, what to do."""
     if isinstance(error, OwnerValueNotSet):
         return (
-            "run it again once an administrator has set it" if by_hand
+            "run it again once an administrator has set it"
+            if by_hand
             else "it runs at its next slot once an administrator has set it"
         )
     return RUN_AGAIN_WORDS if by_hand else NEXT_SLOT_WORDS
@@ -1180,9 +1190,9 @@ class TokenVersionMismatch(PrincipalResolutionError):
         manifest = "2" if want == "2.0" else "1 (or null)"
         super().__init__(
             f"the API's app registration issues v{got} access tokens (issuer {issuer}), and this "
-            f"deployment expects v{want} (cloud_platform.claims.token_version: \"{want}\"): set "
+            f'deployment expects v{want} (cloud_platform.claims.token_version: "{want}"): set '
             f"requestedAccessTokenVersion to {manifest} in the API registration's manifest, or set "
-            f"token_version to \"{got}\" in osprey.yaml and render again"
+            f'token_version to "{got}" in osprey.yaml and render again'
         )
         self.got, self.want, self.issuer = got, want, issuer
 

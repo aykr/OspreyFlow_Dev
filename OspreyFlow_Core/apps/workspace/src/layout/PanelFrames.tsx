@@ -19,18 +19,15 @@ import {
   resetTimelineHeight,
   setSideWidth,
   setTimelineHeight,
-  useLayoutSizes,
-} from "./layoutSizes";
-import { Sash } from "./Sash";
-import {
   setSidePanelMode,
   toggleSidePanel,
-  useSidePanelMode,
-  useWide,
   type SidePanelMode,
-} from "./sidePanelState";
+} from "@ospreyflow/glass-shared";
+import { useLayoutSizes } from "./layoutSizes";
+import { Sash } from "./Sash";
+import { useSidePanelMode, useWide } from "./sidePanelState";
 
-export type { SidePanelMode } from "./sidePanelState";
+export type { SidePanelMode } from "@ospreyflow/glass-shared";
 
 export const SIDE_PANEL_WIDTH = DEFAULT_SIDE_WIDTH;
 export const SIDE_PANEL_RAIL_WIDTH = 36;

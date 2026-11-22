@@ -3,13 +3,12 @@
 // "From alert: ‹its title on Home› · ← Back to your alerts"; *Open the dashboard* opens the Alert monitoring board
 // filtered to the alert's rule and period. They never work an alert: neither opens its address.
 //
-// Opening a case is a reload (`investigation/cases.ts`'s `openCase`), which may pass through the
+// Opening a case is a reload (`investigation/caseNavigation.ts`'s `openCase`), which may pass through the
 // sign-in round trip, so the journey is noted in this tab's session storage beside the case, as a
 // case's view is (`rememberCaseView`), and taken once when that case is open. It grants nothing:
 // the Figures and the board are read from the Conduit as the reader, as any other time.
-import { caseUrl } from "../investigation/cases";
+import { caseOpenUrl as caseUrl, type RuleGroup } from "@ospreyflow/glass-shared";
 import { INVESTIGATION_ID_SESSION_KEY } from "../investigation/investigationId";
-import type { RuleGroup } from "./figureParts";
 import { PERIODS } from "./ReportsView";
 
 export const JOURNEY_KEY = "ospreyflow.alertJourney";

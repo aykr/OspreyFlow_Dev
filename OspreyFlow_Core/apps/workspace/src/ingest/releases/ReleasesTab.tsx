@@ -15,7 +15,7 @@ import {
   exportRelease,
   importRelease,
   releaseName,
-} from "./releasesApi";
+} from "@ospreyflow/glass-shared";
 
 export interface ReleasesTabProps {
   apiBaseUrl: string;

@@ -14,6 +14,7 @@ import pytest
 from adapters.graph_arcadedb.access_filter import AccessFilter
 from adapters.graph_arcadedb.adapter import GraphArcadeDBAdapter, _id_chunks
 from adapters.graph_arcadedb.builders import (
+    render_count_visible_gremlin,
     render_get_edges_gremlin,
     render_get_nodes_gremlin,
     render_record_id_lookup_sql,
@@ -433,3 +434,93 @@ async def test_an_id_the_store_holds_twice_comes_back_once() -> None:
     assert [n.id for n in nodes] == ids
     edges = await adapter.get_edges([ids[0], *ids[1:], ids[0]], READER)
     assert [e.id for e in edges] == ids
+
+
+# --- the count of the readable ids (`count_visible`, C045) --------------------------------------
+#
+# What the adapter returns for a hidden, superseded or absent id is the conformance suite's to prove,
+# against ArcadeDB (`test_count_visible_*` in `conformance/graph_port/test_suite.py`); here, without
+# a store: the access step is in the query the count is made by (rule 3), the reader reaches it, and
+# the answer is what the store counted, chunk by chunk.
+
+
+class _CountingClient(_Client):
+    """Answers each count query with the next of `counts`, as ArcadeDB answers `.count()`."""
+
+    def __init__(self, counts: list[int], **kw: Any) -> None:
+        super().__init__(**kw)
+        self.counts = list(counts)
+
+    async def gremlin(self, query: str, **_: Any) -> list[dict[str, Any]]:
+        self.gremlin_sent.append(query)
+        return [{"result": self.counts.pop(0)}]
+
+
+def test_the_count_query_carries_the_access_step_and_the_readers_own() -> None:
+    """The count is made inside the store's query, through the access step (rule 3), and the step is
+    the reader's: a second reader with another clearance gets another query. Red with the step left
+    out of the rendering (`test_the_count_check_fails_without_the_access_step`)."""
+    access = AccessFilter(load_uk_le_scheme())
+    secret = READER.model_copy(update={"clearance": "SECRET"})
+    one = render_count_visible_gremlin(["#9:1", "#9:2"], access, READER)
+    assert one == (
+        f"g.V(['#9:1','#9:2']).{access.gremlin_has_step(READER)}.values('id').dedup().count()"
+    )
+    assert access.gremlin_has_step(READER) != access.gremlin_has_step(secret)
+    assert render_count_visible_gremlin(["#9:1", "#9:2"], access, secret) != one
+    empty = render_count_visible_gremlin([], access, READER)
+    assert empty.startswith("g.V().limit(0).") and empty.endswith(".values('id').dedup().count()")
+
+
+def test_the_count_check_fails_without_the_access_step() -> None:
+    """Rule 15, at the shape the adapter calls the builder in: an access filter whose step is
+    empty renders a count of every vertex at the ids, and the assertion above does not hold for it."""
+
+    class Open(AccessFilter):
+        def gremlin_has_step(self, principal: Principal) -> str:
+            return "identity()"
+
+    real = AccessFilter(load_uk_le_scheme())
+    opened = Open(load_uk_le_scheme())
+    assert render_count_visible_gremlin(["#9:1"], opened, READER) != render_count_visible_gremlin(
+        ["#9:1"], real, READER
+    )
+    assert real.gremlin_has_step(READER) not in render_count_visible_gremlin(["#9:1"], opened, READER)
+
+
+async def test_the_adapter_sums_the_counts_of_each_chunk_and_asks_each_once() -> None:
+    client = _CountingClient([1000, 1000, 400])
+    adapter, _ = _adapter(client)
+    ids = [f"n{i:05d}" for i in range(2501)]
+    assert await adapter.count_visible([*ids, *ids[:50]], READER) == 2400  # a repeat is one id
+    assert len(client.gremlin_sent) == 3
+    assert all(q.endswith(".values('id').dedup().count()") for q in client.gremlin_sent)
+    assert client.schema_sent == 1
+
+
+async def test_count_visible_of_no_ids_is_zero_and_sends_nothing() -> None:
+    client = _CountingClient([])
+    adapter, _ = _adapter(client)
+    assert await adapter.count_visible([], READER) == 0
+    assert client.sql_sent == [] and client.gremlin_sent == [] and client.schema_sent == 0
+
+
+async def test_count_visible_refuses_a_bare_string_for_the_ids() -> None:
+    client = _CountingClient([])
+    adapter, _ = _adapter(client)
+    with pytest.raises(TypeError):
+        await adapter.count_visible("n00001", READER)
+    assert client.sql_sent == [] and client.gremlin_sent == []
+
+
+async def test_an_absent_id_is_counted_by_the_same_round_trips_as_a_hidden_one() -> None:
+    """A guessed id the store does not hold sends the Gremlin count anyway (the `limit(0)` form), so
+    the number of requests tells nothing of what exists."""
+    absent = _CountingClient([0], known=lambda _id: False)
+    hidden = _CountingClient([0], known=lambda _id: True)
+    for client in (absent, hidden):
+        adapter, _ = _adapter(client)
+        assert await adapter.count_visible(["n00007"], READER) == 0
+    assert len(absent.gremlin_sent) == len(hidden.gremlin_sent) == 1
+    assert len(absent.sql_sent) == len(hidden.sql_sent)
+    assert "limit(0)" in absent.gremlin_sent[0] and "limit(0)" not in hidden.gremlin_sent[0]

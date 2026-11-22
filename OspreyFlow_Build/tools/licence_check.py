@@ -53,7 +53,11 @@ ALLOWED_MARKERS = (
     "mpl-2.0",
     "sil open font",
     "open font license",
+    # `00_ARCHITECTURE.md` §7 allows SIL-OFL-1.1 and Python-2.0 outright, and the Node half of this gate
+    # already read both spellings; this half read neither (DC1a, 20 November 2026; PL11 adds them).
+    "ofl-1.1",
     "psf-2.0",
+    "python-2.0",
     "python software foundation",
     "unlicense",
     "cc0",
@@ -415,6 +419,28 @@ def find_data_licence_offenders(
     ]
 
 
+def find_register_offenders() -> list[str]:
+    """The register leg (PL11, the owner's rulings of 21 November 2026): the weights, map data, font
+    families and base images the code names, held to `spec/LICENCE_REGISTER.yaml`, which none of the
+    legs above can see (they read packages' declared licences). Everything it fails on is in
+    `tools/licence_register.py`'s docstring; an `unconfirmed` row and a name held for the owner do not
+    fail it (`main` says them on every run, and the release check refuses them)."""
+    from tools import licence_register
+
+    return licence_register.find_register_violations(
+        licence_register.load_register(),
+        licence_register.named_by_code(licence_register.read_sources()),
+    )
+
+
+def register_not_yet_settled() -> list[str]:
+    """Each unconfirmed row and held name, one line each: said on every run, never passed silently."""
+    from tools import licence_register
+
+    refusal = licence_register.release_refusal()
+    return refusal.splitlines()[1:] if refusal else []
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -464,13 +490,25 @@ def main() -> int:
             file=sys.stderr,
         )
 
-    if offenders or data_offenders or own_violations or runtime_offenders:
+    register_offenders = find_register_offenders()
+    for violation in register_offenders:
+        print(
+            f"licence-check: the licence register (spec/LICENCE_REGISTER.yaml): {violation}",
+            file=sys.stderr,
+        )
+    unsettled = register_not_yet_settled()
+    for line in unsettled:
+        print(f"licence-check: NOT YET SETTLED (a release refuses it): {line.strip()}", file=sys.stderr)
+
+    if offenders or data_offenders or own_violations or runtime_offenders or register_offenders:
         return 1
     print(
         f"licence-check: {len(packages)} packages, all allowed "
         f"({len(awaiting)} image runtime(s) not yet passed, named above) "
         f"({len(REGISTRY)} demo data licence(s) checked, all allowed or undeclared); "
-        "this project's own LICENSE/NOTICE present and correct."
+        "this project's own LICENSE/NOTICE present and correct; "
+        f"the licence register agrees with the code ({len(unsettled)} row(s) or name(s) not yet settled, "
+        "named above)."
     )
     return 0
 

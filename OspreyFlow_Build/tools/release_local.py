@@ -29,6 +29,12 @@ test files its change reaches owed until a live run has run them green
 of `ci` on exactly that commit concluded success, a rerun that passed included
 (`OspreyFlow_Build/scripts/slice_line/release_green.py`); refused before anything is built otherwise, as the publish
 script does.
+
+**No release while the licence register is unsettled** (the owner, 21 November 2026): any row of
+`spec/LICENCE_REGISTER.yaml` that is `unconfirmed`, and any name in `HELD_FOR_OWNER`
+(`tools/licence_register.py`), refuses the release before anything is built, in words that name each. The gate in
+`make ci` allows both, so the build stays green while the owner decides. Checked after the two above, which the
+existing cases in `tests/test_release_owed.py` assert and which are unchanged.
 """
 
 from __future__ import annotations
@@ -44,6 +50,7 @@ import yaml
 
 from harness import upgrade_stamp
 from harness.render import REPO_ROOT, git_sha
+from tools import licence_register
 
 #: The slice line's owed live tests (owed.py check: exit 1 while any is owed or its records cannot be read).
 OWED = REPO_ROOT.parent / "OspreyFlow_Build" / "scripts" / "slice_line" / "owed.py"
@@ -66,13 +73,26 @@ def owed_refusal() -> str | None:
     return None if p.returncode == 0 else (p.stdout + p.stderr).strip()
 
 
+def register_refusal(
+    rows: list[dict[str, Any]] | None = None, held: frozenset[str] | None = None
+) -> str | None:
+    """Why a release must wait for the licence register, in words that name each unconfirmed row and each
+    name held for the owner, or None when none is left (`tools/licence_register.py`; the owner, 21 November
+    2026). The gate in `make ci` allows both so the build stays green; a release does not."""
+    return licence_register.release_refusal(
+        rows=rows, held=licence_register.HELD_FOR_OWNER if held is None else held
+    )
+
+
 #: The product workflow (REPO_ROOT is the Core checkout, the product repository's root).
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "release.yml"
 #: The product repository's owner, lower case, as the workflow names its images.
 REGISTRY = os.environ.get("OSPREY_IMAGE_REGISTRY", "ghcr.io/aykr")
 #: Our images the lock names (`harness.release_lock`: every image any option renders). The release builds two
-#: more (worker, report-sync) for the Enterprise chart, which the lock does not name.
-LOCKED_OURS = frozenset({"workspace", "api", "ingest", "ner", "superset"})
+#: more (worker, report-sync) for the Enterprise chart, which the lock does not name. The model
+#: gateway (`litellm`) joined on 21 November 2026, when it became OspreyFlow's own image
+#: (`deploy/litellm`).
+LOCKED_OURS = frozenset({"workspace", "api", "ingest", "ner", "litellm", "superset"})
 
 
 def workflow(path: Path = WORKFLOW) -> dict[str, Any]:
@@ -173,6 +193,10 @@ def main(argv: list[str] | None = None) -> int:
     if refusal:
         print(f"release_local: refusing — GitHub is not green on the commit released ({sha}):\n{refusal}",
               file=sys.stderr)
+        return 1
+    refusal = register_refusal()
+    if refusal:
+        print(f"release_local: refusing — {refusal}", file=sys.stderr)
         return 1
     args.out.mkdir(parents=True, exist_ok=True)
     print(f"release_local: the product's release of {args.tag}, from commit {sha}, short of the push")

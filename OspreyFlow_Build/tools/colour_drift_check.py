@@ -5,11 +5,12 @@ that is not in this file is drift"), and the design review that adopted it asked
 (`npx impeccable detect`) this repository does not have. This is that detector, for colour: every
 hex, `rgb()`/`rgba()` and `hsl()`/`hsla()` literal in the Glass's own source must be one DESIGN.md
 holds. Two kinds of file are exempt, by name: a declared mirror of the tokens (the WebGL canvas
-cannot read CSS custom properties, so `color/tokens.ts` and `color/palette.ts` restate them, and
-their own tests hold them to `tokens.css`), and `tokens.css` itself (in `packages/design` since
-ADR-152: that folder is walked too, so its neighbours stay held to the palette). Drift already in
-the Glass when this gate was built is listed in `tests/fixtures/colour_drift_allowlist.txt`, each
-with its reason, until it is fixed; a new literal anywhere else fails.
+cannot read CSS custom properties, so `packages/glass-shared/src/color/tokens.ts` and
+`.../palette.ts` restate them, and their own tests hold them to `tokens.css`), and `tokens.css`
+itself (in `packages/design` since ADR-152: that folder is walked too, so its neighbours stay held
+to the palette). Drift already in the Glass when this gate was built is listed in
+`tests/fixtures/colour_drift_allowlist.txt`, each with its reason, until it is fixed; a new
+literal anywhere else fails.
 
 Non-vacuous: `tests/test_colour_drift_check.py` plants literals in the shapes the real code uses
 (a hex in a style object, an `rgba` canvas fill, a fallback inside `var(...)`) and asserts each is
@@ -22,7 +23,7 @@ import re
 import sys
 from pathlib import Path
 
-from tools.layout import CORE, REPO
+from tools.layout import CORE, PAGES_COPY_ROOTS, REPO
 
 GLASS_SRC = CORE / "apps" / "workspace" / "src"
 #: The design tokens' own folder (ADR-152 decision 6); `tokens.css` is exempt in it by name.
@@ -30,10 +31,14 @@ DESIGN_PACKAGE = CORE / "packages" / "design"
 #: The shared package's source (ADR-152 decision 6): the plain leaves and stores that moved out of
 #: the Glass's own folder (PL4 slice C), so the check must read them where they are now.
 SHARED_SRC = CORE / "packages" / "glass-shared" / "src"
+#: The pages service's templates and modules (slice IS5a0), none of them exempt: a colour there is
+#: a token's, never a literal.
+PAGES_ROOTS = tuple(CORE / name for name in PAGES_COPY_ROOTS)
 DESIGN_PATH = REPO / "OspreyFlow_Build" / "spec" / "design" / "DESIGN.md"
 ALLOWLIST_PATH = REPO / "OspreyFlow_Build" / "tests" / "fixtures" / "colour_drift_allowlist.txt"
 
-#: Files that restate the tokens for the canvas, held to `tokens.css` by their own tests.
+#: Files that restate the tokens for the canvas, held to `tokens.css` by their own tests, by name
+#: relative to `SHARED_SRC` (where they moved from the Glass's own folder, PL4 slice D1).
 MIRRORS = frozenset({"color/tokens.ts", "color/palette.ts"})
 #: The tokens themselves, by name relative to `DESIGN_PACKAGE`.
 TOKENS_FILES = frozenset({"tokens.css"})
@@ -41,9 +46,10 @@ TOKENS_FILES = frozenset({"tokens.css"})
 #: them (`scanned_count`) is said on every run and held not to fall by
 #: `tests/glass_trees/test_design_tokens_location.py` and `test_glass_shared_leaves.py`.
 SCANNED: tuple[tuple[Path, frozenset[str]], ...] = (
-    (GLASS_SRC, MIRRORS),
+    (GLASS_SRC, frozenset()),
     (DESIGN_PACKAGE, TOKENS_FILES),
-    (SHARED_SRC, frozenset()),
+    (SHARED_SRC, MIRRORS),
+    *((root, frozenset()) for root in PAGES_ROOTS),
 )
 
 _HEX = re.compile(r"(?<![&\w])#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![0-9a-zA-Z])")
@@ -68,7 +74,7 @@ def scanned_files(root: Path, mirrors: frozenset[str]) -> list[Path]:
     return [
         path
         for path in sorted(root.rglob("*"))
-        if path.suffix in {".ts", ".tsx", ".css"}
+        if path.suffix in {".ts", ".tsx", ".css", ".njk"}
         and ".test." not in path.name
         and path.relative_to(root).as_posix() not in mirrors
     ]

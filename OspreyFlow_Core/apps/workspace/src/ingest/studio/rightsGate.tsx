@@ -1,13 +1,13 @@
 // An action a person can't take says why and who can, never only greyed out (ADR-145 Amendment 4
 // decision 12; L1.8). The Studio's actions that need a right each take it from here: the button stays
 // focusable (`aria-disabled`, so a keyboard reaches it and its tip, rule 13), does nothing when pressed,
-// and is described by a tip in words from `help/roles.ts` — the right's name and the built-in roles that
+// and is described by a tip in words from `packages/glass-shared/src/help/roles.ts` — the right's name and the built-in roles that
 // hold it, never a role id or a person (the owner's ruling of 9 November 2026, ADR-145 Amendment 7).
 // The route refuses all the same (rule 3): this is words, not access control.
 import { createContext, useContext, useId, type MouseEvent } from "react";
 
 import { Button, type ButtonProps } from "../../design/primitives/Button";
-import { whyNotByRole, type Right } from "../../help/roles";
+import { whyNotByRole, type Right } from "@ospreyflow/glass-shared";
 
 /** The person's rights (`GET /v1/me/rights`) for the Studio's actions. `null` while they are not known:
  * every action is then offered as before, and the route answers for itself. */

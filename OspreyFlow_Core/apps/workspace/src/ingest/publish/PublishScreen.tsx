@@ -33,7 +33,7 @@ import {
   runRecipe,
   setRecipeSchedulePaused,
   updateSchedule,
-} from "../api";
+} from "@ospreyflow/glass-shared";
 import { DEFAULT_TIMEZONE, ScheduleEditor } from "./ScheduleEditor";
 import { choiceOf, cronOf, type ScheduleChoice } from "./scheduleChoice";
 import { RightButton } from "../studio/rightsGate";

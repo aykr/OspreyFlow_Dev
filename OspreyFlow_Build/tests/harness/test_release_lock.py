@@ -174,9 +174,9 @@ def test_every_lock_entry_names_a_reference_docker_can_pull() -> None:
 
     base = OspreyConfig.model_validate(yaml.safe_load(_committed_config_text()) or {})
     lock = yaml.safe_load(render_release_lock(base, _pinned_or_hashed))
-    by_digest_alone = [
-        e for e in lock["images"] if e["service"] in ("ollama", "litellm", "whisper")
-    ]
+    # (The model gateway was one of these until it became OspreyFlow's own image, locked as the
+    # other owned images are: `repository:tag`, the tag the commit.)
+    by_digest_alone = [e for e in lock["images"] if e["service"] in ("ollama", "whisper")]
     assert by_digest_alone, "the committed answers pin some images by digest alone"
     for entry in lock["images"]:
         repository = str(entry["repository"])

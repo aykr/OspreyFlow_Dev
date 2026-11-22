@@ -29,6 +29,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from tests import port_guard
 from tests.port_guard import LIVE_PORTS, URL_SETTINGS, live_settings
 
 BUILD = Path(__file__).resolve().parents[1]
@@ -484,3 +485,90 @@ def test_the_jwks_servers_bind_through_outside_reserved() -> None:
         text = f.read_text()
         assert re.search(r'outside_reserved\(\s*lambda: ThreadingHTTPServer\(\("127\.0\.0\.1", 0\)', text), f
         assert not re.search(r'(?<!lambda: )ThreadingHTTPServer\(\s*\("127\.0\.0\.1", 0\)', text), f
+
+
+
+# --- A listener on port 0 is never given a reserved port (LINE_FIXES_5_BRIEF.md, 9b; 20 and 21 November 2026) ----------
+#
+# LR1's gate (20 November, test_platform_backup.py, 55433 and 55439) and BL1b's (21 November, test_s3_standin.py, 55438):
+# the S3 stand-in listened on port 0, the system handed it a stack's port (free on this Mac), and the test's own
+# connection to it was refused for a lease (OSPREY_LANE is not set). The system is stood in by a socket class that hands
+# out the first port of `free` and takes a port back to the front when its socket closes, as a system may.
+
+
+class _BindingSocket:
+    """Stands in for `socket.socket`'s bind: port 0 takes the first of `free`; never touches the network."""
+
+    free: list[int] = []
+
+    def __init__(self, family: int = 2, type_: int = 1) -> None:
+        self.family, self.type, self.port = family, type_, None
+
+    def bind(self, address: tuple) -> None:
+        port = address[1] or type(self).free.pop(0)
+        if port in type(self).free:
+            type(self).free.remove(port)
+        self.port = port
+
+    def getsockname(self) -> tuple:
+        return ("127.0.0.1", self.port)
+
+    def close(self) -> None:
+        if self.port is not None:
+            type(self).free.insert(0, self.port)
+            self.port = None
+
+    def connect(self, address: object) -> None:
+        pass
+
+    def connect_ex(self, address: object) -> int:
+        return 0
+
+
+def test_a_listener_on_port_0_is_never_given_a_stacks_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    monkeypatch.delenv("OSPREY_LANE", raising=False)
+    # LR1's two, BL1b's, and a closed port (an offline run's pinned store) before a free one.
+    _BindingSocket.free = [55433, 55438, 55439, 59991, 50123]
+    restore = port_guard.guard_socket(_BindingSocket)  # type: ignore[arg-type]
+    try:
+        s = _BindingSocket()
+        s.bind(("127.0.0.1", 0))
+        assert s.getsockname()[1] == 50123
+        s.connect(("127.0.0.1", 50123))  # its own listener: no refusal
+        assert _BindingSocket.free[:4] == [59991, 55439, 55438, 55433]  # the passed-over ports are given back
+        t = _BindingSocket()
+        t.bind(("127.0.0.1", 55433))  # a port named outright is bound as named (the stacks' own holders)
+        assert t.getsockname()[1] == 55433
+    finally:
+        restore()
+    assert {55433, 55438, 55439, 59991} <= port_guard.reserved_ports()
+
+
+def test_a_listener_on_port_0_with_no_free_port_outside_the_reserved_ones_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CI", raising=False)
+    reserved = set(range(50000, 50100))  # more reserved ports than the search's 64 tries
+    monkeypatch.setattr(port_guard, "reserved_ports", lambda: reserved)
+    _BindingSocket.free = [*sorted(reserved), 50200]
+    restore = port_guard.guard_socket(_BindingSocket)  # type: ignore[arg-type]
+    try:
+        with pytest.raises(OSError, match="no port outside the guard's reserved ones"):
+            _BindingSocket().bind(("127.0.0.1", 0))
+    finally:
+        restore()
+    assert sorted(_BindingSocket.free) == [*sorted(reserved), 50200]  # every probe closed
+
+
+def test_a_real_listener_on_port_0_binds_outside_the_reserved_ports_and_the_guard_restores() -> None:
+    import socket as real
+
+    before = real.socket.bind
+    restore = port_guard.guard_socket(real.socket)
+    try:
+        for _ in range(20):
+            with real.socket(real.AF_INET, real.SOCK_STREAM) as s:
+                s.bind(("127.0.0.1", 0))
+                assert s.getsockname()[1] not in port_guard.reserved_ports()
+    finally:
+        restore()
+    assert real.socket.bind is before

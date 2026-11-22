@@ -154,6 +154,7 @@ from principal_auth import (
     PrincipalLookupUnavailable,
     SigningKeysUnavailable,
     in_keys_thread,
+    is_application_identity,
 )
 from rule_standards import StoredRuleFiles, rule_files
 from schemas.admin import (
@@ -539,6 +540,7 @@ from . import (
     alert_sources,
     case_gazetteers,
     map_places,
+    model_calls,
     raised_alerts,
     rule_editor,
     search_service,
@@ -560,6 +562,7 @@ from . import promotion_ageing as promotion_ageing_module
 from . import readiness as readiness_module
 from . import reports as reports_module
 from . import resolution as resolution_module
+from . import resolution_job_status as resolution_job_status_module
 from . import resolution_trigger as resolution_trigger_module
 from . import review as review_module
 from . import risk as risk_module
@@ -629,6 +632,7 @@ from .case_views import (
     ViewNotFound,
     first_item,
     open_view,
+    wired,
 )
 from .change_stream import touched_node_ids
 from .compute_routes import (
@@ -957,6 +961,7 @@ from .release_version import deployment_version, release_version
 from .report_freshness import ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
+from .resolution_job_status import ResolutionJobStatus
 from .resolution_trigger import ResolveNowAccepted
 from .review import (
     AcceptCandidateRequest,
@@ -1029,6 +1034,15 @@ from .service_identity import (
     ServiceIdentityRefused,
     ServiceIdentityVerifier,
     is_deployment_client,
+)
+from .sign_in_events import (
+    SESSION_EVENT_REFUSED,
+    SessionEvent,
+    SessionEventResponse,
+    SignInWatch,
+    claims_of,
+    from_page_service,
+    pages_client_for,
 )
 from .site_images import (
     object_key_for,
@@ -1346,6 +1360,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         graph, ValkeyWorkingSetStore(valkey), handling_scheme, valkey=valkey
     )
     app.state.audit = audit
+    # SE8c: the first time a session is seen is recorded, from `get_principal`, and the page service
+    # reports its sign-ins and sign-outs: both over the Valkey and the audit writer above.
+    app.state.sign_in_watch = SignInWatch(valkey, audit)
     app.state.investigations = investigations
     app.state.custom_roles = custom_roles
     app.state.admin_people = admin_people
@@ -2204,6 +2221,20 @@ class SignInRefused(Exception):
         self.words, self.error = words, error
 
 
+async def _note_session_seen(app_: Any, token: str, identity: Principal) -> None:
+    """SE8c: a session this Conduit has not seen is recorded, once, after the resolver has accepted
+    its token (a refused token writes nothing). **Called by each place that accepts a token from the
+    resolver**: `get_principal` for every HTTP route, and the delta socket's header bearer
+    (`_authenticate_websocket`), which does not go through it; a test reads `app.py` and fails for a
+    new one that skips it. A dashboard identity (an application, admitted to its own routes alone)
+    is not a person signing in; a person's token limited to named routes (Superset's, ADR-148
+    Amendment 9) is one. `note_seen` never raises: a store fault is counted and logged, never a
+    refused request."""
+    watch: SignInWatch | None = getattr(app_.state, "sign_in_watch", None)
+    if watch is not None and not is_application_identity(identity):
+        await watch.note_seen(token, identity)
+
+
 async def get_principal(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
@@ -2254,6 +2285,7 @@ async def get_principal(
                     + ", ".join(sorted(identity.routes)),
                 },
             )
+    await _note_session_seen(request.app, credentials.credentials, identity)
     # The token's own roles, kept apart for what must read a custom role's rights afresh later
     # (the delta socket's ticket, `issue_ws_ticket`).
     request.state.token_roles = list(identity.roles)
@@ -4704,8 +4736,12 @@ async def list_case_views(
 ) -> list[CaseView]:
     """The case's views this reader may see: their own, and those shared with the case. Each says
     its first item as this reader may see it (ADR-145 Amendment 17), never a hidden one."""
+    # `chosen` is how many of the view's chosen nodes this reader may see, counted in the store
+    # through the access step (C045): never the creator's stored count (rules 3 and 7).
     return [
-        v.wire().model_copy(update={"first_item": await first_item(graph, v, principal)})
+        (await wired(graph, v, principal)).model_copy(
+            update={"first_item": await first_item(graph, v, principal)}
+        )
         for v in await views.visible_in(investigation.id, principal.id)
     ]
 
@@ -4721,6 +4757,7 @@ async def save_case_view(
     principal: PrincipalDep,
     views: CaseViewsDep,
     audit: AuditDep,
+    graph: GraphDep,
 ) -> CaseView:
     """*Save what I see as a view* (ADR-144 decision 4): private to its creator until shared."""
     view = await views.save(investigation.id, body, principal.id)
@@ -4731,7 +4768,7 @@ async def save_case_view(
         resolved_query={"view_id": view.id},
         result_cardinality=1,
     )
-    return view.wire()
+    return await wired(graph, view, principal)
 
 
 # --- batch expansions (ADR-151; spec 03 §3.2) -------------------------------------------------
@@ -4774,9 +4811,10 @@ async def get_batch_expansion(
     principal: PrincipalDep,
     jobs: JobsDep,
     views: CaseViewsDep,
+    graph: GraphDep,
 ) -> BatchExpansion:
     """The job as its requester is told it; anyone else's is not found (ADR-151 decision 4)."""
-    return await read_batch_expansion(jobs, views, investigation.id, job_id, principal)
+    return await read_batch_expansion(jobs, views, graph, investigation.id, job_id, principal)
 
 
 @app.get("/v1/investigations/{investigation_id}/views/{view_id}")
@@ -4790,8 +4828,9 @@ async def open_case_view(
     working_set: WorkingSetDep,
     items: BoardItemsDep,
 ) -> CaseViewOpened:
-    """ADR-144 decision 2: the view re-read now, as this reader may see the case; `missing` counts
-    the chosen items it could not show and names none."""
+    """ADR-144 decision 2: the view re-read now, as this reader may see the case. `chosen` is how
+    many of its chosen items they may see; `missing` is 0 for everyone, the creator included, until
+    the store records deletions (C045; `missing_for`)."""
     view = await views.get(investigation.id, view_id, principal.id)
     opened = await open_view(
         view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach
@@ -4818,6 +4857,7 @@ async def share_case_view(
     principal: PrincipalDep,
     views: CaseViewsDep,
     audit: AuditDep,
+    graph: GraphDep,
 ) -> CaseView:
     """*Share with the case* (ADR-144 decision 3): every member then sees it at their own level."""
     view = await views.share(investigation.id, view_id, principal.id)
@@ -4828,7 +4868,7 @@ async def share_case_view(
         resolved_query={"view_id": view_id},
         result_cardinality=1,
     )
-    return view.wire()
+    return await wired(graph, view, principal)
 
 
 @app.delete(
@@ -6045,21 +6085,24 @@ async def run_extraction_route(
     extraction_candidates: ExtractionCandidatesDep,
     audit: AuditDep,
 ) -> list[ExtractionCandidateRecord]:
-    records = await review_module.run_extraction(
-        model,
-        ontology,
-        extraction_candidates,
-        document_id=body.document_id,
-        text=body.text,
-        profile=body.profile.to_profile(),
-        handling=body.handling,
-        principal=principal,
-        extraction_model=body.model,
-        # ADR-136: text extracted in a case is of the case's datasets.
-        datasets=principal.datasets,
-        # ADR-135 Amendment 9: the review queue's extraction, the one call Laurium serves.
-        laurium_may_read=True,
-    )
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="extract", via="run_extraction"
+    ):
+        records = await review_module.run_extraction(
+            model,
+            ontology,
+            extraction_candidates,
+            document_id=body.document_id,
+            text=body.text,
+            profile=body.profile.to_profile(),
+            handling=body.handling,
+            principal=principal,
+            extraction_model=body.model,
+            # ADR-136: text extracted in a case is of the case's datasets.
+            datasets=principal.datasets,
+            # ADR-135 Amendment 9: the review queue's extraction, the one call Laurium serves.
+            laurium_may_read=True,
+        )
     await audit.record(
         principal=principal,
         action="run_extraction",
@@ -7120,7 +7163,10 @@ async def ask_to_search_route(
     explanation and the preview's own count. Viewer, as the preview is: it writes nothing, and
     running the pattern is the existing run route's, counted first (rules 3 and 4)."""
     try:
-        proposal = await pattern_ask.ask(investigation.id, body, principal, ontology)
+        async with model_calls.attributed(
+            audit, principal, investigation.id, job="pattern_ask", via="patterns_ask"
+        ):
+            proposal = await pattern_ask.ask(investigation.id, body, principal, ontology)
     except CouldNotExpress as refused:
         await audit.record(
             principal=principal,
@@ -7687,9 +7733,12 @@ async def extract_email_route(
     linked to both addresses, both go into the working set, and the model's findings are stored
     pending for a person to accept. Only to someone who can see the link; Editor, since it
     writes."""
-    result = await email_extraction.extract(
-        investigation.id, edge_id, event_id, principal, model=body.model, using=body.using
-    )
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="email", via="extract_email"
+    ):
+        result = await email_extraction.extract(
+            investigation.id, edge_id, event_id, principal, model=body.model, using=body.using
+        )
     await publish_delta(valkey, investigation.id, result.delta)
     await audit.record(
         principal=principal,
@@ -8016,7 +8065,12 @@ async def extract_document_route(
     """Entities from a held Document by its kind (ADR-094): kept text as it is, an image described
     and its text read, a video transcribed. Findings are pending until a person accepts one."""
     using = body.using if body is not None else "recogniser"
-    result = await document_content.extract(investigation.id, document_id, principal, using=using)
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="extract", via="extract_document"
+    ):
+        result = await document_content.extract(
+            investigation.id, document_id, principal, using=using
+        )
     await audit.record(
         principal=principal,
         action="extract_document",
@@ -8141,19 +8195,23 @@ async def ask_question_route(
         if body.view_id is not None
         else None
     )
-    answer = await questions.ask(
-        investigation.id,
-        body.question,
-        principal,
-        selected_node_ids=body.selected_node_ids,
-        selected_link_ids=body.selected_link_ids,
-        window=body.window,
-        engine=body.engine,
-        view_id=body.view_id,
-        view_node_ids=in_view,
-        read_from=body.read_from,
-        case_search=_case_search(request, index, datasets, search_working_set),
-    )
+    # SE8a: the model call is recorded with the asker, the case, and the engine and model used.
+    async with model_calls.attributed(
+        audit, principal, investigation.id, job="ask", via="ask_question"
+    ):
+        answer = await questions.ask(
+            investigation.id,
+            body.question,
+            principal,
+            selected_node_ids=body.selected_node_ids,
+            selected_link_ids=body.selected_link_ids,
+            window=body.window,
+            engine=body.engine,
+            view_id=body.view_id,
+            view_node_ids=in_view,
+            read_from=body.read_from,
+            case_search=_case_search(request, index, datasets, search_working_set),
+        )
     await audit.record(
         principal=principal,
         action="ask_question",
@@ -9113,6 +9171,22 @@ async def resolve_now_route(
         result_cardinality=1,
     )
     return accepted
+
+
+@app.get(
+    "/v1/resolution/jobs/{job_id}",
+    dependencies=[Depends(require_right(Right.READ_REPORTS))],
+)
+async def resolution_job_status_route(
+    job_id: str, principal: PrincipalDep, jobs: JobsDep
+) -> ResolutionJobStatus:
+    """What became of a matching job a run or "Resolve now" queued, in words (C249, L06;
+    `resolution_job_status.py` has the reasoning). A read of the job queue, not of the graph: the
+    answer carries no node, count or value (rule 7), and an id with no record, an expired one and
+    another kind of job's answer alike. Not investigation-scoped, as the run that queued it is
+    not: the right is a reader of reports."""
+    del principal
+    return await resolution_job_status_module.resolution_job_status(jobs, job_id)
 
 
 # --- ontology -----------------------------------------------------------------
@@ -17722,9 +17796,7 @@ def _guest_sign_in_admin(identity_admin: Any) -> EntraPeopleAdmin:
     return identity_admin
 
 
-@app.get(
-    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
-)
+@app.get("/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def guest_sign_in_route(identity_admin: IdentityAdminDep) -> GuestSignIn:
     """ADR-148 Amendment 17: whether guest (B2B) accounts are admitted, who last changed it and
     when. Behind `manage_people`, as People is; 409 `not_entra` on Keycloak."""
@@ -17732,9 +17804,7 @@ async def guest_sign_in_route(identity_admin: IdentityAdminDep) -> GuestSignIn:
     return GuestSignIn(admitted=admitted, changed_by=by, changed_at=at)
 
 
-@app.put(
-    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
-)
+@app.put("/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def set_guest_sign_in_route(
     body: GuestSignInInput,
     principal: PrincipalDep,
@@ -20187,6 +20257,52 @@ async def me_route(principal: PrincipalDep) -> MeResponse:
     )
 
 
+async def page_service_only(
+    request: Request,
+    principal: PrincipalDep,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> None:
+    """SE8c: `POST /v1/session-events` is the page service's own report, and its claim check is
+    here, at the route, whichever door the request came in by (the workspace's `/v1/` proxy, the
+    front proxy, the Conduit's own port). The resolver has accepted the token (a refused one is the
+    401 it always was); this asks which client it was issued to (`from_page_service`: `azp`,
+    `appid` on Entra ID v1.0, against `pages_client_for`). Every token that is not the page
+    service's gets the same 403 and the same words, whatever the reason, and a route-level
+    dependency runs before the body is read, so a refused caller learns nothing of its shape,
+    counts no rate window and writes nothing."""
+    mapping = request.app.state.principal_resolver.claim_mapping
+    if not from_page_service(claims_of(credentials.credentials), pages_client_for(mapping)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SESSION_EVENT_REFUSED)
+
+
+@app.post(
+    "/v1/session-events",
+    response_model=SessionEventResponse,
+    dependencies=[Depends(page_service_only)],
+)
+async def record_session_event(
+    body: SessionEvent,
+    request: Request,
+    principal: PrincipalDep,
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer_scheme)],
+) -> Any:
+    """SE8c: the page service reports a person's sign-in (its callback) or sign-out, with that
+    person's own token. The event is recorded for the person the token names and no one else (the
+    body is one field, `kind`, from a closed list; any other field is a 422), once for each report,
+    at most `RATE_LIMIT_PER_MINUTE` a person a minute. Fails closed like every audit write (503
+    `audit_unavailable`); the page service carries on when it is refused. Not a place anyone may
+    send words to: nothing in the body is stored."""
+    watch: SignInWatch | None = getattr(request.app.state, "sign_in_watch", None)
+    if watch is None:
+        return JSONResponse(status_code=503, content={"error": "session_events_unavailable"})
+    if not await watch.allow(principal):
+        return JSONResponse(
+            status_code=429, content={"error": "rate_limited"}, headers={"Retry-After": "60"}
+        )
+    recorded = await watch.record_event(credentials.credentials, principal, body.kind)
+    return SessionEventResponse(recorded=recorded)
+
+
 @app.get("/v1/me/rights")
 async def my_rights_route(principal: PrincipalDep) -> RightsResponse:
     """ADR-112: what the signed-in person may do, so the Glass and the Studio leave out what they
@@ -21387,7 +21503,10 @@ async def _authenticate_websocket(websocket: WebSocket) -> Principal:
     if header.lower().startswith("bearer "):
         token = header[len("bearer ") :]
         resolver: PrincipalResolver = websocket.app.state.principal_resolver
-        return await resolver.resolve_principal(token)
+        identity = await resolver.resolve_principal(token)
+        # SE8c: a session whose only authenticated use is this socket is still a session seen.
+        await _note_session_seen(websocket.app, token, identity)
+        return identity
 
     ticket = websocket.query_params.get("ticket", "")
     if not ticket:
@@ -21419,11 +21538,14 @@ async def _socket_standing(app_: Any, raw: Principal) -> int | None:
         return status.WS_1008_POLICY_VIOLATION
     # ADR-148 Amendment 15: a value an administrator set, changed since the socket opened.
     by_administrator: frozenset[str] = getattr(store, "by_administrator", frozenset())
-    if ("clearance" in by_administrator and stored.clearance != raw.clearance) or (
-        "org_unit" in by_administrator and stored.org_unit != raw.org_unit
-    ) or (
-        "handling_codes" in by_administrator
-        and sorted(stored.receivable_handling_codes or ()) != sorted(raw.receivable_handling_codes)
+    if (
+        ("clearance" in by_administrator and stored.clearance != raw.clearance)
+        or ("org_unit" in by_administrator and stored.org_unit != raw.org_unit)
+        or (
+            "handling_codes" in by_administrator
+            and sorted(stored.receivable_handling_codes or ())
+            != sorted(raw.receivable_handling_codes)
+        )
     ):
         return status.WS_1008_POLICY_VIOLATION
     return None

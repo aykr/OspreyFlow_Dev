@@ -44,7 +44,7 @@ from schemas.batch_expansion import BatchExpansion, BatchExpansionInput, BatchRe
 from schemas.case_views import CaseViewInput
 from schemas.domain import ExpandRequest, NodeId, Principal, TxId
 
-from .case_views import CaseViewStore, ViewNotFound
+from .case_views import CaseViewStore, ViewNotFound, wired
 from .dataset_scope import holds_a_level_in, scope_to_case
 from .investigations import AccessLevel, InsufficientAccessError, InvestigationNotFoundError
 from .jobs import JOB_TTL_SECONDS, JobQueue, JobRecord
@@ -230,7 +230,12 @@ async def submit(
 
 
 async def read(
-    jobs: JobQueue, views: CaseViewStore, case_id: str, job_id: str, reader: Principal
+    jobs: JobQueue,
+    views: CaseViewStore,
+    graph: GraphPort,
+    case_id: str,
+    job_id: str,
+    reader: Principal,
 ) -> BatchExpansion:
     """The job as its requester is told it. Any job that is not a batch expansion on this case
     made by `reader` is `BatchNotFound`, alike."""
@@ -262,7 +267,12 @@ async def read(
         f"private view “{view.name}”."
     )
     return BatchExpansion(
-        id=job_id, state="done", words=words, view=view.wire(), nodes=nodes, links=links
+        id=job_id,
+        state="done",
+        words=words,
+        view=await wired(graph, view, reader),
+        nodes=nodes,
+        links=links,
     )
 
 

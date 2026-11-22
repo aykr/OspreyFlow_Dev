@@ -2,10 +2,9 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
+import { forgetLayoutSizesForTest, getLayoutSizes, forgetSidePanelForTest } from "@ospreyflow/glass-shared";
 
 import { BottomPanelFrame, DetailsToggle, SidePanelFrame } from "./PanelFrames";
-import { forgetSidePanelForTest } from "./sidePanelState";
 
 afterEach(() => {
   cleanup();

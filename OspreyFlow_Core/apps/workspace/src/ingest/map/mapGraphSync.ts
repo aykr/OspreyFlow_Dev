@@ -5,7 +5,7 @@
 import type Graph from "graphology";
 
 import type { OntologySchema, RowTemplate } from "../../../../../packages/schemas/generated";
-import type { Palette } from "../../color/palette";
+import type { Palette } from "@ospreyflow/glass-shared";
 import type { MapSelection } from "./MapCanvas";
 import { mapCanvasColours, mapNodeColour } from "./mapCanvasColours";
 import { linkTypeName } from "../../canvas/linkLabel";

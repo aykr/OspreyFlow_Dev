@@ -1,6 +1,6 @@
 // The metrics panel: "Metrics panel with two-metric comparison;
 // size encoding; community hull overlay." `ComputePort`'s first real Glass caller (Phase 7 Stage
-// 3), talking to `services/api/compute_routes.py` via `metrics/api.ts`.
+// 3), talking to `services/api/compute_routes.py` via `packages/glass-shared/src/metrics/api.ts`.
 //
 // **"Two-metric comparison," a spec-silent detail filled and disclosed rather than guessed
 // silently.** `02_GLASS_FRONTEND.md` names the feature but not its exact
@@ -25,8 +25,8 @@ import { Toggle } from "../design/primitives/Toggle";
 import { Slider } from "../design/primitives/Slider";
 import { NO_FILTER, valueRange, type FilterMetricName, type MetricFilter } from "./filters";
 import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
-import { fetchComputeMetric } from "./api";
-import { fetchConnectionStrengths, fetchRarity, type RarityScope } from "../strength/api";
+import { fetchComputeMetric } from "@ospreyflow/glass-shared";
+import { fetchConnectionStrengths, fetchRarity, type RarityScope } from "@ospreyflow/glass-shared";
 import { strengthValues } from "../strength/words";
 
 const METRIC_OPTIONS: { value: FilterMetricName; label: string }[] = [

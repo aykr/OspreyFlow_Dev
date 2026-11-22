@@ -8,7 +8,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Promotion } from "../../boards/promotionsApi";
+import type { Promotion } from "@ospreyflow/glass-shared";
 import { AnalystPromotions, promotionRevertCommand } from "./promotions";
 
 afterEach(() => {

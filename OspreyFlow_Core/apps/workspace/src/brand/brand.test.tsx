@@ -7,8 +7,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { SignInScreen } from "../auth/SignInScreen";
 import { TopBar } from "../shell/TopBar";
-import { applyTheme, currentTheme } from "../theme/theme";
 import {
+  applyTheme,
+  currentTheme,
   applyBrand,
   brandFromUrl,
   brandTitle,
@@ -18,7 +19,7 @@ import {
   PLAIN_APPEARANCE,
   isGovUkHost,
   readAppearance,
-} from "./brand";
+} from "@ospreyflow/glass-shared";
 
 const themeButton = { name: /Switch to the|theme$/ };
 

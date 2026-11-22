@@ -101,22 +101,21 @@ COPY apps/harness ./apps/harness
 # of `apps/workspace`, which this build does not need and should not pull into this image's own build
 # context. `tests/harness/test_harness_frontend_copies.py` follows the imports into that folder too.
 COPY packages/design ./packages/design
-# The shared package's source (PL4 slice C): `apps/harness/keyboard/actions.ts` imports the keyboard registry by
-# `@ospreyflow/glass-shared`, and the walk in `tests/harness/test_harness_frontend_copies.py` follows that import
-# into the package, so a file it reaches that is not copied here fails that test, not this image's build.
+# The shared package's source (PL4 slices C and D1): `apps/harness/keyboard/actions.ts` imports the keyboard
+# registry, and the install page imports the theme and the statement, by `@ospreyflow/glass-shared`. The walk in
+# `tests/harness/test_harness_frontend_copies.py` follows that import into the package, so a file it reaches that
+# is not copied here fails that test, not this image's build.
 COPY packages/glass-shared/src ./packages/glass-shared/src
 # The workspace's design folder, for the primitives' stylesheet (`apps/harness/src/main.tsx` imports it).
 COPY apps/workspace/src/design ./apps/workspace/src/design
-# The theme module the admin console shares with the Glass (`apps/harness/src/main.tsx` imports
-# `../../workspace/src/theme/theme`): without it this image stopped building the day that import
-# landed — found 9 October 2026, building the welcome service (ADR-107).
+# The theme toggle the admin console shares with the Glass (`apps/harness/src/SummaryRail.tsx` imports
+# `../../workspace/src/theme/ThemeToggle`): without it this image stopped building the day the theme was first
+# imported — found 9 October 2026, building the welcome service (ADR-107). The theme module, the brand and the
+# product's statement it and the install page read are in `packages/glass-shared/src` since PL4 slice D1 (copied
+# above), so only the toggle's own folder is copied here. `tests/harness/test_harness_frontend_copies.py`
+# follows the harness frontend's imports (the third time a new import broke this stage is what it is for) and
+# fails on any file no COPY here covers, and on any COPY of a workspace path that no import reaches.
 COPY apps/workspace/src/theme ./apps/workspace/src/theme
-# The deployment's brand, which the theme module now reads (ADR-132): the second time a new import
-# broke this stage (31 October 2026). `tests/harness/test_harness_frontend_copies.py` now follows the
-# harness frontend's imports and fails on any workspace file no COPY here covers.
-COPY apps/workspace/src/brand/brand.ts ./apps/workspace/src/brand/brand.ts
-# The product's statement, shown above every install screen (ADR-034 Amendment 1).
-COPY apps/workspace/src/welcome/statement.ts ./apps/workspace/src/welcome/statement.ts
 RUN npm run build --workspace apps/harness
 
 FROM python:3.12-slim

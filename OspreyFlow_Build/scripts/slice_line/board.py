@@ -8,6 +8,7 @@ the only writer of that file. It replaces the heartbeat.
     board.py            print the board and write status.js
     board.py --quiet    write status.js only (merge_slice.py and run_seat.py call this after each event)
     board.py --usage    usage per slice and per account, from usage.tsv
+    board.py --self-clears   every stop the line cleared itself (self-clears.tsv), for the conductor's morning report
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ class BadEntry(Exception):
 
 def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
           account: str = "", merged: dict | None = None, verify: dict | None = None,
-          accepted: dict | None = None) -> dict:
+          accepted: dict | None = None, owner_line: dict | None = None, progress: dict | None = None) -> dict:
     """One build's entry for status.js. Refuses an entry the dashboard must not show."""
     if state not in STATES:
         raise BadEntry(f"unknown state {state!r}")
@@ -51,7 +52,77 @@ def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evid
     out = {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
     if state == "done" and accepted_narrower(merged, verify, accepted):
         out["accepted_findings"] = merged["accepted_findings"]["findings"]
+    if owner_line and state == "stopped":
+        out["owner_line"] = owner_line  # the owner has answered; the conductor has not applied it yet (7)
+    if progress:
+        out["progress"] = progress  # a merge running, stalled or stopped without a result (MERGE_PROGRESS_BRIEF.md)
     return out
+
+
+#: A running merge whose log has not grown for this long, its process alive, is shown "stalled" (seconds).
+STALL_SECONDS = 600
+
+
+def merge_progress(rec: Path) -> dict | None:
+    """The slice's merge progress for status.js, from records/<ID>/merge-progress.json while it says running: the step,
+    "n of m", the seconds in the step and in the merge, the estimate left (None: no estimate), and its state: running,
+    stalled (the log not grown for STALL_SECONDS, the process alive) or "no process" (the record says running and its
+    process is gone, or no merge holds the lock: the merge stopped without a result). None when no merge is running."""
+    r = c.read_json(rec / "merge-progress.json")
+    if not isinstance(r, dict) or r.get("state") != "running" or not isinstance(r.get("step"), dict):
+        return None
+    import calendar
+    import time
+    import merge_slice
+    st, now = r["step"], time.time()
+
+    def ago(stamp):
+        try:
+            return now - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
+        except (TypeError, ValueError):
+            return None
+    alive = isinstance(r.get("pid"), int) and c.pid_alive(r["pid"]) and merge_slice.merging() is not None
+    quiet = ago((r.get("log") or {}).get("mtime"))
+    stall = float(os.environ.get("OSPREY_STALL_SECONDS") or STALL_SECONDS)
+    state = "no process" if not alive else ("stalled" if quiet is not None and quiet >= stall else "running")
+    step_s, merge_s = ago(st.get("began")), ago(r.get("started"))
+    out = {"state": state, "merge_id": r.get("merge_id"), "step": st.get("name"), "part": st.get("part") or "",
+           "n_of": f"{st.get('n')} of {st.get('of')}", "step_seconds": round(step_s or 0),
+           "merge_seconds": round(merge_s or 0), "estimate_left_s": r.get("estimate_left_s")}
+    where = f"step {out['n_of']}, {out['step']}" + (f" ({out['part']})" if out["part"] else "")
+    if state == "no process":
+        out["said"] = f"merge stopped without a result ({where})"
+    else:
+        left = r.get("estimate_left_s")
+        out["said"] = (f"merging: {where}, {round(out['merge_seconds'] / 60)} minutes in, "
+                       + (f"about {max(round(left / 60), 1)} left" if isinstance(left, (int, float)) else "no estimate")
+                       + (f"; stalled: the log has not grown for {round(quiet / 60)} minutes" if state == "stalled" else ""))
+    return out
+
+
+#: The owner's actions that answer each kind of stop (resume.py's): a line for another action is not shown as the answer,
+#: since resume.py will refuse it (LINE_FIXES_5_BRIEF.md, 7). move-seat and undo-seat-failure answer any stop.
+ANSWERS = {"red": ("clear-stop", "refreeze"), "findings": ("add-round", "accept", "refreeze"),
+           "refused": ("add-round", "refreeze"), "other": ()}
+ANY_STOP = ("move-seat", "undo-seat-failure")
+
+
+def owners_line(sid: str, st: dict, rec: Path, lines: list[dict]) -> dict | None:
+    """The owner's unapplied line in resume.tsv that answers this slice's stop, or None."""
+    if st.get("phase") == "refused":
+        kind = "refused"
+    elif st.get("phase") != "stopped":
+        return None
+    elif (rec / "red_stop.json").exists():
+        kind = "red"
+    elif st.get("round", 1) >= st.get("rounds_limit", 1):
+        kind = "findings"
+    else:
+        kind = "other"
+    for ln in lines:
+        if ln["slice"] == sid and (ln["action"] in ANSWERS[kind] or ln["action"] in ANY_STOP):
+            return {"action": " ".join([ln["action"], *ln["args"]]), "date": ln["date"], "line": ln["text"]}
+    return None
 
 
 def accepted_narrower(merged: dict | None, verify: dict | None, accepted: dict | None) -> bool:
@@ -85,9 +156,14 @@ def record(path: Path, problems: list[str], sid: str) -> dict | None:
 def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
     rows, builds, problems = [], {}, []
     ids = c.plan_ids()
+    try:
+        lines = c.unapplied_lines()
+    except OSError as e:
+        lines = []
+        problems.append(f"resume.tsv could not be read ({e}): no owner's line is shown as waiting")
     for s in slices:
         try:
-            one_slice(s, ids, rows, builds, problems)
+            one_slice(s, ids, rows, builds, problems, lines)
         except Exception as e:  # noqa: BLE001 -- anything else one slice's records do: that slice reported, every other one shown
             sid = s.get("id", "?")
             problems.append(f"{sid}: its records could not be read ({type(e).__name__}: {e}); skipped, nothing written")
@@ -96,7 +172,7 @@ def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
     return rows, builds, problems
 
 
-def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[str]) -> None:
+def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[str], lines: list[dict] = ()) -> None:
     """One slice's row and status entry, from its records; a bad record is skipped and reported (record())."""
     sid, build = s["id"], s["build"]
     rec = c.rec_dir(sid)
@@ -157,9 +233,17 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         note = (f"seat failed: the {sf.get('seat')}'s call on {sf.get('account')} was refused "
                 f"({str(sf.get('error', ''))[:80]}); the owner clears the account or moves the seat")
         source = "seat failure record"
+    waiting = owners_line(sid, st, rec, list(lines)) if state else None  # a stopped or refused slice's alone
+    if waiting:
+        note = f"the owner's line is in: {waiting['action']} ({waiting['date']}), waiting to be applied"
+        source = "resume.tsv (unapplied)"
+    progress = merge_progress(rec) if state and state != "done" else None
+    if progress:
+        note = progress["said"]
+        source = "merge progress record"
     if state and state != "done":
         try:
-            builds_entry = entry(state, note=note, evidence=evidence, **kw)
+            builds_entry = entry(state, note=note, evidence=evidence, owner_line=waiting, progress=progress, **kw)
         except BadEntry as e:
             problems.append(f"{sid}: {e}")
             builds_entry = None
@@ -167,7 +251,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
     elif state and builds_entry:
         builds[build] = builds_entry
-    if st.get("phase") == "refused" and state == "stopped":
+    if progress:
+        shown = progress["said"][:60]
+    elif waiting:
+        shown = f"owner's line in: {waiting['action']}"[:60]
+    elif st.get("phase") == "refused" and state == "stopped":
         shown = note.split(";")[0][:60]
     elif state == "stopped":
         shown = f"stopped: {note[:60]}"
@@ -183,7 +271,23 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         shown = f"waiting on {', '.join(waits)}" if waits else "ready"
         source = "backlog file's after column"
     rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
-                 "from": source, "track": kw["track"], "account": kw["account"]})
+                 "from": source, "track": kw["track"], "account": kw["account"], "merged": state == "done"})
+
+
+def slice_counts(rows: list[dict], ids: set) -> dict:
+    """For each build of the plan with rows in the backlog file: how many of its slices have merged (shown done, from a
+    merge record the board accepts) and how many are cut (its rows: a row added later raises it), and the two said as
+    "M of N" (LINE_FIXES_5_BRIEF.md, C). A build with none merged says "0 of N"; it is never left out."""
+    out: dict = {}
+    for r in rows:
+        if r["build"] not in ids:
+            continue  # reported to the owner already, never written
+        d = out.setdefault(r["build"], {"merged": 0, "cut": 0})
+        d["cut"] += 1
+        d["merged"] += 1 if r.get("merged") else 0
+    for d in out.values():
+        d["said"] = f"{d['merged']} of {d['cut']}"
+    return out
 
 
 def owed_list(problems: list[str]) -> list[dict]:
@@ -193,7 +297,27 @@ def owed_list(problems: list[str]) -> list[dict]:
     return [{"test": t, **o} for t, o in sorted(owed.items())]
 
 
-def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None) -> Path:
+#: The owner-approved diffs applied (merge_slice.py apply-approved; LINE_FIXES_5_BRIEF.md, 10), as committed on main.
+APPLIED_REL = "OspreyFlow_Build/process/lanes/v062/approved/applied.tsv"
+
+
+def applied_diffs() -> list[dict]:
+    try:
+        text = c.git(["show", f"main:{APPLIED_REL}"], c.REPO)
+    except RuntimeError:
+        return []
+    rows = [ln.split("\t") for ln in text.splitlines()[1:] if ln.strip()]
+    return [dict(zip(("date", "name", "hash8", "commit"), r)) for r in rows if len(r) >= 4]
+
+
+def self_clear_lines(rows: list[dict] | None = None) -> list[str]:
+    """Each stop the line cleared itself, one line each: the time, the slice, the stop, the cause, what it did."""
+    return [f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: {r['what']}"
+            for r in (c.self_clears() if rows is None else rows)]
+
+
+def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None,
+                 counts: dict | None = None) -> Path:
     path = path or c.STATUS_FILE
     main = c.git(["rev-parse", "--short", "main"], c.REPO)
     try:
@@ -203,8 +327,12 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
     for k, v in builds.items():
         if v.get("state") not in STATES:
             raise BadEntry(f"{k}: unknown state")
+    counts = counts or {}
+    builds = {k: {**v, **({"slices": counts[k]["said"], "slices_merged": counts[k]["merged"],
+                           "slices_cut": counts[k]["cut"]} if k in counts else {})} for k, v in builds.items()}
     body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
-            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"}}
+            "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"},
+            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -262,21 +390,33 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quiet", action="store_true")
     ap.add_argument("--usage", action="store_true")
+    ap.add_argument("--self-clears", action="store_true")
     ap.add_argument("--slices-from", default="main", help="a ref, or 'working' for the working copy")
     a = ap.parse_args()
     if a.usage:
         usage()
         return 0
+    if a.self_clears:
+        print("\n".join(self_clear_lines()) or "The line has cleared no stop itself.")
+        return 0
+    try:  # the owner's word of 21 November 2026: a verified slice's conflict with main, seen before the merge
+        import merge_slice
+        conflicts = merge_slice.check_conflicts()
+    except Exception as e:  # the look never stops the board; it says why
+        conflicts = [f"the look for conflicts with main could not run ({type(e).__name__}: {e})"]
     try:
         slices = c.load_slices(None if a.slices_from == "working" else a.slices_from)
     except RuntimeError:
         slices = []
     rows, builds, problems = compute(slices)
+    counts = slice_counts(rows, c.plan_ids())
     owed = owed_list(problems)
     ci = c.main_ci()
-    path = write_status(builds, owed=owed, ci=ci)
+    path = write_status(builds, owed=owed, ci=ci, counts=counts)
     if not a.quiet:
         print(f"main {c.git(['rev-parse', '--short', 'main'], c.REPO)} · dial {c.current_setting()} · {c.now()}")
+        for d in applied_diffs():  # for the top of the conductor's report to the owner (10)
+            print(f"owner-approved diff applied: {d['name']} {d['hash8']} commit {d['commit'][:10]} ({d['date']})")
         if ci["state"] == "red":
             print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: not a gate; merges go on (a red run is "
                   "rerun once; a test of ours red twice stops them)")
@@ -284,9 +424,12 @@ def main() -> int:
             print(f"main's GitHub run cannot be read ({ci['why']}): not a gate; merges go on")
         if c.GITHUB_STOP.exists():
             print("merging stopped: " + c.github_stop_words(c.read_json(c.GITHUB_STOP)))
+        for line in conflicts:
+            print(line)
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
+        print("slices merged of those cut, per build: " + ", ".join(f"{b} {d['said']}" for b, d in sorted(counts.items())))
         for acct in sorted({r['account'] for r in rows if r['account']} | {"default", "sol"}):
             near, stop = c.near_limit(acct), c.account_stop(acct)
             if near or stop:
@@ -298,6 +441,8 @@ def main() -> int:
         fixed = [r for r in c.owner_changes() if r["action"] == "correct-command"]
         for r in fixed:
             print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
+        for line in self_clear_lines():
+            print(line)
         pending = c.DATA / "push.pending"
         if pending.exists():
             print(f"push pending ({pending.read_text().strip()[:10]}): waits for the run on main in progress; the "
