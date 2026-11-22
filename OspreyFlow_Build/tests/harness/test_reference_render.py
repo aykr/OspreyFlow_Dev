@@ -1044,3 +1044,68 @@ def test_the_scan_of_the_stored_files_is_red_on_each_thing_it_names(
     assert any(expect in line for line in found), found
     # A plant may be two things at once (an address's own domain is a host); nothing else is named.
     assert all(expect in line or "host" in line for line in found), found
+
+
+# ---- the guard's block count when an action is not on a line of its own (rule 15) ----
+
+
+#: A guarded block inside an outer `range`, with `inside` where a template might put an action that
+#: opens or closes a block somewhere other than the whole of its line. `real: {{ . }}` and the
+#: range's own end render while the setting is off, so the view must keep them.
+def _ranged_guard(inside: str) -> str:
+    return (
+        "{{- range .Values.list }}\n"
+        "{{- if .Values.pages.enabled }}\n"
+        f"{inside}"
+        "kind: Deployment\n"
+        "{{- end }}\n"
+        "real: {{ . }}\n"
+        "{{- end }}\n"
+    )
+
+
+def test_the_guard_scan_removes_only_the_block_when_every_action_is_on_its_own_line() -> None:
+    """The control for the plants below: the same template with the inner `if` written on lines
+    of its own is read right (the guard's block out, the range and `real:` kept), so the plants'
+    red is the inline form's."""
+    template = _ranged_guard("{{- if .Values.global }}\nx: 1\n{{- end }}\n")
+    # The inner block's own end sits inside the guard: the guard closes at the second end.
+    assert ref.without_pages_guard(template) == (
+        "{{- range .Values.list }}\nreal: {{ . }}\n{{- end }}\n"
+    )
+
+
+@pytest.mark.parametrize(
+    "inside",
+    [
+        # An `if` opened and closed on one line: the open counts, the close is not on a line alone.
+        "{{- if .Values.global }}x: 1{{- end }}\n",
+        # A close after other text on its line, under an open of its own.
+        "{{- if .Values.global }}\n  x: 1 {{- end }}\n",
+        # A close after text with no open of its own: the count would be one short.
+        "  x: 1 {{- end }}\n",
+        # An open after text.
+        "  x: 1 {{- if .Values.global }}\n{{- end }}\n",
+        # Two actions on one line: an end, then an open.
+        "{{- if .Values.global }}\n{{- end }}{{- if .Values.other }}\n{{- end }}\n",
+        # An `else` after text, at the guard's own level: what it holds renders while off.
+        "  x: 1 {{- else }}\n",
+    ],
+    ids=[
+        "inline if and end",
+        "a close after text under an open",
+        "a close after text",
+        "an open after text",
+        "an end and an open on one line",
+        "an else after text",
+    ],
+)
+def test_a_guard_whose_block_count_cannot_be_told_is_left_in_the_view(inside: str) -> None:
+    """`without_pages_guard` removes a guarded block only when it can count its end. An action that
+    opens or closes a block anywhere but as the whole of a line makes the count unreliable, so the
+    guard and everything the scan would have passed stay in the view (a shown change), and never a
+    line that renders while the setting is off is taken out: that line would then be stored by
+    `--write` as if it were not there, and a change to it would show nothing."""
+    template = _ranged_guard(inside)
+    assert ref.without_pages_guard(template) == template
+    assert "real: {{ . }}" in ref.without_pages_guard(template)
