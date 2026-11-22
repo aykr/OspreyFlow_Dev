@@ -786,6 +786,10 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
     async def nothing(*args: Any, **kwargs: Any) -> Any:
         return None
 
+    async def no_jobs(*args: Any, **kwargs: Any) -> list[str]:
+        # As the real hook answers: the ids of the jobs it queued (C249, L06), none here.
+        return []
+
     async def rules(*args: Any, **kwargs: Any) -> Any:
         return None
 
@@ -793,7 +797,7 @@ async def test_the_change_stream_entry_does_not_carry_a_rules_alert(
     monkeypatch.setattr(run_module, "run_published_recipe", run_published)
     monkeypatch.setattr(run_module, "_rule_gate", rules)
     monkeypatch.setattr(run_module, "_evaluate_watches_best_effort", nothing)
-    monkeypatch.setattr(run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing)
+    monkeypatch.setattr(run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", no_jobs)
     deps = SimpleNamespace(
         handling_scheme=SCHEME, valkey=object(), audit=_Audit(), graph=1, ontology=1, analytics=1,
         media=1, recipe_repo_root=1, jobs=1, config=SimpleNamespace(post_ingest_resolution=True),

@@ -142,7 +142,7 @@ def source_column_names(draft: StudioRecipeDraft) -> list[str] | None:
     `None` when the source cannot be read or is empty, in which case a binding to a column is not
     judged at save (it is, row by row, at run). Used only for a template that binds handling."""
     try:
-        rows = _read_recipe_rows(draft)
+        rows = _read_recipe_rows(draft, limit=1)  # the header alone
     except SourceUnreadableError:
         return None
     return list(rows[0]) if rows else None
@@ -170,8 +170,7 @@ async def get_sample_row(
     # Round 13bf: the shared gate, not a fourth inline `{"generic-csv"}` literal.
     require_available_connector(draft)
     source_handling = resolve_source_handling(draft)
-    rows = _read_recipe_rows(draft)
-    sampled = rows[:DEFAULT_SAMPLE_SIZE]
+    sampled = _read_recipe_rows(draft, limit=DEFAULT_SAMPLE_SIZE)
     if row_index >= len(sampled):
         raise RowIndexOutOfRangeError(row_index)
     row = sampled[row_index]

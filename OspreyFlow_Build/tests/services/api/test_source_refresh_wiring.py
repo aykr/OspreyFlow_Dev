@@ -91,11 +91,15 @@ async def test_the_run_path_passes_the_read_to_the_load(
     async def nothing(*args: Any, **kwargs: Any) -> None:
         return None
 
+    async def no_jobs(*args: Any, **kwargs: Any) -> list[str]:
+        # As the real hook answers: the ids of the jobs it queued (C249, L06), none here.
+        return []
+
     monkeypatch.setattr(run_module, "run_published_recipe", fake_recipe)
     monkeypatch.setattr(run_module, "run_published_pipeline", fake_pipeline)
     monkeypatch.setattr(run_module, "_rule_gate", no_rules)
     monkeypatch.setattr(
-        run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", nothing
+        run_module.resolution_trigger_module, "submit_post_ingest_resolution_jobs", no_jobs
     )
     monkeypatch.setattr(
         run_module, "ChangeStreamWriter", lambda valkey: SimpleNamespace(publish=nothing)

@@ -41,9 +41,46 @@ class SameAsCandidate:
     comparison_vector: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class SkippedRecord:
+    """A record the run left out of the comparison, and why (C249): named by id, property and a
+    typed reason, never by the value (a date of birth is `sensitivity: high`, and a record the
+    reader may not see is never in the population this names)."""
+
+    node_id: NodeId
+    property: str
+    #: `not_an_iso_date` / `not_an_iso_datetime`: the property's declared type is a date (or a
+    #: date and time) and the record's value is not one in ISO form.
+    reason: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {"node_id": self.node_id, "property": self.property, "reason": self.reason}
+
+
+@dataclass(frozen=True)
+class ResolutionOutcome:
+    candidates: list[SameAsCandidate]
+    #: Every record left out, in the population's order. Never empty-by-silence: a run that skips a
+    #: record says so (rule 2's spirit).
+    skipped: list[SkippedRecord]
+
+
 def resolve_entity_type(nodes: Sequence[Node], entity_type: EntityTypeDef) -> list[SameAsCandidate]:
-    if entity_type.resolution is None or len(nodes) < 2:
-        return []
+    """The scored candidate pairs alone, for a caller with no run result to carry a note (the demo
+    fixture). A record with a value that cannot be cast is left out of the comparison, as in
+    `resolve_entity_type_with_skips`, which the production trigger calls and which names each."""
+    return resolve_entity_type_with_skips(nodes, entity_type).candidates
+
+
+def resolve_entity_type_with_skips(
+    nodes: Sequence[Node], entity_type: EntityTypeDef
+) -> ResolutionOutcome:
+    """C249. A record whose date (or date and time) property does not parse as ISO is left out of
+    the comparison and named in the outcome; it used to raise `ValueError` out of the cast, so one
+    bad record failed the whole type's run, the worker rolled back and marked the job failed, and
+    every good record went unresolved."""
+    if entity_type.resolution is None:
+        return ResolutionOutcome([], [])
 
     settings = build_settings(entity_type)
     comparison_cols = comparison_columns(entity_type)
@@ -55,20 +92,24 @@ def resolve_entity_type(nodes: Sequence[Node], entity_type: EntityTypeDef) -> li
     # anyone configured one.
     all_columns = list(dict.fromkeys([*blocking_columns(entity_type), *comparison_cols]))
     property_types = {p.name: p.type for p in entity_type.properties}
-    df = _nodes_to_dataframe(nodes, all_columns, property_types)
+    df, skipped = _nodes_to_dataframe(nodes, all_columns, property_types)
+    if len(df) < 2:
+        return ResolutionOutcome([], skipped)
 
     con = duckdb_setup.new_connection()
     try:
         linker = DuckDBLinker(df, settings, connection=con)
         predictions = linker.predict()
-        return _extract_candidates(predictions.as_pandas_dataframe(), comparison_cols)
+        return ResolutionOutcome(
+            _extract_candidates(predictions.as_pandas_dataframe(), comparison_cols), skipped
+        )
     finally:
         con.close()
 
 
 def _nodes_to_dataframe(
     nodes: Sequence[Node], columns: Sequence[str], property_types: dict[str, PropertyType]
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, list[SkippedRecord]]:
     """One row per node, `unique_id` plus every column a blocking rule or comparison references —
     cast to a real Python `date`/`datetime` for `PropertyType.DATE`/`DATETIME` columns, not left
     as strings, and casefolded for `PropertyType.STRING` columns. Both were found, not designed
@@ -85,11 +126,23 @@ def _nodes_to_dataframe(
       this, a source rendering a name in Title Case and a source rendering it in Caps would never
       resolve to each other regardless of how identical the underlying identity is."""
     rows: list[dict[str, Any]] = []
+    skipped: list[SkippedRecord] = []
     for node in nodes:
         row: dict[str, Any] = {"unique_id": node.id}
         for column in columns:
-            row[column] = _cast(node.properties.get(column), property_types.get(column))
-        rows.append(row)
+            try:
+                row[column] = _cast_or_skip(node.properties.get(column), property_types.get(column))
+            except _Uncastable as refused:
+                # C249: the record is left out and named, never compared on a guess and never the
+                # reason a whole type's run fails.
+                skipped.append(SkippedRecord(node.id, column, refused.reason))
+                break
+        else:
+            rows.append(row)
+    if len(rows) < 2:
+        # Nothing to compare (every record skipped, or one left): the caller says so, and the
+        # all-empty temporal columns below need a frame with columns to fix.
+        return pd.DataFrame(rows), skipped
     frame = pd.DataFrame(rows)
     # A date column empty in every row (a population whose every source had no such column) is
     # all `None`, which DuckDB types as INTEGER: `year(date_of_birth)` then cannot bind, and the
@@ -99,16 +152,30 @@ def _nodes_to_dataframe(
         temporal = property_types.get(column) in (PropertyType.DATE, PropertyType.DATETIME)
         if temporal and frame[column].isna().all():
             frame[column] = pd.Series(pd.NaT, index=frame.index, dtype="datetime64[ns]")
-    return frame
+    return frame, skipped
 
 
-def _cast(value: Any, prop_type: PropertyType | None) -> Any:
+class _Uncastable(Exception):
+    """A value that does not parse as its declared type: the record is skipped, with this reason."""
+
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
+
+def _cast_or_skip(value: Any, prop_type: PropertyType | None) -> Any:
     if value is None or prop_type is None:
         return value
     if prop_type is PropertyType.DATE and isinstance(value, str):
-        return date.fromisoformat(value)
+        try:
+            return date.fromisoformat(value)
+        except ValueError as exc:
+            raise _Uncastable("not_an_iso_date") from exc
     if prop_type is PropertyType.DATETIME and isinstance(value, str):
-        return datetime.fromisoformat(value)
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:
+            raise _Uncastable("not_an_iso_datetime") from exc
     if prop_type is PropertyType.STRING and isinstance(value, str):
         return value.casefold()
     return value

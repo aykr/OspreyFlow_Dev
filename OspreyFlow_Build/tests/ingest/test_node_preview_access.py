@@ -51,7 +51,7 @@ def _rows(monkeypatch: pytest.MonkeyPatch) -> None:
         (studio_map, "_read_recipe_rows"),
         (studio_profile, "_read_rows"),
     ):
-        monkeypatch.setattr(module, name, lambda draft: [dict(r) for r in ROWS])
+        monkeypatch.setattr(module, name, lambda draft, limit=None: [dict(r) for r in ROWS[:limit]])
 
 
 async def _source_preview(principal: Principal) -> list[str]:

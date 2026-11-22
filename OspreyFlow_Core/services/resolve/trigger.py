@@ -47,7 +47,7 @@ disclosed as a guess, not a measurement.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Collection
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from services.api.alerts import AlertStore, journal_outside_commit
@@ -69,7 +69,7 @@ from schemas.domain import (
 )
 
 from .conflicts import detect_conflicts
-from .resolver import resolve_entity_type
+from .resolver import SkippedRecord, resolve_entity_type_with_skips
 from .same_as_writer import record_conflicts, write_same_as_edges
 
 JOB_TYPE_RESOLVE_ENTITY_TYPE = "resolve_entity_type"
@@ -111,6 +111,14 @@ class ResolutionRunResult:
     nodes_processed: int = 0
     same_as_written: int = 0
     conflicts_recorded: int = 0
+    #: C249: the records of the population this run left out of the comparison (a value that is not
+    #: of its declared type), counted and named by id, property and typed reason, never by value.
+    #: `skipped` above is the overlap guard's word and means the whole run did not happen.
+    left_out: list[SkippedRecord] = field(default_factory=list)
+
+    @property
+    def records_left_out(self) -> int:
+        return len(self.left_out)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -119,6 +127,8 @@ class ResolutionRunResult:
             "nodes_processed": self.nodes_processed,
             "same_as_written": self.same_as_written,
             "conflicts_recorded": self.conflicts_recorded,
+            "records_left_out": self.records_left_out,
+            "left_out": [r.to_dict() for r in self.left_out],
         }
 
 
@@ -201,7 +211,8 @@ async def run_resolution_for_entity_type(
     nodes = await _fetch_population(graph, entity_type_name, principal)
     nodes_by_id = {n.id: n for n in nodes}
 
-    candidates = resolve_entity_type(nodes, entity_type)
+    outcome = resolve_entity_type_with_skips(nodes, entity_type)
+    candidates = outcome.candidates
 
     # A candidate that conflicts with an existing manual split must never
     # also be written as SAME_AS — `01_DOMAIN_MODEL.md` §4: "a manual split
@@ -251,6 +262,7 @@ async def run_resolution_for_entity_type(
         nodes_processed=len(nodes),
         same_as_written=len(same_as_ids),
         conflicts_recorded=len(conflict_ids),
+        left_out=outcome.skipped,
     )
 
 
