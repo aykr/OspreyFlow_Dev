@@ -4,7 +4,7 @@ import {
   IDEAL_EDGE_LENGTH,
   settleLayout,
   type LayoutNode,
-} from "./forceLayout";
+} from "@ospreyflow/glass-shared";
 
 /**
  * A network drawn from a seeded scatter reads as a hairball. These pin what the layout promises:

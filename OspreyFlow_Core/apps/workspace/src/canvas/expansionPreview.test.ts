@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchWouldAdd } from "./expansionPreview";
+import { fetchWouldAdd } from "@ospreyflow/glass-shared";
 
 /** The count an expansion would add, asked of `/expand/preview`. A failed question is
  * "unavailable", never a number. */

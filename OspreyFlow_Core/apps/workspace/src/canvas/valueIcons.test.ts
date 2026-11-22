@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { describeValueIcon, valueIconFor } from "./valueIcons";
+import { describeValueIcon, valueIconFor } from "@ospreyflow/glass-shared";
 
 // ADR-128 Decision 4 (B7): an entity type may name one enum property and map some of its values to
 // drawings. These tests are the pure half: which drawing a node's properties give, if any.

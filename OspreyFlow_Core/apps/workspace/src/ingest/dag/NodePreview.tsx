@@ -18,10 +18,15 @@ import type {
 } from "../../../../../packages/schemas/generated";
 import { GlassCanvas } from "../../canvas/GlassCanvas";
 import { Table, type TableColumn } from "../../design/primitives/Table";
-import { OntologyRegistry } from "../../ontology/schema";
+import {
+  OntologyRegistry,
+  ProfileError,
+  fetchOntologySchema,
+  fetchSampleRow,
+  previewGraph,
+} from "@ospreyflow/glass-shared";
 import type { WorkingSet } from "@ospreyflow/glass-shared";
 import { workingSetOfDryRun } from "../verify/VerifyScreen";
-import { ProfileError, fetchOntologySchema, fetchSampleRow, previewGraph } from "@ospreyflow/glass-shared";
 import { RightButton } from "../studio/rightsGate";
 
 /** The most rows a table Preview reads. The one place this number is written:

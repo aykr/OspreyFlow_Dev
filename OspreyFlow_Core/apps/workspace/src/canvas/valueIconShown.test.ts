@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { forgetEntityPictures, setEntityPictureForTest } from "./entityPictures";
 import { forgetIconChoicesForTest, resolveIconForNode, setIconChoice, valueIconShownFor } from "./iconChoices";
-import { valueIconFor } from "./valueIcons";
+import { valueIconFor } from "@ospreyflow/glass-shared";
 
 // ADR-128 Decision 4 (B7): the legend and the Inspector name a value icon only for a node that is
 // drawn with it. `valueIconShownFor` is the one function both ask, and it must agree with the

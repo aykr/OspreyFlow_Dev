@@ -7,28 +7,33 @@ import { EntityPicture, type EntityPictureProps } from "./EntityPicture";
 import { LinkDetails, type LinkDetailsProps } from "./LinkDetails";
 import { PairShared, StrengthExplained } from "./StrengthExplained";
 import { LinkChange } from "./LinkChange";
-import type { LinkChangeResult } from "@ospreyflow/glass-shared";
+import type {
+  LinkChangeResult,
+  DocumentReaderView,
+  EntityVisual,
+  HandlingScheme,
+} from "@ospreyflow/glass-shared";
 import { LinkHistory } from "./LinkHistory";
 import { LinkEvents } from "./LinkEvents";
-import { eventsNoun, nounWords } from "@ospreyflow/glass-shared";
+import {
+  eventsNoun,
+  nounWords,
+  linkTypeName,
+  describeIconForValue,
+} from "@ospreyflow/glass-shared";
 import { locatorText, sourceName } from "./sourceLocator";
 import { displayValue } from "../search/searchOptions";
 import { LinkNotes } from "./LinkNotes";
 import { useEffect, useRef, useState } from "react";
-import type { DocumentReaderView } from "@ospreyflow/glass-shared";
-import { linkTypeName } from "../canvas/linkLabel";
-import type { EntityVisual } from "../ontology/schema";
 import { SelectionList } from "./SelectionList";
 import { onEntityPicturesChange } from "../canvas/entityPictures";
 import { onIconChoicesChange, valueIconShownFor } from "../canvas/iconChoices";
-import { describeIconForValue } from "../canvas/valueIcons";
 import { TypeChip } from "./TypeChip";
 import { NeighbourhoodRisk, type NeighbourhoodRiskProps } from "./NeighbourhoodRisk";
 import { SharedContacts, type SharedContactsProps } from "./SharedContacts";
 import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
 import { endName } from "./LinkDetails";
 import { isInternalReference, propertyLabel } from "./propertyNames";
-import type { HandlingScheme } from "@ospreyflow/glass-shared";
 import { WatchForThis, type GlassApi } from "../watches/GlassWatchActions";
 
 function isResolutionLink(type: string): boolean {

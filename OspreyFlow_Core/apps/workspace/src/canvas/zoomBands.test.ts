@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { makeEdge, makeNode } from "../testing/fixtures";
-import { createWorkingSet } from "@ospreyflow/glass-shared";
-import { edgeReducer, nodeReducer, zoomBandForRatio } from "./zoomBands";
+import {
+  createWorkingSet,
+  edgeReducer,
+  nodeReducer,
+  zoomBandForRatio,
+} from "@ospreyflow/glass-shared";
 
 describe("zoomBandForRatio", () => {
   it("covers every camera ratio with exactly one of the four bands", () => {

@@ -8,7 +8,7 @@
 // a row, marked as dimmed, as it stays on the canvas (§2 rule 2).
 import type { ProvenanceState } from "../../../../packages/schemas/generated/Node";
 import { nodeLabel } from "../canvas/nodeAttributes";
-import { linkTypeName, type NamedType } from "../canvas/linkLabel";
+import { linkTypeName, type NamedType } from "@ospreyflow/glass-shared";
 import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
 
 /** How many rows a page of the Matrix shows. A longer view is paged, and says which rows are shown

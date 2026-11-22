@@ -25,14 +25,20 @@
 // metric, a degree or a filter *value* (only filter *presence*, dimmed
 // vs. not, which the token contract itself specifies).
 import type { Edge, Node } from "../../../../packages/schemas/generated";
-import { cachedNodeSvgDataUri, type StrokeStyle } from "../color/nodeVisual";
-import { mixOklab, activePalette } from "@ospreyflow/glass-shared";
-import type { EntityVisual } from "../ontology/schema";
+import {
+  cachedNodeSvgDataUri,
+  type StrokeStyle,
+  mixOklab,
+  activePalette,
+  valueIconFor,
+  linkCaption,
+  linkTypeName,
+  zoomBandForRatio,
+  type ZoomBand,
+} from "@ospreyflow/glass-shared";
+import type { EntityVisual } from "@ospreyflow/glass-shared";
 import { resolveIconForNode } from "./iconChoices";
-import { valueIconFor } from "./valueIcons";
 import { chosenLabel, defaultLabel } from "./labelChoices";
-import { linkCaption, linkTypeName } from "./linkLabel";
-import { zoomBandForRatio, type ZoomBand } from "./zoomBands";
 
 export interface NodeZoomContext {
   cameraRatio: number;

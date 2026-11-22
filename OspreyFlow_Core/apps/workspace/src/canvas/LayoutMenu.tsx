@@ -1,4 +1,4 @@
-import { LAYOUT_MODES, type LayoutMode } from "./layoutModes";
+import { LAYOUT_MODES, type LayoutMode } from "@ospreyflow/glass-shared";
 
 /** What the Clustered bubbles layout puts in one bubble. */
 export type BubbleKey = "type" | "community";

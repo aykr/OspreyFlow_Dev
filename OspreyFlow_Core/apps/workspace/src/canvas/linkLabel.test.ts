@@ -3,7 +3,7 @@
 // number in brackets was strange and hard to read.
 import { describe, expect, it } from "vitest";
 
-import { linkCaption, linkTypeName } from "./linkLabel";
+import { linkCaption, linkTypeName } from "@ospreyflow/glass-shared";
 
 describe("linkTypeName", () => {
   it("uses the label the ontology declares", () => {

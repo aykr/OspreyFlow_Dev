@@ -2,7 +2,7 @@
 // §4. No component logic lives here so it can be unit-tested directly
 // (this repo has no RTL/jsdom setup — `ConnectScreen.test.ts`'s own
 // docstring — so a screen's *logic* is what gets covered, not its render).
-import { WILDCARD } from "../../canvas/edgeTypeMenu";
+import { WILDCARD } from "@ospreyflow/glass-shared";
 import type {
   EdgeTypeDef,
   EntityTypeDef,

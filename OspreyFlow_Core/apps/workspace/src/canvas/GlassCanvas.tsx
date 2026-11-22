@@ -4,7 +4,7 @@
 // lasso, radial context menu, expand... Semantic zoom."
 //
 // Node shape/fill/provenance is `@sigma/node-image` (a generated SVG per
-// distinct combination, `color/nodeVisual.ts`); the interaction-state ring
+// distinct combination, `packages/glass-shared/src/color/nodeVisual.ts`); the interaction-state ring
 // is a composed `@sigma/node-border` layer. Both plugins read their own
 // attributes directly off the graphology node (`packages/glass-shared/src/workingset/store.ts`'s
 // `WorkingSetNodeAttributes`) — `canvas/nodeAttributes.ts`'s module
@@ -26,8 +26,70 @@
 import { DetailsToggle } from "../layout/PanelFrames";
 import { CanvasToolbarCompact, isCompactToolbar } from "./toolbarCompact";
 import { isToolbarKey } from "./toolbarVisibility";
-import { linkHoverText } from "./linkHover";
-import { nodeWithinReach } from "./nodeHitArea";
+import {
+  linkHoverText,
+  nodeWithinReach,
+  redrawOnBandChange,
+  redrawWhenCameraStops,
+  COMMUNITY_LINKS_ABOVE,
+  communityGroupOf,
+  communityLinks,
+  drawsCommunityLinks,
+  drawsNodeDots,
+  zoomBandForRatio,
+  emailsOutcomeText,
+  showEmailsAsDocuments,
+  eventsEntryLabel,
+  eventsNoun,
+  mayCarryText,
+  edgeTypesOfferedFor,
+  settledAnchors,
+  dragTargets,
+  keepPinned,
+  nudgeFor,
+  expansionLinksNotice,
+  linksAmongNotice,
+  showLinksAmong,
+  gateExpansion,
+  narrowingOptions,
+  type NarrowingOption,
+  fetchWouldAdd,
+  type CaseView,
+  saveView,
+  fetchFirstSeen,
+  removeFromWorkingSet,
+  focusAnnouncement,
+  settleLayout,
+  type LayoutNode,
+  ARRANGE_MAX_NODES,
+  arrange,
+  enclosingCircle,
+  linkKey,
+  packBubbles,
+  treeLinkKeys,
+  type LayoutMode,
+  activePalette,
+  onThemeChange,
+  outcomeDeltas,
+  type ClusterExplanation,
+  type ExpansionOutcome,
+  type LimitExceeded,
+  type ResolutionOutcome,
+  type WorkingSetDelta,
+  type ExportMark,
+  singleFlight,
+  linkCaption,
+  linkTypeName,
+  withChunkedTextureRefresh,
+  expandOnDoubleClick,
+  menuRequestForRightClick,
+  previewCountFrom,
+  type PreviewCount,
+  nearestEdge,
+  nextLink,
+  type ScreenSegment,
+  describeEmptyExpansion,
+} from "@ospreyflow/glass-shared";
 import { createNodeBorderProgram } from "@sigma/node-border";
 import { createNodeImageProgram } from "@sigma/node-image";
 import type { StoreApi } from "zustand/vanilla";
@@ -58,8 +120,8 @@ import type {
 } from "../../../../packages/schemas/generated";
 import { captureChartImage } from "../export/chartExport";
 import { pointInPolygon } from "../map/geometry";
-import type { OntologyRegistry } from "../ontology/schema";
 import type {
+  OntologyRegistry,
   WorkingSetEdgeAttributes,
   WorkingSetGraph,
   WorkingSetNodeAttributes,
@@ -79,14 +141,8 @@ import {
   RadialMenu,
   type RadialMenuItem,
 } from "../design/primitives/RadialMenu";
-import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
-import { COMMUNITY_LINKS_ABOVE, communityGroupOf, communityLinks, drawsCommunityLinks, drawsNodeDots } from "./communityLinks";
 import { attachCommunityLinkLayer, type CommunityLinkState } from "./communityLinkLayer";
 import { latestOnly, workerAssign } from "./communityAssigner";
-import { zoomBandForRatio } from "./zoomBands";
-import { emailsOutcomeText, showEmailsAsDocuments } from "@ospreyflow/glass-shared";
-import { eventsEntryLabel, eventsNoun, mayCarryText } from "@ospreyflow/glass-shared";
-import { edgeTypesOfferedFor } from "./edgeTypeMenu";
 import {
   DashedArrowProgram,
   DashedEdgeProgram,
@@ -94,9 +150,6 @@ import {
   DottedEdgeProgram,
   SolidArrowProgram,
 } from "./dottedEdgePrograms";
-import { settledAnchors } from "./settledAnchor";
-import { dragTargets, keepPinned, nudgeFor } from "./nodeDrag";
-import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
 import { CanvasLegend, type LegendValueIcon } from "./CanvasLegend";
 import { ZoomControls } from "./ZoomControls";
 
@@ -104,43 +157,20 @@ import { ZoomControls } from "./ZoomControls";
 const GRID_KEY = "ospreyflow.canvas-grid";
 import { PreviousPositionsOverlay, type PreviousPosition } from "./PreviousPositionsOverlay";
 import { prefersReducedMotion } from "../motion/reducedMotion";
-import {
-  gateExpansion,
-  narrowingOptions,
-  type NarrowingOption,
-} from "./expansionGate";
-import { fetchWouldAdd } from "./expansionPreview";
 import { LargeExpansionPrompt } from "./LargeExpansionPrompt";
 import { CapRefusalPrompt } from "./CapRefusalPrompt";
-import { type CaseView, saveView } from "@ospreyflow/glass-shared";
 import { SaveViewForm } from "../views/SaveViewForm";
-import { fetchFirstSeen } from "@ospreyflow/glass-shared";
 import { litNote, litTabName, UNDATED_NOT_INCLUDED } from "../crossfilter/lit";
 import { LIT_ANSWER_LATE, readLit, selectionChangedSince } from "../crossfilter/selectLit";
 import type { TimeWindow, WeekdayHourCell } from "../crossfilter/store";
-import { removeFromWorkingSet } from "./removeNodes";
 import { ViewActions } from "./ViewActions";
-import { focusAnnouncement } from "./focusAnnouncement";
-import { settleLayout, type LayoutNode } from "./forceLayout";
 import { BubbleOverlay, type Bubble } from "./BubbleOverlay";
-import { ARRANGE_MAX_NODES, arrange, enclosingCircle, linkKey, packBubbles, treeLinkKeys, type LayoutMode } from "./layoutModes";
 import { LayoutMenu, type BubbleKey } from "./LayoutMenu";
 import { CommunitiesStatus, CommunitiesToggle } from "./CommunitiesControls";
 import { CommunityBoxOverlay } from "./CommunityBoxOverlay";
 import { DegreeMarkOverlay } from "./DegreeMarkOverlay";
 import { JudgementBadgeOverlay, type NodeBadge } from "./JudgementBadgeOverlay";
 import { AlertBadgeOverlay } from "../reports/alertBadges";
-import {
-  activePalette,
-  onThemeChange,
-  outcomeDeltas,
-  type ClusterExplanation,
-  type ExpansionOutcome,
-  type LimitExceeded,
-  type ResolutionOutcome,
-  type WorkingSetDelta,
-  type ExportMark,
-} from "@ospreyflow/glass-shared";
 import { drawHoveredNode, drawNodeLabel, labelColoursFor } from "./labelStyle";
 import { labelIsLiteral, NODE_LABEL_FONT, NODE_LABEL_SIZE } from "./nodeLabel";
 import { getLabelChoices, onLabelChoicesChange } from "./labelChoices";
@@ -148,7 +178,6 @@ import { LabelsMenu } from "./LabelsMenu";
 import { IconsMenu } from "./IconsMenu";
 import { forgetEntityPictures, loadEntityPictures, onEntityPicturesChange } from "./entityPictures";
 import { onIconChoicesChange, valueIconShownFor } from "./iconChoices";
-import { singleFlight } from "./singleFlight";
 import {
   boxAt,
   collapseView,
@@ -159,27 +188,17 @@ import {
   type CollapsedView,
   type Community,
 } from "./communities";
-import { linkCaption, linkTypeName } from "./linkLabel";
 import { SelectionBar, type SelectionBarProps } from "./SelectionBar";
 import { AddFiles } from "../content/AddFiles";
 import { linkMenuItems, linkMenuTitle } from "./linkMenu";
 import { selectionMenuItems } from "./selectionActions";
 import { sameAsGroup } from "./linkCollapse";
 import { ReasonPrompt } from "./ReasonPrompt";
-import { withChunkedTextureRefresh } from "./chunkedTextureRefresh";
-import {
-  expandOnDoubleClick,
-  menuRequestForRightClick,
-  previewCountFrom,
-  type PreviewCount,
-} from "./nodeGestures";
-import { nearestEdge, nextLink, type ScreenSegment } from "./edgeSelection";
 import { ClusterExplainOverlay } from "./ClusterExplainOverlay";
 import { CommunityHullOverlay } from "./CommunityHullOverlay";
 import { PathfinderOverlay } from "./PathfinderOverlay";
 import { PathfinderErrorOverlay } from "./PathfinderErrorOverlay";
 import { ActionErrorOverlay } from "./ActionErrorOverlay";
-import { describeEmptyExpansion } from "./expansionOutcome";
 
 const NODE_PROGRAM = createNodeCompoundProgram<
   WorkingSetNodeAttributes,
