@@ -641,10 +641,20 @@ class TeamCoverInput(BaseModel):
 
 
 OwnedKind = Literal[
-    "case_author", "home_case_author", "team_lead", "hotlist", "monitor", "saved_pattern",
-    "typology_rule", "pipeline_schedule", "list_schedule",
+    "case_author",
+    "home_case_author",
+    "team_lead",
+    "hotlist",
+    "monitor",
+    "saved_pattern",
+    "typology_rule",
+    "pipeline_schedule",
+    "list_schedule",
     # L2.5b: the kinds L3.8's ownership route reads (`person_ownership.py`, ADR-145 Amendment 8).
-    "view", "board", "link_type_proposal", "drawn_watch",
+    "view",
+    "board",
+    "link_type_proposal",
+    "drawn_watch",
 ]
 
 
