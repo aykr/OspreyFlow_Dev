@@ -391,6 +391,28 @@ def self_clears() -> list[dict]:
     return [dict(zip(SELF_CLEAR_COLUMNS, r + [""] * (len(SELF_CLEAR_COLUMNS) - len(r)))) for r in rows]
 
 
+def unapplied_lines() -> list[dict]:
+    """The owner's lines in resume.tsv for a slice not yet used (no use logged in owner-changes.tsv): each its slice,
+    action, arguments (move-seat's seat and account), date and text. The k-th of k identical lines is unapplied until it
+    has k uses. Lines that are not a slice's (clear-account) are left out."""
+    if not RESUME_FILE.is_file():
+        return []
+    lines = [ln.split() for ln in RESUME_FILE.read_text().splitlines() if ln.strip() and not ln.strip().startswith("#")]
+    changes = owner_changes()
+    out, seen = [], {}
+    for parts in lines:
+        if len(parts) < 3 or parts[0] == "clear-account":
+            continue
+        sid, action, args, date = parts[0], parts[1], parts[2:-1], parts[-1]
+        key = tuple(parts)
+        seen[key] = seen.get(key, 0) + 1
+        tag = f"resume.tsv {date} {' '.join([action, *args])}:"
+        used = sum(1 for r in changes if r["slice"] == sid and r["detail"].startswith(tag))
+        if used < seen[key]:
+            out.append({"slice": sid, "action": action, "args": args, "date": date, "text": "\t".join(parts)})
+    return out
+
+
 def owner_changes() -> list[dict]:
     if not OWNER_CHANGES.exists():
         return []

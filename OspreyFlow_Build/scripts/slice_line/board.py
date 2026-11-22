@@ -33,7 +33,7 @@ class BadEntry(Exception):
 
 def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
           account: str = "", merged: dict | None = None, verify: dict | None = None,
-          accepted: dict | None = None) -> dict:
+          accepted: dict | None = None, owner_line: dict | None = None) -> dict:
     """One build's entry for status.js. Refuses an entry the dashboard must not show."""
     if state not in STATES:
         raise BadEntry(f"unknown state {state!r}")
@@ -52,7 +52,34 @@ def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evid
     out = {"state": state, "track": track, "branch": branch, "note": note, "evidence": evidence, "account": account}
     if state == "done" and accepted_narrower(merged, verify, accepted):
         out["accepted_findings"] = merged["accepted_findings"]["findings"]
+    if owner_line and state == "stopped":
+        out["owner_line"] = owner_line  # the owner has answered; the conductor has not applied it yet (7)
     return out
+
+
+#: The owner's actions that answer each kind of stop (resume.py's): a line for another action is not shown as the answer,
+#: since resume.py will refuse it (LINE_FIXES_5_BRIEF.md, 7). move-seat and undo-seat-failure answer any stop.
+ANSWERS = {"red": ("clear-stop", "refreeze"), "findings": ("add-round", "accept", "refreeze"),
+           "refused": ("add-round", "refreeze"), "other": ()}
+ANY_STOP = ("move-seat", "undo-seat-failure")
+
+
+def owners_line(sid: str, st: dict, rec: Path, lines: list[dict]) -> dict | None:
+    """The owner's unapplied line in resume.tsv that answers this slice's stop, or None."""
+    if st.get("phase") == "refused":
+        kind = "refused"
+    elif st.get("phase") != "stopped":
+        return None
+    elif (rec / "red_stop.json").exists():
+        kind = "red"
+    elif st.get("round", 1) >= st.get("rounds_limit", 1):
+        kind = "findings"
+    else:
+        kind = "other"
+    for ln in lines:
+        if ln["slice"] == sid and (ln["action"] in ANSWERS[kind] or ln["action"] in ANY_STOP):
+            return {"action": " ".join([ln["action"], *ln["args"]]), "date": ln["date"], "line": ln["text"]}
+    return None
 
 
 def accepted_narrower(merged: dict | None, verify: dict | None, accepted: dict | None) -> bool:
@@ -86,9 +113,14 @@ def record(path: Path, problems: list[str], sid: str) -> dict | None:
 def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
     rows, builds, problems = [], {}, []
     ids = c.plan_ids()
+    try:
+        lines = c.unapplied_lines()
+    except OSError as e:
+        lines = []
+        problems.append(f"resume.tsv could not be read ({e}): no owner's line is shown as waiting")
     for s in slices:
         try:
-            one_slice(s, ids, rows, builds, problems)
+            one_slice(s, ids, rows, builds, problems, lines)
         except Exception as e:  # noqa: BLE001 -- anything else one slice's records do: that slice reported, every other one shown
             sid = s.get("id", "?")
             problems.append(f"{sid}: its records could not be read ({type(e).__name__}: {e}); skipped, nothing written")
@@ -97,7 +129,7 @@ def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
     return rows, builds, problems
 
 
-def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[str]) -> None:
+def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[str], lines: list[dict] = ()) -> None:
     """One slice's row and status entry, from its records; a bad record is skipped and reported (record())."""
     sid, build = s["id"], s["build"]
     rec = c.rec_dir(sid)
@@ -158,9 +190,13 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         note = (f"seat failed: the {sf.get('seat')}'s call on {sf.get('account')} was refused "
                 f"({str(sf.get('error', ''))[:80]}); the owner clears the account or moves the seat")
         source = "seat failure record"
+    waiting = owners_line(sid, st, rec, list(lines)) if state else None  # a stopped or refused slice's alone
+    if waiting:
+        note = f"the owner's line is in: {waiting['action']} ({waiting['date']}), waiting to be applied"
+        source = "resume.tsv (unapplied)"
     if state and state != "done":
         try:
-            builds_entry = entry(state, note=note, evidence=evidence, **kw)
+            builds_entry = entry(state, note=note, evidence=evidence, owner_line=waiting, **kw)
         except BadEntry as e:
             problems.append(f"{sid}: {e}")
             builds_entry = None
@@ -168,7 +204,9 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
     elif state and builds_entry:
         builds[build] = builds_entry
-    if st.get("phase") == "refused" and state == "stopped":
+    if waiting:
+        shown = f"owner's line in: {waiting['action']}"[:60]
+    elif st.get("phase") == "refused" and state == "stopped":
         shown = note.split(";")[0][:60]
     elif state == "stopped":
         shown = f"stopped: {note[:60]}"

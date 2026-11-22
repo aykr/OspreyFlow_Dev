@@ -504,15 +504,7 @@ SECURITY_WORDS = re.compile(r"key|credential|secret|token|passw|security|secure|
 
 def unapplied(slice_id: str, action: str) -> list[str]:
     """The owner's lines in resume.tsv for this slice and action, of any day, not yet used (no use logged)."""
-    out = []
-    for parts in resume_lines():
-        if len(parts) == 3 and parts[0] == slice_id and parts[1] == action:
-            tag = f"resume.tsv {parts[2]} {action}:"
-            have = sum(1 for q in resume_lines() if q == parts)
-            used = sum(1 for r in c.owner_changes() if r["slice"] == slice_id and r["detail"].startswith(tag))
-            if used < have and "\t".join(parts) not in out:
-                out.append("\t".join(parts))
-    return out
+    return list(dict.fromkeys(ln["text"] for ln in c.unapplied_lines() if ln["slice"] == slice_id and ln["action"] == action))
 
 
 def stop_of(st: dict, rec: Path) -> str:

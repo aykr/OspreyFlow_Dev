@@ -393,6 +393,11 @@ M = [
  ("common.py", '    tmp = p.with_name(f".{p.name}.{os.getpid()}.{os.urandom(4).hex()}.tmp")', '    tmp = p.with_name(p.name + ".tmp")', "two_writers_of_one_record"),
  ("run_seat.py", '    with c.file_lock(f"account-{account}"):  # read and written', '    with contextlib.nullcontext():  # read and written', "two_seats_of_one_account_at_once"),
  ("usage_hook.py", '        write_whole(d / (account + ".stopped.json"), json.dumps({', '        (d / (account + ".stopped.json")).write_text(json.dumps({', "stopped_at_once"),
+ # LINE_FIXES_5_BRIEF.md, 7: the owner's line is in
+ ("board.py", '    waiting = owners_line(sid, st, rec, list(lines)) if state else None  # a stopped or refused slice\'s alone\n', '    waiting = None\n', "unapplied_line_shows_the_state"),
+ ("common.py", '        if used < seen[key]:\n', '        if True:\n', "unapplied_line_shows_the_state"),
+ ("board.py", '        if ln["slice"] == sid and (ln["action"] in ANSWERS[kind] or ln["action"] in ANY_STOP):', '        if ln["slice"] == sid:', "only_a_line_that_answers_the_stop"),
+ ("board.py", '    elif st.get("phase") != "stopped":\n        return None\n', '', "slice_not_stopped_never_shows_it"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
