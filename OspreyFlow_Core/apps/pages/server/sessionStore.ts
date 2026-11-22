@@ -90,9 +90,33 @@ interface Entry {
 export class MemorySessionStore implements SessionStore {
   private readonly entries = new Map<string, Entry>();
   private readonly clock: () => number;
+  private sweeper: ReturnType<typeof setInterval> | undefined;
 
-  constructor(options: { clock?: () => number } = {}) {
+  /**
+   * `sweepEveryMs`: how often a timer removes what has expired, with nobody reading it. The store a deployment holds a release
+   * folder in is one nobody has to touch again, so it asks for one; a store built without it removes only on a read or a write.
+   * The timer never keeps the process alive (`unref`), and `close` stops it.
+   */
+  constructor(options: { clock?: () => number; sweepEveryMs?: number } = {}) {
     this.clock = options.clock ?? Date.now;
+    if (options.sweepEveryMs !== undefined) {
+      if (!Number.isInteger(options.sweepEveryMs) || options.sweepEveryMs < 1) {
+        throw new StoreRefusal("the sweep interval must be a whole number of milliseconds, at least 1");
+      }
+      this.sweeper = setInterval(() => this.sweep(), options.sweepEveryMs);
+      this.sweeper.unref();
+    }
+  }
+
+  /** Removes every entry that has expired. */
+  sweep(): void {
+    for (const stored of [...this.entries.keys()]) this.live(stored);
+  }
+
+  /** Stops the sweep timer. The store still works. */
+  close(): void {
+    if (this.sweeper !== undefined) clearInterval(this.sweeper);
+    this.sweeper = undefined;
   }
 
   private live(key: string): Entry | undefined {
@@ -115,7 +139,7 @@ export class MemorySessionStore implements SessionStore {
     guardValue(key, value);
     // This store holds a release folder in the process's memory for a deployment, so a key nobody reads again must not stay:
     // every write first removes what has expired.
-    for (const stored of [...this.entries.keys()]) this.live(stored);
+    this.sweep();
     this.entries.set(key, { value, expiresAt: this.clock() + ttlSeconds * 1000 });
   }
 
@@ -139,6 +163,11 @@ export class MemorySessionStore implements SessionStore {
     const entry = this.live(key);
     this.entries.delete(key);
     return entry?.value ?? null;
+  }
+
+  /** For tests: how many entries the store holds, expired or not. It removes nothing, so it shows what a sweep has not yet done. */
+  size(): number {
+    return this.entries.size;
   }
 
   /** For tests: the keys that have not expired. */

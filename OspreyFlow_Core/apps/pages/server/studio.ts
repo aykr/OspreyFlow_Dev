@@ -88,7 +88,8 @@ interface Frame {
   proposed: number;
   needsUnread: boolean;
   strip: string[] | null;
-  pipelinesProblem: boolean;
+  /** The pipelines read that did not work: a refusal says it is refused (a note, not an alert: it is the person's rights, not a fault), a failing Conduit says to try again (an alert); null when read. */
+  pipelinesProblem: { words: string; refused: boolean } | null;
   /** `opensModel` is the dataset the workspace is asked to open Model on when the link is followed (the Model place only). */
   tabs: { id: string; label: string; href: string; current: boolean; opensModel: string | null }[];
   reminder: { text: string; tip: string; href: string; opensModel: string | null } | null;
@@ -104,6 +105,22 @@ async function read(conduit: Conduit, path: string, query?: Record<string, strin
     throw error;
   }
 }
+
+/**
+ * A read whose refusal is told apart from a failure: `status` is the Conduit's answer (0 when it could not be reached), `json`
+ * its body when it was 200. A 4xx is the Conduit saying no, which no retry changes; anything else is a failing service.
+ */
+async function readWithStatus(conduit: Conduit, path: string): Promise<{ status: number; json: unknown }> {
+  try {
+    const reply = await conduit({ path });
+    return { status: reply.status, json: reply.status === 200 ? reply.json : undefined };
+  } catch (error) {
+    if (error instanceof ConduitUnreachable) return { status: 0, json: undefined };
+    throw error;
+  }
+}
+
+const refused = (status: number): boolean => status >= 400 && status < 500;
 
 const asList = (value: unknown): unknown[] | undefined => (Array.isArray(value) ? value : undefined);
 
@@ -155,7 +172,7 @@ async function loadFrame(
     proposed: 0,
     needsUnread: false,
     strip: null,
-    pipelinesProblem: false,
+    pipelinesProblem: null,
     tabs: [],
     reminder: null,
   };
@@ -233,27 +250,36 @@ async function loadFrame(
 
 /** The readiness strip's reads: the case's pipelines, each deployed one's runs, and the dataset's registered sources. */
 async function readStrip(frame: Frame, conduit: Conduit, caseId: string, datasetId: string): Promise<void> {
-  const [registryRaw, sourcesRaw] = await Promise.all([
-    read(conduit, v1("investigations", caseId, "ingest", "recipe-registry")),
-    read(conduit, v1("datasets", datasetId, "sources")),
+  const [registryReply, sourcesReply] = await Promise.all([
+    readWithStatus(conduit, v1("investigations", caseId, "ingest", "recipe-registry")),
+    readWithStatus(conduit, v1("datasets", datasetId, "sources")),
   ]);
-  const registry = asList(registryRaw) as Pipeline[] | undefined;
-  const sources = (asList(sourcesRaw) as Source[] | undefined) ?? "unreadable";
+  const registry = asList(registryReply.json) as Pipeline[] | undefined;
+  const sources = (asList(sourcesReply.json) as Source[] | undefined) ?? "unreadable";
   const runs: Record<string, Run[]> = {};
+  let runsUnread = false;
   let pipelines: Pipeline[] | "unreadable" = "unreadable";
   if (registry !== undefined) {
     pipelines = registry.filter((p) => p.status !== "superseded");
     const deployed = pipelines.filter(isDeployed);
     await Promise.all(
       deployed.map(async (p) => {
-        const found = asList(await read(conduit, v1("investigations", caseId, "ingest", "recipes", String(p.recipe_id), "runs")));
-        // A pipeline whose runs the person may not read is absent, not shown as never run.
+        const found = asList((await readWithStatus(conduit, v1("investigations", caseId, "ingest", "recipes", String(p.recipe_id), "runs"))).json);
+        // A pipeline whose runs the person may not read, or that could not be read, is not shown as never run.
         if (found !== undefined) runs[String(p.recipe_id)] = found as Run[];
+        else runsUnread = true;
       }),
     );
   }
-  frame.pipelinesProblem = pipelines === "unreadable";
-  frame.strip = stripItems({ packs: frame.servingCase?.domains, pipelines, sources, runs });
+  // A refusal (the person lacks Edit pipelines, or the dataset is not theirs) is said as one and never as "try again";
+  // only a failing Conduit says to try again.
+  frame.pipelinesProblem =
+    pipelines !== "unreadable"
+      ? null
+      : refused(registryReply.status)
+        ? { words: refusalWords(registryReply.status, undefined, "Reading the pipelines"), refused: true }
+        : { words: STUDIO_WORDS.pipelinesUnreadable, refused: false };
+  frame.strip = stripItems({ packs: frame.servingCase?.domains, pipelines, sources, runs, runsUnread });
 }
 
 // ------------------------------------------------------------------------------------------------- the templates

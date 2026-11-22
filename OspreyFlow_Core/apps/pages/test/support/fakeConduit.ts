@@ -7,6 +7,9 @@
  *    query is ignored, so refused as missing;
  *  - a dataset or a case the person's own cases do not read is 404 `{"detail": "Not Found"}`, whatever the person's rights
  *    (the Conduit answers a thing a person may not see exactly as one that does not exist);
+ *  - the readiness strip's three reads need a right each, checked before the case or the dataset (a route's dependency runs
+ *    before its handler): the pipelines `edit_pipelines`, a pipeline's runs `run_pipelines`, a dataset's sources
+ *    `add_ingest_files`; 403 `{"detail": "Missing right: ..."}`, which the page must never show;
  *  - the release routes need rights: export `edit_target_model` and `publish_pipelines`, import `edit_target_model` and
  *    `edit_pipelines`: 403 `{"detail": ...}` with the right named, which the page must never show;
  *  - the release routes' parameters: `name` and `version` are required (FastAPI's own 422, `detail` a list); the name is a
@@ -172,16 +175,20 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     }
     let found = /^\/v1\/investigations\/([^/]+)\/ingest\/recipe-registry$/.exec(path);
     if (found && method === "GET") {
+      // The right first: the real route's dependency runs before its handler, so a person without it learns nothing of the case.
+      if (!has("edit_pipelines")) return json(res, 403, { detail: "Missing right: edit_pipelines" });
       if (!visibleCase(decodeURIComponent(found[1] as string))) return json(res, 404, { detail: "Not Found" });
       return json(res, 200, person.pipelines ?? []);
     }
     found = /^\/v1\/investigations\/([^/]+)\/ingest\/recipes\/([^/]+)\/runs$/.exec(path);
     if (found && method === "GET") {
+      if (!has("run_pipelines")) return json(res, 403, { detail: "Missing right: run_pipelines" });
       if (!visibleCase(decodeURIComponent(found[1] as string))) return json(res, 404, { detail: "Not Found" });
       return json(res, 200, person.runs?.[decodeURIComponent(found[2] as string)] ?? []);
     }
     found = /^\/v1\/datasets\/([^/]+)\/sources$/.exec(path);
     if (found && method === "GET") {
+      if (!has("add_ingest_files")) return json(res, 403, { detail: "Missing right: add_ingest_files" });
       if (!visibleDataset(decodeURIComponent(found[1] as string))) return json(res, 404, { detail: "Not Found" });
       return json(res, 200, person.sources ?? []);
     }

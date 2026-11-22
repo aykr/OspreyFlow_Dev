@@ -37,7 +37,7 @@ export function bearer(): string {
   return `eyJ${generateSecret(24)}.${generateSecret(40)}.${generateSecret(43)}`;
 }
 
-export const ALL_RIGHTS = ["edit_target_model", "publish_pipelines", "edit_pipelines", "accept_types"];
+export const ALL_RIGHTS = ["edit_target_model", "publish_pipelines", "edit_pipelines", "accept_types", "run_pipelines", "add_ingest_files"];
 
 export function person(over: Partial<Person> = {}): Person {
   return { token: bearer(), rights: ALL_RIGHTS, cases: [caseRow()], ...over };

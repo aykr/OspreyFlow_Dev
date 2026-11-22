@@ -39,7 +39,7 @@
 </details>
 {% if f.strip %}<ul aria-label="{{ words.stripLabel }}" class="studio-strip">{% for item in f.strip %}<li>{{ item }}</li>{% endfor %}</ul>
 {% endif %}
-{% if f.pipelinesProblem %}<p role="alert">{{ words.pipelinesUnreadable }}</p>{% endif %}
+{% if f.pipelinesProblem %}{% if f.pipelinesProblem.refused %}<p class="caption" role="note">{{ f.pipelinesProblem.words }}</p>{% else %}<p role="alert">{{ f.pipelinesProblem.words }}</p>{% endif %}{% endif %}
 {% if f.openingNote %}<p class="caption" role="status">{{ f.openingNote }}</p>{% endif %}
 {% if f.reminder %}<p class="caption studio-proposals-reminder"><a class="btn" href="{{ f.reminder.href }}"{% if f.reminder.opensModel %} data-opens-model="{{ f.reminder.opensModel }}"{% endif %} aria-describedby="studio-proposals-tip">{{ f.reminder.text }}</a> <span id="studio-proposals-tip" role="note">{{ f.reminder.tip }}</span></p>
 {% endif %}

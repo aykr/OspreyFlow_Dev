@@ -33,7 +33,7 @@ import {
 import type { LoginRecord } from "./loginState.js";
 import { COOKIE_NAME, IDLE_SECONDS, MIN_SECRET_LENGTH, newRecord, randomToken } from "./sessionPolicy.js";
 import { LOGIN_KEY_PREFIX } from "./sessionStore.js";
-import { endStaged } from "./staging.js";
+import { STAGED_SWEEP_MS, endStaged } from "./staging.js";
 import { MemorySessionStore } from "./sessionStore.js";
 import type { SessionStore } from "./sessionStore.js";
 import { isV1Path, rawPathOf } from "./v1.js";
@@ -113,7 +113,7 @@ export function createApp(deps: AppDeps): Express {
   app.set("view engine", "njk");
   // What the Studio pages (slice IS5a) read from the app: the Conduit's address and limits, the store that holds a staged
   // release folder, the clock and the log. Settings, never a request's own.
-  const stagedStore = deps.stagedStore ?? new MemorySessionStore({ clock });
+  const stagedStore = deps.stagedStore ?? new MemorySessionStore({ clock, sweepEveryMs: STAGED_SWEEP_MS });
   app.locals["studio"] = {
     forward: deps.forward,
     store: stagedStore,

@@ -10,7 +10,8 @@
  * draft it named, whether they confirmed replacing it). A release can carry recipes and mappings, so it is held as little as
  * the steps need: nothing else of it is ever kept, and it is never rendered into a page, a URL, a cookie or a log line.
  * FOR HOW LONG. At most `STAGED_TTL_SECONDS` (half an hour) from the last step, and never past the session: the key's time to
- * live is the least of the two, so the store removes it when either ends. It is removed at once after a successful import and
+ * live is the least of the two, and the process's own store sweeps what has expired every `STAGED_SWEEP_MS` (a minute), so a
+ * folder a person abandons leaves the process's memory within that minute of the end, with nobody reading it. It is removed at once after a successful import and
  * when the person signs out (`endStaged`); a session holds at most `MAX_HELD` folders, and staging another removes the oldest.
  * HOW MUCH. `MAX_FOLDER_BYTES` of file text (2 MB) and `MAX_FOLDER_FILES` files; over either, nothing is held and the person
  * is told in words. The store refuses a value over `MAX_STAGED_VALUE_BYTES` as a second guard.
@@ -32,6 +33,8 @@ export const STAGED_TTL_SECONDS = 30 * 60;
 export const MAX_FOLDER_BYTES = 2 * 1024 * 1024;
 export const MAX_FOLDER_FILES = 200;
 export const MAX_HELD = 3;
+/** How often the process's own store removes held folders that have expired, with nobody reading them. */
+export const STAGED_SWEEP_MS = 60 * 1000;
 
 /** The folder's last check, as the steps after it need it. */
 export interface StagedCheck {

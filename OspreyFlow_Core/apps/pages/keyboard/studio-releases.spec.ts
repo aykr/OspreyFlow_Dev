@@ -31,7 +31,7 @@ import { generateSecret } from "../test/support/secret.js";
 
 const CASE = "case-harbour";
 const DATASET = "harbour-extract";
-const RIGHTS = ["edit_target_model", "publish_pipelines", "edit_pipelines", "accept_types"];
+const RIGHTS = ["edit_target_model", "publish_pipelines", "edit_pipelines", "accept_types", "run_pipelines", "add_ingest_files"];
 
 let assets: { dir: string; manifest: Record<string, string> };
 

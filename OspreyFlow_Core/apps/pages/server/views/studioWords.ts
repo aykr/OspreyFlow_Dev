@@ -186,6 +186,8 @@ export function stripItems(input: {
   pipelines: readonly Pipeline[] | "unreadable";
   sources: readonly Source[] | "unreadable";
   runs: Record<string, readonly Run[]>;
+  /** A pipeline's runs could not be read (refused, or the Conduit failed): the last run is then not known, which is not "no run yet". */
+  runsUnread?: boolean;
 }): string[] {
   const list = input.pipelines === "unreadable" ? [] : input.pipelines;
   const untested = list.filter(isUntested).length;
@@ -195,7 +197,7 @@ export function stripItems(input: {
     input.pipelines === "unreadable"
       ? "pipelines could not be read"
       : `${list.length} ${list.length === 1 ? "pipeline" : "pipelines"}${untested ? ` · ${untested} untested` : ""}`,
-    lastRunInWords(input.runs),
+    input.runsUnread ? "last run could not be read" : lastRunInWords(input.runs),
   ];
 }
 

@@ -69,7 +69,9 @@ describe("the frame for a person the strip's reads refuse", () => {
     const text = textOf(res.text);
     expect(res.status).toBe(200);
     expect(text).toContain(PIPELINES_REFUSED);
-    expect(res.text).toMatch(/role="alert"[^>]*>\s*Reading the pipelines is not available to you/);
+    // A note, not an alert: it is the person's rights, not a fault, and the alert is kept for what failed.
+    expect(res.text).toMatch(/<p class="caption" role="note">Reading the pipelines is not available to you/);
+    expect(res.text).not.toMatch(/role="alert"[^>]*>\s*Reading the pipelines/);
     expect(text).not.toContain(TRY_AGAIN);
     expect(text).toContain("pipelines could not be read");
     expect(text).toContain("sources could not be read");
@@ -110,5 +112,6 @@ describe("the frame for a person the strip's reads refuse", () => {
     const text = textOf((await w.get(`/studio?case=${CASE_ID}`)).text);
     expect(text).toContain("The pipelines could not be read just now. Try again in a few minutes.");
     expect(text).not.toContain(PIPELINES_REFUSED);
+    expect((await w.get(`/studio?case=${CASE_ID}`)).text).toMatch(/<p role="alert">The pipelines could not be read just now/);
   });
 });
