@@ -16,6 +16,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -33,7 +34,8 @@ class BadEntry(Exception):
 
 def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
           account: str = "", merged: dict | None = None, verify: dict | None = None,
-          accepted: dict | None = None, owner_line: dict | None = None, progress: dict | None = None) -> dict:
+          accepted: dict | None = None, owner_line: dict | None = None, progress: dict | None = None,
+          server: dict | None = None) -> dict:
     """One build's entry for status.js. Refuses an entry the dashboard must not show."""
     if state not in STATES:
         raise BadEntry(f"unknown state {state!r}")
@@ -56,6 +58,62 @@ def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evid
         out["owner_line"] = owner_line  # the owner has answered; the conductor has not applied it yet (7)
     if progress:
         out["progress"] = progress  # a merge running, stalled or stopped without a result (MERGE_PROGRESS_BRIEF.md)
+    if server:
+        out["server"] = server  # the demo server's result for a waiting slice, or what a merge took from it (004, 5)
+    return out
+
+
+NOTE_HEAD = re.compile(r"^# Early warning: \S+ at [0-9a-f]{8}: (GREEN|RED|NO RESULT|REFUSED)\s*$", re.M)
+NOTE_TEST = re.compile(r"^\s+- test `([^`]+)`", re.M)
+
+
+def server_view(sid: str, st: dict, rec: Path, merged: dict | None) -> dict | None:
+    """The demo server's word on one slice, for the board and status.js (the owner's file 004, item 5). A merged slice:
+    what its merge took from the server (merged.json). A waiting one (verified, verifying, refused): running (early
+    warning's running file), green, red and the first failing test (as its note says: a display only; the merge reads
+    the runner's own result), or none; with "run it on the server again" and a rerun on the Mac when recorded."""
+    import server_gate
+    if merged:
+        srv = merged.get("server") or {}
+        if not srv:
+            return None
+        out = {"merge": True, "counted": bool(srv.get("counted")), "taken": srv.get("taken") or [],
+               "mac_ran": srv.get("mac_ran") or [], "shadow": srv.get("shadow") or "", "run_id": srv.get("run_id")}
+        out["said"] = (f"server counted: {len(out['taken'])} targets taken ({', '.join(out['taken'][:6])}); the Mac ran "
+                       f"{'; '.join(out['mac_ran'][:4]) or 'nothing of the gate'}" if out["counted"] else
+                       f"server not counted ({srv.get('why') or 'no result'}); shadow: {out['shadow'] or 'none'}")
+        return out
+    tip = st.get("tip") or ""
+    if st.get("phase") not in ("verified", "verifying", "refused") or not re.fullmatch(r"[0-9a-f]{40}", tip):
+        return None
+    out = {"state": "none", "tip": tip, "run_id": server_gate.run_id(sid, tip)}
+    running = c.DATA / "early-warning" / "running" / f"{sid}-{tip[:8]}.json"
+    if running.exists():
+        out["state"] = "running"
+    else:
+        try:
+            text = server_gate.note_of(sid, tip).read_text()
+        except OSError:
+            text = ""
+        m = NOTE_HEAD.search(text)
+        if m:
+            out["state"] = {"GREEN": "green", "RED": "red"}.get(m.group(1), "no result")
+            t = NOTE_TEST.search(text)
+            if out["state"] == "red" and t:
+                out["test"] = t.group(1)
+    again = c.read_json(rec / "server-again.json") or {}
+    if again.get("tip") == tip:
+        out["again"] = again.get("because") or "run it on the server again"
+    rerun = c.read_json(server_gate.rerun_record(sid, out["run_id"])) if out["run_id"] else None
+    if rerun and rerun.get("tip") == tip:
+        out["rerun"] = rerun.get("result")
+    out["said"] = f"server {out['state']}" + (f": {out['test']}" if out.get("test") else "")
+    if out.get("rerun"):
+        out["said"] += f"; rerun on the Mac: {out['rerun']}"
+    elif out["state"] == "red":
+        out["said"] += f"; rerun it on the Mac: merge_slice.py server-rerun {sid}"
+    if out.get("again"):
+        out["said"] += f"; run it on the server again ({out['again']})"
     return out
 
 
@@ -207,7 +265,7 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
             source = "merge record + owner's acceptance"
         try:
             builds_entry = entry("done", note=note, evidence=evidence, merged=merged, verify=verify_m,
-                                 accepted=accepted_m, **kw)
+                                 accepted=accepted_m, server=server_view(sid, st, rec, merged), **kw)
         except BadEntry as e:
             # skipped and reported; the slice is shown from its other records, as if there were no merge record
             problems.append(f"{sid}: merge record skipped, not shown as done: {e}")
@@ -241,9 +299,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     if progress:
         note = progress["said"]
         source = "merge progress record"
+    server = server_view(sid, st, rec, None) if state and state != "done" else None
     if state and state != "done":
         try:
-            builds_entry = entry(state, note=note, evidence=evidence, owner_line=waiting, progress=progress, **kw)
+            builds_entry = entry(state, note=note, evidence=evidence, owner_line=waiting, progress=progress,
+                                 server=server, **kw)
         except BadEntry as e:
             problems.append(f"{sid}: {e}")
             builds_entry = None
@@ -270,8 +330,10 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
                  if d.strip() and not c.read_json(c.rec_dir(d.strip()) / "merged.json")]
         shown = f"waiting on {', '.join(waits)}" if waits else "ready"
         source = "backlog file's after column"
+    view = server_view(sid, st, rec, merged if state == "done" else None) if state else None
     rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
-                 "from": source, "track": kw["track"], "account": kw["account"], "merged": state == "done"})
+                 "from": source, "track": kw["track"], "account": kw["account"], "merged": state == "done",
+                 "server": (view or {}).get("said")})
 
 
 def slice_counts(rows: list[dict], ids: set) -> dict:
@@ -429,6 +491,16 @@ def main() -> int:
         print(f"{'slice':8} {'build':6} {'state':34} {'track':6} {'account':8} {'read from':30} what")
         for r in rows:
             print(f"{r['slice']:8} {r['build']:6} {r['state']:34} {r['track']:6} {r['account']:8} {r['from']:30} {r['what'][:60]}")
+        said = [(r["slice"], r["server"]) for r in rows if r.get("server")]
+        if said:
+            print("demo server (" + ("counting: on" if __import__("server_gate").counting() else
+                                     "advice and shadow only: server_counts is off") + "):")
+            for sid_, line in said:
+                print(f"  {sid_:8} {line}")
+        t = __import__("server_gate").shadow_tally()
+        if any(t.values()):
+            print(f"server shadow: {t['agree']} agree, {t['differ']} differ, {t['no comparison']} no comparison, "
+                  f"{t['counted']} counted")
         print("slices merged of those cut, per build: " + ", ".join(f"{b} {d['said']}" for b, d in sorted(counts.items())))
         for acct in sorted({r['account'] for r in rows if r['account']} | {"default", "sol"}):
             near, stop = c.near_limit(acct), c.account_stop(acct)

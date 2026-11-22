@@ -326,7 +326,7 @@ M = [
  ("slice_start.py", '    if not problems and left:\n', '    if False:\n', "leave_files"),
  ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "rulings_copy_is_in_the_worktree"),
  # LINE_FIXES_5_BRIEF.md, C: merged of cut, per build
- ("board.py", '"account": kw["account"], "merged": state == "done"})', '"account": kw["account"], "merged": bool(merged)})', "merge_record_the_board_refuses"),
+ ("board.py", '"account": kw["account"], "merged": state == "done",', '"account": kw["account"], "merged": bool(merged),', "merge_record_the_board_refuses"),
  ("board.py", '        d["cut"] += 1\n', '        d["cut"] = max(d["cut"], 3)\n', "new_row_raises_the_cut"),
  ("board.py", '            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}', '            "self_clears": c.self_clears(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}, "approved_diffs": applied_diffs()}', "no_merged_slice_writes_0_of_n"),
  ("board.py", '    builds = {k: {**v, **({"slices": counts[k]["said"]', '    builds = {k: {**v, **({} if True else {"slices": counts[k]["said"]', "two_merged_writes_2_of_3"),
@@ -505,6 +505,13 @@ M = [
  ("server_gate.py", '        if not f.exists():\n            f.write_text(SHADOW_HEAD)\n', '        if False:\n            f.write_text(SHADOW_HEAD)\n', "both_green"),
  ("server_gate.py", '        if len(parts) >= 7 and parts[6] in out:\n', '        if False:\n', "both_green"),
  ("server_gate.py", '    srv = {"pass": "green", "fail": "red"}.get(', '    srv = {"pass": "green", "fail": "green"}.get(', "red_from_both_agrees"),
+ # the owner's file 004, item 5: the board shows each waiting slice's server result and what a merge took from it
+ ("board.py", '        out["server"] = server  # the demo server', '        pass  # the demo server', "waiting_slice_shows_its_server_result"),
+ ("board.py", '            out["state"] = {"GREEN": "green", "RED": "red"}.get(m.group(1), "no result")', '            out["state"] = "green"', "waiting_slice_shows_its_server_result"),
+ ("board.py", '    if running.exists():\n        out["state"] = "running"', '    if False:\n        out["state"] = "running"', "waiting_slice_shows_its_server_result"),
+ ("board.py", '    if again.get("tip") == tip:\n', '    if False:\n', "run_again_and_a_rerun"),
+ ("board.py", '"counted": bool(srv.get("counted")),', '"counted": False,', "merge_shows_which_targets"),
+ ("board.py", '        if any(t.values()):\n', '        if False:\n', "merge_shows_which_targets"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

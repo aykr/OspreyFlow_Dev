@@ -269,6 +269,7 @@ says that cost is a list-price estimate, not a bill.
 - **The server's green counts** (004, 2): for a finished pass with the same main tip, slice tip and candidate tree hash, the gate runs only each `ci` target (and Core `check` target) the result does not name as passed, and `make test` whole unless passed (then only the test files the server did not run); anything else, the whole gate. `merged.json` says what was taken and why not.
 - **The stack** (004, 3): a slice stacked on others counts only when main is exactly the tree the server ran it on; a refusal marks the ones above to go to the server again (`server-again.json`).
 - **The shadow** (004, 4): each merge records the server's result beside the Mac's whole gate for the same candidate: agree, differ or no comparison (`server-shadow-<run>.json`, `server-shadow.tsv`).
+- **The board and the server** (004, 5): each waiting slice's server result (running, green, red and the test, none; run again; a rerun's result), what each merge took from the server, and the shadow's tally.
 
 ## Files outside the repository
 
