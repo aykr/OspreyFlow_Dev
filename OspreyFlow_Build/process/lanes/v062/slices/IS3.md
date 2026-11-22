@@ -29,6 +29,10 @@ Data on main (`OspreyFlow_Core/services/api/app.py`): `GET /v1/datasets` (about 
 
 The two new tests; the existing `apps/pages` vitest files; `tests/glass_trees/test_functions_yaml.py`, `test_no_react_check.py`, `test_pages_foundation.py` (IS5a0's), `test_design_gates_reach.py`; the words tests (`test_ui_words_check.py`, `test_copy_says_no_client.py`); `tests/test_doc_citations_check.py`; `npm run lint`, `npm run typecheck`, `node scripts/no_react_check.mjs`, `npm test --workspace apps/pages`; `ruff check .`. **No `tests/test_layout.py`** (the worktree's `Claude outputs` folder fails it). Before your final report run by hand what the conductor runs again: ruff and eslint on every file changed and the scan-map check for each new test.
 
+## Scan-map rows for your new tests (the owner's rule for the night, 22 November 2026)
+
+**If a new test of yours walks a folder** (a directory walk, a glob over repository folders, `git ls-files`, reading files by pattern), **write its scan-map row yourself in your own file `OspreyFlow_Build/process/lanes/v062/scan_rows/IS3.tsv`** (one line per test: the test path relative to `OspreyFlow_Build`, a tab, the prefixes it walks, a tab, one sentence saying what it walks), **and say so in your report** (which test, which prefixes). That includes your acceptance test (the dataset map's scenario test under the glass-trees tests) if it reads the Studio's templates or the repository's folders. A test that only reads its own `tmp_path` still gets a row, saying so. The tests that exist already have their rows or are not new; add none for them.
+
 ## Out of scope
 
 **The Studio's Map step (row template, field bindings, its own Sigma instance, the only dragging in the Studio) is IS4m, under the existing build IS4 (the owner, 21 November, file 009 answer 8); it is not this page.** Editing the run order, the whole-dataset load, the suggestion, any line or graph (IS6); the GOV.UK tree's page; the Studio frame (IS5a); `pipelineLayout.ts` moving; any Conduit change (stop and report instead); anything under `apps/workspace`; the protected files; rendering `pages` in a deployment (PL7a2).
