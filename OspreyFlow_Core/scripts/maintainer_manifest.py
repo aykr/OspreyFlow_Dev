@@ -12,17 +12,16 @@ It writes two files into `--out`:
   column `maintained_under`;
 * `maintainer-manifest.md`: a short summary, one row per folder.
 
-**What it reads.** The tracked files at the ref and nothing from the working tree: the list from
-`git ls-tree -r -z`
-and each file's bytes from one `git cat-file --batch` (no copy of the tree is written to disk, so
-an untracked, ignored
-or edited file cannot get in, and a clone elsewhere gives the same answer). The one exception is
-the isolation check
-(`scripts/no_react_check.mjs`), which reads the disk: it runs on an extracted `git archive` of the
-ref in a temporary
-folder, with the product's bundler found in the `node_modules` of the checkout this script lives
-in. Its rules are
-`scripts/manifest_areas.toml` beside this file, unless `--rules` names another.
+**What it reads.** The tracked files at the ref and nothing from the working tree: the object
+database is read with dulwich (`iter_tree_contents` for the list, one blob at a time for the
+bytes). It is dulwich, not `git ls-tree` and `git cat-file`, because the `api` image copies
+`scripts/` and carries no `git` executable, and the manifest must be runnable from the tree alone
+wherever it is checked out. No copy of the tree is written to disk, so an untracked, ignored or
+edited file cannot get in, and a clone elsewhere gives the same answer. The one exception is the
+isolation check (`scripts/no_react_check.mjs`), which reads the disk: it runs on an extracted copy
+of the ref in a temporary folder, with the product's bundler found in the `node_modules` of the
+checkout this script lives in. Its rules are `scripts/manifest_areas.toml` beside this file, unless
+`--rules` names another.
 
 **Layouts.** In the user repository the product tree is the root. In the developer repository it is
 the
@@ -112,8 +111,10 @@ def open_repo(path: Path):  # type: ignore[no-untyped-def]
 
 
 def resolve_commit(repo: Path, ref: str) -> str:
-    """The commit a ref names: a tag is followed to its commit; `HEAD`, branches and hashes work,
-    and `~N` / `^` suffixes step back along first parents."""
+    """The commit a ref names, as git reads it: a tag is followed to its commit; `HEAD`, branches
+    and hashes work. A suffix `^N` is the commit's Nth parent (`^` is `^1`, and `^0` is the commit
+    itself); `~N` is N steps back along first parents (`~` is `~1`). A parent a commit does not
+    have is a refusal, never another commit."""
     from dulwich.objectspec import parse_commit
 
     match = re.fullmatch(r"(.+?)((?:[~^]\d*)*)", ref)
@@ -122,8 +123,13 @@ def resolve_commit(repo: Path, ref: str) -> str:
         try:
             commit = parse_commit(opened, base.encode())
             for kind, count in re.findall(r"([~^])(\d*)", steps):
-                for _ in range(int(count or 1) if kind == "~" else 1):
-                    commit = opened[commit.parents[0]]
+                if kind == "^":
+                    nth = int(count) if count else 1
+                    if nth:
+                        commit = opened[commit.parents[nth - 1]]
+                else:
+                    for _ in range(int(count) if count else 1):
+                        commit = opened[commit.parents[0]]
             return commit.id.decode()
         except (KeyError, ValueError, TypeError, IndexError) as error:
             raise ManifestError(

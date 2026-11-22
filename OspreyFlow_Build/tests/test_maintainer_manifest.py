@@ -20,7 +20,7 @@ can be believed (rule 12: the sentence, then the test that fails if it is untrue
 
 **What it walks (the scan row).** Every case but the real-tree ones builds its own git repositories in `tmp_path`.
 The real-tree cases (`test_the_real_tree_*`) read the whole of `OspreyFlow_Core` at `HEAD` of this repository through
-`git ls-tree` and `git cat-file` (read-only, nothing from the working tree), once, and run the script's no-React
+dulwich's object store, the script's own reader (read-only, nothing from the working tree; the test's own `git ls-tree` is the oracle it is compared with), once, and run the script's no-React
 step on an extracted archive of it in a temporary folder; they also read `OspreyFlow_Core/scripts/manifest_areas.toml`
 and the release workflow at `HEAD`. One case (`copy_reduced_core`) walks the working tree's `OspreyFlow_Core/apps/pages`
 and `OspreyFlow_Core/packages/glass-shared` with `rglob`, reading them into a temporary repository for the planted React
