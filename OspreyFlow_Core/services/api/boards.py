@@ -824,9 +824,7 @@ class Boards:
         told = {item.item_id} | {
             i.item_id for i in case_items if i.element_id in seen and i.item_id in withdrawn_items
         }
-        watched = {
-            w.item_id for w in await self.items.active_watches(case_id) if w.item_id in told
-        }
+        watched = {w.item_id for w in await self.items.active_watches(case_id) if w.item_id in told}
         if before_write is not None:
             await before_write(nodes, links)
         # Through the graph's own path for a drawn element (`withdraw_drawn`, on the dataset
