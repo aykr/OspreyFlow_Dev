@@ -378,6 +378,13 @@ M = [
  # LINE_FIXES_5_BRIEF.md, 1: the plan-id pattern
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "one_id_of_each_prefix_length"),
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "three_letter_build_starts"),
+ # LINE_FIXES_5_BRIEF.md, 4: lint and the scan-map check in the Stop check
+ ("stop_check.py", '        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)\n', '        lp, lr = [], []\n', "lint_error_is_red_in_the_same_round"),
+ ("stop_check.py", '    one("ruff format", [ruff, "format", "--check", "--force-exclude"], core, py, "ruff format --check")\n', '', "not_formatted_is_red"),
+ ("stop_check.py", '    one("eslint", [eslint], core,', '    0 and one("eslint", [eslint], core,', "eslint_error_is_red"),
+ ("stop_check.py", '        missing = scan_select.unmapped(Path(wt) / "OspreyFlow_Build", table, only=new)\n', '        missing = []\n', "no_scan_map_row_is_red"),
+ ("stop_check.py", '        if rows.returncode == 0:\n            table += scan_select.load(rows.stdout)', '        if False:\n            table += scan_select.load(rows.stdout)', "row_waiting_on_main"),
+ ("stop_check.py", '            problems.append("RED: " + name + ": " + why + " is not installed', '            0 and problems.append("RED: " + name + ": " + why + " is not installed', "not_there_is_red"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
