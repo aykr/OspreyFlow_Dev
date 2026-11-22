@@ -184,7 +184,7 @@ async def test_a_job_still_running_past_the_matching_locks_life_is_said_overdue_
     said = await _status(world, job)
     assert said.state == "overdue"
     assert "longer than" in said.words and "may still be working" in said.words
-    for claim in ("lost", "run it again", "none of its results were saved", "stopped"):
+    for claim in ("was lost", "run it again", "none of its results were saved", "stopped before"):
         assert claim not in said.words, f"age alone does not show {claim!r}"
     assert "administrator" in said.words, "who can read the worker's own log"
 

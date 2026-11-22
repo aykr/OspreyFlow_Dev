@@ -8,21 +8,31 @@ away. A job that failed, or whose worker stopped, left the run looking as it had
 
 **The words are this module's, never the worker's** (rule 7). A failed job's `error` is the
 exception's text, which can name a Gremlin step, a node or a value; it stays on the job's record for
-the operator, and is not said to a reader. Nor is any count or node id of the corpus's records said:
-the run's own result counts the records it left out and names them (`resolution_job_result`,
-`resolve.trigger.ResolutionRunResult`), and a reader is told only *that* some were left out, because
-a count of every record of a type is a number every reader may not have (rules 3 and 7).
+the operator, and is not said to a reader. Nor is any count or node id of the corpus's records said.
+
+**Records a run left out are not said at all, not even as a yes or no** (rule 3). A matching run
+reads the whole corpus as the service principal (`resolve.trigger`), not as the reader who asks, so
+"some records were left out" is a fact about records the reader may not see, and a yes or no about
+them is a one-bit count of the same. A finished job is said finished, left out or not. The run's own
+result counts the records it left out and names them (`ResolutionRunResult.left_out`, kept on the
+job's record) for an operator.
 
 **No oracle for which ids exist.** An id with no record, a record past its day, and the id of a job
 of another kind answer in exactly the same words: a reader cannot find out from this which job ids
 the server holds.
 
-**A worker that stopped.** Nothing reclaims a stream entry, so a job whose worker was lost stays
-`running` on its record until the record expires (ADR-151 Cost, "a batch job whose worker dies
-shows running"). A matching run holds its overlap lock for at most `LOCK_TTL_SECONDS`
-(`resolve.trigger`), so a job still running a minute past that is one no worker is working on, and
-is said so rather than "running". A job that was queued and never taken (no worker at all) is
-indistinguishable from a long queue, and is still said to be waiting.
+**A worker that stopped cannot be told from a long run, so it is not claimed.** Nothing reclaims a
+stream entry, so a job whose worker was lost stays `running` on its record until the record expires
+(ADR-151 Cost). But a run does not stop when its overlap lock expires: `resolve.trigger` says a run
+may outlive `LOCK_TTL_SECONDS` and handles the lock's release failing for that case, and the worker
+sets no time limit on a job (the batch expansion has its own, enforced, which is why it can say
+abandoned). So a job still running a minute past the lock's life is said **overdue**: longer than a
+matching run is expected to take, it may still be working or its worker may have been lost, and the
+reader is not told to run it again, which once the lock has expired is not refused and would overlap
+a live run. A verdict of "lost" needs a signal that a worker is alive (a heartbeat the worker writes
+without racing the job's own record), which is a change to the worker and not made here. A job that
+was queued and never taken (no worker at all) is indistinguishable from a long queue, and is still
+said to be waiting.
 """
 
 from __future__ import annotations
@@ -35,10 +45,11 @@ from services.resolve.trigger import JOB_TYPE_RESOLVE_ENTITY_TYPE, LOCK_TTL_SECO
 
 from .jobs import JobRecord
 
-ResolutionJobState = Literal["queued", "running", "done", "not_run", "failed", "abandoned", "gone"]
+ResolutionJobState = Literal["queued", "running", "overdue", "done", "not_run", "failed", "gone"]
 
 #: The matching lock's own life, and a minute past it, as ADR-151's limit has a minute past its own.
-ABANDONED_AFTER_SECONDS = LOCK_TTL_SECONDS + 60
+#: Past this a run is overdue; it is not thereby lost (see the module's docstring).
+OVERDUE_AFTER_SECONDS = LOCK_TTL_SECONDS + 60
 
 GONE_WORDS = (
     "There is no record of this matching job. A job's record is kept for a day, so it may have "
@@ -50,9 +61,6 @@ class ResolutionJobStatus(BaseModel):
     job_id: str
     state: ResolutionJobState
     words: str
-    #: Whether the job left some records out of its comparison (a value not of its type's form).
-    #: A yes or no, never a count (rules 3 and 7).
-    records_left_out: bool = False
 
 
 class JobSource(Protocol):
@@ -62,10 +70,10 @@ class JobSource(Protocol):
     async def get_status(self, job_id: str) -> JobRecord | None: ...
 
 
-def abandoned(record: JobRecord, now: datetime) -> bool:
+def overdue(record: JobRecord, now: datetime) -> bool:
     if record.state != "running" or record.started_at is None:
         return False
-    return (now - record.started_at).total_seconds() > ABANDONED_AFTER_SECONDS
+    return (now - record.started_at).total_seconds() > OVERDUE_AFTER_SECONDS
 
 
 def _is_a_resolution_job(record: JobRecord) -> bool:
@@ -87,13 +95,16 @@ async def resolution_job_status(
         return ResolutionJobStatus(
             job_id=job_id, state="queued", words=f"{matching} is waiting for a worker to take it."
         )
-    if abandoned(record, now):
+    if overdue(record, now):
+        stage = f" Its stage: {record.progress}." if record.progress else ""
         return ResolutionJobStatus(
             job_id=job_id,
-            state="abandoned",
+            state="overdue",
             words=(
-                f"{matching} stopped before it finished: the worker that took it was lost, so "
-                "none of its results were saved; run it again."
+                f"{matching} has been running for longer than a matching run is expected to "
+                f"take.{stage} It may still be working, or the worker that took it may have been "
+                "lost. Do not start it again yet; if it does not finish, tell an administrator, "
+                "who can read the worker's log."
             ),
         )
     if record.state == "running":
@@ -119,16 +130,5 @@ def _done(job_id: str, matching: str, result: dict[str, Any]) -> ResolutionJobSt
             job_id=job_id,
             state="not_run",
             words=f"{matching} did not run: another matching run for it was already in progress.",
-        )
-    if int(result.get("records_left_out") or 0) > 0:
-        return ResolutionJobStatus(
-            job_id=job_id,
-            state="done",
-            words=(
-                f"{matching} finished. Some records were left out because a value was not in the "
-                "form its type expects (a date that is not year-month-day, for example), so they "
-                "were not compared. Correct them in the source and load it again."
-            ),
-            records_left_out=True,
         )
     return ResolutionJobStatus(job_id=job_id, state="done", words=f"{matching} finished.")
