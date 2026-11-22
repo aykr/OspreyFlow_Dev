@@ -1665,6 +1665,8 @@ def main() -> int:
     ad = sub.add_parser("approve-diff")
     ad.add_argument("name")
     ad.add_argument("hash8")
+    rp = sub.add_parser("server-report")
+    rp.add_argument("--json", action="store_true")
     sr = sub.add_parser("server-rerun")
     sr.add_argument("slice")
     aa = sub.add_parser("apply-approved")
@@ -1683,6 +1685,9 @@ def main() -> int:
             print(wait_idle(a.minutes))
         elif a.cmd == "approve-diff":
             print(approve_diff(a.name, a.hash8))
+        elif a.cmd == "server-report":  # item 6: read only
+            r = server_gate.report()
+            print(json.dumps(r, indent=1) if a.json else server_gate.report_words(r))
         elif a.cmd == "server-rerun":
             print(server_rerun(a.slice))
         elif a.cmd == "apply-approved":

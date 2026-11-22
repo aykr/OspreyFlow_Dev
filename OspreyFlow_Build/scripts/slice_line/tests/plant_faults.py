@@ -512,6 +512,11 @@ M = [
  ("board.py", '    if again.get("tip") == tip:\n', '    if False:\n', "run_again_and_a_rerun"),
  ("board.py", '"counted": bool(srv.get("counted")),', '"counted": False,', "merge_shows_which_targets"),
  ("board.py", '        if any(t.values()):\n', '        if False:\n', "merge_shows_which_targets"),
+ # the owner's file 004, item 6: measure and report what the server saved
+ ("server_gate.py", '            (counted if (merged.get("server") or {}).get("counted") else whole).append(row)', '            whole.append(row)', "averages_and_the_refusals"),
+ ("server_gate.py", '            caught += r.get("result") == "red"', '            caught += 1', "averages_and_the_refusals"),
+ ("server_gate.py", '            gate = next((x["seconds"] for x in prog.get("done") or [] if x.get("name") == GATE_STEP), None)', '            gate = None', "averages_and_the_refusals"),
+ ("server_gate.py", '''        prog = c.read_json(d / f"merge-progress-{run[len('merge-'):-len('.log')]}.json") if run.endswith(".log") else None''', '''        prog = c.read_json(d / "merge-progress.json")''', "averages_and_the_refusals"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

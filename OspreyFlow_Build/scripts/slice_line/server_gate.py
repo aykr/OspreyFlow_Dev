@@ -300,3 +300,52 @@ def shadow_tally() -> dict:
         if len(parts) >= 7 and parts[6] in out:
             out[parts[6]] += 1
     return out
+
+
+# ------------------------------------------------------------------ item 6: measure and report
+
+GATE_STEP = "today's full gate"
+
+
+def report() -> dict:
+    """What the server saved, from the records (read only): for merges whose gate counted the server's green, the
+    Mac-only remainder's seconds and the whole merge's seconds; the same for merges that ran the whole gate; how many
+    refusals the server caught before the slot (a server red, rerun on the Mac and red there too) and how many were an
+    environment difference (green on the Mac); and the shadow's tally."""
+    counted, whole = [], []
+    caught = differences = 0
+    for d in sorted((c.DATA / "records").glob("*")) if (c.DATA / "records").is_dir() else []:
+        merged = c.read_json(d / "merged.json") or {}
+        run = merged.get("gate_run") or ""
+        prog = c.read_json(d / f"merge-progress-{run[len('merge-'):-len('.log')]}.json") if run.endswith(".log") else None
+        if merged and prog:
+            gate = next((x["seconds"] for x in prog.get("done") or [] if x.get("name") == GATE_STEP), None)
+            total = sum(x.get("seconds") or 0 for x in prog.get("done") or [])
+            row = {"slice": d.name, "merge": merged.get("merge"), "gate_s": gate, "merge_s": total}
+            (counted if (merged.get("server") or {}).get("counted") else whole).append(row)
+        for f in d.glob("server-rerun-*.json"):
+            r = c.read_json(f) or {}
+            caught += r.get("result") == "red"
+            differences += r.get("result") == "green"
+
+    def mean(rows, k):
+        xs = [r[k] for r in rows if isinstance(r.get(k), (int, float))]
+        return round(sum(xs) / len(xs)) if xs else None
+    return {"counted": {"merges": len(counted), "remainder_s": mean(counted, "gate_s"), "merge_s": mean(counted, "merge_s"),
+                        "each": counted},
+            "whole": {"merges": len(whole), "gate_s": mean(whole, "gate_s"), "merge_s": mean(whole, "merge_s")},
+            "caught_before_the_slot": caught, "environment_differences": differences, "shadow": shadow_tally()}
+
+
+def report_words(r: dict) -> str:
+    def m(s):
+        return "none yet" if s is None else f"{s // 60} min {s % 60} s"
+    return "\n".join([
+        f"merges with the server's green counted: {r['counted']['merges']}; the Mac-only remainder took "
+        f"{m(r['counted']['remainder_s'])} on average, the whole merge {m(r['counted']['merge_s'])}",
+        f"merges that ran the whole gate: {r['whole']['merges']}; the gate took {m(r['whole']['gate_s'])} on average, "
+        f"the whole merge {m(r['whole']['merge_s'])}",
+        f"refusals the server caught before the slot (red there, rerun red on the Mac): {r['caught_before_the_slot']}; "
+        f"a server red that was green on the Mac (an environment difference): {r['environment_differences']}",
+        f"shadow: {r['shadow']['agree']} agree, {r['shadow']['differ']} differ, {r['shadow']['no comparison']} no "
+        f"comparison, {r['shadow']['counted']} counted"])
