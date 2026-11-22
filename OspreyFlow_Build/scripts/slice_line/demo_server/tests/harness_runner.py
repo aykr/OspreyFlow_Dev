@@ -13,8 +13,8 @@ harness.json, written by the test itself (never the environment):
                                        own Docker answers its owner)
      "slow_clean": <seconds> | null,  the job's clean-up made that much slower, so a result written before its
                                        work is gone is seen (run 7's race)
-     "min_free": <bytes> | null}      the free-space floor for this test (this Mac has less than 40 GB free); null:
-                                       protocol.py's own
+     "min_free": <bytes> | null}      the free-space floor for this test; null: protocol.py's own (40 GB),
+                                       which a test must not rely on: the Mac's free space varies
 
 The job the direct launch starts runs through this wrapper again, with the same harness file, so it sees the same
 stand-ins. Everything else is runner.py's own: its command parsing, its refusals, its bundle checks, its merge.
