@@ -18,9 +18,13 @@ it; `small-govuk` is pinned beside it because a deployment on a server of one's 
 with HTTPS. Nothing here reads, starts or changes that deployment: it is a render in memory from
 synthetic settings.
 
-**What is not stored, and why.** `helm template` output: it needs the `helm` binary, which a pure
-test does not assume (`make chart-check` and `make cp-policy-check` template the chart). The values
-that the chart reads are stored; the chart's own templates are not rendered here. `osprey.yaml`
+**The chart is pinned by its sources.** `helm template` output is not stored: it needs the `helm`
+binary, which a pure test does not assume (`make chart-check` and `make cp-policy-check` template
+the chart). So each Helm shape (`cluster`, `cloud-platform`, `cloud-platform-poc`) stores, beside its
+values, a copy of the chart's own files under `chart/` (`Chart.yaml`, the chart's default
+`values.yaml`, `.helmignore` and every template), byte for byte and in the manifest with their
+SHA-256: what `helm template` renders from, so a template that changes (a workload, an Ingress
+path, a NetworkPolicy) is a changed file, named. `osprey.yaml`
 (the input) and `.rendered` (the list of what was written) are not rendered content. There is no
 `deployment.json` among the files: the renderers write `glass.json` (ADR-114 Amendment 4), which is
 stored; `/deployment.json` is what the Glass is served from it.
@@ -43,7 +47,9 @@ the slice is wrong. It checks `model_fields_set`, so it still means "not set" on
 called in place of the real one (the real renderer files are never edited): a `pages:` service in
 the compose services; a `handle /studio` block in the Caddyfile; a changed Helm value (on both Helm
 shapes); a file dropped from a shape (on a compose shape and on the Terraform one); one byte changed
-in a stored fixture (a copy of it). Each is shown clean first (so the red is the plant's), red with
+in a stored fixture (a copy of it); and, in a temporary copy of the chart (`tools.reference_render.CHART`
+pointed at it), a `pages` workload added to `templates/workloads.yaml`, a `/studio` path added to
+the Ingress in `templates/ingress.yaml`, and a template file dropped. Each is shown clean first (so the red is the plant's), red with
 a message naming the shape, the file and the first differing line, and clean again after.
 
 **Regenerate the reference** (a deliberate change; the diff of `tests/fixtures/reference_render/`
@@ -58,7 +64,8 @@ is what the owner reads):
 **What this test reads.** The folder `OspreyFlow_Build/tests/fixtures/reference_render/` (each
 shape's folder, by a recursion over those folders only), the cloud-platform fixtures
 `OspreyFlow_Build/tests/fixtures/cloud_platform/{development,poc}.yaml` (and the platform settings
-they name, through the renderer), the design tokens `OspreyFlow_Core/packages/design/tokens.css`
+they name, through the renderer), the chart `OspreyFlow_Core/deploy/helm/ospreyflow/` (one recursion
+over that folder, its files only, for the Helm shapes), the design tokens `OspreyFlow_Core/packages/design/tokens.css`
 (read once, to plant a change to them in a temporary copy, and to show no fixture holds them), and,
 by importing the renderers, `OspreyFlow_Core/harness/` and
 `OspreyFlow_Core/packages/schemas/`. It walks no other folder.
@@ -84,6 +91,16 @@ SHAPE_BRANDS = ref.all_folders()
 IDS = [ref.folder_name(shape, brand) for shape, brand in SHAPE_BRANDS]
 #: The compose shapes (a compose file and a Caddyfile).
 COMPOSE = ("local-lite", "small")
+#: The shapes installed from the chart, and the chart files that matter most to "unchanged when off".
+HELM = ("cluster", "cloud-platform", "cloud-platform-poc")
+CHART_PINS = {
+    "chart/Chart.yaml",
+    "chart/values.yaml",
+    "chart/templates/workloads.yaml",
+    "chart/templates/ingress.yaml",
+    "chart/templates/networkpolicies.yaml",
+    "chart/templates/services.yaml",
+}
 
 
 @pytest.fixture(scope="module")
@@ -118,6 +135,7 @@ def test_every_shape_and_brand_has_a_stored_folder_and_nothing_else_is_stored() 
 def test_the_set_of_files_each_shape_writes_is_the_set_in_the_manifest(
     shape: str, brand: str, rendered: dict[tuple[str, str], dict[str, bytes]]
 ) -> None:
+    chart_now = ref.chart_files()
     """No file added and none dropped, and the manifest is true of the files beside it: the paths
     the manifest lists are the paths the shape renders and the paths stored, and each entry's
     SHA-256 and size are those of the stored bytes (so a changed byte shows as a changed hash)."""
@@ -144,11 +162,17 @@ def test_the_set_of_files_each_shape_writes_is_the_set_in_the_manifest(
     expected = {
         "local-lite": {"compose.yaml", "Caddyfile", "deployment.env", "glass.json", "realm.json"},
         "small": {"compose.yaml", "Caddyfile", "deployment.env", "glass.json", "realm.json"},
-        "cluster": {"values.yaml", "versions.lock"},
-        "cloud-platform": {"values.yaml", "versions.lock", "images.yaml", "terraform/rds.tf"},
-        "cloud-platform-poc": {"values.yaml", "images.yaml", "terraform/rds.tf", "INSTALL.md"},
+        "cluster": {"values.yaml", "versions.lock"} | CHART_PINS,
+        "cloud-platform": {"values.yaml", "versions.lock", "images.yaml", "terraform/rds.tf"}
+        | CHART_PINS,
+        "cloud-platform-poc": {"values.yaml", "images.yaml", "terraform/rds.tf", "INSTALL.md"}
+        | CHART_PINS,
     }[shape]
     assert expected <= set(paths), f"{folder.name} lacks {sorted(expected - set(paths))}"
+    # The chart is pinned for the Helm shapes and only for them, every file of it.
+    pinned = {path for path in paths if path.startswith(ref.CHART_PREFIX)}
+    assert pinned == (set(chart_now) if shape in HELM else set()), f"{folder.name}: chart pins"
+    assert len(chart_now) >= 12, "the chart has its templates and its files"
 
 
 # ---- the invariant PL7a2b has to keep ---------------------------------------------------------
@@ -312,6 +336,95 @@ def test_a_file_dropped_from_a_shape_is_red(shape: str, dropped: str, brand: str
         names=f"{dropped}: in the reference, and no longer rendered",
         render_fn=without,
     )
+
+
+def _chart_copy(tmp_path: Path) -> Path:
+    """A temporary copy of the real chart, which `ref.CHART` is pointed at; the real chart is never
+    edited."""
+    copy = tmp_path / "chart"
+    shutil.copytree(ref.CHART, copy)
+    return copy
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", HELM)
+@pytest.mark.parametrize(
+    ("template", "plant", "line"),
+    [
+        (
+            "workloads.yaml",
+            # A document in the shape the template writes its workloads: a Deployment of the pages
+            # service, unguarded by any value.
+            "---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: pages\nspec:\n"
+            "  replicas: 1\n",
+            "name: pages",
+        ),
+        (
+            "ingress.yaml",
+            # A path in the Ingress's own `paths` loop, before it closes: `/studio` to `pages`.
+            "          - path: /studio\n            pathType: Prefix\n            backend:\n"
+            "              service:\n                name: pages\n",
+            "path: /studio",
+        ),
+    ],
+    ids=["a pages workload", "a studio ingress path"],
+)
+def test_a_changed_helm_template_is_red(
+    shape: str, brand: str, template: str, plant: str, line: str, tmp_path: Path
+) -> None:
+    """(f) The chart's own templates are pinned: a workload or an Ingress path added to a template,
+    in the shape the template writes, is a changed file under `chart/templates/` for every Helm
+    shape, naming the file and the first differing line, with the real chart untouched."""
+    copy = _chart_copy(tmp_path)
+    target = copy / "templates" / template
+    text = target.read_text(encoding="utf-8")
+    if template == "ingress.yaml":
+        anchor = "          {{- end }}\n    {{- end }}\n"
+        assert anchor in text, "the Ingress template has no paths loop to plant in"
+        text = text.replace(anchor, plant + anchor, 1)
+    else:
+        text += plant
+    target.write_text(text, encoding="utf-8")
+    assert ref.differences(shape, brand, ref.render_shape(shape, brand)) == [], "not clean first"
+    with mock.patch.object(ref, "CHART", copy):
+        found = ref.differences(shape, brand, ref.render_shape(shape, brand))
+    message = "\n".join(found)
+    name = ref.folder_name(shape, brand)
+    assert f"{name}/chart/templates/{template}: first differing line is" in message, message
+    assert line in message, f"red for another reason:\n{message}"
+    assert len(found) == 1, message  # only that file; the values and the manifest are as before
+    assert ref.differences(shape, brand, ref.render_shape(shape, brand)) == [], "not clean after"
+
+
+@pytest.mark.parametrize("brand", ref.BRANDS)
+@pytest.mark.parametrize("shape", HELM)
+def test_a_chart_file_dropped_or_added_is_red(shape: str, brand: str, tmp_path: Path) -> None:
+    """(f) A template dropped from the chart, and one added, are each named as no longer rendered or
+    as rendered and not in the reference."""
+    name = ref.folder_name(shape, brand)
+    copy = _chart_copy(tmp_path)
+    (copy / "templates" / "networkpolicies.yaml").unlink()
+    with mock.patch.object(ref, "CHART", copy):
+        dropped = ref.differences(shape, brand, ref.render_shape(shape, brand))
+    assert (
+        f"{name}/chart/templates/networkpolicies.yaml: in the reference, and no longer rendered"
+        in (dropped)
+    ), dropped
+    copy = _chart_copy(tmp_path / "again")
+    (copy / "templates" / "pages.yaml").write_text("kind: Deployment\n", encoding="utf-8")
+    with mock.patch.object(ref, "CHART", copy):
+        added = ref.differences(shape, brand, ref.render_shape(shape, brand))
+    assert f"{name}/chart/templates/pages.yaml: rendered, and not in the reference" in added, added
+
+
+@pytest.mark.parametrize("shape", COMPOSE)
+def test_a_compose_shape_is_not_pinned_to_the_chart(shape: str, tmp_path: Path) -> None:
+    """A change to the chart is not a change to a compose deployment: the compose shapes render the
+    reference with the chart changed."""
+    copy = _chart_copy(tmp_path)
+    (copy / "templates" / "workloads.yaml").write_text("changed\n", encoding="utf-8")
+    with mock.patch.object(ref, "CHART", copy):
+        assert ref.differences(shape, "govuk", ref.render_shape(shape, "govuk")) == []
 
 
 @pytest.mark.parametrize("brand", ref.BRANDS)
@@ -499,6 +612,45 @@ _PLANTS = [
     ("origin: https://portal.not-an-example.co.uk\n", "host"),
     ("image: 210987654321.dkr.ecr.eu-west-2.amazonaws.com/api:1\n", "cloud account"),
 ]
+
+
+#: A host written bare, as the renderers write one (so the scan is shown red on the form the
+#: renderers use, not only on `https://`): the real cluster values' own lines with the synthetic
+#: host swapped for a real-shaped one. Each is named in the stored `cluster-ospreyflow/values.yaml`.
+_BARE_HOSTS = [
+    ("VALKEY_HOST: cache.example.internal", "VALKEY_HOST: cache.acme-corp.co.uk"),
+    ("psql -h db.example.internal ", "psql -h db.acme-corp.com "),
+    ("host: db.example.internal", "host: db.acme-corp.zone"),
+    ("endpoint: s3.eu-west-2.amazonaws.com", "endpoint: s3.storage.acme-corp.example"),
+    ("image: ghcr.io/ospreyflow/api:", "image: registry.acme-corp.co.uk/ospreyflow/api:"),
+    ("image: ghcr.io/ospreyflow/api:", "image: evilghcr.io/ospreyflow/api:"),
+]
+
+
+@pytest.mark.parametrize(("real", "planted"), _BARE_HOSTS)
+def test_the_scan_is_red_on_a_host_written_without_a_scheme(real: str, planted: str) -> None:
+    """The renderers write database, cache, search and object-store hosts and image registries bare.
+    The text below is the stored cluster values with one of those swapped for a real-shaped host
+    (each `real` is in the stored file, which is clean without the swap)."""
+    values = ref.read_folder(REFERENCE / "cluster-ospreyflow")
+    assert ref.stored_text_findings(values) == []
+    text = values["values.yaml"].decode("utf-8")
+    assert real in text, f"{real!r} is not a line the renderer writes"
+    swapped = text.replace(real, planted)
+    found = ref.stored_text_findings({**values, "values.yaml": swapped.encode("utf-8")})
+    assert found, f"{planted!r} was not seen"
+    assert all("host" in line for line in found), found
+
+
+def test_the_scan_leaves_the_hosts_the_renderers_write_alone() -> None:
+    """Its own green: the synthetic and public hosts, a service name, a pod's name under its headless
+    service and a version are not findings (so the red above is the plant's)."""
+    ok = (
+        "VALKEY_HOST: cache.example.internal\nimage: ghcr.io/ospreyflow/api:1\n"
+        "endpoint: s3.eu-west-2.amazonaws.com\nhost: arcadedb-0.arcadedb-headless\n"
+        "version: 25.8.33.6\nhost: reference.ospreyflow.localhost\nimport java.io.File;\n"
+    )
+    assert ref.stored_text_findings({"values.yaml": ok.encode()}) == []
 
 
 @pytest.mark.parametrize(("planted", "expect"), _PLANTS)
