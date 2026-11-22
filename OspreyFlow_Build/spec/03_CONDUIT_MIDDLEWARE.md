@@ -1660,24 +1660,6 @@ result cardinality, and — where the action crosses a handling boundary — the
 analyst supplied. Audit write failure fails the request; an unaudited read in this domain is
 worse than a refused one.
 
-**Sign-ins and sign-outs are recorded by the product, never by a change to an identity provider**
-(SE8c). The Conduit writes `sign_in_seen` the first time it sees a session, whatever client the
-person signed in through; the page service reports its own callback and sign-out by the one route
-below:
-
-```
-POST   /v1/session-events                 the page service's report of a person's sign-in or sign-out
-```
-
-The body is one field, `kind`, from a closed list (`sign_in`, `sign_out`); any other field is a 422
-and nothing in the body is stored. The event is recorded for the person the token names and no one
-else, once for each report, at most a fixed number a person a minute. It needs no right, because it
-is accepted **only from the page service's own client** (the token's own client claim against the
-page service's configured client, for Keycloak and Entra ID alike): a token issued to any other
-client, a person's own workspace token among them, is refused with one 403 in the same words
-whatever the reason, and writes nothing. Like every audit write it fails closed (503). Refused
-sign-in attempts never reach the Conduit and are in the identity provider's own log.
-
 **Scope of the audit (DC1c, 20 November 2026, from the DC1a truth check of that date;
 a note on the paragraph above, which it does not replace).** "Every read ... records" holds for reads and writes
 of case data, less what follows. *Unaudited by design:* deployment metadata (the ontology, map providers, ingest
@@ -1695,6 +1677,24 @@ and report-feed exports; the dataset release export, the rule file export and a 
 row and no ledger row; a platform backup and an object transfer write neither. *The table:* append-only in
 intent: the database does not yet refuse an UPDATE or a DELETE from another role, and there is no hash chain.
 The guides say "coming" for the two unbuilt records, until SE8 merges.
+
+**Sign-ins and sign-outs are recorded by the product, never by a change to an identity provider**
+(SE8c). The Conduit writes `sign_in_seen` the first time it sees a session, whatever client the
+person signed in through; the page service reports its own callback and sign-out by the one route
+below:
+
+```
+POST   /v1/session-events                 the page service's report of a person's sign-in or sign-out
+```
+
+The body is one field, `kind`, from a closed list (`sign_in`, `sign_out`); any other field is a 422
+and nothing in the body is stored. The event is recorded for the person the token names and no one
+else, once for each report, at most a fixed number a person a minute. It needs no right, because it
+is accepted **only from the page service's own client** (the token's own client claim against the
+page service's configured client, for Keycloak and Entra ID alike): a token issued to any other
+client, a person's own workspace token among them, is refused with one 403 in the same words
+whatever the reason, and writes nothing. Like every audit write it fails closed (503). Refused
+sign-in attempts never reach the Conduit and are in the identity provider's own log.
 
 **Export gate.** `POST /export` evaluates every node and edge in the selection against the
 handling scheme. A `consult_originator` item blocks the export and is named specifically.
