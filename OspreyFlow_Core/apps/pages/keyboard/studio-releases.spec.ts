@@ -247,7 +247,7 @@ test.describe("with scripts", () => {
 });
 
 test.describe("with scripts: the Model place", () => {
-  test("SK5: the Needs-you reminder is reached by Tab and followed by Enter, and the workspace is asked to open on Model", async ({ page }) => {
+  test("the Needs-you reminder is reached by Tab and followed by Enter, and the workspace is asked to open on Model", async ({ page }) => {
     const s = await studio({ proposals: [{ dataset_id: DATASET, dataset_name: "Harbour prison extract (synthetic)", to_decide: 2 }] });
     try {
       await open(page, s);
