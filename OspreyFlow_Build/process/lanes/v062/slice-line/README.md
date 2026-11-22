@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (592 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (490 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (596 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (492 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -236,7 +236,7 @@ cannot set effort).
 ## Accounts and usage
 
 Every seat session's stream reports its account's rate-limit windows; `run_seat.py` records them in
-`~/.ospreyflow/slice-line/accounts/<account>.json`. At 90% of a window, no new slice starts on that account; the
+`~/.ospreyflow/slice-line/accounts/<account>.json`. At 95% of a window, no new slice starts on that account; the
 running slice finishes. A refused session (rate limit, signed out) stops its track (`StopFailure` hook). **A seat failure** (a call refused: `is_error`, an `api_error_status` of 401, 403, 408, 429 or 5xx, no result line, or a verifier with no verdict and no turns) is never a verdict, a finding, a round or a red stop: `run_seat.py` tries the seat three times, the pause growing, each refused try a `seat-failure-*.json` record that nothing reading a verdict reads; then, or as soon as the account is stopped, the slice stays in its phase with the failure and the account in its state, the account is stopped, the board shows "seat failed on <account>", and the run prints the error's own words for the owner. **The owner clears a stopped account** with `clear_account.py <account>` on a `resume.tsv` line `clear-account <account> <YYYY-MM-DD>`: one cheap probe call on that account, and the stop is removed only if the call is accepted; logged in `owner-changes.tsv`; the guard refuses the script to every agent, as it does `refreeze.py`. Work is never moved to the other account by the line: the owner edits `accounts.yaml` for new slices, and moves a started slice's seat with `resume.py <ID> move-seat` on a `resume.tsv` line. Usage per slice, seat and account is in
 `usage.tsv` (`board.py --usage`); the conductor's own (with its scouts') is one row per session: its SessionEnd hook
 writes it, and `run_seat.py conductor` writes it after the session when the hook did not (never twice).
@@ -275,6 +275,7 @@ says that cost is a list-price estimate, not a bill.
 - **The branch's own changes** (007): the Stop hook's per-file checks and scans read the files changed since `git merge-base main HEAD`, not the frozen base: what a builder takes in from main is never the slice's.
 - **Main's scan rows** (007): the Stop hook's scan-map check adds main's `scan_map.tsv` rows to the installed copy's, so a row a merge added counts at once; nothing installed changes.
 - **Every job of a run** (007): `watch-github` reads every job of the latest completed run, a cancelled one's too, names the failed jobs and each that printed no FAILED line ("failed without a test"), records them, and the board's GitHub line names them.
+- **The stop at 95%** (010): an account at or above 95% of a window starts no new slice (it was 90%); nothing else about the stop changes.
 
 ## Files outside the repository
 

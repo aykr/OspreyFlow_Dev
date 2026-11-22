@@ -542,6 +542,9 @@ M = [
  ("merge_slice.py", 'without_a_test=[j for j in failed if j not in named]', 'without_a_test=[]', "failure_with_no_test"),
  ("merge_slice.py", '        if last.get("conclusion") == "cancelled" and not jobs.get("failed_jobs"):\n', '        if False:\n', "cancelled_run_with_no_failed_job"),
  ("board.py", '''print(f"main is red: run {ci['run']} ({ci['why']}){merge_slice.jobs_said(last_try)} {ci['url']}''', '''print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}''', "boards_github_line"),
+ # the owner's file 010: the stop on an account near its limit at 95%
+ ("common.py", 'NEAR_LIMIT = 0.95  #', 'NEAR_LIMIT = 0.90  #', "below_95_percent_a_new_slice_starts"),
+ ("common.py", 'NEAR_LIMIT = 0.95  #', 'NEAR_LIMIT = 0.96  #', "at_or_above_95_percent"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
