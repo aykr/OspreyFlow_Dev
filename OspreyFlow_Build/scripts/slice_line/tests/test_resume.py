@@ -18,7 +18,15 @@ from test_gates import bash, guard, refused, sh, started, stop_gate, world  # no
 
 V062 = "OspreyFlow_Build/process/lanes/v062"
 TODAY = time.strftime("%Y-%m-%d", time.gmtime())
-RULINGS_COPY = "Claude outputs/slice-line/RULINGS.md"
+RULINGS_COPY = "slice-line/RULINGS.md"  # in the worktree's own git folder (5)
+
+
+class Copy:
+    """`wt / RULINGS_COPY` for a worktree: the rulings copy in its git folder."""
+
+    def __rtruediv__(self, wt):
+        from pathlib import Path
+        return Path(sh("git rev-parse --path-format=absolute --git-path slice-line/RULINGS.md", wt).stdout.strip())
 
 
 def resume(w, slice_id, action, env=None):
@@ -109,12 +117,12 @@ def test_resume_refuses_without_the_owners_line_for_that_slice_action_and_day_an
     wt = at_limit(w)
     if line is not None:
         owner_line(w, line.replace("@TODAY@", TODAY))
-    (wt / RULINGS_COPY).unlink()  # slice_start.py made the worktree as the builder has it (B): a refusal brings none
+    (wt / Copy()).unlink()  # slice_start.py made the worktree as the builder has it (B): a refusal brings none
     before, head = snapshot(w), sh("git rev-parse HEAD", wt).stdout
     p = resume(w, "S1", "add-round")
     assert said_refused(p, "no line", "resume.tsv"), p.stdout + p.stderr
     assert snapshot(w) == before and sh("git rev-parse HEAD", wt).stdout == head
-    assert not (wt / RULINGS_COPY).exists() and changes(w) == []
+    assert not (wt / Copy()).exists() and changes(w) == []
 
 
 def test_resume_a_line_is_used_once_and_each_use_is_logged(world):
@@ -148,7 +156,7 @@ def test_resume_add_round_gives_one_more_round_and_brings_the_rulings_without_a_
     st = state(w)
     assert (st["phase"], st["round"], st["rounds_limit"]) == ("building", st0["round"] + 1, st0["rounds_limit"] + 1)
     assert "note" not in st
-    assert "A newer ruling" in (wt / RULINGS_COPY).read_text()
+    assert "A newer ruling" in (wt / Copy()).read_text()
     assert sh("git rev-parse HEAD", wt).stdout == head                      # nothing committed on the slice's branch
     assert sh("git status --porcelain", wt).stdout.strip() == ""            # and git never sees the copy
     assert yamls(w) == keep
@@ -173,7 +181,7 @@ def test_resume_clear_stop_returns_a_red_stopped_slice_to_building(world):
     assert p.returncode == 0, p.stdout + p.stderr
     rec = w["data"] / "records/S1"
     assert not (rec / "red_stop.json").exists() and not (rec / "red_stops").exists()
-    assert state(w)["phase"] == "building" and (wt / RULINGS_COPY).exists()
+    assert state(w)["phase"] == "building" and (wt / Copy()).exists()
     assert yamls(w) == keep and changes(w)[0][2] == "clear-stop"
 
 
@@ -349,7 +357,7 @@ def test_correct_command_resumes_a_slice_stopped_only_by_its_own_malformed_make_
     assert log[-1][2] == "correct-command" and old in log[-1][3] and new in log[-1][3]
     board = sh([w["py"], str(w["lines"] / "board.py")], w["repo"], w["env"], check=False)
     assert "command corrected" in board.stdout and new in board.stdout
-    assert yamls(w) == keep and (wt / RULINGS_COPY).exists()
+    assert yamls(w) == keep and (wt / Copy()).exists()
 
 
 def test_correct_command_resumes_a_slice_stopped_on_a_missing_port_slot(world):

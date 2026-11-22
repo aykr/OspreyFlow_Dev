@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (448 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (357 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (452 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (360 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -249,6 +249,7 @@ says that cost is a list-price estimate, not a bill.
 - **No fifth round without the scout's table** (D): `run_seat.py builder` refuses a round from 5 on until `slices/<ID>_ROUND<N>_TABLE.md` (N 5 or more, not empty) is in the main checkout, and names it in the builder's prompt (the owner, 21 November: rounds 5 to 8 are judged against it).
 - **Plan ids of two to four letters** (1): `common.plan_ids()` reads `[A-Z]{2,4}\d+` (PLAN_ID_PATTERN.diff).
 - **CI's lint and the scan map at Stop** (4): the Stop hook runs `ruff check` and `ruff format --check` on the branch's changed OspreyFlow_Core Python, eslint on its changed OspreyFlow_Core and OspreyFlow_Build/tools JavaScript and TypeScript, and the scan-map check on each new test under OspreyFlow_Build/tests (scan_map.tsv or the slice's waiting rows); red in the same round. A tool not in the worktree or on PATH is red, with how to install it there.
+- **The rulings copy in the worktree's git folder** (5): `git rev-parse --git-path slice-line/RULINGS.md`, no entry of the tree, so `test_layout` passes in a builder's worktree; a copy left at `Claude outputs/slice-line/` is removed when the new one is written.
 
 ## Files outside the repository
 

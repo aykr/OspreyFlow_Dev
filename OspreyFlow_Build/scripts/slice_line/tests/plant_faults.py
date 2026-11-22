@@ -320,7 +320,7 @@ M = [
  ("run_seat.py", '        return 0 if self_clear(slice_id) else 1', '        return 1', "run_seat_tries_the_clearance"),
  # LINE_FIXES_5_BRIEF.md, B: the checks proved in the slice's own worktree before it starts
  ("slice_start.py", '    problems = dry_run.checks_in_tree(row, wt, slot, log)\n', '    problems = []\n', "fails_only_in_a_builders_worktree"),
- ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "fails_only_in_a_builders_worktree"),
+ ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "rulings_copy_is_in_the_worktree_from_its_start"),
  ("slice_start.py", '        c.git(["branch", "-D", branch], c.REPO, check=False)\n        raise SystemExit(f"NOT STARTED: {slice_id}\'s checks', '        raise SystemExit(f"NOT STARTED: {slice_id}\'s checks', "fails_only_in_a_builders_worktree"),
  ("dry_run.py", '    written = stand_in(tree, acceptance_files(spec))\n', '    written = []\n', "acceptance_command_being_red"),
  ("slice_start.py", '    if not problems and left:\n', '    if False:\n', "leave_files"),
@@ -385,6 +385,10 @@ M = [
  ("stop_check.py", '        missing = scan_select.unmapped(Path(wt) / "OspreyFlow_Build", table, only=new)\n', '        missing = []\n', "no_scan_map_row_is_red"),
  ("stop_check.py", '        if rows.returncode == 0:\n            table += scan_select.load(rows.stdout)', '        if False:\n            table += scan_select.load(rows.stdout)', "row_waiting_on_main"),
  ("stop_check.py", '            problems.append("RED: " + name + ": " + why + " is not installed', '            0 and problems.append("RED: " + name + ": " + why + " is not installed', "not_there_is_red"),
+ # LINE_FIXES_5_BRIEF.md, 5: the rulings copy in the worktree's git folder, no root entry
+ ("common.py", '    dest = rulings_copy(tree)\n', '    dest = Path(tree) / OLD_RULINGS_COPY_REL\n', "worktree_made_by_the_line_passes"),
+ ("common.py", '    if old.is_file():  # the copy the line used to leave', '    if False:  # the copy the line used to leave', "old_place_is_removed"),
+ ("common.py", '        old.unlink()\n', '        old.unlink()\n        [q.unlink() for q in old.parent.parent.rglob("*") if q.is_file()]\n', "old_folder_stays"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

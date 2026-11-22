@@ -238,25 +238,50 @@ def refreeze(slice_id: str, by: str) -> dict:
     return frozen
 
 
-#: The owner's rulings reach a slice's worktree, which is a snapshot from the slice's start, as an untracked copy of
-#: main's RULINGS.md at a path every checkout's .gitignore keeps out of git (`Claude outputs/`), never as a commit on
-#: the slice's branch: a copy committed there conflicts with main the next time main's rulings change (BL6, 18
-#: November 2026). run_seat.py writes it before every builder and verifier session and names it in the prompt.
+#: The owner's rulings reach a slice's worktree, which is a snapshot from the slice's start, as a copy of main's
+#: RULINGS.md, never as a commit on the slice's branch: a copy committed there conflicts with main the next time main's
+#: rulings change (BL6, 18 November 2026). run_seat.py writes it before every builder and verifier session and names it
+#: in the prompt. The copy lives in the worktree's own git folder (`git rev-parse --git-path`), which is no entry of the
+#: tree: at the tree's root (`Claude outputs/slice-line/`, until 21 November 2026) it failed test_layout's "no product
+#: folder is left at the root" in every builder's worktree (PL4d3c; LINE_FIXES_5_BRIEF.md, 5). A copy left at the old
+#: place is removed when the new one is written.
 RULINGS_REL = f"{V062_REL}/RULINGS.md"
-RULINGS_COPY_REL = "Claude outputs/slice-line/RULINGS.md"
+RULINGS_COPY_REL = "slice-line/RULINGS.md"
+OLD_RULINGS_COPY_REL = "Claude outputs/slice-line/RULINGS.md"
+
+
+def rulings_copy(tree: Path) -> Path | None:
+    """Where the rulings copy of `tree` goes: inside its own git folder, never among its files."""
+    p = subprocess.run(["git", "-C", str(tree), "rev-parse", "--path-format=absolute", "--git-path", RULINGS_COPY_REL],
+                       capture_output=True, text=True)
+    if p.returncode != 0 or not p.stdout.strip():
+        return None
+    dest = Path(p.stdout.strip())
+    top = subprocess.run(["git", "-C", str(tree), "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if top.returncode != 0 or str(dest).startswith(top.stdout.strip().rstrip("/") + "/") and ".git/" not in str(dest):
+        return None  # never a path among the tree's own files
+    return dest
 
 
 def deliver_rulings(tree: Path) -> str | None:
-    """Main's RULINGS.md, copied into `tree` where git ignores it; the copy's path, or None when it cannot be."""
+    """Main's RULINGS.md, copied into `tree`'s own git folder; the copy's path, or None when it cannot be."""
     try:
         text = git(["show", f"main:{RULINGS_REL}"], REPO)
     except RuntimeError:
         return None
-    if subprocess.run(["git", "-C", str(tree), "check-ignore", "-q", RULINGS_COPY_REL]).returncode != 0:
+    dest = rulings_copy(tree)
+    if dest is None:
         return None
-    dest = Path(tree) / RULINGS_COPY_REL
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(text + "\n")
+    old = Path(tree) / OLD_RULINGS_COPY_REL
+    if old.is_file():  # the copy the line used to leave at the root (5): removed, with the folders it alone kept
+        old.unlink()
+        for d in (old.parent, old.parent.parent):
+            try:
+                d.rmdir()
+            except OSError:
+                break
     return str(dest)
 
 
