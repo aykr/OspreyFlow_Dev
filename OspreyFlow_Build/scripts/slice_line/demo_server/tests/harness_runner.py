@@ -1,4 +1,4 @@
-"""The Mac's tests' own way into runner.py, and the only one: never installed (install.sh copies six named files, and
+"""The Mac's tests' own way into runner.py, and the only one: never installed (install.sh copies the files its FILES names, and
 this is not one of them), and nothing in runner.py reads it, names it or reads any variable that could select it.
 
     python harness_runner.py <the runner.py under test> <harness.json> [runner.py's own arguments]

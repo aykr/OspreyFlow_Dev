@@ -18,7 +18,9 @@ NODE_VERSION=22.23.5                # the Mac's line Node (~/.ospreyflow/slice-l
                                     # Node 22 from nodejs.org's distributions, as here
 DROPIN_NAME=osprey-early-delegate.conf
 SHIELD_UNIT=/etc/systemd/system/osprey-early-shield.service
-FILES="runner.py protocol.py lists.py lists.tsv mac_only.tsv cleanup.sh shield.nft"
+SUMMARY_USER=osprey-summary         # 010: the summary's account: no password, no shell, no sudo, no docker group
+UNITS=/etc/systemd/system
+FILES="runner.py protocol.py lists.py lists.tsv mac_only.tsv cleanup.sh shield.nft summarize.py summary.nft"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DO=no
 [ "${1:-}" = "--yes" ] && DO=yes
@@ -139,6 +141,72 @@ else
   printf '%s\n' "$UNIT_TEXT" | sed 's/^/    /'
 fi
 
+# 6. The summary of a red run (010), after the job and outside it: its own account, which reads only what the runner
+#    hands over (handoff/, group-readable to it) and writes only its summaries (summaries/, group-readable to the
+#    runner, which returns them as `summary <id>`). It reaches one address and port: 127.0.0.1:11434, the host's
+#    Ollama (summary.nft, by its account; and the unit's own IPAddressAllow). It never reads data/ (mode 700, the
+#    runner's) and runs nothing from a log. A path unit starts it when a run is handed over; a timer catches up.
+if ! id -u "$SUMMARY_USER" >/dev/null 2>&1; then
+  act useradd --system --user-group --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin "$SUMMARY_USER"
+fi
+act install -d -o "$USER_NAME" -g "$SUMMARY_USER" -m 2750 "$ROOT/handoff"
+act install -d -o "$SUMMARY_USER" -g "$USER_NAME" -m 2750 "$ROOT/summaries"
+act chmod 0755 "$ROOT/bin/summarize.py"
+SUMMARY_NFT="$(sed "s/@SUMMARY_USER@/$SUMMARY_USER/g" "$HERE/summary.nft")"
+SUMMARY_SERVICE="[Unit]
+Description=Summaries of the early-warning runner's red runs (advice only)
+[Service]
+Type=oneshot
+User=$SUMMARY_USER
+Group=$SUMMARY_USER
+ExecStartPre=+/usr/sbin/nft -f $ROOT/bin/summary.nft
+ExecStart=/usr/bin/python3 -I $ROOT/bin/summarize.py
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=$ROOT/summaries
+InaccessiblePaths=$ROOT/data $ROOT/home
+IPAddressDeny=any
+IPAddressAllow=127.0.0.1/32
+RestrictAddressFamilies=AF_INET AF_UNIX
+CPUQuota=100%
+MemoryMax=1G
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=45min"
+SUMMARY_PATH="[Unit]
+Description=Start a summary when the early-warning runner hands a red run over
+[Path]
+PathChanged=$ROOT/handoff
+Unit=osprey-summary.service
+[Install]
+WantedBy=multi-user.target"
+SUMMARY_TIMER="[Unit]
+Description=Catch up on any red run handed over while no summary ran
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=10min
+Unit=osprey-summary.service
+[Install]
+WantedBy=timers.target"
+if [ "$DO" = yes ]; then
+  printf '%s\n' "$SUMMARY_NFT" > "$ROOT/bin/summary.nft"
+  chmod 0644 "$ROOT/bin/summary.nft"
+  nft -c -f "$ROOT/bin/summary.nft" || { echo "nft refuses the summary's rules: nothing loaded." >&2; exit 1; }
+  printf '%s\n' "$SUMMARY_SERVICE" > "$UNITS/osprey-summary.service"
+  printf '%s\n' "$SUMMARY_PATH" > "$UNITS/osprey-summary.path"
+  printf '%s\n' "$SUMMARY_TIMER" > "$UNITS/osprey-summary.timer"
+  systemctl daemon-reload
+  systemctl enable --now osprey-summary.path osprey-summary.timer
+else
+  say "  would write $ROOT/bin/summary.nft, checked with nft -c, loaded before each summary:"
+  printf '%s\n' "$SUMMARY_NFT" | sed 's/^/    /'
+  say "  would write $UNITS/osprey-summary.service, .path and .timer, and run: systemctl enable --now osprey-summary.path osprey-summary.timer"
+  printf '%s\n' "$SUMMARY_SERVICE" | sed 's/^/    /'
+fi
+
 say ""
 say "The one line to add, by hand, to $ROOT/home/.ssh/authorized_keys (owned by root, mode 644), with the public key"
 say "in place of the placeholder. restrict turns off the pty and port, agent and X11 forwarding; with the forced"
@@ -152,4 +220,6 @@ say "  this machine's listeners and to every private network, Docker's among the
 say "Containers, networks, volumes, images: none started, none changed. $USER_NAME is in no docker group."
 say "Created: the account $USER_NAME; $ROOT (bin/, data/, home/.ssh/); $DROPIN_DIR/$DROPIN_NAME;"
 say "  $SHIELD_UNIT and the nftables table inet osprey_early it loads;"
+say "  the account $SUMMARY_USER, $ROOT/handoff and $ROOT/summaries, osprey-summary.service, .path and .timer, and the"
+say "  nftables table inet osprey_summary (its one allowed connection: 127.0.0.1 port 11434);"
 say "  linger for $USER_NAME. Removed by: sudo bash $ROOT/bin/cleanup.sh (try --dry-run first)."

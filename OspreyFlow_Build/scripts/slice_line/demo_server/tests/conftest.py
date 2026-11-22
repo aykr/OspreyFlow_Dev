@@ -21,8 +21,9 @@ import pytest
 LINE = Path(__file__).resolve().parents[2]  # scripts/slice_line
 DEMO = LINE / "demo_server"
 TIP_PATTERN = "[0-9a-f]{40}"
-#: The seven files install.sh puts in bin/, as it names them.
-SERVER_FILES = ("runner.py", "protocol.py", "lists.py", "lists.tsv", "mac_only.tsv", "cleanup.sh", "shield.nft")
+#: The files install.sh puts in bin/, as it names them (010 adds the summary's two).
+SERVER_FILES = ("runner.py", "protocol.py", "lists.py", "lists.tsv", "mac_only.tsv", "cleanup.sh", "shield.nft",
+                "summarize.py", "summary.nft")
 WRAPPER = Path(__file__).resolve().parent / "harness_runner.py"
 
 
