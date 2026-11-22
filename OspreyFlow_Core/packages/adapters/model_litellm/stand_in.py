@@ -546,8 +546,10 @@ class StandInGateway:
         self.received.append((virtual or "master", dict(body)))
         tags = _tags(body, request)
         model = str(body.get("model", ""))
-        if virtual is not None and self._keys[virtual].models and model not in (
-            allowed := self._keys[virtual].models
+        if (
+            virtual is not None
+            and self._keys[virtual].models
+            and model not in (allowed := self._keys[virtual].models)
         ):
             return _error(
                 403,

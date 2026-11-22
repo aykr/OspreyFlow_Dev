@@ -17766,9 +17766,7 @@ def _guest_sign_in_admin(identity_admin: Any) -> EntraPeopleAdmin:
     return identity_admin
 
 
-@app.get(
-    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
-)
+@app.get("/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def guest_sign_in_route(identity_admin: IdentityAdminDep) -> GuestSignIn:
     """ADR-148 Amendment 17: whether guest (B2B) accounts are admitted, who last changed it and
     when. Behind `manage_people`, as People is; 409 `not_entra` on Keycloak."""
@@ -17776,9 +17774,7 @@ async def guest_sign_in_route(identity_admin: IdentityAdminDep) -> GuestSignIn:
     return GuestSignIn(admitted=admitted, changed_by=by, changed_at=at)
 
 
-@app.put(
-    "/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))]
-)
+@app.put("/v1/admin/sign-in/guests", dependencies=[Depends(require_right(Right.MANAGE_PEOPLE))])
 async def set_guest_sign_in_route(
     body: GuestSignInInput,
     principal: PrincipalDep,
@@ -21368,11 +21364,14 @@ async def _socket_standing(app_: Any, raw: Principal) -> int | None:
         return status.WS_1008_POLICY_VIOLATION
     # ADR-148 Amendment 15: a value an administrator set, changed since the socket opened.
     by_administrator: frozenset[str] = getattr(store, "by_administrator", frozenset())
-    if ("clearance" in by_administrator and stored.clearance != raw.clearance) or (
-        "org_unit" in by_administrator and stored.org_unit != raw.org_unit
-    ) or (
-        "handling_codes" in by_administrator
-        and sorted(stored.receivable_handling_codes or ()) != sorted(raw.receivable_handling_codes)
+    if (
+        ("clearance" in by_administrator and stored.clearance != raw.clearance)
+        or ("org_unit" in by_administrator and stored.org_unit != raw.org_unit)
+        or (
+            "handling_codes" in by_administrator
+            and sorted(stored.receivable_handling_codes or ())
+            != sorted(raw.receivable_handling_codes)
+        )
     ):
         return status.WS_1008_POLICY_VIOLATION
     return None
