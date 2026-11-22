@@ -44,5 +44,112 @@
       }
     }
   ],
-  "not_recorded": "Performance budget figures: they are measured on the owner's Mac with nothing else running (slice E)."
+  "budget": {
+    "what": "The performance budget figures taken on the owner's Mac before PL4's slice E moved anything (ADR-152 I11; the owner's ruling of 20 November and file 014). Carried forward by dist_compare's re-record. The full paper is OspreyFlow_Build/process/lanes/v062/PL4_BUDGET_FIGURES_2026-11-22.md.",
+    "date": "2026-11-22",
+    "taken": "08:21:07 to 08:23:03 UTC (a pause of 1 minute 56 seconds: no seat, no merge, no builder of the line running; load average 6.3 at the start)",
+    "machine": "the owner's Mac, with nothing else of the conductor's running (main checkout at 2f6388c: the code of PL4d3e's merge, f4d1634, plus docs-only commits)",
+    "commands": {
+      "unit": "npm run test:budget --workspace apps/workspace (vitest run --config vitest.budget.config.ts), three runs, from OspreyFlow_Core",
+      "browser": "OSPREY_PORTS_SLOT=25 npm run test:perf --workspace apps/workspace (playwright test --config perf/playwright.config.ts), two runs, the fixture of 50,000 nodes and 250,000 links under CI's software render, from OspreyFlow_Core"
+    },
+    "unit": {
+      "MatrixView.budget": {
+        "test": "src/matrix/MatrixView.budget.test.tsx: MatrixView at 50,000 nodes and 250,000 links opens inside the first-frame budget",
+        "limit_ms": 2500,
+        "limit_is": "elapsed < BUDGET_MS, asserted inside the test",
+        "runs_ms": [
+          2553,
+          2481,
+          2532
+        ],
+        "note": "the figure is the whole test's duration as vitest prints it (set-up included); the test's own elapsed is under the limit; this is the tightest budget on the Mac, within a few percent of its limit"
+      },
+      "settledAnchor.budget": {
+        "test": "src/canvas/settledAnchor.budget.test.ts: settledAnchors at the perf fixture's size",
+        "limit_ms": 1000,
+        "runs_ms": [
+          85,
+          90,
+          90
+        ]
+      },
+      "communityLinks.budget": {
+        "test": "src/canvas/communityLinks.budget.test.ts: packBubbles, 50,000 nodes in 40 communities",
+        "limit_ms": 2000,
+        "runs_ms": [
+          51,
+          58,
+          56
+        ]
+      }
+    },
+    "browser": {
+      "perf_first_frame": {
+        "test": "perf.spec.ts: 50k/250k fixture to a first interactive frame",
+        "limit_ms": 30000,
+        "runs_ms": [
+          7155,
+          8047
+        ],
+        "ready_at_ms": [
+          2715,
+          2672
+        ],
+        "dom_ready_ms": [
+          1267,
+          1191
+        ]
+      },
+      "perf_sweep": {
+        "test": "perf.spec.ts: a sustained pan and zoom, average frame",
+        "limit_ms_per_frame": 3000,
+        "runs_ms_per_frame": [
+          1885.1,
+          1587.7
+        ],
+        "frames": [
+          9,
+          9
+        ],
+        "run_ms": [
+          16966,
+          14289
+        ]
+      },
+      "long_frames": {
+        "limit": "none asserted; the profile is printed",
+        "runs": [
+          {
+            "count": 4,
+            "after_ready_at": 3,
+            "longest_ms": 2583,
+            "long_in_all_ms": 2860,
+            "script_ms": 2852,
+            "rendering_ms": 1128
+          },
+          {
+            "count": 4,
+            "long_in_all_ms": 3027,
+            "script_ms": 3023,
+            "rendering_ms": 1229
+          }
+        ]
+      },
+      "community_links": {
+        "test": "community-links.spec.ts: a large working set opens grouped by community",
+        "limit": "passes",
+        "runs": [
+          "passed (38.5 s)",
+          "passed"
+        ]
+      },
+      "all_four_passed": true,
+      "whole_run_s": [
+        44.8,
+        41.8
+      ],
+      "spread": "about 12% between two runs on a quiet Mac (first frame 7,155 to 8,047 ms; sweep 1,588 to 1,885 ms per frame): beyond the budget's own tolerance means a figure outside the limits, or outside the spread of these runs by more than that noise"
+    }
+  }
 }
