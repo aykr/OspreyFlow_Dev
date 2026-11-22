@@ -5,7 +5,7 @@
 seats:
   conductor: default
   scout: default        # scouts are the conductor's subagents, so they always share its account
-  verifier: default
+  verifier: sol
 tracks:
   "1": default
   "2": sol
