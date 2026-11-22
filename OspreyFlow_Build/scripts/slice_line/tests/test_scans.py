@@ -67,7 +67,8 @@ def test_the_stop_hook_runs_no_scan_for_a_path_no_row_names_and_records_those_it
     assert stop_gate(w, wt) is None
     tip = sh("git rev-parse HEAD", wt).stdout.strip()
     rec = json.loads((w["data"] / f"records/S1/tests-{tip}.json").read_text())
-    assert [r["name"] for r in rec["results"]] == ["checks", "acceptance"], rec
+    names = [r["name"] for r in rec["results"]]
+    assert names[:2] == ["checks", "acceptance"] and "scans" not in names, rec  # no scan (the three of 005 follow)
     (wt / "OspreyFlow_Core/apps/other.ts").write_text("export const y = 2;\n")
     sh("git add -A OspreyFlow_Core/apps && git commit -qm 'feat: another section'", wt, w["env"])
     lintbin = w["tmp"] / "lintbin"  # eslint, which the Stop hook now runs on a changed .ts (LINE_FIXES_5_BRIEF.md, 4)

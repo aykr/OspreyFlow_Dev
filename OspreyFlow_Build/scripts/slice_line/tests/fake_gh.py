@@ -10,6 +10,8 @@ The runs on GitHub, newest first, come from the environment:
   FAKE_GH_EXIT       gh fails (signed out, offline) with that exit code.
   FAKE_GH_VIEW_EXIT  `gh run view` alone fails (GitHub's 502 for a log), with that exit code.
   FAKE_GH_CALLS      a file each call is appended to, one line each.
+  FAKE_GH_JOBS       a JSON object, "<run>/<attempt>" -> the jobs `gh run view <run> --attempt <n> --json jobs` lists
+                     (name, conclusion, ...); none when absent.
 
   FAKE_GH_LOGS       a JSON object, "<run>/<attempt>" -> a file holding `gh run view <run> --attempt <attempt>
                      --log-failed`'s text as GitHub prints it (job, step, then the timestamped line, tab-separated);
@@ -33,6 +35,8 @@ FIELDS = {"attempt", "conclusion", "createdAt", "databaseId", "displayTitle", "e
 STATUSES = {"queued", "completed", "in_progress", "requested", "waiting", "pending", "action_required", "cancelled",
             "failure", "neutral", "skipped", "stale", "startup_failure", "success", "timed_out"}
 STATES = {"queued", "completed", "in_progress", "requested", "waiting", "pending"}
+VIEW_FIELDS = {"attempt", "conclusion", "createdAt", "databaseId", "displayTitle", "event", "headBranch", "headSha", "jobs",
+               "name", "number", "startedAt", "status", "updatedAt", "url", "workflowDatabaseId", "workflowName"}
 
 
 def fail(msg: str, code: int = 1) -> None:
@@ -136,9 +140,14 @@ def run_view(args: list[str]) -> None:
     o, rest = options(args, {"--attempt": "attempt", "-a": "attempt", "--job": "job", "-j": "job", "--json": "json",
                              "-q": "jq", "--jq": "jq"}, {"--log-failed", "--log", "--verbose", "-v", "--exit-status"})
     if len(rest) != 1 or not rest[0].isdigit():
-        fail("this stand-in answers only `gh run view <run id> [--attempt N] --log-failed`")
-    if not o.get("log-failed"):
-        fail("this stand-in answers only --log-failed")
+        fail("this stand-in answers only `gh run view <run id> [--attempt N] --log-failed` or `--json jobs`")
+    if o.get("json") is not None and o.get("log-failed"):
+        fail("specify only one of `--json` or `--log-failed`")
+    if o.get("json") is not None and o["json"] != "jobs":
+        fail(f'Unknown JSON field: "{o["json"]}"' if o["json"] not in VIEW_FIELDS else
+             "this stand-in answers only --json jobs")
+    if o.get("json") is None and not o.get("log-failed"):
+        fail("this stand-in answers only --log-failed or --json jobs")
     run = int(rest[0])
     if os.environ.get("FAKE_GH_VIEW_EXIT"):
         fail("HTTP 502: Bad Gateway (https://api.github.com/repos/o/r/actions/runs/%d/logs)" % run,
@@ -153,6 +162,10 @@ def run_view(args: list[str]) -> None:
         fail(f"HTTP 404: Not Found (https://api.github.com/repos/o/r/actions/runs/{run}/attempts/{attempt})")
     if attempt == latest and found.get("status") != "completed":
         fail(f"run {run} is still in progress; logs will be available when it is complete")
+    if o.get("json") == "jobs":  # the run's jobs, each with its conclusion (FAKE_GH_JOBS: "<run>/<attempt>" -> list)
+        jobs = json.loads(os.environ.get("FAKE_GH_JOBS") or "{}").get(f"{run}/{attempt}") or []
+        sys.stdout.write(json.dumps({"jobs": jobs}) + "\n")
+        return
     logs = json.loads(os.environ.get("FAKE_GH_LOGS") or "{}")
     path = logs.get(f"{run}/{attempt}")
     if path:

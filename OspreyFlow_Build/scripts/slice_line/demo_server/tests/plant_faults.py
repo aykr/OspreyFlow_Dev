@@ -9,8 +9,8 @@ from pathlib import Path
 S = Path(sys.argv[1]); W = Path(sys.argv[2]); PY = sys.argv[3]; ONLY = sys.argv[4] if len(sys.argv) > 4 else ""
 E, D = "early_warning.py", "demo_server/"
 M = [
- (E, '    if st.get("phase") != "verified":', '    if False:', "unverified_slice_is_refused"),
- (E, '    if not tip or st.get("tip") != tip:', '    if False:', "another_tip_is_refused"),
+ (E, '    raise Refused(f"{slice_id} is not at verified in its records', '    return branch, tip, VERIFIED, ""\n    raise Refused(f"{slice_id} is not at verified in its records', "unverified_slice_is_refused"),
+ (E, '        if st.get("tip") != tip:\n            raise Refused(f"{slice_id}\'s verified tip', '        if False:\n            raise Refused(f"{slice_id}\'s verified tip', "another_tip_is_refused"),
  (E, '    if not SETTING.is_file():', '    if False:', "missing_setting_file"),
  (E, '"refs/heads/main", *[f"refs/heads/{b}" for b in branches]]', '"--all"]', "bundle_carries_main_and_the_slice_tip"),
  (E, '    path = c.REPO / NOTES_REL / f"{name}.md"', '    path = c.rec_dir(slice_id) / f"{name}.md"', "nothing_under_records_changes"),
@@ -154,6 +154,39 @@ M = [
  (D + "summarize.py", '        again, why_not, mt2 = ask_model(ext, url, timeout)', '        again, why_not, mt2 = advice, None, {}', "two_asks_that_differ_say_so"),
  (D + "summarize.py", '        return {**advice, "stable": None, "stability": "asked once only', '        return {**advice, "stable": True, "stability": "asked once only', "second_ask_that_fails_keeps_the_first"),
  (D + "summarize.py", '            out.append({"id": f["id"], "cause": by[f["same_as"]]["cause"], "same_as": f["same_as"]})', '            pass', "identical_failures_are_asked_about_once"),
+ # 013, 1: tested before the verifier answers, held for its tip
+ (E, '        if (rec / f"verify-{tip}.json").exists():', '        if False:', "verifier_answered_with_findings_is_refused"),
+ (E, 'and tests.get("green") is True and tests.get("commit") == tip:', 'and tests.get("green") is True:', "without_the_builders_green_record"),
+ (E, '    if phase == "verifying" and st.get("tip") == tip and tests', '    if st.get("tip") == tip and tests', "building_slice_with_a_green_record"),
+ (E, '        out += [HELD_MARK % tip, HELD_WORDS % tip, ""]', '        out += [HELD_WORDS % tip, ""]', "tested_and_held"),
+ (E, '    out = [f"# Early warning: {slice_id} at {tip[:8]}: {headline}" + (f" ({NOT_YET})" if standing == NOT_YET else ""),', '    out = [f"# Early warning: {slice_id} at {tip[:8]}: {headline}",', "tested_and_held"),
+ (E, '"stack": [x.get("slice") for x in d.get("stack") or []], "standing": standing,', '"stack": [x.get("slice") for x in d.get("stack") or []],', "tested_and_held"),
+ (E, '                                                "standing": standing, **(', '                                                **(', "running_file_says_it_is_held"),
+ (E, '            if standing != VERIFIED or now_tip != tip:', '            if now_tip != tip:', "held_result_is_never_trusted"),
+ (E, '        if tip != held:\n', '        if False:\n', "held_result_is_void"),
+ (E, '        elif standing == VERIFIED:\n', '        elif False:\n', "counts_once_the_verifier_passes"),
+ (E, '        if not m or "\\n**VOID.**" in text', '        if not m', "held_result_is_void"),
+ # 013, 2: any phase when the newest verifier record is a pass for the branch's own tip
+ (E, '    return sorted((x for x in rec.glob("verify-*.json") if not x.name.startswith("verify-gate-")),', '    return sorted((x for x in rec.glob("verify-*.json")),', "builder_has_not_touched_is_taken"),
+ (E, '    if newest and recs[-1].name == f"verify-{tip}.json" and newest.get("commit") == tip \\\n            and newest.get("verdict") == "pass":', '    if (rec / f"verify-{tip}.json").exists() and (c.read_json(rec / f"verify-{tip}.json") or {}).get("verdict") == "pass":', "not_the_newest_verifier_record"),
+ (E, '    if phase == "merged":\n', '    if False:\n', "merged_slice_is_refused"),
+ # the owner's ruling on 013: a slice he accepted that is later refused, as the merge takes his acceptance
+ (E, '    if newest and recs[-1].name == f"verify-{tip}.json" and owners_acceptance(slice_id, tip):', '    if False:', "owner_accepted_that_is_later_refused_is_taken"),
+ (E, '        return merge_slice.acceptance(slice_id, tip) is not None\n    except merge_slice.Refused:\n        return False', '        return merge_slice.acceptance(slice_id, tip) is not None\n    except merge_slice.Refused:\n        return True', "acceptance_the_merge_would_not_take"),
+ (E, '    if newest and recs[-1].name == f"verify-{tip}.json" and owners_acceptance(slice_id, tip):', '    if newest and owners_acceptance(slice_id, tip):', "acceptance_behind_a_newer_verifier_record"),
+ # 013, 3: the ones above a red one, again without it
+ (E, '        if red is None or red == len(found) - 1 or not stack_id:', '        if True:', "first_of_three_is_red"),
+ (E, '        found = found[:red] + found[red + 1:]', '        found = found[red + 1:]', "middle_one_is_red"),
+ (E, '        if red is None or red == len(found) - 1 or not stack_id:', '        if red is None or not stack_id:', "last_is_red_nothing_is_tested_again"),
+ (E, '        (f"-without-{retest[\'without\']}" if retest else "")', '        ""', "first_of_three_is_red"),
+ (E, '        without, prev = without + [found[red][0]], stack_id', '        without, prev = [found[red][0]], stack_id', "red_in_the_retest_is_tested_again"),
+ (E, '    if len(found) == 1:\n        sid, branch, tip, standing = found[0]', '    if False:\n        sid, branch, tip, standing = found[0]', "second_is_run_alone"),
+ (E, '    found = [(sid, *standing_of(sid)[:3]) for sid in order]', '    found = [(sid, *verified_tip(sid), VERIFIED) for sid in order]', "stack_may_hold_a_slice_not_yet_verified"),
+ # 013, 4: broken by what merged ahead, at the top
+ (E, '        carried = [b for b, fs in below if fs & mine] if mine and mine <= set().union(*[fs for _, fs in below]) \\\n            else []', '        carried = []', "red_carried_up_from_a_slice_below"),
+ (E, '    if d.get("verdict") == "conflict":\n        files', '    if False:\n        files', "conflict_with_main_says_so"),
+ (E, '            if old in text or ("/" in short and short in text):', '            if False:', "main_moved_a_path_the_slice_names"),
+ (E, '            if parts and parts[0][:1] in ("R", "D") and len(parts) >= 2:', '            if parts and parts[0][:1] in ("D",) and len(parts) >= 2:', "main_moved_a_path_the_slice_names"),
 ]
 bad = 0
 for f, old, new, test in M:

@@ -49,7 +49,8 @@ WT_ROOT = Path(os.environ.get("OSPREY_SLICE_WT_ROOT") or Path.home() / "dev" / "
 
 COLUMNS = ["id", "build", "what", "after", "track", "branch", "env", "acceptance_files", "acceptance", "checks"]
 FROZEN_KEYS = ("acceptance_files", "acceptance", "checks")
-NEAR_LIMIT = 0.90  # an account at or above this share of a window starts no new slice (README.md, "Accounts")
+NEAR_LIMIT = 0.95  # an account at or above this share of a window starts no new slice (README.md, "Accounts";
+#                   the owner, 22 November 2026, his file 010: 95%, from 90%)
 
 
 def now() -> str:

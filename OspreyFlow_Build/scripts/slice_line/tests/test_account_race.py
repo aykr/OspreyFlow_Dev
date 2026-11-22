@@ -1,7 +1,7 @@
 """Two seats of one account starting together (LINE_FIXES_5_BRIEF.md, 6).
 
 What the line shares per account: `accounts/<account>.json` (the windows each seat's stream reports, read and written
-again at every rate-limit event; read by slice_start.py and the board for the 90% rule), `usage.tsv` (one row per
+again at every rate-limit event; read by slice_start.py and the board for the 95% rule), `usage.tsv` (one row per
 session; its header written when the file is not there) and the stop file. Two seats of one account, started in the
 same second, each handle their session's stream at once: here two processes do exactly what run_seat.launch does with a
 stream of rate-limit events and then append their usage, while a third reads the account as slice_start.py does. Before
