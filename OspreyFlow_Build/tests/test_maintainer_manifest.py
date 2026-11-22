@@ -27,6 +27,9 @@ and `OspreyFlow_Core/packages/glass-shared` with `rglob`, reading them into a te
 import. Prefixes for the scan map: `OspreyFlow_Core/`.
 """
 
+# `OspreyFlow_Build` is not under ruff's line-length rule (the docstrings name whole paths): none is wrapped.
+# ruff: noqa: E501
+
 from __future__ import annotations
 
 import csv
