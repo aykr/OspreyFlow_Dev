@@ -18188,71 +18188,99 @@ async def remove_dashboard_route(
     """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10), so a
     dashboard registered again later finds no level waiting. The grants go first, while the
     registration still names the account: if that fails, the dashboard stays registered and removing
-    it again revokes; if the removal then fails, it holds no level and is removed again. One not
-    registered revokes nothing and is refused by the identity provider's own answer. The audit row
-    counts the grants revoked; it never names their cases.
+    it again revokes. The audit row counts the grants revoked; it never names their cases.
 
-    Its figures go from the reporting mart with it, in every table the sync writes (ADR-111
-    Amendment 2, backlog N19): Superset's Admin and Alpha read the whole mart, and `report-sync`
-    prunes only against a list nothing here updates, so a removed identity's rows would otherwise
-    stay readable. The rows' removal and the identity's deletion are one transaction in the mart
-    (`ReportFreshness.removal`): if the identity provider refuses, the rows come back; if it
-    deletes, the removal is stamped and a `report-sync` pull already running may not write them
-    back.
-    If the mart cannot be reached the dashboard stays registered, the administrator is told in
-    words (503, under `message`, which the Admin screen shows), and removing it again retries;
-    removal is never reported done with the rows still there. A deletion that did happen is audited
-    even when the mart then fails (the row carries `mart_confirmed: false`), and removing it again
-    finishes the job: an identity the provider no longer holds still has its rows taken out and the
-    removal stamped (204, audited), and only one with no row left in the mart is refused as one not
-    registered."""
+    Its figures go from the reporting mart with it (ADR-111 Amendment 2, backlog N19): Superset's
+    Admin and Alpha read the whole mart, and `report-sync` prunes only against a list nothing here
+    updates. The removal is made in one order, so that no step's failure leaves a removed identity's
+    rows readable:
+
+    1. **Stamp**, in a transaction of its own, before the identity provider is called and never
+       undone with a later step. From the stamp on a reader sees none of the identity's rows and
+       every write refuses it. If the mart cannot be reached for this, nothing has been removed:
+       503, still registered, removing it again tries again.
+    2. **The identity provider deletes it.** If that fails the identity is still registered, so
+       still listed with its Remove button; its rows stay hidden; the refusal is in words (under
+       `message`, which the Admin screen shows) and removing it again is idempotent. The identity
+       provider saying it holds no such identity is a finished step when the mart holds rows of it
+       (a removal whose purge never ran), and its own refusal when it holds none: Keycloak raises
+       `NoSuchDashboard` and Entra `PersonActionRefused("no_such_dashboard")`, and both are read.
+    3. **The rows are purged** from every table the sync writes. A failure here is a logged and
+       audited warning, not a 503: the identity is gone and no button is left to retry, the rows are
+       hidden already, and the next `report-sync` pass deletes them.
+
+    Whichever step fails after the stamp, the removal is audited once, and the row names what
+    completed."""
     registered = [d for d in await identity_admin.list_dashboards() if d.client_id == client_id]
     revoked = [
         case
         for d in registered
         for case in await investigations.revoke_everywhere(d.account_id, by=principal)
     ]
-    not_registered: Exception | None = None
+    done = ["case_grants_revoked"]
+    # An identity the provider does not list and the mart holds no row of is a mistyped id: nothing
+    # is stamped for it, and the provider's own refusal is answered.
     try:
-        async with freshness.removal(client_id) as removal:
-            try:
-                await identity_admin.delete_dashboard(client_id)
-            except (NoSuchDashboard, PersonActionRefused) as refused:
-                if getattr(refused, "error", "no_such_dashboard") != "no_such_dashboard":
-                    raise
-                # The provider holds no such identity: the rows are still taken out and the removal
-                # stamped (so finishing a removal that failed in the mart is a retry, not a dead
-                # end), and the refusal is answered below.
-                removal.identity_was_not_registered()
-                not_registered = refused
-            purged = removal.purged
+        known = bool(registered) or await freshness.holds_rows(client_id)
+        if known and await freshness.stamp(client_id):
+            done.append("rows_hidden")
     except MartUnreachable as unreachable:
-        logger.warning("remove_dashboard: the mart refused the removal: %s", unreachable)
-        if unreachable.identity_removed:
-            # The identity is gone at the provider, so who removed it is recorded all the same; the
-            # row says the mart did not confirm that its figures went.
-            await audit.record(principal=principal, action="remove_dashboard",
-                               resolved_query={"client_id": client_id,
-                                               "grants_revoked": len(revoked),
-                                               "mart_confirmed": False},
-                               result_cardinality=1)  # fmt: skip
-            words = (
-                f"{client_id} was removed from the identity provider, but the reporting mart did "
-                "not confirm that its figures went, so they may still be there. Remove it again to "
-                "clear them."
-            )
-        else:
-            words = (
-                f"The reporting mart could not be reached, so {client_id} was not removed and its "
-                "figures are still there. Its case grants have been revoked and it is still "
-                "registered: removing it again will try again."
-            )
+        logger.warning("remove_dashboard: the mart refused the stamp: %s", unreachable)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"error": "reporting_mart_unreachable", "message": words},
+            detail={
+                "error": "reporting_mart_unreachable",
+                "message": (
+                    f"The reporting mart could not be reached, so {client_id} was not removed and "
+                    "its figures are still there. Its case grants have been revoked and it is "
+                    "still registered: removing it again will try again."
+                ),
+            },
         ) from unreachable
-    if not_registered is not None and not purged:
-        raise not_registered  # not registered and no row of it left: the provider's own refusal
+    refusal: Exception | None = None
+    try:
+        await identity_admin.delete_dashboard(client_id)
+    except (NoSuchDashboard, PersonActionRefused) as refused:
+        if not known or getattr(refused, "error", "no_such_dashboard") != "no_such_dashboard":
+            refusal = refused
+        # else: the provider holds no such identity and the mart still holds its rows, so the
+        # removal is finished below.
+    except Exception as failed:
+        refusal = failed
+    if refusal is not None:
+        if "rows_hidden" not in done:
+            raise refusal  # nothing was stamped: the provider's own refusal, as it has always been
+        await audit.record(principal=principal, action="remove_dashboard",
+                           resolved_query={"client_id": client_id, "grants_revoked": len(revoked),
+                                           "mart_confirmed": False, "completed": done},
+                           result_cardinality=1)  # fmt: skip
+        if not isinstance(refusal, (IdentityAdminRefused, PersonActionRefused)):
+            raise refusal
+        raise HTTPException(
+            status_code=409 if isinstance(refusal, PersonActionRefused) else 502,
+            detail={
+                "error": getattr(refusal, "error", "identity_provider_refused"),
+                "message": (
+                    f"{client_id} could not be removed at the identity provider ({refusal}). It "
+                    "is still registered and listed, and its figures are hidden in the reporting "
+                    "mart from now on. Remove it again to finish."
+                ),
+            },
+        ) from refusal
+    done.append("identity_removed")
+    try:
+        await freshness.purge(client_id)
+    except MartUnreachable as unreachable:
+        logger.warning(
+            "remove_dashboard: %s is removed at the identity provider but the mart did not purge "
+            "its rows; they are hidden from every reader and the next report-sync pass deletes "
+            "them: %s", client_id, unreachable,
+        )  # fmt: skip
+        await audit.record(principal=principal, action="remove_dashboard",
+                           resolved_query={"client_id": client_id, "grants_revoked": len(revoked),
+                                           "mart_confirmed": False, "completed": done},
+                           result_cardinality=1)  # fmt: skip
+        return Response(status_code=204)
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
                        result_cardinality=1)  # fmt: skip

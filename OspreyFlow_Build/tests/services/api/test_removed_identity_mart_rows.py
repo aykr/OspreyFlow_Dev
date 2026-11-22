@@ -865,19 +865,23 @@ async def test_the_stamped_sync_check_sees_each_planted_fault(
 ) -> None:
     """Rule 15: red for the purge call removed, a purge that takes one table of two, and a purge that
     takes an identity nobody removed. `sync_once` calls `purge_removed()` as each plant is called."""
-    assert any(said in w for w in await _stamped_sync_verdict([KEPT], plant))
+    # REMOVED is still in the environment's list: `prune` takes nothing of it, so only the purge of
+    # stamped identities can.
+    assert any(said in w for w in await _stamped_sync_verdict([REMOVED, KEPT], plant))
 
 
 async def test_a_failed_purge_in_the_sync_is_said_in_words_and_the_pass_goes_on() -> None:
     pool, mart = await _stamped_world()
     pool.fail("WHERE dashboard = $1", OSError("the mart dropped the connection"))
-    summary = await sync_once([_board(KEPT)], mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
+    boards = [_board(REMOVED), _board(KEPT)]  # still listed: `prune` takes nothing of it
+    summary = await sync_once(boards, mart, _NoValkey(), slot=1)  # type: ignore[arg-type]
     purging = [f for f in summary.failures if "could not be purged" in f]
     assert len(purging) == 1 and "dropped the connection" in purging[0], summary.failures
-    assert summary.failed == 2, "the failed purge is counted, and the other dashboard was still tried"
+    assert summary.failed == 3, "the failed purge is counted, and each dashboard was still tried"
+    assert any("removed in the Admin" in f for f in summary.failures), "a refusal wrote nothing for it"
     assert pool.left_for(REMOVED) != {} and pool.reader_left(REMOVED) == {}, "still hidden"
     pool.heal()
-    await sync_once([_board(KEPT)], mart, _NoValkey(), slot=2)  # type: ignore[arg-type]
+    await sync_once(boards, mart, _NoValkey(), slot=2)  # type: ignore[arg-type]
     assert pool.left_for(REMOVED) == {}, "the next pass tries again"
 
 
@@ -1357,6 +1361,11 @@ async def test_the_pull_race_check_sees_each_planted_fault(
 
         monkeypatch.setattr(Mart, "begin_pass", late)
     wrong, _ = await _pass_with_removal_during(world, conduit, feed_status)
+    if plant == "the pass clock" and feed_status != 200:
+        # A refusal never writes a stamped identity's row, whenever its pull began (it is not the
+        # clock that protects it), so this plant is no fault on that path.
+        assert wrong == []
+        return
     assert any(said in w for w in wrong), wrong
 
 

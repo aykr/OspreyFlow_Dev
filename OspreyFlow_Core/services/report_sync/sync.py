@@ -7,7 +7,8 @@ ledger; the mart holds only what that identity may see. The token is renewed bef
 refused token is a failure said in words, the rows left with their last good pull — never refreshed
 from anywhere else. **One pull per slot across every instance:** each (dashboard, case, slot) is
 claimed with Valkey `SET NX`, as the KYC sweep claims its day. A dashboard no longer configured is
-pruned from the mart.
+pruned from the mart, and every identity removed in the Admin (stamped) is purged from it: a purge
+the Conduit could not finish is finished by the next pass.
 
 The feed is pulled as CSV — the flat rows the Conduit's own `reports.feed_rows` produces — so the
 mart cannot disagree with the Reports view.
@@ -195,6 +196,16 @@ async def sync_once(
         summary.failed += 1
         summary.failures.append(
             f"the rows of removed dashboards could not be pruned from the reporting mart: {e}"
+        )
+    try:
+        await mart.purge_removed()
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+        # The identities removed in the Admin are hidden from a reader by their stamp already, so a
+        # purge that fails costs nothing but time; it is said, never swallowed, and the next pass
+        # tries again. Nobody has to do anything.
+        summary.failed += 1
+        summary.failures.append(
+            f"the rows of removed identities could not be purged from the reporting mart: {e}"
         )
     for board in dashboards:
         await _pull_dashboard(board, mart, valkey, slot, summary)

@@ -6,31 +6,35 @@ and when, and how many cases it pulls — never a case id, so the Admin screen s
 without saying which cases a dashboard may read. A deployment with reporting off has no mart, and
 every dashboard is then simply "never pulled".
 
-The one thing the Conduit writes to the mart is a removal: when an administrator removes a dashboard
-identity its rows go from every table `report-sync` writes (`remove_dashboard`), because Superset's
-Admin and Alpha read the whole mart (ADR-148 Amendment 21) and `report-sync` prunes only against its
-own configured list, which nothing updates. The Conduit uses the connection it already has, as the
-same database role `report-sync` writes as.
+The one thing the Conduit writes to the mart is a removal. When an administrator removes a dashboard
+identity, Superset's Admin and Alpha read the whole mart (ADR-148 Amendment 21) and `report-sync`
+prunes only against its own configured list, which nothing updates, so the removal is made in an
+order in which no step's failure can leave the identity's rows readable:
 
-The removal and the identity's deletion at the identity provider are **one transaction**
-(`removal`): if the provider refuses, the rows come back (nothing is half removed); if it deletes,
-the commit stamps the identity as removed and a `report-sync` pull that began before that moment may
-not write (`services/report_sync/mart.py`), so a pull already running cannot put the rows back.
+1. `stamp`: the removal is stamped and committed in a transaction of its own, before the identity
+   provider is called and never rolled back with anything after it. The stamp is what makes the
+   rows unreadable: a reader's role sees none of a stamped identity's rows, and every write refuses
+   it (`services/report_sync/mart.py`).
+2. The identity provider deletes the identity (the route's step; if it fails the identity is still
+   listed, its rows stay hidden, and removing it again is idempotent).
+3. `purge`: the rows go from every table the sync writes, and the stamp is made again. It is
+   repeatable, and the sync pass finishes it (`Mart.purge_removed`) if it fails here.
+
+The Conduit uses the connection it already has, as the same database role `report-sync` writes as.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from datetime import datetime
 
 import asyncpg
 from pydantic import BaseModel
 from services.report_sync.mart import (
-    CONTROL_SCHEMA,
     DASHBOARD_TABLES,
+    delete_dashboard_rows,
     ensure_control,
     lock_dashboard,
+    stamp_removed,
 )
 
 #: The schema `report-sync` owns (`services/report_sync/mart.py`).
@@ -45,29 +49,8 @@ class Freshness(BaseModel):
 
 
 class MartUnreachable(Exception):
-    """The mart could not be written, so a removal did not reach it; carries the reason.
-    `identity_removed` is True only when the identity provider had already deleted the identity by
-    the time the mart failed (its figures may then still be there, and it can no longer be removed
-    again)."""
-
-    def __init__(self, reason: str, *, identity_removed: bool = False) -> None:
-        super().__init__(reason)
-        self.identity_removed = identity_removed
-
-
-class Removal:
-    """What a removal in progress holds for its body: how many rows it took out, and whether the
-    body (the identity's deletion) found the identity already gone."""
-
-    def __init__(self) -> None:
-        self.purged = 0
-        self.identity_already_gone = False
-
-    def identity_was_not_registered(self) -> None:
-        """The body tells the removal the identity provider holds no such identity. The rows are
-        then still taken out and the removal still stamped (an identity the provider does not
-        hold should hold no rows), instead of the whole removal rolling back."""
-        self.identity_already_gone = True
+    """The mart could not be read or written, so a removal step did not reach it; carries the
+    reason."""
 
 
 class ReportFreshness:
@@ -107,60 +90,65 @@ class ReportFreshness:
             for r in rows
         }
 
-    @asynccontextmanager
-    async def removal(self, client_id: str) -> AsyncIterator[Removal]:
-        """Takes this identity's rows out of every table the sync writes, then runs the body (the
-        identity's deletion at the identity provider), then stamps the removal and commits: all in
-        one transaction, under the dashboard's lock, which `report-sync`'s writes also take.
+    async def holds_rows(self, client_id: str) -> bool:
+        """Whether the mart holds a row naming this identity, in any table. A deployment with no
+        mart holds none."""
+        try:
+            async with self._pool.acquire() as conn:
+                for table in DASHBOARD_TABLES:
+                    if await conn.fetchval(
+                        f"SELECT EXISTS (SELECT 1 FROM {self._schema}.{table} "
+                        "WHERE dashboard = $1)",
+                        client_id,
+                    ):
+                        return True
+        except (asyncpg.UndefinedTableError, asyncpg.InvalidSchemaNameError):
+            return False
+        except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+            raise MartUnreachable(str(e) or type(e).__name__) from e
+        return False
 
-        A body that raises rolls the rows back and raises as it did, except that a body which says
-        the identity was not registered (`Removal.identity_was_not_registered`) and returns still
-        commits: that is how a removal whose first attempt deleted the identity and then failed in
-        the mart is finished by removing it again. A deployment with no mart has
-        nothing to remove and the body still runs. Any other failure of the mart is
-        `MartUnreachable`, never a quiet success."""
-        s = self._schema
-        body_ran = body_failed = False
-        no_mart = False
-        removal = Removal()
+    async def stamp(self, client_id: str) -> bool:
+        """Step 1: the removal stamp, committed on its own (a transaction of its own, under the
+        dashboard's lock) before the identity provider is called. From here a reader sees none
+        of the identity's rows. Returns False, stamping nothing, when the deployment has no mart;
+        any other failure is `MartUnreachable`, never a quiet success."""
         try:
             async with self._pool.acquire() as conn, conn.transaction():
+                made = await conn.fetchval(
+                    "SELECT to_regclass($1)", f"{self._schema}.{DASHBOARD_TABLES[0]}"
+                )
+                if made is None:
+                    return False
+                await lock_dashboard(conn, client_id)
+                await ensure_control(conn)
+                await stamp_removed(conn, client_id)
+                return True
+        except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+            raise MartUnreachable(str(e) or type(e).__name__) from e
+
+    async def purge(self, client_id: str) -> int:
+        """Step 3: the rows go from every table the sync writes, and the stamp is made again (a pull
+        that began after the first stamp and before the provider's deletion may not write either).
+        One transaction, under the dashboard's lock: all of it or none. A failure is
+        `MartUnreachable`; the stamp already committed keeps the rows hidden and the sync pass
+        deletes them. Returns how many rows went; a deployment with no mart has none."""
+        try:
+            async with self._pool.acquire() as conn, conn.transaction():
+                await lock_dashboard(conn, client_id)
                 try:
-                    await lock_dashboard(conn, client_id)
-                    for table in DASHBOARD_TABLES:
-                        done = await conn.execute(
-                            f"DELETE FROM {s}.{table} WHERE dashboard = $1", client_id
-                        )
-                        removal.purged += _rows_in(done)
+                    purged = await delete_dashboard_rows(
+                        conn, self._schema, client_id, DASHBOARD_TABLES
+                    )
                 except (asyncpg.UndefinedTableError, asyncpg.InvalidSchemaNameError):
                     raise _NoMart from None
                 await ensure_control(conn)
-                try:
-                    yield removal
-                except BaseException:
-                    body_failed = True
-                    raise
-                body_ran = True
-                await conn.execute(
-                    f"""INSERT INTO {CONTROL_SCHEMA}.removed_dashboards (dashboard, removed_at)
-                        VALUES ($1, clock_timestamp()) ON CONFLICT (dashboard)
-                        DO UPDATE SET removed_at = EXCLUDED.removed_at""",
-                    client_id,
-                )  # fmt: skip
+                await stamp_removed(conn, client_id)
+                return purged
         except _NoMart:
-            no_mart = True
+            return 0
         except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
-            if body_failed:
-                raise
-            raise MartUnreachable(str(e) or type(e).__name__, identity_removed=body_ran) from e
-        if no_mart:
-            yield removal
-
-
-def _rows_in(status: object) -> int:
-    """The row count of a command tag (`DELETE 3`); 0 when it carries none."""
-    tail = str(status).rsplit(" ", 1)[-1]
-    return int(tail) if tail.isdigit() else 0
+            raise MartUnreachable(str(e) or type(e).__name__) from e
 
 
 class _NoMart(Exception):

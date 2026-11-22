@@ -4,8 +4,6 @@ clearance of the administrator who registers it (rule 3)."""
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from typing import Any
 
 import pytest
@@ -27,7 +25,7 @@ from services.api.identity_admin import (
     UnknownRoleError,
     allowed_role,
 )
-from services.api.report_freshness import Freshness, Removal
+from services.api.report_freshness import Freshness
 
 from ontology.handling import load_uk_le_scheme
 from schemas.admin import (
@@ -148,17 +146,23 @@ class _Identity:
 
 
 class _Freshness:
+    """The mart's side of a removal, in the order the route calls it (stamp, then purge). It holds no
+    rows, so one the provider did not list and that has none is not known to it."""
+
     def __init__(self) -> None:
+        self.stamped: list[str] = []
         self.removed: list[str] = []
 
-    @asynccontextmanager
-    async def removal(self, client_id: str) -> AsyncIterator[Removal]:
-        """Like the real one: the rows go only if the body (the identity's deletion) succeeds. This
-        fake holds no rows, so one the provider did not know purges nothing."""
-        removal = Removal()
-        yield removal
-        if not removal.identity_already_gone:
-            self.removed.append(client_id)
+    async def holds_rows(self, client_id: str) -> bool:
+        return False
+
+    async def stamp(self, client_id: str) -> bool:
+        self.stamped.append(client_id)
+        return True
+
+    async def purge(self, client_id: str) -> int:
+        self.removed.append(client_id)
+        return 0
 
     async def by_dashboard(self) -> dict[str, Freshness]:
         from datetime import UTC, datetime
@@ -707,9 +711,11 @@ def test_removing_a_dashboard_revokes_every_case_grant_its_account_holds(client:
     record = client.audit.records[-1]
     assert record["action"] == "remove_dashboard"
     assert record["resolved_query"] == {"client_id": "osprey-dashboard-board", "grants_revoked": 2}
+    assert client.freshness.stamped == ["osprey-dashboard-board"], "stamped before the provider"
     assert client.freshness.removed == ["osprey-dashboard-board"], "its mart rows go with it (N19)"
     refused = client.delete("/v1/admin/dashboards/osprey-dashboard-gone")
     assert refused.status_code == 409 and grants.revoked == [("sa-1", ADMIN.id)]
+    assert client.freshness.stamped == ["osprey-dashboard-board"], "one not registered is not stamped"
     assert client.freshness.removed == ["osprey-dashboard-board"], "one not registered purges nothing"
 
 
