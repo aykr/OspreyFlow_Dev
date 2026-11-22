@@ -253,12 +253,20 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def resolve(path: str) -> Path | None:
+    """A cited path is written from `OspreyFlow_Core` (a Glass file) or from the specification's own folder."""
+    for base in (CORE, BUILD):
+        if (base / path).is_file():
+            return base / path
+    return None
+
+
 def real() -> tuple[str, str, str, dict[str, str], list[dict[str, str]], dict[str, str]]:
     spec_08 = read(SPEC_08)
     wanted: set[str] = set()
     for cells in rows_of(spec_08).values():
         wanted.update(path for path, _ in cited(cells[2]))
-    sources = {path: read(ROOT / path) for path in wanted if (ROOT / path).is_file()}
+    sources = {path: read(found) for path in wanted if (found := resolve(path)) is not None}
     functions = yaml.safe_load(read(FUNCTIONS))["functions"]
     words = {path.name: read(path) for path in (WORDS, TEMPLATE) if path.is_file()}
     page_test = read(PAGE_TEST) if PAGE_TEST.is_file() else ""
@@ -381,7 +389,7 @@ def test_a_page_test_renamed_is_caught() -> None:
 
 def test_cited_words_that_are_not_in_the_source_are_caught() -> None:
     spec_08, spec_09, page_test, sources, functions, words = planted()
-    path = "OspreyFlow_Core/apps/workspace/src/ingest/studio/vocabulary.ts"
+    path = "apps/workspace/src/ingest/studio/vocabulary.ts"
     assert path in sources
     sources[path] = sources[path].replace("needs attention", "needs a look")
     found = problems(spec_08, spec_09, page_test, sources, functions, words)
@@ -390,7 +398,7 @@ def test_cited_words_that_are_not_in_the_source_are_caught() -> None:
 
 def test_a_source_that_is_not_read_is_caught() -> None:
     spec_08, spec_09, page_test, sources, functions, words = planted()
-    sources.pop("OspreyFlow_Build/spec/ingest_studio_redesign/ingest_studio_prototype.html")
+    sources.pop("spec/ingest_studio_redesign/ingest_studio_prototype.html")
     found = problems(spec_08, spec_09, page_test, sources, functions, words)
     assert any("DM1 cites" in p and "prototype" in p for p in found)
 
