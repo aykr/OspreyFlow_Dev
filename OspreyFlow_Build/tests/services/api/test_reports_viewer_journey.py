@@ -293,6 +293,14 @@ OPEN_TO_ANY_SIGNED_IN = {
     # Reports Viewer, whose rights open the Glass alone, reads the user guide and is refused the
     # developer and administration guides (`test_guides.py`'s matrix, `reports_viewer`).
     "read_guide_route",
+} | {
+    # SE8c, weighed at its round 10: `POST /v1/session-events`, the page service's report of a
+    # person's sign-in or sign-out. It names no right because it is accepted only from the page
+    # service's own client (any other client's token, a person's among them, is refused 403 with the
+    # same words and writes nothing) and it writes only the caller's own session, for the principal of
+    # the token it holds, a kind from a closed list and no free text. A Reports Viewer reads nothing
+    # through it and can record nothing of anyone else's (`test_sign_in_events_ingress.py`).
+    "record_session_event",
 }  # fmt: skip
 
 #: L1.7 (ADR-141 decision 10), weighed at its rebase on 10 November: the run API names no right
@@ -346,7 +354,9 @@ def test_every_route_naming_no_right_is_one_weighed_for_the_viewer() -> None:
         for name, (method, _, right) in _routes_by_right().items()
         if right is None and method != "GET" and name not in SERVICE_IDENTITY_ONLY
     }
-    assert writes == {"set_tab_state", "issue_ws_ticket"}
+    # The two of the reader's own, and the page service's report (SE8c, weighed in the list above:
+    # refused to every client but the page service's own, and it writes only the caller's own session).
+    assert writes == {"set_tab_state", "issue_ws_ticket", "record_session_event"}
 
 
 def _answered_beyond(client: TestClient) -> dict[str, int]:

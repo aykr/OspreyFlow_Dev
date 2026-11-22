@@ -365,6 +365,14 @@ sol is at about 89% of its week (the board read 88% at 05:30 UTC; default 56%) a
 
 **The Mac budget run stands; his answer 7(c) is withdrawn; ADR-152 invariant I11 and his ruling of 20 November are unchanged.** (1) **The conductor takes the budget figures on the Mac now that PL4d3e has merged, with nothing else running: it pauses the seats itself at the first moment that costs least (no merge in its gate; no builder mid-round if it can wait a few minutes), records the figures where `PL4_BASELINE.json` says they belong, and tells him the figures and how long the pause was.** (2) **He approves slice E's list as reported: 25 whole-file moves, one slice, proof SAME; if `chunkedTextureRefresh` fails the package's no-browser-global test, that one file stays and the conductor tells him.** (3) **Slice E starts as soon as the figures are recorded.** (4) **Compare once after slice E has merged, the same way; if a figure moves beyond the budget's own tolerance, stop and tell him before AD1a and AD1b merge.** (5) Everything else in 013 stands.
 
+## 22 November 2026: how slice E's speed is compared (the owner, in chat, after the figures of file 014)
+
+**With about 12% between two browser runs, the comparison after slice E is: three runs on the Mac after it has merged, the middle value compared with the middle of the before-runs; only a move larger than the run-to-run spread counts as a change. The Matrix view's first frame already sitting at its limit (about 2,480 to 2,550 ms against 2,500) is a backlog row, not slice E's fault.** (The before-runs are in `PL4_BUDGET_FIGURES_2026-11-22.md`: three unit runs and two browser runs; **the conductor takes a third browser before-run at the next quiet moment before slice E merges, so both sides have a middle value**.) Backlog row 18.
+
+## 22 November 2026: a hold on merges while three patches go in (the owner, in chat, about 09:10 UTC)
+
+**When SE8c's merge finishes, hold the next merge until he says; he has three patches to apply and will say when they are in.** Only merges are held (seats and records commits go on unless he says otherwise): DC1c, IS5a (which also needs an `add-round` line for one mypy line) and anything else verified wait.
+
 ## 22 November 2026: GitHub's `slice-line-check` job (the owner, in chat)
 
 **If the rerun of `slice-line-check` fails again, that does not stop merging: it is the line's own test failing in its set-up (`test_accept_any_round.py::test_the_owners_accept_is_refused_when_the_builder_committed_after_the_verifiers_record`), not a product test. This is his ruling for this one test only. A release still needs GitHub green on every job.** He also asked whether the conductor's watcher reads every job of a run: **it does not** (line fault 13): until the line-fix session changes it, the conductor reads every job of main's last eight runs by hand before each merge and at each report.
