@@ -83,10 +83,15 @@ def element(result: dict | None, slice_id: str, tip: str) -> dict | None:
     result is not for this slice at this tip."""
     if not isinstance(result, dict):
         return None
-    if isinstance(result.get("stack"), list):
-        for e in result["stack"]:
-            if isinstance(e, dict) and e.get("slice") == slice_id and e.get("tip") == tip:
-                return {**e, "id": result.get("id"), "state": result.get("state")}
+    if isinstance(result.get("stack"), list):  # item 3: main+A, main+A+B, ... run at once, in this order
+        stack = [e for e in result["stack"] if isinstance(e, dict)]
+        for i, e in enumerate(stack):
+            if e.get("slice") == slice_id and e.get("tip") == tip:
+                return {**e, "id": result.get("id"), "state": result.get("state"), "index": i,
+                        "main": result.get("main") if i == 0 else None,
+                        "base_tree": stack[i - 1].get("tree") if i else None,
+                        "below": [x.get("slice") for x in stack[:i]],
+                        "above": [(x.get("slice"), x.get("tip")) for x in stack[i + 1:]]}
         return None
     return result if result.get("slice") == slice_id and result.get("tip") == tip else None
 
@@ -159,7 +164,11 @@ def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
         return "no result from the server for this slice at this tip"
     if e.get("state") != "done" or e.get("verdict") != "pass":
         return f"the server's run is not a finished pass ({e.get('state')}, {e.get('verdict')})"
-    if e.get("main") != base:
+    if e.get("index"):  # stacked: main must be exactly the tree the server ran it on (those below landed as tested)
+        if c.git(["rev-parse", base + "^{tree}"], c.REPO) != e.get("base_tree"):
+            return (f"stacked on {', '.join(e.get('below') or [])}: main is not the tree the server ran it on (one "
+                    "below has not landed as tested); it goes to the server again")
+    elif e.get("main") != base:
         return f"main has moved since the server's run (it ran on {str(e.get('main'))[:10]}, main is {base[:10]})"
     if e.get("tip") != tip:
         return "the server's run is for another tip of the slice"
@@ -207,3 +216,21 @@ def remainder(e: dict, tree: Path, mk: Path) -> dict:
         targets.append(["make", "test"])
         mac.append("test")
     return {"targets": targets, "taken": taken, "mac": mac}
+
+
+# ------------------------------------------------------------------ item 3: the stack
+
+
+def stack_refused(slice_id: str, tip: str) -> list[str]:
+    """A slice refused at merge: every slice the server ran stacked on it is not counted, and is marked to go to the
+    server again (records/<ID>/server-again.json, for that run id). The slices so marked."""
+    rid, e = server_result(slice_id, tip)
+    marked = []
+    for sid, stip in (e or {}).get("above") or []:
+        if not sid or not (c.DATA / "records" / sid).is_dir():
+            continue
+        c.write_json(c.rec_dir(sid) / "server-again.json",
+                     {"slice": sid, "tip": stip, "run_id": rid, "because": f"{slice_id}, below it in the server's stack, "
+                      "was refused at merge", "at": c.now()})
+        marked.append(sid)
+    return marked

@@ -1389,6 +1389,11 @@ def merge(slice_id: str) -> dict:
     except Refused as e:
         c.set_state(slice_id, last_merge_refusal=c.now())
         prog.finish("refused", str(e))
+        try:  # item 3: the slices the server stacked on this one are not counted; they go to the server again
+            if prog.rec.get("tip"):
+                server_gate.stack_refused(slice_id, prog.rec["tip"])
+        except Exception:  # noqa: BLE001 -- best effort: a refusal is never changed by its bookkeeping
+            pass
         raise
     except BaseException as e:
         prog.finish("ended with an error", type(e).__name__)
