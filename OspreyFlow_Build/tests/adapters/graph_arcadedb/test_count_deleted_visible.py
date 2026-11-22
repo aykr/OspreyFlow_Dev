@@ -1,8 +1,9 @@
-"""SE9 (ADR-144 Amendment 7), without a store: how the adapter counts a view's deletions and records
-them. What it returns for a hidden, live, superseded or absent id is the conformance suite's to prove
-against ArcadeDB (`test_count_deleted_visible_*` in `conformance/graph_port/test_suite.py`); here the
-text of the query, the reader reaching it, the chunks, what is refused, and what each deleting write
-sends are checked, so a plant that lifts one of them fails by name.
+"""SE9 (ADR-144 Amendment 7), without a store: how the adapter counts a view's deletions and
+records them. What it returns for a hidden, live, superseded or absent id is the conformance suite's
+to prove against ArcadeDB (`test_count_deleted_visible_*` in
+`conformance/graph_port/test_suite.py`); here the text of the query, the reader reaching it, the
+chunks, what is refused, and what each deleting write sends are checked, so a plant that lifts one
+of them fails by name.
 
 - the count's query carries the reader's own access step with the reverted test turned round, and
   never the live step (`test_the_count_query_...`, red with the access step left out:
