@@ -204,16 +204,26 @@ describe("Releases: a refusal says why it refused", () => {
     expect(textOf(res.text)).not.toContain(TOO_MANY);
   });
 
-  it("a session too near its end to hold a folder says so, and does not call the folder large", async () => {
+  it("a session that ends while its folder is being read says so, and does not call the folder large", async () => {
     const w = await make(person(), { sessionSeconds: 600 });
-    w.clock.advance(599.2);
+    // The session is whole when the request begins and has under a second left once the Conduit has answered about the
+    // case: the point where the folder is to be held. The clock moves when the Conduit is first asked on this request.
+    const push = w.conduit.calls.push.bind(w.conduit.calls);
+    let armed = true;
+    w.conduit.calls.push = (...seen) => {
+      if (armed) {
+        armed = false;
+        w.clock.advance(599.2);
+      }
+      return push(...seen);
+    };
     const res = await uploadFiles(w, FOLDER);
+    expect(armed).toBe(false);
     const said = textOf(res.text);
-    // The session's end is the reason, whether the app notices it before the folder is held or while holding it.
     expect(said).not.toContain(TOO_LARGE);
     expect(said).not.toContain(TOO_MANY);
     expect(res.status).not.toBe(413);
-    expect(said).toMatch(/sign(-| )in|session/i);
+    expect(said).toContain("Your sign-in is about to end, so the folder could not be held. Sign in again and choose the folder again.");
     expect(w.store.keys().filter((k) => k.startsWith("pages-staged:"))).toEqual([]);
   });
 });
