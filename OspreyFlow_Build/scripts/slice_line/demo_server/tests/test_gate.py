@@ -108,7 +108,7 @@ def test_the_real_gate_runs_only_what_the_list_allows_with_no_docker_reachable(w
     assert "client-name-check" not in text  # never run, so never passed
     assert "docker-refused" in text and "docker-reached" not in text and "lease-switch-on" in text
     assert "refused: no container is started on the demo server" in text  # the runner's own docker, first on PATH
-    assert "env docker_host= slot=13 arcade=59991 workers=6 uvpy=3.12 pytest_base=" in text  # no DOCKER_HOST (005)
+    assert "env docker_host= slot=13 arcade=59991 workers=4 uvpy=3.12 pytest_base=" in text  # no DOCKER_HOST (005)
     base = text.split("pytest_base=", 1)[1].split()[0]
     root = next(ln for ln in text.splitlines() if ln.startswith("root="))
     common, remotes = root.split()[0][5:], root.split()[1]
@@ -134,6 +134,12 @@ def test_the_real_gate_runs_only_what_the_list_allows_with_no_docker_reachable(w
     assert any("test_unlisted.py" in d and "neither list" in d for d in a["list_drift"])
     assert a["not_run"]["live_step"].startswith("not run")
     assert a["duckdb_spatial"]["status"] == "installed" and a["duckdb_spatial"]["sha256"] == "0" * 64
+    # 009: every target make -k ci names, each with its own status, read by a script; and the job's own port slot
+    st = {x["name"]: x["status"] for x in a["checks"]}
+    assert st == {"good-check": "passed", "red-check": "failed", "lint": "passed", "docker-check": "not run",
+                  "client-name-check": "not run", "trivy-image-x": "not run", "test": "failed"}, st
+    assert a["lane"] == "merger"
+    assert a["passed_targets"] == ["good-check", "lint"]  # 012 b: red-check failed; make test printed a failure
     spatial_home = (w["tmp"] / "ran.txt.spatial").read_text().strip()
     assert spatial_home.endswith("/home") and "/jobs/" in spatial_home  # into the job's own home, which the tests use
 
@@ -148,4 +154,51 @@ def test_the_real_gate_with_everything_green_is_a_pass(world):
     sh("git commit -qam 'chore: green'", w["repo"], w["env"])
     a = run_real_gate(w)
     assert a["verdict"] == "pass" and a["failing"]["targets"] == [] and a["failing"]["tests"] == []
+    # make test exited 0; its docker-guarded skips are the files the Mac reruns, so it is named (012 b)
+    assert a["passed_targets"] == ["good-check", "red-check", "lint", "test"]
     assert not any(a["failing"].get("by_target", {}).values())
+
+
+def test_jobs_at_once_each_take_their_own_port_slot(world):
+    """009: two candidates tested at once by the real gate never share the Playwright port block."""
+    w = world
+    ran, _ = mini(w)
+    lanes = w["repo"] / "OspreyFlow_Build/scripts/lane_ports.tsv"
+    lanes.write_text("# lanes\nmerger\t13\nplatform-b\t7\nrules-b\t9\n")
+    sh("git commit -qam 'chore: three slots'", w["repo"], w["env"])
+    sh(["git", "switch", "-q", "-c", "lane/slice-S2", "main"], w["repo"], w["env"])
+    (w["repo"] / "s2.txt").write_text("S2\n")
+    sh("git add -A && git commit -qm 'feat: S2'", w["repo"], w["env"])
+    sh(["git", "switch", "-q", "main"], w["repo"], w["env"])
+    f = w["tmp"] / "stack.bundle"
+    sh(["git", "bundle", "create", "-q", str(f), "refs/heads/main", "refs/heads/lane/slice-S1", "refs/heads/lane/slice-S2"],
+       w["repo"], w["env"])
+    a = json.loads(runner(w, "stack S1 S2", f.read_bytes(), harness={"gate": None}).stdout.decode().splitlines()[-1])
+    end = time.monotonic() + 90
+    for jid in a["ids"]:
+        while time.monotonic() < end and json.loads(runner(w, "result " + jid).stdout.decode().splitlines()[-1])["state"] == "running":
+            time.sleep(0.3)
+    slots = sorted(ln.split("slot=")[1].split()[0] for ln in ran.read_text().splitlines() if "slot=" in ln)
+    assert slots == ["13", "7"], slots
+
+
+
+def test_a_target_with_a_skip_inside_or_owning_a_mac_only_spec_is_never_named_passed(world):
+    """012 b: a target that passed, but skipped a docker call inside it (the Mac reruns only make test's), or whose
+    recipe runs a spec whose snapshots are another platform's, is not in passed_targets."""
+    w = world
+    ran, _ = mini(w)
+    mk = w["repo"] / "OspreyFlow_Build/Makefile"
+    mk.write_text(mk.read_text().replace("ci: core-check good-check", "ci: core-check good-check guarded-check map-check")
+                  + "guarded-check:\n\t@echo 'SKIPPED [1] ../OspreyFlow_Build/tests/test_g.py:3: a server-only test: it calls the docker CLI (docker ps)'\n"
+                  + "map-check:\n\t@echo playwright test map-verify/contrast.spec.ts\n")
+    lists = w["repo"] / "OspreyFlow_Build/scripts/slice_line/demo_server/lists.tsv"
+    lists.write_text(lists.read_text() + "ci\tguarded-check\trun\t-\t\t\nci\tmap-check\trun\t-\t\t\n")
+    mac = w["repo"] / "OspreyFlow_Build/scripts/slice_line/demo_server/mac_only.tsv"
+    mac.write_text(mac.read_text() + "OspreyFlow_Core/apps/workspace/map-verify/contrast.spec.ts\t1\tmap-contrast-dark-darwin.png\n")
+    sh("git commit -qam 'chore: two more targets'", w["repo"], w["env"])
+    a = run_real_gate(w)
+    st = {x["name"]: x["status"] for x in a["checks"]}
+    assert st["guarded-check"] == "passed" and st["map-check"] == "passed"  # each exited 0
+    assert "guarded-check" not in a["passed_targets"] and "map-check" not in a["passed_targets"]
+    assert "good-check" in a["passed_targets"]

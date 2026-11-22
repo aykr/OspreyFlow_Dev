@@ -51,12 +51,15 @@ JOBS = WORK / "jobs"
 TOOLS = WORK / "tools"
 CACHE = WORK / "cache"
 REFUSALS = WORK / "refusals.log"
-KEEP_JOBS = 10
+KEEP_JOBS = 40  # 009: a result is kept until the merge has asked for it by id, for several slices at once
 
 #: merge_slice.py's OFFLINE_PORTS: an offline run reaches no store.
 OFFLINE_PORTS = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
                  "CLICKHOUSE_HTTP_PORT": "59994"}
-GATE_LANE = "merger"
+#: The lanes whose port slots the jobs take, one each, so three jobs at once never share a port (009). The merge
+#: gate's own first; the others are lanes that never run on this machine (lane_ports.tsv keeps every slot's block clear
+#: of the stacks' ports and of the owner's deployment's).
+GATE_LANES = ("merger", "platform-b", "rules-b")
 SLICE_REF = re.compile(r"\Arefs/heads/lane/slice-([A-Za-z0-9]+)\Z")
 SHA = re.compile(r"\A[0-9a-f]{40}\Z")
 #: merge_slice.py's own patterns for a failing test and a failed make target.
@@ -131,15 +134,22 @@ def job_alive(job: Path) -> bool:
         return (job / "job.json").exists() and time.time() - (job / "job.json").stat().st_mtime < 60
 
 
-def busy() -> str | None:
-    cur = WORK / "current"
-    if not cur.exists():
-        return None
-    jid = cur.read_text().strip()
-    job = JOBS / jid
-    if (job / "result.json").exists() or not job.exists() or not job_alive(job):
-        return None
-    return jid
+def running_jobs() -> list:
+    """The jobs started and not finished: up to MAX_JOBS run at once (009)."""
+    if not JOBS.is_dir():
+        return []
+    return sorted(d.name for d in JOBS.iterdir()
+                  if (d / "job.json").exists() and not (d / "result.json").exists() and job_alive(d))
+
+
+def lanes_in_use(jobs: list) -> set:
+    used = set()
+    for jid in jobs:
+        try:
+            used.add(json.loads((JOBS / jid / "job.json").read_text()).get("lane", GATE_LANES[0]))
+        except (OSError, ValueError):
+            used.update(GATE_LANES)  # unreadable: assume the worst, so no slot is shared
+    return used
 
 
 # ------------------------------------------------------------------------------------------------- run
@@ -173,7 +183,9 @@ def launch_capped(jid: str) -> bool:
     return subprocess.run(cmd, capture_output=True, env={**os.environ}).returncode == 0
 
 
-def do_run(received: str) -> int:
+def do_run(received: str, order: list | None = None) -> int:
+    """`run` (main and one slice) or `stack A B C` (main and those slices, tested as main+A, main+A+B, main+A+B+C at
+    once, one job each: 009). The bundle carries refs/heads/main and exactly the slices named, no other head."""
     for d in (WORK, JOBS, TOOLS, CACHE):
         if d.exists() and not inside_work(d):
             return refuse("outside-work", received, words="%s leads outside the work folder" % d.name)
@@ -183,18 +195,31 @@ def do_run(received: str) -> int:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         return refuse("busy", received)
-    running = busy()
-    if running:
-        return refuse("busy", received, running=running)
+    running = running_jobs()
+    want = len(order) if order else 1
+    if len(running) + want > p.MAX_JOBS:
+        return refuse("busy", received, running=running, free=max(0, p.MAX_JOBS - len(running)))
     if shutil.disk_usage(str(WORK)).free < p.MIN_FREE_BYTES:
         return refuse("disk-floor", received, words="under %d GB free" % (p.MIN_FREE_BYTES // 1024 ** 3))
-    jid = secrets.token_hex(p.ID_LENGTH // 2)
-    job = JOBS / jid
+    lanes = [ln for ln in GATE_LANES if ln not in lanes_in_use(running)][:want]
+    if len(lanes) < want:
+        return refuse("busy", received, running=running, words="no free port slot")
+    ids = []
+    while len(ids) < want + (1 if order else 0):  # a stack has an id of its own, for its one result (012 c)
+        jid = secrets.token_hex(p.ID_LENGTH // 2)
+        if jid not in ids and not (JOBS / jid).exists():
+            ids.append(jid)
+    stack_id = ids.pop() if order else None
+    job = JOBS / ids[0]
     job.mkdir()
     bundle = job / "bundle"
 
     def drop(reason: str, **words) -> int:
-        shutil.rmtree(str(job), ignore_errors=True)
+        for j in ids + ([stack_id] if stack_id else []):
+            shutil.rmtree(str(JOBS / j), ignore_errors=True)
+        for ref in git(["-C", str(SOURCE), "for-each-ref", "--format=%(refname)", "refs/early/%s/" % ids[0]],
+                       check=False).splitlines():
+            git(["-C", str(SOURCE), "update-ref", "-d", ref], check=False)
         return refuse(reason, received, **words)
 
     size = receive(bundle)
@@ -215,33 +240,84 @@ def do_run(received: str) -> int:
     for ln in git(["bundle", "list-heads", str(bundle)], cwd=SOURCE).splitlines():
         sha, _, ref = ln.partition(" ")
         heads[ref.strip()] = sha.strip()
-    slices = [r for r in heads if SLICE_REF.match(r)]
+    slices = {SLICE_REF.match(r).group(1): r for r in heads if SLICE_REF.match(r)}
     shown = [re.sub(r"[^\w/.-]", "?", r)[:80] for r in sorted(heads)]
-    if set(heads) != {"refs/heads/main", *slices} or len(slices) != 1:
-        return drop("bundle-heads", heads=shown, words="a bundle carries refs/heads/main and one refs/heads/lane/slice-<ID>")
-    slice_id = SLICE_REF.match(slices[0]).group(1)
-    git(["-C", str(SOURCE), "fetch", "-q", "--no-tags", str(bundle),
-         "refs/heads/main:refs/early/%s/main" % jid, "%s:refs/early/%s/slice" % (slices[0], jid)])
+    if set(heads) != {"refs/heads/main", *slices.values()} or (order is None and len(slices) != 1) \
+            or (order is not None and set(slices) != set(order)):
+        return drop("bundle-heads", heads=shown, words="a bundle carries refs/heads/main and one refs/heads/lane/slice-<ID>"
+                    if order is None else "a stack's bundle carries refs/heads/main and exactly the slices named")
+    order = order or list(slices)
+    first = ids[0]
+    git(["-C", str(SOURCE), "fetch", "-q", "--no-tags", str(bundle), "refs/heads/main:refs/early/%s/main" % first,
+         *["%s:refs/early/%s/slice/%s" % (slices[s], first, s) for s in order]])
     tips = {}
-    for name in ("main", "slice"):
-        got = git(["-C", str(SOURCE), "rev-parse", "--verify", "-q", "refs/early/%s/%s^{commit}" % (jid, name)],
+    for name, ref in [("main", "main")] + [(s, "slice/" + s) for s in order]:
+        got = git(["-C", str(SOURCE), "rev-parse", "--verify", "-q", "refs/early/%s/%s^{commit}" % (first, ref)],
                   check=False)
         if not SHA.match(got or ""):
             return drop("unresolved-tip", tip=name, words="the bundle's %s tip cannot be resolved here" % name)
         tips[name] = got
     bundle.unlink()
-    (job / "job.json").write_text(json.dumps({"id": jid, "slice": slice_id, "main": tips["main"],
-                                              "tip": tips["slice"], "bundle_bytes": size, "at": now()}))
-    (WORK / "current").write_text(jid + "\n")
-    if not LAUNCH(jid):
-        return drop("no-cap", words="systemd-run could not start the job under its caps; nothing was run")
-    return say({"state": "started", "id": jid, "slice": slice_id}, 0)
+    for k, jid in enumerate(ids):
+        stack = [{"slice": s, "tip": tips[s]} for s in order[:k + 1]]
+        if k:  # each job holds its own refs to what it tests, so one job's end never drops another's commits
+            (JOBS / jid).mkdir()
+            for name, ref in [("main", "main")] + [(s["slice"], "slice/" + s["slice"]) for s in stack]:
+                git(["-C", str(SOURCE), "update-ref", "refs/early/%s/%s" % (jid, ref), tips[name]])
+        (JOBS / jid / "job.json").write_text(json.dumps({
+            "id": jid, "slice": stack[-1]["slice"], "tip": stack[-1]["tip"], "main": tips["main"], "stack": stack,
+            "position": k + 1, "of": len(ids), "group": ids, "lane": lanes[k], "bundle_bytes": size, "at": now(),
+            **({"stack_id": stack_id} if stack_id else {})}))
+    if stack_id:
+        (JOBS / stack_id).mkdir()
+        (JOBS / stack_id / "stack.json").write_text(json.dumps({"id": stack_id, "main": tips["main"], "order": order,
+                                                              "ids": ids, "at": now()}))
+    for k, jid in enumerate(ids):
+        if not LAUNCH(jid):
+            if k == 0:
+                return drop("no-cap", words="systemd-run could not start the job under its caps; nothing was run")
+            for later in ids[k:]:  # never left looking alive: a result that says what happened
+                (JOBS / later / "result.json").write_text(json.dumps({
+                    "state": "done", "id": later, "verdict": "error", "runner_version": p.RUNNER_VERSION,
+                    "words": "systemd-run could not start this job under its caps; nothing was run"}))
+            break
+    if stack_id:
+        return say({"state": "started", "id": stack_id, "ids": ids, "stack": order}, 0)
+    return say({"state": "started", "id": ids[0], "ids": ids, "slice": order[0]}, 0)
+
+
+#: What a stack's one result gives of each member (the line-fix session's shape, 012 c).
+MEMBER_FIELDS = ("slice", "tip", "tree", "verdict", "failing", "passed_targets", "not_run")
+
+
+def member(jid: str) -> dict:
+    job = JOBS / jid
+    res = job / "result.json"
+    if res.exists():
+        r = json.loads(res.read_text())
+        return {"id": jid, "state": "done", **{k: r.get(k) for k in MEMBER_FIELDS}}
+    meta = json.loads((job / "job.json").read_text()) if (job / "job.json").exists() else {}
+    state = "running" if job.is_dir() and job_alive(job) else "died"
+    return {"id": jid, "state": state, "slice": meta.get("slice"), "tip": meta.get("tip")}
+
+
+def stack_result(stack_id: str) -> dict:
+    """A stack's one result: each member in the order run, from each member job's own result."""
+    meta = json.loads((JOBS / stack_id / "stack.json").read_text())
+    members = [member(j) for j in meta["ids"]]
+    states = {m["state"] for m in members}
+    state = "running" if "running" in states else "died" if "died" in states else "done"
+    return {"state": state, "id": stack_id, "main": meta["main"], "runner_version": p.RUNNER_VERSION,
+            "stack": members, "advice": "advice only; the Mac's merge run is the gate"}
 
 
 def do_result(jid: str) -> int:
     job = JOBS / jid
     if not job.is_dir() or not inside_work(job):
         return say({"state": "unknown", "id": jid}, 3)
+    if (job / "stack.json").exists():
+        r = stack_result(jid)
+        return say(r, 3 if r["state"] == "died" else 0)
     res = job / "result.json"
     if res.exists():
         return say(json.loads(res.read_text()), 0)
@@ -352,12 +428,12 @@ def ci_value(tree: Path, pattern: str, what: str) -> str:
     return found.pop()
 
 
-def lane_slot(tree: Path) -> str:
+def lane_slot(tree: Path, lane: str = GATE_LANES[0]) -> str:
     for ln in (tree / "OspreyFlow_Build/scripts/lane_ports.tsv").read_text().splitlines():
         parts = ln.split("\t")
-        if not ln.startswith("#") and len(parts) >= 2 and parts[0] == GATE_LANE:
+        if not ln.startswith("#") and len(parts) >= 2 and parts[0] == lane:
             return parts[1].strip()
-    raise Stop("error", "lane_ports.tsv gives the merger lane no slot")
+    raise Stop("error", "lane_ports.tsv gives the %s lane no slot" % lane)
 
 
 def closed_ports_in_use() -> list[str]:
@@ -402,7 +478,7 @@ def docker_reachable() -> list:
     return open_
 
 
-def build_env(tree: Path, job: Path) -> dict:
+def build_env(tree: Path, job: Path, lane: str = GATE_LANES[0]) -> dict:
     """ci_env's environment, from nothing of the caller's, with no Docker reachable."""
     py = ci_value(tree, r"^\s*UV_PYTHON:\s*[\"']?([0-9][0-9.]*)", "UV_PYTHON")
     major = ci_value(tree, r"node-version:\s*[\"']?(\d+)", "node-version")
@@ -429,7 +505,7 @@ def build_env(tree: Path, job: Path) -> dict:
            "HOME": str(home), "LANG": "C.UTF-8", "TMPDIR": str(job / "tmp"),
            "UV_PYTHON": py, "UV_CACHE_DIR": str(CACHE / "uv"), "UV_PYTHON_INSTALL_DIR": str(TOOLS / "python"),
            "npm_config_cache": str(CACHE / "npm"), "PLAYWRIGHT_BROWSERS_PATH": str(TOOLS / "playwright"),
-           "OSPREY_PORTS_SLOT": lane_slot(tree), "PYTEST_DEBUG_TEMPROOT": str(job / "pytest"),
+           "OSPREY_PORTS_SLOT": lane_slot(tree, lane), "PYTEST_DEBUG_TEMPROOT": str(job / "pytest"),
            "OSPREY_LEASE_DIR": str(lease), "TEST_WORKERS": str(p.TEST_WORKERS), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
            **OFFLINE_PORTS}
     for d in ("tmp", "pytest"):
@@ -540,6 +616,28 @@ def apply_scan_rows(tree: Path, slice_id: str) -> list:
     return lines
 
 
+def mac_only_owners(tree: Path, specs: list) -> set:
+    """The targets whose recipe, or the npm script it runs, names a Mac-only spec's file or folder: never counted as
+    passed on this machine (012 b), whatever their exit."""
+    owners = set()
+    for makefile, kind in ((named_lists.BUILD_MAKEFILE, "ci"), (named_lists.CORE_MAKEFILE, "core")):
+        try:
+            text = (tree / makefile).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for t in named_lists.prerequisites(text, "ci" if kind == "ci" else "check") + (["test"] if kind == "ci" else []):
+            hay = []
+            for _n, body in named_lists.recipe(text, t):
+                hay.append(body)
+                npm = named_lists._npm_script(tree, body)
+                if npm:
+                    hay.append(npm[1])
+            joined = "\n".join(hay)
+            if any(Path(s).name in joined or Path(s).parent.name in joined for s in specs):
+                owners.add(t)
+    return owners
+
+
 def read_since(log: Path, start: int) -> list:
     with log.open("rb") as fh:
         fh.seek(start)
@@ -556,17 +654,22 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
     result["list_drift"] = named_lists.check(tree, lists_file, lists_file.parent / "mac_only.tsv"
                                              if (lists_file.parent / "mac_only.tsv").is_file() else named_lists.MAC_ONLY)
     not_run = result["not_run"]
+    checks = result.setdefault("checks", [])  # every target make -k ci names, and make test: passed, failed or not run
     run_targets = {"ci": [], "core": []}
     for t in named_lists.derive_targets(tree):
         if t["name"] == "core-check":
             continue
         r = rows.get((t["kind"], t["name"]))
+        why = None
         if r is None:
-            not_run["targets"].append({"name": t["name"], "why": "unlisted: in neither of lists.tsv's verdicts"})
+            why = {"name": t["name"], "why": "unlisted: in neither of lists.tsv's verdicts"}
         elif r["verdict"] == "not-run":
-            not_run["targets"].append({"name": t["name"], "why": r["reason"], "evidence": r["evidence"]})
+            why = {"name": t["name"], "why": r["reason"], "evidence": r["evidence"]}
         elif r["reason"] == "no-tool" and not shutil.which(t["name"]):
-            not_run["targets"].append({"name": t["name"], "why": "no-tool: %s is not installed on this machine" % t["name"]})
+            why = {"name": t["name"], "why": "no-tool: %s is not installed on this machine" % t["name"]}
+        if why:
+            not_run["targets"].append(why)
+            checks.append({"name": t["name"], "kind": t["kind"], "status": "not run", "why": why["why"]})
         else:
             run_targets[t["kind"]].append(t["name"])
     if any(r["name"] == "client-name-check" for r in not_run["targets"]):
@@ -580,7 +683,7 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
     not_run["mac_only"] = [{"name": r["name"], "why": "not run on this machine: its snapshots are another platform's (%s)"
                             % r["evidence"]} for r in mac]
     not_run["live_step"] = "not run: the live step needs the test stacks (stack_lease.sh), which this machine does not hold"
-    env = build_env(tree, job)
+    env = build_env(tree, job, result.get("lane", GATE_LANES[0]))
     core = tree / "OspreyFlow_Core"
     build = tree / "OspreyFlow_Build"
     if (core / ".venv").exists() or (core / "node_modules").exists():
@@ -600,19 +703,23 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
     # replaces the default, and the failing tests went unnamed (run fc4d450f6f238ae2, PL11).
     env_test = {**env, "PYTEST_ADDOPTS": " ".join(["-rfEs"] + ["--ignore=../%s" % n for n in ignores])}
     codes = []
-    steps = []
-    if run_targets["ci"]:
-        steps.append(("make -k ci (the runnable part)", ["make", "-k", *run_targets["ci"]], build, env_test))
-    if run_targets["core"]:
-        steps.append(("core-check (the runnable part)", ["make", "-k", "-C", "../OspreyFlow_Core", *run_targets["core"]],
-                      build, env_test))
-    steps.append(("make test", ["make", "test"], build, env_test))
-    for name, cmd, cwd, e in steps:
+    result["passed_targets"] = []
+    mac_owners = mac_only_owners(tree, [r["name"] for r in mac])
+    # One make per target, so each target's own exit is known and recorded (009: the list a script reads), where one
+    # make -k over them all gave a single exit for the lot.
+    steps = [("make " + t, t, "ci", ["make", t]) for t in run_targets["ci"]]
+    steps += [("make -C ../OspreyFlow_Core " + t, t, "core", ["make", "-C", "../OspreyFlow_Core", t])
+              for t in run_targets["core"]]
+    steps.append(("make test", "test", "test", ["make", "test"]))
+    for name, target, kind, cmd in steps:
         start = log.stat().st_size if log.exists() else 0
         t0 = time.monotonic()
-        code = run_step(cmd, cwd, e, log, deadline)
+        code = run_step(cmd, build, env_test, log, deadline)
         lines = read_since(log, start)
-        codes.append({"step": name, "exit": code, "seconds": int(time.monotonic() - t0)})
+        seconds = int(time.monotonic() - t0)
+        codes.append({"step": name, "exit": code, "seconds": seconds})
+        seen = len(result["failing"]["tests"])
+        server_skips = 0  # docker calls the repository's guard skipped inside this target (the Mac reruns only make test's)
         pending = []  # failing tests seen since the last failed target: make -k runs the targets one after another
         by_target = result["failing"].setdefault("by_target", {})
         for ln in lines:
@@ -632,11 +739,23 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
                 if n and n not in pending:
                     pending.append(n)
             m = DOCKER_SKIP.match(ln)
+            if m:
+                server_skips += 1
             if m and m.group(1) not in not_run["docker_skipped"]:
                 not_run["docker_skipped"].append(m.group(1))
-        if pending:  # failing tests with no failed target after them: named all the same, under the step
-            names = by_target.setdefault("(%s)" % name, [])
+        if code != 0 and target != "test" and target not in result["failing"]["targets"]:
+            result["failing"]["targets"].append(target)  # failed, whether or not make's own error line named it
+        if pending:  # failing tests with no failed target after them: named under the target, or the step
+            names = by_target.setdefault(target if code != 0 and target != "test" else "(%s)" % name, [])
             names += [n for n in pending if n not in names]
+        ok = code == 0 and len(result["failing"]["tests"]) == seen and not any(
+            MAKE_ERROR.match(ln) for ln in lines)
+        checks.append({"name": target, "kind": kind, "status": "passed" if ok else "failed", "exit": code,
+                       "seconds": seconds})
+        # 012 b: named passed only when it ran to completion and passed with nothing skipped inside it but what the
+        # Mac reruns (make test's docker-guarded and not-run files), and when it owns no Mac-only spec
+        if ok and (target == "test" or not server_skips) and target not in mac_owners:
+            result["passed_targets"].append(target)
     return codes
 
 
@@ -650,7 +769,11 @@ def run_job(jid: str) -> int:
     t0 = time.monotonic()
     deadline = t0 + p.MAX_RUN_SECONDS
     tree = job / "tree"
+    stack = meta.get("stack") or [{"slice": meta["slice"], "tip": meta["tip"]}]
     result = {"state": "done", "id": jid, "slice": meta["slice"], "main": meta["main"], "tip": meta["tip"],
+              "stack": stack, "position": meta.get("position", 1), "of": meta.get("of", 1),
+              "group": meta.get("group", [jid]), "lane": meta.get("lane", GATE_LANES[0]),
+              **({"stack_id": meta["stack_id"]} if meta.get("stack_id") else {}),
               "runner_version": p.RUNNER_VERSION, "advice": "advice only; the Mac's merge run is the gate",
               "failing": {"targets": [], "tests": []},
               "not_run": {"targets": [], "test_files": [], "docker_skipped": [], "mac_only": [], "live_step": ""},
@@ -663,15 +786,21 @@ def run_job(jid: str) -> int:
         if docker_reachable():
             raise Stop("error", "Docker's socket answers this account (%s): nothing was run" % ", ".join(docker_reachable()))
         make_tree(tree, meta["main"])
-        msg = "merge: slice %s (early warning) %s\n\nSlice-Merge: %s\nSlice-Tip: %s" % (
-            meta["slice"], meta["tip"][:10], meta["slice"], meta["tip"])
-        m = subprocess.run(["git", "merge", "--no-ff", "-q", "-m", msg, meta["tip"]], cwd=str(tree),
-                           capture_output=True, text=True, env=git_env())
-        if m.returncode != 0:
-            files = git(["diff", "--name-only", "--diff-filter=U"], cwd=tree, check=False).splitlines()
-            raise Stop("conflict", "the slice does not merge cleanly onto main", conflicts=files[:20])
-        result["scan_rows"] = apply_scan_rows(tree, meta["slice"])
-        result["merge"] = git(["rev-parse", "HEAD"], cwd=tree)
+        result["scan_rows"], result["merges"] = [], []
+        for i, s in enumerate(stack):  # in merge order, each as the Mac's merge makes it: --no-ff, then its scan rows
+            msg = "merge: slice %s (early warning) %s\n\nSlice-Merge: %s\nSlice-Tip: %s" % (
+                s["slice"], s["tip"][:10], s["slice"], s["tip"])
+            m = subprocess.run(["git", "merge", "--no-ff", "-q", "-m", msg, s["tip"]], cwd=str(tree),
+                               capture_output=True, text=True, env=git_env())
+            if m.returncode != 0:
+                files = git(["diff", "--name-only", "--diff-filter=U"], cwd=tree, check=False).splitlines()
+                before = [x["slice"] for x in stack[:i]]
+                raise Stop("conflict", "the slice does not merge cleanly onto main" if not before else
+                           "%s does not merge cleanly onto main with %s merged first" % (s["slice"], ", ".join(before)),
+                           conflicts=files[:20], conflict_slice=s["slice"])
+            result["scan_rows"] += apply_scan_rows(tree, s["slice"])
+            result["merges"].append(git(["rev-parse", "HEAD"], cwd=tree))
+        result["merge"] = result["merges"][-1]
         result["tree"] = git(["rev-parse", "HEAD^{tree}"], cwd=tree)
         result["steps"] = GATE(tree, job, log, deadline, result)
         red = any(s["exit"] != 0 for s in result["steps"]) or result["failing"]["targets"] or result["failing"]["tests"]
@@ -682,10 +811,12 @@ def run_job(jid: str) -> int:
         result.update(verdict="error", words="the runner failed: %s" % type(e).__name__)
     result["seconds"] = int(time.monotonic() - t0)
     result["finished"] = now()
+    result["usage"] = own_usage()
     try:
         git(["-C", str(SOURCE), "update-ref", "refs/heads/main", meta["main"]])
-        for ref in ("main", "slice"):
-            git(["-C", str(SOURCE), "update-ref", "-d", "refs/early/%s/%s" % (jid, ref)], check=False)
+        for ref in git(["-C", str(SOURCE), "for-each-ref", "--format=%(refname)", "refs/early/%s/" % jid],
+                       check=False).splitlines():
+            git(["-C", str(SOURCE), "update-ref", "-d", ref], check=False)
         result["holds_main"] = meta["main"]
     except Exception:  # noqa: BLE001
         pass
@@ -695,6 +826,22 @@ def run_job(jid: str) -> int:
     os.replace(str(tmp), str(job / "result.json"))
     prune_jobs()
     return 0
+
+
+def own_usage() -> dict:
+    """What this job used, from its own cgroup (cgroup v2): its peak memory and its processor time, so the caps can be
+    set from measurements (009); {} where the machine has no such files (the Mac)."""
+    try:
+        rel = Path("/proc/self/cgroup").read_text().strip().splitlines()[0].split("::", 1)[1]
+        base = Path("/sys/fs/cgroup") / rel.lstrip("/")
+        used = {"memory_peak_bytes": int((base / "memory.peak").read_text().strip())}
+        for ln in (base / "cpu.stat").read_text().splitlines():
+            k, _, v = ln.partition(" ")
+            if k == "usage_usec":
+                used["cpu_seconds"] = int(v) // 1000000
+        return used
+    except (OSError, ValueError, IndexError):
+        return {}
 
 
 def clean_job(job: Path, tree: Path) -> None:
@@ -717,6 +864,13 @@ def prune_jobs() -> None:
     jobs = sorted((d for d in JOBS.iterdir() if (d / "result.json").exists()), key=lambda d: d.stat().st_mtime)
     for old in jobs[:-KEEP_JOBS]:
         shutil.rmtree(str(old), ignore_errors=True)
+    for d in JOBS.iterdir():  # a stack's own folder goes with the last of its members
+        try:
+            if (d / "stack.json").exists() and not any((JOBS / j).exists()
+                                                       for j in json.loads((d / "stack.json").read_text())["ids"]):
+                shutil.rmtree(str(d), ignore_errors=True)
+        except (OSError, ValueError, KeyError):
+            pass
 
 
 #: The job's launcher and its gate. Nothing in this file replaces either, and nothing here reads a variable that could:
@@ -736,6 +890,8 @@ def main(argv: list) -> int:
         return refuse(arg, received)
     if verb == "run":
         return do_run(received)
+    if verb == "stack":
+        return do_run(received, arg.split())
     return do_result(arg)
 
 

@@ -116,7 +116,7 @@ def test_the_note_is_written_in_the_lanes_folder_and_nothing_under_records_chang
     assert records_snapshot(w) == before
     text = note(w).read_text()
     assert note(w).parent == w["repo"] / "OspreyFlow_Build/process/lanes/v062/early_warning"
-    for line in ("advice only; the Mac's merge run is the gate", "GREEN", w["tip"], "Runner version: ew-1",
+    for line in ("advice only; the Mac's merge run is the gate", "GREEN", w["tip"], "Runner version: ew-2",
                  "Time taken:", "Candidate tree hash: `", "never costs a builder a round",
                  "The client-name check: not run (no client-name list on this machine)"):
         assert line in text, line
@@ -162,7 +162,9 @@ def test_the_note_says_in_one_line_what_happened_to_duckdbs_spatial_extension(wo
     w = world
     gate(w, exit=2, targets=["test"], duckdb_spatial={"status": "failed", "stage": "fetch", "version": "1.5.6",
          "reason": "HTTPError: HTTP Error 403: Forbidden"})
-    early(w, "S1")
+    p = early(w, "S1")
+    # once (22 November, a loaded full run) no note was written: should it happen again, say what the script said
+    assert note(w).exists(), (p.returncode, p.stdout.decode()[-1500:], p.stderr.decode()[-3000:])
     assert "- DuckDB's spatial extension: failed at the fetch: HTTPError: HTTP Error 403: Forbidden" in \
         note(w).read_text().splitlines()
     gate(w, exit=0, duckdb_spatial={"status": "installed", "version": "1.5.6", "platform": "linux_amd64",
@@ -186,11 +188,11 @@ def test_a_run_still_going_at_the_deadline_is_no_result(world):
 
 def test_a_refusal_by_the_runner_is_refused_not_green(world):
     w = world
-    jobs = w["remote"] / "data/jobs/aaaaaaaaaaaaaaaa"
-    jobs.mkdir(parents=True)
-    (jobs / "job.json").write_text("{}")
-    (jobs / "job.pid").write_text(str(os.getpid()))  # a job of the runner's still running: busy
-    (w["remote"] / "data/current").write_text("aaaaaaaaaaaaaaaa\n")
+    for n in "abc":  # every job slot taken by a job of the runner's still running: busy (009: three at once)
+        jobs = w["remote"] / ("data/jobs/" + n * 16)
+        jobs.mkdir(parents=True)
+        (jobs / "job.json").write_text("{}")
+        (jobs / "job.pid").write_text(str(os.getpid()))
     p = early(w, "S1")
     text = note(w).read_text()
     assert p.returncode == 3 and "REFUSED" in text and "busy" in text and "GREEN" not in text

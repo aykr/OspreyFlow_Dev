@@ -5,6 +5,18 @@
                                               runner, poll until it answers, and write the result as a note
     early_warning.py <slice> --result <id>    poll a run already started (its id is in the note of a run that was
                                               still going at the deadline) and write its note
+    early_warning.py <A> <B> [<C>]            a stack (009): main+A, main+A+B and main+A+B+C tested at once, one job
+                                              each, in that merge order; one note each
+    early_warning.py fetch <id>               the runner's own result for run <id>, as `result <id>` returns it, on
+                                              one line (012 a); exit 0, non-zero when it cannot be fetched. Never
+                                              read from a note.
+    early_warning.py <slice> --trust <id>|auto --tree <hash>
+                                              for the merge (009): ask the server itself for run <id>, never a note,
+                                              and say in JSON whether it proves the candidate tree <hash>: every
+                                              target the tree's own Makefiles name passed or is on the list the Mac
+                                              must still run. Exit 0 trusted, 1 not trusted, 4 no answer.
+                                              `auto`: the runs of this slice at its tip that this script recorded,
+                                              newest first, until one is trusted.
 
 The Mac's merge run (merge_slice.py merge) is the only gate to main. This script changes nothing in merge_slice.py,
 stop_check.py or the guard, and writes no record the merge reads: nothing under ~/.ospreyflow/slice-line/records/.
@@ -54,11 +66,18 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE / "demo_server"))
 import common as c  # noqa: E402
+import lists as named_lists  # noqa: E402
 import protocol as proto  # noqa: E402
 
 SETTING = c.DATA / "demo-server.json"
 OWN = c.DATA / "early-warning"
 HELD = OWN / "held.json"
+#: Every run this script started or polled, one JSON line each (slice, tip, id, tree, stack): only where to ask, never
+#: what the answer was. `--trust auto` reads it for the run ids to ask the server about (009, item 3).
+RUNS = OWN / "runs.jsonl"
+#: One file per run in flight, <slice>-<tip first 8>.json, removed when the run ends, so the board can say "running"
+#: (012 d).
+RUNNING = OWN / "running"
 NOTES_REL = f"{c.V062_REL}/early_warning"
 SAFE_HOST = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9.:-]*\Z")
 SAFE_USER = re.compile(r"\A[a-z_][a-z0-9_-]*\Z")
@@ -67,6 +86,10 @@ RED_RULE = ("On red, rerun the named failing check on the Mac before sending the
             "different kind of machine: a red from the server alone never costs a builder a round. Green changes "
             "nothing.")
 ADVICE = "advice only; the Mac's merge run is the gate"
+#: The runner versions whose results carry one check per target (009); an older result is never trusted.
+TRUSTED_VERSIONS = ("ew-2",)
+#: The checks the server never runs, whatever its result says: the Mac runs these for every candidate (009, item 4).
+ALWAYS_ON_THE_MAC = ("client-name-check", "the live step")
 
 
 class Refused(Exception):
@@ -126,12 +149,13 @@ def verified_tip(slice_id: str) -> tuple[str, str]:
     return branch, tip
 
 
-def make_bundle(branch: str, dest: Path, full: bool) -> None:
-    """A git bundle of main's tip and the slice's tip, from commits only (never a working-tree file); less what the
-    server already holds, unless `full`."""
+def make_bundle(branch, dest: Path, full: bool) -> None:
+    """A git bundle of main's tip and the slice's tip (or each slice's, for a stack), from commits only (never a
+    working-tree file); less what the server already holds, unless `full`."""
+    branches = [branch] if isinstance(branch, str) else list(branch)
     main = c.git(["rev-parse", "refs/heads/main"], c.REPO)
     held = (c.read_json(HELD) or {}).get("main", "")
-    args = ["bundle", "create", "-q", str(dest), "refs/heads/main", f"refs/heads/{branch}"]
+    args = ["bundle", "create", "-q", str(dest), "refs/heads/main", *[f"refs/heads/{b}" for b in branches]]
     if not full and re.fullmatch(r"[0-9a-f]{40}", held or "") and \
             subprocess.run(["git", "merge-base", "--is-ancestor", held, main], cwd=c.REPO).returncode == 0:
         # git leaves out a ref whose tip is excluded, so when the server holds main itself the bundle stops at main's
@@ -157,21 +181,44 @@ def ssh(s: dict, words: list[str], stdin=None, timeout: int = 1800) -> tuple[int
         try:
             data = json.loads(ln)
             if isinstance(data, dict) and "state" in data:
+                LAST_LINE[0] = ln
                 return r.returncode, data
         except ValueError:
             continue
     return r.returncode, None
 
 
-def start(s: dict, branch: str) -> tuple[str, dict | None, int]:
-    """Send the bundle; once more in full if the server lacks what an incremental one is built on."""
+#: The runner's own line for the last answer ssh() parsed, unchanged: what `fetch` prints.
+LAST_LINE = [""]
+
+
+def running_file(slice_id: str, tip: str) -> Path:
+    return RUNNING / f"{slice_id}-{tip[:8]}.json"
+
+
+def mark_running(slice_id: str, tip: str, jid: str, stack_id: str = "") -> None:
+    RUNNING.mkdir(parents=True, exist_ok=True)
+    c.write_json(running_file(slice_id, tip), {"slice": slice_id, "tip": tip, "id": jid, "started": c.now(),
+                                                **({"stack_id": stack_id} if stack_id else {})})
+
+
+def unmark_running(slice_id: str, tip: str) -> None:
+    try:
+        running_file(slice_id, tip).unlink()
+    except OSError:
+        pass
+
+
+def start(s: dict, branch, order: list | None = None) -> tuple[str, dict | None, int]:
+    """Send the bundle; once more in full if the server lacks what an incremental one is built on. With `order`, a
+    stack: the slices' branches, and the command names them in merge order."""
     with tempfile.TemporaryDirectory(prefix="early-warning-") as d:
         for full in (False, True):
             b = Path(d) / "slice.bundle"
             b.unlink(missing_ok=True)
             make_bundle(branch, b, full)
             with b.open("rb") as fh:
-                code, data = ssh(s, ["run"], stdin=fh)
+                code, data = ssh(s, ["stack", *order] if order else ["run"], stdin=fh)
             if data and data.get("state") == "refused" and data.get("reason") == "bundle-prerequisites" and not full:
                 continue
             return ("started" if data and data.get("state") == "started" else "failed"), data, code
@@ -237,6 +284,7 @@ def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: st
     d = data or {}
     fail = d.get("failing") or {}
     nr = d.get("not_run") or {}
+    stack = d.get("stack") or []
     out = [f"# Early warning: {slice_id} at {tip[:8]}: {headline}", "",
            f"**{ADVICE}.** {RED_RULE}", "",
            f"- Result: {headline} ({why})",
@@ -246,6 +294,13 @@ def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: st
            f"- Time taken: {d.get('seconds', '?')} s",
            f"- Runner version: {d.get('runner_version', 'unknown')}; this script's: {proto.RUNNER_VERSION}",
            f"- Run id: `{jid or 'none'}`", f"- Written: {c.now()}", ""]
+    if d.get("stack_id"):
+        out.insert(out.index(f"- Run id: `{jid or 'none'}`") + 1, f"- The stack's run id: `{d['stack_id']}` "
+                   f"(`early_warning.py fetch {d['stack_id']}` gives the stack's one result)")
+    if len(stack) > 1:  # a stack's candidate: main with every slice before this one merged first, in that order
+        out.insert(out.index(f"- Main: `{d.get('main', '?')}`") + 1, "- Stack: candidate %d of %d, main + %s (merged in "
+                   "that order)" % (d.get("position", len(stack)), d.get("of", len(stack)),
+                                    " + ".join(f"{x['slice']} `{x['tip'][:10]}`" for x in stack)))
     if "duckdb_spatial" in d:  # what made the DuckDB tests' extension, or why not, in one line (006)
         out.insert(out.index(f"- Run id: `{jid or 'none'}`"), f"- DuckDB's spatial extension: {spatial_line(d['duckdb_spatial'])}")
     if headline == "NO RESULT" and jid:
@@ -278,29 +333,226 @@ def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: st
                    "guard): " + ", ".join(f"`{n}`" for n in nr["docker_skipped"][:40]))
     if d.get("list_drift"):
         out += ["", "## The named lists do not match the candidate (lists.py)", ""] + [f"- {x}" for x in d["list_drift"]]
+    if d.get("checks"):
+        block = {"run_id": jid, "slice": slice_id, "tip": tip, "main": d.get("main"), "tree": d.get("tree"),
+                 "stack": stack, "verdict": d.get("verdict"), "runner_version": d.get("runner_version"),
+                 "passed": [x["name"] for x in d["checks"] if x.get("status") == "passed"],
+                 "failed": [x["name"] for x in d["checks"] if x.get("status") == "failed"],
+                 "not_run": [x["name"] for x in d["checks"] if x.get("status") == "not run"]}
+        out += ["", "## The checks, for scripts", "",
+                "The merge never reads this block, or this note: it asks the server for the run by its id itself "
+                f"(`early_warning.py {slice_id} --trust {jid or '<id>'} --tree <candidate tree>`), so a note written "
+                "by hand proves nothing.", "", "```json", json.dumps(block, indent=1), "```"]
     out += ["", f"_{ADVICE}._", ""]
     return "\n".join(out)
 
 
-def write_note(slice_id: str, tip: str, data: dict | None, headline: str, why: str, jid: str, s: dict) -> Path:
-    path = c.REPO / NOTES_REL / f"{slice_id}-{tip[:8]}.md"
+def record_run(slice_id: str, tip: str, jid: str, data: dict | None) -> None:
+    """Where to ask later (RUNS): this run's id, for this slice and tip. Never its verdict: the server says that."""
+    if not jid:
+        return
+    d = data or {}
+    OWN.mkdir(parents=True, exist_ok=True)
+    with RUNS.open("a") as fh:
+        fh.write(json.dumps({"slice": slice_id, "tip": tip, "id": jid, "tree": d.get("tree"),
+                             "stack": [x.get("slice") for x in d.get("stack") or []], "at": c.now()}) + "\n")
+
+
+def recorded_runs(slice_id: str, tip: str, tree: str) -> list[str]:
+    """The run to ask about for this slice at this tip: the newest RUNS holds for this candidate tree, else the newest
+    of any (the server's answer then says which tree it tested). Only ever one: a newer red is never passed over for
+    an older green."""
+    seen = []
+    try:
+        lines = RUNS.read_text().splitlines()
+    except OSError:
+        return []
+    for ln in reversed(lines):
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        jid = r.get("id") if isinstance(r, dict) else None
+        if r.get("slice") == slice_id and r.get("tip") == tip and isinstance(jid, str) \
+                and re.fullmatch(proto.ID_PATTERN, jid) and jid not in [x for x, _ in seen]:
+            seen.append((jid, r.get("tree")))
+    same = [x for x, tr in seen if tr == tree]
+    return (same or [x for x, _ in seen])[:1]
+
+
+def write_note(slice_id: str, tip: str, data: dict | None, headline: str, why: str, jid: str, s: dict,
+               before: list | None = None) -> Path:
+    name = f"{slice_id}-{tip[:8]}" + ("-after-" + "-".join(before) if before else "")
+    path = c.REPO / NOTES_REL / f"{name}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(scrub(note_text(slice_id, tip, data, headline, why, jid), s))
+    record_run(slice_id, tip, jid, data)
     return path
 
 
+def expected_checks(tree: str) -> list[str]:
+    """Every target `make -k ci` runs on this candidate (core-check as Core's check targets) and make test: read from
+    the candidate tree's own Makefiles, here, never from the server's answer."""
+    build = c.git(["show", f"{tree}:{named_lists.BUILD_MAKEFILE}"], c.REPO)
+    core = c.git(["show", f"{tree}:{named_lists.CORE_MAKEFILE}"], c.REPO)
+    names = [x for x in named_lists.prerequisites(build, "ci") if x != "core-check"]
+    names += named_lists.prerequisites(core, "check")
+    return names + ["test"]
+
+
+def trust(s: dict, jid: str, slice_id: str, tip: str, tree: str) -> tuple[int, dict]:
+    """Whether the server's run `jid` proves the candidate `tree` for `slice_id` at `tip` (009, item 3), asked of the
+    server itself over the forced command, never read from a note. (exit code, the answer)."""
+    said = {"trusted": False, "run_id": jid, "slice": slice_id, "tip": tip, "tree": tree}
+    code, data = ssh(s, ["result", jid], timeout=120)
+    if data is None:
+        return NO_RESULT, {**said, "why": f"the server could not be reached or gave no answer (ssh exit {code})"}
+    why = None
+    checks = {x.get("name"): x for x in data.get("checks") or [] if isinstance(x, dict)}
+    if data.get("state") != "done" or data.get("id") != jid:
+        why = f"the server holds no finished run {jid} (it says: {data.get('state', '?')})"
+    elif data.get("runner_version") not in TRUSTED_VERSIONS:
+        why = f"run {jid} is by runner {data.get('runner_version', 'unknown')}, which records no check per target"
+    elif data.get("slice") != slice_id or data.get("tip") != tip:
+        why = f"run {jid} tested {data.get('slice')} at {str(data.get('tip'))[:10]}, not {slice_id} at {tip[:10]}"
+    elif data.get("tree") != tree:
+        why = f"run {jid} tested tree {str(data.get('tree'))[:12]}, not this candidate's {tree[:12]}"
+    elif data.get("verdict") != "pass":
+        why = f"run {jid}'s verdict is {data.get('verdict')}, not pass"
+    elif data.get("list_drift"):
+        why = "the server's named lists did not match the candidate: " + "; ".join(map(str, data["list_drift"]))[:300]
+    else:
+        try:
+            want = expected_checks(tree)
+        except RuntimeError:
+            want = None
+        if want is None:
+            why = f"this machine cannot read the candidate tree {tree[:12]}'s Makefiles"
+        else:
+            missing = [n for n in want if n not in checks]
+            failed = [n for n, x in checks.items() if x.get("status") not in ("passed", "not run")]
+            if missing:
+                why = "the result does not say what became of " + ", ".join(missing)
+            elif failed:
+                why = "these checks did not pass: " + ", ".join(failed)
+            elif checks["test"].get("status") != "passed":
+                why = "make test did not pass on the server"
+    nr = data.get("not_run") or {}
+    mac = {"targets": sorted({n for n, x in checks.items() if x.get("status") == "not run"} | {"client-name-check"}),
+           "test_files": [x.get("name") for x in nr.get("test_files", [])],
+           "docker_guarded_test_files": list(nr.get("docker_skipped", [])),
+           "mac_only": [x.get("name") for x in nr.get("mac_only", [])],
+           "live_step": True}
+    said.update(main=data.get("main"), stack=data.get("stack"), seconds=data.get("seconds"),
+                passed=sorted(n for n, x in checks.items() if x.get("status") == "passed"), mac_must_run=mac)
+    if why:
+        return RED, {**said, "why": why}
+    return GREEN, {**said, "trusted": True,
+                   "why": "the server ran this exact tree and every check it could run passed; the Mac runs the rest"}
+
+
+def run_stack(s: dict, order: list) -> int:
+    """009's stack: one bundle, one command, then each candidate's note."""
+    found = [(sid, *verified_tip(sid)) for sid in order]
+    state, sent, code = start(s, [b for _, b, _ in found], order)
+    if state != "started":
+        headline, exit_code, why = outcome(sent, code)
+        for k, (sid, _, tip) in enumerate(found):
+            path = write_note(sid, tip, sent, headline, why, "", s, order[:k])
+            print(scrub(f"{sid}: {headline}: {why}. Note: {path}", s))
+        return exit_code
+    ids = list(sent.get("ids") or [])
+    stack_id = str(sent.get("id") or "")
+    for k, (sid, _, tip) in enumerate(found):
+        mark_running(sid, tip, ids[k] if k < len(ids) else "", stack_id)
+    try:
+        poll(s, stack_id)  # the stack's one result, until it is no longer running
+        return stack_notes(s, found, ids, stack_id, order)
+    finally:
+        for sid, _, tip in found:
+            unmark_running(sid, tip)
+
+
+def stack_notes(s: dict, found: list, ids: list, stack_id: str, order: list) -> int:
+    worst = GREEN
+    for k, (sid, _, tip) in enumerate(found):
+        jid = ids[k] if k < len(ids) else ""
+        code, data = ssh(s, ["result", jid], timeout=120) if jid else (255, None)
+        if data and data.get("state") == "done" and re.fullmatch(r"[0-9a-f]{40}", str(data.get("holds_main", ""))):
+            OWN.mkdir(parents=True, exist_ok=True)
+            c.write_json(HELD, {"main": data["holds_main"], "at": c.now()})
+        want = [{"slice": x, "tip": t} for x, _, t in found[:k + 1]]
+        if data and data.get("state") == "done" and (data.get("tip") != tip or data.get("stack") != want):
+            data = {"state": "unknown"}  # an answer for another candidate is no answer for this one
+        headline, exit_code, why = outcome(data, code)
+        path = write_note(sid, tip, data, headline, why, jid, s, order[:k])
+        print(scrub(f"{sid}: {headline}: {why}. Note: {path}", s))
+        worst = max(worst, exit_code)
+    return worst
+
+
+def fetch(argv: list) -> int:
+    """`early_warning.py fetch <id>` (012 a): the runner's own result line for that run, unchanged, from the server."""
+    if len(argv) != 2 or not re.fullmatch(proto.ID_PATTERN, argv[1]):
+        print(f"Refused: fetch takes one run id ({proto.ID_LENGTH} lower-case hexadecimal characters).", file=sys.stderr)
+        return REFUSED_HERE
+    try:
+        s = load_setting()
+    except Refused as e:
+        print(f"Refused: {e}", file=sys.stderr)
+        return REFUSED_HERE
+    LAST_LINE[0] = ""
+    code, data = ssh(s, ["result", argv[1]], timeout=120)
+    if data is None:
+        print(f"No answer: the server could not be reached or gave no answer (ssh exit {code}).", file=sys.stderr)
+        return NO_RESULT
+    if data.get("state") == "unknown":
+        print(LAST_LINE[0])
+        return REFUSED_THERE  # the server holds no such run
+    print(LAST_LINE[0])
+    return GREEN
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["fetch"]:
+        return fetch(argv)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("slice")
+    ap.add_argument("slices", nargs="+", metavar="slice")
     ap.add_argument("--result", metavar="ID", help="poll a run already started")
+    ap.add_argument("--trust", metavar="ID", help="for the merge: does the server's run ID prove --tree?")
+    ap.add_argument("--tree", metavar="HASH", help="the candidate tree the merge built (with --trust)")
     a = ap.parse_args(argv)
     s: dict = {}
     try:
-        if not re.fullmatch(r"[A-Za-z0-9]+", a.slice):
+        if not all(re.fullmatch(proto.SLICE_PATTERN, x) for x in a.slices):
             raise Refused("A slice id is letters and digits only.")
-        if a.result is not None and not re.fullmatch(proto.ID_PATTERN, a.result):
-            raise Refused(f"A run id is {proto.ID_LENGTH} lower-case hexadecimal characters.")
+        if len(a.slices) > proto.MAX_STACK or len(set(a.slices)) != len(a.slices):
+            raise Refused(f"A stack is two to {proto.MAX_STACK} different slices, in merge order.")
+        if len(a.slices) > 1 and (a.result or a.trust):
+            raise Refused("--result and --trust take one slice.")
+        for v in (a.result, None if a.trust == "auto" else a.trust):
+            if v is not None and not re.fullmatch(proto.ID_PATTERN, v):
+                raise Refused(f"A run id is {proto.ID_LENGTH} lower-case hexadecimal characters.")
+        if (a.trust is None) != (a.tree is None) or (a.tree is not None and not re.fullmatch(r"[0-9a-f]{40}", a.tree)):
+            raise Refused("--trust <id> goes with --tree <the candidate's 40-character tree hash>.")
         s = load_setting()
+        if a.trust:
+            frozen = c.read_json(c.rec_dir(a.slices[0]) / "frozen.json") or {}
+            tip = c.git(["rev-parse", "--verify", "-q", f"refs/heads/{frozen.get('branch', '')}"], c.REPO,
+                        check=False) if frozen.get("branch") else ""
+            if not tip:
+                raise Refused(f"{a.slices[0]} has no branch in its records.")
+            ids = recorded_runs(a.slices[0], tip, a.tree) if a.trust == "auto" else [a.trust]
+            code, said = RED, {"trusted": False, "slice": a.slices[0], "tip": tip, "tree": a.tree,
+                               "why": f"no run of {a.slices[0]} at {tip[:10]} is recorded here"}
+            for jid in ids:
+                code, said = trust(s, jid, a.slices[0], tip, a.tree)
+            print(scrub(json.dumps(said, indent=1, sort_keys=True), s))
+            return code
+        if len(a.slices) > 1:
+            return run_stack(s, a.slices)
+        a.slice = a.slices[0]
         branch, tip = verified_tip(a.slice)
     except Refused as e:
         print(f"Refused: {e}", file=sys.stderr)
@@ -315,7 +567,11 @@ def main(argv: list[str] | None = None) -> int:
             print(scrub(f"{headline}: {why}. Note: {path}", s))
             return exit_code
         jid = sent["id"]
-    data, code = poll(s, jid)
+    mark_running(a.slice, tip, jid)
+    try:
+        data, code = poll(s, jid)
+    finally:
+        unmark_running(a.slice, tip)
     if data and data.get("state") == "done" and re.fullmatch(r"[0-9a-f]{40}", str(data.get("holds_main", ""))):
         OWN.mkdir(parents=True, exist_ok=True)
         c.write_json(HELD, {"main": data["holds_main"], "at": c.now()})

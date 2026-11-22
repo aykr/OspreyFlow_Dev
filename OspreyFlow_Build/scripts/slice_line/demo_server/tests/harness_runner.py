@@ -6,7 +6,7 @@ this is not one of them), and nothing in runner.py reads it, names it or reads a
 harness.json, written by the test itself (never the environment):
     {"launch": "direct" | "capped",   direct: the job as a plain detached process (the Mac has no systemd-run);
                                        capped: runner.py's own launch_capped, untouched
-     "gate": "<a JSON file>" | null,  a stand-in for the hour-long gate (its exit, failing names, a sleep); null: the
+     "gate": "<a JSON file>" | null,  a stand-in for the hour-long gate (its exit, failing names, checks, a sleep); null: the
                                        real gate, untouched
      "proc": "<a folder>" | null,     /proc/net's stand-in: its tcp and tcp6 files, written by the test
      "docker_sockets": [<paths>],     the Docker sockets a job checks are closed (none by default: the Mac's
@@ -52,6 +52,8 @@ def stand_in_gate(tree, job, log, deadline, result):
     result["not_run"]["targets"] += spec.get("not_run", [])
     if "duckdb_spatial" in spec:
         result["duckdb_spatial"] = spec["duckdb_spatial"]
+    if "checks" in spec:  # 009: the per-target statuses the real gate records
+        result["checks"] = spec["checks"]
     result["lists_from"] = "stand-in"
     result["list_drift"] = []
     return [{"step": "stand-in", "exit": int(spec.get("exit", 0)), "seconds": 0}]

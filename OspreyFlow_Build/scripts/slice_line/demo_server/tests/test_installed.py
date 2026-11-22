@@ -112,7 +112,7 @@ def test_with_every_switch_set_a_run_still_launches_capped_and_runs_the_real_gat
     calls = [json.loads(ln) for ln in log.read_text().splitlines()]
     assert len(calls) == 1
     call = calls[0]
-    for want in ("--user", "CPUQuota=600%", "MemoryMax=16G", "MemorySwapMax=0", "IOSchedulingClass=best-effort"):
+    for want in ("--user", "CPUQuota=400%", "MemoryMax=12G", "MemorySwapMax=0", "IOSchedulingClass=best-effort"):
         assert want in call, want
     assert any(x.startswith("RuntimeMaxSec=") for x in call)
     job = call[call.index("--") + 1:]

@@ -156,9 +156,10 @@ def test_run_returns_at_once_and_result_says_running_then_done(world):
     jid = started(w, harness={"slow_clean": 2}, exit=0, sleep=3)  # a slow clean-up: "done" only once it is over
     assert len(jid) == protocol.ID_LENGTH
     assert answer(runner(w, "result " + jid))["state"] == "running"
+    others = [started(w, harness={"slow_clean": 2}, exit=0, sleep=3) for _ in range(protocol.MAX_JOBS - 1)]
     busy = runner(w, "run", bundle_of(w, "refs/heads/main", "refs/heads/lane/slice-S1"),
-                  )
-    assert answer(busy) == {"state": "refused", "reason": "busy", "running": jid}
+                  )  # 009: up to MAX_JOBS at once, and no more
+    assert answer(busy) == {"state": "refused", "reason": "busy", "running": sorted([jid, *others]), "free": 0}
     a = wait(w, jid)
     assert a["state"] == "done" and a["verdict"] == "pass" and a["runner_version"] == protocol.RUNNER_VERSION
     want = out(["git", "merge-tree", "--write-tree", "main", w["tip"]], w["repo"]).splitlines()[0]
