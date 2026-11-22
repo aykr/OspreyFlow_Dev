@@ -1,0 +1,173 @@
+v061-admin-forms, the model form's first slice: the check before Add, red first at 881920b (2026-11-15T13:35:19Z), offline on 59991-59994, OSPREY_LANE unset, a fresh pycache prefix each run.
+
+Before (cc0e898, no check routes): test_model_engine_checks 8 failed (no route), and the key test failed on a key-shaped label being taken off the cloud platform (200 where 422). After: 9 passed; with the model and engine tests (test_model_admin_routes, test_model_engine_kinds, test_model_catalogue, test_admin_models_extraction_engine, and every test naming engines or model_admin but the live-Postgres store file): 477 passed, 3 skipped. Route counts brought to 14; test_admin_models_extraction_engine's bodyless exemption by the route's own signature. ruff from OspreyFlow_Core on the diff's files: All checks passed; mypy clean.
+
+plant 1: Add without a passed check goes ahead
+  -k 'refused_without_a_passed_check': RED (1 failed, 8 deselected in 5.49s)
+plant 2: a refused check keeps its key in the gateway
+  -k 'leaves_nothing_in_the_gateway': RED (2 failed, 7 deselected in 5.06s)
+plant 3: a check lives for ever
+  -k 'not_added_in_15_minutes': RED (1 failed, 8 deselected in 5.14s)
+plant 4: a checked model's entry is left in the gateway
+  -k 'offers_nothing_until_add': RED (1 failed, 8 deselected in 4.78s)
+plant 5: a refused body is echoed back
+  -k 'appears_nowhere': RED (1 failed, 8 deselected in 5.54s)
+plant 6: a key pasted into the label is taken
+  -k 'appears_nowhere': RED (1 failed, 8 deselected in 5.27s)
+plant 7: Cancel leaves the key in the gateway
+  -k 'cancel_removes': RED (1 failed, 8 deselected in 5.68s)
+7/7 red
+
+Stage 4 (the browser's half) and stage 5 (the screen), red first on 15 November 2026, on sol, offline on closed ports
+59991-59999, no stack, no browser.
+
+The Conduit: the view carries the form's providers and the passed checks (test_model_engine_checks.py, 3 new
+cases). Before the change: 3 failed (KeyError 'providers' / 'checks'); after: 12 passed. Plants:
+  a lapsed check still shown (the 15-minute filter removed): -k being_checked RED (1 failed)
+  Bedrock offered off the cloud platform (the whole catalogue served): -k offers_this_profile RED (1 failed)
+Found on the way: stage 3's three check routes were never recorded in placesByRole.json
+(test_place_routes::test_the_record_of_places_by_role_is_the_routes and the manage_models hidden-place case red at
+881920b); rewritten with OSPREY_WRITE_PLACES_BY_ROLE=1, 105 passed. And stage 3 never regenerated the TypeScript
+(ModelAdminEntry.ts lacked the three check actions, so make schemas-check was red at 881920b); regenerated with the
+new types, schemas-check: 627 generated types match.
+
+The Glass (Models.test.tsx, 11 new cases, the add form's old tests replaced). Run against the screen as it was at
+HEAD (Models.tsx and ModelsApi.ts from 4965ec6): 11 failed, 12 passed. Against the new screen: 23 passed. Plants in
+Models.tsx, each at the real call site:
+  the key kept in sessionStorage at Check: RED (1 failed: the browser-half key test)
+  the key field not emptied once sent: RED (2 failed)
+  the key put in Add's address: RED (1 failed)
+  autocomplete left on the key field: RED (1 failed)
+  Add the engine offered before any check: RED (6 failed)
+(A first plant, Add's own `if (!passed) return` guard removed, stayed green: the button is not drawn before a pass,
+so that guard is not the defence; replaced by the plant above, which is.)
+
+Not run here: keyboard/admin-models.spec.ts and the axe scan of the new states (the every-harness diff): a browser
+run needs a slot from the orchestrator (Prompt L), and was refused here.
+
+The lane review of 506ad53 (my own lane-reviewer, 15 November 2026): 22 items. Fixed with red first, offline on closed
+ports 59991-59999, no stack, no browser:
+
+Conduit, test_model_engine_checks.py: 5 new cases red before the fix (the sweep with no request; the sweep from
+start; the older add route and a name being checked; a key-shaped model name; the key recorded as the checker's),
+then the refused-field cases (KeyError 'fields', 3 red); test_model_engine_kinds.py's cloud-platform refusal before
+the key reaches the gateway passed at once (it guards the order as built) and is shown red by plant 14. After: 21 and
+126 passed. Catalogue: its dead routed/bare/engine_fields/hosts removed; the prefix test, which could not fail for
+its five cases without "/", now asserts the engine's own route.
+
+plants_check.py, re-run at this head: 14/14 red (plants_run.txt). Plant 1 now takes a real bypass's shape (a refused
+check still held for Add; the first version crashed instead). Plant 5 first went GREEN after the review's fixes:
+every malformed body now reaches _check_refusal, so the old echo branch was dead; it was removed and the plant moved
+to the live branch. A new redaction plant was GREEN until a case quoting a planted key through the roles' rule was
+added.
+
+Glass, Models.test.tsx: run against Models.tsx and ModelsApi.ts as at 506ad53:
+     × sends the key once, clears the field, and never shows it again 36ms
+     × checks the key and the typed model before Add, adds from the check, and never sends the key again 18ms
+     × empties a typed key when the provider is changed, so it is never sent where it was not typed for 17ms
+     × ties each field the Conduit's rules refused to that field, in the Conduit's words 28ms
+     × sends the label the preview shows, the provider's own when the field is emptied 28ms
+     × offers no Cancel while a check is out, so none can pass unseen after the form has closed 19ms
+     × keeps your own gateway's model names whole, its prefix being only LiteLLM's way to it 30ms
+     × says nothing of it on a profile that offers no Laurium 5ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+      Tests  8 failed | 20 passed (28)
+After: 28 passed. (The Glass plants are run by hand, as recorded above; no script.)
+
+The browser runs, slot 9 (OSPREY_PORTS_SLOT=9), 15 Nov ~16:20Z, at c440153 with ACTION_REGISTRY.diff and
+EVERY_HARNESS.diff applied to the working tree only and reverted after:
+  keyboard/admin-models.spec.ts: RED, 13 passed, 4 failed. The three add cases (add, Bedrock, your own gateway)
+  failed on getByRole("status") resolving to two elements while Add was out: "Adding…" beside the check's own
+  status. The page ended correct ("… is added"); the defect was two live regions at once (a screen reader hears
+  both), and assertAllCovered failed with them.
+  Models.test.tsx's new case "says one thing at a time while it adds, in one live region …": RED at c440153
+  (received the check's words beside "Adding…"), green with the fix (the busy words replace the check's).
+  After the fix: keyboard 17 passed (with the 4 registry ids applied); every-harness axe, models states: 56 passed
+  (each new state in dark, light and govuk, and the 2.5.3 label check); Models.test.tsx 29 passed.
+
+The owner's rulings 18 and 19 (15 Nov ~16:15Z, on main at bd253df), at 5ff67cb:
+  test_model_engine_checks.py, written before the code, 5 RED:
+    test_no_route_adds_an_engine_without_a_passed_check: POST /v1/admin/models/engines still in the app.
+    test_an_edited_model_name_is_checked_before_it_is_saved: a model the provider does not offer saved, 200.
+    test_a_changed_address_takes_its_key_with_it_and_is_checked_there: an address changed with no key saved, 200.
+    test_a_new_key_is_checked_before_it_replaces_the_one_held: a key the provider refuses set, 200.
+    test_the_key_appears_nowhere_through_an_edit_or_a_new_key: the edit's body with a key refused (no such field).
+  Green at 5ff67cb, as they should be (behaviour kept): a label or agreement alone saved with no call; a key moved
+  from deployment.env moved unchecked (the one exception).
+  Found while building, each RED before its fix:
+    test_a_corrected_key_checked_again_at_once_is_not_held_back_by_the_refused_one: RED at 5ff67cb ("cooling_down"):
+      the gateway cools a refused entry's name for a minute even once deleted, so a corrected key checked again at
+      once was refused (a defect in stage 3's check before Add, not only in ruling 19's).
+    test_the_key_appears_nowhere_through_an_edit_or_a_new_key: RED after the first build: an edit took a key pasted
+      into the label (the check's rule was never on the edit).
+    test_a_models_file_that_cannot_be_written_...: RED with its new assertion: a check whose record could not be
+      saved left its key in the gateway with nothing to remove it.
+    test_route_rights.py::test_every_route_names_the_right_the_table_gives_it: RED at c440153 (the three check
+      routes missing from the table); green with them, and with P1's add route gone.
+  Plants: 21/21 red (plants_run.txt), the 7 new ones at the new code's call sites; plant 4 (a check's entry left)
+  went GREEN once the entries had a name of their own, until offers_nothing_until_add asserted no entry at all.
+  Glass, Models.test.tsx: 4 new cases RED at 5ff67cb (no key field on a changed address, no "Check and save", no
+  words on the key form); green after. keyboard/admin-models.spec.ts at slot 9 against Models.tsx and ModelsApi.ts
+  as at 5ff67cb: "an engine's address is changed by keyboard with its key" RED (no disabled Check and save); "a new
+  key the provider refuses is said by keyboard" GREEN there, since the screen already showed the Conduit's refusal:
+  it proves the action reachable by keyboard (rule 13), and the invariant (the held key kept) is held RED-first in
+  the Conduit (plant 17). After: keyboard 19/19 with ACTION_REGISTRY.diff applied; every-harness axe for Models
+  60/60 with EVERY_HARNESS.diff applied (the new state open=edit&moved=1 shown to draw its key field); both
+  reverted after.
+
+The owner's key review (15 Nov; rulings 21-28), at 9f6b2c6:
+  test_model_key_review.py, written before the code (29 cases; FAILED is red, PASSED held already):
+    PASSED test_an_odd_shaped_key_appears_nowhere[lower-hyphen]
+    PASSED test_an_odd_shaped_key_appears_nowhere[short]
+    PASSED test_an_odd_shaped_key_appears_nowhere[uuid]
+    PASSED test_an_unexpected_transport_error_reports_no_key_and_leaves_no_credential[/credentials]
+    PASSED test_an_unexpected_transport_error_reports_no_key_and_leaves_no_credential[/chat/completions]
+    PASSED test_a_key_not_sent_as_text_is_refused_unechoed[number]
+    PASSED test_a_key_not_sent_as_text_is_refused_unechoed[list]
+    PASSED test_a_key_not_sent_as_text_is_refused_unechoed[object]
+    FAILED test_a_refused_model_name_is_said_by_its_job_never_echoed_nor_audited
+    FAILED test_every_catalogue_name_and_real_model_name_looks_like_one
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[question]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[too-long]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[angle]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[accent]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[comma]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[hash]
+    FAILED test_a_model_name_is_taken_only_if_it_looks_like_one[uuid]
+    FAILED test_a_key_in_a_model_name_box_appears_nowhere[lower-hyphen]
+    FAILED test_a_key_in_a_model_name_box_appears_nowhere[short]
+    FAILED test_a_key_in_a_model_name_box_appears_nowhere[uuid]
+    FAILED test_a_key_shaped_field_name_is_never_echoed[extra-in-provider]
+    FAILED test_a_key_shaped_field_name_is_never_echoed[extra-at-top]
+    FAILED test_a_key_shaped_field_name_is_never_echoed[key-under-roles]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[roles]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[address]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[reference]
+    FAILED test_a_refused_field_is_said_in_fixed_words_never_the_validator_s[name]
+    FAILED test_a_key_in_the_address_is_refused
+    FAILED test_a_check_stopped_after_its_key_reached_the_gateway_is_swept_with_its_key
+  The 8 already held (P2's three odd shapes as the real key, P3's two transport errors, P9's three
+  non-string keys) are shown red by plants instead: plants_review.py, 17/17 red (plants_review_run.txt).
+  Red for real defects at 9f6b2c6: a refused model name echoed in the answer, the page and the audit
+  (ruling 22); any name taken as a model (ruling 23); a UUID taken; a key-shaped field name echoed by
+  the edit and check routes (Fix B, all three bodies); a key in the address read past (P9); a credential
+  left by a Conduit stopped mid-check (ruling 25).
+  Found while building: the older key rule refused a real model name (`moondream:1.8b-v2-q4_K_M`, 24
+  mixed characters): each part between `:`, `/` and `@` is now judged alone. The ruling 25 test first
+  modelled the stop with an exception, whose handler still ran; a stop runs nothing, so the test now lets
+  only the record's save happen. Plant 5 went GREEN on refused_field's last line, which an earlier branch
+  defends (rule 15); retargeted to the branch a key under roles takes.
+  test_models_verb.py: presence "unknown" without the Conduit RED at 9f6b2c6 (it read deployment.env);
+  P7's refusal case held already, shown red by plant 14.
+  test_model_keys_commands.py (P6): held already, shown red by plant 13.
+  Models.test.tsx: the result's lines by job RED at 9f6b2c6 (": Extraction and Ask: …", the model
+  undefined); green after.
+  Browser, slot 9: P8's case green, then red under each of three plants (sessionStorage, localStorage,
+  the key in the check's address), restored after each (plants_p8_run.txt). Keyboard 20/20 with
+  ACTION_REGISTRY.diff applied; every-harness axe for Models 60/60 with EVERY_HARNESS.diff; both reverted.
+  The earlier plants (plants_check.py) re-run: 21/21. Five anchors had gone stale: three on the refusal
+  code moved to _engine_refusal and refused_field, one on the combined clean-up handler, and plant 7's,
+  which the format restore of 15 Nov had put back to HEAD's indentation in the script committed at
+  9f6b2c6 (plants_run.txt's 21/21 was the run before that restore). All moved to their real call sites;
+  plant 21 went GREEN until it was pointed at the save that now follows the key (a full disk refuses
+  before the key since ruling 25), with a case for it.
