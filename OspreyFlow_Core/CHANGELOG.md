@@ -11,6 +11,15 @@ update. Work not yet in a release is listed under *Unreleased*.
   now needs WebGL 2: a browser or device without it shows a message saying so, where the map would have been a
   blank panel. The map's worker file is served by the Glass itself. The Graph, and every other view, are unchanged.
 
+**Settings (ADR-152 Amendment 3).**
+- **`pages.enabled` exists in `osprey.yaml`, and is off.** It says whether a deployment runs the page service, the
+  server-rendered pages. It is `false` unless the owner sets it to `true` in that deployment's own file, and nothing reads
+  it yet: no deployment's rendered files change.
+
+**The Ingest Studio (ADR-152).**
+- **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any
+  deployment: `pages.enabled` is off). The React screens are unchanged.
+
 ## v0.6.1 — 2026-11-16
 
 A patch to v0.6.0: Ask & Chat opens as a drawer again, and search on Small and Lite keeps up with new data.
