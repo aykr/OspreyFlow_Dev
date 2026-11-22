@@ -78,6 +78,18 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l):
 FULL_GATE = _stand_in_gate"""
 
 
+#: The Mac's rerun of a demo server's red (merge_slice.SERVER_RERUN), stood in as the gate is: TEST_RERUN's exit code;
+#: TEST_RERUN_SEES: what it was asked to rerun, and whether the tree it got has the slice merged in.
+STAND_IN_RERUN = """def _stand_in_rerun(t, l, tests, targets):
+    l.open('a').write('\\nrerun: ' + ' '.join(tests + targets) + '\\n')
+    if os.environ.get('TEST_RERUN_SEES'):
+        Path(os.environ['TEST_RERUN_SEES']).write_text(json.dumps({'tests': tests, 'targets': targets,
+                                                                  'feature': (t / 'feature.txt').exists()}))
+    return int(os.environ.get('TEST_RERUN', '0'))
+
+
+SERVER_RERUN = _stand_in_rerun"""
+
 @pytest.fixture
 def world(tmp_path):
     """A throwaway repository shaped like this one, its bare origin, a fake home and a fake claude."""
@@ -111,7 +123,8 @@ def world(tmp_path):
     lines = repo / "OspreyFlow_Build/scripts/slice_line"
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
-    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE))
+    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE)
+                    .replace("SERVER_RERUN = rerun_named", STAND_IN_RERUN))
     day = lines / "resume.py"  # the run's one date, in this copy only (9)
     assert TODAY_REAL in day.read_text(), "resume.today() changed: the suite's one-date copy needs it"
     day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))

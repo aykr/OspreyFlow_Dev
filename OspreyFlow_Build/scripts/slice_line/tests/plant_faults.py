@@ -467,6 +467,18 @@ M = [
  # the owner's file 006 (line fault 12): the suite never depends on the machine's git configuration
  ("tests/test_gates.py", 'git config user.name t && git config user.email t@t.invalid && ', '', "world_commits_with_its_own_identity"),
  ("tests/conftest.py", '"GIT_CONFIG_VALUE_0": "true"', '"GIT_CONFIG_VALUE_0": "false"', "suite_runs_as_on_a_machine"),
+ # the owner's file 004 (22 November 2026), item 1: before the slot, a server red is rerun on the Mac
+ ("merge_slice.py", '    held = server_hold(slice_id)  # the owner', '    held = None  # the owner', "shows_red_is_not_given_the_slot"),
+ ("server_gate.py", '    if not counting():\n        return None\n    rid, e = server_result', '    rid, e = server_result', "switch_off_a_server_red_holds_nothing"),
+ ("server_gate.py", '        return f.read_text() in ("on", "on\\n")', '        return f.read_text().strip().lower() == "on"', "switch_off_a_server_red_holds_nothing"),
+ ("server_gate.py", '        if f.is_symlink() or not f.is_file():', '        if not f.is_file():', "switch_off_a_server_red_holds_nothing"),
+ ("server_gate.py", '    return result if result.get("slice") == slice_id and result.get("tip") == tip else None', '    return result', "no_red_result_from_the_runner"),
+ ("server_gate.py", 'data.get("state") and data.get("id") == rid:', 'data.get("state"):', "no_red_result_from_the_runner"),
+ ("server_gate.py", '    return bool(e) and e.get("state") == "done" and e.get("verdict") == "fail"', '    return bool(e) and e.get("verdict") in ("fail", "pass")', "no_red_result_from_the_runner"),
+ ("server_gate.py", '    if done.get("tip") == tip and done.get("result") == "green":', '    if done.get("tip") == tip:', "red_on_the_mac_too"),
+ ("merge_slice.py", "    refuse_to_builder(slice_id, tip, \"the demo server's red, rerun on the Mac", "    (lambda *a: None)(slice_id, tip, \"the demo server's red, rerun on the Mac", "red_on_the_mac_too"),
+ ("server_gate.py", '    bare = [t for t in f.get("targets") or [] if isinstance(t, str) and t and not by_target.get(t)]', '    bare = []', "failing_target_with_no_test"),
+ ("merge_slice.py", '["git", "merge", "--no-ff", "-q", "-m", f"rerun {slice_id}", tip]', '["git", "status"]', "shows_red_is_not_given_the_slot"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

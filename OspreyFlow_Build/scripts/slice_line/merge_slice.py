@@ -51,6 +51,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import owed as owed_tests  # noqa: E402
+import server_gate  # noqa: E402
 import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
@@ -1099,7 +1100,96 @@ class Progress:
                 pass
 
 
+def server_hold(slice_id: str) -> str | None:
+    """Why the slice is not given the slot (server_gate.slot_hold), for its branch's tip; None when nothing holds it."""
+    frozen = c.read_json(c.rec_dir(slice_id) / "frozen.json") or {}
+    if not frozen.get("branch"):
+        return None
+    try:
+        tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    except RuntimeError:
+        return None
+    return server_gate.slot_hold(slice_id, tip)
+
+
+def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> int:
+    """The demo server's named failures, rerun on the Mac in the gate's own environment (ci_env): the tests by
+    make test's own pytest command (the Makefile's IN_CORE and PYTEST, through a second makefile beside the log, the
+    Makefile itself unchanged), and a failing target with no test named by make -k. 0 when every one is green."""
+    try:
+        env = ci_env(tree, log)
+    except (NetworkError, GateEnvError) as e:
+        log.open("a").write(f"\nREFUSED: the rerun's environment: {e}\n")
+        return 3
+    codes = []
+    if tests:
+        mk = log.with_suffix(".mk")
+        mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
+        codes.append(run_step("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
+                                                                    "RERUN_TESTS=" + " ".join(tests)],
+                              tree / "OspreyFlow_Build", log, env, []))
+    if targets:
+        codes.append(run_step("the server's failing targets, rerun", ["make", "-k", *targets], tree / "OspreyFlow_Build",
+                              log, env, [], tests=False))
+    return next((x for x in codes if x), 0)
+
+
+#: The Mac's rerun of a server's red; the line's tests stand it in, as they stand in FULL_GATE.
+SERVER_RERUN = rerun_named
+
+
+def server_rerun(slice_id: str) -> str:
+    """merge_slice.py server-rerun <ID> (item 1): the server's named failures for the slice's tip, rerun on the Mac on
+    the same candidate (main with the slice merged in). Green: recorded, and the slice queues as before. Red: recorded,
+    and the slice goes back to its builder as a gate refusal, the failing names its findings."""
+    rec = c.rec_dir(slice_id)
+    frozen = c.read_json(rec / "frozen.json")
+    if not frozen:
+        raise Refused(f"{slice_id} was never started (no frozen record).")
+    if c.state(slice_id).get("phase") != "verified":
+        raise Refused(f"{slice_id} is not verified: a server result is read only for a verified slice.")
+    tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    rid, e = server_gate.server_result(slice_id, tip)
+    if not server_gate.is_red(e):
+        raise Refused(f"no red result from the demo server for {slice_id} at {tip[:10]} (run {rid or 'none named'}): "
+                      "nothing to rerun.")
+    tests, bare = server_gate.failing_names(e)
+    if not tests and not bare:
+        raise Refused(f"the server's run {rid} names no failing test or target: nothing to rerun; the merge's whole gate "
+                      "settles it.")
+    base = c.git(["rev-parse", "main"], c.REPO)
+    log = rec / f"server-rerun-{rid}.log"
+    tree = temp_tree(base, f"{slice_id}-rerun")
+    try:
+        if subprocess.run(["git", "merge", "--no-ff", "-q", "-m", f"rerun {slice_id}", tip], cwd=tree,
+                          capture_output=True).returncode != 0:
+            raise Refused(f"{slice_id} does not merge cleanly onto main: the merge's conflict check settles it.")
+        t0 = time.monotonic()
+        code = SERVER_RERUN(tree, log, tests, bare)
+        seconds = round(time.monotonic() - t0)
+    finally:
+        drop_tree(tree)
+        shutil.rmtree(tree, ignore_errors=True)
+    result = "green" if code == 0 else "red"
+    c.write_json(server_gate.rerun_record(slice_id, rid), {
+        "slice": slice_id, "tip": tip, "main": base, "run_id": rid, "result": result, "tests": tests, "targets": bare,
+        "seconds": seconds, "log": log.name, "at": c.now()})
+    named = ", ".join(tests + bare)
+    if result == "green":
+        return (f"{slice_id}: the server's red ({named}) is green on the Mac ({seconds} s): an environment difference, "
+                f"recorded; it queues for the merge as before.")
+    refuse_to_builder(slice_id, tip, "the demo server's red, rerun on the Mac, was red there too", [
+        {"file": n.split("::")[0].replace("../", ""), "what": f"Rerun on the Mac after the demo server's run {rid}: {n} "
+         "failed there too.", "evidence": f"the rerun's log ({log.name} in this slice's records)"} for n in tests + bare],
+        len(tests), "gate")
+    return (f"{slice_id}: the server's red ({named}) is red on the Mac too ({seconds} s): back to its builder "
+            f"(resume.py {slice_id} send-back).")
+
+
 def merge(slice_id: str) -> dict:
+    held = server_hold(slice_id)  # the owner's word of 22 November 2026, item 1: a server red is rerun before the slot
+    if held:
+        raise Refused(held)
     fh = lock()
     c.write_json(c.DATA / RUNNING, {"slice": slice_id, "pid": os.getpid(), "at": c.now()})
     trees: list[Path] = []
@@ -1540,6 +1630,8 @@ def main() -> int:
     ad = sub.add_parser("approve-diff")
     ad.add_argument("name")
     ad.add_argument("hash8")
+    sr = sub.add_parser("server-rerun")
+    sr.add_argument("slice")
     aa = sub.add_parser("apply-approved")
     aa.add_argument("name")
     aa.add_argument("--wait", type=float, default=120, metavar="MINUTES", help="how long to wait for a running merge")
@@ -1556,6 +1648,8 @@ def main() -> int:
             print(wait_idle(a.minutes))
         elif a.cmd == "approve-diff":
             print(approve_diff(a.name, a.hash8))
+        elif a.cmd == "server-rerun":
+            print(server_rerun(a.slice))
         elif a.cmd == "apply-approved":
             print(apply_approved(a.name, a.wait))
         else:
