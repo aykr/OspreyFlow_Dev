@@ -6,6 +6,7 @@
 {% block content %}
 {% if not f.caseId %}
 <p class="label">{{ words.noCase }}</p>
+{% if refusal %}<p role="alert">{{ refusal }}</p>{% endif %}
 {% else %}
 <div class="studio-bar">
 {% if f.casesProblem %}

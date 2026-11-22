@@ -338,7 +338,7 @@ function releaseView(frame: Frame, over: Partial<ReleaseView> = {}): ReleaseView
 }
 
 function renderReleases(req: Request, res: Response, frame: Frame, view: ReleaseView, status = 200): void {
-  res.status(status).render("studio/releases", context(req, frame, { title: "Ingest Studio · Releases", rel: view }));
+  res.status(status).render("studio/releases", context(req, frame, { title: "Ingest Studio · Releases", rel: view, refusal: view.problem }));
 }
 
 /** The export, asked of the Conduit as the person: its files, or the words for why not. */

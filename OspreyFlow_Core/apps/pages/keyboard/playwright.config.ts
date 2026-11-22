@@ -13,5 +13,6 @@ export default defineConfig({
   workers: 1,
   // Results go to the machine's temporary folder, never into the checkout.
   outputDir: join(tmpdir(), "ospreyflow-pages-keyboard-results"),
-  use: { locale: "en-GB" },
+  // Chromium unless `PAGES_KEYBOARD_BROWSER` names `firefox` or `webkit` (the folder form's file names are worth seeing in each).
+  use: { locale: "en-GB", browserName: (process.env["PAGES_KEYBOARD_BROWSER"] ?? "chromium") as "chromium" | "firefox" | "webkit" },
 });
