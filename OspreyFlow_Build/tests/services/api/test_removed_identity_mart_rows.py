@@ -101,7 +101,7 @@ from services.api.identity_admin import (
     NoSuchDashboard,
     PersonActionRefused,
 )
-from services.api.report_freshness import ReportFreshness
+from services.api.report_freshness import Freshness, ReportFreshness
 from services.report_sync import mart as mart_module
 from services.report_sync.mart import CONTROL_SCHEMA, Mart
 from services.report_sync.sync import Dashboard, SyncRefused, TokenSource, sync_once
@@ -429,10 +429,46 @@ class FakeMartPool:
         if text == f"SELECT dashboard FROM {CONTROL_SCHEMA}.removed_dashboards ORDER BY dashboard":
             table = self._table(CONTROL_SCHEMA, "removed_dashboards")
             return [{"dashboard": r["dashboard"]} for r in self.rows[table]]
+        if m := re.fullmatch(
+            r"SELECT dashboard, max\(last_pulled\) AS last_pulled, count\(\*\) AS cases, "
+            r"\(array_agg\(last_failure ORDER BY failed_at DESC NULLS LAST\)\)\[1\] AS last_failure, "
+            r"max\(failed_at\) AS failed_at FROM (\w+)\.pulls"
+            rf"( WHERE NOT EXISTS \(SELECT 1 FROM {CONTROL_SCHEMA}\.removed_dashboards r "
+            r"WHERE r\.dashboard = pulls\.dashboard\))? GROUP BY dashboard",
+            text,
+        ):
+            return self._pulls_by_dashboard(m[1], filtered=bool(m[2]))
         m = re.match(r"SELECT \* FROM (\w+)\.(\w+) WHERE dashboard = \$1 ORDER BY", text)
         if not m:
             raise AssertionError(f"the fake mart does not model this query: {text}")
         return [dict(r) for r in self.rows[self._table(m[1], m[2])] if r["dashboard"] == args[0]]
+
+    def _pulls_by_dashboard(self, schema: str, *, filtered: bool) -> list[dict[str, Any]]:
+        """The Admin list's aggregate over `pulls`, run as the tables' owner (which the Conduit
+        is): row security does not apply to it, so only a `WHERE` in the query itself hides a
+        stamped identity. A `NOT EXISTS` over the control table needs that table, as in Postgres."""
+        pulls = self._table(schema, "pulls")
+        stamped: set[str] = set()
+        if filtered:
+            control = self._table(CONTROL_SCHEMA, "removed_dashboards")
+            stamped = {r["dashboard"] for r in self.rows[control]}
+        found: dict[str, list[dict[str, Any]]] = {}
+        for r in self.rows[pulls]:
+            if r["dashboard"] not in stamped:
+                found.setdefault(r["dashboard"], []).append(r)
+        answer = []
+        for dashboard, rs in found.items():
+            pulled = [r["last_pulled"] for r in rs if r["last_pulled"] is not None]
+            failed = [r for r in rs if r["failed_at"] is not None]
+            latest = max(failed, key=lambda r: r["failed_at"], default=None)
+            answer.append({
+                "dashboard": dashboard,
+                "last_pulled": max(pulled, default=None),
+                "cases": len(rs),
+                "last_failure": latest["last_failure"] if latest else None,
+                "failed_at": latest["failed_at"] if latest else None,
+            })  # fmt: skip
+        return answer
 
     def value(self, sql: str, args: tuple[Any, ...]) -> Any:
         text = " ".join(sql.split())
@@ -567,11 +603,8 @@ class _Audit:
 
 
 class _Freshness(ReportFreshness):
-    """The real removal code; only the Admin list's freshness figures (a query this fake does not
-    model, and not what any case here is about) are left out."""
-
-    async def by_dashboard(self) -> dict[str, Any]:
-        return {}
+    """The real reader: the removal code and the Admin list's query, both run through the fake mart
+    (which models the list's query, so a read that ignores the stamp is seen)."""
 
 
 class _World:
@@ -1937,3 +1970,188 @@ def test_the_reader_check_sees_a_grant_on_the_control_schema() -> None:
     """Rule 15: the same observation, red for a grant the real `ensure_reader` would never issue."""
     planted = [f"GRANT USAGE ON SCHEMA {CONTROL_SCHEMA} TO osprey_reports_reader"]
     assert _grants_reaching_the_control_schema(planted) == planted
+
+
+# --- The Conduit's own read of the mart: the Admin's Dashboards list (round 9) ---------------------
+#
+# `GET /v1/admin/dashboards` works its figures out of `pulls` as the tables' owner, which row
+# security does not bind, so only the query itself can hide a stamped identity. If the identity
+# provider's delete failed the identity is still listed, and the list must say its removal is pending
+# and show none of `last_pulled`, `cases_pulled`, `last_failure` (in words) or `failed_at`: each is
+# worked out from rows the stamp hides. The fake models the list's query in both shapes (with and
+# without the stamp's `NOT EXISTS`), so the old query is a plant that comes out red, not a refusal.
+
+FIGURE_FIELDS = ("last_pulled", "cases_pulled", "last_failure", "failed_at")
+
+
+def _listing(world: _World) -> dict[str, dict[str, Any]]:
+    response = world.client.get("/v1/admin/dashboards")
+    assert response.status_code == 200, response.text
+    return {d["client_id"]: d for d in response.json()}
+
+
+def _list_verdict(
+    listing: dict[str, dict[str, Any]], *, pending: tuple[str, ...], shown: tuple[str, ...]
+) -> list[str]:
+    wrong = []
+    for client in pending:
+        entry = listing.get(client)
+        if entry is None:
+            wrong.append(f"{client} is not listed")
+            continue
+        if entry.get("removal_pending") is not True:
+            wrong.append(f"the list does not say {client}'s removal is pending")
+        wrong += [f"the list shows {client}'s {f}" for f in FIGURE_FIELDS if entry.get(f) not in (None, 0)]
+    for client in shown:
+        entry = listing.get(client)
+        if entry is None:
+            wrong.append(f"{client} is not listed")
+            continue
+        if entry.get("removal_pending"):
+            wrong.append(f"the list says {client}'s removal is pending")
+        if not (entry.get("last_pulled") and entry.get("cases_pulled")):
+            wrong.append(f"the list no longer shows {client}'s figures")
+    return wrong
+
+
+@pytest.mark.parametrize("fail, status", PROVIDER_FAILURES)
+def test_a_stamped_identity_still_listed_shows_its_removal_pending_and_no_figures(
+    world: _World, fail: Callable[[], Exception], status: int
+) -> None:
+    """Rule 4 for the Conduit's own read. Before the removal both identities show their figures
+    (the case is not vacuous); with the stamp committed and the provider refusing, the removed
+    identity is still listed (its Remove button is there) with its removal pending and none of its
+    four figures, and the other identity's are untouched; the retry that finishes it unlists it."""
+    both = (REMOVED, KEPT)
+    assert _list_verdict(_listing(world), pending=(), shown=both) == []
+    assert _listing(world)[REMOVED]["last_failure"], "the removed identity had a failure to hide"
+    world.identity.refuses = fail()
+    assert world.remove().status_code == status
+    listing = _listing(world)
+    assert _list_verdict(listing, pending=(REMOVED,), shown=(KEPT,)) == []
+    assert listing[REMOVED]["cases_pulled"] == 0
+    world.identity.refuses = None
+    assert world.remove().status_code == 204
+    assert REMOVED not in _listing(world)
+
+
+async def test_the_list_hides_a_stamped_identitys_figures_at_every_step(world: _World) -> None:
+    """The read the Conduit makes (`by_dashboard`) at each step of a removal, not only the route's
+    merge of it: before, with the provider refusing, with the purge failing, and after the sync
+    purged. A stamped identity is reported as pending with none of its figures, and never as having
+    any, whether or not its rows are still in the table."""
+    reader = ReportFreshness(world.pool, SCHEMA)  # type: ignore[arg-type]
+
+    async def verdict(*, pending: bool) -> list[str]:
+        got = await reader.by_dashboard()
+        wrong = []
+        if (KEPT not in got) or got[KEPT].removal_pending or not got[KEPT].cases_pulled:
+            wrong.append("the other identity's figures are not shown as they were")
+        if pending:
+            mine = got.get(REMOVED)
+            if mine is None or not mine.removal_pending:
+                wrong.append("a stamped identity is not reported as pending")
+            elif (mine.last_pulled, mine.last_failure, mine.failed_at, mine.cases_pulled) != (None, None, None, 0):
+                wrong.append(f"a stamped identity's figures are reported: {mine}")
+        elif REMOVED in got and got[REMOVED].removal_pending:
+            wrong.append("an unstamped identity is reported as pending")
+        return wrong
+
+    steps = [("before", await verdict(pending=False))]
+    world.identity.refuses = PersonActionRefused("identity_provider_refused", "refused")
+    world.remove()
+    steps.append(("provider failed", await verdict(pending=True)))
+    world.identity.refuses = None
+    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+    world.remove()
+    steps.append(("purge failed", await verdict(pending=True)))
+    world.pool.heal()
+    assert world.pool.left_for(REMOVED), "the rows are still in the table: only the query hides them"
+    await sync_once([_board(KEPT)], Mart(world.pool, SCHEMA), _NoValkey(), slot=1)  # type: ignore[arg-type]
+    steps.append(("purged", await verdict(pending=True)))
+    assert all(not wrong for _, wrong in steps), steps
+
+
+async def test_a_stamped_identity_with_no_rows_is_still_pending(world: _World) -> None:
+    world.pool.stamp(REMOVED)
+    for table in world.pool.tables():
+        world.pool.rows[table] = [r for r in world.pool.rows[table] if r["dashboard"] != REMOVED]
+    got = await ReportFreshness(world.pool, SCHEMA).by_dashboard()  # type: ignore[arg-type]
+    assert got[REMOVED] == Freshness(removal_pending=True)
+
+
+async def test_an_identity_registered_again_shows_its_own_figures_not_pending(world: _World) -> None:
+    """Not stamped, so shown as it was: removal finished, the same name registered again (which
+    lifts the stamp and takes the earlier identity's rows out), then a pull of its own."""
+    assert world.remove().status_code == 204
+    assert world.register().status_code == 201, "the same name, registered again"
+    assert _list_verdict(_listing(world), pending=(), shown=(KEPT,)) == []
+    again = _listing(world)[REMOVED]
+    assert (again["removal_pending"], again["cases_pulled"], again["last_failure"]) == (False, 0, None)
+    reader = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    await reader.replace(REMOVED, "case-9", "Operation Ledger", 12, FEED, NOW)
+    assert _list_verdict(_listing(world), pending=(), shown=(REMOVED, KEPT)) == []
+    assert _listing(world)[REMOVED]["cases_pulled"] == 1, "its own rows only, never the earlier identity's"
+
+
+async def test_no_mart_and_no_record_of_removals_mean_nothing_to_list() -> None:
+    """A deployment with reporting off, or a mart whose record of removals was never made, lists no
+    figures (a missing control schema counts as no mart, never as no stamp)."""
+    assert await ReportFreshness(FakeMartPool(), SCHEMA).by_dashboard() == {}  # type: ignore[arg-type]
+    pool, _ = await _mart_with_two_identities()
+    del pool.rows[f"{CONTROL_SCHEMA}.removed_dashboards"]
+    assert await ReportFreshness(pool, SCHEMA).by_dashboard() == {}  # type: ignore[arg-type]
+
+
+async def _the_old_query(self: ReportFreshness) -> dict[str, Freshness]:
+    """`by_dashboard` as it was on main before round 9: the aggregate over every `pulls` row."""
+    async with self._pool.acquire() as conn:
+        rows = await conn.fetch(
+            f"""SELECT dashboard, max(last_pulled) AS last_pulled, count(*) AS cases,
+                       (array_agg(last_failure ORDER BY failed_at DESC NULLS LAST))[1]
+                           AS last_failure,
+                       max(failed_at) AS failed_at
+                FROM {self._schema}.pulls GROUP BY dashboard"""
+        )
+    return {
+        str(r["dashboard"]): Freshness(
+            last_pulled=r["last_pulled"],
+            last_failure=r["last_failure"] if r["failed_at"] else None,
+            failed_at=r["failed_at"],
+            cases_pulled=int(r["cases"]),
+        )
+        for r in rows
+    }
+
+
+async def _pending_never_said(self: ReportFreshness) -> dict[str, Freshness]:
+    return {k: v.model_copy(update={"removal_pending": False}) for k, v in (await _real_list(self)).items()}
+
+
+async def _nobody_s_figures(self: ReportFreshness) -> dict[str, Freshness]:
+    return {}
+
+
+_real_list = ReportFreshness.by_dashboard
+
+
+@pytest.mark.parametrize(
+    ("plant", "said"),
+    [
+        (_the_old_query, "the list shows"),
+        (_pending_never_said, "does not say"),
+        (_nobody_s_figures, "no longer shows"),
+    ],
+    ids=["the old query", "pending never said", "nobody's figures"],
+)
+def test_the_list_check_sees_each_planted_fault(
+    monkeypatch: pytest.MonkeyPatch, world: _World, plant: Callable[..., Any], said: str
+) -> None:
+    """Rule 15: the verdict is red for the query as it was (every `pulls` row aggregated, so a stamped
+    identity's four figures are shown), for a query that hides them and never says why, and for one
+    that hides everyone's. Each is made by replacing the real query the route calls."""
+    world.identity.refuses = PersonActionRefused("identity_provider_refused", "refused")
+    world.remove()
+    monkeypatch.setattr(ReportFreshness, "by_dashboard", plant)
+    wrong = _list_verdict(_listing(world), pending=(REMOVED,), shown=(KEPT,))
+    assert any(said in w for w in wrong), wrong
