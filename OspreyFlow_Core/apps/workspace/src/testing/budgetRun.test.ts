@@ -120,7 +120,7 @@ describe("the performance-budget tests run alone", () => {
     const files = new Map<string, string>([
       ...shapes.map(([name, text]): [string, string] => [join("src", "canvas", name), text]),
       [join("src", "canvas", "settledAnchor.budget.test.ts"), timed(`${perf}()`, `${perf}()`)],
-      [join("src", "canvas", "settledAnchor.ts"), timed(`${perf}()`, `${perf}()`)],
+      [join("src", "canvas", "labelChoices.ts"), timed(`${perf}()`, `${perf}()`)],
       [join("src", "canvas", "expiry.test.ts"), `    const expires = ${wall}() + 60_000;\n    expect(expires).toBeGreaterThan(0);`],
       [join("src", "canvas", "untimed.test.tsx"), "expect(anchors.size).toBe(0);"],
     ]);

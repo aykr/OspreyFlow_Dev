@@ -2,7 +2,7 @@
 // hull overlay" bullet. Pure graph-space geometry only: `canvas/CommunityHullOverlay.tsx` is what
 // converts these points to viewport space against a live camera and renders them; this module has
 // no dependency on Sigma or the DOM, so it is plain-`vitest`-testable the same way
-// `canvas/zoomBands.ts`'s own pure functions are.
+// `packages/glass-shared/src/canvas/zoomBands.ts`'s own pure functions are.
 //
 // Benchmarked (not assumed) at this stage's own planning time: a monotone-chain convex hull
 // (`d3-polygon`'s `polygonHull`, the real dependency this module uses) over 40 communities

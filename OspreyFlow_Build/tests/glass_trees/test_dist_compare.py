@@ -554,4 +554,94 @@ def test_the_committed_baseline_record_is_complete() -> None:
         assert run_["tests"]["passed"] == run_["tests"]["total"] - run_["tests"]["skipped"] > 0
     # Written by the normaliser the script has now: a record made by another version cannot be compared with.
     assert record["normaliser_version"] == NORMALISER_VERSION
-    assert "performance" in record["not_recorded"].lower()
+    # The Mac's performance budget figures (slice PL4e, 22 November 2026): a record holds them, or says they are not recorded.
+    budget = record["budget"]
+    assert "not_recorded" not in record
+    assert set(budget["unit"]) == {"MatrixView.budget", "settledAnchor.budget", "communityLinks.budget"}
+    for name, test in budget["unit"].items():
+        assert len(test["runs_ms"]) == 3 and all(ms < test["limit_ms"] for ms in test["runs_ms"] if name != "MatrixView.budget"), name
+    assert len(budget["browser"]["perf_first_frame"]["runs_ms"]) == 2 and len(budget["browser"]["perf_sweep"]["runs_ms_per_frame"]) == 2
+    assert budget["date"] == "2026-11-22" and "Mac" in budget["machine"]
+
+
+# ------------------------------------------------------------------------------- the budget figures survive a re-record
+
+BUDGET = {"date": "2026-11-22", "machine": "the owner's Mac", "unit": {"a": {"limit_ms": 1000, "runs_ms": [85, 90, 90]}}}
+
+
+def record_with_budget(tmp_path: Path) -> Path:
+    record = make_record(tmp_path)
+    data = json.loads(record.read_text(encoding="utf-8"))
+    data.pop("not_recorded", None)
+    data["budget"] = BUDGET
+    record.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    return record
+
+
+def plant_that_drops_the_budget(tmp_path: Path) -> Path:
+    """A copy of the script (in a folder shaped like Core, so it finds node_modules) whose `makeRecord` forgets `budget`:
+    the exact line a careless edit would lose, in the shape the real script has."""
+    core = tmp_path / "plant-core"
+    (core / "scripts").mkdir(parents=True)
+    (core / "package.json").write_text("{}", encoding="utf-8")
+    (core / "node_modules").symlink_to(CORE / "node_modules")
+    source = SCRIPT.read_text(encoding="utf-8")
+    line = "    record.budget = budget;\n"
+    assert source.count(line) == 1, "the plant must hit the one carry-forward line"
+    (core / "scripts" / "dist_compare.mjs").write_text(source.replace(line, "    // dropped\n"), encoding="utf-8")
+    return core / "scripts" / "dist_compare.mjs"
+
+
+def run_script(script: Path, *args: str | Path) -> tuple[int, str]:
+    done = subprocess.run([node(), str(script), *map(str, args)], cwd=CORE, capture_output=True, text=True, timeout=300)
+    return done.returncode, done.stdout + done.stderr
+
+
+def test_record_carries_an_existing_budget_forward(tmp_path: Path) -> None:
+    record = record_with_budget(tmp_path)
+    before = json.loads(record.read_text(encoding="utf-8"))
+    write_build(tmp_path / "moved", Build(**MOVE))
+    code, output = run("record", "--dist", tmp_path / "moved", "--tests", tmp_path / "tests.txt", "--out", record)
+    assert code == 0, output
+    after = json.loads(record.read_text(encoding="utf-8"))
+    assert after["budget"] == BUDGET and "not_recorded" not in after
+    # Nothing else in the record changed: the move is the same build, so its hash and counts are the same.
+    assert {k: v for k, v in after.items() if k != "budget"} == {k: v for k, v in before.items() if k != "budget"}
+
+
+def test_a_record_with_no_budget_still_says_it_is_not_recorded(tmp_path: Path) -> None:
+    record = make_record(tmp_path)
+    data = json.loads(record.read_text(encoding="utf-8"))
+    assert "budget" not in data and "performance" in data["not_recorded"].lower()
+
+
+def test_rebaseline_carries_an_existing_budget_forward(tmp_path: Path) -> None:
+    record = record_with_budget(tmp_path)
+    write_build(tmp_path / "moved", Build(**MOVE))
+    write(tmp_path / "declared.tsv", "# no declared units: a move\n")
+    code, output = run(
+        "rebaseline", "--declared", tmp_path / "declared.tsv", "--baseline", tmp_path / "baseline", "--dist", tmp_path / "moved",
+        "--tests", tmp_path / "tests.txt", "--out", record,
+    )
+    assert code == 0, output
+    after = json.loads(record.read_text(encoding="utf-8"))
+    assert after["budget"] == BUDGET and "not_recorded" not in after
+
+
+@pytest.mark.parametrize("how", ["record", "rebaseline"])
+def test_a_script_that_drops_the_budget_is_red(tmp_path: Path, how: str) -> None:
+    """Rule 15: the carry-forward line removed from the real script, each way of re-recording: the same tests go red."""
+    plant = plant_that_drops_the_budget(tmp_path)
+    record = record_with_budget(tmp_path)
+    write_build(tmp_path / "moved", Build(**MOVE))
+    if how == "record":
+        code, output = run_script(plant, "record", "--dist", tmp_path / "moved", "--tests", tmp_path / "tests.txt", "--out", record)
+    else:
+        write(tmp_path / "declared.tsv", "# no declared units: a move\n")
+        code, output = run_script(
+            plant, "rebaseline", "--declared", tmp_path / "declared.tsv", "--baseline", tmp_path / "baseline", "--dist", tmp_path / "moved",
+            "--tests", tmp_path / "tests.txt", "--out", record,
+        )
+    assert code == 0, output
+    after = json.loads(record.read_text(encoding="utf-8"))
+    assert "budget" not in after, "the plant must lose the figures, or the tests above prove nothing"

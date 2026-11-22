@@ -105,3 +105,8 @@ apps/workspace/src/workingset/store.ts
 apps/workspace/src/welcome/statement.ts
 apps/workspace/src/brand/brand.ts
 apps/workspace/src/color/tokens.ts
+
+# Moved by PL4 slice E to `packages/glass-shared/src/`: the canvas and graph logic (twenty-three files of `canvas/`),
+# `color/nodeVisual.ts` and `ontology/schema.ts`. The build record and the decision-log entries that name the old places are
+# history and stay as written; only this one is named in full there.
+apps/workspace/src/canvas/edgeTypeMenu.ts

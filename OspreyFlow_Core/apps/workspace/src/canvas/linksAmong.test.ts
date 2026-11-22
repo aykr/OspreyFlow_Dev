@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "./linksAmong";
+import { expansionLinksNotice, linksAmongNotice, showLinksAmong } from "@ospreyflow/glass-shared";
 
 // ADR-098 decision 1: the links among nodes already in the view.
 describe("showLinksAmong", () => {

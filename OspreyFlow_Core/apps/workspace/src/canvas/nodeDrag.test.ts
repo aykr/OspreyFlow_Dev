@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { dragTargets, keepPinned, nudgeFor, NUDGE_PX } from "./nodeDrag";
+import { dragTargets, keepPinned, nudgeFor, NUDGE_PX } from "@ospreyflow/glass-shared";
 
 // Owner, 6 October 2026: "When I select a node I need the ability to move it around, it seems fixed".
 

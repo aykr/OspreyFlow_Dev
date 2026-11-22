@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { singleFlight } from "./singleFlight";
+import { singleFlight } from "@ospreyflow/glass-shared";
 
 // Select what is lit reads the server, then replaces the selection. A second press while the first
 // is still being read must not start a second read: the two would race, and the later would record

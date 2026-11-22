@@ -715,16 +715,37 @@ function fileCounts(files) {
   return { total: files.length, hashed: files.filter((f) => f.hashed).length, by_kind: Object.fromEntries(Object.entries(byKind).sort()) };
 }
 
-export function makeRecord(dist, testOutput) {
+/**
+ * The record of a build. `previous` is the record being replaced, if there is one: the performance budget figures in its
+ * `budget` object are measured on the owner's Mac and cannot be re-derived from a build, so a re-record carries them
+ * forward unchanged (a record with none says so in `not_recorded`, as it did before the figures were taken).
+ */
+export function makeRecord(dist, testOutput, previous = null) {
   const { hash, files } = normalise(dist);
-  return {
+  const record = {
     what: "The build of apps/workspace before PL4 moved anything (ADR-152 R2, I11): what every later PL4 slice is compared against.",
     normaliser_version: NORMALISER_VERSION,
     normalised_hash: hash,
     files: fileCounts(files),
     unit_tests: parseTestCounts(testOutput),
-    not_recorded: "Performance budget figures: they are measured on the owner's Mac with nothing else running (slice E).",
   };
+  const budget = previous?.budget;
+  if (budget && typeof budget === "object" && !Array.isArray(budget)) {
+    record.budget = budget;
+  } else {
+    record.not_recorded = "Performance budget figures: they are measured on the owner's Mac with nothing else running (slice E).";
+  }
+  return record;
+}
+
+/** The record already at `path`, or null if there is none (or it is not JSON: then there is nothing to carry forward). */
+function readPrevious(path) {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------- the rebaseline
@@ -823,12 +844,12 @@ function rebaseline(rest) {
         return 1;
       }
     }
-    const record = makeRecord(fresh, testOutput);
+    const previous = readPrevious(out);
+    const record = makeRecord(fresh, testOutput, previous);
 
     const aside = `${baseline}-before-${stamp()}`;
     renameSync(baseline, aside);
     cpSync(fresh, baseline, { recursive: true });
-    const previous = existsSync(out) ? JSON.parse(readFileSync(out, "utf8")) : null;
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
     console.log(`the old baseline folder is kept at ${aside}`);
@@ -906,7 +927,7 @@ function main(args) {
       const tests = flag(rest, "--tests");
       if (!dist || !tests) throw new Error("usage: record --dist <dist> --tests <npm-test-output> [--out <file>]");
       const out = flag(rest, "--out") ?? recordPath;
-      const record = makeRecord(dist, readFileSync(tests, "utf8"));
+      const record = makeRecord(dist, readFileSync(tests, "utf8"), readPrevious(out));
       mkdirSync(dirname(out), { recursive: true });
       writeFileSync(out, `${JSON.stringify(record, null, 2)}\n`);
       console.log(`wrote ${relative(process.cwd(), out)}: ${record.files.total} files, hash ${record.normalised_hash.slice(0, 16)}`);

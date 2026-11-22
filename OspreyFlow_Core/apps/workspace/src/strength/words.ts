@@ -9,7 +9,7 @@ import type {
   StrengthInfluencer,
   StrengthLegend,
 } from "../../../../packages/schemas/generated";
-import { linkTypeName } from "../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 
 /** The link-type name an influencer uses for a pair linked through a shared value (ADR-139
  * Amendment 2; `schemas/strength.py`'s `SHARED_VALUE`): the client's `dup_*` rows. */

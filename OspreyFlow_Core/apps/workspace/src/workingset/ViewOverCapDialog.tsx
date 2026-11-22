@@ -31,7 +31,7 @@ export interface ViewOverCapDialogProps {
   onClose: () => void;
 }
 
-/** The figure, in the words the canvas's other limit refusal uses (`canvas/linksAmong.ts`). */
+/** The figure, in the words the canvas's other limit refusal uses (`packages/glass-shared/src/canvas/linksAmong.ts`). */
 export function figure(wouldBe: LimitExceeded): string {
   const what = wouldBe.cap_kind === "nodes" ? "nodes" : "links";
   return `Too many for the canvas: ${COUNT.format(wouldBe.would_be)} ${what} against a limit of ${COUNT.format(wouldBe.cap)}.`;

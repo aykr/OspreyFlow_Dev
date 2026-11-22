@@ -4,8 +4,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Node } from "../../../../packages/schemas/generated";
-import type { OntologyRegistry } from "../ontology/schema";
-import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
+import type { OntologyRegistry, WorkingSetGraph } from "@ospreyflow/glass-shared";
 import * as api from "@ospreyflow/glass-shared";
 import { Dossier } from "./Dossier";
 

@@ -2,7 +2,7 @@ import type { Edge, Node } from "../../../../packages/schemas/generated";
 import { intervalText } from "./intervalText";
 import { locatorText, sourceName } from "./sourceLocator";
 import { SOURCES_WITHHELD_TEXT } from "./sourcesWithheld";
-import { linkTypeName } from "../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 import { displayValue } from "../search/searchOptions";
 
 export interface LinkDetailsProps {

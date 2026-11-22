@@ -60,7 +60,7 @@ import { layoutSettled } from "./layoutSettled";
 import { readPng } from "./pngPixels";
 
 // An expansion now asks the Conduit how big it would be before it goes ahead
-// (`canvas/expansionGate.ts`, ADR-060 Amendment 1). The harness has no Conduit, so a test that
+// (`packages/glass-shared/src/canvas/expansionGate.ts`, ADR-060 Amendment 1). The harness has no Conduit, so a test that
 // proves an expand reaches the network answers that question first. Small, so it proceeds.
 async function stubSmallExpansionPreview(page: Page): Promise<void> {
   await page.route("**/*/expand/preview", async (route) => {

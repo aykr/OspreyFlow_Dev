@@ -321,7 +321,7 @@ test("explain on a merged cluster names the pair's real resolution score", async
   await expect(
     sameAs,
     "the radial menu offers no SAME_AS entry — it is declared from:[\"*\"] to:[\"*\"], so a " +
-      "filter that does not read the wildcard drops it (see canvas/edgeTypeMenu.ts)",
+      "filter that does not read the wildcard drops it (see packages/glass-shared/src/canvas/edgeTypeMenu.ts)",
   ).toBeVisible();
   await sameAs.click();
   await expect

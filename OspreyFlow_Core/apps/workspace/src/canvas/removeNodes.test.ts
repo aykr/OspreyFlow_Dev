@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { removeFromWorkingSet } from "./removeNodes";
+import { removeFromWorkingSet } from "@ospreyflow/glass-shared";
 
 const base = {
   apiBaseUrl: "http://api",

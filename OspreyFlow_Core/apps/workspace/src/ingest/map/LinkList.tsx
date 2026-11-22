@@ -14,7 +14,7 @@ import { Button } from "../../design/primitives/Button";
 import { Select } from "../../design/primitives/Select";
 import { moveFocusInList } from "./listKeys";
 import { edgeTypesForEndpoints, findEntity } from "./rowTemplate";
-import { linkTypeName } from "../../canvas/linkLabel";
+import { linkTypeName } from "@ospreyflow/glass-shared";
 
 export interface LinkListProps {
   template: RowTemplate;

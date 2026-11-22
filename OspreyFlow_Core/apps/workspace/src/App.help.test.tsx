@@ -54,10 +54,11 @@ vi.mock("./auth/userManager", async () => {
   };
 });
 
-vi.mock("./ontology/schema", async () => {
-  const actual = await vi.importActual<typeof import("./ontology/schema")>("./ontology/schema");
+vi.mock("@ospreyflow/glass-shared", async () => {
+  const actual = await vi.importActual<typeof import("@ospreyflow/glass-shared")>("@ospreyflow/glass-shared");
   return {
     ...actual,
+    fetchMapConfig: vi.fn(() => new Promise(() => undefined)),
     fetchOntologyRegistry: vi.fn(
       () =>
         new Promise(() => {
@@ -67,13 +68,8 @@ vi.mock("./ontology/schema", async () => {
   };
 });
 
-vi.mock("@ospreyflow/glass-shared", async () => {
-  const actual = await vi.importActual<typeof import("@ospreyflow/glass-shared")>("@ospreyflow/glass-shared");
-  return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
-});
-
 import * as userManager from "./auth/userManager";
-import * as ontologySchema from "./ontology/schema";
+import * as ontologySchema from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();
