@@ -905,6 +905,37 @@ def attempt_tests(run: dict, attempt: int) -> list[dict]:
     return tests
 
 
+#: A job's conclusions that are a failure of the job (the owner's file 007, fault 13).
+FAILED_JOB = ("failure", "timed_out", "startup_failure")
+
+
+def attempt_jobs(run: dict, attempt: int, tests: list[dict]) -> dict:
+    """One completed attempt's jobs (gh run view --json jobs), kept beside its tests in records/github/<run>.json: the
+    failed jobs by name, and those among them whose log names no failing test ("failed without a test": a runner, a
+    download, a time-out, a run cut off), so each is named and countable (the owner's file 007, fault 13)."""
+    f = c.GITHUB_RECORDS / f"{run['databaseId']}.json"
+    rec = c.read_json(f) or {"run": run["databaseId"], "attempts": {}}
+    have = rec["attempts"].get(str(attempt)) or {}
+    if "failed_jobs" in have:
+        return have
+    jobs = json.loads(gh_json(["run", "view", str(run["databaseId"]), "--attempt", str(attempt), "--json", "jobs"]))
+    failed = [j.get("name", "?") for j in jobs.get("jobs") or [] if j.get("conclusion") in FAILED_JOB]
+    named = {t["job"] for t in tests}
+    have.update(failed_jobs=failed, without_a_test=[j for j in failed if j not in named], conclusion=run.get("conclusion"))
+    rec["attempts"][str(attempt)] = {**(rec["attempts"].get(str(attempt)) or {}), **have}
+    c.write_json(f, rec)
+    return have
+
+
+def jobs_said(j: dict) -> str:
+    if not j.get("failed_jobs"):
+        return ""
+    out = "failed jobs: " + ", ".join(j["failed_jobs"])
+    if j.get("without_a_test"):
+        out += "; " + ", ".join(j["without_a_test"]) + " failed without a test (no FAILED line)"
+    return " (" + out + ")"
+
+
 def cleared_stops() -> set[str]:
     rows = c.GITHUB_CLEARS.read_text().splitlines()[1:] if c.GITHUB_CLEARS.exists() else []
     return {r.split("\t")[1] for r in rows if len(r.split("\t")) > 1}
@@ -921,10 +952,13 @@ def watch_github() -> str:
         if not runs:
             return "watch-github: no run on main has completed: nothing to watch."
         last = runs[0]
-        if last.get("conclusion") != "failure":
+        if last.get("conclusion") not in ("failure", "cancelled"):
             return f"watch-github: run {last.get('databaseId')} on main is {last.get('conclusion')}: no stop."
         attempt = int(last.get("attempt") or 1)
         now = attempt_tests(last, attempt)
+        jobs = attempt_jobs(last, attempt, now)  # the owner's file 007: every job, a cancelled run's too
+        if last.get("conclusion") == "cancelled" and not jobs.get("failed_jobs"):
+            return f"watch-github: run {last.get('databaseId')} on main is cancelled, with no failed job: no stop."
         if attempt > 1:
             prev, prev_attempt = last, attempt - 1
         else:
@@ -932,13 +966,13 @@ def watch_github() -> str:
             prev_attempt = int(prev.get("attempt") or 1) if prev else 0
         if not prev:
             return (f"watch-github: run {last['databaseId']} is red, its first on {str(last.get('headSha'))[:10]} "
-                    f"({len(now)} failing tests): recorded, no stop; a red run is rerun once.")
+                    f"({len(now)} failing tests){jobs_said(jobs)}: recorded, no stop; a red run is rerun once.")
         before = {t["test"] for t in attempt_tests(prev, prev_attempt)}
         both = [t for t in now if t["test"] in before]
         if not both:
             return (f"watch-github: run {last['databaseId']} attempt {attempt} is red again on "
                     f"{str(last.get('headSha'))[:10]}, but no test failed in both ({len(now)} now, {len(before)} "
-                    "before): no stop.")
+                    f"before){jobs_said(jobs)}: no stop.")
         key = f"{last.get('headSha')}:{prev['databaseId']}/{prev_attempt}:{last['databaseId']}/{attempt}"
         stop = {"test": both[0]["test"], "tests": [t["test"] for t in both], "job": both[0]["job"],
                 "commit": last.get("headSha"), "key": key, "at": c.now(),

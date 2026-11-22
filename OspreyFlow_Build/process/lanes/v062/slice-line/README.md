@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (532 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (426 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (592 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (490 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -274,6 +274,7 @@ says that cost is a list-price estimate, not a bill.
 - **Three project checks at every stop** (005): `route-coverage-check`, `test-file-coverage-check` and `mypy` run at the start and at every stop in the builder's worktree, as the line's own step (a slice started before meets them at its next stop, no refreeze). A refused merge records its cause; the board counts refusals by cause.
 - **The branch's own changes** (007): the Stop hook's per-file checks and scans read the files changed since `git merge-base main HEAD`, not the frozen base: what a builder takes in from main is never the slice's.
 - **Main's scan rows** (007): the Stop hook's scan-map check adds main's `scan_map.tsv` rows to the installed copy's, so a row a merge added counts at once; nothing installed changes.
+- **Every job of a run** (007): `watch-github` reads every job of the latest completed run, a cancelled one's too, names the failed jobs and each that printed no FAILED line ("failed without a test"), records them, and the board's GitHub line names them.
 
 ## Files outside the repository
 

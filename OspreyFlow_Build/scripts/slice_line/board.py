@@ -484,8 +484,12 @@ def main() -> int:
         for d in applied_diffs():  # for the top of the conductor's report to the owner (10)
             print(f"owner-approved diff applied: {d['name']} {d['hash8']} commit {d['commit'][:10]} ({d['date']})")
         if ci["state"] == "red":
-            print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}: not a gate; merges go on (a red run is "
-                  "rerun once; a test of ours red twice stops them)")
+            gh_rec = c.read_json(c.GITHUB_RECORDS / f"{ci['run']}.json") or {}  # the owner's file 007: name the jobs
+            last_try = (gh_rec.get("attempts") or {}).get(str(max((int(k) for k in gh_rec.get("attempts") or {}),
+                                                                   default=0))) or {}
+            import merge_slice
+            print(f"main is red: run {ci['run']} ({ci['why']}){merge_slice.jobs_said(last_try)} {ci['url']}: not a "
+                  "gate; merges go on (a red run is rerun once; a test of ours red twice stops them)")
         elif ci["state"] != "green":
             print(f"main's GitHub run cannot be read ({ci['why']}): not a gate; merges go on")
         if c.GITHUB_STOP.exists():

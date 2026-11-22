@@ -536,6 +536,12 @@ M = [
  # the owner's file 007: main's scan-map rows count beside the installed copy
  ("stop_check.py", '        table = scan_select.entries() + main_map(wt)  # the owner', '        table = scan_select.entries()  # the owner', "row_a_merge_added_on_main"),
  ("stop_check.py", '    p = subprocess.run(["git", "show", "main:" + LINE_MAP], cwd=wt, capture_output=True, text=True)', '    p = subprocess.run(["git", "show", "HEAD~999:" + LINE_MAP], cwd=wt, capture_output=True, text=True)', "row_a_merge_added_on_main"),
+ # the owner's file 007, fault 13: the watcher reads every job, a cancelled run's too, and names a failure with no test
+ ("merge_slice.py", '        if last.get("conclusion") not in ("failure", "cancelled"):\n', '        if last.get("conclusion") != "failure":\n', "cancelled_run_with_a_failed_job"),
+ ("merge_slice.py", '    failed = [j.get("name", "?") for j in jobs.get("jobs") or [] if j.get("conclusion") in FAILED_JOB]', '    failed = []', "failed_run_names_each"),
+ ("merge_slice.py", 'without_a_test=[j for j in failed if j not in named]', 'without_a_test=[]', "failure_with_no_test"),
+ ("merge_slice.py", '        if last.get("conclusion") == "cancelled" and not jobs.get("failed_jobs"):\n', '        if False:\n', "cancelled_run_with_no_failed_job"),
+ ("board.py", '''print(f"main is red: run {ci['run']} ({ci['why']}){merge_slice.jobs_said(last_try)} {ci['url']}''', '''print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}''', "boards_github_line"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
