@@ -3,8 +3,9 @@ reporting mart's `pulls` table, which `report-sync` writes, for the Admin area's
 
 Only aggregates per dashboard leave here — when it last truly pulled, its latest failure in words
 and when, and how many cases it pulls — never a case id, so the Admin screen says a feed is stale
-without saying which cases a dashboard may read. A deployment with reporting off has no mart, and
-every dashboard is then simply "never pulled".
+without saying which cases a dashboard may read. For an identity whose removal is under way, not
+even those: it is listed as pending and its rows are not read (`by_dashboard`). A deployment with
+reporting off has no mart, and every dashboard is then simply "never pulled".
 
 The one thing the Conduit writes to the mart is a removal. When an administrator removes a dashboard
 identity, Superset's Admin and Alpha read the whole mart (ADR-148 Amendment 21) and `report-sync`
@@ -52,6 +53,8 @@ class Freshness(BaseModel):
     last_failure: str | None = None
     failed_at: datetime | None = None
     cases_pulled: int = 0
+    #: The identity's removal is under way (it has a removal stamp): no figure above is shown.
+    removal_pending: bool = False
 
 
 class MartUnreachable(Exception):
@@ -73,7 +76,13 @@ class ReportFreshness:
 
     async def by_dashboard(self) -> dict[str, Freshness]:
         """Each dashboard the mart has pulled for. A case's failure is still standing until that
-        case's next good pull clears it (`report-sync` clears it), so a failure here is current."""
+        case's next good pull clears it (`report-sync` clears it), so a failure here is current.
+
+        A stamped identity (one whose removal is under way) has none of its figures here: the query
+        runs as the tables' owner, which row security does not bind, so the stamp is asked in the
+        query itself, and the identity is reported with its removal pending and nothing else. It is
+        the same stamp the readers use. A deployment with no mart, or one whose record of removals
+        was never made, lists nothing."""
         s = self._schema
         try:
             async with self._pool.acquire() as conn:
@@ -82,11 +91,22 @@ class ReportFreshness:
                                (array_agg(last_failure ORDER BY failed_at DESC NULLS LAST))[1]
                                    AS last_failure,
                                max(failed_at) AS failed_at
-                        FROM {s}.pulls GROUP BY dashboard"""
+                        FROM {s}.pulls
+                        WHERE NOT EXISTS (SELECT 1 FROM {CONTROL_SCHEMA}.removed_dashboards r
+                                          WHERE r.dashboard = pulls.dashboard)
+                        GROUP BY dashboard"""
                 )
+                # Read after the figures: a stamp made in between hides them as well.
+                stamped = {
+                    str(r["dashboard"])
+                    for r in await conn.fetch(
+                        f"SELECT dashboard FROM {CONTROL_SCHEMA}.removed_dashboards "
+                        "ORDER BY dashboard"
+                    )
+                }
         except (asyncpg.UndefinedTableError, asyncpg.InvalidSchemaNameError):
             return {}
-        return {
+        listed = {
             str(r["dashboard"]): Freshness(
                 last_pulled=r["last_pulled"],
                 last_failure=r["last_failure"] if r["failed_at"] else None,
@@ -94,7 +114,9 @@ class ReportFreshness:
                 cases_pulled=int(r["cases"]),
             )
             for r in rows
+            if str(r["dashboard"]) not in stamped
         }
+        return {**listed, **{name: Freshness(removal_pending=True) for name in stamped}}
 
     async def holds_rows(self, client_id: str) -> bool:
         """Whether the mart holds a row naming this identity, in any table. A deployment with no

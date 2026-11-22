@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 
 import pytest
 from services.api.config import PostgresConfig
-from services.api.report_freshness import ReportFreshness
+from services.api.report_freshness import Freshness, ReportFreshness
 from services.report_sync.mart import Mart
 
 from conduit_common.identity import new_id
@@ -64,3 +64,21 @@ async def test_no_mart_means_never_pulled_not_an_error() -> None:
         assert await freshness.by_dashboard() == {}
     finally:
         await freshness.close()
+
+
+async def test_a_stamped_dashboard_has_no_figures_in_the_list_and_is_pending(
+    pair: tuple[Mart, ReportFreshness],
+) -> None:
+    """Round 9 against the real query: the Conduit connects as the tables' owner, which row security
+    does not bind, so the stamp must be asked in the query itself. The pure model of this is
+    `test_removed_identity_mart_rows.py`; this runs it on a real Postgres (a live file)."""
+    mart, freshness = pair
+    when = datetime(2026, 10, 11, 9, tzinfo=UTC)
+    await mart.replace("osprey-dashboard-a", "case-1", "One", 12, ROW, when)
+    await mart.record_failure("osprey-dashboard-a", "case-2", "the feed was refused (403)", when)
+    await mart.replace("osprey-dashboard-b", "case-1", "One", 12, ROW, when)
+    assert await freshness.stamp("osprey-dashboard-a")
+    seen = await freshness.by_dashboard()
+    assert seen["osprey-dashboard-a"] == Freshness(removal_pending=True)
+    assert (seen["osprey-dashboard-b"].cases_pulled, seen["osprey-dashboard-b"].last_pulled) == (1, when)
+    assert seen["osprey-dashboard-b"].removal_pending is False

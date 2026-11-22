@@ -145,6 +145,10 @@ class DashboardIdentity(BaseModel):
     last_failure: str | None = None
     failed_at: datetime | None = None
     cases_pulled: int = 0
+    #: The identity's removal is under way: it was stamped in the Admin and the identity provider
+    #: has not yet finished deleting it, so the four figures above are left out (they would be
+    #: worked out from rows the stamp hides). Removing it again finishes it.
+    removal_pending: bool = False
 
 
 class RegisteredDashboard(BaseModel):
