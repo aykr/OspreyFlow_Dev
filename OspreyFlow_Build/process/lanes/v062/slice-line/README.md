@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (411 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (323 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (421 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (342 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -243,6 +243,7 @@ says that cost is a list-price estimate, not a bill.
 
 ## The line fixes of 21 November 2026 (LINE_FIXES_5_BRIEF.md)
 - **The owner's approved diffs** (10): `merge_slice.py approve-diff <name> <hash8>` records the owner's "approved: <name> <hash8>" (refused unless hash8 is the diff file's SHA-256 now) in `approved/<name>.json`, committed; `merge_slice.py apply-approved <name>` applies `slice-line/proposals/<name>.diff` only while its SHA-256 is the approved one, it touches only spec/06_DECISIONS.md, spec/ADR_RESERVATIONS.md, both DESIGN.md and process/CLAUDE.md (no rename or mode change), it applies to main's tip and the decision checks are green on the result; it commits with "approved by the owner, <date>", `Slice-Records: yes` and `Owner-Approved-Diff: <name>`, lists name, hash8, commit and date in `approved/applied.tsv` (the board prints it for the top of each report) and pushes (`push_main.sh` accepts the new trailer). The guard refuses the conductor's own `git apply`, `git am` and `patch` (but `--check`, `--stat`, `--numstat`, `--summary`).
+- **Records, the owner's lines and standing accepts while a merge runs** (2): `merge_slice.py records` commits while a merge runs (`records.lock`: one commit at a time), unpushed until the merge pushes. The merge lands its tested result on a main moved only by records commits (each `Slice-Records`, one parent, only records-folder files that are not its scan rows, the owner's files or a file the slice changed): made again there with `git merge-tree`, kept only when it differs from the tested tree in exactly those files; `merged.json` names `base`, `tested_merge`, `landed_on` and `records_under_gate`. Anything else moving main is refused as before. For a slice other than the one being merged (`merge.running.json` names it), `add-round`, `clear-stop`, `send-back`, `accept` (the standing accept with it), `refreeze`, `undo-seat-failure` and `self-clear` go on; a refreeze's (or self-clear's) slices.tsv commit takes the records lock and lands beneath the merge. `correct-command` and `move-seat`, and any action on the merging slice, wait. `approve-diff` is a records commit and goes on; `apply-approved` changes files the gate reads, so it waits for the merge (saying so once; `--wait <minutes>`, 120 by default) and then applies, unasked.
 
 ## Files outside the repository
 

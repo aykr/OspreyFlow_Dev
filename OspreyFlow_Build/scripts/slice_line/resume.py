@@ -222,14 +222,20 @@ def changed_row(slice_id: str, allowed: tuple[str, ...]) -> tuple[dict, dict]:
 
 
 def commit_row(slice_id: str, message: str) -> str:
-    c.git(["add", "--", c.SLICES_REL], c.REPO)
-    staged = c.git(["diff", "--cached", "--name-only"], c.REPO).splitlines()
-    if staged != [c.SLICES_REL]:
-        c.git(["reset", "-q", "--", c.SLICES_REL], c.REPO)
-        raise Refused("something besides slices.tsv would be committed: " + ", ".join(staged))
-    c.git(["commit", "-q", "-m", f"{message}\n\nSlice-Records: yes"], c.REPO)
-    subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True)
-    return c.git(["rev-parse", "HEAD"], c.REPO)
+    """slices.tsv committed alone in records mode, one commit at a time with every other (the records lock). While a
+    merge of another slice runs (LINE_FIXES_5_BRIEF.md, 2) it is not pushed: the merge lands beneath its result and
+    pushes it with the merge, as a records commit made meanwhile."""
+    with ms.records_lock():
+        c.git(["add", "--", c.SLICES_REL], c.REPO)
+        staged = c.git(["diff", "--cached", "--name-only"], c.REPO).splitlines()
+        if staged != [c.SLICES_REL]:
+            c.git(["reset", "-q", "--", c.SLICES_REL], c.REPO)
+            raise Refused("something besides slices.tsv would be committed: " + ", ".join(staged))
+        c.git(["commit", "-q", "-m", f"{message}\n\nSlice-Records: yes"], c.REPO)
+        sha = c.git(["rev-parse", "HEAD"], c.REPO)
+    if MERGE_RUNNING is None:
+        subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True)
+    return sha
 
 
 # ------------------------------------------------------------------ correct-command's limits
@@ -722,8 +728,51 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
                   "owner's line, as before. Nothing changed.")
 
 
+#: The actions that go on while a merge of another slice runs (LINE_FIXES_5_BRIEF.md, 2b; the owner, 21 November 2026:
+#: a running merge held six of his lines and two standing accepts). Each touches only the records folder, the slice's own
+#: worktree and, for refreeze and self-clear's cause (b), the slice's own row of slices.tsv, committed under the records
+#: lock and landed beneath the merge's tested result as any records commit is. The others (correct-command, move-seat),
+#: and any action on the slice being merged, wait for it.
+DURING_MERGE = ("add-round", "clear-stop", "send-back", "accept", "refreeze", "undo-seat-failure", "self-clear")
+#: The slice a running merge is merging, while this action goes on beside it (set by locks()); None otherwise.
+MERGE_RUNNING: str | None = None
+
+
+def locks(slice_id: str, action: str) -> list:
+    """The merge lock, or, while a merge of another slice runs, nothing of it for the actions that may go on; and the
+    slice's own lock, so two actions on one slice never run together. Refused in words otherwise."""
+    held = []
+    try:
+        held.append(ms.lock())
+    except ms.Refused:
+        busy = ms.merging()
+        if busy is None:  # it ended between the two looks
+            held.append(ms.lock())
+        elif action not in DURING_MERGE:
+            raise Refused(f"another merge is running ({busy}): {action} waits for it (only {', '.join(DURING_MERGE)}, on "
+                          "another slice, go on meanwhile). Nothing changed.")
+        elif busy in (slice_id, "?"):
+            raise Refused(f"another merge is running ({slice_id if busy == slice_id else 'of a slice its record does not name'}"
+                          f"): {action} on {slice_id} waits for it. Nothing changed.")
+        else:
+            global MERGE_RUNNING
+            MERGE_RUNNING = busy
+    import fcntl
+    f = c.DATA / "locks" / f"resume-{slice_id}.lock"  # beside the records, never in them
+    f.parent.mkdir(parents=True, exist_ok=True)
+    fh = f.open("w")
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        fh.close()
+        for h in held:
+            h.close()
+        raise Refused(f"another resume.py action on {slice_id} is running. Nothing changed.")
+    return [*held, fh]
+
+
 def act(slice_id: str, action: str, standing_only: bool = False, args: list[str] | tuple[str, ...] = ()) -> list[str]:
-    fh = ms.lock()
+    held = locks(slice_id, action)
     try:
         frozen = frozen_of(slice_id)
         if action == "move-seat":  # touches state.json's one key only: a builder at work in the worktree is no matter
@@ -837,7 +886,8 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
                     f"The conductor runs merge_slice.py merge {slice_id}: every other gate still runs."]
         raise Refused(f"unknown action {action}")
     finally:
-        fh.close()
+        for fh in held:
+            fh.close()
 
 
 def main() -> int:

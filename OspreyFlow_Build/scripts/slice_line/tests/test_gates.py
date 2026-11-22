@@ -52,6 +52,9 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l):
         l.with_suffix('.retries.json').write_text(os.environ['TEST_GATE_RETRIES'])
     if os.environ.get('TEST_LIVE_NOTE'):
         l.with_suffix('.live.json').write_text(os.environ['TEST_LIVE_NOTE'])
+    if os.environ.get('TEST_GATE_DURING'):  # what happens on the Mac while the gate runs (LINE_FIXES_5_BRIEF.md, 2)
+        import subprocess as _sp
+        _sp.run(os.environ['TEST_GATE_DURING'], shell=True, cwd=os.environ.get('TEST_GATE_DURING_CWD') or None)
     if os.environ.get('TEST_GATE_SEES'):
         have = [n for n in ('.venv', 'node_modules') if (t / 'OspreyFlow_Core' / n).exists()]
         Path(os.environ['TEST_GATE_SEES']).write_text(' '.join(have) or 'clean')
