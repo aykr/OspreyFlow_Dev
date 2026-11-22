@@ -239,6 +239,120 @@ def test_where_the_page_services_client_cannot_be_known_every_token_is_refused(
     assert event_rows(rig) == []
 
 
+# --- Entra ID: the same check, reading the same mapping the resolver was built with (round 9) --
+
+
+ENTRA_PAGES = "77777777-aaaa-4bbb-8ccc-dddddddddddd"  # the page service's own app registration
+ENTRA_SUPERSET = "99999999-aaaa-4bbb-8ccc-dddddddddddd"
+
+
+class EntraRig:
+    """The route on an Entra ID deployment: the real app, the real resolver built with an Entra
+    mapping that names the page service's own registration (`pages_client_id`) and Superset's, a
+    stand-in for the people store that refuses as the real one does (`test_auth_entra_claims`)."""
+
+    def __init__(self, rig_: Rig, jwks_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        from principal_auth import ClaimMapping, StoredPerson
+        from services.api.auth import PrincipalResolver
+        from tests.services.api import test_auth_entra_claims as entra
+
+        self.entra = entra
+        self.rig = rig_
+        self.mapping = ClaimMapping.model_validate(
+            entra.BY_EXTENSION.model_dump()
+            | {"pages_client_id": ENTRA_PAGES, "superset_client_id": ENTRA_SUPERSET}
+        )
+        people = entra.FakePeople()
+        people.rows[(entra.TENANT, entra.OID)] = StoredPerson(roles=("analyst",), disabled=False)
+        resolver = PrincipalResolver(
+            entra._entra_config(jwks_url),
+            claim_mapping=self.mapping,
+            role_source=people,
+            role_lookup_timeout_seconds=0.2,
+        )
+        monkeypatch.setattr(app.state, "principal_resolver", resolver, raising=False)
+
+    def token(self, client: str, **claims: Any) -> str:
+        entra = self.entra
+        body = entra.entra_claims(**entra._GOOD, azp=client, **claims)
+        return sign_token(self.rig.private, body)
+
+
+def entra_cases(entra_: EntraRig) -> dict[str, str]:
+    """Every shape of token an Entra deployment has that is not the page service's own."""
+    return {
+        "the workspace's client": entra_.token(entra_.entra.GLASS),
+        "Superset's client": entra_.token(ENTRA_SUPERSET),
+        "a third client": entra_.token(entra_.entra.OTHER_APP),
+    }
+
+
+def check_entra_route(rig_: Rig, entra_: EntraRig) -> None:
+    """What the route does on Entra ID: the page service's own client's token records, every other
+    client's is refused and writes nothing (the three kinds told apart in the comments)."""
+    for kind in ("sign_in", "sign_out"):
+        answer = rig_.event(entra_.token(ENTRA_PAGES), kind)
+        assert (answer.status_code, answer.json()) == (200, {"recorded": True}), answer.text
+    rows = event_rows(rig_)
+    assert [r["action"] for r in rows] == ["sign_in", "sign_out"]
+    assert {base.detail(r)["channel"] for r in rows} == {ENTRA_PAGES}
+    assert {r["principal_id"] for r in rows} == {entra_.entra.OID}
+
+    answers: dict[str, tuple[int, bytes]] = {}
+    for name, token in entra_cases(entra_).items():
+        before = list(rig_.pool.rows)
+        keys = {k for k in rig_.valkey.data if k.startswith("sign-in-events:rate:")}
+        answer = rig_.event(token, "sign_in")
+        answers[name] = (answer.status_code, answer.content)
+        assert answer.status_code in (401, 403), (name, answer.text)
+        assert event_rows(rig_) == rows, f"{name}: a refused call wrote an event"
+        # At most the first sight of the session (the Conduit's own row, never an event).
+        assert {r["action"] for r in rig_.pool.rows if r not in before} <= {"sign_in_seen"}, name
+        assert {k for k in rig_.valkey.data if k.startswith("sign-in-events:rate:")} == keys, name
+    # The workspace's client is admitted by the resolver as a person and refused by the route's own
+    # check: the same status and the same words as on Keycloak.
+    assert (
+        answers["the workspace's client"][0],
+        json.loads(answers["the workspace's client"][1]),
+    ) == REFUSED
+    # Superset's person-limited token is refused earlier, by the gate every route passes
+    # (`route_not_admitted`), and a client the resolver does not admit at all by the resolver (401):
+    # neither reaches the route, so neither writes anything.
+    assert answers["Superset's client"][0] == 403
+    assert answers["a third client"][0] == 401
+
+
+def test_on_entra_the_route_takes_the_page_services_client_from_the_mapping_and_no_other(
+    rig: Rig, jwks_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The route as an Entra deployment sends it: a mapping with its own `pages_client_id`, the page
+    service's own client's token recorded, the workspace's and a third client's refused with no row.
+    Planted below (`test_the_entra_check_is_red_when_it_reads_a_default_mapping`)."""
+    check_entra_route(rig, EntraRig(rig, jwks_url, monkeypatch))
+
+
+def test_the_entra_check_is_red_when_it_reads_a_default_mapping(
+    rig: Rig, jwks_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The plant: the check reads a default `ClaimMapping()` (not Entra, so it falls back to the
+    Keycloak name `osprey-pages`) instead of the resolver's own mapping. The page service's own
+    client is then refused on Entra and nothing is recorded, so the test above fails for it."""
+    from principal_auth import ClaimMapping
+    from services.api import app as app_module
+
+    entra_ = EntraRig(rig, jwks_url, monkeypatch)
+    real = app_module.pages_client_for
+    assert real(entra_.mapping) == ENTRA_PAGES  # the control: the real check reads the mapping
+    monkeypatch.setattr(
+        app_module, "pages_client_for", lambda mapping, environ=None: real(ClaimMapping(), environ)
+    )
+    answer = rig.event(entra_.token(ENTRA_PAGES), "sign_in")
+    assert (answer.status_code, answer.json()) == REFUSED
+    assert event_rows(rig) == []
+    with pytest.raises(AssertionError):
+        check_entra_route(rig, entra_)
+
+
 # --- every way in -------------------------------------------------------------------------------
 
 
