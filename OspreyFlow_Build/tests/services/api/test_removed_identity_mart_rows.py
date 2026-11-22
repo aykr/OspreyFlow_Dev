@@ -95,6 +95,7 @@ from services.report_sync.mart import CONTROL_SCHEMA, Mart
 from services.report_sync.sync import Dashboard, SyncRefused, TokenSource, sync_once
 
 from ontology.handling import load_uk_le_scheme
+from principal_auth import OidcResolverSettings
 from schemas.admin import DashboardIdentity, RegisteredDashboard
 from schemas.domain import Principal
 
@@ -1247,6 +1248,252 @@ async def test_the_keycloak_admin_says_not_registered_in_a_way_the_route_can_tel
     with pytest.raises(NoSuchDashboard) as raised:
         await admin.delete_dashboard("osprey-dashboard-gone")
     assert isinstance(raised.value, IdentityAdminRefused)
+
+
+# --- The real Keycloak adapter's step 2 (the identity provider deletes it) ------------------------
+#
+# Every route case above models a provider failure as a raised exception. The real Keycloak adapter
+# raised none for a refused DELETE: `_call` raises only on a transport error or a 401/403, and
+# `delete_dashboard` never read the status, so a 5xx, a 409 or a 404 from the realm came back as
+# "removed": the route then audited a completed removal and answered 204 for an identity still
+# registered, with its working secret, still listed. The stand-in below is the realm's HTTP, and the
+# adapter and the route are the real ones, so what the route sees is what the adapter really emits.
+
+
+class _Keycloak:
+    """The realm's admin API for dashboard clients, with its refusals: no bearer or another is 401, an
+    unknown client is 404, and the answers a planted fault gives (`delete_status` for the DELETE of a
+    client it holds, `lookup_status` for the exact lookup by client id, `list_status` for the list)."""
+
+    BEARER = "a-token-made-for-this-test"
+
+    def __init__(self) -> None:
+        self.held = {REMOVED: "uuid-leaver", KEPT: "uuid-stayer"}
+        self.delete_status = 204
+        self.lookup_status = 200
+        self.list_status = 200
+        self.deleted: list[str] = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if request.method == "POST" and path.endswith("/token"):
+            return httpx.Response(200, json={"access_token": self.BEARER})
+        if request.headers.get("Authorization") != f"Bearer {self.BEARER}":
+            return httpx.Response(401, json={"error": "HTTP 401 Unauthorized"})
+        base = "/admin/realms/osprey/clients"
+        assert path.startswith(base), path
+        rest = path[len(base) :].strip("/")
+        if request.method == "GET" and rest == "":
+            wanted = request.url.params["clientId"]
+            if request.url.params.get("search") == "true":
+                if self.list_status != 200:
+                    return httpx.Response(self.list_status, text="<html>upstream error</html>")
+                return httpx.Response(
+                    200, json=[{"id": u, "clientId": c} for c, u in self.held.items() if wanted in c]
+                )
+            if self.lookup_status != 200:
+                return httpx.Response(self.lookup_status, text="<html>upstream error</html>")
+            return httpx.Response(
+                200, json=[{"id": u, "clientId": c} for c, u in self.held.items() if c == wanted]
+            )
+        uuid = rest.split("/")[0]
+        if uuid not in self.held.values():
+            return httpx.Response(404, json={"error": "Could not find client"})
+        if request.method == "GET" and rest.endswith("/service-account-user"):
+            return httpx.Response(200, json={"id": f"sa-{uuid}", "attributes": {}})
+        assert request.method == "DELETE" and rest == uuid, (request.method, path)
+        if self.delete_status != 204:
+            return httpx.Response(self.delete_status, json={"error": "the realm refused"})
+        gone = next(c for c, u in self.held.items() if u == uuid)
+        del self.held[gone]
+        self.deleted.append(gone)
+        return httpx.Response(204)
+
+
+def _keycloak_admin(realm: _Keycloak) -> IdentityAdmin:
+    """The real adapter, its HTTP client the stand-in realm (nothing is sent anywhere)."""
+    base = "http://keycloak.invalid"
+    admin = IdentityAdmin(
+        OidcResolverSettings(
+            oidc_jwks_url=f"{base}/certs", oidc_issuer=base, oidc_audience="osprey-conduit",
+            oidc_token_exchange_url=f"{base}/token", oidc_token_exchange_client_id="osprey-conduit",
+            oidc_token_exchange_client_secret=secrets.token_urlsafe(8),
+            oidc_admin_users_url=f"{base}/admin/realms/osprey/users",
+        )  # fmt: skip
+    )
+    admin._http = httpx.AsyncClient(transport=httpx.MockTransport(realm.handler))  # noqa: SLF001
+    return admin
+
+
+@pytest.fixture
+def keycloak(world: _World) -> _Keycloak:
+    """The route's identity provider is the real Keycloak adapter over the stand-in realm."""
+    realm = _Keycloak()
+    app.dependency_overrides[get_identity_admin] = lambda: _keycloak_admin(realm)
+    return realm
+
+
+@pytest.mark.parametrize("status", [500, 502, 409, 400])
+async def test_the_keycloak_adapter_refuses_a_delete_the_realm_did_not_make(status: int) -> None:
+    """A DELETE the realm answers with anything but 204 is not a removal: the adapter raises an
+    `IdentityAdminRefused` naming the status, and the client is still held."""
+    realm = _Keycloak()
+    realm.delete_status = status
+    admin = _keycloak_admin(realm)
+    with pytest.raises(IdentityAdminRefused) as raised:
+        await admin.delete_dashboard(REMOVED)
+    assert str(status) in str(raised.value), "the status is not in the words"
+    assert REMOVED in realm.held, "the realm still holds it"
+
+
+async def test_the_keycloak_adapter_says_not_registered_when_the_realm_answers_not_found() -> None:
+    """A client that went between the lookup and the DELETE: 404 is `NoSuchDashboard`, as a lookup
+    that finds nothing is, so the route reads one answer for "the provider holds no such identity"."""
+    realm = _Keycloak()
+    realm.delete_status = 404
+    with pytest.raises(NoSuchDashboard):
+        await _keycloak_admin(realm).delete_dashboard(REMOVED)
+
+
+async def test_the_keycloak_adapter_removes_when_the_realm_says_done() -> None:
+    realm = _Keycloak()
+    await _keycloak_admin(realm).delete_dashboard(REMOVED)
+    assert REMOVED not in realm.held and realm.deleted == [REMOVED]
+
+
+@pytest.mark.parametrize("status", [500, 502, 503])
+async def test_the_keycloak_adapter_refuses_in_words_when_the_lookup_fails(status: int) -> None:
+    """A realm answering the lookup of a client with an error page: said in words as an
+    `IdentityAdminRefused`, not an `AttributeError` or a `JSONDecodeError` the route can only answer
+    with a bare 500."""
+    realm = _Keycloak()
+    realm.lookup_status = status
+    with pytest.raises(IdentityAdminRefused) as raised:
+        await _keycloak_admin(realm).delete_dashboard(REMOVED)
+    assert str(status) in str(raised.value)
+    assert REMOVED in realm.held
+
+
+def _keycloak_refusal_verdict(world: _World, realm: _Keycloak, held: dict[str, int]) -> list[str]:
+    """What the removal must be when the realm refused step 2, as one list of what is wrong: a
+    refusal in words, the identity still listed with its Remove button, its rows hidden and not
+    purged, a neighbour's rows still read, the audit row naming what completed (once), and a retry
+    that finishes it once the realm answers."""
+    wrong: list[str] = []
+    answer = world.remove()
+    try:
+        detail = answer.json().get("detail") if answer.status_code != 204 else None
+    except ValueError:
+        detail = answer.text  # a bare 500 carries no words at all
+    words = detail.get("message", "") if isinstance(detail, dict) else str(detail)
+    if answer.status_code != 502:
+        wrong.append(f"answered {answer.status_code}, not a refusal in words (502)")
+    elif "could not be removed" not in words or "hidden" not in words:
+        wrong.append(f"the refusal's words say nothing of what happened: {words!r}")
+    if REMOVED not in realm.held:
+        wrong.append("the realm no longer holds it, though it refused")
+    if REMOVED not in world.listed():
+        wrong.append("the identity is not listed: no Remove button to retry with")
+    if world.pool.reader_left(REMOVED) != {}:
+        wrong.append("a reader can read the removed identity's rows")
+    if world.pool.left_for(REMOVED) != held:
+        wrong.append("the rows were purged although the identity provider still holds it")
+    if not world.pool.reader_left(KEPT):
+        wrong.append("a present identity's rows are no longer read")
+    rows = world.removal_rows()
+    if len(rows) != 1:
+        wrong.append(f"{len(rows)} audit rows, not one")
+    elif "completed" not in rows[0]["resolved_query"] or "identity_removed" in _steps_done(rows[0]):
+        # the full success row (client id and grants only) names no step: it says all of it was done
+        wrong.append("the audit row says the identity was removed")
+    return wrong
+
+
+@pytest.mark.parametrize("status", [500, 409])
+def test_a_refused_delete_at_the_real_keycloak_adapter_is_a_refusal_in_words(
+    world: _World, keycloak: _Keycloak, status: int
+) -> None:
+    """Step 2 on the default provider, at the shape it really emits: the realm answers the DELETE
+    with an error, the adapter is the real one, the route is the real one. The administrator is
+    told in words, the identity is still listed, its rows are hidden and still in the mart, the
+    audit row does not say it was removed, and removing it again finishes it."""
+    keycloak.delete_status = status
+    held = world.pool.left_for(REMOVED)
+    assert _keycloak_refusal_verdict(world, keycloak, held) == []
+    keycloak.delete_status = 204
+    assert world.remove().status_code == 204, "a retry on a still-listed identity finishes it"
+    assert REMOVED not in keycloak.held and REMOVED not in world.listed()
+    assert world.pool.left_for(REMOVED) == {} and world.pool.reader_left(REMOVED) == {}
+    assert len(world.removal_rows()) == 2
+
+
+@pytest.mark.parametrize("status", [500, 503])
+def test_a_failed_lookup_at_the_real_keycloak_adapter_is_a_refusal_in_words(
+    world: _World, keycloak: _Keycloak, status: int
+) -> None:
+    """The same step, failing earlier: the realm lists the identity (the Remove button is there) and
+    then answers the exact lookup with an error page. A refusal in words, not a bare 500."""
+    keycloak.lookup_status = status
+    held = world.pool.left_for(REMOVED)
+    assert _keycloak_refusal_verdict(world, keycloak, held) == []
+    keycloak.lookup_status = 200
+    assert world.remove().status_code == 204
+    assert world.pool.left_for(REMOVED) == {} and world.pool.reader_left(REMOVED) == {}
+
+
+def test_a_realm_that_loses_the_client_between_lookup_and_delete_finishes_the_removal(
+    world: _World, keycloak: _Keycloak
+) -> None:
+    """404 on the DELETE: the identity is gone at the provider, whatever took it, and its rows are
+    purged, as for any other "the provider holds no such identity"."""
+    keycloak.delete_status = 404
+    assert world.remove().status_code == 204
+    assert world.pool.left_for(REMOVED) == {} and world.pool.reader_left(REMOVED) == {}
+
+
+def _the_old_delete(self: IdentityAdmin, client_id: str) -> Any:
+    async def run() -> None:
+        uuid = await self._uuid(client_id)  # noqa: SLF001
+        if uuid is None:
+            raise NoSuchDashboard("no such dashboard")
+        await self._call("DELETE", f"/clients/{uuid}")  # noqa: SLF001
+
+    return run()
+
+
+def _the_old_lookup(self: IdentityAdmin, client_id: str) -> Any:
+    async def run() -> str | None:
+        found = (await self._call("GET", "/clients", params={"clientId": client_id})).json()  # noqa: SLF001
+        exact = [c for c in found if c.get("clientId") == client_id]
+        return str(exact[0]["id"]) if exact else None
+
+    return run()
+
+
+@pytest.mark.parametrize(
+    "plant, field, status",
+    [
+        pytest.param("delete_dashboard", "delete_status", 500, id="delete-status-unread"),
+        pytest.param("_uuid", "lookup_status", 503, id="lookup-status-unread"),
+    ],
+)
+def test_the_keycloak_check_sees_each_planted_fault(
+    world: _World,
+    keycloak: _Keycloak,
+    monkeypatch: pytest.MonkeyPatch,
+    plant: str,
+    field: str,
+    status: int,
+) -> None:
+    """Rule 15: the adapter as it was (the DELETE's status never read, the lookup's answer parsed
+    as a list whatever it was) is run through the same verdict at the same shapes, and the verdict
+    names what is wrong."""
+    monkeypatch.setattr(
+        IdentityAdmin, plant, _the_old_delete if plant == "delete_dashboard" else _the_old_lookup
+    )
+    setattr(keycloak, field, status)
+    held = world.pool.left_for(REMOVED)
+    assert _keycloak_refusal_verdict(world, keycloak, held), f"the {plant} plant was not caught"
 
 
 # --- A pull already running when the identity is removed ------------------------------------------
