@@ -448,6 +448,19 @@ M = [
  ("merge_slice.py", '        c.write_json(seen_f, seen)\n', '', "looked_at_once_per_main"),
  ("merge_slice.py", '                files = merge_conflicts(base, tip)\n                seen[sid]', '                files = merge_conflicts(base, tip)\n                c.git(["update-ref", "refs/conflict-look", base], c.REPO)\n                seen[sid]', "when_main_moves_a_verified_slice"),
  ("run_seat.py", '        c.set_state(slice_id, phase="verified", tip=tip)\n        board()\n', '        c.set_state(slice_id, phase="verified", tip=tip)\n', "verifier_passes_a_conflict"),
+ # MERGE_PROGRESS_BRIEF.md: the merge's progress record and the board's progress field
+ ("merge_slice.py", '        self._close_step("red as expected" if prev and prev["n"] == 2 else "passed")', '        self._close_step("passed")', "running_merge_shows_its_step"),
+ ("merge_slice.py", '        prog.step(5)\n', '', "running_merge_shows_its_step"),
+ ("merge_slice.py", '        while not self.stop.wait(every):\n            self.write()', '        while not self.stop.wait(every):\n            pass', "running_merge_shows_its_step"),
+ ("board.py", '        out["progress"] = progress', '        pass', "running_merge_shows_its_step"),
+ ("board.py", '    alive = isinstance(r.get("pid"), int) and c.pid_alive(r["pid"]) and merge_slice.merging() is not None', '    alive = True', "killed_merge_is_shown_stopped"),
+ ("board.py", '("stalled" if quiet is not None and quiet >= stall else "running")', '"running"', "writes_nothing_is_shown_stalled"),
+ ("merge_slice.py", '        prog.finish("refused", str(e))\n', '', "red_step_is_recorded_red"),
+ ("merge_slice.py", '    for f in own:\n        if secs(f):\n            return secs(f), "this slice\'s previous attempt"\n', '', "previous_attempt_before_any"),
+ ("merge_slice.py", '        if not st or self.rec["state"] != "running" or any(n not in self.history for n in left):', '        if not st or self.rec["state"] != "running":', "nothing_to_go_on_there_is_no_estimate"),
+ ("merge_slice.py", '            except OSError as e:\n                if not self.said_failure:', '            except ZeroDivisionError as e:\n                if not self.said_failure:', "cannot_be_written_never_fails"),
+ ("merge_slice.py", '                if not self.said_failure:\n', '                if True:\n', "cannot_be_written_never_fails"),
+ ("merge_slice.py", '            shutil.copyfile(self.f, self.f.with_name(f"merge-progress-', '            (lambda *a: None)(self.f, self.f.with_name(f"merge-progress-', "records_never_mix"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

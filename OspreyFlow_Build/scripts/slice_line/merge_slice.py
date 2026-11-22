@@ -41,6 +41,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -399,6 +400,8 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
     codes = []
     for target in FULL_GATE_TARGETS:
         started = time.monotonic()
+        if PROGRESS:
+            PROGRESS.part(" ".join(target))
         codes.append(run_step(" ".join(target), list(target), tree / "OspreyFlow_Build", log, env, retries))
         log.open("a").write(f"\n{' '.join(target)}: exit {codes[-1]} in {time.monotonic() - started:.0f} s\n")
         if codes[-1] == NETWORK:
@@ -966,13 +969,146 @@ def github_at_merge() -> dict:
     return ci
 
 
+#: The merge's progress record (MERGE_PROGRESS_BRIEF.md; the owner, 19 November 2026: "intermediate status outputs ...
+#: to track progress in the dashboard"): records/<ID>/merge-progress.json, rewritten whole (beside it, then renamed) at
+#: each step's start and end and every PROGRESS_SECONDS while one runs. Names, numbers and times only; never test output.
+PROGRESS_FILE = "merge-progress.json"
+PROGRESS_SECONDS = 30
+STEPS = ("checks before the gate", "red before: the acceptance on the base", "the merge onto main",
+         "the acceptance, checks and scans on the merge result", "today's full gate", "landing on main", "the push")
+PROGRESS = None  # the running merge's Progress, for full_gate's parts
+
+
+def progress_history(slice_id: str) -> tuple[dict, str]:
+    """Seconds per step from this slice's previous attempt (its newest finished record), else the mean of the last
+    three finished merges of any slice; ({}, "no estimate") when there is nothing to go on. Never invented."""
+    def secs(f: Path) -> dict:
+        r = c.read_json(f) or {}
+        return {d["name"]: d["seconds"] for d in r.get("done") or [] if isinstance(d.get("seconds"), (int, float))}
+    own = sorted(c.rec_dir(slice_id).glob("merge-progress-*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    for f in own:
+        if secs(f):
+            return secs(f), "this slice's previous attempt"
+    every = sorted((c.DATA / "records").glob("*/merge-progress-*.json"), key=lambda f: f.stat().st_mtime, reverse=True)
+    runs = [x for x in (secs(f) for f in every) if x][:3]
+    if not runs:
+        return {}, "no estimate"
+    names = {n for r in runs for n in r}
+    return ({n: sum(r[n] for r in runs if n in r) / sum(1 for r in runs if n in r) for n in names},
+            f"the last {len(runs)} merge(s) of any slice")
+
+
+class Progress:
+    """The record one merge writes as it goes. Best effort: a write that fails never fails or slows the merge, and says
+    so once in the merge log."""
+
+    def __init__(self, slice_id: str, log: Path):
+        self.f = c.rec_dir(slice_id) / PROGRESS_FILE
+        self.log = log
+        self.t0 = time.time()
+        self.step_t0 = self.t0
+        self.said_failure = False
+        self.mutex = threading.Lock()
+        self.history, self.source = progress_history(slice_id)
+        self.rec = {"slice": slice_id, "tip": "", "merge_id": log.stem, "pid": os.getpid(), "started": c.now(),
+                    "state": "running", "result": None, "step": None, "done": [], "log": {"path": str(log)},
+                    "estimate_left_s": None, "estimate_from": "no estimate"}
+        self.board = None
+        self.stop = threading.Event()
+        self.beat = threading.Thread(target=self._beat, daemon=True)
+        self.beat.start()
+
+    def _beat(self) -> None:
+        every = float(os.environ.get("OSPREY_PROGRESS_SECONDS") or PROGRESS_SECONDS)
+        while not self.stop.wait(every):
+            self.write()
+
+    def _estimate(self) -> None:
+        st = self.rec["step"]
+        left = STEPS[st["n"] - 1:] if st else ()
+        if not st or self.rec["state"] != "running" or any(n not in self.history for n in left):
+            self.rec["estimate_left_s"], self.rec["estimate_from"] = None, "no estimate"
+            return
+        now_in = time.time() - self.step_t0
+        self.rec["estimate_left_s"] = round(max(self.history[left[0]] - now_in, 0) + sum(self.history[n] for n in left[1:]))
+        self.rec["estimate_from"] = self.source
+
+    def write(self) -> None:
+        with self.mutex:
+            try:
+                st = self.log.stat() if self.log.exists() else None
+                self.rec["log"] = {"path": str(self.log), "size": st.st_size if st else 0,
+                                   "mtime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(st.st_mtime)) if st else None}
+                self._estimate()
+                self.rec["updated"] = c.now()
+                tmp = self.f.with_name(self.f.name + ".tmp")
+                tmp.write_text(json.dumps(self.rec, indent=1))
+                os.replace(tmp, self.f)
+            except OSError as e:
+                if not self.said_failure:
+                    self.said_failure = True
+                    try:
+                        with self.log.open("a") as fh:
+                            fh.write(f"\n(the progress record could not be written: {e}; the merge goes on without it)\n")
+                    except OSError:
+                        pass
+
+    def _close_step(self, result: str) -> None:
+        st = self.rec["step"]
+        if st:
+            self.rec["done"].append({"name": st["name"], "result": result, "seconds": round(time.time() - self.step_t0)})
+
+    def _board(self) -> None:
+        """board.py --quiet, so status.js carries the step: one at a time, and never waited for by a step."""
+        try:
+            if self.board and self.board.poll() is None:
+                return
+            self.board = subprocess.Popen([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"],
+                                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+
+    def step(self, n: int) -> None:
+        prev = self.rec["step"]
+        self._close_step("red as expected" if prev and prev["n"] == 2 else "passed")
+        self.step_t0 = time.time()
+        self.rec["step"] = {"name": STEPS[n - 1], "n": n, "of": len(STEPS), "began": c.now(), "part": ""}
+        self.write()
+        self._board()
+
+    def part(self, name: str) -> None:
+        if self.rec["step"]:
+            self.rec["step"]["part"] = name
+            self.write()
+
+    def finish(self, result: str, why: str = "") -> None:
+        if self.rec["state"] != "running":
+            return
+        self._close_step("passed" if result == "merged" else "red")
+        self.rec.update(state="finished", result=result, why=why[:300], finished=c.now())
+        self.stop.set()
+        self.write()
+        try:  # kept beside it, for the next merge's estimate
+            shutil.copyfile(self.f, self.f.with_name(f"merge-progress-{self.rec['merge_id'].removeprefix('merge-')}.json"))
+        except OSError:
+            pass
+        if self.board:
+            try:
+                self.board.wait(timeout=30)
+            except subprocess.TimeoutExpired:
+                pass
+
+
 def merge(slice_id: str) -> dict:
     fh = lock()
     c.write_json(c.DATA / RUNNING, {"slice": slice_id, "pid": os.getpid(), "at": c.now()})
     trees: list[Path] = []
     rec = c.rec_dir(slice_id)
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
+    global PROGRESS
+    prog = PROGRESS = Progress(slice_id, log)
     try:
+        prog.step(1)
         base = main_ready(records=True)  # 9: the conductor's uncommitted records do not hold a merge (below)
         note(watch_github())  # 1c: a test of ours red twice stops merging
         github_stop()
@@ -986,6 +1122,7 @@ def merge(slice_id: str) -> dict:
                           "a change needs the owner's word (refreeze.py).")
         branch = frozen["branch"]
         tip = c.git(["rev-parse", branch], c.REPO)
+        prog.rec["tip"] = tip
         if subprocess.run(["git", "merge-base", "--is-ancestor", tip, base], cwd=c.REPO).returncode == 0:
             raise Refused(f"{branch} is already on main.")
         accepted = acceptance(slice_id, tip)
@@ -1002,6 +1139,7 @@ def merge(slice_id: str) -> dict:
                           + ". Commit them with merge_slice.py records (or set them aside), then merge.")
 
         # 5. red before the slice: the base, with only the slice's acceptance files from the tip
+        prog.step(2)
         before = temp_tree(base, f"{slice_id}-before")
         trees.append(before)
         files = [f for f in (frozen.get("acceptance_files") or "").split(",") if f.strip()]
@@ -1023,6 +1161,7 @@ def merge(slice_id: str) -> dict:
             raise Refused("the acceptance test passes without the slice's code: it was never red. See " + str(log))
 
         # 6. green on the merge result
+        prog.step(3)
         after = temp_tree(base, f"{slice_id}-merge")
         trees.append(after)
         msg = f"merge: slice {slice_id} ({frozen['build']}) {branch} {tip[:10]}\n\nSlice-Merge: {slice_id}\nSlice-Tip: {tip}"
@@ -1053,6 +1192,7 @@ def merge(slice_id: str) -> dict:
             raise Refused(f"{branch} does not merge cleanly onto main, and git merge-tree names no conflicting file: not "
                           "recorded as the slice's fault, and the slice is left where it was; the conductor looks at the "
                           f"merge (a hook, a lock, the tree). See {log}")
+        prog.step(4)
         scan_rows = apply_scan_rows(slice_id, after, base, tip)  # 1b: in the merge commit itself
         merged = c.git(["rev-parse", "HEAD"], after)
         try:
@@ -1075,6 +1215,7 @@ def merge(slice_id: str) -> dict:
         drop_env(after)  # the full gate builds its own, fresh
 
         # 7. today's full gate on the merge result
+        prog.step(5)
         code = FULL_GATE(after, base, log)
         retried = c.read_json(log.with_suffix(".retries.json"))
         if code == NETWORK:  # 1d: a registry or download unreachable twice: the slice's fault in nothing
@@ -1089,6 +1230,7 @@ def merge(slice_id: str) -> dict:
             refuse_to_builder(slice_id, tip, "today's full gate was red on the merge result", findings, len(names), "gate")
             raise Refused(f"today's full gate is red on the merge result. See {log}")
 
+        prog.step(6)
         with records_lock():  # no records commit between the check and the fast-forward
             landed, under = land(slice_id, base, merged, tip, touched)
             c.git(["merge", "--ff-only", landed], c.REPO)
@@ -1115,13 +1257,19 @@ def merge(slice_id: str) -> dict:
                 "backlog_rows": accepted.get("gaps_in_a_test", [])}
         c.write_json(rec / "merged.json", done)
         c.set_state(slice_id, phase="merged", merge=landed)
+        prog.step(7)
         push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO,
                               capture_output=True, text=True)
         done["push"] = {"exit": push.returncode, "said": (push.stdout + push.stderr).strip()[-400:]}
         c.write_json(rec / "merged.json", done)
+        prog.finish("merged")
         return done
-    except Refused:
+    except Refused as e:
         c.set_state(slice_id, last_merge_refusal=c.now())
+        prog.finish("refused", str(e))
+        raise
+    except BaseException as e:
+        prog.finish("ended with an error", type(e).__name__)
         raise
     finally:
         for t in trees:

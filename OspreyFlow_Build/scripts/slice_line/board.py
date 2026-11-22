@@ -33,7 +33,7 @@ class BadEntry(Exception):
 
 def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evidence: str = "",
           account: str = "", merged: dict | None = None, verify: dict | None = None,
-          accepted: dict | None = None, owner_line: dict | None = None) -> dict:
+          accepted: dict | None = None, owner_line: dict | None = None, progress: dict | None = None) -> dict:
     """One build's entry for status.js. Refuses an entry the dashboard must not show."""
     if state not in STATES:
         raise BadEntry(f"unknown state {state!r}")
@@ -54,6 +54,49 @@ def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evid
         out["accepted_findings"] = merged["accepted_findings"]["findings"]
     if owner_line and state == "stopped":
         out["owner_line"] = owner_line  # the owner has answered; the conductor has not applied it yet (7)
+    if progress:
+        out["progress"] = progress  # a merge running, stalled or stopped without a result (MERGE_PROGRESS_BRIEF.md)
+    return out
+
+
+#: A running merge whose log has not grown for this long, its process alive, is shown "stalled" (seconds).
+STALL_SECONDS = 600
+
+
+def merge_progress(rec: Path) -> dict | None:
+    """The slice's merge progress for status.js, from records/<ID>/merge-progress.json while it says running: the step,
+    "n of m", the seconds in the step and in the merge, the estimate left (None: no estimate), and its state: running,
+    stalled (the log not grown for STALL_SECONDS, the process alive) or "no process" (the record says running and its
+    process is gone, or no merge holds the lock: the merge stopped without a result). None when no merge is running."""
+    r = c.read_json(rec / "merge-progress.json")
+    if not isinstance(r, dict) or r.get("state") != "running" or not isinstance(r.get("step"), dict):
+        return None
+    import calendar
+    import time
+    import merge_slice
+    st, now = r["step"], time.time()
+
+    def ago(stamp):
+        try:
+            return now - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ"))
+        except (TypeError, ValueError):
+            return None
+    alive = isinstance(r.get("pid"), int) and c.pid_alive(r["pid"]) and merge_slice.merging() is not None
+    quiet = ago((r.get("log") or {}).get("mtime"))
+    stall = float(os.environ.get("OSPREY_STALL_SECONDS") or STALL_SECONDS)
+    state = "no process" if not alive else ("stalled" if quiet is not None and quiet >= stall else "running")
+    step_s, merge_s = ago(st.get("began")), ago(r.get("started"))
+    out = {"state": state, "merge_id": r.get("merge_id"), "step": st.get("name"), "part": st.get("part") or "",
+           "n_of": f"{st.get('n')} of {st.get('of')}", "step_seconds": round(step_s or 0),
+           "merge_seconds": round(merge_s or 0), "estimate_left_s": r.get("estimate_left_s")}
+    where = f"step {out['n_of']}, {out['step']}" + (f" ({out['part']})" if out["part"] else "")
+    if state == "no process":
+        out["said"] = f"merge stopped without a result ({where})"
+    else:
+        left = r.get("estimate_left_s")
+        out["said"] = (f"merging: {where}, {round(out['merge_seconds'] / 60)} minutes in, "
+                       + (f"about {max(round(left / 60), 1)} left" if isinstance(left, (int, float)) else "no estimate")
+                       + (f"; stalled: the log has not grown for {round(quiet / 60)} minutes" if state == "stalled" else ""))
     return out
 
 
@@ -194,9 +237,13 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     if waiting:
         note = f"the owner's line is in: {waiting['action']} ({waiting['date']}), waiting to be applied"
         source = "resume.tsv (unapplied)"
+    progress = merge_progress(rec) if state and state != "done" else None
+    if progress:
+        note = progress["said"]
+        source = "merge progress record"
     if state and state != "done":
         try:
-            builds_entry = entry(state, note=note, evidence=evidence, owner_line=waiting, **kw)
+            builds_entry = entry(state, note=note, evidence=evidence, owner_line=waiting, progress=progress, **kw)
         except BadEntry as e:
             problems.append(f"{sid}: {e}")
             builds_entry = None
@@ -204,7 +251,9 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
     elif state and builds_entry:
         builds[build] = builds_entry
-    if waiting:
+    if progress:
+        shown = progress["said"][:60]
+    elif waiting:
         shown = f"owner's line in: {waiting['action']}"[:60]
     elif st.get("phase") == "refused" and state == "stopped":
         shown = note.split(";")[0][:60]

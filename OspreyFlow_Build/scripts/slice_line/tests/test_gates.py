@@ -52,7 +52,8 @@ GH = (Path(__file__).resolve().parent / "fake_gh.py").read_text()
 #: The full gate's stand-in, in the throwaway copy of merge_slice.py only: TEST_GATE's exit code; TEST_GATE_LOG's text
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
 #: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
-#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them.
+#: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them; TEST_GATE_SLEEP:
+#: seconds the gate runs, writing nothing.
 STAND_IN_GATE = """def _stand_in_gate(t, b, l):
     Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
     l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
@@ -68,6 +69,9 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l):
     if os.environ.get('TEST_GATE_SEES'):
         have = [n for n in ('.venv', 'node_modules') if (t / 'OspreyFlow_Core' / n).exists()]
         Path(os.environ['TEST_GATE_SEES']).write_text(' '.join(have) or 'clean')
+    if os.environ.get('TEST_GATE_SLEEP'):  # a gate that runs a while and writes nothing meanwhile (merge progress)
+        import time as _t
+        _t.sleep(float(os.environ['TEST_GATE_SLEEP']))
     return int(os.environ.get('TEST_GATE', '0'))
 
 
