@@ -1093,6 +1093,72 @@ def test_images_a_wildcard_source_is_resolved_as_docker_does_a_star_stays_in_its
     assert [got[p] for p in ("src/sub/b.py", "src/c.txt", "lib/c.txt")] == ["none"] * 3
 
 
+@pytest.mark.parametrize(
+    "copy",
+    (
+        "COPY --from=builder /app/out $APP_HOME/",  # a variable in the destination
+        "COPY --from=builder --exclude=*.pyc /app /app",  # a flag that cannot be read statically
+        "COPY --from=builder --parents /app/./out /app",
+        "COPY --from=builder <<EOF /app\nbody\nEOF",  # a heredoc
+        'COPY --from=builder ["/app/out"',  # a JSON form that does not parse
+        "COPY --from=builder /app/out",  # fewer than two words
+    ),
+)
+def test_images_a_copy_from_a_stage_that_cannot_be_read_is_not_determined_and_never_a_crash(
+    tmp_path: Path, copy: str
+) -> None:
+    files = {
+        "svc/Dockerfile": (
+            "FROM node AS builder\nWORKDIR /app\nCOPY src ./src\nRUN npm run build\n"
+            f"FROM nginx\n{copy}\nCOPY known.txt /known.txt\n"
+        ),
+        "src/main.ts": "",
+        "known.txt": "",
+        "elsewhere.txt": "",
+    }
+    got = images(tmp_path, files, "service: web, dockerfile: svc/Dockerfile")
+    assert got["known.txt"] == "web", copy
+    assert got["src/main.ts"] == "not determined", copy
+    assert got["elsewhere.txt"] == "not determined", copy
+
+
+@pytest.mark.parametrize("name", ("Dockerfile.gpu", "web.Dockerfile", "docker/web.dockerfile"))
+def test_images_a_dockerfile_whose_name_is_not_plain_dockerfile_is_read_when_the_matrix_names_it(
+    tmp_path: Path, name: str
+) -> None:
+    files = {
+        f"svc/{name}": "FROM x\nARG KIND=inc\nCOPY svc/own.py ./\n",
+        f"svc/{name}.dockerignore": "svc/skipped.py\n",
+        "svc/own.py": "",
+        "svc/skipped.py": "",
+        "svc/Dockerfile.other": "FROM x\nCOPY svc/never.py ./\n",
+        "svc/never.py": "",
+    }
+    got = images(tmp_path, files, f"service: web, dockerfile: svc/{name}")
+    assert got["svc/own.py"] == "web", name
+    assert got["svc/skipped.py"] == "none", "the Dockerfile's own ignore file applies"
+    assert got["svc/never.py"] == "none (not released)", (
+        "a Dockerfile of another name that the release does not name"
+    )
+
+
+def test_images_a_dockerfile_with_an_unusual_name_the_matrix_names_is_read_and_its_arguments_count(
+    tmp_path: Path,
+) -> None:
+    dockerfile = (
+        "ARG KIND=included\nFROM base AS runtime-included\nCOPY inc.txt /inc.txt\n"
+        "FROM base AS runtime-omitted\nCOPY omit.txt /omit.txt\nFROM runtime-${KIND}\n"
+    )
+    files = {"svc/build.docker": dockerfile, "inc.txt": "", "omit.txt": ""}
+    passed = release_yml("service: app, dockerfile: svc/build.docker") + (
+        "  other:\n    steps:\n      - run: docker build --build-arg KIND=omitted .\n"
+    )
+    got = images(tmp_path, {**files, ".github/workflows/release.yml": passed})
+    assert got["inc.txt"] == got["omit.txt"] == "not determined", (
+        "an argument the workflow may override is not assumed, whatever the file is called"
+    )
+
+
 def test_images_a_dockerfile_the_release_does_not_name_leaves_its_folder_not_released(
     tmp_path: Path,
 ) -> None:
