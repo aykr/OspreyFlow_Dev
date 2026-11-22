@@ -27,17 +27,29 @@ What a mistake would do, and the case that catches it:
 - the mart is down and the removal is reported as done —
   `test_a_removal_the_mart_refuses_is_a_refusal_the_administrator_sees`, and its words reach the
   Admin screen — `test_the_refusal_is_in_the_shape_the_admin_screen_reads`;
-- the identity provider refuses and the rows are gone anyway —
-  `test_the_identity_provider_refusing_the_deletion_puts_the_rows_back`;
+- the identity provider refuses to delete the identity (step 2 fails): the rows must stay hidden
+  and the Remove button must stay, and nothing may make them readable again before the retry —
+  `test_a_provider_that_fails_after_the_stamp_leaves_the_rows_hidden_and_the_button_there`, and the
+  pull that begins after the stamp, with a working secret, must not lift it —
+  `test_a_pull_after_a_failed_provider_delete_does_not_make_the_rows_readable_again`;
+- a pull that began after the stamp and was granted its token before the provider's delete, then a
+  failed purge: the stamp must still be there for the sync to act on —
+  `test_a_pull_begun_after_the_stamp_cannot_undo_a_removal_whose_purge_failed`;
 - a refused token keeps a removed identity's rows —
   `test_a_refusal_never_keeps_a_removed_identitys_rows`;
 - a pull already running when the identity is removed writes the rows back (a refused feed makes a
   `pulls` row, a fetched one `figures` and `pulls`), and they stay for good —
   `test_a_pull_running_during_the_removal_does_not_put_the_rows_back`, and
   `test_the_pull_race_check_sees_each_planted_fault` (check removed, removal never stamped, write
-  without the lock, pull clock read late);
-- the record of removal blocks an identity registered again —
-  `test_an_identity_registered_again_after_its_removal_is_written_for`;
+  without the lock);
+- the record of removal blocks an identity registered again, or is lifted by anything but the
+  registration itself (never by the timing of a pull) —
+  `test_an_identity_registered_again_after_its_removal_is_written_for`,
+  `test_registering_again_takes_the_earlier_identitys_rows_out_before_it_writes`,
+  `test_registering_a_name_the_provider_still_holds_does_not_lift_the_stamp`,
+  `test_a_registration_whose_mart_cannot_be_reopened_is_refused_and_undone`,
+  `test_a_registration_that_cannot_be_undone_leaves_the_rows_hidden_and_says_so`, and
+  `test_the_registration_check_sees_each_planted_fault`;
 - a BI tool able to read the record of removals —
   `test_the_reader_role_is_never_given_the_record_of_removals`;
 - the next sync does not prune what is no longer configured, or prunes only one table, or prunes
@@ -72,6 +84,7 @@ from services.api.app import (
     get_report_freshness,
 )
 from services.api.identity_admin import (
+    DashboardExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
     NoSuchDashboard,
@@ -83,7 +96,7 @@ from services.report_sync.mart import CONTROL_SCHEMA, Mart
 from services.report_sync.sync import Dashboard, SyncRefused, TokenSource, sync_once
 
 from ontology.handling import load_uk_le_scheme
-from schemas.admin import DashboardIdentity
+from schemas.admin import DashboardIdentity, RegisteredDashboard
 from schemas.domain import Principal
 
 SCHEMA = "osprey_reports"
@@ -487,6 +500,7 @@ class _Identity:
             DashboardIdentity(client_id=KEPT, account_id="sa-stayer"),
         ]
         self.deleted: list[str] = []
+        self.created: list[str] = []
         self.refuses: Exception | None = None  # the identity provider's own refusal, when planted
         self.at_delete: Callable[[str], None] = lambda client_id: None  # what the world is as it acts
 
@@ -497,6 +511,19 @@ class _Identity:
 
     async def list_dashboards(self) -> list[DashboardIdentity]:
         return list(self.registered)
+
+    async def create_dashboard(
+        self, name: str, *, clearance: str, org_unit: str, application_id: str | None = None
+    ) -> RegisteredDashboard:
+        """Registration as both providers do it: a client id already held is refused
+        (`DashboardExistsError`, the 409), never made twice."""
+        client_id = f"osprey-dashboard-{name}"
+        if client_id in {d.client_id for d in self.registered}:
+            raise DashboardExistsError(client_id)
+        made = DashboardIdentity(client_id=client_id, account_id=f"sa-{name}-again")
+        self.registered.append(made)
+        self.created.append(client_id)
+        return RegisteredDashboard(dashboard=made, secret=secrets.token_urlsafe(8))
 
     async def delete_dashboard(self, client_id: str) -> None:
         self.at_delete(client_id)
@@ -536,6 +563,16 @@ class _World:
 
     def remove(self, client_id: str = REMOVED) -> Any:
         return self.client.delete(f"/v1/admin/dashboards/{client_id}")
+
+    def register(self, name: str = "leaver") -> Any:
+        """The same name again: `osprey-dashboard-leaver` is `REMOVED`'s client id."""
+        return self.client.post(
+            "/v1/admin/dashboards",
+            json={"name": name, "clearance": "OFFICIAL", "org_unit": "verify"},
+        )
+
+    def registration_rows(self) -> list[dict[str, Any]]:
+        return [r for r in self.audit.records if r["action"] == "register_dashboard"]
 
     def listed(self) -> list[str]:
         """What the Admin's Dashboards list offers a Remove button for: the provider's own list."""
@@ -887,30 +924,17 @@ async def test_a_failed_purge_in_the_sync_is_said_in_words_and_the_pass_goes_on(
 
 async def test_a_refusal_never_writes_a_stamped_identitys_row() -> None:
     """`record_failure` keeps what it finds and writes what it is given; for a stamped identity it
-    does neither, at whatever moment the pull began (a pull that began after the stamp and before the
-    identity provider deleted the identity is still the removed identity's)."""
+    does neither, whenever its pull began: nothing about the pull's timing can make a stamped
+    identity writable (a pull that began after the stamp and before the identity provider deleted
+    the identity is still the removed identity's)."""
     pool, mart = await _mart_with_two_identities()
     pool.stamp(REMOVED)
-    later = await mart.begin_pass()
-    for began in (later, None):
-        with pytest.raises(mart_module.DashboardRemoved):
-            await mart.record_failure(REMOVED, "case-3", "refused", NOW, pass_started=began)
+    with pytest.raises(mart_module.DashboardRemoved):
+        await mart.record_failure(REMOVED, "case-3", "refused", NOW)
     assert not [r for r in pool.rows_of(REMOVED)[f"{SCHEMA}.pulls"] if r["case_id"] == "case-3"]
     # an identity that was not removed is written as before
-    await mart.record_failure(KEPT, "case-3", "refused", NOW, pass_started=later)
+    await mart.record_failure(KEPT, "case-3", "refused", NOW)
     assert [r for r in pool.rows_of(KEPT)[f"{SCHEMA}.pulls"] if r["case_id"] == "case-3"]
-
-
-async def test_a_pull_after_the_stamp_for_an_identity_registered_again_purges_before_it_writes() -> None:
-    """A stamped identity registered again under the same name: its first good pull clears the stamp,
-    but never leaves the earlier identity's rows readable beside its own (they are taken out first)."""
-    pool, mart = await _stamped_world()
-    began = await mart.begin_pass()
-    await mart.replace(REMOVED, "case-9", "Operation Nine", 12, FEED, NOW, pass_started=began)
-    assert pool.removed_at(REMOVED) is None
-    assert {r["case_id"] for r in pool.rows_of(REMOVED)[f"{SCHEMA}.pulls"]} == {"case-9"}
-    assert {r["case_id"] for r in pool.rows_of(REMOVED)[f"{SCHEMA}.figures"]} == {"case-9"}
-    assert pool.reader_left(REMOVED), "its own rows are read again"
 
 
 async def test_a_write_with_no_pass_start_is_refused_for_a_stamped_identity() -> None:
@@ -1313,6 +1337,65 @@ async def test_a_pull_running_during_the_removal_does_not_put_the_rows_back(
     )
 
 
+@pytest.mark.parametrize("feed_status", [200, 403], ids=["feed fetched", "feed refused"])
+@pytest.mark.parametrize("fail, status", PROVIDER_FAILURES)
+async def test_a_pull_after_a_failed_provider_delete_does_not_make_the_rows_readable_again(
+    world: _World, conduit: _Conduit, fail: Callable[[], Exception], status: int, feed_status: int
+) -> None:
+    """The finding of round 5: the provider refused to delete the identity, so it is still registered
+    with its working secret, still in the environment's list, and the Admin was told its figures are
+    hidden. The next sync pass begins after the stamp and is granted a token. Nothing about that pull
+    may lift the stamp: the rows stay hidden (and are purged by the pass), nothing is written for it,
+    and the words say the removal did not finish. Only a retry that completes, or a registration,
+    ends the stamp."""
+    world.identity.refuses = fail()
+    assert world.remove().status_code == status
+    conduit.feed_status = feed_status
+    mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    summary = await sync_once([_board(REMOVED), _board(KEPT)], mart, _AnyValkey(), slot=2)  # type: ignore[arg-type]
+    assert world.pool.removed_at(REMOVED) is not None, "a successful pull lifted the removal stamp"
+    assert world.pool.reader_left(REMOVED) == {}, "a reader can read the rows of an identity being removed"
+    assert world.pool.left_for(REMOVED) == {}, "the pass finishes the purge"
+    assert REMOVED in world.listed(), "the Remove button is still there"
+    assert any("removed in the Admin" in f and REMOVED in f for f in summary.failures), summary.failures
+    assert world.pool.reader_left(KEPT), "a present identity's rows are still read"
+    world.identity.refuses = None
+    assert world.remove().status_code == 204, "the retry finishes it"
+    assert world.pool.reader_left(REMOVED) == {} and REMOVED not in world.listed()
+
+
+async def test_a_pull_begun_after_the_stamp_cannot_undo_a_removal_whose_purge_failed(
+    world: _World, conduit: _Conduit
+) -> None:
+    """Round 5's smaller race, in the state it leaves: the stamp was committed (the provider refused
+    the first attempt); a pull begins after it and is granted its token; the removal's later attempt
+    deletes the identity at the provider but its purge fails, and a purge is one transaction, so it
+    leaves the mart exactly as it was (the rows there, the stamp as old as before the pull began);
+    the pull then writes. The stamp must still refuse the write: the rows stay hidden throughout and
+    the next pass has a stamp to purge by."""
+    world.identity.refuses = IdentityAdminRefused("the identity provider could not be reached")
+    assert world.remove().status_code == 502
+    stamped_at = world.pool.removed_at(REMOVED)
+    assert stamped_at is not None
+    deleted_meanwhile: list[bool] = []
+
+    def provider_deletes_while_the_feed_is_fetched() -> None:
+        if not deleted_meanwhile:
+            world.identity.registered = [
+                d for d in world.identity.registered if d.client_id != REMOVED
+            ]
+            deleted_meanwhile.append(True)  # the purge that followed it failed: nothing changed
+
+    conduit.during = provider_deletes_while_the_feed_is_fetched
+    mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    await sync_once([_board(REMOVED), _board(KEPT)], mart, _AnyValkey(), slot=2)  # type: ignore[arg-type]
+    assert deleted_meanwhile == [True]
+    assert world.pool.removed_at(REMOVED) == stamped_at, "the pull's write lifted or moved the stamp"
+    assert world.pool.reader_left(REMOVED) == {}, "a removed identity's rows are readable"
+    await sync_once([_board(KEPT)], mart, _AnyValkey(), slot=3)  # type: ignore[arg-type]
+    assert world.pool.left_for(REMOVED) == {}, "the next pass had no stamp to purge by"
+
+
 def _no_check(*_: Any, **__: Any) -> Any:
     async def refuse_if_removed(*_: Any, **__: Any) -> None:
         return None
@@ -1334,7 +1417,6 @@ def _lock_never_taken(*_: Any, **__: Any) -> Any:
         ("the check", "has rows again"),
         ("the stamp", "has rows again"),
         ("the lock", "refused the write"),
-        ("the pass clock", "has rows again"),
     ],
 )
 async def test_the_pull_race_check_sees_each_planted_fault(
@@ -1346,41 +1428,198 @@ async def test_the_pull_race_check_sees_each_planted_fault(
     feed_status: int,
 ) -> None:
     """Rule 15: the verdict above is red for the removal check taken out of the writers, for a removal
-    that is never stamped, for a write made without the dashboard's lock, and for a pull whose clock
-    is read after the removal rather than before it."""
+    that is never stamped, and for a write made without the dashboard's lock. (There is no pull clock
+    to plant any more: a stamped identity is refused whenever its pull began, which is stronger.)"""
     if plant == "the check":
         monkeypatch.setattr(mart_module, "refuse_if_removed", _no_check())
     elif plant == "the stamp":
         world.pool.ignored.append(f"INSERT INTO {CONTROL_SCHEMA}.removed_dashboards")
-    elif plant == "the lock":
-        monkeypatch.setattr(mart_module, "lock_dashboard", _lock_never_taken())
     else:
-
-        async def late(self: Mart) -> datetime:
-            return datetime(2999, 1, 1, tzinfo=UTC)
-
-        monkeypatch.setattr(Mart, "begin_pass", late)
+        monkeypatch.setattr(mart_module, "lock_dashboard", _lock_never_taken())
     wrong, _ = await _pass_with_removal_during(world, conduit, feed_status)
-    if plant == "the pass clock" and feed_status != 200:
-        # A refusal never writes a stamped identity's row, whenever its pull began (it is not the
-        # clock that protects it), so this plant is no fault on that path.
-        assert wrong == []
-        return
     assert any(said in w for w in wrong), wrong
 
 
 async def test_an_identity_registered_again_after_its_removal_is_written_for(
     world: _World, conduit: _Conduit
 ) -> None:
-    """The record of a removal must not outlive its purpose: a pull that began after the removal
-    belongs to the identity registered again under the same name, and its rows are written."""
+    """The record of a removal must not outlive its purpose: the identity registered again under the
+    same name (the register route, a deliberate act) is written for, and the removed one's rows do
+    not come back with it."""
     assert world.remove().status_code == 204
-    world.identity.registered.append(DashboardIdentity(client_id=REMOVED, account_id="sa-new"))
     assert world.pool.removed_at(REMOVED) is not None
+    made = world.register()
+    assert made.status_code == 201, made.text
+    assert world.pool.removed_at(REMOVED) is None, "the registration lifts the removal record"
     mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
     summary = await sync_once([_board(REMOVED)], mart, _AnyValkey(), slot=2)  # type: ignore[arg-type]
     assert summary.failed == 0 and summary.pulled == 1, summary.failures
     assert set(world.pool.left_for(REMOVED)) == set(world.pool.tables())
+    assert world.pool.reader_left(REMOVED), "its own rows are read again"
+
+
+async def test_registering_again_takes_the_earlier_identitys_rows_out_before_it_writes(
+    world: _World,
+) -> None:
+    """The removal's purge failed and the sync has not yet run: the earlier identity's rows are still
+    in the mart, hidden by the stamp. Registering the name again must not make them readable beside
+    the new identity's own: they go in the same transaction that lifts the stamp."""
+    world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+    assert world.remove().status_code == 204
+    world.pool.heal()
+    assert world.pool.left_for(REMOVED) != {}
+    assert world.register().status_code == 201
+    assert world.pool.left_for(REMOVED) == {}, "the earlier identity's rows survived the registration"
+    assert world.pool.removed_at(REMOVED) is None
+    mart = Mart(world.pool, SCHEMA)  # type: ignore[arg-type]
+    await mart.replace(REMOVED, "case-9", "Operation Nine", 12, FEED, NOW)
+    assert {r["case_id"] for r in world.pool.rows_of(REMOVED)[f"{SCHEMA}.pulls"]} == {"case-9"}
+    assert {r["case_id"] for r in world.pool.rows_of(REMOVED)[f"{SCHEMA}.figures"]} == {"case-9"}
+    (row,) = world.registration_rows()
+    assert row["resolved_query"]["client_id"] == REMOVED
+    assert row["resolved_query"]["rows_cleared"] is True
+
+
+async def test_registering_a_name_the_provider_still_holds_does_not_lift_the_stamp(
+    world: _World,
+) -> None:
+    """A removal the provider refused: the identity is still registered at the provider, with its
+    working secret. Registering the same name is refused (the provider holds it: 409), and that
+    refusal must leave the stamp where it is: lifting it first would make a removed person's rows
+    readable again."""
+    world.identity.refuses = IdentityAdminRefused("the identity provider could not be reached")
+    assert world.remove().status_code == 502
+    refused = world.register()
+    assert refused.status_code == 409, refused.text
+    assert world.pool.removed_at(REMOVED) is not None
+    assert world.pool.reader_left(REMOVED) == {}
+    assert world.registration_rows() == []
+
+
+def test_a_registration_whose_mart_cannot_be_reopened_is_refused_and_undone(
+    world: _World,
+) -> None:
+    """The identity is created at the provider, then the mart refuses the step that lifts the stamp.
+    Nothing is left half done: the identity is deleted again (so no secret exists that nobody was
+    given), the stamp stays, the rows stay hidden, the refusal is in words the Admin screen shows, and
+    the registration is audited once as undone."""
+    assert world.remove().status_code == 204
+    world.pool.fail(
+        f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards", OSError("the mart is unreachable")
+    )
+    refused = world.register()
+    assert refused.status_code == 503, refused.text
+    detail = refused.json()["detail"]
+    assert detail["error"] == "reporting_mart_unreachable"
+    assert "not registered" in detail["message"] and "reporting mart" in detail["message"]
+    assert REMOVED not in world.listed(), "the identity registered for nothing is still there"
+    assert world.identity.created == [REMOVED]
+    assert world.pool.removed_at(REMOVED) is not None
+    assert world.pool.reader_left(REMOVED) == {}
+    (row,) = world.registration_rows()
+    assert row["resolved_query"]["undone"] is True and row["resolved_query"]["rows_cleared"] is False
+    world.pool.heal()
+    assert world.register().status_code == 201, "registering again, with the mart back, works"
+    assert world.pool.removed_at(REMOVED) is None
+
+
+def test_a_registration_that_cannot_be_undone_leaves_the_rows_hidden_and_says_so(
+    world: _World,
+) -> None:
+    """Both the mart and the identity provider refuse: the identity exists and is listed (it has a
+    Remove button), its rows stay hidden by the stamp, and the words say what to do."""
+    assert world.remove().status_code == 204
+    world.pool.fail(
+        f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards", OSError("the mart is unreachable")
+    )
+    world.identity.refuses = IdentityAdminRefused("the identity provider could not be reached")
+    refused = world.register()
+    assert refused.status_code == 503, refused.text
+    message = refused.json()["detail"]["message"]
+    assert "remove it" in message and "register it again" in message, message
+    assert REMOVED in world.listed(), "the identity exists, so it is listed with its Remove button"
+    assert world.pool.removed_at(REMOVED) is not None
+    assert world.pool.reader_left(REMOVED) == {}
+    (row,) = world.registration_rows()
+    assert row["resolved_query"]["undone"] is False
+
+
+def test_a_deployment_with_no_mart_registers_a_dashboard_as_before() -> None:
+    """Reporting off: no mart, no stamp to lift, and registering is not refused for want of one."""
+    pool = FakeMartPool()
+    state = _World(pool)
+    state.identity.registered = []
+    app.dependency_overrides[get_principal] = lambda: ADMIN
+    app.dependency_overrides[get_audit] = lambda: state.audit
+    app.dependency_overrides[get_identity_admin] = lambda: state.identity
+    app.dependency_overrides[get_report_freshness] = lambda: ReportFreshness(pool, SCHEMA)  # type: ignore[arg-type]
+    app.dependency_overrides[get_handling_scheme] = load_uk_le_scheme
+    try:
+        assert state.register().status_code == 201
+        assert state.identity.created == [REMOVED]
+    finally:
+        app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize(
+    ("plant", "said"),
+    [
+        ("the registration never reopens", "still hidden"),
+        ("the registration leaves the earlier rows", "earlier identity's rows"),
+        ("the registration reopens before the provider is asked", "stamp was lifted"),
+    ],
+)
+def test_the_registration_check_sees_each_planted_fault(
+    world: _World, monkeypatch: pytest.MonkeyPatch, plant: str, said: str
+) -> None:
+    """Rule 15: red for a registration that never lifts the stamp (the new identity stays hidden), for
+    one that lifts it and leaves the earlier identity's rows to be read beside its own, and for one
+    that lifts it before the provider has accepted the name (a refused registration must not)."""
+    real = ReportFreshness.reopen
+
+    async def never(self: ReportFreshness, client_id: str) -> bool:
+        return False
+
+    async def leaves_rows(self: ReportFreshness, client_id: str) -> bool:
+        async with self._pool.acquire() as conn, conn.transaction():
+            await mart_module.lock_dashboard(conn, client_id)
+            await conn.execute(
+                f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = $1", client_id
+            )
+        return True
+
+    wrong: list[str] = []
+    if plant == "the registration reopens before the provider is asked":
+        # The provider refuses the removal, so it still holds the name; a registration that lifted
+        # the stamp before asking the provider would unhide a removal still to be finished.
+        world.identity.refuses = IdentityAdminRefused("the identity provider could not be reached")
+        assert world.remove().status_code == 502
+        world.identity.refuses = None
+        asked = world.identity.create_dashboard
+
+        async def lifts_first(name: str, **kwargs: Any) -> RegisteredDashboard:
+            await real(ReportFreshness(world.pool, SCHEMA), f"osprey-dashboard-{name}")  # type: ignore[arg-type]
+            return await asked(name, **kwargs)
+
+        monkeypatch.setattr(world.identity, "create_dashboard", lifts_first)
+    else:
+        world.pool.fail(f"DELETE FROM {SCHEMA}", OSError("the mart dropped the connection"))
+        assert world.remove().status_code == 204  # the purge fails: the rows stay, hidden
+        world.pool.heal()
+        monkeypatch.setattr(
+            ReportFreshness, "reopen",
+            never if plant == "the registration never reopens" else leaves_rows,
+        )  # fmt: skip
+    world.register()
+    if plant == "the registration reopens before the provider is asked":
+        if world.pool.removed_at(REMOVED) is None:
+            wrong.append("the stamp was lifted though the provider refused the registration")
+    else:
+        if world.pool.removed_at(REMOVED) is not None:
+            wrong.append("the registered identity is still hidden")
+        if world.pool.left_for(REMOVED):
+            wrong.append("the earlier identity's rows are still in the mart beside its own")
+    assert any(said in w for w in wrong), wrong
 
 
 async def test_the_removal_record_is_stamped_by_the_database_not_the_conduit(

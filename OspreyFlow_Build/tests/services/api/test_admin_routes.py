@@ -152,6 +152,7 @@ class _Freshness:
     def __init__(self) -> None:
         self.stamped: list[str] = []
         self.removed: list[str] = []
+        self.reopened: list[str] = []
 
     async def holds_rows(self, client_id: str) -> bool:
         return False
@@ -163,6 +164,12 @@ class _Freshness:
     async def purge(self, client_id: str) -> int:
         self.removed.append(client_id)
         return 0
+
+    async def reopen(self, client_id: str) -> bool:
+        """A registration lifts the removal stamp of the same name, after the provider has accepted
+        it. This one holds no stamp, so nothing was lifted."""
+        self.reopened.append(client_id)
+        return False
 
     async def by_dashboard(self) -> dict[str, Freshness]:
         from datetime import UTC, datetime
@@ -256,6 +263,9 @@ def test_a_dashboard_cannot_read_above_its_registrars_clearance(client: Any) -> 
     made = client.post("/v1/admin/dashboards", json={"name": "Board", "clearance": "OFFICIAL", "org_unit": "verify"})
     assert made.status_code == 201 and made.json()["secret"] == "s"
     assert client.identity.made == [("Board", "OFFICIAL")]
+    assert client.freshness.reopened == ["osprey-dashboard-x"], (
+        "the registration lifts a removal stamp of the same name, once the provider has accepted it"
+    )
 
 
 class _Broken:
