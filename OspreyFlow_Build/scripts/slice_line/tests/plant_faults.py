@@ -220,7 +220,7 @@ M = [
  ("resume.py", '    newest_record_is(slice_id, tip)\n', '', "standing_accept_by_the_conductor"),
  ("resume.py", '    legacy = rs.is_legacy(verify)\n    only_gaps', '    legacy = False\n    only_gaps', "standing_accept_reads_a_record_written_before"),
  ("merge_slice.py", '    if acc.get("by") == "standing":  # the owner', '    if False:  # the owner', "merge_reads_the_owners_line_again"),
- ("run_seat.py", '    if standing_accept(slice_id):\n        return 0\n', '', "standing_accept_on_accepts"),
+ ("run_seat.py", '    taken = standing_accept(slice_id)\n    if taken:\n        return 0\n', '    taken = False\n    if taken:\n        return 0\n', "standing_accept_on_accepts"),
  ("merge_slice.py", '                "backlog_rows": accepted.get("gaps_in_a_test", [])}', '                "backlog_rows": []}', "standing_accept_on_accepts"),
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
@@ -368,7 +368,7 @@ M = [
  ("resume.py", '    if MERGE_RUNNING is None:\n        subprocess.run(', '    if False:\n        subprocess.run(', "refreeze_with_no_merge_running"),
  # LINE_FIXES_5_BRIEF.md, 3: the standing accept before another round
  ("resume.py", '    if hit:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding', '    if False:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding', "security_or_key_finding_is_never_accepted"),
- ("run_seat.py", '    if standing_accept(slice_id):\n        return 0\n', '', "gaps_only_at_round_3_are_accepted"),
+ ("run_seat.py", '    taken = standing_accept(slice_id)\n    if taken:\n        return 0\n', '    taken = False\n    if taken:\n        return 0\n', "gaps_only_at_round_3_are_accepted"),
  ("resume.py", '    if rnd < rule["from_round"]:\n', '    if False:\n', "gaps_only_at_round_2_go_round"),
  ("resume.py", '    if faults or other:\n', '    if other:\n', "fault_and_a_gap_go_round"),
  # LINE_FIXES_5_BRIEF.md, D: no fifth round without the scout's table
@@ -414,6 +414,14 @@ M = [
  ("merge_slice.py", '        if both:  # 9:', '        if False:  # 9:', "branch_changes_still_refuses_before_the_gate"),
  ("merge_slice.py", '        if busy is None:\n            return "no merge is running."', '        if True:\n            return "no merge is running."', "wait_idle_returns_when_the_merge_ends"),
  ("merge_slice.py", '        if time.time() >= end:\n            raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes.")', '        if False:\n            raise Refused(f"a merge ({busy}) is still running after {minutes:g} minutes.")', "wait_idle_says_which_merge_still_runs"),
+ # the owner's word of 21 November, 17: a standing accept a lock refuses is held, never lost
+ ("run_seat.py", '        except resume.Busy as e:\n', '        except ZeroDivisionError as e:\n', "lock_refuses_is_held"),
+ ("run_seat.py", '            time.sleep(resume.ms.WAIT_POLL_SECONDS)\n            continue\n', '            return False\n', "lock_refuses_is_held"),
+ ("resume.py", '        raise Busy(f"another resume.py action on {slice_id} is running.', '        raise Refused(f"another resume.py action on {slice_id} is running.', "lock_refuses_is_held"),
+ ("resume.py", '        elif busy in (slice_id, "?"):\n            raise Busy(', '        elif busy in (slice_id, "?"):\n            raise Refused(', "lock_refuses_is_held"),
+ ("run_seat.py", '    if taken is None:  # held', '    if False:  # held', "held_past_the_limit"),
+ ("run_seat.py", '            if time.monotonic() >= until:\n', '            if False:\n', "held_past_the_limit"),
+ ("run_seat.py", '        except resume.Busy as e:\n', '        except resume.Refused as e:\n', "refused_by_its_rule_is_not_held"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

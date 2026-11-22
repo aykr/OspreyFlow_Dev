@@ -77,6 +77,11 @@ class Refused(Exception):
     pass
 
 
+class Busy(Refused):
+    """Refused by a lock alone (a merge whose record names no slice or names this one, or another resume.py action on
+    the slice): nothing about the action is wrong, and it can be tried again when the lock frees."""
+
+
 def today() -> str:
     return time.strftime("%Y-%m-%d", time.gmtime())
 
@@ -746,12 +751,15 @@ def locks(slice_id: str, action: str) -> list:
     except ms.Refused:
         busy = ms.merging()
         if busy is None:  # it ended between the two looks
-            held.append(ms.lock())
+            try:
+                held.append(ms.lock())
+            except ms.Refused as e:
+                raise Busy(str(e)) from None
         elif action not in DURING_MERGE:
-            raise Refused(f"another merge is running ({busy}): {action} waits for it (only {', '.join(DURING_MERGE)}, on "
+            raise Busy(f"another merge is running ({busy}): {action} waits for it (only {', '.join(DURING_MERGE)}, on "
                           "another slice, go on meanwhile). Nothing changed.")
         elif busy in (slice_id, "?"):
-            raise Refused(f"another merge is running ({slice_id if busy == slice_id else 'of a slice its record does not name'}"
+            raise Busy(f"another merge is running ({slice_id if busy == slice_id else 'of a slice its record does not name'}"
                           f"): {action} on {slice_id} waits for it. Nothing changed.")
         else:
             global MERGE_RUNNING
@@ -766,7 +774,7 @@ def locks(slice_id: str, action: str) -> list:
         fh.close()
         for h in held:
             h.close()
-        raise Refused(f"another resume.py action on {slice_id} is running. Nothing changed.")
+        raise Busy(f"another resume.py action on {slice_id} is running. Nothing changed.")
     return [*held, fh]
 
 

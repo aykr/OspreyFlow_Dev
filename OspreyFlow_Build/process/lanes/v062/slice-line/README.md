@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (492 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (380 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (496 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (387 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -255,6 +255,7 @@ says that cost is a list-price estimate, not a bill.
 - **Found on 21 November** (8): `records` ignores a slices.tsv change an unapplied refreeze line covers (and leaves slices.tsv to the refreeze), and the refreeze leaves other uncommitted briefs under slices/ alone; `clear-stop` is refused while a refreeze line waits; `add-round` on a slice refused by the gate names `send-back`; the guard reads a chain's line-script runs and simple variables apart (and refuses a write into a variable it cannot resolve).
 - **The run's one date** (9): the line's suite takes today's date once (`TEST_TODAY`), and the scripts it runs read that date, so a run that crosses 00:00 UTC no longer writes yesterday's line and reads today's.
 - **The night's faults** (9): a merge is no longer held by the conductor's own uncommitted records (an uncommitted file the branch changes, or anything else uncommitted outside the records folder, still refuses, before the gate); `merge_slice.py wait-idle [--minutes N]` waits on the merge lock itself (no `pgrep` that matches its own command line).
+- **A standing accept a lock refuses is held, never lost** (the owner, 21 November 2026; IS5a0, PL11): when `run_seat.py`'s standing accept is refused by a lock alone (`resume.Busy`: a merge whose record names no slice, or another resume.py action on the slice), it is tried again each time the lock may have freed, before any other round starts. Still held after 180 minutes, the slice stops (no round started) and the stop says to run `resume.py <ID> accept` when the lock frees. A refusal by the rule itself goes on at once, as before.
 
 ## Files outside the repository
 

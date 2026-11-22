@@ -496,8 +496,11 @@ def verifier(slice_id: str) -> int:
         board()
         print(f"{slice_id}: the verifier passed {tip[:10]}. The conductor runs merge_slice.py merge {slice_id}.")
         return 0
-    if standing_accept(slice_id):
+    taken = standing_accept(slice_id)
+    if taken:
         return 0
+    if taken is None:  # held behind a lock past the limit: stopped for the conductor, never another round
+        return 1
     if st["round"] >= st["rounds_limit"]:
         first = record["findings"][0]["what"] if record["findings"] else "no verdict"
         stop_slice(slice_id, f"findings after {st['round']} round(s) ({kinds_said(record['kinds'])}; first: "
@@ -523,18 +526,40 @@ def self_clear(slice_id: str) -> bool:
     return True
 
 
-def standing_accept(slice_id: str) -> bool:
+#: How long a standing accept that a lock refuses is held, tried again each time the lock may have freed, before the
+#: slice stops for the conductor (minutes; the owner's word of 21 November 2026: held, never lost).
+STANDING_HOLD_MINUTES = 180
+
+
+def standing_accept(slice_id: str) -> bool | None:
     """The owner's standing accept (standing.tsv; resume.py accept), tried after a verifier record with findings; it
-    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit)."""
+    says why when it does not accept, and the slice then goes on as before (another round, or stopped at the limit).
+    Refused by a lock alone (resume.Busy), it is held and tried again when the lock frees, before any other round; still
+    held after STANDING_HOLD_MINUTES, the slice stops (None) and the conductor runs resume.py <ID> accept later."""
     import resume  # here, not at the top: resume.py imports this module
-    try:
-        said = resume.act(slice_id, "accept", standing_only=True)
-    except (resume.Refused, resume.ms.Refused) as e:
-        print(f"{slice_id}: not accepted on the standing word: {e}")
-        return False
-    board()
-    print("\n".join(said))
-    return True
+    minutes = float(os.environ.get("OSPREY_STANDING_HOLD_MINUTES") or STANDING_HOLD_MINUTES)
+    until = None
+    while True:
+        try:
+            said = resume.act(slice_id, "accept", standing_only=True)
+        except resume.Busy as e:
+            if until is None:
+                until = time.monotonic() + minutes * 60
+                print(f"{slice_id}: the standing accept is held: {e} It is tried again when the lock frees, before any "
+                      "other round.", flush=True)
+            if time.monotonic() >= until:
+                stop_slice(slice_id, f"the owner's standing accept was held {minutes:g} minutes behind a lock and the "
+                                     f"lock is still held ({e}); no other round was started. When it frees, the "
+                                     f"conductor runs resume.py {slice_id} accept (the standing word).")
+                return None
+            time.sleep(resume.ms.WAIT_POLL_SECONDS)
+            continue
+        except (resume.Refused, resume.ms.Refused) as e:
+            print(f"{slice_id}: not accepted on the standing word: {e}")
+            return False
+        board()
+        print("\n".join(said))
+        return True
 
 
 def conductor_usage(session: str, account: str) -> None:
