@@ -121,6 +121,29 @@ def git(args: list, cwd: str) -> str:
     return p.stdout.rstrip()
 
 
+#: Three checks the merge's full gate runs that a slice's own checks did not (the owner's file 005, 22 November 2026:
+#: five merges refused for them, CO1, IS5a twice, SE6b, SE8c). The line runs them at the start and at every stop, in the
+#: builder's worktree, so a builder sees them red in its own round: the owner's word for these three and no others. The
+#: line's own step, not the slice's frozen row: a slice started before them meets them at its next stop.
+PROJECT_CHECKS_REAL = (("route-coverage-check", "make -C OspreyFlow_Build route-coverage-check"),
+                       ("test-file-coverage-check", "make -C OspreyFlow_Build test-file-coverage-check"),
+                       ("mypy", "cd OspreyFlow_Core && .venv/bin/mypy packages services harness"))
+PROJECT_CHECKS = PROJECT_CHECKS_REAL
+
+
+def project_checks(wt: str, slot=None) -> tuple:
+    """(problems, results) of the three project checks in the worktree (005)."""
+    problems, results = [], []
+    for name, cmd in PROJECT_CHECKS:
+        t0 = time.monotonic()
+        code, out = run(cmd, wt, slot, name)
+        results.append({"name": name, "command": cmd, "exit": code, "seconds": round(time.monotonic() - t0)})
+        if code != 0:
+            problems.append("RED: " + name + " (exit " + str(code) + "), a check the merge's full gate runs (the owner's "
+                            "file 005: the line runs it at every stop): " + cmd + "\n" + failures_only(out))
+    return problems, results
+
+
 CORE = "OspreyFlow_Core/"
 TOOLS = "OspreyFlow_Build/tools/"
 JS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
@@ -247,6 +270,10 @@ def main() -> int:
         if code != 0:
             problems.append("RED: scans (exit " + str(code) + "): the pure tests that walk the files this slice "
                             "touches (scan_map.tsv): " + ", ".join(scans) + "\n" + failures_only(out))
+
+    pp, pr = project_checks(wt, slot)  # the owner's file 005: three checks the full gate runs, at every stop
+    problems += pp
+    results += pr
 
     try:  # LINE_FIXES_5_BRIEF.md, 4: CI's lint and the scan map, on what the branch changed
         lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)

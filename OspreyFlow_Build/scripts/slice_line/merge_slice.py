@@ -1100,6 +1100,57 @@ class Progress:
                 pass
 
 
+#: A failed make target in a log, as make prints it ("make: *** [target] Error 2", "make[1]: *** [target] Error 1").
+MAKE_FAILED = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[([^\]]+)\] Error \d+")
+REFUSALS = "refusals.tsv"
+
+
+def refusal_cause(words: str, log: Path) -> str:
+    """A merge refusal's cause in a few words (the owner's file 005): for the full gate, the make targets that failed."""
+    for needle, cause in (("in the records folder alone", "a records-only conflict"),
+                          ("conflicts with main", "a conflict with main"),
+                          ("never red", "the acceptance was never red"),
+                          ("acceptance is red on the merge result", "the acceptance, red on the merge result"),
+                          ("checks is red on the merge result", "the checks, red on the merge result"),
+                          ("scan the files this slice touches", "the scans"),
+                          ("(network)", "the network"),
+                          ("protected paths", "a protected path"),
+                          ("no verifier", "no verifier pass")):
+        if needle in words:
+            return cause
+    if "full gate is red" in words:
+        try:
+            text = log.read_text(errors="replace")
+        except OSError:
+            text = ""
+        targets = list(dict.fromkeys(m.group(1) for ln in gate_part(text) if (m := MAKE_FAILED.match(ln))))
+        targets = [t for t in targets if t not in ("ci", "test")] or targets
+        return "the full gate: " + (", ".join(targets[:3]) if targets else "a failing test")
+    return "another refusal"
+
+
+def record_refusal(slice_id: str, tip: str, cause: str) -> None:
+    f = c.DATA / REFUSALS
+    if not f.exists():
+        f.write_text("at\tslice\ttip\tcause\n")
+    with f.open("a") as fh:
+        fh.write(f"{c.now()}\t{slice_id}\t{tip}\t{cause}\n")
+
+
+def refusal_counts() -> dict:
+    """How many merges were refused for each cause (refusals.tsv), most first."""
+    out: dict = {}
+    try:
+        lines = (c.DATA / REFUSALS).read_text().splitlines()[1:]
+    except OSError:
+        return out
+    for ln in lines:
+        parts = ln.split("\t")
+        if len(parts) >= 4:
+            out[parts[3]] = out.get(parts[3], 0) + 1
+    return dict(sorted(out.items(), key=lambda kv: -kv[1]))
+
+
 def server_hold(slice_id: str) -> str | None:
     """Why the slice is not given the slot (server_gate.slot_hold), for its branch's tip; None when nothing holds it."""
     frozen = c.read_json(c.rec_dir(slice_id) / "frozen.json") or {}
@@ -1397,6 +1448,12 @@ def merge(slice_id: str) -> dict:
     except Refused as e:
         c.set_state(slice_id, last_merge_refusal=c.now())
         prog.finish("refused", str(e))
+        try:  # the owner's file 005: each refusal's cause in a few words, counted by cause on the board
+            cause = refusal_cause(str(e), log)
+            c.set_state(slice_id, last_refusal_cause=cause)
+            record_refusal(slice_id, prog.rec.get("tip") or "", cause)
+        except Exception:  # noqa: BLE001 -- best effort: a refusal is never changed by its bookkeeping
+            pass
         try:  # item 3: the slices the server stacked on this one are not counted; they go to the server again
             if prog.rec.get("tip"):
                 server_gate.stack_refused(slice_id, prog.rec["tip"])

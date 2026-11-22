@@ -106,6 +106,8 @@ def start(slice_id: str) -> dict:
                              f"The worktree was removed. See {log}")
     hashes = dry_run.builder_shaped(wt)[1]
     problems = dry_run.checks_in_tree(row, wt, slot, log)
+    if not problems:  # the owner's file 005: the three project checks the full gate runs, from the start
+        problems = dry_run.stop_check.project_checks(str(wt), slot)[0]
     left = [ln for ln in c.git(["status", "--porcelain"], wt).splitlines()
             if not ln[3:].startswith(("OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/"))]
     if not problems and left:

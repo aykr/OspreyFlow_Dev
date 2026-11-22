@@ -92,6 +92,18 @@ STAND_IN_RERUN = """def _stand_in_rerun(t, l, tests, targets):
 
 SERVER_RERUN = _stand_in_rerun"""
 
+#: The three project checks (stop_check.PROJECT_CHECKS, the owner's file 005), stood in in both copies alike: each
+#: exits TEST_PROJECT_<NAME>'s code (ROUTE_COVERAGE_CHECK, TEST_FILE_COVERAGE_CHECK, MYPY; 0 when unset) and appends its
+#: name to TEST_PROJECT_SEES.
+STAND_IN_PROJECT = ("PROJECT_CHECKS = tuple((n, 'echo ' + n + ' >> \"${TEST_PROJECT_SEES:-/dev/null}\"; exit ${TEST_PROJECT_'"
+                    " + n.upper().replace('-', '_') + ':-0}') for n, _ in PROJECT_CHECKS_REAL)")
+
+
+def stand_in_project_checks(f: Path) -> None:
+    text = f.read_text()
+    if "PROJECT_CHECKS = PROJECT_CHECKS_REAL" in text:
+        f.write_text(text.replace("PROJECT_CHECKS = PROJECT_CHECKS_REAL", STAND_IN_PROJECT))
+
 @pytest.fixture
 def world(tmp_path):
     """A throwaway repository shaped like this one, its bare origin, a fake home and a fake claude."""
@@ -102,6 +114,7 @@ def world(tmp_path):
     for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv"):
         if (SRC / f).exists():
             shutil.copy(SRC / f, data / "bin" / f)
+    stand_in_project_checks(data / "bin" / "stop_check.py")
     (data / "emails.sha256").write_text(hashlib.sha256(OWNER.encode()).hexdigest() + "\n")
     # gh, as the line calls it (tests/fake_gh.py): FAKE_GH_RUNS, every run newest first; or FAKE_GH_COMPLETED, the
     # latest completed run's JSON list, and FAKE_GH_LATEST, the newest run of any status; FAKE_GH_EXIT: a failing gh
@@ -124,6 +137,7 @@ def world(tmp_path):
     repo = tmp_path / "repo"
     lines = repo / "OspreyFlow_Build/scripts/slice_line"
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    stand_in_project_checks(lines / "stop_check.py")
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
     gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE)
                     .replace("SERVER_RERUN = rerun_named", STAND_IN_RERUN))

@@ -271,6 +271,7 @@ says that cost is a list-price estimate, not a bill.
 - **The shadow** (004, 4): each merge records the server's result beside the Mac's whole gate for the same candidate: agree, differ or no comparison (`server-shadow-<run>.json`, `server-shadow.tsv`).
 - **The board and the server** (004, 5): each waiting slice's server result (running, green, red and the test, none; run again; a rerun's result), what each merge took from the server, and the shadow's tally.
 - **`merge_slice.py server-report`** (004, 6): the Mac-only remainder's and the whole merge's time with the green counted, the same for the whole gate, refusals caught before the slot, environment differences, the shadow.
+- **Three project checks at every stop** (005): `route-coverage-check`, `test-file-coverage-check` and `mypy` run at the start and at every stop in the builder's worktree, as the line's own step (a slice started before meets them at its next stop, no refreeze). A refused merge records its cause; the board counts refusals by cause.
 
 ## Files outside the repository
 

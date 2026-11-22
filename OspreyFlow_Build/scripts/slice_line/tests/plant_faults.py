@@ -517,6 +517,15 @@ M = [
  ("server_gate.py", '            caught += r.get("result") == "red"', '            caught += 1', "averages_and_the_refusals"),
  ("server_gate.py", '            gate = next((x["seconds"] for x in prog.get("done") or [] if x.get("name") == GATE_STEP), None)', '            gate = None', "averages_and_the_refusals"),
  ("server_gate.py", '''        prog = c.read_json(d / f"merge-progress-{run[len('merge-'):-len('.log')]}.json") if run.endswith(".log") else None''', '''        prog = c.read_json(d / "merge-progress.json")''', "averages_and_the_refusals"),
+ # the owner's file 005: three project checks at every stop and at the start; a refusal's cause, counted
+ ("stop_check.py", '    pp, pr = project_checks(wt, slot)  # the owner', '    pp, pr = [], []  # the owner', "every_stop_runs_the_three"),
+ ("stop_check.py", '        if code != 0:\n            problems.append("RED: " + name + " (exit "', '        if False:\n            problems.append("RED: " + name + " (exit "', "every_stop_runs_the_three"),
+ ("slice_start.py", '        problems = dry_run.stop_check.project_checks(str(wt), slot)[0]', '        problems = []', "mypy_red_on_main"),
+ ("merge_slice.py", '        targets = list(dict.fromkeys(m.group(1) for ln in gate_part(text) if (m := MAKE_FAILED.match(ln))))', '        targets = []', "refused_merge_says_which"),
+ ("merge_slice.py", '("conflicts with main", "a conflict with main"),', '("conflicts with main!", "a conflict with main"),', "conflict_is_counted"),
+ ("merge_slice.py", '            record_refusal(slice_id, prog.rec.get("tip") or "", cause)', '            pass', "refused_merge_says_which"),
+ ("board.py", '        if by_cause:  # the owner', '        if False:  # the owner', "refused_merge_says_which"),
+ ("board.py", '        if cause and (st.get("last_merge_refusal") or "") >= (st.get("refused_at") or "~"):', '        if False:', "refused_merge_says_which"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

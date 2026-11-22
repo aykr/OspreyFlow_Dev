@@ -278,6 +278,10 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         state, source = "stopped", "merge refusal"
         note = (f"refused by the gate: {st.get('refused_tests', 0)} tests" if st.get("refused_for") == "gate"
                 else st.get("note") or "refused by the merge script") + "; resume.py send-back returns it to the builder"
+        cause = st.get("last_refusal_cause")  # the owner's file 005: which check, in a few words; this refusal's only
+        if cause and (st.get("last_merge_refusal") or "") >= (st.get("refused_at") or "~"):
+            head, _, rest = note.partition("; ")
+            note = f"{head} ({cause}); {rest}"
     elif tip and verify and verify.get("verdict") == "pass":
         state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
     elif tip and tests and tests.get("green"):
@@ -501,6 +505,9 @@ def main() -> int:
         if any(t.values()):
             print(f"server shadow: {t['agree']} agree, {t['differ']} differ, {t['no comparison']} no comparison, "
                   f"{t['counted']} counted")
+        by_cause = __import__("merge_slice").refusal_counts()
+        if by_cause:  # the owner's file 005: the next pattern is seen after two refusals, not five
+            print("merge refusals by cause: " + ", ".join(f"{k} {v}" for k, v in by_cause.items()))
         print("slices merged of those cut, per build: " + ", ".join(f"{b} {d['said']}" for b, d in sorted(counts.items())))
         for acct in sorted({r['account'] for r in rows if r['account']} | {"default", "sol"}):
             near, stop = c.near_limit(acct), c.account_stop(acct)
