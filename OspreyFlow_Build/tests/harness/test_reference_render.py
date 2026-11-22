@@ -18,25 +18,47 @@ it; `small-govuk` is pinned beside it because a deployment on a server of one's 
 with HTTPS. Nothing here reads, starts or changes that deployment: it is a render in memory from
 synthetic settings.
 
-**The chart is pinned by its sources.** `helm template` output is not stored: it needs the `helm`
-binary, which a pure test does not assume (`make chart-check` and `make cp-policy-check` template
-the chart). So each Helm shape (`cluster`, `cloud-platform`, `cloud-platform-poc`) stores, beside
-its
-values, a copy of the chart's own files under `chart/` (`Chart.yaml`, the chart's default
-`values.yaml`, `.helmignore` and every template), byte for byte and in the manifest with their
-SHA-256: what `helm template` renders from, so a template that changes (a workload, an Ingress
-path, a NetworkPolicy) is a changed file, named. `osprey.yaml`
-(the input) and `.rendered` (the list of what was written) are not rendered content. There is no
-`deployment.json` among the files: the renderers write `glass.json` (ADR-114 Amendment 4), which is
-stored; `/deployment.json` is what the Glass is served from it.
+**The chart is pinned by its sources, as they render with the page service off.** `helm template`
+output is not stored: it needs the `helm` binary, which a pure test does not assume (`make
+chart-check` and `make cp-policy-check` template the chart). So each Helm shape (`cluster`,
+`cloud-platform`, `cloud-platform-poc`) stores, beside its values, the chart's own files under
+`chart/` (`Chart.yaml`, the chart's default `values.yaml`, `.helmignore` and every template), byte
+for byte and in the manifest with their SHA-256: what `helm template` renders from, so a template
+that changes (a workload, an Ingress path, a NetworkPolicy) is a changed file, named. **Stored as
+the chart is with `pages.enabled` off** (`tools.reference_render.chart_off_view`, which reads one
+guard and is not a Helm renderer): a block of a template opened by `{{- if .Values.pages.enabled }}`
+on a line of its own and closed by `{{- end }}` on one of its own, with no `else`, is not in the
+stored file; a template that is nothing but such a block is not a file; a top-level `pages:` section
+of the chart's default `values.yaml` that says `enabled: false` is not there. So the chart PL7a2b
+changes to add the page service, behind that guard, is the reference unchanged; the same block
+unguarded, guarded by anything else (`if .Values.pages` is true of a mapping that says `enabled:
+false`), under an `else`, or switched on by default, is red (each case is below). That is the
+guard's name from the owner's ruling of 21 November 2026 (answer 6: `pages.enabled`); if PL7a2b
+names it otherwise, the guard it uses is a deliberate change to `chart_off_view`, in a diff he
+reads. **What this cannot see** without `helm`: a template that renders a page service while off
+by a guard it does not read (a `lookup`, an `include` of a helper), or a workload the renderer
+writes into the values (that one is in the stored values, and is red).
 
-**No network, no docker, no real secret, no clock.** The renders take their digests from a hash of
-the image reference (`tools.reference_render.resolver`: the registry is never asked) and have the
-commit, the version and the design tokens pinned (`pinned_inputs`: they are read from the checkout,
-and would otherwise move with every commit). A render reads no clock and mints no secret (`apply`
-mints them after it), so the stored `deployment.env` names variables and holds no value; the last
-case below scans every stored file for a credential-shaped string, an address, a real host and a
-cloud account other than the synthetic one, and is shown red on each.
+**The compose shapes' `deployment.env` is the one `apply` writes.** The shapes `local-lite` and
+`small` are rendered through `harness.apply.stage_deployment`, run into a temporary folder with its
+render step given this module's resolver, so the file holds every line `apply` appends to the
+rendered one: the identity provider's addresses, the stores' hosts and the page service's two
+secrets (`OSPREY_PAGES_CLIENT_SECRET`, `OSPREY_PAGES_SESSION_SECRET`), each minted value `PINNED_<n>`
+(numbered by the order the render mints them; not one word, because `harness.cloud_platform` mints
+twice and compares to tell a fixed value from a fresh one). An enable flag added beside them, or
+the two secrets made conditional, is a changed `deployment.env`. `osprey.yaml` (the input, copied)
+and `.rendered` (the list of what was written) are not rendered content and are not stored. There
+is no `deployment.json` among the files: the renderers write `glass.json` (ADR-114 Amendment 4),
+which is stored; `/deployment.json` is what the Glass is served from it.
+
+**No network, no docker, no real secret, no clock; nothing from the shell.** The renders take their
+digests from a hash of the image reference (`tools.reference_render.resolver`: the registry is never
+asked) and have the commit, the version, the design tokens, the minted secrets and the shell's
+`OSPREY_IMAGE_REGISTRY` and `OSPREY_BUILT_FROM_SHA` pinned (`pinned_inputs`: they are read from the
+checkout or the shell, and would otherwise move with every commit or every terminal). A render reads
+no clock; `apply` is given an empty environment, so no provider key or mail password of the shell
+reaches a file. The last cases below scan every stored file for a credential-shaped string, an
+address, a real host and a cloud account other than the synthetic one, and are shown red on each.
 
 **The page-service setting.** Today there is none: `OspreyConfig` has no `pages` section, and no
 renderer reads one. The case `test_the_render_with_no_page_service_setting_equals_the_reference`
@@ -67,12 +89,13 @@ is what the owner reads):
 **What this test reads.** The folder `OspreyFlow_Build/tests/fixtures/reference_render/` (each
 shape's folder, by a recursion over those folders only), the cloud-platform fixtures
 `OspreyFlow_Build/tests/fixtures/cloud_platform/{development,poc}.yaml` (and the platform settings
-they name, through the renderer), the chart `OspreyFlow_Core/deploy/helm/ospreyflow/` (one recursion
-over that folder, its files only, for the Helm shapes), the design tokens
-`OspreyFlow_Core/packages/design/tokens.css`
-(read once, to plant a change to them in a temporary copy, and to show no fixture holds them), and,
-by importing the renderers, `OspreyFlow_Core/harness/` and
-`OspreyFlow_Core/packages/schemas/`. It walks no other folder.
+they name, through the renderer), the chart `OspreyFlow_Core/deploy/helm/ospreyflow/` (one
+recursion over that folder, its files only, for the Helm shapes), the design tokens
+`OspreyFlow_Core/packages/design/tokens.css` (read once, to plant a change to them in a temporary
+copy, and to show no fixture holds them), and, by importing the renderers,
+`OspreyFlow_Core/harness/` and `OspreyFlow_Core/packages/schemas/`. It writes only to temporary
+folders (the staging folder `stage_deployment` fills, and the copies of the chart and of the
+reference a plant edits). It walks no other folder.
 """
 
 from __future__ import annotations
@@ -82,6 +105,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -514,6 +538,48 @@ def test_a_variable_in_the_shell_moves_no_fixture(
     assert os.environ[variable] == "registry.other.example/elsewhere"
 
 
+@contextlib.contextmanager
+def _pins_with(extra: Callable[[], Any]) -> Any:
+    """The real pins, then `extra` on top of them (a plant that undoes one): `ref.pinned_inputs`
+    replaced for the length of the block."""
+    real = ref.pinned_inputs
+
+    @contextlib.contextmanager
+    def undone() -> Any:
+        with real(), extra():
+            yield
+
+    with mock.patch.object(ref, "pinned_inputs", undone):
+        yield
+
+
+@pytest.mark.parametrize(
+    ("shape", "brand"), [("small", "ospreyflow"), ("cluster", "govuk"), ("cloud-platform", "govuk")]
+)
+def test_the_registry_pin_is_what_keeps_the_shell_out(shape: str, brand: str) -> None:
+    """Shown red (rule 15): the same render with the variable put back after the pin is not the
+    reference, naming the image line; and clean again with the pin as it is."""
+    assert ref.differences(shape, brand, ref.render_shape(shape, brand)) == []
+    with _pins_with(lambda: mock.patch.dict(os.environ, {"OSPREY_IMAGE_REGISTRY": "r.example/x"})):
+        found = ref.differences(shape, brand, ref.render_shape(shape, brand))
+    message = "\n".join(found)
+    assert "/x" in message, message  # the registry as each shape writes it
+    assert ref.differences(shape, brand, ref.render_shape(shape, brand)) == []
+
+
+@pytest.mark.parametrize("shape", COMPOSE)
+def test_the_secret_pin_is_what_keeps_a_minted_value_out(shape: str) -> None:
+    """Shown red (rule 15): with the generator put back after the pin, `deployment.env` is not the
+    reference, naming a secret's line (the case above is the same without the plant)."""
+    import secrets
+
+    with _pins_with(lambda: mock.patch.object(secrets, "token_urlsafe", lambda *_a: "x" * 43)):
+        found = ref.differences(shape, "govuk", ref.render_shape(shape, "govuk"))
+    message = "\n".join(found)
+    assert f"{shape}-govuk/deployment.env: first differing line" in message, message
+    assert "_SECRET=" in message or "_PASSWORD=" in message, message
+
+
 @pytest.mark.parametrize("brand", ref.BRANDS)
 @pytest.mark.parametrize("shape", COMPOSE)
 def test_a_minted_secret_is_pinned(shape: str, brand: str, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -536,15 +602,19 @@ def test_the_stored_deployment_env_is_the_one_apply_writes(shape: str, brand: st
     from harness.apply import PAGES_CLIENT_SECRET_KEY, PAGES_SESSION_SECRET_KEY
 
     env = ref.read_folder(REFERENCE / ref.folder_name(shape, brand))["deployment.env"].decode()
+    for name in (PAGES_CLIENT_SECRET_KEY, PAGES_SESSION_SECRET_KEY, "OSPREY_OIDC_CLIENT_SECRET"):
+        assert re.search(rf"(?m)^{name}=PINNED_\d+$", env), (
+            f"{shape}-{brand} deployment.env: {name}"
+        )
     for line in (
-        f"{PAGES_CLIENT_SECRET_KEY}={ref.PINNED_SECRET}\n",
-        f"{PAGES_SESSION_SECRET_KEY}={ref.PINNED_SECRET}\n",
-        "OSPREY_OIDC_CLIENT_SECRET=" + ref.PINNED_SECRET + "\n",
         "OIDC_JWKS_URL=http://keycloak:8080/realms/osprey/protocol/openid-connect/certs\n",
         "ARCADEDB_HOST=arcadedb\n",
         "VALKEY_HOST=valkey\n",
     ):
         assert line in env, f"{shape}-{brand} deployment.env lacks {line!r}"
+    # Two names for one password hold one value, as `apply` writes them.
+    shared = re.search(r"(?m)^OSPREY_ARCADEDB_PASSWORD=(PINNED_\d+)$", env)
+    assert shared is not None and env.count(shared[1] + "\n") == 2
 
 
 @pytest.mark.parametrize("brand", ref.BRANDS)
@@ -553,7 +623,7 @@ def test_the_stored_deployment_env_is_the_one_apply_writes(shape: str, brand: st
     ("replacement", "line_has"),
     [
         # A page-service secret made conditional (gone while the service is off).
-        (lambda real: "", "PAGES_CLIENT_SECRET_KEY"),
+        (lambda real: "", "OSPREY_PAGES_CLIENT_SECRET"),
         # A new line, as an enable flag would be, beside the secrets.
         (lambda real: real() + "PAGES_ENABLED=false\n", "PAGES_ENABLED"),
     ],
@@ -688,6 +758,12 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
             lambda t: t + "{{- if .Values.pages.enabled }}x{{- end }}\n",
             "pages.enabled",
         ),
+        # An `else`: what is in it renders while the setting is off, so the block is not removed.
+        (
+            "templates/workloads.yaml",
+            lambda t: t + GUARD + A_PAGES_WORKLOAD + "{{- else }}\n  y: 2\n{{- end }}\n",
+            "{{- if .Values.pages.enabled }}",
+        ),
         # A guard that is never closed: nothing is removed.
         (
             "templates/workloads.yaml",
@@ -697,7 +773,14 @@ def test_a_whole_template_file_under_the_guard_is_not_a_file_while_it_is_off(
         # Switched on in the chart's own defaults: a page service rendered by default.
         ("values.yaml", lambda t: t + "pages:\n  enabled: true\n", "'pages:'"),
     ],
-    ids=["a section guard", "the body after the end", "one line", "never closed", "on by default"],
+    ids=[
+        "a section guard",
+        "the body after the end",
+        "one line",
+        "an else",
+        "never closed",
+        "on by default",
+    ],
 )
 def test_a_pages_change_that_renders_while_off_is_red(
     shape: str,
@@ -859,6 +942,8 @@ _PLANTS = [
     ('Authorization: "' + "Bear" + "er " + "x1y2z3w4" * 3 + '"\n', "credential-shaped"),
     ("-----BEGIN " + "RSA PRIVATE" + " KEY-----\n", "credential-shaped"),
     ("      LITELLM_MASTER_KEY: " + "AK" + "IA" + "Q" * 16 + "\n", "credential-shaped"),
+    ("OSPREY_LITELLM_MASTER_SECRET=" + "sk" + "-" + "a1b2c3d4" * 3 + "\n", "credential-shaped"),
+    ("OSPREY_PAGES_CLIENT_SECRET=" + "abcdef0123456789" + "\n", "credential-shaped"),
     ("contact: someone" + "@" + "real-organisation.co.uk\n", "address"),
     ("origin: https://portal.not-an-example.co.uk\n", "host"),
     ("image: 210987654321.dkr.ecr.eu-west-2.amazonaws.com/api:1\n", "cloud account"),
@@ -891,6 +976,16 @@ def test_the_scan_is_red_on_a_host_written_without_a_scheme(real: str, planted: 
     found = ref.stored_text_findings({**values, "values.yaml": swapped.encode("utf-8")})
     assert found, f"{planted!r} was not seen"
     assert all("host" in line for line in found), found
+
+
+def test_the_scan_leaves_the_pinned_values_and_identifiers_alone() -> None:
+    """Its own green for the `deployment.env` lines: a pinned value (the secrets `apply` mints are
+    `PINNED_<n>` here) and an identifier whose name has `TOKEN` in it are not findings."""
+    ok = (
+        "OSPREY_OIDC_CLIENT_SECRET=PINNED_3\nOSPREY_LITELLM_MASTER_SECRET=sk-PINNED_12\n"
+        "OIDC_TOKEN_EXCHANGE_CLIENT_ID=osprey-conduit\n"
+    )
+    assert ref.stored_text_findings({"deployment.env": ok.encode()}) == []
 
 
 def test_the_scan_leaves_the_hosts_the_renderers_write_alone() -> None:

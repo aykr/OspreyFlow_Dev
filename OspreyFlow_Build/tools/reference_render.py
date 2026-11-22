@@ -43,9 +43,12 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import itertools
 import json
+import os
 import re
 import sys
+import tempfile
 import unittest.mock as mock
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -70,6 +73,15 @@ BRANDS = ("ospreyflow", "govuk")
 PINNED_SHA = "0123456789abcdef0123456789abcdef01234567"
 PINNED_VERSION = "dev-0123456"
 PINNED_TOKENS = ":root {\n  --reference-render-token: pinned;\n}\n"
+#: What every secret `apply` mints is, in the stored `deployment.env`: `PINNED_` and the number of
+#: the minting in that render (an ALL-CAPS word, which the stored-file scan reads as a reference
+#: and not a value). Numbered, not one word: `harness.cloud_platform` mints twice and compares, to
+#: tell a fixed first value from a fresh password, and one word would make every password fixed.
+PINNED_SECRET_PREFIX = "PINNED_"
+#: Read by the renderers from the process environment, and so removed for the length of a render:
+#: `OSPREY_IMAGE_REGISTRY` names every image the deployment owns (`harness.render._owned`), and
+#: `OSPREY_BUILT_FROM_SHA` is what `git_sha` falls back to outside a checkout.
+SHELL_INPUTS = ("OSPREY_IMAGE_REGISTRY", "OSPREY_BUILT_FROM_SHA")
 
 #: What the GOV.UK demo's own configuration sets, with synthetic words. The demo is a Lite
 #: deployment (a named one, `govuk`, on this Mac at an `http://` address on a `.localhost` name), so
@@ -140,15 +152,25 @@ def resolver(reference: str) -> str:
 
 @contextlib.contextmanager
 def pinned_inputs() -> Iterator[None]:
-    """Fixes the commit, the version and the design tokens a render reads (see the module's
-    docstring). Patches the functions where the renderers look them up, for the length of the block;
-    nothing on disk changes."""
+    """Fixes everything a render reads that is not the configuration (see the module's docstring):
+    the commit, the version, the design tokens, the minted secrets, and the shell's variables that
+    name images. Patches the functions where the renderers look them up, and the environment, for
+    the length of the block; both are as they were after it, and nothing on disk changes."""
+    mint = itertools.count(1)
     with (
         mock.patch("harness.render.git_sha", lambda *_a, **_k: PINNED_SHA),
         mock.patch("harness.release.checkout_version", lambda *_a, **_k: PINNED_VERSION),
         mock.patch("harness.cluster.read_tokens", lambda *_a, **_k: PINNED_TOKENS),
         mock.patch("harness.keycloak_theme.read_tokens", lambda *_a, **_k: PINNED_TOKENS),
+        # `harness.realm.generate_client_secret` and `harness.reporting` both call this one. A
+        # counter, started again for each render: the same sequence on every machine.
+        mock.patch(
+            "secrets.token_urlsafe", lambda *_a, **_k: f"{PINNED_SECRET_PREFIX}{next(mint)}"
+        ),
+        mock.patch.dict(os.environ),
     ):
+        for name in SHELL_INPUTS:
+            os.environ.pop(name, None)
         yield
 
 
@@ -156,45 +178,173 @@ def render_files(config: Any, *, render_fn: Callable[..., Any] | None = None) ->
     """Every file the shape writes, keyed by its path in the deployment's folder, as bytes (UTF-8,
     as `harness.render.write` writes them).
 
-    That is `harness.render.render`'s own artefacts, and for a compose shape the three files
-    `harness.apply.stage_deployment` writes beside them from the same configuration: the realm
-    import, the model gateway's routing table and the sign-in theme. `deployment.env` is the
-    rendered one; the secrets `apply` appends to it are minted after the render and are not here.
-    For a Helm shape, the chart's own sources (`chart_files`: `Chart.yaml`, the chart's default
-    `values.yaml`, `.helmignore` and every template) are among the files, under `chart/`.
-    `osprey.yaml` (the input, copied) and `.rendered` (the list of the files) are not rendered
-    content and are not stored."""
-    import harness.keycloak_theme as keycloak_theme
-    from harness.realm import render_realm_json
-    from harness.render import render, render_litellm_config
+    For a compose shape that is what `harness.apply.stage_deployment` leaves in the staging folder,
+    run for real with the render's own step (`render_deployment`) given `render_fn` (default
+    `harness.render.render`) and the pinned resolver: the artefacts of the render, the realm
+    import, the model gateway's routing table, the sign-in theme, and `deployment.env` with every
+    line `apply` appends to it (the identity provider's addresses, the stores' hosts, the page
+    service's two secrets, the reporting and gateway secrets), each minted value pinned to
+    `PINNED_<n>`, numbered by the order the render mints them. `osprey.yaml` (the input, copied)
+    and `.rendered` (the list of the files) are not rendered content and are not stored.
+
+    For a Helm shape: `render`'s own artefacts, and the chart's files as they render with the page
+    service off (`chart_files`), under `chart/`."""
+    from harness.render import render
 
     from schemas.deployment import Profile
 
     with pinned_inputs():
+        if config.profile in (Profile.LOCAL_LITE, Profile.SMALL):
+            return staged_files(config, render_fn or render)
         result = (render_fn or render)(config, resolver=resolver)
         files = {name: text.encode("utf-8") for name, text in result.artefacts.items()}
-        if config.profile in (Profile.LOCAL_LITE, Profile.SMALL):
-            files["realm.json"] = render_realm_json(config, demo_analyst=False).encode("utf-8")
-            files["litellm.yaml"] = render_litellm_config(config).encode("utf-8")
-            # Through the module, inside the block: `pinned_inputs` patches the module's attribute,
-            # and a name imported before it would still be the real function (the real tokens).
-            theme = keycloak_theme.render_login_theme(
-                keycloak_theme.read_tokens(), **keycloak_theme.login_theme_options(config)
-            )
-            for name, text in theme.items():
-                files[f"keycloak-theme/osprey/{name}"] = text.encode("utf-8")
-        else:
-            files.update(chart_files())
+        files.update(chart_files())
     return dict(sorted(files.items()))
 
 
+#: What `stage_deployment` leaves that is not rendered content: the input, copied beside the
+#: compose file, and the list of the files `harness.render.write` wrote.
+_NOT_RENDERED = ("osprey.yaml", ".rendered")
+
+
+def staged_files(config: Any, render_fn: Callable[..., Any]) -> dict[str, bytes]:
+    """`stage_deployment` run into a temporary folder (inside `pinned_inputs`: the caller's block).
+    Its render step is the one place the digest resolver is chosen (it asks the daemon and the
+    registry, `allow_unpinned`), so that step alone is replaced, by the same render with this
+    module's resolver; everything else in `stage_deployment` is the product's own code, and
+    `environ` is passed empty, so no provider key, mail password or organisation secret of the
+    shell can reach a file."""
+    import harness.apply as apply_module
+
+    def render_with_resolver(cfg: Any, out_dir: Path, *, images_from: Path | None) -> Any:
+        result = render_fn(cfg, resolver=resolver)
+        apply_module.write_artefacts(result, out_dir)
+        return result
+
+    with tempfile.TemporaryDirectory(prefix="reference-render-") as scratch:
+        root = Path(scratch)
+        config_path = root / "osprey.yaml"
+        config_path.write_text(f"profile: {config.profile.value}\n", encoding="utf-8")
+        stage = root / "deploy" / "generated" / "reference"
+        with mock.patch.object(apply_module, "render_deployment", render_with_resolver):
+            apply_module.stage_deployment(
+                config,
+                config_path,
+                stage,
+                realm="osprey",
+                demo_analyst=False,
+                images_from=None,
+                previous_env="",
+                environ={},
+            )
+        found = read_folder(stage)
+    return dict(sorted((n, d) for n, d in found.items() if n not in _NOT_RENDERED))
+
+
+#: One line of a template that opens a block (`if`, `range`, `with`, `define`, `block`), one that
+#: closes it, one that is an `else`, and the guard this module reads: the page service's own
+#: setting, `pages.enabled` (the missing entry of the deployment schema, the owner's ruling of 21
+#: November 2026, answer 6), tested alone on a line of its own.
+_BLOCK_OPEN = re.compile(r"^\s*\{\{-?\s*(?:if|range|with|define|block)\b")
+_BLOCK_END = re.compile(r"^\s*\{\{-?\s*end\s*-?\}\}\s*$")
+_BLOCK_ELSE = re.compile(r"^\s*\{\{-?\s*else\b")
+_PAGES_GUARD = re.compile(r"^\s*\{\{-?\s*if\s+\.Values\.pages\.enabled\s*-?\}\}\s*$")
+
+
+def _guarded_block_end(lines: list[str], start: int) -> int | None:
+    """The index of the line that closes the block opened at `start`, or None when it cannot be
+    told: the block is not closed, an open or close is not on a line of its own so the count is
+    off, or the guard has an `else` (what is in it renders while the setting is off). None leaves
+    the block in what is stored, which is the cautious side: it shows as a change."""
+    depth = 0
+    for index in range(start, len(lines)):
+        line = lines[index]
+        if _BLOCK_OPEN.match(line):
+            depth += 1
+        elif _BLOCK_END.match(line):
+            depth -= 1
+            if depth == 0:
+                return index
+        elif depth == 1 and _BLOCK_ELSE.match(line):
+            return None
+    return None
+
+
+def without_pages_guard(text: str) -> str:
+    """A template as it renders with `pages.enabled` off: every block opened by
+    `{{- if .Values.pages.enabled }}` on a line of its own and closed by `{{- end }}` on one of its
+    own, with no `else`, removed. Not a Helm renderer: it understands that one guard and nothing
+    else, and a guard of any other shape (`if .Values.pages`, which is true of a mapping that says
+    `enabled: false`; `if or .Values.pages.enabled ...`; a guard and its end on one line) is left
+    where it is and shows as a changed template."""
+    lines = text.splitlines(keepends=True)
+    kept: list[str] = []
+    index = 0
+    while index < len(lines):
+        end = _guarded_block_end(lines, index) if _PAGES_GUARD.match(lines[index]) else None
+        if end is None:
+            kept.append(lines[index])
+            index += 1
+        else:
+            index = end + 1
+    return "".join(kept)
+
+
+_PAGES_KEY = re.compile(r"^pages:[ \t]*(?:#.*)?$")
+_ENABLED_OFF = re.compile(r"^[ \t]+enabled:[ \t]*false[ \t]*(?:#.*)?$")
+
+
+def without_pages_section_when_off(text: str) -> str:
+    """The chart's default `values.yaml` as it reads with the page service off: a top-level
+    `pages:` section that says `enabled: false`, with the comment lines directly above it and one
+    blank line above those, is not there. A `pages:` section that is on, or does not say, stays."""
+    lines = text.splitlines(keepends=True)
+    for start, line in enumerate(lines):
+        if not _PAGES_KEY.match(line.rstrip("\r\n")):
+            continue
+        end = start + 1
+        while end < len(lines) and (not lines[end].strip() or lines[end][0] in " \t"):
+            end += 1
+        # Blank lines at the end of the section belong to what follows it.
+        while end > start + 1 and not lines[end - 1].strip():
+            end -= 1
+        if not any(_ENABLED_OFF.match(body.rstrip("\r\n")) for body in lines[start + 1 : end]):
+            return text
+        first = start
+        while first > 0 and lines[first - 1].lstrip().startswith("#"):
+            first -= 1
+        if first > 0 and not lines[first - 1].strip():
+            first -= 1
+        return "".join(lines[:first] + lines[end:])
+    return text
+
+
+def chart_off_view(path: str, data: bytes) -> bytes | None:
+    """One chart file as it is with the page service off, or None where it is not a file at all
+    (a template that renders nothing: Helm writes no manifest for it)."""
+    text = data.decode("utf-8")
+    if path.startswith("templates/"):
+        text = without_pages_guard(text)
+        return text.encode("utf-8") if text.strip() else None
+    if path == "values.yaml":
+        return without_pages_section_when_off(text).encode("utf-8")
+    return data
+
+
 def chart_files() -> dict[str, bytes]:
-    """The chart's files, as bytes, keyed `chart/<path in the chart>`. Not rendered (`helm template`
-    needs the `helm` binary, which a pure test does not assume): the sources, which are what
-    `helm template` would render from, so a template that changes (a workload, an Ingress path, a
-    NetworkPolicy) changes the file stored here and the manifest's hash of it. Read by a plain
-    recursion over the one chart folder."""
-    return {f"{CHART_PREFIX}{path}": data for path, data in read_folder(CHART).items()}
+    """The chart's files, as bytes, keyed `chart/<path in the chart>`, as the chart is with the page
+    service off (`chart_off_view`). Not `helm template` output: that needs the `helm` binary, which
+    a pure test does not assume (`make chart-check` and `make cp-policy-check` template the chart).
+    They are the sources `helm template` renders from, so a template that changes (a workload, an
+    Ingress path, a NetworkPolicy) changes the file stored here and the manifest's hash of it; a
+    block under `pages.enabled` is not part of what is stored, so adding one is not a change while
+    the setting is off. Read by a plain recursion over the one chart folder."""
+    files = {}
+    for path, data in read_folder(CHART).items():
+        viewed = chart_off_view(path, data)
+        if viewed is not None:
+            files[f"{CHART_PREFIX}{path}"] = viewed
+    return files
 
 
 def render_shape(shape: str, brand: str, **settings: Any) -> dict[str, bytes]:
@@ -342,17 +492,19 @@ def _prune_empty(folder: Path) -> None:
 
 #: A string shaped like a credential, in the shapes the renderers could emit one: a provider key, a
 #: bearer token, a private key block, a cloud access key, and a secret-named setting given a literal
-#: value (a reference to a variable by `${...}` or by its ALL-CAPS name, `''`, or a Terraform
-#: `random_password` is the right shape).
+#: value (a reference to a variable by `${...}` or by its ALL-CAPS name, `''`, a Terraform
+#: `random_password`, or this module's `PINNED_<n>` is the right shape; a name ending `_ID` is an
+#: identifier, not a secret).
 _SECRET_SHAPES = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{16,}"),
     re.compile(r"\bBearer\s+[A-Za-z0-9._~+/-]{16,}"),
     re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
     re.compile(
-        r"(?im)\b[A-Z_]*(?:PASSWORD|SECRET|TOKEN)[A-Z_]*\s*[:=]\s*['\"]?"
+        r"(?im)\b[A-Z_]*(?:PASSWORD|SECRET|TOKEN)[A-Z_]*(?<!_ID)\s*[:=]\s*['\"]?"
         r"(?![$'\"\s]|random_password|OSPREY_|http|true|false)"
         r"(?!(?-i:[A-Z][A-Z0-9_]*['\"]?[ \t]*$))"
+        r"(?!(?-i:(?:sk-)?PINNED_\d+['\"]?[ \t]*$))"
         r"[A-Za-z0-9+/_=-]{8,}['\"]?[ \t]*$"
     ),
 )
@@ -360,9 +512,9 @@ _SECRET_SHAPES = (
 _PLACEHOLDER_ADDRESSES = ("name@organisation.gov.uk",)
 _ADDRESS = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 _URL_HOST = re.compile(r"\bhttps?://([A-Za-z0-9.-]+)")
-#: A host written bare, as the renderers write the database, cache, search and object-store hosts and
-#: an image registry: a dotted name whose last label is a top-level domain a real host could end in
-#: (the file extensions that are also domains, `.sh`, `.py`, `.md` and `.zip`, are left out).
+#: A host written bare, as the renderers write the database, cache, search and object-store hosts
+#: and an image registry: a dotted name whose last label is a top-level domain a real host could
+#: end in (the file extensions that are also domains, `.sh`, `.py`, `.md` and `.zip`, are left out).
 _BARE_HOST = re.compile(
     r"(?<![\w.-])((?:[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\.)+"
     r"(?:com|org|net|uk|io|gov|edu|int|eu|co|dev|app|cloud|info|biz|us|ie|de|fr|nl|ca|au|in|ai"

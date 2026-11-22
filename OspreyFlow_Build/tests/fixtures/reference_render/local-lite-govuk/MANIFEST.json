@@ -17,8 +17,8 @@
     },
     {
       "path": "deployment.env",
-      "sha256": "38bed987e5304bbe7c5ac6c7b01c2157c9d3cfac23ed048610c7d8356af2689e",
-      "size": 1904
+      "sha256": "115c8ca94cc5484a7f70a912ebe4ed86bb5a885a93689f8268a56005d29ea44f",
+      "size": 3070
     },
     {
       "path": "glass.json",
