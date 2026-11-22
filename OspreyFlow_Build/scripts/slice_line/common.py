@@ -81,7 +81,7 @@ def slice_row(slice_id: str, ref: str | None = "main") -> dict:
 
 def plan_ids() -> set[str]:
     """The build ids in the owner's plan page (index.html's N list): BL1, CO1, IS2 ..."""
-    return set(re.findall(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,', PLAN_HTML.read_text()))
+    return set(re.findall(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,', PLAN_HTML.read_text()))
 
 
 def load_dial() -> dict:

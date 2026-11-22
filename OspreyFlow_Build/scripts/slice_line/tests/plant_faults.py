@@ -375,6 +375,9 @@ M = [
  ("run_seat.py", '    if st.get("round", 1) >= c.TABLE_ROUND and not c.round_table(slice_id):', '    if False:', "round_5_without_the_table"),
  ("common.py", '        if m and int(m.group(1)) >= TABLE_ROUND and f.read_text().strip():', '        if m:', "only_a_round_5_or_later_table"),
  ("common.py", 'TABLE_ROUND = 5\n', 'TABLE_ROUND = 4\n', "rounds_1_to_4_need_no_table"),
+ # LINE_FIXES_5_BRIEF.md, 1: the plan-id pattern
+ ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "one_id_of_each_prefix_length"),
+ ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "three_letter_build_starts"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
