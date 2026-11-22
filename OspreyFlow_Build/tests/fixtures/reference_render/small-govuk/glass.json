@@ -1,0 +1,18 @@
+{
+  "identity_provider": "https://id.osprey.example.org",
+  "realm": "osprey",
+  "marking": "PUBLIC",
+  "organisation_sign_in": null,
+  "organisation_label": null,
+  "welcome": {
+    "about": true,
+    "links": {}
+  },
+  "appearance": {
+    "brand": "govuk",
+    "service_name": "Example Service",
+    "organisation": "Example Organisation",
+    "phase": "beta"
+  },
+  "version": "dev-0123456"
+}

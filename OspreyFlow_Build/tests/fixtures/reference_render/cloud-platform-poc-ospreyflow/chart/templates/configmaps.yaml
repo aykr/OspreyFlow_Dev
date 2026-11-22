@@ -1,0 +1,26 @@
+{{- if .Values.environment }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ospreyflow-env
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "environment" "root" $) | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.environment }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
+{{- if .Values.files }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ospreyflow-files
+  labels:
+    {{- include "ospreyflow.labels" (dict "name" "files" "root" $) | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.files }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+{{- end }}
