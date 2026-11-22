@@ -255,23 +255,35 @@ _BLOCK_OPEN = re.compile(r"^\s*\{\{-?\s*(?:if|range|with|define|block)\b")
 _BLOCK_END = re.compile(r"^\s*\{\{-?\s*end\s*-?\}\}\s*$")
 _BLOCK_ELSE = re.compile(r"^\s*\{\{-?\s*else\b")
 _PAGES_GUARD = re.compile(r"^\s*\{\{-?\s*if\s+\.Values\.pages\.enabled\s*-?\}\}\s*$")
+#: An action anywhere in a line that opens a block, closes one, or is an `else`: a line that holds
+#: one of these other than as the whole of the line (`_BLOCK_OPEN`, `_BLOCK_END`, `_BLOCK_ELSE`
+#: matched, and no second one) is a line whose block count cannot be trusted.
+_BLOCK_ACTION = re.compile(r"\{\{-?\s*(?:if|range|with|define|block|end|else)\b")
 
 
 def _guarded_block_end(lines: list[str], start: int) -> int | None:
     """The index of the line that closes the block opened at `start`, or None when it cannot be
-    told: the block is not closed, an open or close is not on a line of its own so the count is
-    off, or the guard has an `else` (what is in it renders while the setting is off). None leaves
-    the block in what is stored, which is the cautious side: it shows as a change."""
+    told: the block is not closed, an action that opens or closes a block (or is an `else`) is
+    anywhere in a line but as the whole of it (`{{- if .X }}a{{- end }}`, `  x: 1 {{- end }}`, two
+    on one line), so the count is off, or the guard has an `else` (what is in it renders while the
+    setting is off). None leaves the block in what is stored, which is the cautious side: it shows
+    as a change."""
     depth = 0
     for index in range(start, len(lines)):
         line = lines[index]
+        actions = len(_BLOCK_ACTION.findall(line))
+        if actions > 1:
+            return None
         if _BLOCK_OPEN.match(line):
             depth += 1
         elif _BLOCK_END.match(line):
             depth -= 1
             if depth == 0:
                 return index
-        elif depth == 1 and _BLOCK_ELSE.match(line):
+        elif _BLOCK_ELSE.match(line):
+            if depth == 1:
+                return None
+        elif actions:
             return None
     return None
 
