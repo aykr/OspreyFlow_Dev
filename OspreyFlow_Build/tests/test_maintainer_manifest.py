@@ -515,6 +515,61 @@ def test_the_manifest_is_of_the_ref_and_not_of_the_working_tree(tmp_path: Path) 
     assert head.by_path()["packages/libs/out/a.ts"]["is_generated"] == "no evidence in this tree"
 
 
+def merge_repo(tmp: Path) -> Path:
+    """A merge commit whose two parents differ: first parent has `main.txt`, second has `side.txt`."""
+    repo = make_repo(tmp, "merged", {**BASE, "base.txt": "b\n"})
+    git(repo, "checkout", "-q", "-b", "side")
+    write_tree(repo, {"side.txt": "s\n"})
+    commit(repo, "side")
+    git(repo, "checkout", "-q", "main")
+    write_tree(repo, {"main.txt": "m\n"})
+    commit(repo, "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "merge", "side")
+    return repo
+
+
+@pytest.mark.parametrize(
+    "ref",
+    ["HEAD^", "HEAD^1", "HEAD^2", "HEAD^0", "HEAD~", "HEAD~1", "HEAD~2", "HEAD^2^", "HEAD~1^2"],
+)
+def test_a_ref_with_parent_and_ancestor_steps_names_the_commit_git_names(
+    tmp_path: Path, ref: str
+) -> None:
+    # `^N` is the Nth parent of a merge (`^0` the commit itself), `~N` the Nth first-parent ancestor
+    repo = merge_repo(tmp_path)
+    rules = write_rules(tmp_path / "rules.toml", SMALL_RULES)
+    try:
+        want = git(repo, "rev-parse", f"{ref}^{{commit}}")
+    except subprocess.CalledProcessError:  # HEAD~1^2 is not a merge: git refuses, and so must we
+        done = run_script(
+            "--repo", str(repo), "--ref", ref, "--out", str(tmp_path / "o"), cwd=tmp_path
+        )
+        assert done.returncode != 0
+        return
+    made = generate(repo, tmp_path, ref=ref, rules=rules)
+    assert f"Commit: {want}" in made.md and f"Ref: {ref}" in made.md
+    assert set(made.by_path()) == set(git(repo, "ls-tree", "-r", "--name-only", want).splitlines())
+
+
+def test_the_second_parent_of_a_merge_is_the_second_parent_and_not_the_first(
+    tmp_path: Path,
+) -> None:
+    repo = merge_repo(tmp_path)
+    rules = write_rules(tmp_path / "rules.toml", SMALL_RULES)
+    second = set(generate(repo, tmp_path, ref="HEAD^2", rules=rules).by_path())
+    first = set(generate(repo, tmp_path, ref="HEAD^1", rules=rules).by_path())
+    assert "side.txt" in second and "main.txt" not in second
+    assert "main.txt" in first and "side.txt" not in first
+
+
+@pytest.mark.parametrize("ref", ["HEAD^3", "HEAD^9", "HEAD~9", "HEAD^2^2"])
+def test_a_ref_past_the_parents_there_are_is_refused_in_words(tmp_path: Path, ref: str) -> None:
+    repo = merge_repo(tmp_path)
+    done = run_script("--repo", str(repo), "--ref", ref, "--out", str(tmp_path / "o"), cwd=tmp_path)
+    assert done.returncode != 0 and "not a commit" in done.stderr + done.stdout
+    assert not (tmp_path / "o").exists()
+
+
 # --- same input, same bytes ----------------------------------------------------------------------------------------------
 
 DOCKER_FILES = {
@@ -719,6 +774,57 @@ def test_other_is_not_a_catch_all_it_names_folders_and_files(
     red = check_areas(make_repo(tmp_path, "r", {**BASE, "misc/z.txt": "z\n"}), tmp_path, rules)
     assert red.returncode == 1
     assert "other" in red.stdout and catch_all in red.stdout and "names" in red.stdout
+
+
+#: A file in a folder no one has made a rule for, one for each place the check guards.
+NEW_FOLDERS = [
+    "packages/newthing/x.py",
+    "services/newone/x.py",
+    "apps/newapp/x.ts",
+    "apps/pages/newtree/x.ts",
+    "packages/themes/newtheme/x.css",
+    "packages/loose_file.py",
+]
+
+
+@pytest.mark.parametrize("planted", NEW_FOLDERS)
+def test_the_shipped_rules_fail_on_a_new_folder_no_rule_covers(
+    tmp_path: Path, planted: str
+) -> None:
+    # the check exists to fail on a folder nobody has placed: so it is the repository's own rules file that is
+    # run here, not a small one of this test's, and a wildcard that covered every new folder would turn this red
+    repo = make_repo(tmp_path, "r", {"README.md": "r\n", planted: "z\n"})
+    done = check_areas(repo, tmp_path, RULES)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f"{planted} is in no area" in done.stdout
+
+
+def test_a_wildcard_in_the_shipped_rules_would_turn_that_case_red(tmp_path: Path) -> None:
+    # the planted fault at its real shape: the real rules with the per-service list swapped for `services/*`
+    # (and likewise for packages and apps), so the new-folder cases above are shown able to fail
+    text = RULES.read_text(encoding="utf-8")
+    wild = text.replace('"services/compute",', '"services/*", "services/compute",')
+    wild = wild.replace(
+        'paths = ["packages/adapters"]', 'paths = ["packages/adapters", "packages/*"]'
+    )
+    wild = wild.replace('paths = ["apps/harness"]', 'paths = ["apps/harness", "apps/*"]')
+    assert wild.count("/*") == 3, "the plant did not land in the real file's shape"
+    rules = write_rules(tmp_path / "wild.toml", wild)
+    for planted in ("services/newone/x.py", "packages/newthing/x.py", "apps/newapp/x.ts"):
+        repo = make_repo(
+            tmp_path, "r" + planted.replace("/", "_"), {"README.md": "r\n", planted: "z\n"}
+        )
+        hidden = check_areas(repo, tmp_path, rules)
+        assert hidden.returncode == 0, "a wildcard hides a new folder from the check: " + planted
+
+
+def test_no_area_in_the_shipped_rules_names_its_folders_by_pattern() -> None:
+    # `other` is checked by the script itself; the areas are checked here: a folder under apps, packages or
+    # services is placed by name, so a new one is a failure and a rule is added with it
+    rules = tomllib.loads(RULES.read_text(encoding="utf-8"))
+    for area in rules["area"]:
+        for path in [*area["paths"], *area.get("except", [])]:
+            assert not re.search(r"[*?\[]", path), (area["name"], path)
 
 
 def test_areas_check_reads_the_ref_not_the_working_tree(tmp_path: Path) -> None:
