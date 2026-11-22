@@ -83,6 +83,8 @@ export interface Seen {
 export interface FakeConduit {
   url: string;
   calls: Seen[];
+  /** SE8c's sign-in and sign-out reports (`POST /v1/session-events`): the page service's own, never a page's ask, so kept apart from `calls`. */
+  sessionEvents: Seen[];
   /** What the fake wrote as imported (dry_run=false), by dataset. */
   written: { dataset: string; files: Record<string, string>; replace: string | null }[];
   /** A route's path fragment that answers 500, to model a failing read. */
@@ -121,6 +123,7 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
   const fake: FakeConduit = {
     url: "",
     calls: [],
+    sessionEvents: [],
     written: [],
     failing: new Set(),
     refuseNextWrite: undefined,
@@ -131,7 +134,7 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
   const handle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     const target = new URL(req.url ?? "/", "http://conduit.test");
     const body = await read(req);
-    fake.calls.push({
+    const seen: Seen = {
       method: req.method ?? "GET",
       url: req.url ?? "",
       path: target.pathname,
@@ -139,12 +142,19 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
       headers: req.headers,
       rawHeaders: req.rawHeaders,
       body,
-    });
+    };
+    const reported = req.method === "POST" && target.pathname === "/v1/session-events";
+    (reported ? fake.sessionEvents : fake.calls).push(seen);
     const header = req.headers["authorization"];
     const bearer = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : undefined;
     const person = bearer === undefined ? undefined : fake.people.get(bearer);
     if (!person) {
       json(res, 401, { detail: "Not authenticated" });
+      return;
+    }
+    if (reported) {
+      res.writeHead(204);
+      res.end();
       return;
     }
     for (const fragment of fake.failing) {
