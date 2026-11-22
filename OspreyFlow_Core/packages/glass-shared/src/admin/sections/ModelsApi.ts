@@ -4,6 +4,7 @@
 import type {
   AdminEngine,
   ConnectionTestResult,
+  EngineCheckResult,
   EngineLimits,
   ModelAdminHistory,
   ModelsAdminView,
@@ -17,6 +18,23 @@ export interface ModelsApi {
   bearerToken: string;
 }
 
+/** A field the Conduit's rules refused (ADR-135 Amendment 14): `provider.api_base`,
+ * `provider.roles.<job>`, `provider.label`, `provider.contract_reference` or `key`, in its words. */
+export interface RefusedField {
+  field: string;
+  words: string;
+}
+
+/** The Conduit's refusal in its own words, with each refused field named where it names one. */
+export class ModelsRefused extends Error {
+  constructor(
+    message: string,
+    readonly fields: RefusedField[] = [],
+  ) {
+    super(message);
+  }
+}
+
 /** One call to the Conduit; `path` is written out whole at each call site (`/v1/admin/models…`), so
  * the place and section scans read every route this screen uses. */
 async function ask<T>(api: ModelsApi, path: string, init: RequestInit = {}): Promise<T> {
@@ -26,8 +44,8 @@ async function ask<T>(api: ModelsApi, path: string, init: RequestInit = {}): Pro
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
-    const detail = body.detail as { detail?: string } | undefined;
-    if (typeof detail?.detail === "string") throw new Error(detail.detail);
+    const detail = body.detail as { detail?: string; fields?: RefusedField[] } | undefined;
+    if (typeof detail?.detail === "string") throw new ModelsRefused(detail.detail, detail.fields ?? []);
     if (response.status === 403) throw new Error("Your account does not hold the right to manage models.");
     throw new Error(`Models could not complete that (${response.status}).`);
   }
@@ -38,12 +56,12 @@ const n = encodeURIComponent;
 
 export const readModels = (api: ModelsApi) => ask<ModelsAdminView>(api, "/v1/admin/models");
 export const readHistory = (api: ModelsApi) => ask<ModelAdminHistory>(api, "/v1/admin/models/history");
-export const addEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
-  ask<ModelsAdminView>(api, "/v1/admin/models/engines", { method: "POST", body: JSON.stringify({ provider }) });
-export const editEngine = (api: ModelsApi, provider: ModelProviderConfig) =>
+/** The owner's ruling 19: a changed model name, address or key is checked before it is saved; a
+ * changed address takes its key with it, in this request's body and nowhere else. */
+export const editEngine = (api: ModelsApi, provider: ModelProviderConfig, key?: string) =>
   ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(provider.name)}`, {
     method: "PUT",
-    body: JSON.stringify({ provider }),
+    body: JSON.stringify(key ? { provider, key } : { provider }),
   });
 export const removeEngine = (api: ModelsApi, name: string) =>
   ask<ModelsAdminView>(api, `/v1/admin/models/engines/${n(name)}`, { method: "DELETE" });
@@ -62,3 +80,16 @@ export const setLimits = (api: ModelsApi, name: string, limits: EngineLimits) =>
 /** ADR-135 Amendment 3: the gateway's own records over whole UTC days, as counts only. */
 export const readUsage = (api: ModelsApi, start: string, end: string) =>
   ask<ModelUsageView>(api, `/v1/admin/models/usage?start=${n(start)}&end=${n(end)}`);
+/** ADR-135 Amendment 14: the key and each typed model proved by one call in the gateway before the
+ * engine exists. The key is in this request's body alone, where the engine has one; the answer is
+ * the outcome in fixed words, never the key. */
+export const checkEngine = (api: ModelsApi, provider: ModelProviderConfig, key: string | null) =>
+  ask<EngineCheckResult>(api, "/v1/admin/models/checks", {
+    method: "POST",
+    body: JSON.stringify(key === null ? { provider } : { provider, key }),
+  });
+/** **Add** names the passed check, never the key. */
+export const addChecked = (api: ModelsApi, check: string) =>
+  ask<ModelsAdminView>(api, `/v1/admin/models/checks/${n(check)}/add`, { method: "POST" });
+export const cancelCheck = (api: ModelsApi, check: string) =>
+  ask<ModelsAdminView>(api, `/v1/admin/models/checks/${n(check)}`, { method: "DELETE" });

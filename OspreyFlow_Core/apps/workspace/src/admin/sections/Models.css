@@ -6,3 +6,9 @@
 .admin-models-row { display: flex; flex-direction: column; gap: var(--sp-4); }
 .admin-models-check { display: flex; align-items: center; gap: var(--sp-6); }
 .admin-models-actions { display: flex; flex-wrap: wrap; gap: var(--sp-6); }
+/* ADR-135 Amendment 14: the add form's fields locked once its check passed, a refusal at its field,
+   the analysts' preview and the check's answer. */
+.admin-models-fieldset { display: flex; flex-direction: column; gap: var(--sp-6); border: 0; padding: 0; margin: 0; min-width: 0; }
+.admin-models-error { margin: 0; color: var(--error); }
+.admin-models-preview { margin: 0; padding: var(--sp-6); background: var(--surface-raised); }
+.admin-models-result ul { margin: var(--sp-4) 0 0; padding-left: var(--sp-12); }

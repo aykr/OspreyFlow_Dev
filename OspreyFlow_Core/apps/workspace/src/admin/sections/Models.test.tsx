@@ -557,6 +557,19 @@ describe("Models", () => {
     for (const level of ["log", "info", "warn", "error", "debug"] as const) {
       vi.spyOn(console, level).mockImplementation((...args: unknown[]) => void written.push(args));
     }
+    // Where a typed key must never be, typed or not: an attribute (a title, an aria label, a data
+    // attribute, an address, a placeholder), the page's title, address and text, and the console.
+    // The password field's own `value` is the one place the browser keeps what is typed into it.
+    const nowhereElse = () => {
+      for (const element of Array.from(document.querySelectorAll("*"))) {
+        for (const attribute of Array.from(element.attributes)) {
+          if (attribute.name === "value" && element.matches('input[type="password"]')) continue;
+          expect(attribute.value, `${element.tagName} ${attribute.name}`).not.toContain(PART);
+        }
+      }
+      expect(document.title + location.href + document.body.textContent).not.toContain(PART);
+      expect(JSON.stringify(written)).not.toContain(PART);
+    };
     stub((path, init) =>
       path === "/v1/admin/models/engines/gemini/key" && init?.method === "PUT"
         ? { status: 502, body: { detail: { error: "key_refused", detail: "The model gateway refused the key. Nothing was changed." } } }
@@ -565,20 +578,14 @@ describe("Models", () => {
     render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
     fireEvent.click(await screen.findByRole("button", { name: "Enter key for Gemini" }));
     fireEvent.change(screen.getByLabelText(/Key for Gemini/), { target: { value: PLANTED } });
+    nowhereElse(); // while it is being typed
     fireEvent.click(screen.getByRole("button", { name: "Set the key" }));
     await screen.findByRole("alert");
-    // No field holds it, whether the form stays open or closes: its value, an attribute, a title,
-    // an aria label, the address, the page's text and the console.
+    // After the refusal no field holds it, whether the form stays open or closes.
     for (const input of Array.from(document.querySelectorAll("input"))) {
       expect((input as HTMLInputElement).value).not.toContain(PART);
     }
-    for (const element of Array.from(document.querySelectorAll("*"))) {
-      for (const attribute of Array.from(element.attributes)) {
-        expect(attribute.value).not.toContain(PART);
-      }
-    }
-    expect(document.title + location.href + document.body.textContent).not.toContain(PART);
-    expect(JSON.stringify(written)).not.toContain(PART);
+    nowhereElse();
     vi.restoreAllMocks();
   });
 
