@@ -691,6 +691,12 @@ def test_a_mart_that_fails_after_the_identity_went_says_so_in_words(world: _Worl
     assert world.identity.deleted == [REMOVED]
     assert "was removed from the identity provider" in message and "may still be there" in message
     assert "removing it again will try again" not in message
+    # The identity is gone at the provider, so who removed it is on the record all the same, with
+    # the grants it revoked, and the row says the mart did not confirm its figures went.
+    rows = [r for r in world.audit.records if r["action"] == "remove_dashboard"]
+    assert len(rows) == 1, "a deletion that happened is audited even when the mart then fails"
+    assert rows[0]["resolved_query"]["client_id"] == REMOVED
+    assert rows[0]["resolved_query"]["mart_confirmed"] is False
 
 
 # --- A pull already running when the identity is removed ------------------------------------------
