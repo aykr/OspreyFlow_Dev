@@ -14,18 +14,18 @@
 // names each file by its path below the chosen folder (`webkitRelativePath`), so the page can rebuild the bundle's paths
 // from the file names (`bundleFromFolder` does it from the same property). The fake Conduit receives the bundle the page
 // built, so a browser that sent bare names would show as one file in place of two, here.
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { expect, test } from "@playwright/test";
-import type { BrowserContext, Locator, Page } from "@playwright/test";
+import type { BrowserContext, Download, Locator, Page } from "@playwright/test";
 
 import { buildAssets } from "../scripts/assets.mjs";
 import { MemorySessionStore } from "../server/sessionStore.js";
 import { main } from "../server/start.js";
 import type { Running } from "../server/start.js";
-import { fakeConduit } from "../test/support/fakeConduit.js";
+import { EXPORT_FILES, fakeConduit } from "../test/support/fakeConduit.js";
 import type { FakeConduit, Person } from "../test/support/fakeConduit.js";
 import { generateSecret } from "../test/support/secret.js";
 
@@ -144,6 +144,18 @@ test.beforeEach(async ({ context }) => {
 
 // ------------------------------------------------------------------------------------------------- with scripts
 
+/**
+ * A download that worked: named as the page names it, not failed, and holding the file's own text. A suggested name alone is
+ * not proof (a link with a `download` attribute to a route that answers 404 still has one: it was shown red that way).
+ */
+async function savedAs(download: Download, name: string, text: string): Promise<void> {
+  expect(download.suggestedFilename()).toBe(name);
+  expect(await download.failure()).toBeNull();
+  const saved = await download.path();
+  expect(saved).not.toBeNull();
+  expect(readFileSync(saved as string, "utf8")).toBe(text);
+}
+
 test.describe("with scripts", () => {
   test("SK1: a release is exported by keyboard, its files listed, and a file downloaded", async ({ page }) => {
     const s = await studio();
@@ -159,7 +171,7 @@ test.describe("with scripts", () => {
       expect(sent?.query.get("version")).toBe("2");
       const download = page.waitForEvent("download");
       await press(page.getByRole("link", { name: "model.yaml" }));
-      expect((await download).suggestedFilename()).toBe("model.yaml");
+      await savedAs(await download, "model.yaml", EXPORT_FILES["model.yaml"]);
     } finally {
       await s.stop();
     }
@@ -252,7 +264,7 @@ test.describe("scripts off", () => {
       expect(s.conduit.calls.find((c) => c.path === `/v1/datasets/${DATASET}/release`)?.query.get("version")).toBe("2");
       const download = page.waitForEvent("download");
       await press(page.getByRole("link", { name: "model.yaml" }));
-      expect((await download).suggestedFilename()).toBe("model.yaml");
+      await savedAs(await download, "model.yaml", EXPORT_FILES["model.yaml"]);
     } finally {
       await s.stop();
     }

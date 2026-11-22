@@ -61,9 +61,11 @@ describe("Releases: the Conduit's own words for a refusal that will not pass", (
     expect(w.conduit.calls.filter((c) => c.path.endsWith("/release/import"))).toHaveLength(1);
   });
 
-  it("RR3: the write into a composite says the same words, and nothing is marked written", async () => {
-    const w = await make(person({ datasetKind: "composite" }));
+  it("RR3: a write refused for a composite (made one since the check) says the same words, and nothing is marked written", async () => {
+    const w = await make();
     const token = await uploaded(w);
+    expect((await w.post("/studio/releases", { case: CASE_ID, staged: token, action: "check" })).status).toBe(200);
+    w.me.datasetKind = "composite";
     const res = await w.post("/studio/releases", { case: CASE_ID, staged: token, action: "import" });
     expect(textOf(res.text)).toContain(COMPOSITE_WORDS);
     expect(textOf(res.text)).not.toMatch(TRY_AGAIN);

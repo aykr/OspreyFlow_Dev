@@ -301,17 +301,24 @@ export function planView(plan: Plan, dryRun: boolean): PlanView {
 /**
  * A refusal in words. The same words for a dataset that is not the person's and a right they do not hold: the Conduit answers
  * both as a refusal, and the page must not tell them apart (rule 3: nobody learns what exists by how a refusal is worded).
- * Only the Conduit's `problems` and `refused` lists, which are the release's own faults, are shown as it sent them; its
- * `detail` is never shown (it can name a right, or a route).
+ *
+ * Its own `problems` and `refused` lists, which are the release's own faults, are shown as it sent them. So is a string
+ * `detail` on any other refusal (4xx), as the React screen's `wordsOf` shows it: the import into a composite or a drawn dataset
+ * is 409 with the reason in `detail`, a permanent refusal that must not read as a passing fault. The `detail` of a 401, a 403
+ * and a 404 is never shown (the 403's names the right, and the 404's is the same as for a dataset that does not exist). Only a
+ * Conduit that failed (5xx, or an answer the page could not read) is worded as a fault to try again; a 4xx never is.
  */
 export function refusalWords(status: number, body: unknown, what: string): string {
   if (status === 401) return "Your session has ended, or your access could not be checked. Sign in again.";
   if (status === 403 || status === 404) {
     return `${what} is not available to you: it needs rights you do not hold, or the dataset is not one of yours.`;
   }
-  const lists = body as { problems?: unknown; refused?: unknown } | undefined;
-  for (const list of [lists?.problems, lists?.refused]) {
+  const said = body as { problems?: unknown; refused?: unknown; detail?: unknown } | undefined;
+  for (const list of [said?.problems, said?.refused]) {
     if (Array.isArray(list) && list.length > 0 && list.every((line) => typeof line === "string")) return (list as string[]).join("; ");
+  }
+  if (status >= 400 && status < 500) {
+    return typeof said?.detail === "string" && said.detail.trim() !== "" ? said.detail : `${what} was refused (${status}).`;
   }
   return `${what} could not be carried out just now. Nothing was changed. Try again in a few minutes.`;
 }
