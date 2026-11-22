@@ -41,7 +41,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from tools.layout import CORE, ROOT
+from tools.layout import BUILD, CORE, ROOT
 
 SCRIPT = CORE / "scripts" / "maintainer_manifest.py"
 RULES = CORE / "scripts" / "manifest_areas.toml"
@@ -1213,8 +1213,12 @@ def test_the_real_tree_images_come_from_the_release_matrix_and_the_dockerfiles(r
     words = {"none", "none (not released)", "builder only", "not determined"}
     for row in real.table:
         value = row["release_images"]
-        assert value in words or set(value.split(";")) <= names, (row["path"], value)
-        assert value in words or value.split(";") == sorted(value.split(";")), (row["path"], value)
+        # a list of exact names, sorted, then `not determined` when another image may carry it too
+        listed = value.split(";")
+        undecided = len(listed) > 1 and listed[-1] == "not determined"
+        named = listed[:-1] if undecided else listed
+        assert value in words or set(named) <= names, (row["path"], value)
+        assert value in words or named == sorted(named), (row["path"], value)
     by = real.by_path()
     assert by["deploy/superset/superset_config.py"]["release_images"] == "superset"
     assert by["services/laurium/app.py"]["release_images"] == "none (not released)", (
@@ -1272,6 +1276,9 @@ def test_the_real_summary_carries_the_counts_the_two_trees_and_the_no_react_resu
 def test_the_real_rules_file_and_output_name_no_client(real: Made) -> None:
     """The repository's client-name check over the rules file, the script and the real output (it hides names as
     hashes: this can only run it). Where the owner's local list is absent it says so and does not pass."""
+    marketing = str(BUILD / "marketing_site")
+    if marketing not in sys.path:
+        sys.path.insert(0, marketing)
     import client_hashes
     from tools import client_name_check
 
