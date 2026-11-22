@@ -1,7 +1,6 @@
 // The canvas toolbar's "Last change" (ADR-115 E6; the reference): the case's latest history step and
 // when, from the history the History drawer lists (spec 03 §3.1).
-import { whenLabel } from "../home/homeData";
-import type { HistoryStepSummary } from "@ospreyflow/glass-shared";
+import { type HistoryStepSummary, whenLabel } from "@ospreyflow/glass-shared";
 
 export function lastChangeText(steps: readonly HistoryStepSummary[], now: Date): string | null {
   if (steps.length === 0) return null;

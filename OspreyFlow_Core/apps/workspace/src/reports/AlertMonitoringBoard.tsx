@@ -10,10 +10,10 @@
 import { useEffect, useRef, useState } from "react";
 
 import type { ReportFigures } from "../../../../packages/schemas/generated";
-import { closingReasonLabel, fetchReport, type ReportsApi } from "@ospreyflow/glass-shared";
+import { closingReasonLabel, fetchReport, type ReportsApi, type RuleGroup } from "@ospreyflow/glass-shared";
 import { Select } from "../design/primitives";
 import { AlertsPanel } from "./AlertsPanel";
-import { Bars, channel, groupKey, groupName, NUMBER, plural, Section, type RuleGroup } from "./figureParts";
+import { Bars, channel, groupKey, groupName, NUMBER, plural, Section } from "./figureParts";
 import { PERIODS } from "./ReportsView";
 import type { FromAlert } from "./ReportsView";
 

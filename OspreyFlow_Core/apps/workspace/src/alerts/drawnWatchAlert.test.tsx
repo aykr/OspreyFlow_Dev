@@ -8,7 +8,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AlertQueue, alertTitle, drawnBoard } from "./AlertQueue";
-import { alertRuleGroup, groupName } from "../reports/figureParts";
+import { groupName } from "../reports/figureParts";
+import { alertRuleGroup } from "@ospreyflow/glass-shared";
 
 afterEach(() => {
   cleanup();

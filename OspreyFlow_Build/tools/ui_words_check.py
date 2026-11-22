@@ -8,7 +8,7 @@ JSX's `{" "}`, or by a non-breaking space written as `&nbsp;`, `&#160;`, `\\u00a
 (`edit_target_model`) never match.
 
 **What this gate cannot see, and what holds it instead.** Words computed at run time from an id: a
-right's name is `help/roles.ts`'s `rightName`, held to the rule by `help/rightNames.test.ts`, which also
+right's name is `packages/glass-shared/src/help/roles.ts`'s `rightName`, held to the rule by `help/rightNames.test.ts`, which also
 holds Admin › Roles' `rightWords` to `rightName` (until rules-b's `admin-tips.patch` lands, Admin builds
 its own, and says "Edit target model": the lane review of L1.8). Words the Conduit sends to the screen
 (none says it today) and `apps/harness` are outside the Glass's `src` and not scanned. Words joined at run

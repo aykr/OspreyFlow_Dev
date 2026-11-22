@@ -294,7 +294,9 @@ def package_copy(tmp_path: Path) -> Path:
 # ----------------------------------------------------------------------------------------------- the real tree: cases
 
 _STAR = re.compile(r"""^export\s+\*\s+from\s+["']([^"']+)["'];""", re.M)
-_BRACED = re.compile(r"""^export\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']([^"']+)["'];""", re.M)
+#: A record the index passes on (`export { default as X } from "./x/y.json"`, PL4d3e) is data, not a module of source: it is
+#: not read as one.
+_BRACED = re.compile(r"""^export\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']([^"']+(?<!\.json))["'];""", re.M)
 
 
 def index_problems(
@@ -447,7 +449,7 @@ def test_a_react_or_workspace_import_in_a_moved_client_is_found(package_copy: Pa
         'import { useEffect } from "react";\n',
         'import { WITHHELD_SENTENCE } from "../statusbar/StatusBar";\n',
         'import { create } from "zustand";\n',
-        'import BY_ROLE from "../../../../apps/workspace/src/shell/placesByRole.json";\n',
+        'import BY_ROLE from "../../../../apps/workspace/src/shell/places.json";\n',
         'import type { Node } from "../../../../packages/schemas/generated";\n',
     )
     for rel in WHOLE:

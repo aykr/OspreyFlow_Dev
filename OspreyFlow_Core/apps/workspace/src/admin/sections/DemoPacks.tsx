@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import type { DemoPackStatus } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives";
-import { listDemoPacks, type AdminApi } from "../api";
+import { listDemoPacks, type AdminApi } from "@ospreyflow/glass-shared";
 
 /** The demo packs (ADR-114 Amendment 5, "Show and explain"): what each shows, its licence and
  * credit, whether it is loaded, and the command that adds it on the host. The Glass runs nothing. */

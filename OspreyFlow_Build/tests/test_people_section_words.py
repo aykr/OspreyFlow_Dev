@@ -277,10 +277,10 @@ def test_a_rule_s_author_refused_names_the_section(error, words) -> None:
 
 
 def _glass_right_names() -> dict[str, str]:
-    """The Glass's exceptions to "the id with spaces, capitalised" (`help/roles.ts`'s RIGHT_NAMES), read there."""
-    source = (CORE / "apps/workspace/src/help/roles.ts").read_text(encoding="utf-8")
+    """The Glass's exceptions to "the id with spaces, capitalised" (`packages/glass-shared/src/help/roles.ts`'s RIGHT_NAMES), read there."""
+    source = (CORE / "packages/glass-shared/src/help/roles.ts").read_text(encoding="utf-8")
     block = re.search(r"const RIGHT_NAMES[^{]*\{(.*?)\};", source, re.S)
-    assert block, "help/roles.ts no longer has RIGHT_NAMES"
+    assert block, "packages/glass-shared/src/help/roles.ts no longer has RIGHT_NAMES"
     return dict(re.findall(r"(\w+):\s*\"([^\"]+)\"", block.group(1)))
 
 

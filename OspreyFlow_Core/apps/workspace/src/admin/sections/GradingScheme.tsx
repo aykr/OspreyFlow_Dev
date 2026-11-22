@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 
 import type { GradingSchemeAnswer } from "../../../../../packages/schemas/generated";
 import { Button } from "../../design/primitives";
-import type { AdminApi } from "../api";
+import type { AdminApi } from "@ospreyflow/glass-shared";
 
 /** The dry run, always first: the change itself is refused without its token (Amendment 6, 2). */
 export const GRADING_COMMAND = "ospreyflow grading change --to <scheme> --mapping <file> --dry-run";

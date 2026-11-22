@@ -1,10 +1,10 @@
 // Admin's tips (ADR-145 Amendment 4 decision 12; L2.7): every role, level, team, lead and a dataset's
 // Authors has a short tip where it appears, read with the control it explains (`aria-describedby`),
-// in the words of `help/roles.ts`, the one source the help page and the guides take too. A tip names
+// in the words of `packages/glass-shared/src/help/roles.ts`, the one source the help page and the guides take too. A tip names
 // roles by their names and never a person or an id (`adminWords.test.tsx`).
 import type { ReactNode } from "react";
 
-import { LEVEL_WORDS, PLACE_WORDS, ROLE_WORDS, TEAM_WORDS, rightName } from "../help/roles";
+import { LEVEL_WORDS, PLACE_WORDS, ROLE_WORDS, TEAM_WORDS, rightName } from "@ospreyflow/glass-shared";
 
 /** The id a role's tip is drawn under, for `aria-describedby`. */
 export const roleTipId = (role: string) => `role-tip-${role.replace(/[^A-Za-z0-9-]/g, "-")}`;

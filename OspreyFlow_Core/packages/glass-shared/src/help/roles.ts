@@ -7,8 +7,8 @@
 // of rights to draw it from). `roles.test.ts` refuses words for a right `rights.py` no longer declares.
 //
 // Plain words, British English; what a role or right lets a person do, never how it is checked.
-import type { BuiltInRole } from "../../../../packages/schemas/generated";
-import BY_ROLE from "../shell/placesByRole.json";
+import type { BuiltInRole } from "../../../schemas/generated";
+import BY_ROLE from "../shell/placesByRole.json" with { type: "json" };
 
 export type Right = BuiltInRole["rights"][number];
 
