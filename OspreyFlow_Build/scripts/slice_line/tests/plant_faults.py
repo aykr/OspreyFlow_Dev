@@ -366,6 +366,11 @@ M = [
  ("resume.py", '    if MERGE_RUNNING is None:\n        subprocess.run(', '    if True:\n        subprocess.run(', "resume_action_on_another_slice"),
  ("resume.py", '            MERGE_RUNNING = busy', '            MERGE_RUNNING = None', "resume_action_on_another_slice"),
  ("resume.py", '    if MERGE_RUNNING is None:\n        subprocess.run(', '    if False:\n        subprocess.run(', "refreeze_with_no_merge_running"),
+ # LINE_FIXES_5_BRIEF.md, 3: the standing accept before another round
+ ("resume.py", '    if hit:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding', '    if False:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding', "security_or_key_finding_is_never_accepted"),
+ ("run_seat.py", '    if standing_accept(slice_id):\n        return 0\n', '', "gaps_only_at_round_3_are_accepted"),
+ ("resume.py", '    if rnd < rule["from_round"]:\n', '    if False:\n', "gaps_only_at_round_2_go_round"),
+ ("resume.py", '    if faults or other:\n', '    if other:\n', "fault_and_a_gap_go_round"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

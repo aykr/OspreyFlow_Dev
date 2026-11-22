@@ -365,6 +365,11 @@ def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[st
     newest_record_is(slice_id, tip)
     legacy = rs.is_legacy(verify)
     only_gaps(verify["findings"], legacy)
+    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+                                         for f in verify["findings"]))
+    if hit:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding is never covered by the standing word
+        raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): never accepted on "
+                      "the standing word, gap or not. It needs the owner's resume.tsv line (accept). Nothing changed.")
     acc = write_acceptance(slice_id, tip, verify, rule["line"], "standing",
                            {"rule": f"standing.tsv: {rule['line']} (RULINGS.md, 19 November 2026, ruling 5: from a "
                                     "slice's third round on, a gap in a test never blocks)", "round": rnd})
