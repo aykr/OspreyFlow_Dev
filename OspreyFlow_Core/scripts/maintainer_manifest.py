@@ -56,7 +56,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import tomllib
 from collections.abc import Iterable, Iterator, Sequence
@@ -97,27 +96,39 @@ class ManifestError(Exception):
     """A refusal in words: the ref, the rules or a release matrix could not be read."""
 
 
-# --- git ------------------------------------------------------------------------------------------
+# --- the repository, read with dulwich (no process is run: the image carries no `git`) -----------
 
 
-def git(repo: Path, *args: str) -> bytes:
+def open_repo(path: Path):  # type: ignore[no-untyped-def]
     try:
-        done = subprocess.run(["git", "-C", str(repo), *args], capture_output=True, check=False)
-    except FileNotFoundError as error:
-        raise ManifestError("git is not available") from error
-    if done.returncode != 0:
-        words = done.stderr.decode("utf-8", "replace").strip() or f"exit status {done.returncode}"
-        raise ManifestError(f"git {' '.join(args[:2])} failed: {words}")
-    return done.stdout
+        from dulwich.errors import NotGitRepository
+        from dulwich.repo import Repo
+    except ImportError as error:  # pragma: no cover - dulwich is a dependency of the product
+        raise ManifestError("dulwich is needed to read the repository") from error
+    try:
+        return Repo.discover(str(path))
+    except NotGitRepository as error:
+        raise ManifestError(f"{str(path)!r} is not inside a git repository") from error
 
 
 def resolve_commit(repo: Path, ref: str) -> str:
-    try:
-        return git(repo, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").decode().strip()
-    except ManifestError as error:
-        raise ManifestError(
-            f"{ref!r} is not a commit or a tag of a commit in this repository"
-        ) from error
+    """The commit a ref names: a tag is followed to its commit; `HEAD`, branches and hashes work,
+    and `~N` / `^` suffixes step back along first parents."""
+    from dulwich.objectspec import parse_commit
+
+    match = re.fullmatch(r"(.+?)((?:[~^]\d*)*)", ref)
+    base, steps = (match.group(1), match.group(2)) if match else (ref, "")
+    with open_repo(repo) as opened:
+        try:
+            commit = parse_commit(opened, base.encode())
+            for kind, count in re.findall(r"([~^])(\d*)", steps):
+                for _ in range(int(count or 1) if kind == "~" else 1):
+                    commit = opened[commit.parents[0]]
+            return commit.id.decode()
+        except (KeyError, ValueError, TypeError, IndexError) as error:
+            raise ManifestError(
+                f"{ref!r} is not a commit or a tag of a commit in this repository"
+            ) from error
 
 
 @dataclass(frozen=True)
@@ -130,19 +141,20 @@ def decode_path(raw: bytes) -> str:
     return raw.decode("utf-8", "surrogateescape")
 
 
+GITLINK = 0o160000
+
+
 def list_tree(repo: Path, commit: str) -> tuple[list[Entry], str]:
     """The tracked files of `commit` and the layout seen: `user` (the product tree is the root) or
-    `developer`
-    (it is `OspreyFlow_Core/`, the prefix taken off, nothing outside it read)."""
-    raw = git(repo, "ls-tree", "-r", "-z", "--full-tree", commit)
+    `developer` (it is `OspreyFlow_Core/`, the prefix taken off, nothing outside it read)."""
+    from dulwich.object_store import iter_tree_contents
+
     found: list[tuple[str, str]] = []
-    for record in raw.split(b"\0"):
-        if not record:
-            continue
-        meta, _, name = record.partition(b"\t")
-        mode, kind, oid = meta.decode().split()
-        if kind == "blob":  # a submodule is a `commit` entry, and has no bytes here
-            found.append((decode_path(name), oid))
+    with open_repo(repo) as opened:
+        tree = opened[commit.encode()].tree
+        for item in iter_tree_contents(opened.object_store, tree):
+            if item.mode is not None and item.mode != GITLINK:  # a submodule has no bytes here
+                found.append((decode_path(item.path), item.sha.decode()))
     prefixed = any(path.startswith(CORE_PREFIX) for path, _ in found)
     rooted = any(path.split("/", 1)[0] in CHECKED_FOLDERS and "/" in path for path, _ in found)
     layout = "developer" if prefixed and not rooted else "user"
@@ -159,30 +171,13 @@ def list_tree(repo: Path, commit: str) -> tuple[list[Entry], str]:
 
 
 def read_blobs(repo: Path, oids: Sequence[str]) -> Iterator[bytes]:
-    """Each blob's bytes, in order, from one `git cat-file --batch` (one object requested, one
-    read: no deadlock)."""
-    proc = subprocess.Popen(
-        ["git", "-C", str(repo), "cat-file", "--batch"],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-    )
-    assert proc.stdin is not None and proc.stdout is not None
-    try:
+    """Each blob's bytes, in order, one object at a time."""
+    with open_repo(repo) as opened:
         for oid in oids:
-            proc.stdin.write(oid.encode() + b"\n")
-            proc.stdin.flush()
-            header = proc.stdout.readline().split()
-            if len(header) != 3 or header[1] != b"blob":
-                raise ManifestError(f"git could not give the bytes of object {oid}")
-            size = int(header[2])
-            data = proc.stdout.read(size)
-            proc.stdout.read(1)
-            yield data
-    finally:
-        proc.stdin.close()
-        proc.stdout.close()
-        proc.wait()
+            try:
+                yield opened.object_store[oid.encode()].data
+            except KeyError as error:
+                raise ManifestError(f"the repository has no object {oid}") from error
 
 
 # --- the rules ------------------------------------------------------------------------------------
@@ -955,7 +950,7 @@ def _scrub(text: str, *private: str) -> str:
     return re.sub(r"(?<![\w.@-])/(?:[\w.@+-]+/)+[\w.@+-]*", "<path>", text)
 
 
-def run_isolation_check(repo: Path, commit: str, layout: str, has_script: bool = True) -> str:
+def run_isolation_check(repo: Path, entries: list[Entry], has_script: bool = True) -> str:
     """`exit status N; last line: ...` of scripts/no_react_check.mjs on an extracted archive of the
     ref, or `not run (why)`:
     never a pass the check did not give."""
@@ -970,16 +965,18 @@ def run_isolation_check(repo: Path, commit: str, layout: str, has_script: bool =
             "not run (the product's node_modules are not installed beside this script, "
             "and the check bundles with them)"
         )
-    tree_ish = f"{commit}:{CORE_PREFIX.rstrip('/')}" if layout == "developer" else commit
     with tempfile.TemporaryDirectory(prefix="manifest-archive-") as scratch_name:
         scratch = Path(scratch_name)
         root = scratch / "tree"
         root.mkdir()
         work = scratch / "cwd"
         work.mkdir()
-        archive = git(repo, "archive", "--format=tar", tree_ish)
-        with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-            tar.extractall(root, filter="data")
+        for entry, data in zip(entries, read_blobs(repo, [e.oid for e in entries]), strict=True):
+            if entry.path.startswith(("/", "../")) or "/../" in entry.path:
+                raise ManifestError(f"the tree holds an unsafe path: {entry.path!r}")
+            target = root / entry.path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
         script = root / ISOLATION_SCRIPT
         if not script.is_file():
             return f"not run (no {ISOLATION_SCRIPT} at this ref)"
@@ -1155,7 +1152,7 @@ def build_manifest(
         ]
         writer.writerow(cells + ([row.maintained_under] if labels is not None else []))
     if isolation is None:
-        isolation = run_isolation_check(repo, commit, layout, ISOLATION_SCRIPT in tree)
+        isolation = run_isolation_check(repo, entries, ISOLATION_SCRIPT in tree)
     summary = render_summary(
         ref, commit, layout, rules, rows, release, results, undetermined, isolation
     )
