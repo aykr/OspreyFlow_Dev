@@ -1,0 +1,34 @@
+{#- Studio › the dataset map (slice IS3; ADR-140 Amendment 22 items 1 and 8): a read-only table of the pipelines that load the
+    dataset, in the Studio's frame. Complete without a script: a table with a caption and header cells, no control of its own.
+    The page draws no column for the order pipelines run in and no line; that is IS6's, drawn only once the order is stored. -#}
+{% extends "studio/frame.njk" %}
+{% block place %}
+{% if dm.kind == "table" %}
+<section class="studio-dataset-map" aria-labelledby="dataset-map-heading">
+<h2 id="dataset-map-heading">{{ mapWords.heading }}</h2>
+<p>{{ mapWords.intro }}</p>
+<table class="table">
+<caption class="caption">{{ dm.caption }}</caption>
+<thead>
+<tr>{% for column in mapWords.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in dm.rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.status }}</td><td>{{ row.version }}</td><td>{{ row.stages }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+<p class="caption">{{ mapWords.sorted }}</p>
+</section>
+{% elif dm.kind == "empty" %}
+<section class="studio-dataset-map" aria-labelledby="dataset-map-heading">
+<h2 id="dataset-map-heading">{{ mapWords.heading }}</h2>
+<p>{{ mapWords.intro }}</p>
+<p>{{ mapWords.empty }}</p>
+</section>
+{% elif dm.kind == "refused" %}
+<p class="caption" role="note">{{ mapWords.refused }}</p>
+{% elif dm.kind == "unreadable" %}
+<p role="alert">{{ mapWords.unreadable }}</p>
+{% endif %}
+{% endblock %}

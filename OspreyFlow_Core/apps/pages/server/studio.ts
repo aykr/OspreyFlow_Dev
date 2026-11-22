@@ -56,7 +56,7 @@ interface Studio {
 const studioOf = (req: Request): Studio => req.app.locals["studio"] as Studio;
 
 /** A query or form value that is one string, else undefined: an array or an object is not what a page's own form sends. */
-function one(value: unknown): string | undefined {
+export function one(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
@@ -69,9 +69,9 @@ interface NeedsYou {
 }
 
 /** Everything the frame draws, read as the person. */
-interface Frame {
+export interface Frame {
   path: string;
-  place: StudioPlace | "frame";
+  place: StudioPlace | "frame" | "dataset-map";
   caseId: string | null;
   conduit: Conduit | undefined;
   /** The words for a case list that could not be read (or for a session that has ended); null when it was read. */
@@ -90,6 +90,11 @@ interface Frame {
   strip: string[] | null;
   /** The pipelines read that did not work: a refusal says it is refused (a note, not an alert: it is the person's rights, not a fault), a failing Conduit says to try again (an alert); null when read. */
   pipelinesProblem: { words: string; refused: boolean } | null;
+  /**
+   * What the Conduit answered for the case's pipelines (the registry), kept for a page that draws them (the dataset map, slice
+   * IS3): its status, and its list when it was read (200 and a list). `null` until the strip has been read.
+   */
+  registry: { status: number; list: Pipeline[] | undefined } | null;
   /** `opensModel` is the dataset the workspace is asked to open Model on when the link is followed (the Model place only). */
   tabs: { id: string; label: string; href: string; current: boolean; opensModel: string | null }[];
   reminder: { text: string; tip: string; href: string; opensModel: string | null } | null;
@@ -142,7 +147,7 @@ function unavailable(res: Response, status = 503): void {
  * Reads what the frame draws for `caseId` and answers a dataset switch. Returns the frame, or `"sent"` when it has already
  * answered (a switch to another case is a redirect; the service being unreachable is a page of words).
  */
-async function loadFrame(
+export async function loadFrame(
   req: Request,
   res: Response,
   options: { path: string; place: Frame["place"]; caseId: string | undefined; wantsDataset?: string; opening?: string },
@@ -173,6 +178,7 @@ async function loadFrame(
     needsUnread: false,
     strip: null,
     pipelinesProblem: null,
+    registry: null,
     tabs: [],
     reminder: null,
   };
@@ -255,6 +261,7 @@ async function readStrip(frame: Frame, conduit: Conduit, caseId: string, dataset
     readWithStatus(conduit, v1("datasets", datasetId, "sources")),
   ]);
   const registry = asList(registryReply.json) as Pipeline[] | undefined;
+  frame.registry = { status: registryReply.status, list: registry };
   const sources = (asList(sourcesReply.json) as Source[] | undefined) ?? "unreadable";
   const runs: Record<string, Run[]> = {};
   let runsUnread = false;
@@ -285,7 +292,7 @@ async function readStrip(frame: Frame, conduit: Conduit, caseId: string, dataset
 // ------------------------------------------------------------------------------------------------- the templates
 
 /** What every Studio template draws: the frame's parts, and the anti-forgery token for its forms. */
-function context(req: Request, frame: Frame, extra: Record<string, unknown>): Record<string, unknown> {
+export function context(req: Request, frame: Frame, extra: Record<string, unknown>): Record<string, unknown> {
   return {
     page: "studio",
     csrfToken: req.session.auth?.csrfToken,
