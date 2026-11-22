@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { redrawOnBandChange, redrawWhenCameraStops } from "./cameraMoves";
+import { redrawOnBandChange, redrawWhenCameraStops } from "@ospreyflow/glass-shared";
 
 afterEach(() => vi.unstubAllGlobals());
 

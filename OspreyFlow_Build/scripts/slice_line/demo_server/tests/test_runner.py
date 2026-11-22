@@ -129,8 +129,10 @@ def test_without_systemd_run_nothing_runs_uncapped(world):
 def test_under_the_free_space_floor_nothing_is_received(world):
     w = world
     p = runner(w, "run", bundle_of(w, "refs/heads/main", "refs/heads/lane/slice-S1"),
-               harness={"min_free": None})  # protocol.py's own 40 GB: more than this Mac has free
+               harness={"min_free": 1 << 62})  # more than any disk has free, whatever this Mac has today
     assert p.returncode == 3 and answer(p)["reason"] == "disk-floor"
+    assert answer(p)["words"] == "under %d GB free" % ((1 << 62) // 1024 ** 3)
+    assert list((w["remote"] / "data/jobs").iterdir()) == []
 
 
 def started(w, harness=None, **gate):

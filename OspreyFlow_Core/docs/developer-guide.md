@@ -11,13 +11,40 @@ says plainly where something is not yet.
 The other guides in this folder are the [administration guide](administration-guide.md), for
 whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for analysts.
 
+## Why OspreyFlow is built this way
+
+You bring data into a platform that people will rely on for judgements, so here is what OspreyFlow is built
+to and what each part means for a pipeline. The [architecture guide](architecture-guide.md) (its section
+"Why OspreyFlow is built this way") gives the fullest account, with what holds each constraint today and
+what is "coming".
+
+- **Software sovereignty.** You can inspect, modify, host and replace what you work with. The software
+  dependencies are under open-source licences, and a gate checks the build's package list against an
+  allowlist on every change; it does not yet reach every package inside the images. The graph store, the
+  analytics store, graph algorithms and the model engines sit behind ports, so for them an adapter is the
+  unit of replacement. Model weights, map data, fonts and base images are outside the licence gate; a
+  register and a gate for them are coming.
+- **Data sovereignty.** A hosted model engine is an opt-in that an administrator turns on, and what a
+  pipeline may send to one is bounded by each dataset's egress setting and its handling codes.
+- **Privacy control.** Every record carries its handling, set at load, and what each person then sees is
+  meant to be bounded by those markings and by case membership. Some gaps on the read side are known
+  and are listed in the architecture guide.
+- **Security management.** A run is made as the person who set it, and changes are audited. Recording
+  every model call, and every sign-in, is coming.
+- **Analytical accountability.** A record keeps where it came from, and what a model extracts stays
+  *inferred* until a person confirms it.
+
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.40** · 2026-11-16 · For OspreyFlow v0.6.1 · Issued
+**Version 1.44** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.44 | 2026-11-21 | §1: the lead-in to the tiers and ports no longer says everything between the tiers crosses one of four ports. It says what crosses the four ports, that three narrower ports sit beside them, and that the relational store, the working-set store and the search index are not behind a port (DC1c round 7). PDF made again. |
+| 1.43 | 2026-11-21 | *Why OspreyFlow is built this way*: the licence line says the gate checks the build's package list against an allowlist on every change and does not yet reach every package inside the images, in place of saying every software dependency is under an open-source licence; the line names which stores and engines sit behind ports and says an adapter is the unit of replacement for those (DC1c, round 5). PDF made again. |
+| 1.42 | 2026-11-21 | *Why OspreyFlow is built this way*: the privacy line is an aim with known read-side gaps, listed in the architecture guide, not a plain statement of fact (DC1c, verifier's finding). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
+| 1.41 | 2026-11-20 | A passage, *Why OspreyFlow is built this way*, after the opening, fitted to a data engineer: the five constraints and what each means for a pipeline (DC1c). Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.40 | 2026-11-16 | The header names v0.6.1, the patch to v0.6.0 (Ask & Chat a drawer by default, ADR-145 Amendment 20; search on Small and Lite fed by the Conduit, ADR-150 Amendment 4). Held by `tests/test_guides_release_header.py`. Version set at the cut. PDF made by the orchestrator at the cut. |
 | 1.39 | 2026-11-15 | The header names v0.6.0 (the owner's plan of 15 November); §9's example release tag is `v0.6.0`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
 | 1.38 | 2026-11-15 | The header names v0.5.2 (step 5's sweep, §2, at the cut); §9's example release tag is `v0.5.2`. Held by `tests/test_guides_release_header.py`. Version set at merge. PDF made by the orchestrator at merge. |
@@ -71,7 +98,7 @@ whoever installs and runs OspreyFlow, and the [user guide](user-guide.md), for a
 The [architecture guide](architecture-guide.md) has the level 1 diagram, with the technology in each
 component, and every interface with what crosses it.
 
-Three tiers; everything that passes between them crosses one of four typed ports:
+Three tiers. What passes between the Conduit and the graph store, the analytics store, graph algorithms and the model engines crosses one of four typed ports, below; the media store, the recognition pass and the search index's feed each have a narrower one beside them. The relational store (the audit table and the export ledger), the working-set store and the search index are not behind a port.
 
 | Tier | What it is |
 | --- | --- |

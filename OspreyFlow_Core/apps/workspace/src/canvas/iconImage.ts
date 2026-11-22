@@ -1,6 +1,6 @@
 // Turning a file the analyst chose into the small picture kept for a type (ADR-079). The file is read
 // and cut in this browser and never sent anywhere.
-import { MAX_IMAGE_ICON_CHARS, isSafeImageDataUrl } from "../color/nodeVisual";
+import { MAX_IMAGE_ICON_CHARS, isSafeImageDataUrl } from "@ospreyflow/glass-shared";
 
 export const MAX_PICTURE_BYTES = 5 * 1024 * 1024;
 export const PICTURE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";

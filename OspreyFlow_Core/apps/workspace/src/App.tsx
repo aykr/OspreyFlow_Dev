@@ -46,6 +46,9 @@ import {
   summariseHome,
   switchableProviders,
   type WorkingSetDelta,
+  linkTypeName,
+  fetchOntologyRegistry,
+  type OntologyRegistry,
 } from "@ospreyflow/glass-shared";
 import { followCrossFilterWithMapBins } from "./crossfilter/mapBins";
 import {
@@ -72,7 +75,6 @@ import { actionableRefusalWords } from "./auth/refusalWords";
 import { SignInScreen } from "./auth/SignInScreen";
 import { deploymentMarking, deploymentReportsUrl, deploymentWelcome } from "./auth/oidcConfig";
 import { GlassCanvas, type GlassCanvasHandle } from "./canvas/GlassCanvas";
-import { linkTypeName } from "./canvas/linkLabel";
 import { DocumentReader } from "./reader/DocumentReader";
 import { displayValue } from "./search/searchOptions";
 import { judgementCountsByNode } from "./assessment/judgementCounts";
@@ -125,10 +127,6 @@ import { searchPlaces } from "./map/places";
 import { addGazetteer, caseGazetteers, removeGazetteer } from "./map/gazetteers";
 import type { GazetteerControls } from "./map/MapControls";
 import { instantAtFraction, itemsUpTo } from "./playback/math";
-import {
-  fetchOntologyRegistry,
-  type OntologyRegistry,
-} from "./ontology/schema";
 import { GlobalSearch } from "./search/GlobalSearch";
 import { SearchResults } from "./search/SearchResults";
 import { useSearchResultsOverlay } from "./search/useSearchResultsOverlay";

@@ -51,6 +51,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import owed as owed_tests  # noqa: E402
+import server_gate  # noqa: E402
 import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
@@ -377,7 +378,7 @@ def wait_for_queue(tree: Path, wait_minutes: int, log: Path) -> str | None:
         time.sleep(QUEUE_POLL_SECONDS)
 
 
-def full_gate(tree: Path, base: str, log: Path) -> int:
+def full_gate(tree: Path, base: str, log: Path, targets: list | None = None) -> int:
     """Today's full gate on the merge result, in its own CI-built environment: make -k ci and make test, then the
     live step: the live files the change itself reaches, on the test server through the lease, as they need stores
     (live_step.yaml: off, or on after the server's run queue clears)."""
@@ -398,7 +399,7 @@ def full_gate(tree: Path, base: str, log: Path) -> int:
         log.open("a").write(f"\nREFUSED: the gate's environment: {e}\n")
         return 3
     codes = []
-    for target in FULL_GATE_TARGETS:
+    for target in (FULL_GATE_TARGETS if targets is None else targets):  # targets: the server's remainder (004, 2)
         started = time.monotonic()
         if PROGRESS:
             PROGRESS.part(" ".join(target))
@@ -904,6 +905,37 @@ def attempt_tests(run: dict, attempt: int) -> list[dict]:
     return tests
 
 
+#: A job's conclusions that are a failure of the job (the owner's file 007, fault 13).
+FAILED_JOB = ("failure", "timed_out", "startup_failure")
+
+
+def attempt_jobs(run: dict, attempt: int, tests: list[dict]) -> dict:
+    """One completed attempt's jobs (gh run view --json jobs), kept beside its tests in records/github/<run>.json: the
+    failed jobs by name, and those among them whose log names no failing test ("failed without a test": a runner, a
+    download, a time-out, a run cut off), so each is named and countable (the owner's file 007, fault 13)."""
+    f = c.GITHUB_RECORDS / f"{run['databaseId']}.json"
+    rec = c.read_json(f) or {"run": run["databaseId"], "attempts": {}}
+    have = rec["attempts"].get(str(attempt)) or {}
+    if "failed_jobs" in have:
+        return have
+    jobs = json.loads(gh_json(["run", "view", str(run["databaseId"]), "--attempt", str(attempt), "--json", "jobs"]))
+    failed = [j.get("name", "?") for j in jobs.get("jobs") or [] if j.get("conclusion") in FAILED_JOB]
+    named = {t["job"] for t in tests}
+    have.update(failed_jobs=failed, without_a_test=[j for j in failed if j not in named], conclusion=run.get("conclusion"))
+    rec["attempts"][str(attempt)] = {**(rec["attempts"].get(str(attempt)) or {}), **have}
+    c.write_json(f, rec)
+    return have
+
+
+def jobs_said(j: dict) -> str:
+    if not j.get("failed_jobs"):
+        return ""
+    out = "failed jobs: " + ", ".join(j["failed_jobs"])
+    if j.get("without_a_test"):
+        out += "; " + ", ".join(j["without_a_test"]) + " failed without a test (no FAILED line)"
+    return " (" + out + ")"
+
+
 def cleared_stops() -> set[str]:
     rows = c.GITHUB_CLEARS.read_text().splitlines()[1:] if c.GITHUB_CLEARS.exists() else []
     return {r.split("\t")[1] for r in rows if len(r.split("\t")) > 1}
@@ -920,10 +952,13 @@ def watch_github() -> str:
         if not runs:
             return "watch-github: no run on main has completed: nothing to watch."
         last = runs[0]
-        if last.get("conclusion") != "failure":
+        if last.get("conclusion") not in ("failure", "cancelled"):
             return f"watch-github: run {last.get('databaseId')} on main is {last.get('conclusion')}: no stop."
         attempt = int(last.get("attempt") or 1)
         now = attempt_tests(last, attempt)
+        jobs = attempt_jobs(last, attempt, now)  # the owner's file 007: every job, a cancelled run's too
+        if last.get("conclusion") == "cancelled" and not jobs.get("failed_jobs"):
+            return f"watch-github: run {last.get('databaseId')} on main is cancelled, with no failed job: no stop."
         if attempt > 1:
             prev, prev_attempt = last, attempt - 1
         else:
@@ -931,13 +966,13 @@ def watch_github() -> str:
             prev_attempt = int(prev.get("attempt") or 1) if prev else 0
         if not prev:
             return (f"watch-github: run {last['databaseId']} is red, its first on {str(last.get('headSha'))[:10]} "
-                    f"({len(now)} failing tests): recorded, no stop; a red run is rerun once.")
+                    f"({len(now)} failing tests){jobs_said(jobs)}: recorded, no stop; a red run is rerun once.")
         before = {t["test"] for t in attempt_tests(prev, prev_attempt)}
         both = [t for t in now if t["test"] in before]
         if not both:
             return (f"watch-github: run {last['databaseId']} attempt {attempt} is red again on "
                     f"{str(last.get('headSha'))[:10]}, but no test failed in both ({len(now)} now, {len(before)} "
-                    "before): no stop.")
+                    f"before){jobs_said(jobs)}: no stop.")
         key = f"{last.get('headSha')}:{prev['databaseId']}/{prev_attempt}:{last['databaseId']}/{attempt}"
         stop = {"test": both[0]["test"], "tests": [t["test"] for t in both], "job": both[0]["job"],
                 "commit": last.get("headSha"), "key": key, "at": c.now(),
@@ -1099,7 +1134,168 @@ class Progress:
                 pass
 
 
+#: A failed make target in a log, as make prints it ("make: *** [target] Error 2", "make[1]: *** [target] Error 1").
+MAKE_FAILED = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[([^\]]+)\] Error \d+")
+REFUSALS = "refusals.tsv"
+
+
+def refusal_cause(words: str, log: Path) -> str:
+    """A merge refusal's cause in a few words (the owner's file 005): for the full gate, the make targets that failed."""
+    for needle, cause in (("in the records folder alone", "a records-only conflict"),
+                          ("conflicts with main", "a conflict with main"),
+                          ("never red", "the acceptance was never red"),
+                          ("acceptance is red on the merge result", "the acceptance, red on the merge result"),
+                          ("checks is red on the merge result", "the checks, red on the merge result"),
+                          ("scan the files this slice touches", "the scans"),
+                          ("(network)", "the network"),
+                          ("protected paths", "a protected path"),
+                          ("no verifier", "no verifier pass")):
+        if needle in words:
+            return cause
+    if "full gate is red" in words:
+        try:
+            text = log.read_text(errors="replace")
+        except OSError:
+            text = ""
+        targets = list(dict.fromkeys(m.group(1) for ln in gate_part(text) if (m := MAKE_FAILED.match(ln))))
+        targets = [t for t in targets if t not in ("ci", "test")] or targets
+        return "the full gate: " + (", ".join(targets[:3]) if targets else "a failing test")
+    return "another refusal"
+
+
+def record_refusal(slice_id: str, tip: str, cause: str) -> None:
+    f = c.DATA / REFUSALS
+    if not f.exists():
+        f.write_text("at\tslice\ttip\tcause\n")
+    with f.open("a") as fh:
+        fh.write(f"{c.now()}\t{slice_id}\t{tip}\t{cause}\n")
+
+
+def refusal_counts() -> dict:
+    """How many merges were refused for each cause (refusals.tsv), most first."""
+    out: dict = {}
+    try:
+        lines = (c.DATA / REFUSALS).read_text().splitlines()[1:]
+    except OSError:
+        return out
+    for ln in lines:
+        parts = ln.split("\t")
+        if len(parts) >= 4:
+            out[parts[3]] = out.get(parts[3], 0) + 1
+    return dict(sorted(out.items(), key=lambda kv: -kv[1]))
+
+
+def server_hold(slice_id: str) -> str | None:
+    """Why the slice is not given the slot (server_gate.slot_hold), for its branch's tip; None when nothing holds it."""
+    frozen = c.read_json(c.rec_dir(slice_id) / "frozen.json") or {}
+    if not frozen.get("branch"):
+        return None
+    try:
+        tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    except RuntimeError:
+        return None
+    return server_gate.slot_hold(slice_id, tip)
+
+
+def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> int:
+    """The demo server's named failures, rerun on the Mac in the gate's own environment (ci_env): the tests by
+    make test's own pytest command (the Makefile's IN_CORE and PYTEST, through a second makefile beside the log, the
+    Makefile itself unchanged), and a failing target with no test named by make -k. 0 when every one is green."""
+    try:
+        env = ci_env(tree, log)
+    except (NetworkError, GateEnvError) as e:
+        log.open("a").write(f"\nREFUSED: the rerun's environment: {e}\n")
+        return 3
+    codes = []
+    if tests:
+        mk = log.with_suffix(".mk")
+        mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
+        codes.append(run_step("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
+                                                                    "RERUN_TESTS=" + " ".join(tests)],
+                              tree / "OspreyFlow_Build", log, env, []))
+    if targets:
+        codes.append(run_step("the server's failing targets, rerun", ["make", "-k", *targets], tree / "OspreyFlow_Build",
+                              log, env, [], tests=False))
+    return next((x for x in codes if x), 0)
+
+
+def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> dict:
+    """The server's green for this merge (item 2): counted only with the owner's switch on and a finished pass for the
+    same main tip, slice tip and candidate tree as `after`; then the gate runs only server_gate.remainder's targets.
+    Otherwise the whole gate runs as before, and the record says why."""
+    rid, e = server_gate.server_result(slice_id, tip)
+    tree = c.git(["rev-parse", "HEAD^{tree}"], after)
+    why = server_gate.matches(e, base, tip, tree)
+    same = server_gate.same_candidate(e, base, tip, tree)
+    out = {"run_id": rid, "counted": False, "tree": tree, "same": same is None, "server_verdict": (e or {}).get("verdict")}
+    if same:
+        out["same_why"] = same
+    if not server_gate.counting():
+        return {**out, "why": "the owner's switch (server_counts) is off"}
+    if why:
+        return {**out, "why": why}
+    plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"))
+    log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}; the Mac runs: "
+                        f"{'; '.join(plan['mac']) or 'nothing of the full gate'}\n")
+    return {**out, "counted": True, "taken": plan["taken"], "mac_ran": plan["mac"], "plan": plan}
+
+
+#: The Mac's rerun of a server's red; the line's tests stand it in, as they stand in FULL_GATE.
+SERVER_RERUN = rerun_named
+
+
+def server_rerun(slice_id: str) -> str:
+    """merge_slice.py server-rerun <ID> (item 1): the server's named failures for the slice's tip, rerun on the Mac on
+    the same candidate (main with the slice merged in). Green: recorded, and the slice queues as before. Red: recorded,
+    and the slice goes back to its builder as a gate refusal, the failing names its findings."""
+    rec = c.rec_dir(slice_id)
+    frozen = c.read_json(rec / "frozen.json")
+    if not frozen:
+        raise Refused(f"{slice_id} was never started (no frozen record).")
+    if c.state(slice_id).get("phase") != "verified":
+        raise Refused(f"{slice_id} is not verified: a server result is read only for a verified slice.")
+    tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    rid, e = server_gate.server_result(slice_id, tip)
+    if not server_gate.is_red(e):
+        raise Refused(f"no red result from the demo server for {slice_id} at {tip[:10]} (run {rid or 'none named'}): "
+                      "nothing to rerun.")
+    tests, bare = server_gate.failing_names(e)
+    if not tests and not bare:
+        raise Refused(f"the server's run {rid} names no failing test or target: nothing to rerun; the merge's whole gate "
+                      "settles it.")
+    base = c.git(["rev-parse", "main"], c.REPO)
+    log = rec / f"server-rerun-{rid}.log"
+    tree = temp_tree(base, f"{slice_id}-rerun")
+    try:
+        if subprocess.run(["git", "merge", "--no-ff", "-q", "-m", f"rerun {slice_id}", tip], cwd=tree,
+                          capture_output=True).returncode != 0:
+            raise Refused(f"{slice_id} does not merge cleanly onto main: the merge's conflict check settles it.")
+        t0 = time.monotonic()
+        code = SERVER_RERUN(tree, log, tests, bare)
+        seconds = round(time.monotonic() - t0)
+    finally:
+        drop_tree(tree)
+        shutil.rmtree(tree, ignore_errors=True)
+    result = "green" if code == 0 else "red"
+    c.write_json(server_gate.rerun_record(slice_id, rid), {
+        "slice": slice_id, "tip": tip, "main": base, "run_id": rid, "result": result, "tests": tests, "targets": bare,
+        "seconds": seconds, "log": log.name, "at": c.now()})
+    named = ", ".join(tests + bare)
+    if result == "green":
+        return (f"{slice_id}: the server's red ({named}) is green on the Mac ({seconds} s): an environment difference, "
+                f"recorded; it queues for the merge as before.")
+    refuse_to_builder(slice_id, tip, "the demo server's red, rerun on the Mac, was red there too", [
+        {"file": n.split("::")[0].replace("../", ""), "what": f"Rerun on the Mac after the demo server's run {rid}: {n} "
+         "failed there too.", "evidence": f"the rerun's log ({log.name} in this slice's records)"} for n in tests + bare],
+        len(tests), "gate")
+    return (f"{slice_id}: the server's red ({named}) is red on the Mac too ({seconds} s): back to its builder "
+            f"(resume.py {slice_id} send-back).")
+
+
 def merge(slice_id: str) -> dict:
+    held = server_hold(slice_id)  # the owner's word of 22 November 2026, item 1: a server red is rerun before the slot
+    if held:
+        raise Refused(held)
     fh = lock()
     c.write_json(c.DATA / RUNNING, {"slice": slice_id, "pid": os.getpid(), "at": c.now()})
     trees: list[Path] = []
@@ -1201,7 +1397,17 @@ def merge(slice_id: str) -> dict:
             raise Refused(f"the merge result's environment could not be built: {e}. See {log}")
         for name in ("acceptance", "checks"):
             if frozen.get(name) and run(frozen[name], after, log, shell=True, env=env_after) != 0:
-                raise Refused(f"the slice's {name} is red on the merge result. See {log}")
+                # line fault 17 (the owner's file 008, SE6b): recorded for the builder, so send-back works, as a
+                # refusal at the full gate and at the scans is; left at `verified`, no action could move the slice
+                names, findings = gate_findings(log.read_text(errors="replace"))
+                if not names:
+                    findings = [{"file": "", "what": f"The slice's {name} command is red on the merge result (main with the "
+                                 f"slice merged in), though green on the slice's own tip: {frozen[name][:200]}",
+                                 "evidence": "the merge log (a merge-*.log in this slice's records)"}]
+                refuse_to_builder(slice_id, tip, f"the slice's {name} was red on the merge result", findings, len(names),
+                                  "gate")
+                raise Refused(f"the slice's {name} is red on the merge result. Recorded: resume.py {slice_id} send-back "
+                              f"returns it to the builder. See {log}")
         # the pure tests that scan what the slice touched (scan_map.tsv), on the merge result
         scans = scan_select.not_named(scan_select.select(touched, scan_select.load((after / LINE_MAP_REL).read_text())),
                                       frozen.get("checks") or "", frozen.get("acceptance") or "")
@@ -1216,8 +1422,15 @@ def merge(slice_id: str) -> dict:
 
         # 7. today's full gate on the merge result
         prog.step(5)
-        code = FULL_GATE(after, base, log)
+        server = counted_gate(slice_id, tip, base, after, log)  # the owner's file 004, item 2
+        code = FULL_GATE(after, base, log, targets=server["plan"]["targets"]) if server.get("counted") else \
+            FULL_GATE(after, base, log)
         retried = c.read_json(log.with_suffix(".retries.json"))
+        try:  # item 4: the server's result beside the Mac's whole gate, on from the first day; never changes the merge
+            server["shadow"] = server_gate.shadow(slice_id, tip, server, code, code == NETWORK, gate_findings(
+                log.read_text(errors="replace"))[0] if code not in (0, NETWORK) and log.exists() else [])["result"]
+        except Exception as e:  # noqa: BLE001 -- best effort, said in the log
+            log.open("a").write(f"\n(the server shadow could not be recorded: {type(e).__name__})\n")
         if code == NETWORK:  # 1d: a registry or download unreachable twice: the slice's fault in nothing
             c.write_json(rec / f"refusal-network-{uuid.uuid4().hex[:8]}.json",
                          {"kind": "network", "slice": slice_id, "tip": tip, "merge_log": log.name, "retried": retried,
@@ -1237,6 +1450,8 @@ def merge(slice_id: str) -> dict:
         done = {"slice": slice_id, "build": frozen["build"], "merge": landed, "tip": tip, "base": base,
                 "acceptance_run": log.name, "gate_run": log.name, "verifier": verify.get("passes"),
                 "github_at_merge": github, "at": c.now()}
+        if server.get("run_id") or server.get("counted"):
+            done["server"] = {k: v for k, v in server.items() if k != "plan"}
         if under:  # 2: records commits that moved main under the gate, landed beneath the tested result
             done.update(tested_merge=merged, landed_on=c.git(["rev-parse", f"{landed}^1"], c.REPO), records_under_gate=under)
         if retried:
@@ -1267,6 +1482,17 @@ def merge(slice_id: str) -> dict:
     except Refused as e:
         c.set_state(slice_id, last_merge_refusal=c.now())
         prog.finish("refused", str(e))
+        try:  # the owner's file 005: each refusal's cause in a few words, counted by cause on the board
+            cause = refusal_cause(str(e), log)
+            c.set_state(slice_id, last_refusal_cause=cause)
+            record_refusal(slice_id, prog.rec.get("tip") or "", cause)
+        except Exception:  # noqa: BLE001 -- best effort: a refusal is never changed by its bookkeeping
+            pass
+        try:  # item 3: the slices the server stacked on this one are not counted; they go to the server again
+            if prog.rec.get("tip"):
+                server_gate.stack_refused(slice_id, prog.rec["tip"])
+        except Exception:  # noqa: BLE001 -- best effort: a refusal is never changed by its bookkeeping
+            pass
         raise
     except BaseException as e:
         prog.finish("ended with an error", type(e).__name__)
@@ -1530,6 +1756,10 @@ def main() -> int:
     ad = sub.add_parser("approve-diff")
     ad.add_argument("name")
     ad.add_argument("hash8")
+    rp = sub.add_parser("server-report")
+    rp.add_argument("--json", action="store_true")
+    sr = sub.add_parser("server-rerun")
+    sr.add_argument("slice")
     aa = sub.add_parser("apply-approved")
     aa.add_argument("name")
     aa.add_argument("--wait", type=float, default=120, metavar="MINUTES", help="how long to wait for a running merge")
@@ -1546,6 +1776,11 @@ def main() -> int:
             print(wait_idle(a.minutes))
         elif a.cmd == "approve-diff":
             print(approve_diff(a.name, a.hash8))
+        elif a.cmd == "server-report":  # item 6: read only
+            r = server_gate.report()
+            print(json.dumps(r, indent=1) if a.json else server_gate.report_words(r))
+        elif a.cmd == "server-rerun":
+            print(server_rerun(a.slice))
         elif a.cmd == "apply-approved":
             print(apply_approved(a.name, a.wait))
         else:

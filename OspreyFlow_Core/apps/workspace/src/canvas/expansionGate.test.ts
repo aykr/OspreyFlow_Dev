@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  EXPANSION_CONFIRM_ABOVE,
-  gateExpansion,
-  narrowingOptions,
-} from "./expansionGate";
+import { EXPANSION_CONFIRM_ABOVE, gateExpansion, narrowingOptions } from "@ospreyflow/glass-shared";
 
 /**
  * Seen 3 October 2026: a double-click on a busy Enron address added all 1,090 of its neighbours at

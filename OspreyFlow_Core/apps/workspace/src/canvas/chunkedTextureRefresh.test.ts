@@ -1,7 +1,7 @@
 // The perf gate's profile (15 October 2026): a texture's full refresh held the page 8 s on CI.
 import { describe, expect, it } from "vitest";
 
-import { chunkedRefresher, type Refreshable } from "./chunkedTextureRefresh";
+import { chunkedRefresher, type Refreshable } from "@ospreyflow/glass-shared";
 
 function fakeRenderer(count: number) {
   const nodes = Array.from({ length: count }, (_, i) => `n${i}`);

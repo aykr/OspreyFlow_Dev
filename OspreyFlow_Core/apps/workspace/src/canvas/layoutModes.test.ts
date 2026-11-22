@@ -6,7 +6,7 @@ import {
   MIN_NODE_GAP,
   treeLinkKeys,
   type ArrangeInput,
-} from "./layoutModes";
+} from "@ospreyflow/glass-shared";
 
 type N = ArrangeInput["nodes"][number];
 const n = (id: string, type = "Endpoint"): N => ({ id, type, x: 0, y: 0 });

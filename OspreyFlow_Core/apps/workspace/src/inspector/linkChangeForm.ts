@@ -3,9 +3,8 @@
 // how what the analyst typed becomes the request the server takes — only what changed, with the
 // reason, or a sentence saying what is wrong.
 import type { Edge, EdgeTypeDef, Handling, PropertyDef } from "../../../../packages/schemas/generated";
-import { linkTypeName } from "../canvas/linkLabel";
-import type { HandlingScheme } from "@ospreyflow/glass-shared";
-import type { LinkChangeInput } from "@ospreyflow/glass-shared";
+import { linkTypeName } from "@ospreyflow/glass-shared";
+import type { HandlingScheme, LinkChangeInput } from "@ospreyflow/glass-shared";
 import { lowerParts } from "./linkHandling";
 
 /** The same limit the server holds (`services/api/link_changes.py::MAX_REASON_CHARS`). */

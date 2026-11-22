@@ -10,8 +10,7 @@ import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
 import { applyHarnessBrand } from "../keyboard/brandHarness";
 import { GlassCanvas, type GlassCanvasHandle } from "../src/canvas/GlassCanvas";
-import { OntologyRegistry } from "../src/ontology/schema";
-import { createWorkingSet } from "@ospreyflow/glass-shared";
+import { OntologyRegistry, createWorkingSet } from "@ospreyflow/glass-shared";
 import { generateFixture } from "./fixture";
 import type { OntologySchema } from "../../../packages/schemas/generated";
 

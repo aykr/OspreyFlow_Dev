@@ -1,4 +1,4 @@
-"""The Mac's tests' own way into runner.py, and the only one: never installed (install.sh copies six named files, and
+"""The Mac's tests' own way into runner.py, and the only one: never installed (install.sh copies the files its FILES names, and
 this is not one of them), and nothing in runner.py reads it, names it or reads any variable that could select it.
 
     python harness_runner.py <the runner.py under test> <harness.json> [runner.py's own arguments]
@@ -13,8 +13,8 @@ harness.json, written by the test itself (never the environment):
                                        own Docker answers its owner)
      "slow_clean": <seconds> | null,  the job's clean-up made that much slower, so a result written before its
                                        work is gone is seen (run 7's race)
-     "min_free": <bytes> | null}      the free-space floor for this test (this Mac has less than 40 GB free); null:
-                                       protocol.py's own
+     "min_free": <bytes> | null}      the free-space floor for this test; null: protocol.py's own (40 GB),
+                                       which a test must not rely on: the Mac's free space varies
 
 The job the direct launch starts runs through this wrapper again, with the same harness file, so it sees the same
 stand-ins. Everything else is runner.py's own: its command parsing, its refusals, its bundle checks, its merge.
@@ -56,7 +56,10 @@ def stand_in_gate(tree, job, log, deadline, result):
         result["checks"] = spec["checks"]
     result["lists_from"] = "stand-in"
     result["list_drift"] = []
-    return [{"step": "stand-in", "exit": int(spec.get("exit", 0)), "seconds": 0}]
+    red = any((Path(tree) / f).exists() for f in spec.get("red_with", []))  # 013: red for a candidate holding it
+    if red:
+        result["failing"]["targets"] += ["test"]
+    return [{"step": "stand-in", "exit": 1 if red else int(spec.get("exit", 0)), "seconds": 0}]
 
 
 if conf.get("launch") == "direct":

@@ -49,17 +49,17 @@ vi.mock("./auth/userManager", async () => {
     signOut: vi.fn(),
   };
 });
-vi.mock("./ontology/schema", async () => {
-  const actual = await vi.importActual<typeof import("./ontology/schema")>("./ontology/schema");
-  return { ...actual, fetchOntologyRegistry: vi.fn() };
-});
 vi.mock("@ospreyflow/glass-shared", async () => {
   const actual = await vi.importActual<typeof import("@ospreyflow/glass-shared")>("@ospreyflow/glass-shared");
-  return { ...actual, fetchMapConfig: vi.fn(() => new Promise(() => undefined)) };
+  return {
+    ...actual,
+    fetchMapConfig: vi.fn(() => new Promise(() => undefined)),
+    fetchOntologyRegistry: vi.fn(),
+  };
 });
 
 import * as userManager from "./auth/userManager";
-import * as ontologySchema from "./ontology/schema";
+import * as ontologySchema from "@ospreyflow/glass-shared";
 
 
 const RIGHTS = ["investigate", "read_alert_queue", "triage_alerts", "ask_model", "read_reports", "trace_ownership"];

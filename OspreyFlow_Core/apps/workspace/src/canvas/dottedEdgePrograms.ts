@@ -23,7 +23,12 @@ import {
 } from "sigma/rendering";
 import type { RenderParams } from "sigma/types";
 
-import { DASH_LENGTH_PX, DASH_PERIOD_PX, DOT_LENGTH_PX, DOT_PERIOD_PX } from "./provenancePatterns";
+import {
+  DASH_LENGTH_PX,
+  DASH_PERIOD_PX,
+  DOT_LENGTH_PX,
+  DOT_PERIOD_PX,
+} from "@ospreyflow/glass-shared";
 
 export { DASH_LENGTH_PX, DASH_PERIOD_PX, DOT_LENGTH_PX, DOT_PERIOD_PX };
 

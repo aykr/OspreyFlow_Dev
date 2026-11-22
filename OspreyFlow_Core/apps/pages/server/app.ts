@@ -17,7 +17,7 @@ import type { ForwardSettings } from "./config.js";
 import { csrfProtection } from "./csrf.js";
 import { forwarder, v1Gate } from "./forward.js";
 import { PagesSessionStore } from "./expressStore.js";
-import { registerPages } from "./pages.js";
+import { registerPages, uploadPathsOf } from "./pages.js";
 import type { PageModule } from "./pages.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderRefused, IdentityProviderUnavailable, isRefusalReason } from "./identity.js";
@@ -36,11 +36,19 @@ import { createSessionEventReporter } from "./sessionEvents.js";
 import type { SessionEventReporter } from "./sessionEvents.js";
 import { COOKIE_NAME, IDLE_SECONDS, MIN_SECRET_LENGTH, newRecord, randomToken } from "./sessionPolicy.js";
 import { LOGIN_KEY_PREFIX } from "./sessionStore.js";
+import { STAGED_SWEEP_MS, endStaged } from "./staging.js";
+import { MemorySessionStore } from "./sessionStore.js";
 import type { SessionStore } from "./sessionStore.js";
 import { isV1Path, rawPathOf } from "./v1.js";
 
 export interface AppDeps {
   store: SessionStore;
+  /**
+   * Where a release folder is held between the Studio's Releases steps. By default the app's own in-process memory, which is
+   * what a deployment uses: the session store is Valkey, and Valkey saves its keys to disk (the folder holds recipes and
+   * mappings, and is never written to disk). A test passes the memory store it reads.
+   */
+  stagedStore?: SessionStore;
   /** The one-shot seam PL3 built (a fake, or `unconfiguredProvider`). Not used for sign-in when `codeFlow` is given. */
   identityProvider: IdentityProvider;
   /**
@@ -126,6 +134,16 @@ export function createApp(deps: AppDeps): Express {
   app.set("trust proxy", "loopback, linklocal, uniquelocal");
   nunjucks.configure([TREE, ...(deps.viewDirs ?? [])], { autoescape: true, express: app, noCache: false });
   app.set("view engine", "njk");
+  // What the Studio pages (slice IS5a) read from the app: the Conduit's address and limits, the store that holds a staged
+  // release folder, the clock and the log. Settings, never a request's own.
+  const stagedStore = deps.stagedStore ?? new MemorySessionStore({ clock, sweepEveryMs: STAGED_SWEEP_MS });
+  app.locals["studio"] = {
+    forward: deps.forward,
+    store: stagedStore,
+    clock,
+    log: deps.log ?? ((): void => undefined),
+    bodyStallMs: deps.bodyStallMs ?? DEFAULT_BODY_STALL_MS,
+  };
 
   app.use(securityHeaders());
 
@@ -137,6 +155,8 @@ export function createApp(deps: AppDeps): Express {
   app.use((_req, res, next) => {
     res.locals["stylesheet"] = manifest?.["pages.css"] === undefined ? undefined : assetUrl(manifest, "pages.css");
     res.locals["asset"] = (name: string): string => assetUrl(manifest, name);
+    // A page's optional enhancement: its module's address when the build made it, else nothing (the page works without it).
+    res.locals["assetIfBuilt"] = (name: string): string => (manifest?.[name] === undefined ? "" : assetUrl(manifest, name));
     next();
   });
 
@@ -176,7 +196,7 @@ export function createApp(deps: AppDeps): Express {
     res.locals["csrfToken"] = req.session?.auth?.csrfToken;
     next();
   });
-  app.use(csrfProtection());
+  app.use(csrfProtection({ uploadPaths: deps.pages ? uploadPathsOf(deps.pages) : new Set<string>() }));
 
   app.get("/", (req, res) => {
     const auth = req.session.auth;
@@ -317,9 +337,11 @@ export function createApp(deps: AppDeps): Express {
   });
 
   app.post("/session/sign-out", async (req, res) => {
-    // The anti-forgery check has already run, so there is a session here. Its token is read before the session goes, so
-    // that the Conduit can be told: reported (and not waited for) only if the Conduit accepts the token, which it
-    // checks itself; an expired one is refused there and costs a log line, and the session is deleted either way.
+    // The anti-forgery check has already run, so there is a session here. A release folder this session staged goes first.
+    await endStaged(stagedStore, req.session.staged);
+    // The session's token is read before the session goes, so that the Conduit can be told: reported (and not waited
+    // for) only if the Conduit accepts the token, which it checks itself; an expired one is refused there and costs
+    // a log line, and the session is deleted either way.
     let token: string | undefined;
     try {
       const auth = req.session.auth;

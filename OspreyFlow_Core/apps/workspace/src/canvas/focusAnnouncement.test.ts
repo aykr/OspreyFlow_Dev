@@ -1,7 +1,7 @@
 // GDS remediation plan A2: the words a screen reader hears as keyboard focus moves between nodes.
 import { describe, expect, it } from "vitest";
 
-import { focusAnnouncement } from "./focusAnnouncement";
+import { focusAnnouncement } from "@ospreyflow/glass-shared";
 
 describe("the focused node's announcement", () => {
   it("says the name, the type and the links, as the plan's example", () => {

@@ -73,7 +73,9 @@ def test_commands_that_together_pass_the_allowance_are_cut_off_inside_it_and_the
     assert "acceptance was cut off after" in out["reason"] and "allowance of 5 s" in out["reason"], out["reason"]
     rec = w["data"] / "records/S1"
     cut = json.loads((rec / f"stop-timeout-{tip}.json").read_text())
-    assert cut["commit"] == tip and cut["allowance_s"] == 5 and [c["name"] for c in cut["cut"]] == ["acceptance"], cut
+    assert cut["commit"] == tip and cut["allowance_s"] == 5, cut
+    # the acceptance cut off, then the three project checks of the owner's file 005 not run (no time left)
+    assert [(c["name"], c["run"]) for c in cut["cut"]] == [("acceptance", True)] + [(n, False) for n in ["route-coverage-check", "test-file-coverage-check", "mypy"]], cut
     assert cut["cut"][0]["by"] == "allowance" and 1 <= cut["cut"][0]["after_s"] <= 4, cut
     assert (rec / "red_stops").read_text() == "1" and not (rec / f"tests-{tip}.json").exists()
 
@@ -100,7 +102,8 @@ def test_a_command_left_with_no_time_is_not_run_and_the_record_names_it(world):
     out = stop_gate(w, wt)
     assert out and "checks was cut off after" in out["reason"] and "acceptance was not run" in out["reason"], out
     cut = json.loads((w["data"] / f"records/S1/stop-timeout-{tip}.json").read_text())["cut"]
-    assert [(c["name"], c["run"]) for c in cut] == [("checks", True), ("acceptance", False)], cut
+    assert [(c["name"], c["run"]) for c in cut] == [("checks", True), ("acceptance", False)] + \
+        [(n, False) for n in ["route-coverage-check", "test-file-coverage-check", "mypy"]], cut
 
 
 def test_a_stop_inside_the_allowance_writes_no_timeout_record(world):

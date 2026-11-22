@@ -1,0 +1,95 @@
+{#- Studio › 5 Releases (slice IS5a; ADR-140 Amendment 9 decision 4): export as a GET form, each file a link to a route of the page;
+    import as three forms (read the folder, check, import) that carry the held folder's token in a hidden field. -#}
+{% extends "studio/frame.njk" %}
+{% macro plan(view) %}<div aria-label="What the import writes">
+{% if view.refused | length %}<div role="alert">
+<p>Nothing was written, because:</p>
+<ul>
+{% for line in view.refused %}<li>{{ line }}</li>
+{% endfor %}</ul>
+</div>
+{% endif %}
+{% if view.lines | length %}<ul>{% for line in view.lines %}<li>{{ line }}</li>{% endfor %}</ul>
+{% endif %}
+{% for caption in view.captions %}<p class="caption">{{ caption }}</p>
+{% endfor %}</div>{% endmacro %}
+{% block place %}
+{% if f.casesProblem %}
+{% elif not f.datasetId %}
+<p class="label">{{ release.noDataset }}</p>
+{% else %}
+<div class="studio-releases">
+<p>{{ release.intro }}</p>
+{% if rel.problem %}<p role="alert">{{ rel.problem }}</p>{% endif %}
+<section aria-label="Export a release">
+<h3>Export</h3>
+{% if not rel.mayExport %}<p class="caption">{{ release.noExport }}</p>{% endif %}
+<form method="get" action="/studio/releases">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<label>
+<span>Release name</span>
+<input class="input" name="name" value="{{ rel.name }}"{% if not rel.mayExport %} disabled{% endif %}>
+</label>
+<label>
+<span>Release version</span>
+<input class="input" name="version" value="{{ rel.version }}"{% if not rel.mayExport %} disabled{% endif %}>
+</label>
+<button type="submit" class="btn btn--primary" name="export" value="1"{% if not rel.mayExport %} disabled aria-describedby="why-export"{% endif %}>Export</button>
+{% if rel.whyExport %}<span id="why-export" class="label" data-why-not>{{ rel.whyExport }}</span>{% endif %}
+</form>
+{% if rel.exported %}
+<div>
+<p role="status">{{ release.exported(rel.exported.count) }}{% if rel.exported.leftOut %}{{ release.leftOut(rel.exported.leftOut) }}{% endif %}</p>
+<ul aria-label="The release's files">{% for file in rel.exported.files %}<li><a href="{{ file.href }}" download="{{ file.download }}">{{ file.path }}</a></li>{% endfor %}</ul>
+<p class="caption">{{ rel.exported.cli }}</p>
+</div>
+{% endif %}
+</section>
+<section aria-label="Import a release">
+<h3>Import</h3>
+{% if not rel.mayImport %}<p class="caption">{{ release.noImport }}</p>{% endif %}
+<form method="post" action="/studio/releases" enctype="multipart/form-data">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<input type="hidden" name="action" value="upload">
+<label>
+<span>The release's folder</span>
+<input type="file" name="folder" multiple webkitdirectory aria-label="Choose the release's folder"{% if not rel.mayImport %} disabled aria-describedby="why-import"{% endif %}>
+</label>
+<button type="submit" class="btn"{% if not rel.mayImport %} disabled aria-describedby="why-import"{% endif %}>Read the folder</button>
+{% if rel.whyImport %}<span id="why-import" class="label" data-why-not>{{ rel.whyImport }}</span>{% endif %}
+</form>
+<p class="caption">{{ release.checkFirst }}</p>
+{% if rel.staged %}<p role="status">{{ release.folderRead(rel.staged.count) }}</p>{% endif %}
+{% if not rel.written %}
+<form method="post" action="/studio/releases">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+{% if rel.token %}<input type="hidden" name="staged" value="{{ rel.token }}">
+{% endif %}{% if rel.check and rel.check.confirmed %}<input type="hidden" name="replace" value="1">
+{% endif %}<button type="submit" class="btn" name="action" value="check"{% if not rel.token or not rel.mayImport %} disabled{% endif %}{% if not rel.mayImport %} aria-describedby="why-import"{% endif %}>Check the release</button>
+<button type="submit" class="btn btn--primary" name="action" value="import"{% if not rel.clean or not rel.mayImport %} disabled{% endif %}{% if not rel.mayImport %} aria-describedby="why-import"{% endif %}>Import as drafts</button>
+{% if not rel.token %}<span class="label">{{ release.chooseFolder }}</span>{% endif %}
+</form>
+{% endif %}
+{% if rel.check and rel.check.replacesOwn and not rel.written %}
+<form method="post" action="/studio/releases" id="studio-replace">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<input type="hidden" name="staged" value="{{ rel.token }}">
+<label>
+<input type="checkbox" name="replace" value="1"{% if rel.check.confirmed %} checked{% endif %}{% if not rel.mayImport %} disabled{% endif %}>
+<span>{{ release.replaceOwn }}</span>
+</label>
+<p class="caption">{{ release.replaceOwnHint }}</p>
+<button type="submit" class="btn" name="action" value="{% if rel.check.confirmed %}check{% else %}replace{% endif %}">{% if rel.check.confirmed %}Check again{% else %}Check again, replacing my draft{% endif %}</button>
+</form>
+{% endif %}
+{% if rel.check and not rel.written %}{{ plan(rel.check.view) }}{% endif %}
+{% if rel.written %}{{ plan(rel.written) }}
+{% if not (rel.written.refused | length) %}<p role="status">{{ release.drafts }}</p>{% endif %}
+{% endif %}
+</section>
+</div>
+{% endif %}
+{% endblock %}

@@ -25,8 +25,8 @@ import { Button } from "../../design/primitives/Button";
 import { Panel } from "../../design/primitives/Panel";
 import { Table, type TableColumn } from "../../design/primitives/Table";
 import { rowNumber } from "../../inspector/sourceLocator";
-import { OntologyRegistry } from "../../ontology/schema";
 import {
+  OntologyRegistry,
   createWorkingSet,
   type WorkingSet,
   ProfileError,

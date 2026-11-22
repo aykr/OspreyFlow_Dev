@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
-import { OntologyRegistry } from "../src/ontology/schema";
+import { OntologyRegistry } from "@ospreyflow/glass-shared";
 import { DocumentReader } from "../src/reader/DocumentReader";
 
 declare global {

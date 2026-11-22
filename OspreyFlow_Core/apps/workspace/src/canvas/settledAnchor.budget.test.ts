@@ -3,7 +3,7 @@
 // (14 November 2026, case-b's gates at 1231898). The limit is unchanged.
 import { describe, expect, it } from "vitest";
 
-import { settledAnchors } from "./settledAnchor";
+import { settledAnchors } from "@ospreyflow/glass-shared";
 
 describe("settledAnchors at the perf fixture's size", () => {
   it("is linear in the links: the perf fixture's 50,000 nodes and 250,000 links take well under a second", () => {

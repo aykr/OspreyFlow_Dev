@@ -2,7 +2,7 @@
 
 The owner's ruling 4 (DEMO_SERVER_EARLY_WARNING_BRIEF.md, 21 November 2026): the forced command takes exactly
 `run` and `result <id>`, the id a fixed pattern of lower-case hexadecimal characters of fixed length, and (009) `stack
-<slice> <slice> [<slice>]`, two or three slice ids in merge order; anything else is
+<slice> <slice> [<slice>]`, two or three slice ids in merge order, and (010) `summary <id>`; anything else is
 refused and logged by its reason class and the length of what was received, never the text itself. The runner
 (install.sh copies this file beside it) and the Mac script both import this module; neither writes the pattern again.
 
@@ -24,7 +24,14 @@ SLICE_PATTERN = "[A-Za-z0-9]{1,16}"
 MAX_STACK = 3
 MAX_JOBS = 3
 #: The only three commands the forced command accepts, whole: anchored, one space, nothing before or after.
-COMMAND = re.compile(r"\A(?:(run)|(result) (%s)|(stack)((?: %s){2,%d}))\Z" % (ID_PATTERN, SLICE_PATTERN, MAX_STACK))
+COMMAND = re.compile(r"\A(?:(run)|(result) (%s)|(stack)((?: %s){2,%d})|(summary) (%s))\Z" % (
+    ID_PATTERN, SLICE_PATTERN, MAX_STACK, ID_PATTERN))
+
+#: How the runner, and the summary after it (010), find a failing test and a failing make target in a log.
+FAILED_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)|^\s*(?:FAIL|✘|×)\s+(\S+.*)$")
+MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[(?:[^\]]*?:\s*)?([\w./-]+)\] Error \d+")
+#: The largest summary the forced command returns (summarize.py's caps keep a real one far smaller).
+MAX_SUMMARY_BYTES = 256 * 1024
 
 #: Every container, network and volume the runner would start carries this prefix and these labels; the clean-up
 #: command removes only what carries both. (Under the owner's ruling 1 the runner starts none: it has no Docker.)
@@ -53,7 +60,8 @@ REASONS = ("empty", "newline", "shape", "busy", "bundle-empty", "bundle-too-larg
 
 
 def parse_command(received: str | None) -> tuple[str, str] | tuple[None, str]:
-    """('run', ''), ('result', <id>) or ('stack', '<slice> <slice> ...'), or (None, <reason class>). `received` is
+    """('run', ''), ('result', <id>), ('stack', '<slice> <slice> ...') or ('summary', <id>), or (None, <reason
+    class>). `received` is
     SSH_ORIGINAL_COMMAND, read once."""
     if not received:
         return None, "empty"
@@ -64,6 +72,8 @@ def parse_command(received: str | None) -> tuple[str, str] | tuple[None, str]:
         return None, "shape"
     if m.group(1):
         return "run", ""
+    if m.group(6):
+        return "summary", m.group(7)
     if m.group(4):
         order = m.group(5).split()
         if len(set(order)) != len(order):

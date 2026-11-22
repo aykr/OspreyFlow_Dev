@@ -15,7 +15,7 @@
 // `weight` (`01_DOMAIN_MODEL.md` §6.1's load-time strength formula) against ADR-035 §C5's match
 // *score*, which are different quantities; round 12e measured both and found every stored `score`
 // matches §C5 exactly.
-import type { EdgeTypeDef } from "../../../../packages/schemas/generated";
+import type { EdgeTypeDef } from "../../../schemas/generated";
 
 /** `"*"` in an ontology edge type's `from`/`to` means "any entity type" — it is a wildcard, not a
  * literal type name, and has to be read as one here. */

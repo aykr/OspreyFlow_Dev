@@ -121,6 +121,29 @@ def git(args: list, cwd: str) -> str:
     return p.stdout.rstrip()
 
 
+#: Three checks the merge's full gate runs that a slice's own checks did not (the owner's file 005, 22 November 2026:
+#: five merges refused for them, CO1, IS5a twice, SE6b, SE8c). The line runs them at the start and at every stop, in the
+#: builder's worktree, so a builder sees them red in its own round: the owner's word for these three and no others. The
+#: line's own step, not the slice's frozen row: a slice started before them meets them at its next stop.
+PROJECT_CHECKS_REAL = (("route-coverage-check", "make -C OspreyFlow_Build route-coverage-check"),
+                       ("test-file-coverage-check", "make -C OspreyFlow_Build test-file-coverage-check"),
+                       ("mypy", "cd OspreyFlow_Core && .venv/bin/mypy packages services harness"))
+PROJECT_CHECKS = PROJECT_CHECKS_REAL
+
+
+def project_checks(wt: str, slot=None) -> tuple:
+    """(problems, results) of the three project checks in the worktree (005)."""
+    problems, results = [], []
+    for name, cmd in PROJECT_CHECKS:
+        t0 = time.monotonic()
+        code, out = run(cmd, wt, slot, name)
+        results.append({"name": name, "command": cmd, "exit": code, "seconds": round(time.monotonic() - t0)})
+        if code != 0:
+            problems.append("RED: " + name + " (exit " + str(code) + "), a check the merge's full gate runs (the owner's "
+                            "file 005: the line runs it at every stop): " + cmd + "\n" + failures_only(out))
+    return problems, results
+
+
 CORE = "OspreyFlow_Core/"
 TOOLS = "OspreyFlow_Build/tools/"
 JS = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
@@ -131,6 +154,31 @@ def tool(wt: str, env: dict, local: str, name: str):
     """The worktree's own copy of a tool (its venv's, its node_modules'), else the one on the seat's PATH, else None."""
     own = Path(wt) / local
     return str(own) if own.is_file() else shutil.which(name, path=env.get("PATH"))
+
+
+LINE_MAP = "OspreyFlow_Build/scripts/slice_line/scan_map.tsv"
+
+
+def main_map(wt: str) -> list:
+    """main's scan_map.tsv rows, read beside the installed copy for the scan-map check (the owner's file 007: the
+    installed copy goes stale when a merge adds a row, 195 rows installed against 196 on main after PL4d3e, and a
+    builder was failed for a row that exists). Rows only add: the installed copy stays the authority and nothing
+    installed changes. [] when main's copy cannot be read."""
+    import scan_select
+    p = subprocess.run(["git", "show", "main:" + LINE_MAP], cwd=wt, capture_output=True, text=True)
+    if p.returncode != 0:
+        return []
+    try:
+        return scan_select.load(p.stdout)
+    except ValueError:
+        return []
+
+
+def own_base(wt: str, frozen: dict) -> str:
+    """Where the branch's own changes are measured from: its merge-base with main (the owner's file 007, line fault 14:
+    measured from the frozen base, everything a builder took in from main counted as the slice's, and IS5a was failed
+    six times for two files of main's). The frozen base when main cannot be read."""
+    return git(["merge-base", "main", "HEAD"], wt) or frozen.get("base") or "main"
 
 
 def lint(wt: str, base: str, slice_id: str, slot=None) -> tuple:
@@ -172,7 +220,7 @@ def lint(wt: str, base: str, slice_id: str, slot=None) -> tuple:
     if new:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import scan_select
-        table = scan_select.entries()
+        table = scan_select.entries() + main_map(wt)  # the owner's file 007: rows a merge added since the install
         rows = subprocess.run(["git", "show", "main:" + SCAN_ROWS + slice_id + ".tsv"], cwd=wt, capture_output=True,
                               text=True)
         if rows.returncode == 0:
@@ -233,7 +281,7 @@ def main() -> int:
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import scan_select
-        scans = scan_select.not_named(scan_select.select(scan_select.touched(wt, frozen.get("base") or "main"),
+        scans = scan_select.not_named(scan_select.select(scan_select.touched(wt, own_base(wt, frozen)),
                                                          scan_select.entries()),
                                       frozen.get("checks") or "", frozen.get("acceptance") or "")
     except Exception as e:  # fail closed: a slice's checks are never run without the scans the line requires
@@ -248,8 +296,12 @@ def main() -> int:
             problems.append("RED: scans (exit " + str(code) + "): the pure tests that walk the files this slice "
                             "touches (scan_map.tsv): " + ", ".join(scans) + "\n" + failures_only(out))
 
+    pp, pr = project_checks(wt, slot)  # the owner's file 005: three checks the full gate runs, at every stop
+    problems += pp
+    results += pr
+
     try:  # LINE_FIXES_5_BRIEF.md, 4: CI's lint and the scan map, on what the branch changed
-        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)
+        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)
         problems += lp
         results += lr
     except Exception as e:  # fail closed, as for the scans

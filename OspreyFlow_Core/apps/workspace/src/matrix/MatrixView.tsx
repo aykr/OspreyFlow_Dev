@@ -18,10 +18,13 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEve
 import { useStore } from "zustand/react";
 import type { StoreApi } from "zustand/vanilla";
 
-import type { NamedType } from "../canvas/linkLabel";
+import type {
+  NamedType,
+  EntityVisual,
+  WorkingSetGraph,
+  WorkingSetStoreState,
+} from "@ospreyflow/glass-shared";
 import { TypeChip } from "../inspector/TypeChip";
-import type { EntityVisual } from "../ontology/schema";
-import type { WorkingSetGraph, WorkingSetStoreState } from "@ospreyflow/glass-shared";
 import { fetchConnectionStrengths, fetchRarity } from "@ospreyflow/glass-shared";
 import {
   entityRows,

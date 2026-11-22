@@ -1,0 +1,24 @@
+SE8d's whole change, for the owner to apply (22 November 2026, 17:37 UTC): six lines in one test file, the rights table's entry for SE8c's route `record_session_event` (`POST /v1/session-events`).
+
+Why a diff and not a merge: the merge script refused SE8d ("the acceptance test passes without the slice's code: it was never red"). The slice has no code: its whole change is the entry in the table inside the test file the acceptance test lives in, so with the slice's tests and without its code the test is already green, and the line's red-before cannot be satisfied by a change of this kind. The verifier passed it (`97753007a9`) and the demo server was green on it (run `2d74629dc8960c9e`). On main the test is red (shown again at 17:31 on main's checkout: `test_every_route_names_the_right_the_table_gives_it`, "in the app, not the table: ['record_session_event']").
+
+What the entry says, confirmed from the route (the owner's condition): the route enforces `page_service_only`: the bearer token must resolve to a person (401 if not) and must have been issued to the page service's own client (`azp`, or `appid` on Entra ID v1.0), or every caller gets the same 403; `None` names no person's right (none exists for it), as `issue_ws_ticket` does. The route's own enforcement is held by `test_sign_in_events_ingress.py`, not by this table.
+
+Apply from the repository root: git apply OspreyFlow_Build/process/lanes/v062/SE8d_TABLE_ENTRY.diff
+
+diff --git a/OspreyFlow_Build/tests/services/api/test_route_rights.py b/OspreyFlow_Build/tests/services/api/test_route_rights.py
+--- a/OspreyFlow_Build/tests/services/api/test_route_rights.py
++++ b/OspreyFlow_Build/tests/services/api/test_route_rights.py
+@@ -428,6 +428,12 @@ ROUTE_RIGHTS = {
+     "release_held_rows_route": "decide_held_rows",
+     "reject_held_rows": "decide_held_rows",
+     "issue_ws_ticket": None,
++    # SE8c: the page service's own report of a sign-in or sign-out. `None` names no person's right
++    # (none exists for it): the route's gate is `page_service_only`, a client check, not a right:
++    # the bearer token must resolve to a person (401 if not), and must have been issued to the page
++    # service's own client (`azp`, `appid` on Entra ID v1.0), or every caller is the same 403.
++    # Held by `test_sign_in_events_ingress.py`, not by this table.
++    "record_session_event": None,
+     "my_rights_route": None,
+     # ADR-148 Amendment 8: the caller's own principal as resolved, which the Glass shows.
+     "me_route": None,

@@ -51,6 +51,11 @@ JOBS = WORK / "jobs"
 TOOLS = WORK / "tools"
 CACHE = WORK / "cache"
 REFUSALS = WORK / "refusals.log"
+#: 010: a red run's log and result, copied here once its result is written, for the summary account (osprey-summary)
+#: to read; and that account's summaries, which `summary <id>` returns. Both beside data/, never inside it: the
+#: summary account reads nothing of data/. install.sh makes them; without them nothing is handed over.
+HANDOFF = HERE.parent / "handoff"
+SUMMARIES = HERE.parent / "summaries"
 KEEP_JOBS = 40  # 009: a result is kept until the merge has asked for it by id, for several slices at once
 
 #: merge_slice.py's OFFLINE_PORTS: an offline run reaches no store.
@@ -63,8 +68,8 @@ GATE_LANES = ("merger", "platform-b", "rules-b")
 SLICE_REF = re.compile(r"\Arefs/heads/lane/slice-([A-Za-z0-9]+)\Z")
 SHA = re.compile(r"\A[0-9a-f]{40}\Z")
 #: merge_slice.py's own patterns for a failing test and a failed make target.
-FAILED_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)|^\s*(?:FAIL|✘|×)\s+(\S+.*)$")
-MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[(?:[^\]]*?:\s*)?([\w./-]+)\] Error \d+")
+FAILED_TEST = p.FAILED_TEST  # one pattern, which the summary (010) also reads logs with
+MAKE_ERROR = p.MAKE_ERROR
 #: tests/local_docker_guard.py's skip, as pytest -rs prints it.
 DOCKER_SKIP = re.compile(r"^SKIPPED \[\d+\] ([^:\s]+):\d+: a server-only test: it calls the docker CLI")
 
@@ -309,6 +314,31 @@ def stack_result(stack_id: str) -> dict:
     state = "running" if "running" in states else "died" if "died" in states else "done"
     return {"state": state, "id": stack_id, "main": meta["main"], "runner_version": p.RUNNER_VERSION,
             "stack": members, "advice": "advice only; the Mac's merge run is the gate"}
+
+
+def do_summary(jid: str) -> int:
+    """010: a red run's summary, by its id: the summary account's file, or pending while it is being made."""
+    job = JOBS / jid
+    if not job.is_dir() or not inside_work(job):
+        return say({"state": "unknown", "id": jid}, 3)
+    if not (job / "result.json").exists():
+        return say({"state": "pending", "id": jid, "words": "the run has no result yet"}, 0)
+    try:
+        fd = os.open(str(SUMMARIES / (jid + ".json")), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        verdict = json.loads((job / "result.json").read_text()).get("verdict")
+        if verdict != "fail":
+            return say({"state": "none", "id": jid, "words": "only a red run is summarized (this one: %s)" % verdict}, 0)
+        return say({"state": "pending", "id": jid, "words": "the summary is not made yet"}, 0)
+    with os.fdopen(fd, "rb") as fh:
+        raw = fh.read(p.MAX_SUMMARY_BYTES + 1)
+    try:
+        data = json.loads(raw) if len(raw) <= p.MAX_SUMMARY_BYTES else None
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or data.get("id") != jid:
+        return say({"state": "unknown", "id": jid, "words": "the summary file is not one this runner reads"}, 3)
+    return say(data, 0)
 
 
 def do_result(jid: str) -> int:
@@ -824,8 +854,25 @@ def run_job(jid: str) -> int:
     tmp = job / "result.json.tmp"
     tmp.write_text(json.dumps(result, indent=1, sort_keys=True))
     os.replace(str(tmp), str(job / "result.json"))
+    hand_over(job, result)  # after the result: nothing the summary does can hold it back
     prune_jobs()
     return 0
+
+
+def hand_over(job: Path, result: dict) -> None:
+    """A red run's log and result, copied for the summary account (010). Never fails the run."""
+    try:
+        if result.get("verdict") != "fail" or not HANDOFF.is_dir():
+            return
+        dest = HANDOFF / job.name
+        dest.mkdir(mode=0o750)
+        for name in ("log", "result.json"):
+            if (job / name).is_file():
+                shutil.copyfile(str(job / name), str(dest / name))
+                os.chmod(str(dest / name), 0o640)
+        os.chmod(str(dest), 0o750)
+    except Exception:  # noqa: BLE001 - a summary is advice: its hand-over never stops a result
+        pass
 
 
 def own_usage() -> dict:
@@ -871,6 +918,10 @@ def prune_jobs() -> None:
                 shutil.rmtree(str(d), ignore_errors=True)
         except (OSError, ValueError, KeyError):
             pass
+    if HANDOFF.is_dir():  # a hand-over goes once its summary is made, or its job is gone
+        for d in HANDOFF.iterdir():
+            if (SUMMARIES / (d.name + ".json")).exists() or not (JOBS / d.name).is_dir():
+                shutil.rmtree(str(d), ignore_errors=True)
 
 
 #: The job's launcher and its gate. Nothing in this file replaces either, and nothing here reads a variable that could:
@@ -892,6 +943,8 @@ def main(argv: list) -> int:
         return do_run(received)
     if verb == "stack":
         return do_run(received, arg.split())
+    if verb == "summary":
+        return do_summary(arg)
     return do_result(arg)
 
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { settledAnchors } from "./settledAnchor";
+import { settledAnchors } from "@ospreyflow/glass-shared";
 
 describe("settledAnchors: where an arriving node starts", () => {
   it("is the first settled neighbour in link order, on either end of the link", () => {

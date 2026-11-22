@@ -326,7 +326,7 @@ M = [
  ("slice_start.py", '    if not problems and left:\n', '    if False:\n', "leave_files"),
  ("slice_start.py", '    hashes = dry_run.builder_shaped(wt)[1]\n', '    hashes = bring_client_hashes(wt)\n', "rulings_copy_is_in_the_worktree"),
  # LINE_FIXES_5_BRIEF.md, C: merged of cut, per build
- ("board.py", '"account": kw["account"], "merged": state == "done"})', '"account": kw["account"], "merged": bool(merged)})', "merge_record_the_board_refuses"),
+ ("board.py", '"account": kw["account"], "merged": state == "done",', '"account": kw["account"], "merged": bool(merged),', "merge_record_the_board_refuses"),
  ("board.py", '        d["cut"] += 1\n', '        d["cut"] = max(d["cut"], 3)\n', "new_row_raises_the_cut"),
  ("board.py", '            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}', '            "self_clears": c.self_clears(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}, "approved_diffs": applied_diffs()}', "no_merged_slice_writes_0_of_n"),
  ("board.py", '    builds = {k: {**v, **({"slices": counts[k]["said"]', '    builds = {k: {**v, **({} if True else {"slices": counts[k]["said"]', "two_merged_writes_2_of_3"),
@@ -379,7 +379,7 @@ M = [
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "one_id_of_each_prefix_length"),
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "three_letter_build_starts"),
  # LINE_FIXES_5_BRIEF.md, 4: lint and the scan-map check in the Stop check
- ("stop_check.py", '        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)\n', '        lp, lr = [], []\n', "lint_error_is_red_in_the_same_round"),
+ ("stop_check.py", '        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)\n', '        lp, lr = [], []\n', "lint_error_is_red_in_the_same_round"),
  ("stop_check.py", '    one("ruff format", [ruff, "format", "--check", "--force-exclude"], core, py, "ruff format --check")\n', '', "not_formatted_is_red"),
  ("stop_check.py", '    one("eslint", [eslint], core,', '    0 and one("eslint", [eslint], core,', "eslint_error_is_red"),
  ("stop_check.py", '        missing = scan_select.unmapped(Path(wt) / "OspreyFlow_Build", table, only=new)\n', '        missing = []\n', "no_scan_map_row_is_red"),
@@ -461,6 +461,90 @@ M = [
  ("merge_slice.py", '            except OSError as e:\n                if not self.said_failure:', '            except ZeroDivisionError as e:\n                if not self.said_failure:', "cannot_be_written_never_fails"),
  ("merge_slice.py", '                if not self.said_failure:\n', '                if True:\n', "cannot_be_written_never_fails"),
  ("merge_slice.py", '            shutil.copyfile(self.f, self.f.with_name(f"merge-progress-', '            (lambda *a: None)(self.f, self.f.with_name(f"merge-progress-', "records_never_mix"),
+ # the owner's file 008, line fault 17: a refusal on the merge result (step 4) is recorded, so send-back works
+ ("merge_slice.py", "                refuse_to_builder(slice_id, tip, f\"the slice's {name} was red on the merge result\"", "                (lambda *a: None)(slice_id, tip, f\"the slice's {name} was red on the merge result\"", "red_on_the_merge_result_is_recorded"),
+ ("merge_slice.py", "                if not names:\n                    findings = [{\"file\": \"\", \"what\": f\"The slice's {name} command", "                if False:\n                    findings = [{\"file\": \"\", \"what\": f\"The slice's {name} command", "red_on_the_merge_result_is_recorded"),
+ # the owner's file 006 (line fault 12): the suite never depends on the machine's git configuration
+ ("tests/test_gates.py", 'git config user.name t && git config user.email t@t.invalid && ', '', "world_commits_with_its_own_identity"),
+ ("tests/conftest.py", '"GIT_CONFIG_VALUE_0": "true"', '"GIT_CONFIG_VALUE_0": "false"', "suite_runs_as_on_a_machine"),
+ # the owner's file 004 (22 November 2026), item 1: before the slot, a server red is rerun on the Mac
+ ("merge_slice.py", '    held = server_hold(slice_id)  # the owner', '    held = None  # the owner', "shows_red_is_not_given_the_slot"),
+ ("server_gate.py", '    if not counting():\n        return None\n    rid, e = server_result', '    rid, e = server_result', "switch_off_a_server_red_holds_nothing"),
+ ("server_gate.py", '        return f.read_text() in ("on", "on\\n")', '        return f.read_text().strip().lower() == "on"', "switch_off_a_server_red_holds_nothing"),
+ ("server_gate.py", '        if f.is_symlink() or not f.is_file():', '        if not f.is_file():', "switch_off_a_server_red_holds_nothing"),
+ ("server_gate.py", '    return result if result.get("slice") == slice_id and result.get("tip") == tip else None', '    return result', "no_red_result_from_the_runner"),
+ ("server_gate.py", 'data.get("state") and data.get("id") == rid:', 'data.get("state"):', "no_red_result_from_the_runner"),
+ ("server_gate.py", '    return bool(e) and e.get("state") == "done" and e.get("verdict") == "fail"', '    return bool(e) and e.get("verdict") in ("fail", "pass")', "no_red_result_from_the_runner"),
+ ("server_gate.py", '    if done.get("tip") == tip and done.get("result") == "green":', '    if done.get("tip") == tip:', "red_on_the_mac_too"),
+ ("merge_slice.py", "    refuse_to_builder(slice_id, tip, \"the demo server's red, rerun on the Mac", "    (lambda *a: None)(slice_id, tip, \"the demo server's red, rerun on the Mac", "red_on_the_mac_too"),
+ ("server_gate.py", '    bare = [t for t in f.get("targets") or [] if isinstance(t, str) and t and not by_target.get(t)]', '    bare = []', "failing_target_with_no_test"),
+ ("merge_slice.py", '["git", "merge", "--no-ff", "-q", "-m", f"rerun {slice_id}", tip]', '["git", "status"]', "shows_red_is_not_given_the_slot"),
+ # the owner's file 004, item 2: the server's green counts only for exactly this tree; the Mac runs the rest
+ ("server_gate.py", '    if e.get("tree") != tree:\n', '    if False:\n', "short_of_a_pass"),
+ ("server_gate.py", '    elif e.get("main") != base:\n', '    elif False:\n', "short_of_a_pass"),
+ ("server_gate.py", '    if e.get("state") != "done" or e.get("verdict") != "pass":\n', '    if e.get("state") != "done":\n', "short_of_a_pass"),
+ ("server_gate.py", '    if not isinstance(e.get("passed_targets"), list):\n', '    if False:\n', "short_of_a_pass"),
+ ("server_gate.py", '    ci_left = [t for t in ci if t != "core-check" and t not in passed]\n', '    ci_left = [t for t in ci if t == "client-name-check"]\n', "target_missing"),
+ ("server_gate.py", '        core_left = [t for t in core if t not in passed] if core else ["check"]\n', '        core_left = []\n', "exactly_this_tree_counts"),
+ ("server_gate.py", '    if "test" in passed and all(files):\n', '    if all(files):\n', "make_test_runs_whole"),
+ ("server_gate.py", 'TEST_FILE = re.compile(r"\\A(?:\\.\\./)?(OspreyFlow_Build/tests/[A-Za-z0-9_./-]+\\.py)\\Z")', 'TEST_FILE = re.compile(r"\\A(?:\\.\\./)?(.+)\\Z")', "make_test_runs_whole"),
+ ("merge_slice.py", '    if not server_gate.counting():\n        return {**out, "why": "the owner', '    if False:\n        return {**out, "why": "the owner', "switch_off_the_whole_gate"),
+ ("merge_slice.py", '        code = FULL_GATE(after, base, log, targets=server["plan"]["targets"]) if server.get("counted") else', '        code = FULL_GATE(after, base, log) if server.get("counted") else', "exactly_this_tree_counts"),
+ # the owner's file 004, item 3: a stack lands in order, each on the tree the server tested
+ ("server_gate.py", '        if c.git(["rev-parse", base + "^{tree}"], c.REPO) != e.get("base_tree"):\n', '        if False:\n', "refused_slice_under_the_stack"),
+ ("server_gate.py", '        if c.git(["rev-parse", base + "^{tree}"], c.REPO) != e.get("base_tree"):\n', '        if False:\n', "out_of_order"),
+ ("server_gate.py", '"base_tree": stack[i - 1].get("tree") if i else None,', '"base_tree": stack[i].get("tree") if i else None,', "lands_in_order"),
+ ("server_gate.py", '        c.write_json(c.rec_dir(sid) / "server-again.json",', '        (lambda *a, **k: None)(c.rec_dir(sid) / "server-again.json",', "refused_slice_under_the_stack"),
+ ("merge_slice.py", '                server_gate.stack_refused(slice_id, prog.rec["tip"])', '                pass', "refused_slice_under_the_stack"),
+ ("server_gate.py", '"above": [(x.get("slice"), x.get("tip")) for x in stack[i + 1:]]}', '"above": []}', "refused_slice_under_the_stack"),
+ # the owner's file 004, item 4: the shadow, on from the first day: agree or differ for every merge
+ ("server_gate.py", '        result = "agree" if srv == mac else "differ"\n', '        result = "agree"\n', "differ_when_the_server_was_green"),
+ ("server_gate.py", '    elif not server.get("same"):\n', '    elif False:\n', "another_candidate_is_no_comparison"),
+ ("merge_slice.py", '            server["shadow"] = server_gate.shadow(slice_id, tip, server, code,', '            server["shadow"] = server_gate.shadow(slice_id, tip, server, 0,', "differ_when_the_server_was_green"),
+ ("server_gate.py", '    if server.get("counted"):\n        result, why = "counted"', '    if False:\n        result, why = "counted"', "marked_counted_not_compared"),
+ ("server_gate.py", '        if not f.exists():\n            f.write_text(SHADOW_HEAD)\n', '        if False:\n            f.write_text(SHADOW_HEAD)\n', "both_green"),
+ ("server_gate.py", '        if len(parts) >= 7 and parts[6] in out:\n', '        if False:\n', "both_green"),
+ ("server_gate.py", '    srv = {"pass": "green", "fail": "red"}.get(', '    srv = {"pass": "green", "fail": "green"}.get(', "red_from_both_agrees"),
+ # the owner's file 004, item 5: the board shows each waiting slice's server result and what a merge took from it
+ ("board.py", '        out["server"] = server  # the demo server', '        pass  # the demo server', "waiting_slice_shows_its_server_result"),
+ ("board.py", '            out["state"] = {"GREEN": "green", "RED": "red"}.get(m.group(1), "no result")', '            out["state"] = "green"', "waiting_slice_shows_its_server_result"),
+ ("board.py", '    if running.exists():\n        out["state"] = "running"', '    if False:\n        out["state"] = "running"', "waiting_slice_shows_its_server_result"),
+ ("board.py", '    if again.get("tip") == tip:\n', '    if False:\n', "run_again_and_a_rerun"),
+ ("board.py", '"counted": bool(srv.get("counted")),', '"counted": False,', "merge_shows_which_targets"),
+ ("board.py", '        if any(t.values()):\n', '        if False:\n', "merge_shows_which_targets"),
+ # the owner's file 004, item 6: measure and report what the server saved
+ ("server_gate.py", '            (counted if (merged.get("server") or {}).get("counted") else whole).append(row)', '            whole.append(row)', "averages_and_the_refusals"),
+ ("server_gate.py", '            caught += r.get("result") == "red"', '            caught += 1', "averages_and_the_refusals"),
+ ("server_gate.py", '            gate = next((x["seconds"] for x in prog.get("done") or [] if x.get("name") == GATE_STEP), None)', '            gate = None', "averages_and_the_refusals"),
+ ("server_gate.py", '''        prog = c.read_json(d / f"merge-progress-{run[len('merge-'):-len('.log')]}.json") if run.endswith(".log") else None''', '''        prog = c.read_json(d / "merge-progress.json")''', "averages_and_the_refusals"),
+ # the owner's file 005: three project checks at every stop and at the start; a refusal's cause, counted
+ ("stop_check.py", '    pp, pr = project_checks(wt, slot)  # the owner', '    pp, pr = [], []  # the owner', "every_stop_runs_the_three"),
+ ("stop_check.py", '        if code != 0:\n            problems.append("RED: " + name + " (exit "', '        if False:\n            problems.append("RED: " + name + " (exit "', "every_stop_runs_the_three"),
+ ("slice_start.py", '        problems = dry_run.stop_check.project_checks(str(wt), slot)[0]', '        problems = []', "mypy_red_on_main"),
+ ("merge_slice.py", '        targets = list(dict.fromkeys(m.group(1) for ln in gate_part(text) if (m := MAKE_FAILED.match(ln))))', '        targets = []', "refused_merge_says_which"),
+ ("merge_slice.py", '("conflicts with main", "a conflict with main"),', '("conflicts with main!", "a conflict with main"),', "conflict_is_counted"),
+ ("merge_slice.py", '            record_refusal(slice_id, prog.rec.get("tip") or "", cause)', '            pass', "refused_merge_says_which"),
+ ("board.py", '        if by_cause:  # the owner', '        if False:  # the owner', "refused_merge_says_which"),
+ ("board.py", '        if cause and (st.get("last_merge_refusal") or "") >= (st.get("refused_at") or "~"):', '        if False:', "refused_merge_says_which"),
+ # the owner's file 006 (line fault 12): the suite never depends on the machine's git configuration
+ ("tests/test_gates.py", 'git config user.name t && git config user.email t@t.invalid && ', '', "world_commits_with_its_own_identity"),
+ ("tests/conftest.py", '"GIT_CONFIG_VALUE_0": "true"', '"GIT_CONFIG_VALUE_0": "false"', "suite_runs_as_on_a_machine"),
+ # the owner's file 007, line fault 14: the branch's own changes, from its merge-base with main
+ ("stop_check.py", '    return git(["merge-base", "main", "HEAD"], wt) or frozen.get("base") or "main"', '    return frozen.get("base") or "main"', "main_brought_in_is_not_the_slices"),
+ ("stop_check.py", '        lp, lr = lint(wt, own_base(wt, frozen), slice_id, slot)', '        lp, lr = lint(wt, frozen.get("base") or "main", slice_id, slot)', "main_brought_in_is_not_the_slices"),
+ ("stop_check.py", 'scan_select.touched(wt, own_base(wt, frozen))', 'scan_select.touched(wt, frozen.get("base") or "main")', "only_mains_file_selects"),
+ # the owner's file 007: main's scan-map rows count beside the installed copy
+ ("stop_check.py", '        table = scan_select.entries() + main_map(wt)  # the owner', '        table = scan_select.entries()  # the owner', "row_a_merge_added_on_main"),
+ ("stop_check.py", '    p = subprocess.run(["git", "show", "main:" + LINE_MAP], cwd=wt, capture_output=True, text=True)', '    p = subprocess.run(["git", "show", "HEAD~999:" + LINE_MAP], cwd=wt, capture_output=True, text=True)', "row_a_merge_added_on_main"),
+ # the owner's file 007, fault 13: the watcher reads every job, a cancelled run's too, and names a failure with no test
+ ("merge_slice.py", '        if last.get("conclusion") not in ("failure", "cancelled"):\n', '        if last.get("conclusion") != "failure":\n', "cancelled_run_with_a_failed_job"),
+ ("merge_slice.py", '    failed = [j.get("name", "?") for j in jobs.get("jobs") or [] if j.get("conclusion") in FAILED_JOB]', '    failed = []', "failed_run_names_each"),
+ ("merge_slice.py", 'without_a_test=[j for j in failed if j not in named]', 'without_a_test=[]', "failure_with_no_test"),
+ ("merge_slice.py", '        if last.get("conclusion") == "cancelled" and not jobs.get("failed_jobs"):\n', '        if False:\n', "cancelled_run_with_no_failed_job"),
+ ("board.py", '''print(f"main is red: run {ci['run']} ({ci['why']}){merge_slice.jobs_said(last_try)} {ci['url']}''', '''print(f"main is red: run {ci['run']} ({ci['why']}) {ci['url']}''', "boards_github_line"),
+ # the owner's file 010: the stop on an account near its limit at 95%
+ ("common.py", 'NEAR_LIMIT = 0.95  #', 'NEAR_LIMIT = 0.90  #', "below_95_percent_a_new_slice_starts"),
+ ("common.py", 'NEAR_LIMIT = 0.95  #', 'NEAR_LIMIT = 0.96  #', "at_or_above_95_percent"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

@@ -3,7 +3,7 @@
 // it is a click on the nearest such node.
 import { describe, expect, it } from "vitest";
 
-import { HIT_RADIUS, nodeWithinReach } from "./nodeHitArea";
+import { HIT_RADIUS, nodeWithinReach } from "@ospreyflow/glass-shared";
 
 const at = (id: string, x: number, y: number, size = 7) => ({ id, x, y, size });
 

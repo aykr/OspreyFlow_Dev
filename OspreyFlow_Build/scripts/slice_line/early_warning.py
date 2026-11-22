@@ -1,15 +1,22 @@
 #!/usr/bin/env python3
-"""The demo server as an early warning for a verified slice (DEMO_SERVER_EARLY_WARNING_BRIEF.md). ADVICE ONLY.
+"""The demo server as an early warning for a slice (DEMO_SERVER_EARLY_WARNING_BRIEF.md). ADVICE ONLY.
 
     early_warning.py <slice>                  bundle main's tip and the slice's tip, send them to the demo server's
                                               runner, poll until it answers, and write the result as a note
     early_warning.py <slice> --result <id>    poll a run already started (its id is in the note of a run that was
                                               still going at the deadline) and write its note
     early_warning.py <A> <B> [<C>]            a stack (009): main+A, main+A+B and main+A+B+C tested at once, one job
-                                              each, in that merge order; one note each
+                                              each, in that merge order; one note each. When one is red, the ones
+                                              above it are tested again without it, at once after (013, 3)
+    early_warning.py standing <slice>         what the slice's records let this script do now (013): verified,
+                                              tested-not-yet-verified, or refused and why; and each held note of the
+                                              slice marked void (its tip moved) or now verified. Exit 0, 2 refused
     early_warning.py fetch <id>               the runner's own result for run <id>, as `result <id>` returns it, on
                                               one line (012 a); exit 0, non-zero when it cannot be fetched. Never
                                               read from a note.
+    early_warning.py summary <id>             a red run's summary (010), as the server's `summary <id>` gives it: the
+                                              failures' extract by script, the model's advice marked as advice;
+                                              exit 0, non-zero when it cannot be fetched
     early_warning.py <slice> --trust <id>|auto --tree <hash>
                                               for the merge (009): ask the server itself for run <id>, never a note,
                                               and say in JSON whether it proves the candidate tree <hash>: every
@@ -28,8 +35,15 @@ How the conductor uses a result. Green changes nothing. On red, rerun the named 
 sending the slice back, because the server is a different kind of machine: a red from the server alone never costs
 a builder a round. ("not run" is never green: it says what the server could not check.)
 
-It refuses a slice that is not at `verified` in its records (state.json's phase, at the branch's own tip), and it
-never runs while no setting file exists. The setting lives outside the repository and is the owner's:
+What it takes (013, the owner's decision of 22 November 2026, conductor file 015): a slice whose newest verifier
+record (verify-<tip>.json; the merge's own verify-gate-* records are not a verifier's) is a pass for the branch's own
+tip, whatever its phase (a refused slice its builder has not touched still has that: the line-fix session's rule, as
+the owner ruled); a slice at `verified` at the branch's tip (the owner's acceptance); and a slice whose builder's
+checks are green at the branch's tip (tests-<tip>.json) and whose verifier has not yet answered (phase `verifying`, no
+verify-<tip>.json). That last result is held, "tested, not yet verified", for that tip only: if the verifier's round
+moves the tip, its note says it is void, and --trust never counts it (only a verified slice's run, for its exact tip
+and tree, can count). Anything else is refused, and so is a merged slice. It never runs while no setting file exists.
+The setting lives outside the repository and is the owner's:
 
     ~/.ospreyflow/slice-line/demo-server.json
     {
@@ -47,7 +61,7 @@ Nothing of the setting (host, user, key path) is ever written into the note or p
 said as "unreachable (ssh exit N)", never with ssh's own words, which name the host.
 
 Exit codes, none of which lies: 0 green (pass); 1 red (fail, or the slice does not merge onto main); 2 refused here
-(not verified, no setting, a bad setting); 3 refused by the runner (busy, a bundle it would not take); 4 no result
+(not a slice it takes, no setting, a bad setting); 3 refused by the runner (busy, a bundle it would not take); 4 no result
 (unreachable, still running at the deadline, the job died or the runner failed). Only 0 is green.
 """
 from __future__ import annotations
@@ -90,6 +104,13 @@ ADVICE = "advice only; the Mac's merge run is the gate"
 TRUSTED_VERSIONS = ("ew-2",)
 #: The checks the server never runs, whatever its result says: the Mac runs these for every candidate (009, item 4).
 ALWAYS_ON_THE_MAC = ("client-name-check", "the live step")
+#: What a slice's records make it for this script (013): its result can count (verified), or is held (not yet).
+VERIFIED, NOT_YET = "verified", "tested, not yet verified"
+#: A held note's marker, so `standing` finds it again; and the words that open it.
+HELD_MARK = "<!-- held: tested, not yet verified, tip %s -->"
+HELD_WORDS = ("**Tested, not yet verified.** The verifier had not answered when this ran. This result is held for tip "
+              "`%s` only: it counts for nothing until the verifier passes that exact commit, and if the verifier's "
+              "round moves the tip, it is void (this note will say so).")
 
 
 class Refused(Exception):
@@ -131,22 +152,132 @@ def scrub(text: str, s: dict) -> str:
     return text
 
 
-def verified_tip(slice_id: str) -> tuple[str, str]:
-    """The slice's branch and its tip, when its records have it at `verified` at that tip; refused otherwise."""
+def verifier_records(rec: Path) -> list[Path]:
+    """The slice's verifier records, oldest first, as resume.py orders them (by when each was written); the merge's
+    own verify-gate-* records are findings the merge wrote, not a verifier's, so they are not among them."""
+    return sorted((x for x in rec.glob("verify-*.json") if not x.name.startswith("verify-gate-")),
+                  key=lambda x: x.stat().st_mtime)
+
+
+def owners_acceptance(slice_id: str, tip: str) -> bool:
+    """The owner's acceptance of the verifier's findings for exactly this tip, as the merge itself takes it
+    (merge_slice.acceptance, read, never changed): a slice he accepted that is later refused is taken (the owner, 22
+    November 2026, on 013's question). A record that is missing or does not stand is no acceptance."""
+    import merge_slice
+    try:
+        return merge_slice.acceptance(slice_id, tip) is not None
+    except merge_slice.Refused:
+        return False
+
+
+def standing_of(slice_id: str) -> tuple[str, str, str, str]:
+    """(branch, tip, standing, why) for the branch's tip now; Refused, in words, when this script does not take it.
+
+    verified: the newest verifier record is a pass for exactly the branch's tip, in any phase (013, 2: a refused slice
+    its builder has not touched still has that, and one the builder has touched has a new tip, which no pass names);
+    or it is the findings for that tip and the owner's acceptance of them stands as the merge would take it;
+    or the records have it at verified at that tip (the owner's acceptance of findings). Not yet: the builder's checks
+    are green at the tip (the Stop hook's tests-<tip>.json) and the verifier has not answered (phase verifying, no
+    verify-<tip>.json) (013, 1)."""
     rec = c.rec_dir(slice_id)
     frozen = c.read_json(rec / "frozen.json")
     if not frozen or not frozen.get("branch"):
         raise Refused(f"{slice_id} was never started (no frozen record): nothing to warn about.")
     st = c.state(slice_id)
+    phase = st.get("phase") or "nothing"
     branch = frozen["branch"]
     tip = c.git(["rev-parse", "--verify", "-q", f"refs/heads/{branch}"], c.REPO, check=False)
-    if st.get("phase") != "verified":
-        raise Refused(f"{slice_id} is not at verified in its records (it is at {st.get('phase') or 'nothing'}): the "
-                      "early warning runs only for a verified slice.")
-    if not tip or st.get("tip") != tip:
-        raise Refused(f"{slice_id}'s verified tip is not its branch's tip ({(st.get('tip') or '')[:10]} recorded, "
-                      f"{tip[:10] or 'no branch'} now): the early warning runs only for the tip the verifier passed.")
+    if not tip:
+        raise Refused(f"{slice_id} has no branch {branch}: nothing to test.")
+    if phase == "merged":
+        raise Refused(f"{slice_id} is merged: it is on main already.")
+    recs = verifier_records(rec)
+    newest = c.read_json(recs[-1]) if recs else None
+    if newest and recs[-1].name == f"verify-{tip}.json" and newest.get("commit") == tip \
+            and newest.get("verdict") == "pass":
+        return branch, tip, VERIFIED, (f"the newest verifier record is a pass for the branch's tip {tip[:10]}"
+                                       + ("" if phase == "verified" else f" (phase {phase})"))
+    if newest and recs[-1].name == f"verify-{tip}.json" and owners_acceptance(slice_id, tip):
+        return branch, tip, VERIFIED, (f"the owner accepted the verifier's findings for the branch's tip {tip[:10]}, "
+                                       "as the merge would take it" + ("" if phase == "verified" else f" (phase {phase})"))
+    if phase == "verified":
+        if st.get("tip") != tip:
+            raise Refused(f"{slice_id}'s verified tip is not its branch's tip ({(st.get('tip') or '')[:10]} recorded, "
+                          f"{tip[:10]} now): the early warning runs only for the tip the verifier passed.")
+        return branch, tip, VERIFIED, f"at verified in its records at the branch's tip {tip[:10]}"
+    tests = c.read_json(rec / f"tests-{tip}.json") or {}
+    if phase == "verifying" and st.get("tip") == tip and tests.get("green") is True and tests.get("commit") == tip:
+        if (rec / f"verify-{tip}.json").exists():
+            raise Refused(f"{slice_id}'s verifier has answered for {tip[:10]} and it is not a pass: not a slice to "
+                          "test before its verifier, and not verified.")
+        return branch, tip, NOT_YET, (f"the builder's checks are green at {tip[:10]} and the verifier has not "
+                                      "answered: tested, not yet verified")
+    why = ("its newest verifier record is not a pass for the branch's tip" if recs else "it has no verifier record")
+    raise Refused(f"{slice_id} is not at verified in its records (it is at {phase}), {why}, and it is not a tip whose "
+                  "builder's checks are green waiting on its verifier: the early warning takes only those.")
+
+
+def verified_tip(slice_id: str) -> tuple[str, str]:
+    """The branch and tip of a slice whose result can count; Refused otherwise (a held one included)."""
+    branch, tip, standing, _ = standing_of(slice_id)
+    if standing != VERIFIED:
+        raise Refused(f"{slice_id} is {standing} at {tip[:10]}.")
     return branch, tip
+
+
+def held_notes(slice_id: str) -> list[Path]:
+    d = c.REPO / NOTES_REL
+    return sorted(d.glob(f"{slice_id}-*.md")) if d.is_dir() else []
+
+
+def review_held(slice_id: str) -> dict:
+    """Every held note of the slice, checked against its records now: void when the branch's tip is no longer the
+    tip tested; now verified when the verifier has since passed that exact tip. Said at the top of the note, once."""
+    try:
+        _, tip, standing, _ = standing_of(slice_id)
+    except Refused:
+        frozen = c.read_json(c.rec_dir(slice_id) / "frozen.json") or {}
+        tip = c.git(["rev-parse", "--verify", "-q", f"refs/heads/{frozen.get('branch', '')}"], c.REPO,
+                    check=False) if frozen.get("branch") else ""
+        standing = ""
+    said = {"void": [], "now_verified": []}
+    for n in held_notes(slice_id):
+        text = n.read_text()
+        m = re.search(r"<!-- held: tested, not yet verified, tip ([0-9a-f]{40}) -->", text)
+        if not m or "\n**VOID.**" in text or "\n**Now verified.**" in text:
+            continue
+        held = m.group(1)
+        if tip != held:
+            line = (f"**VOID.** This result was for tip `{held[:10]}`, which the verifier never passed; the branch is "
+                    f"now at `{(tip or 'nothing')[:10]}` (the verifier's round moved it). It counts for nothing. "
+                    f"Seen {c.now()}.")
+            said["void"].append(n.name)
+        elif standing == VERIFIED:
+            line = (f"**Now verified.** The verifier has since passed this exact tip `{held[:10]}`, so this result "
+                    f"stands as a verified slice's would (the merge still asks the server itself). Seen {c.now()}.")
+            said["now_verified"].append(n.name)
+        else:
+            continue
+        title, _, rest = text.partition("\n")
+        n.write_text(f"{title}\n\n{line}\n{rest}")
+    return said
+
+
+def standing_cmd(argv: list) -> int:
+    """`early_warning.py standing <slice>`: what this script may do for the slice now, and its held notes reviewed."""
+    if len(argv) != 2 or not re.fullmatch(proto.SLICE_PATTERN, argv[1]):
+        print("Refused: standing takes one slice id.", file=sys.stderr)
+        return REFUSED_HERE
+    said = {"slice": argv[1], "notes": review_held(argv[1])}
+    try:
+        _, tip, standing, why = standing_of(argv[1])
+        said.update(tip=tip, standing=standing, why=why, counts=standing == VERIFIED)
+        code = GREEN
+    except Refused as e:
+        said.update(standing="refused", why=str(e), counts=False)
+        code = REFUSED_HERE
+    print(json.dumps(said, indent=1, sort_keys=True))
+    return code
 
 
 def make_bundle(branch, dest: Path, full: bool) -> None:
@@ -196,10 +327,10 @@ def running_file(slice_id: str, tip: str) -> Path:
     return RUNNING / f"{slice_id}-{tip[:8]}.json"
 
 
-def mark_running(slice_id: str, tip: str, jid: str, stack_id: str = "") -> None:
+def mark_running(slice_id: str, tip: str, jid: str, stack_id: str = "", standing: str = VERIFIED) -> None:
     RUNNING.mkdir(parents=True, exist_ok=True)
     c.write_json(running_file(slice_id, tip), {"slice": slice_id, "tip": tip, "id": jid, "started": c.now(),
-                                                **({"stack_id": stack_id} if stack_id else {})})
+                                                "standing": standing, **({"stack_id": stack_id} if stack_id else {})})
 
 
 def unmark_running(slice_id: str, tip: str) -> None:
@@ -280,13 +411,88 @@ def spatial_line(s) -> str:
     return "%s%s: %s" % (s["status"], where, " ".join(str(s.get("reason") or "no reason given").split()))
 
 
-def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: str, jid: str) -> str:
+#: The most of the slice's own files read when looking for a path main moved (item 4), and the most bytes of each.
+MAX_FILES_READ, MAX_FILE_BYTES = 400, 1024 * 1024
+
+
+def merged_ahead(tip: str, d: dict) -> list[str]:
+    """013, item 4: why a red is of the kind broken by what merged ahead, in plain words; [] when nothing shows it.
+    A conflict always is. Otherwise: a path that main (or a slice merged before this one in the stack) renamed or
+    removed since this slice's base, which a file this slice changed still names. Read with git, on this machine."""
+    said = []
+    if d.get("verdict") == "conflict":
+        files = ", ".join(f"`{f}`" for f in (d.get("conflicts") or [])[:10]) or "files the runner named"
+        ahead = "main" + "".join(f" + {x['slice']}" for x in (d.get("stack") or [])[:-1])
+        said.append(f"it does not merge onto {ahead}: a conflict in {files}. What merged ahead of it changed the same "
+                    "lines since it was built.")
+        return said
+    if d.get("verdict") != "fail":
+        return said
+    ahead = [str(d.get("main") or "")] + [x.get("tip", "") for x in (d.get("stack") or [])[:-1]]
+    ahead = [x for x in ahead if re.fullmatch(r"[0-9a-f]{40}", x)]
+    moved = {}
+    for a in ahead:
+        base = c.git(["merge-base", tip, a], c.REPO, check=False)
+        if not base:
+            continue
+        for ln in c.git(["diff", "--name-status", "-M", base, a], c.REPO, check=False).splitlines():
+            parts = ln.split("\t")
+            if parts and parts[0][:1] in ("R", "D") and len(parts) >= 2:
+                moved.setdefault(parts[1], parts[2] if parts[0][:1] == "R" and len(parts) > 2 else "")
+    if not moved:
+        return said
+    base = c.git(["merge-base", tip, ahead[0]], c.REPO, check=False) if ahead else ""
+    mine = c.git(["diff", "--name-only", "--diff-filter=AM", base, tip], c.REPO, check=False).splitlines() if base else []
+    hits = {}
+    for f in mine[:MAX_FILES_READ]:
+        try:
+            raw = subprocess.run(["git", "show", f"{tip}:{f}"], cwd=c.REPO, capture_output=True, timeout=30).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if b"\0" in raw[:8000]:
+            continue
+        text = raw[:MAX_FILE_BYTES].decode(errors="replace")
+        for old in moved:
+            short = old.split("/", 1)[1] if "/" in old else old  # as a component's own files name it
+            if old in text or ("/" in short and short in text):
+                hits.setdefault(old, []).append(f)
+    for old, files in sorted(hits.items()):
+        new = moved[old]
+        said.append(f"what merged ahead of it {'moved' if new else 'removed'} `{old}`" + (f" to `{new}`" if new else "")
+                    + ", and this slice's " + ", ".join(f"`{f}`" for f in files[:5]) + " still names the old path.")
+    return said
+
+
+def failures_of(d: dict | None) -> set:
+    f = (d or {}).get("failing") or {}
+    return set(f.get("tests") or []) | {n for v in (f.get("by_target") or {}).values() for n in v}
+
+
+def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: str, jid: str,
+              standing: str = VERIFIED, retest: dict | None = None, carried: list | None = None) -> str:
     d = data or {}
     fail = d.get("failing") or {}
     nr = d.get("not_run") or {}
     stack = d.get("stack") or []
-    out = [f"# Early warning: {slice_id} at {tip[:8]}: {headline}", "",
-           f"**{ADVICE}.** {RED_RULE}", "",
+    out = [f"# Early warning: {slice_id} at {tip[:8]}: {headline}" + (f" ({NOT_YET})" if standing == NOT_YET else ""),
+           ""]
+    if standing == NOT_YET:
+        out += [HELD_MARK % tip, HELD_WORDS % tip, ""]
+    if headline == "RED":
+        try:
+            ahead = merged_ahead(tip, d)
+        except Exception:  # advice: a look that fails says nothing, and never stops the note
+            ahead = []
+        if carried:  # a stack: every failure here fails for a slice merged before it (013, 4)
+            ahead = [f"every failing test here also fails for {' and '.join(carried)}, merged before it in this stack, "
+                     f"so it is {' and '.join(carried)}'s red carried up; this slice is tested again without it."] + ahead
+        if ahead:
+            out += ["**Broken by what merged ahead, not by the server.** This red is the slice meeting what merged "
+                    "before it, so the Mac's merge would be refused for it too: " + " ".join(ahead), ""]
+    if retest:
+        out += [f"**Tested again without {retest['without']}**, which was red in stack `{retest['stack_id']}` "
+                f"(`early_warning.py fetch {retest['stack_id']}`): this is its own result, in the stack named below.", ""]
+    out += [f"**{ADVICE}.** {RED_RULE}", "",
            f"- Result: {headline} ({why})",
            f"- Slice tip: `{tip}`",
            f"- Main: `{d.get('main', '?')}`",
@@ -347,15 +553,17 @@ def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: st
     return "\n".join(out)
 
 
-def record_run(slice_id: str, tip: str, jid: str, data: dict | None) -> None:
-    """Where to ask later (RUNS): this run's id, for this slice and tip. Never its verdict: the server says that."""
+def record_run(slice_id: str, tip: str, jid: str, data: dict | None, standing: str = VERIFIED) -> None:
+    """Where to ask later (RUNS): this run's id, for this slice and tip, and whether it was verified when it ran.
+    Never its verdict: the server says that."""
     if not jid:
         return
     d = data or {}
     OWN.mkdir(parents=True, exist_ok=True)
     with RUNS.open("a") as fh:
         fh.write(json.dumps({"slice": slice_id, "tip": tip, "id": jid, "tree": d.get("tree"),
-                             "stack": [x.get("slice") for x in d.get("stack") or []], "at": c.now()}) + "\n")
+                             "stack": [x.get("slice") for x in d.get("stack") or []], "standing": standing,
+                             "at": c.now()}) + "\n")
 
 
 def recorded_runs(slice_id: str, tip: str, tree: str) -> list[str]:
@@ -381,12 +589,14 @@ def recorded_runs(slice_id: str, tip: str, tree: str) -> list[str]:
 
 
 def write_note(slice_id: str, tip: str, data: dict | None, headline: str, why: str, jid: str, s: dict,
-               before: list | None = None) -> Path:
-    name = f"{slice_id}-{tip[:8]}" + ("-after-" + "-".join(before) if before else "")
+               before: list | None = None, standing: str = VERIFIED, retest: dict | None = None,
+               carried: list | None = None) -> Path:
+    name = f"{slice_id}-{tip[:8]}" + ("-after-" + "-".join(before) if before else "") + \
+        (f"-without-{retest['without']}" if retest else "")
     path = c.REPO / NOTES_REL / f"{name}.md"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(scrub(note_text(slice_id, tip, data, headline, why, jid), s))
-    record_run(slice_id, tip, jid, data)
+    path.write_text(scrub(note_text(slice_id, tip, data, headline, why, jid, standing, retest, carried), s))
+    record_run(slice_id, tip, jid, data, standing)
     return path
 
 
@@ -437,6 +647,14 @@ def trust(s: dict, jid: str, slice_id: str, tip: str, tree: str) -> tuple[int, d
                 why = "these checks did not pass: " + ", ".join(failed)
             elif checks["test"].get("status") != "passed":
                 why = "make test did not pass on the server"
+    if not why:  # only a verified slice's run can count (013, 1): a held one is held, whatever the server says
+        try:
+            _, now_tip, standing, _ = standing_of(slice_id)
+            if standing != VERIFIED or now_tip != tip:
+                why = (f"{slice_id} is {standing} at {now_tip[:10]}: only a verified slice's run, for its exact tip "
+                       "and tree, can count")
+        except Refused as e:
+            why = f"not a slice whose run can count: {e}"
     nr = data.get("not_run") or {}
     mac = {"targets": sorted({n for n, x in checks.items() if x.get("status") == "not run"} | {"client-name-check"}),
            "test_files": [x.get("name") for x in nr.get("test_files", [])],
@@ -452,49 +670,106 @@ def trust(s: dict, jid: str, slice_id: str, tip: str, tree: str) -> tuple[int, d
 
 
 def run_stack(s: dict, order: list) -> int:
-    """009's stack: one bundle, one command, then each candidate's note."""
-    found = [(sid, *verified_tip(sid)) for sid in order]
-    state, sent, code = start(s, [b for _, b, _ in found], order)
+    """009's stack: one bundle, one command, then each candidate's note. 013, item 3: when one candidate is red, the
+    slices above it are tested again at once without it (main + the ones below + the ones above), and again if one of
+    those is red, so one bad slice does not cost the ones behind it a whole run each. Each such result is its own
+    note, naming the stack it was tested in and the one that was left out."""
+    found = [(sid, *standing_of(sid)[:3]) for sid in order]
+    for sid in order:
+        review_held(sid)
+    finals, without, prev = {}, [], ""
+    while True:
+        results = one_stack(s, found, without, prev)
+        finals.update({sid: r[0] for sid, r in results.items()})
+        red = next((k for k, (sid, *_) in enumerate(found) if results.get(sid, (GREEN, ""))[0] == RED), None)
+        stack_id = next((r[1] for r in results.values() if r[1]), "")
+        if red is None or red == len(found) - 1 or not stack_id:
+            return max(finals.values())
+        without, prev = without + [found[red][0]], stack_id
+        found = found[:red] + found[red + 1:]
+        print(scrub(f"Tested again at once without {without[-1]}, which was red in stack {prev}: "
+                    + ", ".join(sid for sid, *_ in found[red:]), s))
+
+
+def start_when_free(s: dict, branches, order: list | None) -> tuple[str, dict | None, int]:
+    """start(), asked again while the runner is busy, up to the setting's wait: a retest waits for its slots."""
+    deadline = time.monotonic() + s["max_wait_minutes"] * 60
+    while True:
+        state, sent, code = start(s, branches, order)
+        if state == "started" or not (sent and sent.get("state") == "refused" and sent.get("reason") == "busy") \
+                or time.monotonic() + s["poll_seconds"] > deadline:
+            return state, sent, code
+        time.sleep(s["poll_seconds"])
+
+
+def one_stack(s: dict, found: list, without: list, prev_stack: str) -> dict:
+    """One stack (or, with one slice left, one run): {slice: (exit code, the stack's or run's id, "" if none)}."""
+    order = [sid for sid, *_ in found]
+    retest = {"without": "-".join(without), "stack_id": prev_stack} if without else None
+    if len(found) == 1:
+        sid, branch, tip, standing = found[0]
+        state, sent, code = start_when_free(s, branch, None) if retest else start(s, branch)
+    else:
+        state, sent, code = (start_when_free if retest else start)(s, [b for _, b, _, _ in found], order)
     if state != "started":
         headline, exit_code, why = outcome(sent, code)
-        for k, (sid, _, tip) in enumerate(found):
-            path = write_note(sid, tip, sent, headline, why, "", s, order[:k])
+        for k, (sid, _, tip, standing) in enumerate(found):
+            path = write_note(sid, tip, sent, headline, why, "", s, order[:k], standing, retest)
             print(scrub(f"{sid}: {headline}: {why}. Note: {path}", s))
-        return exit_code
+        return {sid: (exit_code, "") for sid, *_ in found}
+    if len(found) == 1:
+        jid = str(sent["id"])
+        mark_running(sid, tip, jid, "", standing)
+        try:
+            data, code = poll(s, jid)
+        finally:
+            unmark_running(sid, tip)
+        if data and data.get("state") == "done" and data.get("tip") != tip:
+            data = {"state": "unknown"}
+        headline, exit_code, why = outcome(data, code)
+        path = write_note(sid, tip, data, headline, why, jid, s, None, standing, retest)
+        print(scrub(f"{sid}: {headline}: {why}. Note: {path}", s))
+        return {sid: (exit_code, jid)}
     ids = list(sent.get("ids") or [])
     stack_id = str(sent.get("id") or "")
-    for k, (sid, _, tip) in enumerate(found):
-        mark_running(sid, tip, ids[k] if k < len(ids) else "", stack_id)
+    for k, (sid, _, tip, standing) in enumerate(found):
+        mark_running(sid, tip, ids[k] if k < len(ids) else "", stack_id, standing)
     try:
         poll(s, stack_id)  # the stack's one result, until it is no longer running
-        return stack_notes(s, found, ids, stack_id, order)
+        return stack_notes(s, found, ids, stack_id, order, retest)
     finally:
-        for sid, _, tip in found:
+        for sid, _, tip, _ in found:
             unmark_running(sid, tip)
 
 
-def stack_notes(s: dict, found: list, ids: list, stack_id: str, order: list) -> int:
-    worst = GREEN
-    for k, (sid, _, tip) in enumerate(found):
+def stack_notes(s: dict, found: list, ids: list, stack_id: str, order: list, retest: dict | None = None) -> dict:
+    results, below = {}, []
+    for k, (sid, _, tip, standing) in enumerate(found):
         jid = ids[k] if k < len(ids) else ""
         code, data = ssh(s, ["result", jid], timeout=120) if jid else (255, None)
         if data and data.get("state") == "done" and re.fullmatch(r"[0-9a-f]{40}", str(data.get("holds_main", ""))):
             OWN.mkdir(parents=True, exist_ok=True)
             c.write_json(HELD, {"main": data["holds_main"], "at": c.now()})
-        want = [{"slice": x, "tip": t} for x, _, t in found[:k + 1]]
+        want = [{"slice": x, "tip": t} for x, _, t, _ in found[:k + 1]]
         if data and data.get("state") == "done" and (data.get("tip") != tip or data.get("stack") != want):
             data = {"state": "unknown"}  # an answer for another candidate is no answer for this one
         headline, exit_code, why = outcome(data, code)
-        path = write_note(sid, tip, data, headline, why, jid, s, order[:k])
+        mine = failures_of(data) if headline == "RED" else set()
+        carried = [b for b, fs in below if fs & mine] if mine and mine <= set().union(*[fs for _, fs in below]) \
+            else []
+        path = write_note(sid, tip, data, headline, why, jid, s, order[:k], standing, retest, carried)
         print(scrub(f"{sid}: {headline}: {why}. Note: {path}", s))
-        worst = max(worst, exit_code)
-    return worst
+        results[sid] = (exit_code, stack_id)
+        below.append((sid, mine))
+    return results
 
 
 def fetch(argv: list) -> int:
-    """`early_warning.py fetch <id>` (012 a): the runner's own result line for that run, unchanged, from the server."""
+    """`early_warning.py fetch <id>` (012 a): the runner's own result line for that run, unchanged, from the server.
+    `early_warning.py summary <id>` (010): the same for the server's summary of a red run."""
     if len(argv) != 2 or not re.fullmatch(proto.ID_PATTERN, argv[1]):
-        print(f"Refused: fetch takes one run id ({proto.ID_LENGTH} lower-case hexadecimal characters).", file=sys.stderr)
+        print(f"Refused: {argv[0]} takes one run id ({proto.ID_LENGTH} lower-case hexadecimal characters).",
+              file=sys.stderr)
         return REFUSED_HERE
     try:
         s = load_setting()
@@ -502,7 +777,7 @@ def fetch(argv: list) -> int:
         print(f"Refused: {e}", file=sys.stderr)
         return REFUSED_HERE
     LAST_LINE[0] = ""
-    code, data = ssh(s, ["result", argv[1]], timeout=120)
+    code, data = ssh(s, ["result" if argv[0] == "fetch" else "summary", argv[1]], timeout=120)
     if data is None:
         print(f"No answer: the server could not be reached or gave no answer (ssh exit {code}).", file=sys.stderr)
         return NO_RESULT
@@ -515,8 +790,10 @@ def fetch(argv: list) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if argv[:1] == ["fetch"]:
+    if argv[:1] in (["fetch"], ["summary"]):
         return fetch(argv)
+    if argv[:1] == ["standing"]:
+        return standing_cmd(argv)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("slices", nargs="+", metavar="slice")
     ap.add_argument("--result", metavar="ID", help="poll a run already started")
@@ -553,7 +830,8 @@ def main(argv: list[str] | None = None) -> int:
         if len(a.slices) > 1:
             return run_stack(s, a.slices)
         a.slice = a.slices[0]
-        branch, tip = verified_tip(a.slice)
+        review_held(a.slice)
+        branch, tip, standing, _ = standing_of(a.slice)
     except Refused as e:
         print(f"Refused: {e}", file=sys.stderr)
         return REFUSED_HERE
@@ -563,11 +841,11 @@ def main(argv: list[str] | None = None) -> int:
         state, sent, code = start(s, branch)
         if state != "started":
             headline, exit_code, why = outcome(sent, code)
-            path = write_note(a.slice, tip, sent, headline, why, "", s)
+            path = write_note(a.slice, tip, sent, headline, why, "", s, None, standing)
             print(scrub(f"{headline}: {why}. Note: {path}", s))
             return exit_code
         jid = sent["id"]
-    mark_running(a.slice, tip, jid)
+    mark_running(a.slice, tip, jid, "", standing)
     try:
         data, code = poll(s, jid)
     finally:
@@ -578,7 +856,7 @@ def main(argv: list[str] | None = None) -> int:
     if data and data.get("state") == "done" and data.get("tip") != tip:
         data = {"state": "unknown"}  # an answer for another tip is no answer for this one
     headline, exit_code, why = outcome(data, code)
-    path = write_note(a.slice, tip, data, headline, why, jid, s)
+    path = write_note(a.slice, tip, data, headline, why, jid, s, None, standing)
     print(scrub(f"{headline}: {why}. Note: {path}", s))
     return exit_code
 

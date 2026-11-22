@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 
-import type { OntologyRegistry } from "../ontology/schema";
-import type { WorkingSetGraph } from "@ospreyflow/glass-shared";
+import type { OntologyRegistry, WorkingSetGraph, DocumentView } from "@ospreyflow/glass-shared";
 import { SOURCES_WITHHELD_TEXT } from "../inspector/sourcesWithheld";
 import { fetchDocumentView } from "@ospreyflow/glass-shared";
 import { HighlightedMessage } from "./HighlightedMessage";
-import type { DocumentView } from "@ospreyflow/glass-shared";
 
 export interface DossierProps {
   graph: WorkingSetGraph;

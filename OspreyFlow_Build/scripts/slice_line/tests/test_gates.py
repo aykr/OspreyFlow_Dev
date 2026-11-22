@@ -53,9 +53,11 @@ GH = (Path(__file__).resolve().parent / "fake_gh.py").read_text()
 #: appended to the merge log; TEST_LIVE_NOTE as the live step's note; TEST_GATE_SEES: what the merge tree's
 #: OspreyFlow_Core holds of an environment when the gate starts ("clean" when neither .venv nor node_modules);
 #: TEST_GATE_RETRIES: the steps the gate retried after a network failure, as full_gate records them; TEST_GATE_SLEEP:
-#: seconds the gate runs, writing nothing.
-STAND_IN_GATE = """def _stand_in_gate(t, b, l):
+#: seconds the gate runs, writing nothing; TEST_GATE_PLAN: the targets it was given (null: the whole gate).
+STAND_IN_GATE = """def _stand_in_gate(t, b, l, targets=None):
     Path(str(t) + '-pytest').mkdir(exist_ok=True)  # pytest's temp base of the gate's own, as ci_env makes it
+    if os.environ.get('TEST_GATE_PLAN'):  # the targets it was given: None for the whole gate (004, 2)
+        Path(os.environ['TEST_GATE_PLAN']).write_text(json.dumps(targets))
     l.open('a').write('\\ngate pytest base: ' + str(t) + '-pytest\\n')
     if os.environ.get('TEST_GATE_LOG'):
         l.open('a').write(open(os.environ['TEST_GATE_LOG']).read())
@@ -78,6 +80,30 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l):
 FULL_GATE = _stand_in_gate"""
 
 
+#: The Mac's rerun of a demo server's red (merge_slice.SERVER_RERUN), stood in as the gate is: TEST_RERUN's exit code;
+#: TEST_RERUN_SEES: what it was asked to rerun, and whether the tree it got has the slice merged in.
+STAND_IN_RERUN = """def _stand_in_rerun(t, l, tests, targets):
+    l.open('a').write('\\nrerun: ' + ' '.join(tests + targets) + '\\n')
+    if os.environ.get('TEST_RERUN_SEES'):
+        Path(os.environ['TEST_RERUN_SEES']).write_text(json.dumps({'tests': tests, 'targets': targets,
+                                                                  'feature': (t / 'feature.txt').exists()}))
+    return int(os.environ.get('TEST_RERUN', '0'))
+
+
+SERVER_RERUN = _stand_in_rerun"""
+
+#: The three project checks (stop_check.PROJECT_CHECKS, the owner's file 005), stood in in both copies alike: each
+#: exits TEST_PROJECT_<NAME>'s code (ROUTE_COVERAGE_CHECK, TEST_FILE_COVERAGE_CHECK, MYPY; 0 when unset) and appends its
+#: name to TEST_PROJECT_SEES.
+STAND_IN_PROJECT = ("PROJECT_CHECKS = tuple((n, 'echo ' + n + ' >> \"${TEST_PROJECT_SEES:-/dev/null}\"; exit ${TEST_PROJECT_'"
+                    " + n.upper().replace('-', '_') + ':-0}') for n, _ in PROJECT_CHECKS_REAL)")
+
+
+def stand_in_project_checks(f: Path) -> None:
+    text = f.read_text()
+    if "PROJECT_CHECKS = PROJECT_CHECKS_REAL" in text:
+        f.write_text(text.replace("PROJECT_CHECKS = PROJECT_CHECKS_REAL", STAND_IN_PROJECT))
+
 @pytest.fixture
 def world(tmp_path):
     """A throwaway repository shaped like this one, its bare origin, a fake home and a fake claude."""
@@ -88,6 +114,7 @@ def world(tmp_path):
     for f in ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv"):
         if (SRC / f).exists():
             shutil.copy(SRC / f, data / "bin" / f)
+    stand_in_project_checks(data / "bin" / "stop_check.py")
     (data / "emails.sha256").write_text(hashlib.sha256(OWNER.encode()).hexdigest() + "\n")
     # gh, as the line calls it (tests/fake_gh.py): FAKE_GH_RUNS, every run newest first; or FAKE_GH_COMPLETED, the
     # latest completed run's JSON list, and FAKE_GH_LATEST, the newest run of any status; FAKE_GH_EXIT: a failing gh
@@ -110,8 +137,10 @@ def world(tmp_path):
     repo = tmp_path / "repo"
     lines = repo / "OspreyFlow_Build/scripts/slice_line"
     shutil.copytree(SRC, lines, ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    stand_in_project_checks(lines / "stop_check.py")
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
-    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE))
+    gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE)
+                    .replace("SERVER_RERUN = rerun_named", STAND_IN_RERUN))
     day = lines / "resume.py"  # the run's one date, in this copy only (9)
     assert TODAY_REAL in day.read_text(), "resume.today() changed: the suite's one-date copy needs it"
     day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))
@@ -138,7 +167,11 @@ def world(tmp_path):
     dash = repo / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard"
     dash.mkdir(parents=True)
     (dash / "index.html").write_text('const N=[\n["BL1",9,1,"None","x",[],""],\n["CO1",6,1,"None","y",["BL2"],""]\n];')
-    sh("git init -q -b main && git add -A && git commit -q -m init", repo, env)
+    # The world's own git identity, in its repository's config (every worktree shares it): no git command a test runs,
+    # with the world's environment or without it, reaches the machine's configuration (the owner's file 006: GitHub's
+    # runner has no identity, and a commit run without the world's environment failed there).
+    sh("git init -q -b main && git config user.name t && git config user.email t@t.invalid && "
+       "git config commit.gpgsign false && git config tag.gpgsign false && git add -A && git commit -q -m init", repo, env)
     sh(["git", "remote", "add", "origin", str(origin)], repo, env)
     sh("git push -q origin main", repo, env)
     (data / "origin.url").write_text(str(origin) + "\n")
