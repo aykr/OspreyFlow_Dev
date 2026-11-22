@@ -20,6 +20,11 @@ order in which no step's failure can leave the identity's rows readable:
 3. `purge`: the rows go from every table the sync writes, and the stamp is made again. It is
    repeatable, and the sync pass finishes it (`Mart.purge_removed`) if it fails here.
 
+The stamp is lifted by one act only, `reopen`: the Admin registering the identity again, after the
+identity provider has accepted the name. Never by a pull: an identity whose deletion at the provider
+failed is still registered there with a working secret and looks to a pull exactly like one
+registered again, so its rows must stay hidden until the removal is finished.
+
 The Conduit uses the connection it already has, as the same database role `report-sync` writes as.
 """
 
@@ -30,6 +35,7 @@ from datetime import datetime
 import asyncpg
 from pydantic import BaseModel
 from services.report_sync.mart import (
+    CONTROL_SCHEMA,
     DASHBOARD_TABLES,
     delete_dashboard_rows,
     ensure_control,
@@ -147,6 +153,39 @@ class ReportFreshness:
                 return purged
         except _NoMart:
             return 0
+        except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+            raise MartUnreachable(str(e) or type(e).__name__) from e
+
+    async def reopen(self, client_id: str) -> bool:
+        """The identity is registered again (the identity provider has accepted the name): the
+        earlier identity's rows go from every table and the stamp is lifted, in one transaction
+        under the dashboard's lock, so they are never readable beside the new identity's own.
+        Returns True when a stamp was lifted, False when there was none (a name never removed here)
+        or no mart. A failure is `MartUnreachable`, and nothing was changed: the stamp stays."""
+        try:
+            async with self._pool.acquire() as conn, conn.transaction():
+                await lock_dashboard(conn, client_id)
+                try:
+                    stamped = await conn.fetchval(
+                        f"SELECT removed_at FROM {CONTROL_SCHEMA}.removed_dashboards "
+                        "WHERE dashboard = $1",
+                        client_id,
+                    )
+                except (asyncpg.UndefinedTableError, asyncpg.InvalidSchemaNameError):
+                    raise _NoMart from None
+                if stamped is None:
+                    return False
+                try:
+                    await delete_dashboard_rows(conn, self._schema, client_id, DASHBOARD_TABLES)
+                except (asyncpg.UndefinedTableError, asyncpg.InvalidSchemaNameError):
+                    raise _NoMart from None
+                await conn.execute(
+                    f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = $1",
+                    client_id,
+                )
+                return True
+        except _NoMart:
+            return False
         except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
             raise MartUnreachable(str(e) or type(e).__name__) from e
 

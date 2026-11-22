@@ -16,13 +16,16 @@ it is committed before anything else is done (`services/api/report_freshness.py`
   `dashboard_is_current` (a function that runs as the table's owner and reads the stamp), so a
   stamped identity's rows are not returned to it, at once, whether or not they have been deleted
   yet (`hiding_statements`; the owner, which writes, is not subject to it);
-- every write refuses a stamped identity: a refusal (`record_failure`) never writes its row, and a
-  successful pull (`replace`) that began before the stamp raises `DashboardRemoved`;
+- every write refuses a stamped identity, whenever its pull began and whether it succeeded or was
+  refused: `replace` and `record_failure` raise `DashboardRemoved` and write nothing;
 - the sync pass deletes the rows of every stamped identity (`purge_removed`), so a purge the Conduit
   could not finish costs nothing and needs no person;
-- the stamp is cleared only by a pull that began after it and succeeded, which is the identity
-  registered again under the same name: the earlier identity's rows are taken out first, so they
-  never reappear beside its own.
+- the stamp is lifted by one act only: the Admin registering the identity again, which the identity
+  provider has accepted (`ReportFreshness.reopen`, which also takes the earlier identity's rows out
+  in the same transaction, so they never appear beside its own). It is never lifted by a pull,
+  however late the pull began or however good its token: an identity whose deletion at the identity
+  provider failed is still registered there with a working secret, and looks to a pull exactly like
+  one registered again.
 """
 
 from __future__ import annotations
@@ -52,8 +55,7 @@ def _identifier(name: str) -> str:
 
 
 class DashboardRemoved(Exception):
-    """The identity was removed in the Admin after the pull that wanted to write began: nothing is
-    written for it."""
+    """The identity was removed in the Admin (it has a removal stamp): nothing is written for it."""
 
 
 async def lock_dashboard(conn: Any, dashboard: str) -> None:
@@ -99,29 +101,18 @@ async def stamp_removed(conn: Any, dashboard: str) -> None:
     )  # fmt: skip
 
 
-async def refuse_if_removed(
-    conn: Any, dashboard: str, pass_started: datetime | None, *, reopen_in: str | None = None
-) -> None:
+async def refuse_if_removed(conn: Any, dashboard: str) -> None:
     """Called with the dashboard's lock held; a stamped identity is never written for.
 
     Every write refuses one that has a stamp, whatever moment its pull began (an identity removed in
-    the Admin may still be in the environment's list, its token refused). The one exception is a
-    caller that passes `reopen_in` (the schema, which a successful pull does): a pull that began
-    after the stamp belongs to an identity registered again, so the earlier identity's rows are
-    taken out and the stamp cleared before it writes."""
+    the Admin may still be in the environment's list, its token granted, if its deletion at the
+    identity provider failed). Only a registration lifts the stamp (`ReportFreshness.reopen`)."""
     removed_at = await conn.fetchval(
         f"SELECT removed_at FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = $1",
         dashboard,
     )
-    if removed_at is None:
-        return
-    if reopen_in is not None and pass_started is not None and removed_at < pass_started:
-        await delete_dashboard_rows(conn, reopen_in, dashboard)
-        await conn.execute(
-            f"DELETE FROM {CONTROL_SCHEMA}.removed_dashboards WHERE dashboard = $1", dashboard
-        )
-        return
-    raise DashboardRemoved(dashboard)
+    if removed_at is not None:
+        raise DashboardRemoved(dashboard)
 
 
 #: The function a reader's policy asks, in the mart's own schema (which a reader may use).
@@ -187,11 +178,6 @@ class Mart:
             for statement in hiding_statements(s):
                 await conn.execute(statement)
 
-    async def begin_pass(self) -> datetime:
-        """The database's own clock, which a removal is stamped with: read before a pull begins."""
-        async with self._pool.acquire() as conn:
-            return await conn.fetchval("SELECT clock_timestamp()")  # type: ignore[no-any-return]
-
     async def replace(
         self,
         dashboard: str,
@@ -200,18 +186,16 @@ class Mart:
         weeks: int,
         rows: Sequence[FigureRow],
         at: datetime,
-        *,
-        pass_started: datetime | None = None,
     ) -> int:
         """The case's figures for this dashboard and period, as the feed now has them: changed rows
         updated, new ones added, rows no longer fed removed — in one transaction. Returns how many
-        rows changed or were added. `pass_started` is `begin_pass()` from before the pull began:
-        an identity removed since then raises `DashboardRemoved` and nothing is written."""
+        rows changed or were added. A stamped (removed) identity raises `DashboardRemoved` and
+        nothing is written."""
         s = self.schema
         changed = 0
         async with self._pool.acquire() as conn, conn.transaction():
             await lock_dashboard(conn, dashboard)
-            await refuse_if_removed(conn, dashboard, pass_started, reopen_in=s)
+            await refuse_if_removed(conn, dashboard)
             for section, label, typology, week, value in rows:
                 result = await conn.execute(
                     f"""INSERT INTO {s}.figures VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -242,22 +226,14 @@ class Mart:
             )  # fmt: skip
         return changed
 
-    async def record_failure(
-        self,
-        dashboard: str,
-        case_id: str,
-        words: str,
-        at: datetime,
-        *,
-        pass_started: datetime | None = None,
-    ) -> None:
+    async def record_failure(self, dashboard: str, case_id: str, words: str, at: datetime) -> None:
         """A pull that failed, in words; the rows and their last good pull are left as they were.
         A refusal never makes a removed identity's row, whenever its pull began: a stamped identity
         raises `DashboardRemoved` and writes nothing (its rows already there are hidden from a
         reader by the stamp and deleted by the next sync pass)."""
         async with self._pool.acquire() as conn, conn.transaction():
             await lock_dashboard(conn, dashboard)
-            await refuse_if_removed(conn, dashboard, pass_started)
+            await refuse_if_removed(conn, dashboard)
             await conn.execute(
                 f"""INSERT INTO {self.schema}.pulls (dashboard, case_id, last_failure, failed_at)
                     VALUES ($1, $2, $3, $4) ON CONFLICT (dashboard, case_id) DO UPDATE

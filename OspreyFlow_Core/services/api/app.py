@@ -18146,11 +18146,21 @@ async def register_dashboard_route(
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
     handling_scheme: HandlingSchemeDep,
+    freshness: ReportFreshnessDep,
     audit: AuditDep,
 ) -> RegisteredDashboard:
     """A dashboard identity (ADR-111 decision 7). Its clearance may not exceed the registering
     administrator's own — otherwise registering a dashboard would be a way to read above one's
-    clearance (rule 3). The secret is in this answer only."""
+    clearance (rule 3). The secret is in this answer only.
+
+    A name removed here earlier carries a removal stamp in the reporting mart that hides its rows
+    (`remove_dashboard_route`). This registration, once the identity provider has accepted the name,
+    is the one act that lifts it, and it takes the earlier identity's rows out first: a pull never
+    lifts it, because an identity whose removal failed at the provider looks to a pull exactly like
+    one registered again. A refused registration (the provider holds the name) lifts nothing. If the
+    mart cannot be reached for this, the registration is undone at the provider (no secret was given
+    to anyone) and refused in words; if it cannot be undone either, the identity stays listed with
+    its Remove button and its rows stay hidden."""
     order = list(handling_scheme.classification)
     if body.clearance not in order:
         raise UnknownRoleError(f"{body.clearance} is not a classification of this deployment")
@@ -18165,10 +18175,41 @@ async def register_dashboard_route(
         body.name, clearance=body.clearance, org_unit=body.org_unit,
         application_id=body.application_id,
     )  # fmt: skip
+    client_id = made.dashboard.client_id
+    registered: dict[str, object] = {
+        "client_id": client_id, "clearance": body.clearance, "org_unit": body.org_unit,
+    }  # fmt: skip
+    try:
+        rows_cleared = await freshness.reopen(client_id)
+    except MartUnreachable as unreachable:
+        logger.warning("register_dashboard: the mart refused to lift the stamp: %s", unreachable)
+        undone = True
+        try:
+            await identity_admin.delete_dashboard(client_id)
+        except Exception as failed:
+            undone = False
+            logger.warning("register_dashboard: %s could not be undone: %s", client_id, failed)
+        await audit.record(principal=principal, action="register_dashboard",
+                           resolved_query={**registered, "rows_cleared": False, "undone": undone},
+                           result_cardinality=0 if undone else 1)  # fmt: skip
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "reporting_mart_unreachable",
+                "message": (
+                    f"The reporting mart could not be reached, so {client_id} was not registered. "
+                    "Nothing was changed: register it again when the mart is back."
+                    if undone
+                    else f"The reporting mart could not be reached, and {client_id}, registered at "
+                    "the identity provider, could not be undone. It is listed, and none of its "
+                    "figures will show: remove it, then register it again."
+                ),
+            },
+        ) from unreachable
+    if rows_cleared:
+        registered["rows_cleared"] = True
     await audit.record(principal=principal, action="register_dashboard",
-                       resolved_query={"client_id": made.dashboard.client_id,
-                                       "clearance": body.clearance, "org_unit": body.org_unit},
-                       result_cardinality=1)  # fmt: skip
+                       resolved_query=registered, result_cardinality=1)  # fmt: skip
     return made
 
 
