@@ -9,12 +9,13 @@ the configuration pinned, and stores the result byte for byte under
 compose service, the front proxy's routes, a Helm value or a setting's default then shows as a
 changed file, named, in a diff the owner can read.
 
-It changes no renderer: it calls `harness.render.render` (and, for the compose shapes, the three
-functions `harness.apply.stage_deployment` calls for the files beside the compose file), with the
-inputs below fixed.
+It changes no renderer: it calls `harness.render.render` and, for the compose shapes, runs
+`harness.apply.stage_deployment` itself (in a temporary folder, with the inputs below fixed), so the
+files stored are the files `apply` writes: the compose file, the Caddyfile, `deployment.json` and
+`deployment.env`, with the env lines `stage_deployment` appends for the page service.
 
-**What is pinned, and why.** A render reads four things that are not the configuration; each is
-fixed here, so the reference holds the same bytes on every machine and every day:
+**What is pinned, and why.** A render reads things that are not the configuration; each is fixed
+here, so the reference holds the same bytes on every machine and every day:
 
 - the digest resolver (a hash of the reference, as `tools.cp_policy_check` does; the registry is
   never asked);
@@ -25,8 +26,13 @@ fixed here, so the reference holds the same bytes on every machine and every day
   values carry whole): the tokens' own changes are the design package's business, not a
   deployment's shape.
 
-No clock is read by a render and no secret is minted by one (`apply` mints them after it); the
-`deployment.env` stored is the rendered one, which names variables and holds no value.
+- the secrets `stage_deployment` mints (`secrets.token_urlsafe`) and the shell variables a render
+  reads (`SHELL_INPUTS`, among them `OSPREY_IMAGE_REGISTRY`): the generator returns `PINNED_<n>` in
+  turn, and the shell's values are removed for the run. So the stored `deployment.env` holds the
+  minted entries as `PINNED_1` onwards (`OSPREY_OIDC_CLIENT_SECRET=PINNED_1` up to
+  `MINIO_SECRET_KEY=PINNED_6` for local-lite): placeholders, never a real secret.
+
+No clock is read into the output.
 
 **Regenerate** (a deliberate change to the reference; the diff of `tests/fixtures/reference_render/`
 is what the owner reads):
@@ -291,13 +297,35 @@ def without_pages_guard(text: str) -> str:
 
 
 _PAGES_KEY = re.compile(r"^pages:[ \t]*(?:#.*)?$")
-_ENABLED_OFF = re.compile(r"^[ \t]+enabled:[ \t]*false[ \t]*(?:#.*)?$")
+_ENABLED_OFF = re.compile(r"^([ \t]+)enabled:[ \t]*false[ \t]*(?:#.*)?$")
+
+
+def _section_is_off(body: list[str]) -> bool:
+    """Whether a section's own `enabled` key, at the section's first indentation level, is false.
+    A key nested deeper (`ingress: enabled: false`) is a sub-toggle and says nothing of the
+    section: a section that is on, with a sub-toggle off, is on."""
+    own = next(
+        (
+            line[: len(line) - len(line.lstrip(" \t"))]
+            for line in body
+            if line.strip() and not line.lstrip().startswith("#")
+        ),
+        None,
+    )
+    if own is None:
+        return False
+    for line in body:
+        found = _ENABLED_OFF.match(line.rstrip("\r\n"))
+        if found and found.group(1) == own:
+            return True
+    return False
 
 
 def without_pages_section_when_off(text: str) -> str:
     """The chart's default `values.yaml` as it reads with the page service off: a top-level
-    `pages:` section that says `enabled: false`, with the comment lines directly above it and one
-    blank line above those, is not there. A `pages:` section that is on, or does not say, stays."""
+    `pages:` section whose own first-level `enabled` key is false (not a key nested in it), with
+    the comment lines directly above it and one blank line above those, is not there. A `pages:`
+    section that is on, or does not say, stays."""
     lines = text.splitlines(keepends=True)
     for start, line in enumerate(lines):
         if not _PAGES_KEY.match(line.rstrip("\r\n")):
@@ -308,7 +336,7 @@ def without_pages_section_when_off(text: str) -> str:
         # Blank lines at the end of the section belong to what follows it.
         while end > start + 1 and not lines[end - 1].strip():
             end -= 1
-        if not any(_ENABLED_OFF.match(body.rstrip("\r\n")) for body in lines[start + 1 : end]):
+        if not _section_is_off(lines[start + 1 : end]):
             return text
         first = start
         while first > 0 and lines[first - 1].lstrip().startswith("#"):

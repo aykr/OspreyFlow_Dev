@@ -43,10 +43,10 @@ writes into the values (that one is in the stored values, and is red).
 `small` are rendered through `harness.apply.stage_deployment`, run into a temporary folder with its
 render step given this module's resolver, so the file holds every line `apply` appends to the
 rendered one: the identity provider's addresses, the stores' hosts and the page service's two
-secrets (`OSPREY_PAGES_CLIENT_SECRET`, `OSPREY_PAGES_SESSION_SECRET`), each minted value `PINNED_<n>`
-(numbered by the order the render mints them; not one word, because `harness.cloud_platform` mints
-twice and compares to tell a fixed value from a fresh one). An enable flag added beside them, or
-the two secrets made conditional, is a changed `deployment.env`. `osprey.yaml` (the input, copied)
+secrets (`OSPREY_PAGES_CLIENT_SECRET`, `OSPREY_PAGES_SESSION_SECRET`), each minted value
+`PINNED_<n>` (numbered by the order the render mints them; not one word, because
+`harness.cloud_platform` mints twice and compares to tell a fixed value from a fresh one). An
+enable flag added beside them, or the two secrets made conditional, is a changed `deployment.env`. `osprey.yaml` (the input, copied)
 and `.rendered` (the list of what was written) are not rendered content and are not stored. There
 is no `deployment.json` among the files: the renderers write `glass.json` (ADR-114 Amendment 4),
 which is stored; `/deployment.json` is what the Glass is served from it.
