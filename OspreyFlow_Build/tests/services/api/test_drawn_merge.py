@@ -1311,6 +1311,35 @@ async def test_reverting_a_retyped_merge_withdraws_its_copies_their_links_and_sa
     assert not mw.graph.node(drawn.fight["element_id"]).audit.reverted
 
 
+async def test_the_commands_revert_of_a_merge_records_the_operator_who_took_back_its_writes(
+    mw: SimpleNamespace,
+) -> None:
+    """SE9, rule 12 at the real call site: a retyped merge's own writes (its copies, their links
+    and `SAME_AS`) are reverted by `MergeCommit.undo_writes`, and the person named on the command
+    line (`--reverted-by`) is the one saved as `reverted_by` with the time, never nothing. Run
+    through `run`, the command's own entry. The plant: the `by=`/`at=` taken off the
+    `revert_elements` call in `undo_writes`, or `revert_promotion` not handing it the person."""
+    from scripts.revert_promotion import run
+
+    drawn = _incident(mw)
+    body = _step(mw, "merge", "dana", item_ids=drawn.ids, mapping=RETYPE).json()
+    boards, merge = _merge_commit(mw)
+
+    async def invalidate() -> None:
+        return None
+
+    async def stopped() -> tuple[str, str]:
+        return ("stopped", "planted")
+
+    code = await run(
+        body["load_id"], reverted_by="ops", dry_run=False, store=mw.store, graph=boards.graph,
+        items=mw.items, audit=mw.audit, invalidate=invalidate, conduit=stopped, merge=merge,
+    )  # fmt: skip
+    assert code == 0
+    assert [(kind, by) for kind, by, _at in mw.graph.deleted_by] == [("revert", "ops")]
+    assert all(at is not None for _kind, _by, at in mw.graph.deleted_by)
+
+
 def test_a_sheet_given_a_mapping_it_cannot_read_is_refused(mw: SimpleNamespace) -> None:
     _incident(mw)
     for given in ("not json", json.dumps([{"kind": "node"}])):

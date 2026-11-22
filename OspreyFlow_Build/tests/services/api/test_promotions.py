@@ -1336,6 +1336,23 @@ async def test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts(
     assert await _run_the_command(pw, "promotion-none", dry_run=False) == 1
 
 
+async def test_the_commands_layer_withdrawal_records_the_operator_it_was_given(
+    pw: SimpleNamespace,
+) -> None:
+    """SE9, rule 12 at the real call site: `--reverted-by` is required, so the layer's withdrawal
+    the revert makes for a promotion from a layer since deleted saves that person as
+    `reverted_by` (never nothing: a saved view's `missing` and the deletion record read it). Run
+    through `run`, the command's own entry, so a person dropped between `run` and the graph call
+    leaves `deleted_by` with `None` and this fails; the plant is the `by=` taken off
+    `withdraw_layer` in `revert_promotion`."""
+    board, made, link_item, _ = _drawn()
+    promoted = _promote(board, made["item_id"], link_item).json()
+    pw.store.deleted_layers.add(pw.store.records[promoted["id"]].layer_id)
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 0
+    assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [("layer", "ops")]
+    assert all(at is not None for _kind, _by, at in pw.graph.deleted_by)
+
+
 async def test_the_dry_run_check_fails_with_the_dry_run_writing(
     pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
 ) -> None:
