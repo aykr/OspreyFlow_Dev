@@ -555,6 +555,45 @@ def test_a_custom_property_named_for_a_theme_in_a_shared_rule_is_found() -> None
     assert found_in(".a { padding: var(--govuk-gutter); }") == [(".a", "custom-property")]
 
 
+def test_a_property_registration_named_for_a_theme_in_the_shared_scale_is_found(
+    core: Path,
+) -> None:
+    scale = core / "packages/design/scale.css"
+    scale.write_text(
+        scale.read_text(encoding="utf-8")
+        + "\n@property --govuk-x { syntax: '<length>'; inherits: false; initial-value: 0px; }\n"
+        + "@property --card-x { syntax: '<length>'; inherits: false; initial-value: 0px; }\n",
+        encoding="utf-8",
+    )
+    assert triples(judged(core).new) == [
+        ("packages/design/scale.css", "@property --govuk-x", "custom-property")
+    ]
+
+
+@pytest.mark.parametrize("name", ["chrome.js", "chrome.mjs", "chrome.ts"])
+def test_a_govuk_rule_in_a_script_string_in_a_second_themes_folder_is_found(
+    core: Path, name: str
+) -> None:
+    """A script inside a theme folder is read as strings (ADR-152 Am. 4 item 2 moves one there)."""
+    plant(
+        core,
+        f"packages/themes/other/{name}",
+        'const css = `\n[data-brand="govuk"] #kc-header { display: none; }\n`;\n',
+    )
+    assert triples(judged(core).new) == [
+        (f"packages/themes/other/{name}", '[data-brand="govuk"] #kc-header', "string-rule")
+    ]
+
+
+def test_a_govuk_rule_in_a_script_string_in_the_govuk_folder_is_allowed(core: Path) -> None:
+    plant(
+        core,
+        "packages/themes/govuk/chrome.js",
+        'const css = `\n[data-brand="govuk"] #kc-header { display: none; }\n`;\n',
+    )
+    assert_clean(core)
+
+
 def test_a_font_naming_gds_transport_in_a_shared_rule_is_found() -> None:
     assert found_in('.a { font-family: "GDS Transport", arial; }') == [(".a", "font-use")]
 
