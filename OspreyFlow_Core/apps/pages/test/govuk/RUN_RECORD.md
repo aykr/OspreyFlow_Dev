@@ -14,5 +14,8 @@ Rule 15: each fault planted in the real file, the spec shown red, the file resto
 | `tokens.css` names the face under `data-govuk-identity="on"` alone (the first round's rule: no address condition) | "switch on, off gov.uk" | all six |
 | `sync_govuk_assets.mjs` leaves GOV.UK Frontend's font stacks naming the face (the gating lost) | "switch on, off gov.uk", "a build that holds the face, with the switch off at run time" and "means nothing under the OspreyFlow brand" | all six |
 | `govuk_chrome.js` draws the organisation's name and drops the service's (round 3's header fault) | "switch off, on a gov.uk address" and "switch off, off gov.uk" (the header must also name the service) | all six |
+| `govuk_chrome.js` reads a settings object with no `govukIdentity` key as identity ON (`given === true \|\| given === undefined`, round 7's change) | "switch off, on a gov.uk address", "switch off, off gov.uk" and "a build that holds the face, with the switch off at run time" (3 failed, 3 passed) | all six |
 
 Green run, 23 November 2026 (round 3): 6 passed.
+
+Green run, 23 November 2026 (round 8, at the commit that makes a missing key mean off): `npm run test:govuk` in `apps/pages`, 6 passed, the spec unchanged since round 3. The three cases above fail against round 7's script and pass against this one.
