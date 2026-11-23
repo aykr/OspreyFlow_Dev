@@ -1,0 +1,83 @@
+{#- Studio › 1 Model (slice IS2a; ADR-140 Amendment 22 items 1, 3 and 4): the dataset's domain model in the Studio's frame. The draft's types
+    and the live version's are a table each (caption, header cells, one row header per type); a draft is opened, saved and discarded by
+    forms that carry the anti-forgery token, the case and, for a save and a discard, the version the person's copy was read at.
+    Complete without a script: tables, forms and buttons, no handler. A failure to read or to save is an alert, never an empty model. -#}
+{% extends "studio/frame.njk" %}
+{% macro types(caption, rows, empty, columns) %}{% if rows | length %}<table class="table">
+<caption class="caption">{{ caption }}</caption>
+<thead>
+<tr>{% for column in columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.klass }}</td><td>{{ row.identifiers }}</td><td>{{ row.rule }}</td><td>{{ row.properties }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}<p>{{ empty }}</p>
+{% endif %}{% endmacro %}
+{% block place %}
+{% if problem %}<p role="alert">{{ problem }}</p>{% endif %}
+{% if mv.kind == "model" %}
+<section class="studio-model" aria-labelledby="model-heading">
+<h2 id="model-heading">{{ modelWords.heading }}</h2>
+<p>{{ modelWords.intro }}</p>
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+<section aria-labelledby="draft-heading">
+<h3 id="draft-heading">{{ modelWords.draftHeading }}</h3>
+{% if mv.draft %}
+<p>{{ mv.draft.held }}</p>
+<p class="caption">{{ mv.draft.builtOn }}</p>
+{{ types(mv.draft.caption, mv.draft.rows, modelWords.noTypes, modelWords.columns) }}
+{% if mv.draft.mine %}
+<form method="post" action="/studio/model">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<input type="hidden" name="action" value="save">
+<input type="hidden" name="expected_version" value="{{ mv.draft.version }}">
+<fieldset>
+<legend>{{ modelWords.packsLegend }}</legend>
+{% for pack in mv.draft.packs %}<p>
+<label for="{{ pack.id }}">{{ pack.text }}</label>
+<input class="input" type="text" inputmode="numeric" id="{{ pack.id }}" name="{{ pack.field }}" value="{{ pack.value }}">
+</p>
+{% endfor %}</fieldset>
+<button type="submit" class="btn btn--primary">{{ modelWords.save }}</button>
+</form>
+<form method="post" action="/studio/model">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<input type="hidden" name="action" value="discard">
+<input type="hidden" name="expected_version" value="{{ mv.draft.version }}">
+<button type="submit" class="btn">{{ modelWords.discard }}</button>
+</form>
+{% else %}
+<p class="caption">{{ mv.draft.notYours }}</p>
+{% endif %}
+{% else %}
+<p>{{ modelWords.noDraft }}</p>
+<form method="post" action="/studio/model">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<input type="hidden" name="action" value="open">
+<button type="submit" class="btn btn--primary">{{ modelWords.open }}</button>
+</form>
+{% endif %}
+</section>
+<section aria-labelledby="live-heading">
+<h3 id="live-heading">{{ modelWords.liveHeading }}</h3>
+{% if mv.live %}
+<p>{{ mv.live.version }}</p>
+<p class="caption">{{ mv.live.builtOn }}</p>
+{{ types(mv.live.caption, mv.live.rows, modelWords.noTypes, modelWords.columns) }}
+{% else %}
+<p>{{ modelWords.noLive }}</p>
+{% endif %}
+</section>
+</section>
+{% elif mv.kind == "refused" %}
+<p class="caption" role="note">{{ modelWords.refused }}</p>
+{% elif mv.kind == "unreadable" %}
+<p role="alert">{{ modelWords.unreadable }}</p>
+{% endif %}
+{% endblock %}

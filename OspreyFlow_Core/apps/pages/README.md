@@ -47,11 +47,14 @@ Needs-you reminder, the five places as links); a page fills its `place` block. T
   refuses the folder's key prefix and the folder is never written to disk. The cost is that a pages restart loses a held folder
   (the person is told, and chooses the folder again) and a second pages process would not see the first's. It is never in a page,
   a URL, a cookie or a log line.
-- **The Model place** is not on the pages yet, so the Needs-you reminder and the "1 Model" link open the Studio in the workspace
-  on the same case. With the enhancement script loaded, following either also writes the workspace's own Needs-you request
-  (`osprey.needsYou.opening` in the tab's session storage, the key and shape of
-  `packages/glass-shared/src/admin/needsYou/openings.ts`), so the workspace opens on Model; with scripts off it opens on its
-  first place, Pipelines (a difference, listed in `spec/08`).
+- **The Model place** (slice IS2a) is a page: `/studio/model?case=<case>[&dataset=<dataset>]`, so the "1 Model" link and the
+  Needs-you reminder go to it and no longer open the workspace, and neither asks the workspace to open on Model (`data-opens-model`
+  is written only for a place that is not a page, so the places still to come can use it; `modules/studio-frame.ts` stays for
+  them). The page shows the draft's types and the live version's, each as a table (type, class, identifiers, matching rule,
+  properties with the indexed flag), says who holds the draft, and opens, saves and discards it by native forms. A save and a discard
+  carry the version the person's copy was read at, and the Conduit refuses a stale one; the page says the copy was out of date and
+  keeps what was typed. Its route is `server/model.ts`, its words and rows `server/views/modelWords.ts`, its template
+  `tree-default/studio/model.njk` (`spec/09_INGEST_STUDIO.md` section 1.3, `spec/08_ACCEPTANCE_SCENARIOS.md` Scenario MS).
 - **An upload page** says `upload: true` in its `PageModule`; its handler reads the form with `server/upload.ts`, which checks the
   anti-forgery token as the form's first part before any file is read.
 - **The dataset map** (slice IS3) is `/studio/dataset-map?case=<case>[&dataset=<dataset>]`: a read-only table of the pipelines that

@@ -156,6 +156,8 @@ export interface FakeConduit {
   models: Map<string, FakeModelState>;
   /** A model route's next answer is this 409 `model_refused` detail instead of the real rule's (to plant words the page must not trust). */
   nextModelRefusal: string | undefined;
+  /** A model route's next answer is a 409 that is not the store's (`error` is another code): words the page must not show. */
+  nextOtherConflict: string | undefined;
   people: Map<string, Person>;
   stop(): Promise<void>;
 }
@@ -194,6 +196,7 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     refuseNextWrite: undefined,
     models: new Map(),
     nextModelRefusal: undefined,
+    nextOtherConflict: undefined,
     people: new Map(people.map((p) => [p.token, p])),
     stop: () => new Promise((resolve) => server.close(() => resolve())),
   };
@@ -445,6 +448,11 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
         expected = Number(asked);
       }
       const draft = state.draft;
+      if (fake.nextOtherConflict !== undefined) {
+        const words = fake.nextOtherConflict;
+        fake.nextOtherConflict = undefined;
+        return json(res, 409, { error: "owner_needed", detail: words });
+      }
       if (fake.nextModelRefusal !== undefined) {
         const words = fake.nextModelRefusal;
         fake.nextModelRefusal = undefined;

@@ -85,6 +85,8 @@ export interface Frame {
   openingNote: string | null;
   rights: ReadonlySet<string> | null;
   roles: string[] | null;
+  /** The person's own principal id (`GET /v1/me`), which a draft's creator is compared with to say whether the forms are theirs to use; null when it could not be read (the Conduit decides all the same). */
+  meId: string | null;
   proposed: number;
   needsUnread: boolean;
   strip: string[] | null;
@@ -174,6 +176,7 @@ export async function loadFrame(
     openingNote: null,
     rights: null,
     roles: null,
+    meId: null,
     proposed: 0,
     needsUnread: false,
     strip: null,
@@ -206,12 +209,14 @@ export async function loadFrame(
   const rights = rightsList ? new Set(rightsList.filter((r): r is string => typeof r === "string")) : null;
   const rolesList = asList((meRaw as { roles?: unknown } | undefined)?.roles);
   const roles = rolesList ? rolesList.filter((r): r is string => typeof r === "string") : null;
+  const meId = typeof (meRaw as { id?: unknown } | undefined)?.id === "string" ? (meRaw as { id: string }).id : null;
   const needs = needsOf(needsRaw);
   const frame: Frame = {
     ...empty,
     conduit,
     rights,
     roles,
+    meId,
     needsUnread: needs === undefined,
     casesProblem: cases !== undefined ? null : casesReply?.status === 401 ? refusalWords(401, undefined, "") : STUDIO_WORDS.casesUnreadable,
   };
@@ -245,11 +250,17 @@ export async function loadFrame(
     label: place.id === "model" && frame.proposed > 0 ? `${place.label} · ${frame.proposed} proposed` : place.label,
     href: placeHref(place, caseId),
     current: place.id === frame.place,
-    opensModel: place.id === "model" ? frame.datasetId : null,
+    // Model asks the workspace to open on it only while Model is not a page of this service (slice IS2a: it is).
+    opensModel: place.id === "model" && place.path === null ? frame.datasetId : null,
   }));
   const model = PLACES[0];
   if (frame.proposed > 0 && frame.place !== "model" && model) {
-    frame.reminder = { text: NEEDS_YOU_WORDS.reminder(frame.proposed), tip: NEEDS_YOU_WORDS.reminderTip, href: placeHref(model, caseId), opensModel: frame.datasetId };
+    frame.reminder = {
+      text: NEEDS_YOU_WORDS.reminder(frame.proposed),
+      tip: NEEDS_YOU_WORDS.reminderTip,
+      href: placeHref(model, caseId),
+      opensModel: model.path === null ? frame.datasetId : null,
+    };
   }
   return frame;
 }

@@ -44,26 +44,22 @@ const withProposals = (n: number) =>
 const askingForModel = (html: string): string[] => [...html.matchAll(/<a\b[^>]*\bdata-opens-model="[^"]*"[^>]*>/g)].map((m) => m[0]);
 
 describe("the page asks for Model when a link to it is followed", () => {
-  it("ON1: the Model tab and the reminder each name the dataset to open Model on; no other link does; with no dataset, none does", async () => {
+  it("ON1: Model is a page of this service (slice IS2a), so no link asks the workspace to open on it: not the Model tab, not the reminder, and no other", async () => {
     const w = await make(withProposals(2));
     const res = await w.get(`/studio/releases?case=${CASE_ID}`);
-    const asking = askingForModel(res.text);
-    expect(asking).toHaveLength(2);
-    expect(asking.filter((a) => a.includes("tabs__tab"))).toHaveLength(1);
-    for (const tag of asking) expect(tag).toContain(`data-opens-model="${DATASET}"`);
-    expect(asking.filter((a) => a.includes('aria-describedby="studio-proposals-tip"'))).toHaveLength(1);
-    // The other places do not ask for Model.
+    expect(askingForModel(res.text)).toEqual([]);
+    // The Model tab and the reminder are plain links to the page, which the person is taken to; the count is still on the tab.
     const nav = /<nav aria-label="Ingest Studio places">([\s\S]*?)<\/nav>/.exec(res.text)?.[1] ?? "";
     const links = [...nav.matchAll(/<a ([^>]*)>([^<]*)<\/a>/g)];
-    expect(links.filter((l) => (l[1] ?? "").includes("data-opens-model")).map((l) => l[2])).toEqual(["1 Model · 2 proposed"]);
+    expect(links.map((l) => l[2])).toContain("1 Model · 2 proposed");
+    expect(links.find((l) => l[2] === "1 Model · 2 proposed")?.[1]).toContain(`href="/studio/model?case=${CASE_ID}"`);
+    expect(res.text).toContain(`<a class="btn" href="/studio/model?case=${CASE_ID}" aria-describedby="studio-proposals-tip">`);
 
-    // With no proposals the Model tab still asks (the React tab opens Model); there is no reminder.
+    // With no proposals, and with a case that loads into no dataset, nothing asks either.
     const none = await make();
-    expect(askingForModel((await none.get(`/studio?case=${CASE_ID}`)).text)).toHaveLength(1);
-
-    // A case that loads into no dataset has no dataset to open Model on: it asks for nothing.
+    expect(askingForModel((await none.get(`/studio?case=${CASE_ID}`)).text)).toEqual([]);
     const bare = await make(person({ cases: [caseRow({ datasets: [], dataset_ids: [] })] }));
-    expect(askingForModel((await bare.get(`/studio?case=${CASE_ID}`)).text)).toHaveLength(0);
+    expect(askingForModel((await bare.get(`/studio?case=${CASE_ID}`)).text)).toEqual([]);
   });
 
   it("ON2: following a link that asks writes the request the workspace reads; another kind's request is kept, an earlier Model request replaced", async () => {

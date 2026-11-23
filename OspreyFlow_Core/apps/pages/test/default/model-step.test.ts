@@ -271,7 +271,7 @@ describe("the Model step (Scenario MS)", () => {
     }
     // A type's own record: its class, identifiers and matching rule, and its properties each with the flag as words, by name.
     expect(draft?.rows.map((r) => r.map((c) => c.text))).toEqual([
-      ["Vessel", "Object", "imo_number", "Matches on imo_number: an existing record is used", "flag_state (indexed); call_sign (not indexed)"],
+      ["Vessel", "Object", "imo_number", "Matches on imo_number: an existing record is used", "call_sign (not indexed); flag_state (indexed)"],
       ["Wing", "Not recorded", "None", "No matching rule", "None"],
     ]);
     // A property is a property of its type, never a row of its own, and the live model is read apart from the draft.
@@ -424,7 +424,7 @@ describe("the Model step (Scenario MS)", () => {
     expect(formFor(page.text, "discard")).toBeUndefined();
     // The forms are only words about who may act: the Conduit refuses a forged request all the same (rules 3 and 4).
     for (const fields of [
-      { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "9" },
+      { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "9" } as Record<string, string>,
       { case: CASE_ID, action: "discard", expected_version: "2" },
       { case: CASE_ID, action: "open" },
     ]) {
@@ -476,7 +476,7 @@ describe("the Model step (Scenario MS)", () => {
     }
     // A save, a discard and an open by a person without the right, or for a dataset not theirs, are refused in the same words and write nothing.
     for (const fields of [
-      { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "9" },
+      { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "9" } as Record<string, string>,
       { case: CASE_ID, action: "discard", expected_version: "2" },
       { case: CASE_ID, action: "open" },
     ]) {
@@ -493,7 +493,8 @@ describe("the Model step (Scenario MS)", () => {
     const elsewhere = await w.post("/studio/model", { case: "case-not-mine", action: "discard", expected_version: "2" });
     expect(textOf(placeOf(elsewhere.text))).toContain(REFUSED);
     expect(w.conduit.calls.filter((c) => c.method === "DELETE")).toEqual([]);
-    expect(echoProblems(elsewhere.text, ["case-not-mine"])).toEqual([]);
+    // (The frame's own switch form carries the case id the person's request named, as it does for every Studio page; no dataset's id is echoed.)
+    expect(echoProblems(elsewhere.text, [DATASET, "Vessel", "Berth"].filter((word) => word !== DATASET))).toEqual([]);
   });
 
   it("MS13: a model that could not be read, or a save that failed, is said in an alert and never drawn as an empty model", async () => {
@@ -547,6 +548,12 @@ describe("the Model step (Scenario MS)", () => {
     expect(alertOf(escaped.text)).toContain("<b>bold</b> <script>run()</script> words");
     expect(placeOf(escaped.text)).not.toContain("<b>bold</b>");
     expect(escaped.text).not.toMatch(/<script>run\(\)/);
+    // A 409 that is not the store's (another code) says nothing of its own: the page's sentence, with the Conduit's words nowhere.
+    w.conduit.nextOtherConflict = "Internal words about owners and keys";
+    const other = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2" });
+    expect(other.status).toBe(409);
+    expect(alertOf(other.text)).toContain("The draft was refused (409).");
+    expect(echoProblems(other.text, ["Internal words", "owner_needed"])).toEqual([]);
   });
 
   it("MS14: with scripts off the lists are tables and every action is a form with a button, carrying the anti-forgery token, the case and the version", async () => {

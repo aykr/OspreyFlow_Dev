@@ -148,8 +148,9 @@ describe("the frame (Scenario S, frame)", () => {
       expect(link.attrs).not.toContain("tabindex");
       expect(link.attrs).not.toContain("typed-text");
     }
-    // The places not yet on the pages open the Studio in the workspace, on the same case.
-    expect(links[0]?.attrs).toContain(`href="/?investigation=${CASE_ID}&amp;from=case&amp;view=ingest"`);
+    // Model is a page of this service (slice IS2a); the places not yet on the pages open the Studio in the workspace, on the same case.
+    expect(links[0]?.attrs).toContain(`href="/studio/model?case=${CASE_ID}"`);
+    for (const place of links.slice(1, 4)) expect(place.attrs).toContain(`href="/?investigation=${CASE_ID}&amp;from=case&amp;view=ingest"`);
   });
 
   it("SF7: a control that needs a right is a real disabled control with the reason as text beside it, from the person's rights as the Conduit answers; unknown rights offer it as before", async () => {

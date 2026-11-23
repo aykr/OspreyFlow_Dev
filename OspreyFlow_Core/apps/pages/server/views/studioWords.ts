@@ -67,7 +67,7 @@ export const STUDIO_WORDS = {
 
 /** The places in order, with the labels the screens use. A place with no `path` is not on the pages yet. */
 export const PLACES: readonly { id: StudioPlace; label: string; path: string | null }[] = [
-  { id: "model", label: "1 Model", path: null },
+  { id: "model", label: "1 Model", path: "/studio/model" },
   { id: "sources", label: "2 Sources", path: null },
   { id: "pipelines", label: "3 Pipelines", path: null },
   { id: "runs", label: "4 Runs", path: null },
@@ -125,7 +125,7 @@ export function caseForDataset(cases: readonly CaseListing[], datasetId: string,
   return loadsInto[0]?.id ?? null;
 }
 
-const PACKS: readonly { name: string; label: string }[] = [
+export const PACKS: readonly { name: string; label: string }[] = [
   { name: "fibo", label: "Financial fraud and AML (FIBO)" },
   { name: "niem", label: "Crime case analysis (NIEM)" },
   { name: "stix", label: "Cyber threat analytics (STIX 2.1)" },
