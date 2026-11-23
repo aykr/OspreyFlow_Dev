@@ -87,6 +87,12 @@ class PageServiceNeedsAnOrigin(ValueError):
     address, a name that is not plain ASCII DNS)."""
 
 
+class PageServiceNeedsAnotherPort(ValueError):
+    """The page service is on, and the identity name's extra listener would land on a port the front
+    proxy already serves as plain HTTP inside its container, which Caddy refuses to load (round 10
+    of PL7a2b)."""
+
+
 class PageServiceNotOnThisShape(ValueError):
     """The page service is on for the cloud-platform shape, which has no sign-in for it yet (the
     owner's ruling of 23 November 2026, PL7a2b case C: ADR-148 Amendment 23 item 1 needs the chart's
@@ -384,7 +390,43 @@ def identity_listener_port(config: OspreyConfig) -> int | None:
     if not enabled(config) or names.scheme != "https":
         return None
     own = PROXY_HTTPS_PORT if config.network.tls is not None else 443
-    return None if names.port == own else names.port
+    if names.port == own:
+        return None
+    refuse_a_clashing_listener(config, names.port)
+    return names.port
+
+
+#: The words of the sixth refusal: the identity address, the port, what the proxy uses it for.
+NEEDS_ANOTHER_PORT = (
+    "pages.enabled is on, but network.public_origin gives the identity address {identity} the port "
+    ":{port}, which the front proxy already serves as plain HTTP inside its container ({use}), and "
+    "one port cannot serve both plain HTTP and HTTPS, so the front proxy would not start: give "
+    "network.public_origin a different port, or leave pages.enabled off"
+)
+
+
+def refuse_a_clashing_listener(config: OspreyConfig, port: int) -> None:
+    """The identity listener is not put on a port the proxy already serves as plain HTTP inside its
+    container: Caddy refuses a Caddyfile with an HTTP site and an HTTPS site on one listener, and
+    the front proxy, the deployment's only door, would not start (round 10 of PL7a2b). The
+    plain-HTTP ports are those `render_caddyfile` writes: `PROXY_HTTP_PORT` beside the
+    organisation's certificate (its `http_port`: the health check and the redirect) and 80
+    otherwise (the catch-all), and the loopback doors the compose proxy carries (`loopback_doors`).
+    The proxy's own HTTPS port is not one: where the origin's port is it, no listener is added
+    (`identity_listener_port`). Refused in words, naming the setting and the port; the service's
+    own check is not touched."""
+    from harness.site import PROXY_HTTP_PORT, loopback_doors, sites
+
+    own = config.network.tls is not None
+    served = {PROXY_HTTP_PORT if own else 80: "its plain-HTTP port"}
+    served |= {
+        door: f"its loopback door to the {'graph store' if door == 2480 else 'Conduit'}"
+        for door, _upstream in loopback_doors(config)
+    }
+    if port in served:
+        raise PageServiceNeedsAnotherPort(
+            NEEDS_ANOTHER_PORT.format(identity=sites(config).identity, port=port, use=served[port])
+        )
 
 
 def identity_alias(config: OspreyConfig) -> str:
