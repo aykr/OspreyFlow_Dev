@@ -1725,6 +1725,181 @@ def test_the_extra_listener_publishes_nothing_and_adds_no_network(case: str, bra
     assert _networks(on["pages"]) == {"osprey": {}}
 
 
+# ---- 6b''. the identity listener never lands on a port the proxy already serves (round 10) --------
+#
+# Round 5 gave the identity site a second address at the origin's port. Caddy refuses one listener
+# that carries both an HTTP site and an HTTPS site ("cannot natively multiplex HTTP and HTTPS"), so
+# where that port is one the proxy already serves as plain HTTP inside its container the Caddyfile
+# does not load and the deployment's only door does not start. The plain-HTTP ports are: 8080 with
+# the organisation's certificate (`http_port`: the health check and the redirect), 80 otherwise (the
+# catch-all), and the loopback doors the compose proxy publishes (2480 for the graph store, 8000 for
+# the Conduit when `network.expose_conduit` asks). The proxy's own HTTPS port is never a clash: where
+# the origin's port is it, no listener is added. With the setting on the render refuses, in words,
+# naming the setting and the port. (The cluster has no alias, no extra listener and no doors.)
+
+THE_PORT_WORDS = (
+    "pages.enabled is on, but network.public_origin gives the identity address {identity} the port "
+    ":{port}, which the front proxy already serves as plain HTTP inside its container ({use}), and "
+    "one port cannot serve both plain HTTP and HTTPS, so the front proxy would not start: give "
+    "network.public_origin a different port, or leave pages.enabled off"
+)
+HTTP_PORT_USE = "its plain-HTTP port"
+#: name -> (origin, own certificate, `network.expose_conduit`, the port, what the proxy uses it for)
+CLASH_CASES = {
+    "own-certificate-8080": (
+        "https://osprey.example.org:8080", {"ca": CA_ON_THE_HOST}, False, 8080, HTTP_PORT_USE,
+    ),
+    "own-certificate-2480": (
+        "https://osprey.example.org:2480", {"ca": CA_ON_THE_HOST}, False, 2480,
+        "its loopback door to the graph store",
+    ),
+    "own-certificate-8000-conduit": (
+        "https://osprey.example.org:8000", {"ca": CA_ON_THE_HOST}, True, 8000,
+        "its loopback door to the Conduit",
+    ),
+    "public-name-80": ("https://osprey.example.org:80", None, False, 80, HTTP_PORT_USE),
+    "public-name-2480": (
+        "https://osprey.example.org:2480", None, False, 2480, "its loopback door to the graph store",
+    ),
+    "public-name-8000-conduit": (
+        "https://osprey.example.org:8000", None, True, 8000, "its loopback door to the Conduit",
+    ),
+}  # fmt: skip
+#: Ports the proxy does not serve as plain HTTP in that shape: each renders, and has no clash.
+CLEAR_CASES = {
+    "own-certificate-80": ("https://osprey.example.org:80", {"ca": CA_ON_THE_HOST}, False),
+    "own-certificate-8000-no-door": (
+        "https://osprey.example.org:8000", {"ca": CA_ON_THE_HOST}, False,
+    ),
+    "own-certificate-8443-its-own": (
+        "https://osprey.example.org:8443", {"ca": CA_ON_THE_HOST}, True,
+    ),
+    "own-certificate-9443": ("https://osprey.example.org:9443", {"ca": CA_ON_THE_HOST}, True),
+    "public-name-8080": ("https://osprey.example.org:8080", None, False),
+    "public-name-8000-no-door": ("https://osprey.example.org:8000", None, False),
+    "public-name-8443": ("https://osprey.example.org:8443", None, False),
+}  # fmt: skip
+
+
+def _small_exposing(brand: str, origin: str, own: dict[str, str] | None, expose: bool) -> Any:
+    """`_small`, with `network.expose_conduit` as asked (the loopback door to the Conduit)."""
+    from schemas.deployment import OspreyConfig
+
+    raw = _small(brand, origin, own).model_dump(mode="json", exclude_unset=True)
+    raw["network"]["expose_conduit"] = expose
+    return OspreyConfig.model_validate(raw)
+
+
+def _clash_findings(caddyfile: str) -> list[str]:
+    """Each port the Caddyfile makes both a plain-HTTP listener and an HTTPS one, as Caddy reads the
+    addresses: `http://` with a port (else the global `http_port`, 80), a bare `:port` (plain HTTP),
+    `https://` with a port (else the global `https_port`, 443)."""
+    from urllib.parse import urlsplit
+
+    def written(name: str, default: int) -> int:
+        found = re.search(rf"(?m)^\t{name} (\d+)$", caddyfile)
+        return int(found[1]) if found else default
+
+    http_default, https_default = written("http_port", 80), written("https_port", 443)
+    plain: set[int] = set()
+    secure: set[int] = set()
+    for _number, addresses in _labels(caddyfile):
+        for address in addresses:
+            if address.startswith(":"):
+                plain.add(int(address[1:]))
+                continue
+            url = urlsplit(address)
+            if url.scheme == "https":
+                secure.add(url.port or https_default)
+            elif url.scheme == "http":
+                plain.add(url.port or http_default)
+    return [
+        f"port {port} is served as plain HTTP and as HTTPS in one Caddyfile, which Caddy refuses"
+        for port in sorted(plain & secure)
+    ]
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("case", CLASH_CASES)
+def test_an_identity_port_the_proxy_serves_as_plain_http_is_refused_in_words(
+    case: str, brand: str
+) -> None:
+    """Each plain-HTTP port the proxy serves, as the origin's port with the setting on: refused in
+    exactly these words (the setting, the identity address, the port, what to do), by an error of
+    its own kind. Nothing is rendered. With the setting off, at the same address, the render is the
+    one it always was and holds no clash."""
+    origin, own, expose, port, use = CLASH_CASES[case]
+    config = _small_exposing(brand, origin, own, expose)
+    with pytest.raises(ValueError) as refused:
+        _compose_files(config)
+    assert str(refused.value) == THE_PORT_WORDS.format(
+        identity=f"https://id.osprey.example.org:{port}", port=port, use=use
+    )
+    assert type(refused.value).__name__ == "PageServiceNeedsAnotherPort"
+    raw = config.model_dump(mode="json", exclude_unset=True)
+    raw["pages"] = {"enabled": False}
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    off = render(OspreyConfig.model_validate(raw), resolver=ref.resolver).artefacts
+    assert _clash_findings(off["Caddyfile"]) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("case", CLEAR_CASES)
+def test_a_port_the_proxy_does_not_serve_as_plain_http_is_rendered_with_no_clash(
+    case: str, brand: str
+) -> None:
+    """The refusal is for a clash and nothing wider: a port the proxy does not serve as plain HTTP in
+    that shape (80 beside the organisation's certificate, a door the deployment does not publish,
+    the proxy's own HTTPS port, another port) renders, with the identity address listened on and no
+    port served both ways."""
+    origin, own, expose = CLEAR_CASES[case]
+    files = _compose_files(_small_exposing(brand, origin, own, expose))
+    caddyfile = files["Caddyfile"].decode("utf-8")
+    assert _clash_findings(caddyfile) == []
+    assert _reach_findings(files) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("case", ["own-certificate-8080", "public-name-80"])
+def test_the_clash_check_is_red_when_the_refusal_is_taken_out(case: str, brand: str) -> None:
+    """The planted fault takes the shape the renderer writes: the refusal taken out, so the Caddyfile
+    is the one round 5 wrote at that port (the identity site with a second `https://` address on a
+    port the same file serves as plain HTTP). The check reads the file and names the port. It is
+    clean for the same deployment with the setting off, and for a port that does not clash."""
+    origin, own, expose, port, _use = CLASH_CASES[case]
+
+    def no_refusal(real: Callable[..., Any]) -> Callable[..., Any]:
+        def planted(config: Any, port: int) -> None:
+            return None
+
+        return planted
+
+    config = _small_exposing(brand, origin, own, expose)
+    with _patched("harness.pages_service", "refuse_a_clashing_listener", no_refusal):
+        files = _compose_files(config)
+    caddyfile = files["Caddyfile"].decode("utf-8")
+    assert f"https://id.osprey.example.org:{port}" in caddyfile
+    found = _clash_findings(caddyfile)
+    assert any(f"port {port} is served as plain HTTP and as HTTPS" in line for line in found), found
+    clear = _small_exposing(brand, "https://osprey.example.org:9443", own, expose)
+    assert _clash_findings(_compose_files(clear)["Caddyfile"].decode("utf-8")) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_a_cluster_proxy_has_no_identity_listener_to_clash(brand: str) -> None:
+    """The cluster's proxy is rendered with no alias and no doors, so it gets no second identity
+    address, whatever port the origin carries: nothing is refused there."""
+    from harness.site import render_caddyfile
+
+    config = _small(brand, "https://osprey.example.org:8080", {"ca": CA_ON_THE_HOST})
+    text = render_caddyfile(config, doors=False)
+    block = [a for _n, a in _labels(text) if "https://id.osprey.example.org" in a]
+    assert block == [["https://id.osprey.example.org"]]
+
+
 def _small_with_its_own_certificate(brand: str, **tls: str) -> dict[str, Any]:
     """The `pages` service of a small deployment on the organisation's own certificate, rendered
     directly (nothing staged, no key read)."""
