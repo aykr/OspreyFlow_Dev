@@ -371,10 +371,16 @@ def test_a_govuk_deployment_whose_sign_in_theme_has_no_switch_key_gets_it_when_r
     out = _rendered(repo)
     config_path = out / "osprey.yaml"
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    raw["appearance"] = {"brand": "govuk", "service_name": "Prison Intelligence", "govuk_identity": identity}
+    raw["appearance"] = {
+        "brand": "govuk",
+        "service_name": "Prison Intelligence",
+        "govuk_identity": identity,
+    }
     config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     # The theme as it was before this version: the chrome script's settings line holds no switch key.
-    write_login_theme(out, tokens_css=TOKENS, **login_theme_options(OspreyConfig.model_validate(raw)))
+    write_login_theme(
+        out, tokens_css=TOKENS, **login_theme_options(OspreyConfig.model_validate(raw))
+    )
     chrome = out / THEME_DIRECTORY / THEME_NAME / GOVUK_CHROME_SCRIPT
     prefix = "window.OSPREY_GOVUK = "
     line, _, rest = chrome.read_text(encoding="utf-8").partition("\n")

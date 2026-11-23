@@ -77,8 +77,8 @@
     },
     {
       "path": "values.yaml",
-      "sha256": "427b246fdc5c57fbb09a34411a6687931eb87c200ae87a712436b6b6c12d244f",
-      "size": 75055
+      "sha256": "ebba0b24150827b9b969370d40b6119a98372778bbccf56fa3887a10189a307a",
+      "size": 75016
     },
     {
       "path": "versions.lock",

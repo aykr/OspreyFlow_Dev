@@ -673,7 +673,9 @@ def _key_written(files: dict[str, str]) -> object:
     """The `govukIdentity` the sign-in script will read, or a marker string when its settings line does not hold the key."""
     first = files[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
     assert first.startswith(_SETTINGS_PREFIX)
-    return json.loads(first.removeprefix(_SETTINGS_PREFIX).rstrip(";")).get("govukIdentity", "<missing>")
+    return json.loads(first.removeprefix(_SETTINGS_PREFIX).rstrip(";")).get(
+        "govukIdentity", "<missing>"
+    )
 
 
 _APPEARANCES = [
@@ -701,7 +703,9 @@ def test_no_render_path_leaves_the_switch_out_of_the_sign_in_settings(
     expected = bool(raw.get("govuk_identity", False))
     assert _key_written(render_login_theme(TOKENS, **options)) is expected
     write_login_theme(tmp_path, tokens_css=TOKENS, **options)
-    on_disk = (tmp_path / "keycloak-theme" / "osprey" / GOVUK_CHROME_SCRIPT).read_text(encoding="utf-8")
+    on_disk = (tmp_path / "keycloak-theme" / "osprey" / GOVUK_CHROME_SCRIPT).read_text(
+        encoding="utf-8"
+    )
     assert _key_written({GOVUK_CHROME_SCRIPT: on_disk}) is expected
 
 
@@ -737,7 +741,7 @@ def test_the_generated_sign_in_script_draws_none_of_the_identity_with_no_key_on_
         "d.documentElement.setAttribute('data-brand', 'govuk');"
         f"dom.window.eval({json.dumps(old)});"
         "console.log(JSON.stringify({logotype: !!d.querySelector('.govuk-header__logotype'),"
-        "crown: !!d.querySelector('circle[cx=\"20\"][cy=\"17.6\"]'),"
+        'crown: !!d.querySelector(\'circle[cx="20"][cy="17.6"]\'),'
         "footer_crown: !!d.querySelector('.govuk-footer__crown'),"
         "crown_copyright: /Crown copyright/.test(d.body.textContent)}));"
     )

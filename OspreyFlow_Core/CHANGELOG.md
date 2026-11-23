@@ -34,6 +34,8 @@ update. Work not yet in a release is listed under *Unreleased*.
   (`osprey/workspace:local-govuk`; `…/workspace:<commit>-govuk` in a cloud platform's registry), so a default deployment
   and a GOV.UK one on the same machine, or sharing a registry, never run each other's image: a start that does not rebuild
   runs the image its own tag holds. Every other deployment, and every other service, keeps the tag it had.
+  **A GOV.UK deployment gets the switch's key in its sign-in page when it is refreshed or applied; until then its sign-in page
+  draws no GOV.UK identity** (no logotype, no crown), whatever the setting, because the page's script reads a missing key as off.
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any
