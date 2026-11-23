@@ -4831,8 +4831,9 @@ async def open_case_view(
     items: BoardItemsDep,
 ) -> CaseViewOpened:
     """ADR-144 decision 2: the view re-read now, as this reader may see the case. `chosen` is how
-    many of its chosen items they may see; `missing` is 0 for everyone, the creator included, until
-    the store records deletions (C045; `missing_for`)."""
+    many of its chosen items they may see; `missing` is how many of the creator's chosen nodes have
+    been deleted since and would pass this reader's own access step if live (ADR-144 Amendment 7;
+    C045; `missing_for`)."""
     view = await views.get(investigation.id, view_id, principal.id)
     opened = await open_view(
         view, principal, graph=graph, working_set=working_set, cap_breach=_cap_breach
@@ -11767,7 +11768,7 @@ async def _delete_layer(
         audit, principal, "delete_layer", investigation_id, 0, dataset_id=dataset_id,
         layer_id=layer,
     )  # fmt: skip
-    return await promotions.delete_layer(investigation_id, layer)
+    return await promotions.delete_layer(investigation_id, layer, by=principal.id)
 
 
 @app.delete("/v1/datasets/{dataset_id}/removed-cases/{case_id}/layer", dependencies=_LAYER_WRITES)

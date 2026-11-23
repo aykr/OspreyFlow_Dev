@@ -1,0 +1,69 @@
+diff --git a/OspreyFlow_Build/spec/01_DOMAIN_MODEL.md b/OspreyFlow_Build/spec/01_DOMAIN_MODEL.md
+index 40ac162..76be5d6 100644
+--- a/OspreyFlow_Build/spec/01_DOMAIN_MODEL.md
++++ b/OspreyFlow_Build/spec/01_DOMAIN_MODEL.md
+@@ -746,20 +746,17 @@ selection is its creator's, so naming an id the reader may not see would tell th
+ (rules 3 and 7). Opening a view (`CaseViewOpened`) gives:
+ - the items the reader may see now;
+ - the saved positions of those items alone;
+-- `missing`: **0 for every principal, the creator included, until the store records deletions.**
+-  The boards' rule (below) has two halves: `missing` counts only items lost after they were placed
+-  (deleted or removed), told to the creator who placed each seeing it, and anything hidden by a
+-  marking is counted nowhere. A board keeps both because each item's record carries a
+-  `withdrawn_at`. A view has no such record: the store keeps no time and no placing for a removed
+-  graph node (only an untimed `reverted` flag, which reads the same for a node the reader may not
+-  see, and which says nothing of whether the creator ever saw it). So a number of "lost" nodes can
+-  only be got as the chosen ids less the nodes shown, which counts every node above the reader's
+-  clearance or outside the case as well as the ones that are gone, or by an existence lookup
+-  (`existing_node_ids`, which no route may call), which is an oracle: a count that differs for an id
+-  that does not exist and for one that exists and is hidden lets anyone who can save a view probe
+-  the store for hidden nodes (rule 3). So a view reports what is visible and does not report what
+-  is gone, to anyone. The field stays on the wire as a number (the Glass reads it so and shows
+-  nothing for 0); it is the place a count of recorded deletions goes if the store ever keeps them.
++- `missing`: **how many of the view's chosen nodes have been deleted and would pass this reader's own
++  access step if they were live** (ADR-144 Amendment 7). The revert and the withdraw writes record
++  `reverted_at` and `reverted_by` on the element, in the same transaction; the count is made in the
++  store by `GraphPort.count_deleted_visible`, with the access step in the query (rule 3), and only a
++  number leaves the adapter. A node the reader could never see, one re-marked above them or outside the
++  case's datasets, and an id nobody holds are counted nowhere and answer alike (an existence lookup
++  would be an oracle: `existing_node_ids`, which no route may call). A node deleted and then written
++  again is live and is not missing; a node superseded by a correction is not deleted. A deletion made
++  before the store recorded a time has none, and counts if the reader could see the node. A filtered
++  view has no chosen nodes and no `missing`. The field stays on the wire as a number (the Glass shows
++  nothing for 0).
+ 
+ `chosen`, on every answer that carries a `CaseView` (the list, save, share, open and a batch
+ expansion's status), is **how many of the chosen nodes this reader may see now**, never the count the
+@@ -771,14 +768,14 @@ rule 3), and a merged drawing's drawn nodes are not counted (L3.9).
+ 
+ The invariants, each with the test that fails if it is broken (rule 12):
+ - **Live, never a copy.** Opening a view re-reads the case under the reader's own principal.
+-  `CaseViewOpened` returns only what that reader may see, and `missing` is 0 for everyone (above).
++  `CaseViewOpened` returns only what that reader may see, and `missing` counts only the deletions that reader could have seen (above).
+   - `test_a_view_shows_the_rest_and_counts_the_missing` is red with the view returning its stored
+     selection.
+ - **A view's count never includes what its asker may not see** (C045): `chosen` is the asker's
+-  visible count, and `missing` is nothing, for the creator as for a reader. A node re-marked above
+-  them after the save, one in a dataset the case does not read, one deleted, one reverted, and their
+-  own clearance lowered each leave no trace in a number; an id nobody holds and an id that exists
+-  and is hidden answer alike.
++  visible count, and `missing` counts only deletions the asker could see. A node re-marked above
++  them after the save, one in a dataset the case does not read, and their own clearance lowered
++  each leave no trace in a number, deleted or not; an id nobody holds and an id that exists and is
++  hidden answer alike.
+   - `test_the_list_counts_what_the_reader_may_see`,
+     `test_open_save_and_share_count_what_the_reader_may_see`,
+     `test_no_number_includes_what_the_asker_may_not_see` and
+diff --git a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+index 9802690..f3df1d4 100644
+--- a/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
++++ b/OspreyFlow_Build/spec/03_CONDUIT_MIDDLEWARE.md
+@@ -123,7 +123,7 @@ nodes and never names them or their positions (rules 3 and 7).
+ ```
+ GET    /v1/investigations/{id}/views                  the case's views the caller may see: their own, and those shared
+ POST   /v1/investigations/{id}/views                  save a view, private to the caller (`CaseViewInput`: a name, exactly one of `node_ids` or `filter`, a layout, a window, a threshold)
+-GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, which is 0 for everyone until the store records deletions; `chosen` on every `CaseView` is how many the caller may see (C045)
++GET    /v1/investigations/{id}/views/{view}           open it now (`CaseViewOpened`): what the caller may see, the saved positions of those alone, and `missing`, the chosen nodes deleted since that the caller could have seen (ADR-144 Amendment 7); `chosen` on every `CaseView` is how many the caller may see (C045)
+ POST   /v1/investigations/{id}/views/{view}/share     share it with the case's members, at their own levels (its creator only; 403 `not_the_views_creator` for a member who can see it)
+ DELETE /v1/investigations/{id}/views/{view}           delete it, and nothing else (its creator only, as above)
+ ```

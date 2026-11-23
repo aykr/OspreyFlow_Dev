@@ -37,7 +37,9 @@ _REVERT = re.compile(
     # ADR-110 Amendment 6 point 3: reverting the load that made an element also clears
     # `withdrawn_by_load`, so a withdrawing refresh's later revert cannot bring it back. The
     # adapter has sent it since 28f3174; this expectation had not followed (L1.2a's brief).
-    r"UPDATE `(\w+)` SET reverted = true, withdrawn_by_load = null WHERE id IN :ids"
+    # SE9 (ADR-144 Amendment 7): the same statement sets when and by whom, with the flag.
+    r"UPDATE `(\w+)` SET reverted = true, reverted_at = :at, reverted_by = :by, "
+    r"withdrawn_by_load = null WHERE id IN :ids"
 )
 
 
@@ -91,6 +93,8 @@ class NodeStore:
                 if i in self.rows:
                     # What the statement sets, both of it: the flag and the withdrawal cleared.
                     self.rows[i]["reverted"] = True
+                    self.rows[i]["reverted_at"] = params["at"]
+                    self.rows[i]["reverted_by"] = params["by"]
                     self.rows[i]["withdrawn_by_load"] = None
             return []
         if command == "INSERT INTO IndexPending CONTENT :rows":
@@ -147,9 +151,11 @@ def _write(
     )
 
 
-async def _revert(graph: adapter_module.GraphArcadeDBAdapter, node_id: str) -> None:
+async def _revert(
+    graph: adapter_module.GraphArcadeDBAdapter, node_id: str, *, by: str | None = None
+) -> None:
     tx = await graph.begin_transaction()
-    await graph.revert_elements([node_id], [], tx)
+    await graph.revert_elements([node_id], [], tx, by=by)
     await graph.commit_transaction(tx)
 
 
@@ -265,3 +271,26 @@ async def test_existing_node_ids_names_a_node_reverted_and_superseded() -> None:
     await _revert(graph, "plain")
     await _revert(graph, "both")
     assert await graph.existing_node_ids(["plain", "both"]) == {"both"}
+
+
+async def test_a_write_onto_a_reverted_node_clears_when_and_by_whom_it_was_reverted() -> None:
+    """SE9: the flag and the record are one write and one clear. A fresh create over a reverted node
+    leaves no `reverted_at` or `reverted_by`, so a record never outlives the deletion it records (the
+    count reads the flag, and the record is only for the audit)."""
+    store = NodeStore()
+    graph = _adapter(store)
+    first = _write("n1", classification="OFFICIAL", load_id="load-1", datasets=["a"], source="one")
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([first], tx)
+    await graph.commit_transaction(tx)
+    await _revert(graph, "n1", by="analyst-1")
+    assert store.rows["n1"]["reverted_by"] == "analyst-1"
+    assert store.rows["n1"]["reverted_at"] is not None
+
+    again = _write("n1", classification="OFFICIAL", load_id="load-2", datasets=["a"], source="two")
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([again], tx)
+    await graph.commit_transaction(tx)
+    assert store.rows["n1"]["reverted"] is False
+    assert store.rows["n1"]["reverted_at"] is None
+    assert store.rows["n1"]["reverted_by"] is None

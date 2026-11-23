@@ -73,7 +73,7 @@ class _Graph:
         return [n.id for n in nodes]
 
     async def revert_elements(
-        self, node_ids: Sequence[str], edge_ids: Sequence[str], tx: Any
+        self, node_ids: Sequence[str], edge_ids: Sequence[str], tx: Any, **_recorded: object
     ) -> None:
         return None
 

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Sequence
 from contextvars import ContextVar
+from datetime import datetime
 from typing import Any, Protocol
 
 from services.ingest.ceiling import refuse_writes_above_the_ceiling
@@ -625,21 +626,40 @@ class DatasetStampingGraph:
         return new_id
 
     async def revert_elements(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[str], tx: Any
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[str],
+        tx: Any,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
     ) -> None:
         await self._refuse_loading_here()
-        await self._inner.revert_elements(node_ids, edge_ids, tx)
+        await self._inner.revert_elements(node_ids, edge_ids, tx, by=by, at=at)
         await self._written()
 
     async def withdraw_elements(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[str], load_id: str, tx: Any
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[str],
+        load_id: str,
+        tx: Any,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
     ) -> None:
         await self._refuse_loading_here()
-        await self._inner.withdraw_elements(node_ids, edge_ids, load_id, tx)
+        await self._inner.withdraw_elements(node_ids, edge_ids, load_id, tx, by=by, at=at)
         await self._written()
 
     async def withdraw_drawn(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[str], withdrawal: str, tx: Any
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[str],
+        withdrawal: str,
+        tx: Any,
+        *,
+        by: str | None = None,
     ) -> None:
         """A drawn item's withdrawal from a board (ADR-143 decision 5): its elements, each wholly
         the case's layer's or drawn dataset's (the board service checks that first), reverted for
@@ -648,7 +668,7 @@ class DatasetStampingGraph:
         a case not yet converted, as every write there is; and the kept figures are cleared."""
         if self._dataset is None:
             await refuse_writing_in_an_unconverted_case()
-        await self._inner.withdraw_elements(node_ids, edge_ids, withdrawal, tx)
+        await self._inner.withdraw_elements(node_ids, edge_ids, withdrawal, tx, by=by)
         await self._written()
 
     async def promote_elements(
@@ -673,12 +693,20 @@ class DatasetStampingGraph:
         await self._written()
         return taken
 
-    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: Any) -> Any:
+    async def withdraw_layer(
+        self,
+        dataset_id: str,
+        withdrawal: str,
+        tx: Any,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
+    ) -> Any:
         """A removed case's layer deleted (ADR-143 Amendment 2 decision 1). Run outside any case's
         scope (Admin's or the Studio's route), so only the unconverted-case refusal applies."""
         if self._dataset is None:
             await refuse_writing_in_an_unconverted_case()
-        gone = await self._inner.withdraw_layer(dataset_id, withdrawal, tx)
+        gone = await self._inner.withdraw_layer(dataset_id, withdrawal, tx, by=by, at=at)
         await self._written()
         return gone
 

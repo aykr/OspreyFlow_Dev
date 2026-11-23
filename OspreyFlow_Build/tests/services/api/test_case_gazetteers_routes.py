@@ -140,7 +140,9 @@ class _Graph:
                 self.reverted.remove(w.id)
         return [w.id for w in writes]
 
-    async def revert_elements(self, nodes: Sequence[str], edges: Sequence[str], _tx: str) -> None:
+    async def revert_elements(
+        self, nodes: Sequence[str], edges: Sequence[str], _tx: str, **_recorded: object
+    ) -> None:
         self.reverted.extend(nodes)
 
     async def get_nodes(self, ids: Sequence[str], principal: Principal) -> list[Node]:

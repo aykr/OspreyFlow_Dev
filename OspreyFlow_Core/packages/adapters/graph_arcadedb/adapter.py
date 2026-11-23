@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from conduit_common.identity import new_edge_id, now_utc
@@ -71,6 +71,7 @@ from schemas.domain import (
     PathRequest,
     PatternQuery,
     Principal,
+    PrincipalId,
     Provenance,
     RoutesAtLength,
     SchemaReport,
@@ -123,6 +124,7 @@ from .builders import (
     SearchNodesBuilder,
     SuggestLocationsBuilder,
     SuggestNodesBuilder,
+    render_count_deleted_visible_gremlin,
     render_count_visible_gremlin,
     render_edges_among_gremlin,
     render_existing_ids_sql,
@@ -223,6 +225,13 @@ def _same_as_ends(edges: Sequence[EdgeWrite]) -> list[NodeId]:
 
 #: The search index feed's outbox (ADR-150 decision 1), a document type of its own.
 INDEX_PENDING = "IndexPending"
+
+
+def _utc_text(at: datetime | None) -> str:
+    """The time a deleting write records (SE9): `at`, else now, as UTC ISO 8601 text. The property
+    is schemaless (the store's schema statements are pinned), and the client sends JSON, so the
+    time goes as text it can read back."""
+    return (at or datetime.now(UTC)).astimezone(UTC).isoformat()
 
 
 def _id_chunks(ids: Sequence[str]) -> list[list[str]]:
@@ -435,6 +444,9 @@ class GraphArcadeDBAdapter:
                 # A fresh create is no longer withdrawn (ADR-110 Amendment 6 point 3): the row came
                 # back, and the snapshot's revert has nothing of its own left here.
                 props["withdrawn_by_load"] = None
+                # The record of the deletion goes with the flag (SE9): a live node carries none.
+                props["reverted_at"] = None
+                props["reverted_by"] = None
                 set_clause = ", ".join(f"{key} = :{key}" for key in props)
             if existing is not None:  # live (merged above) or reverted (replaced whole)
                 await self._client.sql(
@@ -953,6 +965,18 @@ class GraphArcadeDBAdapter:
             rids = await self._record_ids(types, chunk)
             # Sent even when no id resolved: an absent id must cost what a hidden one costs.
             query = render_count_visible_gremlin(rids, self._access, principal)
+            results = await self._client.gremlin(query)
+            counted += int(results[0].get("result") or 0) if results else 0
+        return counted
+
+    async def count_deleted_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
+        counted = 0
+        chunks = _id_chunks(node_ids)
+        types = await self._types_with_unique_id("vertex") if chunks else []
+        for chunk in chunks:
+            rids = await self._record_ids(types, chunk)
+            # Sent even when no id resolved: an absent id must cost what a hidden one costs.
+            query = render_count_deleted_visible_gremlin(rids, self._access, principal)
             results = await self._client.gremlin(query)
             counted += int(results[0].get("result") or 0) if results else 0
         return counted
@@ -1997,7 +2021,13 @@ class GraphArcadeDBAdapter:
     # --- revert ------------------------------------------------------------
 
     async def revert_elements(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], tx: TxId
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        tx: TxId,
+        *,
+        by: PrincipalId | None = None,
+        at: datetime | None = None,
     ) -> None:
         # Resolved first, written after: an id two types of one kind hold cannot be told apart (a
         # load's record keeps no types), and the call is refused before any of it is written.
@@ -2013,11 +2043,15 @@ class GraphArcadeDBAdapter:
         # A revert clears `withdrawn_by_load` too (ADR-110 Amendment 6 point 3): reverting the load
         # that made an element takes it back for good, so the withdrawing refresh's later revert
         # cannot restore it.
+        # The deletion's record (SE9, ADR-144 Amendment 7) is set by the one statement that sets the
+        # flag, in this transaction: when and by whom, for the audit. Nothing reads it back.
+        when = _utc_text(at)
         for _, type_name, ids in plan:
             await self._client.sql(
                 f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true, "
-                "withdrawn_by_load = null WHERE id IN :ids",
-                params={"ids": ids},
+                "reverted_at = :at, reverted_by = :by, withdrawn_by_load = null "
+                "WHERE id IN :ids",
+                params={"ids": ids, "at": when, "by": by},
                 session_id=tx,
             )
         await self._index_pending(  # ADR-150 decision 1: a deletion
@@ -2025,7 +2059,14 @@ class GraphArcadeDBAdapter:
         )
 
     async def withdraw_elements(
-        self, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId], load_id: str, tx: TxId
+        self,
+        node_ids: Sequence[NodeId],
+        edge_ids: Sequence[EdgeId],
+        load_id: str,
+        tx: TxId,
+        *,
+        by: PrincipalId | None = None,
+        at: datetime | None = None,
     ) -> None:
         # Resolved as a revert resolves (an ambiguous id refused before anything is written), and
         # only a live element is withdrawn: one already reverted is not this refresh's to restore.
@@ -2033,11 +2074,13 @@ class GraphArcadeDBAdapter:
             *[t_ids for t_ids in await self._holders("vertex", node_ids, tx)],
             *[t_ids for t_ids in await self._holders("edge", edge_ids, tx)],
         ]
+        when = _utc_text(at)
         for type_name, ids in plan:
             await self._client.sql(
                 f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true, "
-                "withdrawn_by_load = :load WHERE id IN :ids AND reverted = false",
-                params={"ids": ids, "load": load_id},
+                "reverted_at = :at, reverted_by = :by, withdrawn_by_load = :load "
+                "WHERE id IN :ids AND reverted = false",
+                params={"ids": ids, "load": load_id, "at": when, "by": by},
                 session_id=tx,
             )
         await self._index_pending(list(node_ids), tx)  # ADR-150 decision 1: a deletion
@@ -2118,10 +2161,19 @@ class GraphArcadeDBAdapter:
                 counts[kind] += len(found)
         return PromotionReverted(nodes=counts["vertex"], edges=counts["edge"])
 
-    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: TxId) -> PromotionReverted:
+    async def withdraw_layer(
+        self,
+        dataset_id: str,
+        withdrawal: str,
+        tx: TxId,
+        *,
+        by: PrincipalId | None = None,
+        at: datetime | None = None,
+    ) -> PromotionReverted:
         # By the `datasets BY ITEM` index, then only an element wholly the layer's: one promoted
         # from it holds the source too and is left (Amendment 2 decision 1).
         counts = {"vertex": 0, "edge": 0}
+        when = _utc_text(at)
         for kind in counts:
             for type_name in await self._types_with_unique_id(kind):
                 name = groovy_identifier(type_name)
@@ -2134,9 +2186,10 @@ class GraphArcadeDBAdapter:
                 ids = [str(r["id"]) for r in found if list(r.get("datasets") or []) == [dataset_id]]
                 for chunk in _id_chunks(ids):
                     await self._client.sql(
-                        f"UPDATE `{name}` SET reverted = true, withdrawn_by_load = :w "
+                        f"UPDATE `{name}` SET reverted = true, reverted_at = :at, "
+                        "reverted_by = :by, withdrawn_by_load = :w "
                         "WHERE id IN :ids AND reverted = false",
-                        params={"ids": chunk, "w": withdrawal},
+                        params={"ids": chunk, "w": withdrawal, "at": when, "by": by},
                         session_id=tx,
                     )
                 if kind == "vertex":  # ADR-150 decision 1: a deleted case layer
@@ -2156,8 +2209,8 @@ class GraphArcadeDBAdapter:
             ids = [str(r["id"]) for r in rows]
             for chunk in _id_chunks(ids):
                 await self._client.sql(
-                    f"UPDATE `{name}` SET reverted = false, withdrawn_by_load = null "
-                    "WHERE id IN :ids",
+                    f"UPDATE `{name}` SET reverted = false, reverted_at = null, "
+                    "reverted_by = null, withdrawn_by_load = null WHERE id IN :ids",
                     params={"ids": chunk},
                     session_id=tx,
                 )
@@ -2187,8 +2240,8 @@ class GraphArcadeDBAdapter:
                     back.append(str(row["id"]))
             for chunk in _id_chunks(back):
                 await self._client.sql(
-                    f"UPDATE `{name}` SET reverted = false, withdrawn_by_load = null "
-                    "WHERE id IN :ids",
+                    f"UPDATE `{name}` SET reverted = false, reverted_at = null, "
+                    "reverted_by = null, withdrawn_by_load = null WHERE id IN :ids",
                     params={"ids": chunk},
                     session_id=tx,
                 )

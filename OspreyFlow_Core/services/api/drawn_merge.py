@@ -1075,14 +1075,21 @@ class MergeCommit:
         ]
         return shown, len(shown) != len(node_ids) + len(edge_ids)
 
-    async def undo_writes(self, record: PromotionRecord, tx: Any) -> None:
+    async def undo_writes(
+        self,
+        record: PromotionRecord,
+        tx: Any,
+        *,
+        by: str | None = None,
+        at: datetime | None = None,
+    ) -> None:
         """The revert's: the merge's matches, its copies and their `SAME_AS` reverted with it (never
-        deleted), as a load's own writes are."""
+        deleted), as a load's own writes are, saving who and when (`by`, `at`: SE9)."""
         nodes, edges = await self._own_writes(record)
         if nodes or edges:
             # Reverted as a load's own writes are (`revert_elements`), never stamped withdrawn by
             # a load (a refresh's record, which `restore_withdrawn` would bring back).
-            await self.graph.revert_elements(nodes, edges, tx)
+            await self.graph.revert_elements(nodes, edges, tx, by=by, at=at)
 
     async def _own_writes(self, record: PromotionRecord) -> tuple[list[str], list[str]]:
         """What the merge's load wrote of its own: its matches, its copies, their `SAME_AS`."""

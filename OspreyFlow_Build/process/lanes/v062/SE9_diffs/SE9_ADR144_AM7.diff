@@ -1,0 +1,61 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+index 37b5a7e..aa3f29d 100644
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -41799,3 +41799,56 @@ Tests that would fail (rule 12; each shown red against a planted fault in the sh
+ allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
+ file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
+ in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
++
++### ADR-144, Amendment 7 (22 November 2026) — a saved view's `missing` counts the deletions its reader could see: the revert and withdraw writes record when and by whom, and the graph counts them under the reader's own access filter
++
++Status: accepted on the owner's rulings of 22 November 2026 (option (b): the deletion record lives in the
++graph itself). ADR-144 and its Amendments 1 to 6 are unchanged except where this says so. Slice SE9.
++
++**Context.** ADR-144 decision 2 says an opened view "says how many of its selected items it could not
++show". Until now `missing` has been 0 for every principal, the creator included (the C045 ruling, built
++as SE7), because the store kept no time and no placing for a removed graph node: only an untimed
++`reverted` flag, which reads the same for a node the reader may never have seen. The two ways to get a
++number then, the chosen ids less the nodes shown and an existence lookup, each break rule 3. The boards
++have the one timed precedent (`withdrawn_at`, `withdrawn_by`, the board's own item record).
++
++**Decisions.**
++
++1. **The record is on the element.** Every write that sets `reverted` on an element (`revert_elements`,
++   `withdraw_elements`, `withdraw_layer`, which a board's withdrawal and a removed case's layer go
++   through) also sets `reverted_at` (the time, UTC) and `reverted_by` (the principal who acted, or `null`
++   where a caller names none) in the same statement and the same transaction, through the adapter's own
++   write path. `restore_withdrawn` and a fresh create over a reverted element clear both, as they clear
++   `withdrawn_by_load`. Nothing outside the adapter writes them, so a script that reverts (for example
++   `scripts/revert_promotion.py`) records through the same port call. The time and the person are for the
++   record and for the audit; **no read returns them**, and no count depends on them.
++2. **One new read, a count.** `GraphPort.count_deleted_visible(node_ids, principal) -> int` counts the
++   given ids whose node is **deleted** (reverted, and not superseded) **and which `principal`'s access
++   step (clearance, handling code, the case's datasets) would pass if the node were live**. The access
++   step is in the query, the same fragment every other read carries with its first test turned round, so
++   a new access axis reaches this count with no change here (rule 3); only a number leaves the adapter.
++   A missing id, a hidden deleted one, a live one and a superseded one are each counted as 0, and
++   nothing in the number or the round trips says which. A deletion written before this amendment has
++   no time: it counts if the reader could see the element, whatever its time.
++3. **`missing` is that count.** Opening a view of chosen nodes sets `missing` to
++   `count_deleted_visible` over the creator's choice (a merged drawing's drawn nodes are not the
++   creator's choice and are not counted), for the reader's own principal: a shared view counts each
++   reader's own visibility. A deleted-then-re-created element is live again and is not missing; a
++   supersession is a correction and not a deletion (`superseded_by` is not `reverted`); a filtered
++   view has no chosen nodes and its `missing` stays 0. A deletion is counted for every reader who could
++   have seen the element, whoever deleted it, and never for one who could not.
++4. **The wire is unchanged.** `CaseViewOpened.missing` stays a number (`ge=0`); the Glass shows nothing
++   for 0. No response, log line or audit row carries a count of what the reader may not see, and the
++   stored count still never reaches the wire. The number is real for views opened from the release that
++   builds this, and counts every deletion the store already holds that the reader could see.
++5. **Spec sentences.** `01_DOMAIN_MODEL.md` §2.2c and `03_CONDUIT_MIDDLEWARE.md` (the views routes) no
++   longer say `missing` is 0 until the store records deletions; they say what decisions 1 to 4 say.
++
++**Tests that would fail** (rule 12; each shown red against a planted fault in the shape the code
++sees, rule 15): `tests/services/api/test_case_view_missing.py`: a deleted item the reader saw is
++counted; an item never visible and then deleted is counted nowhere (plant: the count takes every
++deletion); one hidden by clearance and then deleted is counted nowhere (plant: the record read without
++the access filter); a deleted-and-re-created element is not missing (plant: the flag read without its
++clear); each reader's own deletions and visibility (plant: one count for every reader); a missing id and
++a hidden deleted one answer alike (plant: an existence lookup on the record); the conformance suite's
++`test_count_deleted_visible_*` and the adapter's query test for the store.
