@@ -1074,10 +1074,12 @@ async def test_a_dataset_release_row_reaches_only_a_reader_who_may_know_the_data
     """Rules 3 and 7, the finding of the round before: the ledger read must not reveal a dataset
     the reader has no right to. The row of a release has no case, so no case's reach places it;
     it is kept by the reader's own: the administrator, who names every dataset already, and a
-    reader of the dataset itself (`principal.datasets`). The compliance role by itself, and a
-    reader of other datasets only, are given no release row, and nothing says one was left out. A
-    rule file's row and a case's row are read by the role alone, as before. The route's own
-    principal outside a case carries `datasets=[]`, never `None`, so every reader here does."""
+    principal that carries the dataset in `principal.datasets`. The compliance role by itself, and
+    a reader of other datasets only, are given no release row, and nothing says one was left out. A
+    rule file's row and a case's row are read by the role alone, as before. **This is the store's
+    rule, asked with principals the test shapes: `GET /v1/exports` never gives it one that carries
+    a reach** (outside a case `datasets=[]`), so only the administrator is admitted there; the
+    route's own case is `test_at_the_ledger_route_only_the_administrator_is_given_a_release_row`."""
     store = await _ledger_of_three_kinds(FakePool())
     admin = COMPLIANCE.model_copy(update={"datasets": []})
     assert await _seen(store, admin) == {"rel-1", "rule-1", "case-1"}
@@ -1086,6 +1088,74 @@ async def test_a_dataset_release_row_reaches_only_a_reader_who_may_know_the_data
     assert await _seen(store, other) == {"rule-1", "case-1"}
     reader = COMPLIANCE_ONLY.model_copy(update={"datasets": [DATASET]})
     assert await _seen(store, reader) == {"rel-1", "rule-1", "case-1"}
+
+
+class _Resolver:
+    """A stand-in for the token resolver alone: `get_principal` is the real one, so the principal
+    the ledger route is given is the one the app builds, not one a test shaped."""
+
+    def __init__(self, who: Principal) -> None:
+        self.who = who
+
+    async def resolve_principal(self, token: str) -> Principal:
+        return self.who
+
+
+def _get_exports(who: Principal, store: Any) -> set[str]:
+    """`GET /v1/exports` as `who`, through the client, with the real `get_principal` (so the
+    request's principal is `outside_any_case(identity)`, as in a running Conduit) and the real
+    ledger store over the fake pool. Returns the ids of the rows the answer holds."""
+    from services.api import app as app_module
+
+    app = app_module.app
+    saved = getattr(app.state, "principal_resolver", None)
+    try:
+        app.state.principal_resolver = _Resolver(who)
+        app.dependency_overrides[app_module.get_export_ledger] = lambda: store
+        response = TestClient(app, raise_server_exceptions=False).get(
+            "/v1/exports", headers={"Authorization": "Bearer x"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+        app.state.principal_resolver = saved
+    assert response.status_code == 200, response.text
+    return {entry["id"] for entry in response.json()["entries"]}
+
+
+async def test_at_the_ledger_route_only_the_administrator_is_given_a_release_row() -> None:
+    """Round 5, case 9, through the route as it is (`GET /v1/exports`). The route takes the plain
+    principal, which outside a case is `outside_any_case(identity)`: `datasets=[]`, whatever reach
+    the token holds. So the only reader the route admits to a dataset's release row is the one who
+    names every dataset already (`ADMINISTER_SYSTEM`). A compliance reader whose own identity
+    carries the dataset is given the rule file's row and the case's row, no release row and no
+    sign that one was left out: the same answer as a compliance reader with another dataset or
+    none. Nothing here widens who reads a release row. (The store's own reach branch,
+    `test_a_dataset_release_row_reaches_only_a_reader_who_may_know_the_dataset`, answers a
+    principal that carries a reach; no request builds one for this route.)"""
+    store = await _ledger_of_three_kinds(FakePool())
+    admin = COMPLIANCE.model_copy(update={"datasets": [DATASET]})
+    assert _get_exports(admin, store) == {"rel-1", "rule-1", "case-1"}
+    for reach in ([DATASET], ["ds-other"], []):
+        reader = COMPLIANCE_ONLY.model_copy(update={"datasets": reach})
+        assert _get_exports(reader, store) == {"rule-1", "case-1"}, reach
+    unlimited = COMPLIANCE_ONLY.model_copy(update={"datasets": None})
+    assert _get_exports(unlimited, store) == {"rule-1", "case-1"}
+
+
+async def test_the_ledger_route_test_fails_if_the_route_were_given_the_identitys_reach(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15, the planted fault at the shape the route really sees: `outside_any_case` replaced by
+    a pass-through, so the route's principal keeps the reach on the token. The compliance reader of
+    `ds-1` is then given the release row, and the route test above would be red. It is the same
+    store, the same rows; only the route's principal differs."""
+    from services.api import app as app_module
+
+    store = await _ledger_of_three_kinds(FakePool())
+    reader = COMPLIANCE_ONLY.model_copy(update={"datasets": [DATASET]})
+    assert "rel-1" not in _get_exports(reader, store)
+    monkeypatch.setattr(app_module, "outside_any_case", lambda principal: principal)
+    assert "rel-1" in _get_exports(reader, store), "the planted fault must show the grant"
 
 
 async def test_the_release_row_is_left_out_in_the_query_not_after_it(

@@ -584,7 +584,9 @@ async def test_export_ledger_entry_survives_investigation_deletion(
         try:
             for own in ("investigation_grants", "investigation_access_history",
                         "investigation_tab_state"):  # fmt: skip
-                await conn.execute(f"DELETE FROM {own} WHERE investigation_id = $1", investigation.id)
+                await conn.execute(
+                    f"DELETE FROM {own} WHERE investigation_id = $1", investigation.id
+                )
             await conn.execute("DELETE FROM investigations WHERE id = $1", investigation.id)
         finally:
             await conn.close()
@@ -956,8 +958,10 @@ async def test_a_release_row_is_left_out_of_the_read_of_a_reader_who_may_not_kno
     """SE8b, live (owed where the line's live step is off for builders): the real query keeps a
     no-case dataset row from a ledger reader whose reach leaves the dataset out. The compliance role
     alone, and a reader of another dataset, are given the rule file's row and not the release's;
-    the administrator, and a reader of the dataset, are given both. Red with the
-    condition removed."""
+    the administrator, and a principal that carries the dataset, are given both. Red with the
+    condition removed. (`GET /v1/exports` is given the first kind only: outside a case its principal
+    carries no reach, so there only the administrator is admitted: see
+    `test_export_ledger_completeness.py::test_at_the_ledger_route_only_the_administrator_is_given_a_release_row`.)"""
     dataset = f"ds-{new_id()}"
     release = ExportLedgerEntry(
         id=new_id(), investigation_id=None, principal_id=ANALYST.id,

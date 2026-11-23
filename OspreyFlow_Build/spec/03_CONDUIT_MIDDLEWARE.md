@@ -1682,9 +1682,11 @@ withheld flag is true when the reader's rights lowered one of its alert or held 
 because the reader cannot read what it cites, an alert the reader's dataset reach took out of the query, or (for an
 editor's held figures) a held row their marking or reach leaves out; the KYC and POLE figures add nothing to it. `GET /v1/exports`
 reads them all by its one right, as it reads every case's, with one condition on a row that has no case:
-a dataset's release row is in the read only for a reader who may know the dataset (an administrator, who lists every
-dataset, or a reader whose own dataset reach holds it), the condition being in the query's `WHERE`; the compliance role
-by itself is given no release row and no sign that one was left out, until the owner gives it a reach of its own. A held document's file shown in the document reader is
+a dataset's release row is in the read only for a reader who may know the dataset, the condition being in the query's
+`WHERE`. At `GET /v1/exports` that reader is the administrator alone, who lists every dataset: the route takes the plain
+principal, which outside a case carries no dataset reach, whatever the token holds, so the compliance role by itself, with
+or without a reach of its own, is given no release row and no sign that one was left out, until the owner gives that role
+a reach to be read at this route (the store's own reach condition is there for that day, and no request meets it now). A held document's file shown in the document reader is
 an access audited per read, not an export. A platform backup and an object transfer are an operator's commands
 (the cloud profile's CronJob; `ospreyflow backup`), run outside the Conduit with no principal and no ledger
 connection: they write no ledger row, and nothing the Conduit can record says that one ran.
