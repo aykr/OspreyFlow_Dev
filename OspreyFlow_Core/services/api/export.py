@@ -53,6 +53,7 @@ from schemas.domain import Handling, Principal
 from schemas.rights import Right, rights_for
 
 from .assessments import JudgementStore, judgement_visible_to
+from .audit import AuditWriteError
 from .working_set.service import WorkingSetService
 
 # --- ADR-045: the withheld-item manifest policy ----------------------------------------------
@@ -307,19 +308,41 @@ class ExportLedgerEntry(BaseModel):
     `audit.record(..., justification=body.justification)` call)."""
 
     id: str
-    investigation_id: str
+    #: `None` for an export that has no case (a dataset's release): the row then says what it
+    #: concerns in `subject_kind` and `subject_id` (SE8b; the owner's ruling of 21 November 2026).
+    investigation_id: str | None
     principal_id: str
     #: `report_feed` (ADR-111 decision 8): a dashboard's read of the reporting feed — figures only,
     #: no element, so not through the item gate, but recorded here so compliance sees what left.
     #: `report_pack` (ADR-113 decision 6): a published report pack, through `packs.export_pack`.
-    artefact_kind: Literal["chart", "subgraph", "report", "report_feed", "report_pack"]
-    handling_level: str
+    #: `case_report`: the Reports view's figures, handed to the Glass. `dataset_release`: a
+    #: dataset's release bundle (Studio › Releases). `rule_file`: a rule's `.bpmn` or `.dmn`.
+    artefact_kind: Literal[
+        "chart",
+        "subgraph",
+        "report",
+        "report_feed",
+        "report_pack",
+        "case_report",
+        "dataset_release",
+        "rule_file",
+    ]
+    #: The highest marking of what was exported. `None` where the export has none: a dataset's
+    #: release is a model, lists and pipelines, and only a pipeline carries a source marking, so a
+    #: release holding no pipeline has no level to record (never a made-up one).
+    handling_level: str | None
     exported_at: datetime
     item_count: int
     withheld: bool  #: a yes or no: the exporter's own view of the case left something out
     manifest_policy: ExportManifestPolicy
     justification_given: bool = False
     originator_reference_given: bool = False
+    #: What the export concerns, by id and never by name (a name is content: ADR-047's own "metadata
+    #: only"): `case` (a chart, subgraph or report: the case's id), `pack`, `report` (the case's
+    #: figures), `dataset`, `rule`. Set on every row written now; `None` only on a row written
+    #: before SE8b, which had a case and needed no more.
+    subject_kind: Literal["case", "pack", "report", "dataset", "rule"] | None = None
+    subject_id: str | None = None
 
 
 def _table(name: str) -> str:
@@ -332,21 +355,27 @@ def _table(name: str) -> str:
 
 def ledger_bootstrap_sql(table: str = "export_ledger") -> str:
     """The ledger's table in its current shape: a yes or no of what was withheld, never a count
-    (ADR-124 decision 9, the owner's ruling "A yes/no only")."""
+    (ADR-124 decision 9, the owner's ruling "A yes/no only"); a case that may be empty, and then
+    the subject the row concerns, which the table's own check insists on (SE8b)."""
     table = _table(table)
     return f"""
 CREATE TABLE IF NOT EXISTS {table} (
     id TEXT PRIMARY KEY,
-    investigation_id TEXT NOT NULL,
+    investigation_id TEXT,
     principal_id TEXT NOT NULL,
     artefact_kind TEXT NOT NULL,
-    handling_level TEXT NOT NULL,
+    handling_level TEXT,
     exported_at TIMESTAMPTZ NOT NULL,
     item_count INTEGER NOT NULL,
     withheld BOOLEAN NOT NULL,
     manifest_policy TEXT NOT NULL,
     justification_given BOOLEAN NOT NULL DEFAULT FALSE,
-    originator_reference_given BOOLEAN NOT NULL DEFAULT FALSE
+    originator_reference_given BOOLEAN NOT NULL DEFAULT FALSE,
+    subject_kind TEXT,
+    subject_id TEXT,
+    CONSTRAINT {table}_concerns CHECK (
+        investigation_id IS NOT NULL OR (subject_kind IS NOT NULL AND subject_id IS NOT NULL)
+    )
 );
 CREATE INDEX IF NOT EXISTS {table}_investigation_id_idx ON {table} (investigation_id);
 """
@@ -358,7 +387,8 @@ def ledger_migration_sql(table: str = "export_ledger") -> str:
     every start, so it is idempotent: with no `withheld_count` column (a new table, or one already
     migrated) it changes nothing. The copy is before the drop, and both are under a table lock in
     one block, so two instances starting together cannot both find the count and one fail on the
-    other's drop."""
+    other's drop. It also brings a table from before SE8b to the case that may be empty, the marking
+    that may be empty, the two subject columns and the check that a row concerns something."""
     table = _table(table)
     return f"""
 DO $$
@@ -373,6 +403,20 @@ BEGIN
         UPDATE {table} SET withheld = (withheld_count > 0) WHERE withheld IS NULL;
         ALTER TABLE {table} DROP COLUMN withheld_count;
         ALTER TABLE {table} ALTER COLUMN withheld SET NOT NULL;
+    END IF;
+    -- SE8b: an export with no case. Every statement is a no-op the second time, and no row is
+    -- touched: a row written before this has a case and its subject columns stay empty.
+    ALTER TABLE {table} ALTER COLUMN investigation_id DROP NOT NULL;
+    ALTER TABLE {table} ALTER COLUMN handling_level DROP NOT NULL;
+    ALTER TABLE {table} ADD COLUMN IF NOT EXISTS subject_kind TEXT;
+    ALTER TABLE {table} ADD COLUMN IF NOT EXISTS subject_id TEXT;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = '{table}_concerns' AND conrelid = to_regclass('{table}')
+    ) THEN
+        ALTER TABLE {table} ADD CONSTRAINT {table}_concerns CHECK (
+            investigation_id IS NOT NULL OR (subject_kind IS NOT NULL AND subject_id IS NOT NULL)
+        );
     END IF;
 END
 $$;
@@ -401,24 +445,41 @@ class ExportLedgerStore:
         await self._pool.close()
 
     async def record(self, entry: ExportLedgerEntry) -> None:
-        async with self._pool.acquire() as conn:
-            await conn.execute(
-                "INSERT INTO export_ledger (id, investigation_id, principal_id, artefact_kind, "
-                "handling_level, exported_at, item_count, withheld, manifest_policy, "
-                "justification_given, originator_reference_given) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
-                entry.id,
-                entry.investigation_id,
-                entry.principal_id,
-                entry.artefact_kind,
-                entry.handling_level,
-                entry.exported_at,
-                entry.item_count,
-                entry.withheld,
-                entry.manifest_policy,
-                entry.justification_given,
-                entry.originator_reference_given,
+        """Writes one row, and fails closed: a row that says nothing of what it concerns is refused
+        here (`ValueError`), and a database that cannot take it raises `AuditWriteError` (503, as
+        the audit writer's own failure does), so an export whose record was not made is not made.
+        The message names the kind of artefact and never the database's own words, which can
+        carry the values of the row."""
+        if not entry.subject_kind or not entry.subject_id:
+            raise ValueError(
+                f"ledger entry for {entry.artefact_kind!r} names no subject: a row says what the "
+                "export concerns"
             )
+        try:
+            async with self._pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO export_ledger (id, investigation_id, principal_id, artefact_kind, "
+                    "handling_level, exported_at, item_count, withheld, manifest_policy, "
+                    "justification_given, originator_reference_given, subject_kind, subject_id) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+                    entry.id,
+                    entry.investigation_id,
+                    entry.principal_id,
+                    entry.artefact_kind,
+                    entry.handling_level,
+                    entry.exported_at,
+                    entry.item_count,
+                    entry.withheld,
+                    entry.manifest_policy,
+                    entry.justification_given,
+                    entry.originator_reference_given,
+                    entry.subject_kind,
+                    entry.subject_id,
+                )
+        except Exception as exc:
+            raise AuditWriteError(
+                f"export ledger write failed for artefact kind {entry.artefact_kind!r}"
+            ) from exc
 
     async def list_all(self, principal: Principal) -> list[ExportLedgerEntry]:
         """The one cross-investigation read in this module — `tools/authorized_query_check.py`'s
@@ -444,6 +505,8 @@ class ExportLedgerStore:
                 manifest_policy=row["manifest_policy"],
                 justification_given=row["justification_given"],
                 originator_reference_given=row["originator_reference_given"],
+                subject_kind=row["subject_kind"],
+                subject_id=row["subject_id"],
             )
             for row in rows
         ]
@@ -593,6 +656,8 @@ async def submit_export(
         manifest_policy=manifest_policy,
         justification_given=bool(request.justification),
         originator_reference_given=bool(request.originator_reference),
+        subject_kind="case",
+        subject_id=investigation_id,
     )
     await ledger.record(entry)
 

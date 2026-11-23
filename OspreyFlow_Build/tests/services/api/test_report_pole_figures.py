@@ -541,6 +541,10 @@ class _Sink:
     async def record(self, *args: object, **kwargs: object) -> None:
         return None
 
+    async def withheld_for(self, *args: object, **kwargs: object) -> bool:
+        """The case's standing sentence the figures' ledger row carries (SE8b)."""
+        return False
+
 
 @pytest.fixture
 def client(spy: _Spy):  # type: ignore[no-untyped-def]
@@ -558,6 +562,7 @@ def client(spy: _Spy):  # type: ignore[no-untyped-def]
         get_investigations,
         get_ontology,
         get_principal,
+        get_working_set,
     )
 
     def build(domains: list[str]) -> tuple[TestClient, _Graph]:
@@ -568,6 +573,7 @@ def client(spy: _Spy):  # type: ignore[no-untyped-def]
         app.dependency_overrides[get_analytics] = lambda: object()
         app.dependency_overrides[get_audit] = lambda: _Sink()
         app.dependency_overrides[get_export_ledger] = lambda: _Sink()
+        app.dependency_overrides[get_working_set] = lambda: _Sink()
         app.dependency_overrides[get_graph] = lambda: object()
         app.dependency_overrides[get_held_rows] = lambda: object()
         app.dependency_overrides[get_compute] = lambda: object()

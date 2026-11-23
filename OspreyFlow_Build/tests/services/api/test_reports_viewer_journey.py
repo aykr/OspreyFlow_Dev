@@ -141,6 +141,10 @@ class _Nothing:
     async def display_names(self, ids: list[str]) -> dict[str, str]:
         return {}
 
+    async def withheld_for(self, investigation_id: str, principal: Principal) -> bool:
+        """The case's standing sentence the figures' ledger row carries (SE8b)."""
+        return False
+
     async def type_counts(self, principal: Principal) -> Any:
         from schemas.explore import TypeCounts
 
@@ -176,6 +180,7 @@ def _journey_client(
         get_principal_names,
         get_superset_embedder,
         get_target_models,
+        get_working_set,
     )  # fmt: skip
     from services.api.explore import ExploreService
 
@@ -188,7 +193,8 @@ def _journey_client(
     monkeypatch.setattr(reports, "monitoring_queue", _queue)
     nothing = _Nothing()
     for dep in (get_alerts_store, get_analytics, get_audit, get_compute, get_datasets, get_export_ledger, get_graph,
-                get_held_rows, get_identity_admin, get_principal_names, get_target_models):  # fmt: skip
+                get_held_rows, get_identity_admin, get_principal_names, get_target_models,
+                get_working_set):  # fmt: skip
         app.dependency_overrides[dep] = lambda: nothing
     explore = ExploreService(nothing, None)  # type: ignore[arg-type]
     ontology = load_deployment_ontology()

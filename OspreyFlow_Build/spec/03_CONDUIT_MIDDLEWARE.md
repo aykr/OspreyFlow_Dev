@@ -1672,9 +1672,17 @@ embedding leave no audit row; the model gateway's own usage record is per engine
 or case. One record of every model call (who asked, for which case, to which engine) is SE8's, not built, and no test
 fails today when a model call is not recorded. *Sign-in:* the Conduit and the `pages` service record no sign-in
 or session event; recording them is SE8's, not built. *Exports:* the export
-ledger (`export_ledger`) records who, when, case, handling level and withheld flag for report, assessment, pack
-and report-feed exports; the dataset release export, the rule file export and a source file read write an audit
-row and no ledger row; a platform backup and an object transfer write neither. *The table:* append-only in
+ledger (`export_ledger`) records who, when, the case (empty for an export that has none), what the export
+concerns (`subject_kind` and `subject_id`, an id and never a name: a case, a pack, a case's report, a dataset or a
+rule), the handling level (empty where the export has none: a dataset release holding no pipeline) and the
+withheld flag, for every export the Conduit makes: a report, assessment or pack export, the report feed, the
+Reports view's figures, a dataset release and a rule file. A ledger row is written before the artefact is
+returned, and a row that cannot be written fails the export with a 503, as the audit writer does. `GET /v1/exports`
+reads them all by its one right, as it reads every case's. A held document's file shown in the document reader is
+an access audited per read, not an export. A platform backup and an object transfer are an operator's commands
+(the cloud profile's CronJob; `ospreyflow backup`), run outside the Conduit with no principal and no ledger
+connection: they write no ledger row, and nothing the Conduit can record says that one ran.
+`test_export_ledger_completeness.py` fails if an export route writes no row. *The table:* append-only in
 intent: the database does not yet refuse an UPDATE or a DELETE from another role, and there is no hash chain.
 The guides say "coming" for the two unbuilt records, until SE8 merges.
 

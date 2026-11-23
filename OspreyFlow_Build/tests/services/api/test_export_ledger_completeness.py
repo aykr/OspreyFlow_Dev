@@ -615,6 +615,22 @@ class FakePool:
         return list(reversed(self.rows))
 
 
+async def test_the_fake_refuses_a_no_case_row_when_the_case_is_required() -> None:
+    """The fake is only worth its green if it can be red: built over the table as it was before
+    SE8b (the case NOT NULL), it refuses the row a release writes, as Postgres did."""
+    from services.api.export import ledger_bootstrap_sql
+
+    pool = FakePool()
+    pool._not_null = {**_bootstrap_columns(), "investigation_id": True}
+    assert "investigation_id TEXT," in ledger_bootstrap_sql()
+    with pytest.raises(_NotNullViolation):
+        await pool.execute(
+            "INSERT INTO export_ledger (id, investigation_id, principal_id, artefact_kind, "
+            "exported_at, item_count, withheld, manifest_policy) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+            "x", None, "p", "dataset_release", NOW, 1, False, "omit",
+        )  # fmt: skip
+
+
 def _store(pool: FakePool) -> Any:
     from services.api.export import ExportLedgerStore
 
