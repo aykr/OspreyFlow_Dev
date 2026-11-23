@@ -346,9 +346,7 @@ async def _repair(args: argparse.Namespace) -> int:
     try:
         graph = cast(
             GraphPort,
-            stamping(
-                GraphArcadeDBAdapter(client, load_uk_le_scheme()), dataset=PAYSIM.id
-            ),
+            stamping(GraphArcadeDBAdapter(client, load_uk_le_scheme()), dataset=PAYSIM.id),
         )
         # The adapter refuses to write until it holds the ontology; the load does the same.
         await graph.apply_schema(load_default_ontology())
@@ -444,9 +442,7 @@ async def _run(args: argparse.Namespace) -> int:
         if args.reset_graph_database:
             await reset_graph_database(client, database=database)
         await client.create_database_if_absent()
-        graph = cast(
-            GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=PAYSIM.id)
-        )
+        graph = cast(GraphPort, stamping(GraphArcadeDBAdapter(client, scheme), dataset=PAYSIM.id))
         await graph.apply_schema(ontology)
         if args.replace_graph and not args.reset_graph_database:
             removed = await clear_seeded_graph(

@@ -832,9 +832,7 @@ class GraphPort(Protocol):
         Nothing else is touched; running it again takes back nothing."""
         ...
 
-    async def withdraw_layer(
-        self, dataset_id: str, withdrawal: str, tx: TxId
-    ) -> PromotionReverted:
+    async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: TxId) -> PromotionReverted:
         """A removed case's layer deleted (ADR-143 Amendment 2 decision 1): every live element
         whose `datasets` is exactly `[dataset_id]` is set reverted (`withdrawn_by_load =
         withdrawal`), never deleted, so the audit keeps it. An element holding another dataset too

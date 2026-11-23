@@ -399,6 +399,8 @@ from schemas.model import OfferedEngines
 from schemas.model_admin import (
     ConnectionTestResult,
     DefaultsInput,
+    EngineCheckInput,
+    EngineCheckResult,
     EngineInput,
     KeyInput,
     LimitsInput,
@@ -20592,25 +20594,23 @@ async def models_admin_history_route(admin: ModelAdminDep) -> ModelAdminHistory:
     return ModelAdminHistory(entries=await admin.history())
 
 
-@app.post("/v1/admin/models/engines", dependencies=_MANAGE_MODELS)
-async def models_admin_add_engine_route(
-    request: Request, principal: PrincipalDep, admin: ModelAdminDep
-) -> ModelsAdminView:
-    body = await _model_admin_body(request, EngineInput)
-    try:
-        await admin.add_engine(principal.id, body.provider)
-    except model_admin_module.ModelAdminRefused as refused:
-        raise _model_admin_refused(refused) from None
-    return admin.view()
-
-
 @app.put("/v1/admin/models/engines/{name}", dependencies=_MANAGE_MODELS)
 async def models_admin_edit_engine_route(
     name: str, request: Request, principal: PrincipalDep, admin: ModelAdminDep
 ) -> ModelsAdminView:
-    body = await _model_admin_body(request, EngineInput)
+    # The body read here and refused in fixed words, as the check's is (the owner's review, Fix B):
+    # a field name that was sent is never echoed, nor a validator's own words (Fix C).
+    _no_query(request, "model_admin_refused")
+    raw = await request.body()
     try:
-        await admin.edit_engine(principal.id, name, body.provider)
+        body = EngineInput.model_validate_json(raw)
+    except ValidationError as invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=_engine_refusal(raw, invalid, "model_admin_refused", _EDIT_BODY_REFUSED),
+        ) from None
+    try:
+        await admin.edit_engine(principal.id, name, body.provider, body.key)
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
     return admin.view()
@@ -20642,6 +20642,17 @@ async def models_admin_defaults_route(
 _KEY_BODY_REFUSED = (
     'Send the key as JSON, {"key": "…"}, at most 4096 characters. Nothing was changed.'
 )
+_KEY_IN_THE_ADDRESS = (
+    "Send the key in the request's body, never in the address: an address is logged and kept by "
+    "every hop. Nothing was changed."
+)
+
+
+def _no_query(request: Request, error: str) -> None:
+    """The owner's review, P9: the routes that take a key take nothing in the address, so a key put
+    there is refused in fixed words, never read, whatever the body holds."""
+    if request.url.query:
+        raise HTTPException(status_code=422, detail={"error": error, "detail": _KEY_IN_THE_ADDRESS})
 
 
 @app.put("/v1/admin/models/engines/{name}/key", dependencies=_MANAGE_MODELS)
@@ -20650,6 +20661,7 @@ async def models_admin_set_key_route(
 ) -> ModelsAdminView:
     """Write-only. The body is read here rather than by FastAPI, whose validation errors carry the
     input back; a body that is not `{"key": "…"}` is refused in fixed words."""
+    _no_query(request, "key_refused")
     try:
         key = KeyInput.model_validate_json(await request.body()).key
     except ValueError:
@@ -20714,6 +20726,91 @@ async def models_admin_test_route(
         return await admin.test(principal.id, name)
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
+
+
+_CHECK_BODY_REFUSED = (
+    'Send the engine and its key as JSON, {"provider": {…}, "key": "…"}, the key at most 4096 '
+    "characters. Nothing was checked."
+)
+
+
+_EDIT_BODY_REFUSED = (
+    'Send the engine as JSON, {"provider": {…}}, with "key": "…" where its address or key changes, '
+    "the key at most 4096 characters. Nothing was changed."
+)
+
+
+def _engine_refusal(
+    raw: bytes, invalid: ValidationError, error: str, refused: str
+) -> dict[str, object]:
+    """ADR-135 Amendment 14 point 5, and the owner's review (Fixes B and C): each refused field
+    named from a fixed list (`provider.api_base`, `provider.roles.extraction` …) with that field's
+    fixed words, so the form says them at that field; never a field name or a value that was sent,
+    nor a validator's own words, which may quote what was sent in another form. A body that is not
+    the route's shape at all, or names a field not on the list, is answered in `refused`'s words."""
+    try:
+        json.loads(raw)
+    except ValueError:
+        return {"error": error, "detail": refused}
+    errors = invalid.errors(include_input=False, include_context=False, include_url=False)
+    fields: list[dict[str, str]] = []
+    for e in errors:
+        if not e["loc"] or e["type"] in ("extra_forbidden", "json_invalid"):
+            return {"error": error, "detail": refused}
+        named = model_admin_module.refused_field(e["loc"], str(e.get("msg", "")))
+        if named is None:
+            return {"error": error, "detail": refused}
+        fields.append({"field": named[0], "words": named[1]})
+    if not fields:
+        return {"error": error, "detail": refused}
+    then = refused.rsplit(". ", 1)[-1]  # "Nothing was checked." or "Nothing was changed."
+    words = " ".join(f["words"] for f in fields) + " " + then
+    return {"error": error, "detail": words, "fields": fields}
+
+
+@app.post("/v1/admin/models/checks", dependencies=_MANAGE_MODELS)
+async def models_admin_check_route(
+    request: Request, principal: PrincipalDep, admin: ModelAdminDep
+) -> EngineCheckResult:
+    """ADR-135 Amendment 14: the key and each typed model proved before **Add**. The body is read
+    here rather than by FastAPI, whose validation errors carry the input back, so neither the key
+    nor any other value of a refused body is echoed."""
+    _no_query(request, "check_refused")
+    raw = await request.body()
+    try:
+        body = EngineCheckInput.model_validate_json(raw)
+    except ValidationError as invalid:  # a body that is not JSON at all is one too
+        raise HTTPException(
+            status_code=422,
+            detail=_engine_refusal(raw, invalid, "check_refused", _CHECK_BODY_REFUSED),
+        ) from None
+    try:
+        return await admin.check(principal.id, body.provider, body.key)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+
+
+@app.post("/v1/admin/models/checks/{check_id}/add", dependencies=_MANAGE_MODELS)
+async def models_admin_add_checked_route(
+    check_id: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    """**Add**: the engine made from a passed check; the key is never sent again."""
+    try:
+        await admin.add_checked(principal.id, check_id)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.delete("/v1/admin/models/checks/{check_id}", dependencies=_MANAGE_MODELS)
+async def models_admin_cancel_check_route(
+    check_id: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.cancel_check(principal.id, check_id)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
 
 
 @app.get("/v1/models/engines")
