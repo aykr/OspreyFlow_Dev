@@ -16,6 +16,9 @@ decision 1).
   never had, retired; one it had is in force again, as it was then.
 - **A POLE core type cannot be an extension** (`_refuse_a_core_type`): the core is always on and
   cannot be removed or renamed.
+- **A type's matching rule names a field a reference can find**
+  (`_refuse_a_rule_a_reference_cannot_use`): one of its identifiers or one of its indexed
+  properties, and no other.
 - **A revert is a new draft, never a rewrite**: reverting to version N while N+1 is live makes the
   draft N+2, a copy of N (`reverted_from = N`); N itself is untouched.
 
@@ -162,6 +165,30 @@ def _refuse_a_deleted_extension(
             raise TargetModelRefused(f"{name} is retired in this draft, version {version}")
 
 
+def _refuse_a_rule_a_reference_cannot_use(extensions: Sequence[ModelExtension]) -> None:
+    """A type's matching rule names a field a reference can find: one of the type's identifiers, or
+    one of its indexed properties (the draft's own property records for it), as the recipe rules
+    judge a template (`services/ingest/recipe_rules.py`, `reference_match_problems`): the store
+    answers a lookup for those and no others, so a rule on any other field would make a new record
+    for every row."""
+    findable: dict[str, set[str]] = {}
+    for extension in extensions:
+        if extension.kind == "entity_type":
+            findable.setdefault(extension.name, set()).update(extension.identifiers)
+        elif extension.kind == "property" and extension.indexed and extension.retired_in is None:
+            findable.setdefault(extension.on_type or "", set()).add(extension.name)
+    for extension in extensions:
+        rule = extension.matching
+        if extension.kind != "entity_type" or rule is None or extension.retired_in is not None:
+            continue
+        if rule.match_on not in findable.get(extension.name, set()):
+            raise TargetModelRefused(
+                f"{extension.name} cannot be found by {rule.match_on}: a matching rule can only "
+                f"name an identifier or an indexed property of the type, so this would make a new "
+                f"{extension.name} for every row"
+            )
+
+
 def _checked(
     live: TargetModel | None,
     draft: TargetModel,
@@ -170,6 +197,7 @@ def _checked(
 ) -> None:
     _refuse_a_core_type(given.extensions, core)
     _refuse_a_deleted_extension(live, given.extensions, draft.version)
+    _refuse_a_rule_a_reference_cannot_use(given.extensions)
 
 
 def _reverted(

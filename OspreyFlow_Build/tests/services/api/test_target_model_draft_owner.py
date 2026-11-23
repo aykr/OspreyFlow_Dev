@@ -17,8 +17,9 @@ What a mistake would do, and the case that catches it:
 - a stale save over one's own draft: `test_the_creators_own_save_is_confirmed_against_the_version`;
 - the two tests ADR-152 decision 11 (X5) names: `test_a_second_person_cannot_save_into_replace_or_delete_
   another_persons_draft` and `test_a_stale_version_is_refused_in_words` (the latter plants a stale
-  discard, at the store and through the DELETE route; red with the version argument deleted from
-  either the store's discard or the route's call);
+  discard, at the store and through the routes, which now carry the client's version; red with the
+  version argument deleted from either the store's discard or the route's call; the expected
+  version's own cases are `test_model_draft_expected_version.py`);
 - the refusal leaking the draft's content: `test_the_refusal_names_who_holds_it_and_none_of_its_content`.
 
 The second writer is planted as the code meets one: a different `principal.id` arriving through the
@@ -95,11 +96,17 @@ def world(monkeypatch: pytest.MonkeyPatch) -> Iterator[SimpleNamespace]:
     yield SimpleNamespace(client=TestClient(app), audit=audit, models=models)
 
 
-def _call(world: SimpleNamespace, method: str, person: str, body: Any = None) -> Any:
+def _call(
+    world: SimpleNamespace, method: str, person: str, body: Any = None, version: int = 1
+) -> Any:
+    """A request as a client sends it: a save carries the version its copy was read at in the body,
+    a discard in the query (every draft here is version 1 unless the case says another)."""
+    sent = {**body, "expected_version": version} if method == "PUT" else body
     return world.client.request(
         method,
         f"/v1/datasets/{DATASET}/model/draft",
-        json=body,
+        json=sent,
+        params={"expected_version": version} if method == "DELETE" else None,
         headers={"Authorization": f"Bearer {person}"},
     )
 
@@ -220,25 +227,19 @@ async def test_a_stale_version_is_refused_in_words(world: SimpleNamespace) -> No
         assert "read it again" in words
     assert await _held(world) == before  # neither changed anything
 
-    # Through the route: it reads the draft, then discards confirming what it read. Plant a read
-    # gone stale (the draft replaced between the route's read and its discard), as a race would.
-    real_draft = store.draft
-    calls = {"n": 0}
-
-    async def stale_read(dataset_id: str) -> TargetModel | None:
-        calls["n"] += 1
-        held = await real_draft(dataset_id)
-        if calls["n"] == 1 and held is not None:
-            return held.model_copy(update={"version": first.version})
-        return held
-
-    store.draft = stale_read  # type: ignore[method-assign]
-    answer = _call(world, "DELETE", "alice")
+    # Through the route: the client's own version is what the store is given, so a copy read before the
+    # draft was made live and opened again is refused (the route reads nothing of its own to confirm).
+    answer = _call(world, "DELETE", "alice", version=first.version)
     assert answer.status_code == 409, answer.text
     assert answer.json()["error"] == "model_refused"
     assert f"you meant your draft's version {first.version}" in answer.json()["detail"]
-    assert await real_draft(DATASET) == before  # still there
+    assert await _held(world) == before  # still there
     assert "discard_model_draft" not in _actions(world)
+    saved = _call(world, "PUT", "alice", _content({"niem": 1}), version=first.version)
+    assert saved.status_code == 409, saved.text
+    assert f"you meant your draft's version {first.version}" in saved.json()["detail"]
+    assert await _held(world) == before
+    assert "save_model_draft" not in _actions(world)[2:]
 
 
 async def test_the_refusal_names_who_holds_it_and_none_of_its_content(
