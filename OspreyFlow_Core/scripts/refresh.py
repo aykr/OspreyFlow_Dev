@@ -625,7 +625,8 @@ def _identity_argument_moved(service: dict[str, Any], wanted: dict[str, Any]) ->
         service["image"] = wanted_image
         changed = True
     want = (wanted["build"].get("args") or {}).get(_IDENTITY_ARGUMENT)
-    args = held.get("args") if isinstance(held.get("args"), dict) else {}
+    held_args = held.get("args")
+    args: dict[str, Any] = dict(held_args) if isinstance(held_args, dict) else {}
     if args.get(_IDENTITY_ARGUMENT) == want:
         return changed
     if want is None:
