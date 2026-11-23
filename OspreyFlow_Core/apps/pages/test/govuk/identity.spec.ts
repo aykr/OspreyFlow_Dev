@@ -12,7 +12,7 @@
 // What is read: every element's computed font family (the rule's own words: "no `GDS Transport` in any computed font"), the
 // header's logotype and crown by their own markup, and every request the page made (a default build must ask for no face).
 //
-//   npm run test:govuk --workspace apps/pages        (not yet in `make ci`: its wiring is the owner's diff)
+//   npm run test:govuk --workspace apps/pages        (its CI job is `ci-wiring.patch` beside this file, for the owner to apply)
 import { execFileSync } from "node:child_process";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, symlinkSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -127,6 +127,7 @@ test.describe("the GOV.UK identity, in a browser (I9)", () => {
       expect(askedForAFace(v)).toBe(false);
       // The header carries the department's name in the logo's place (decision 14), and the page's type is the fallback.
       expect(v.headerText).toContain("A department");
+      expect(v.headerText).toContain("Test service");
       expect(v.families.some((f) => f.includes("arial"))).toBe(true);
     });
   }

@@ -681,7 +681,9 @@ def _workspace_build(out: Path) -> dict:
     return yaml.safe_load((out / "compose.yaml").read_text())["services"]["workspace"]["build"]
 
 
-def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_built_from_source(repo: Path) -> None:
+def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_built_from_source(
+    repo: Path,
+) -> None:
     """A finding of PL7c's round 3: `_pins_moved` skipped every service that already had a `build`, so the new argument
     never reached the stanza, the default image was rebuilt and the type fell back to arial in silence."""
     out = _workspace_built_with(repo, identity=True)
@@ -692,7 +694,9 @@ def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_bui
     assert _workspace_build(out)["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
 
 
-def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators_own(repo: Path) -> None:
+def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators_own(
+    repo: Path,
+) -> None:
     import yaml
 
     out = _workspace_built_with(repo, identity=True)
@@ -701,7 +705,9 @@ def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators
     document = yaml.safe_load((out / "compose.yaml").read_text())
     document["services"]["workspace"]["build"]["args"]["OPERATOR_ARG"] = "kept"
     text = (out / "compose.yaml").read_text()
-    (out / "compose.yaml").write_text(text[: text.index("\nname:") + 1] + yaml.safe_dump(document, sort_keys=False))
+    (out / "compose.yaml").write_text(
+        text[: text.index("\nname:") + 1] + yaml.safe_dump(document, sort_keys=False)
+    )
     config = yaml.safe_load((out / "osprey.yaml").read_text())
     config["appearance"] = {"brand": "govuk", "govuk_identity": False}
     (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
@@ -711,7 +717,9 @@ def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators
     assert _workspace_build(out)["args"] == {"OPERATOR_ARG": "kept"}
 
 
-def test_a_deployment_with_the_identity_off_keeps_a_workspace_build_with_no_args_as_it_was(repo: Path) -> None:
+def test_a_deployment_with_the_identity_off_keeps_a_workspace_build_with_no_args_as_it_was(
+    repo: Path,
+) -> None:
     out = _workspace_built_with(repo, identity=False)
     before = (out / "compose.yaml").read_text()
     refresh.refresh(repo, run=Recorder(), register=Registrar())

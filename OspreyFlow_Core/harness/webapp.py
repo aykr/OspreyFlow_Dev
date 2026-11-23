@@ -152,6 +152,7 @@ from harness.realm import HARNESS_PORT
 from harness.render import (
     DEFAULT_CONFIG_PATH,
     DEFAULT_OUT_ROOT,
+    GovukIdentityNeedsABuild,
     MissingDockerfileError,
     UnpinnedImagesError,
     diff_for,
@@ -531,7 +532,7 @@ def create_app(
             result = render(config, resolver=render_resolver)
         except ClusterNotRenderable as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        except MissingDockerfileError as exc:
+        except (GovukIdentityNeedsABuild, MissingDockerfileError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except UnpinnedImagesError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc

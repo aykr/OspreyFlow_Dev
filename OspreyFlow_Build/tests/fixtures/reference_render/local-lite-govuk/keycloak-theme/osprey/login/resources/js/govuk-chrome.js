@@ -84,7 +84,7 @@ window.OSPREY_GOVUK = {"serviceName": "Example Service", "organisation": "Exampl
     var identity = settings.govukIdentity === true;
     var onGovUk = identity && (host === "gov.uk" || host.slice(-7) === ".gov.uk");
     if (!identity) {
-      // Off: no logotype and no crown; the organisation's (or the service's) name, as text, in the logo's
+      // Off: no logotype and no crown; the organisation's (or the service's) name, as text, and the service's after it, in the logo's
       // place, as `GovukHeader.tsx` draws it with `identity` false.
       var logoLink = top.querySelector(".govuk-header__homepage-link");
       if (logoLink) {
@@ -92,6 +92,13 @@ window.OSPREY_GOVUK = {"serviceName": "Example Service", "organisation": "Exampl
         nameplate.className = "govuk-header__homepage-link govuk-header__organisation-name";
         nameplate.textContent = settings.organisation || settings.serviceName || "OspreyFlow";
         logoLink.parentNode.replaceChild(nameplate, logoLink);
+        // ADR-152 decision 14: the department's name "with the service name"; one name is drawn once.
+        if (settings.organisation && settings.serviceName && settings.serviceName !== settings.organisation) {
+          var service = document.createElement("span");
+          service.className = "govuk-header__service-name";
+          service.textContent = settings.serviceName;
+          nameplate.parentNode.insertBefore(service, nameplate.nextSibling);
+        }
       }
     }
     // ADR-132 Amendment 8 (the owner's ruling of 13 November 2026): off gov.uk the header draws no crown,

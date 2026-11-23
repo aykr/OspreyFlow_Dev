@@ -2455,29 +2455,6 @@ class OspreyConfig(BaseModel):
         )
 
     @model_validator(mode="after")
-    def _the_govuk_identity_needs_a_build_from_source(self) -> OspreyConfig:
-        """ADR-152 decision 14, invariant I9 (the owner's ruling of 21 November 2026): the
-        workspace image holds no GDS Transport file unless it was built for a deployment with the
-        switch on, which the renderer arranges by passing a build argument (`harness/render.py`).
-        A deployment that pulls the release's images (no `components.source_path`) has no build to
-        pass it to: the release's images are default builds, so the switch would be on and the
-        type would fall back to arial in silence. Refused in words instead, as a setting that
-        would be ignored always is."""
-        if (
-            self.appearance.brand == "govuk"
-            and self.appearance.govuk_identity
-            and self.components.source_path is None
-        ):
-            raise ValueError(
-                "appearance.govuk_identity: true needs components.source_path (a checkout to "
-                "build the workspace from): the release's images are default builds and hold no "
-                "GDS Transport, which is licensed for services on GOV.UK domains only, so a "
-                "deployment that pulls them cannot show it. Build from source for the GOV.UK "
-                "identity, or leave the switch off"
-            )
-        return self
-
-    @model_validator(mode="after")
     def _a_gpu_is_not_a_clouds(self) -> OspreyConfig:
         """ADR-135 Amendment 1 decision 1: the local engine on an NVIDIA GPU is for Lite on a Linux
         computer or Small on a server of your own. A cloud's servers are sized without a GPU

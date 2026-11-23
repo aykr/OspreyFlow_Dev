@@ -19,15 +19,18 @@ update. Work not yet in a release is listed under *Unreleased*.
 **The GOV.UK identity switch (ADR-152 decision 14).**
 - **`appearance.govuk_identity` exists in `osprey.yaml`, and is off.** The crown, the GOV.UK logotype and the GOV.UK typeface
   (GDS Transport, licensed for services on GOV.UK domains only) now show only when a deployment turns it on. **A deployment
-  under `appearance.brand: govuk` that does not set it will look different after it updates:** the header names the
-  organisation in place of the GOV.UK logo, the type is Arial, and the footer carries no crown. To keep today's look, set
-  `govuk_identity: true` under `appearance:` in that deployment's own `osprey.yaml`, and build from source (below). The
-  typeface also needs a gov.uk address: with the switch on at any other address the crown stays off and the type is Arial,
-  because GDS Transport's licence is for services on GOV.UK domains. A default build of the Glass no longer holds GDS
-  Transport's files; the renderer passes the switch to the workspace's build only for `brand: govuk` with it on. **Turning it
-  on needs `components.source_path` (a deployment built from source):** the release's own images are default builds, so a
-  deployment that pulls them is refused in words (`appearance.govuk_identity: true needs components.source_path`) until a
-  release carries a build with the face for it.
+  under `appearance.brand: govuk` that does not set it will look different after it updates:** the header shows the
+  organisation's name (and the service's, after it) in place of the GOV.UK logo, the type is Arial, and the footer carries no
+  crown. To keep today's look, set `govuk_identity: true` under `appearance:` in that deployment's own `osprey.yaml`, and build
+  from source (below). The typeface also needs a gov.uk address: with the switch on at any other address the crown stays off
+  and the type is Arial, because GDS Transport's licence is for services on GOV.UK domains. A default build of the Glass no
+  longer holds GDS Transport's files; the renderer passes the switch to the workspace's build only for `brand: govuk` with it
+  on. **Turning it on needs a build of the workspace from source** (`ospreyflow start --build`, a checkout, or a cloud platform's
+  `ospreyflow images push`): the release's own images are default builds, so a render that pulls the workspace image with the
+  switch on is refused in words (`appearance.govuk_identity is on, and this render pulls the workspace image`) until a release
+  carries a build with the face for it. A deployment already built from source takes the switch on its next
+  refresh (`scripts/refresh.py`), which puts the build argument on the workspace's build stanza (and takes it off when the
+  switch is off again).
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any

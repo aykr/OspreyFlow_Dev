@@ -37,8 +37,8 @@
     },
     {
       "path": "keycloak-theme/osprey/login/resources/js/govuk-chrome.js",
-      "sha256": "e34065cc65be39d08a8129b22a8d3613e33e623cbdf9aadf03955d5e1112fb16",
-      "size": 14479
+      "sha256": "ae21f8bd1685890e8354edf6c4e5372b77d9e31d63d9e6656aa5588da00be6a3",
+      "size": 14978
     },
     {
       "path": "keycloak-theme/osprey/login/resources/js/osprey-sign-in.js",

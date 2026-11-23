@@ -278,6 +278,34 @@ _BANNER = (
 )
 
 
+class GovukIdentityNeedsABuild(RuntimeError):
+    """`appearance.govuk_identity: true` on a render that pulls the workspace image.
+
+    ADR-152 decision 14, invariant I9 (the owner's ruling of 21 November 2026): GDS Transport's
+    files are in the workspace image only when it was built for a deployment with the switch on
+    (`--build-arg OSPREY_GOVUK_IDENTITY=1`, which `compose_services` passes). The release's images
+    are default builds, so a render that pulls one has nowhere to pass the switch: the type would
+    fall back to arial in silence. Refused in words, at render, where it is known whether the
+    image is built or pulled: that is only decided after `--build` or `components.source_path`
+    has been applied, so the schema (which reads the file as written) cannot ask. A cloud
+    platform is not refused: it builds ours itself, with the argument
+    (`harness/cloud_platform/__init__.py`, `_Copies`)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "refusing to render: appearance.govuk_identity is on, and this render pulls the "
+            "workspace image. The release's images are default builds and hold no GDS Transport, "
+            "which is licensed for services on GOV.UK domains only, so the type would fall back "
+            "to arial in silence. Build the workspace from a checkout (start --build, or "
+            "components.source_path) for the GOV.UK identity, or leave the switch off"
+        )
+
+
+def wants_govuk_identity(config: OspreyConfig) -> bool:
+    """The switch is on for this deployment: it means something only under the GOV.UK brand."""
+    return config.appearance.brand == "govuk" and bool(config.appearance.govuk_identity)
+
+
 class MissingDockerfileError(RuntimeError):
     """Names every OspreyFlow-owned service whose Dockerfile is not at the declared
     `components.source_path`.
@@ -1042,11 +1070,7 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
             stanza: dict[str, Any] = dict(entry.build_stanza())
-            if (
-                entry.service == "workspace"
-                and config.appearance.brand == "govuk"
-                and config.appearance.govuk_identity
-            ):
+            if entry.service == "workspace" and wants_govuk_identity(config):
                 # ADR-152 decision 14 (the owner's ruling of 21 November 2026): GDS Transport's
                 # files are in the workspace's bundle only for a deployment whose GOV.UK
                 # identity switch is on. Off, no `args` key is written, so a deployment that
@@ -2056,6 +2080,10 @@ def render(
                 resolved_source_label=resolved_source_label,
             ),
         )
+    if wants_govuk_identity(config) and not any(
+        i.service == "workspace" and i.building for i in images
+    ):
+        raise GovukIdentityNeedsABuild
     if config.profile is Profile.CLUSTER:
         # 05 §3b: the chart's values, translated from the same services (`harness/cluster.py`).
         from harness.cluster import render_cluster

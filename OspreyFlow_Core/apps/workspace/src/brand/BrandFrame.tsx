@@ -19,7 +19,7 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type Reac
 import { brandTitle, isGovUkHost, type Appearance } from "@ospreyflow/glass-shared";
 import { containInnerScroll } from "./containInnerScroll";
 import { GovukFooter } from "./govuk/GovukFooter";
-import { GovukHeader, governmentHeaderName } from "./govuk/GovukHeader";
+import { GovukHeader, governmentHeaderNames } from "./govuk/GovukHeader";
 import { PhaseBanner } from "./govuk/PhaseBanner";
 import { SkipLink } from "./govuk/SkipLink";
 
@@ -92,7 +92,7 @@ export function BrandFrame({
           withPlaces
           hostname={hostname}
           identity={appearance.govukIdentity}
-          name={governmentHeaderName(appearance.organisation, appearance.serviceName)}
+          {...governmentHeaderNames(appearance.organisation, appearance.serviceName)}
         />
         <PhaseBanner phase={appearance.phase} text={appearance.bannerText} />
       </div>

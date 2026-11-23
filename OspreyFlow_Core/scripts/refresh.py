@@ -594,6 +594,35 @@ def _published_on_loopback(directory: Path) -> None:
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
 
 
+#: The workspace image's one build argument that the deployment's settings decide: whether the
+#: bundle holds GDS Transport (ADR-152 decision 14; `harness.render.compose_services`).
+_IDENTITY_ARGUMENT = "OSPREY_GOVUK_IDENTITY"
+
+
+def _identity_argument_moved(service: dict[str, Any], wanted: dict[str, Any]) -> bool:
+    """A service this checkout builds, that the deployment also builds, takes the render's value
+    of the GOV.UK identity argument and no other: the switch turned on adds it, the switch turned
+    off removes it, and an operator's own arguments stay as they were. Without this a stanza that
+    already had a `build` (and so was skipped whole) rebuilt the default image after the switch
+    changed, and the type fell back to arial in silence. True when it changed the stanza."""
+    held = service.get("build")
+    if not isinstance(held, dict) or not isinstance(wanted.get("build"), dict):
+        return False
+    want = (wanted["build"].get("args") or {}).get(_IDENTITY_ARGUMENT)
+    args = held.get("args") if isinstance(held.get("args"), dict) else {}
+    if args.get(_IDENTITY_ARGUMENT) == want:
+        return False
+    if want is None:
+        args = {k: v for k, v in args.items() if k != _IDENTITY_ARGUMENT}
+        if args:
+            held["args"] = args
+        else:
+            held.pop("args", None)
+    else:
+        held["args"] = {**args, _IDENTITY_ARGUMENT: want}
+    return True
+
+
 def _pins_moved(directory: Path) -> None:
     """A service built from no source here whose rendered image differs from the deployment's is
     moved to it, with the rendered values of its settings (a new version's launch options). Secrets
@@ -622,6 +651,7 @@ def _pins_moved(directory: Path) -> None:
     rendered = yaml.safe_load(_render_compose(config, images))["services"]
     moved: dict[str, str] = {}
     built_here: list[str] = []
+    switched: list[str] = []
     for name, wanted in rendered.items():
         service = services.get(name)
         if not isinstance(service, dict):
@@ -632,6 +662,8 @@ def _pins_moved(directory: Path) -> None:
             built_here.append(name)
             continue
         if "build" in wanted or "build" in service:
+            if _identity_argument_moved(service, wanted):
+                switched.append(name)
             continue
         if service.get("image") == wanted.get("image") or "image" not in wanted:
             continue
@@ -644,7 +676,7 @@ def _pins_moved(directory: Path) -> None:
         if "healthcheck" in wanted:
             service["healthcheck"] = wanted["healthcheck"]
         moved[name] = str(wanted["image"]).rsplit(":", 1)[1]
-    if not moved and not built_here:
+    if not moved and not built_here and not switched:
         return
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     compose_path.write_text(text[:header_end] + body, encoding="utf-8")
