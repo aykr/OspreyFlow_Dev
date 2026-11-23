@@ -57,8 +57,12 @@ describe("the sign-in page's chrome, run", () => {
     return document.body;
   }
 
-  it("with the switch off (the default, and the key absent) draws the organisation's name, no logotype, no crown", () => {
-    const body = run({});
+  // The harness writes the switch into every GOV.UK sign-in theme as a boolean, so "off" is the key written as false; a
+  // settings object from before the switch existed (no key) is the script as it was, which the keycloak_theme node tests hold.
+  const off = { govukIdentity: false };
+
+  it("with the switch off (the default, written as false) draws the organisation's name, no logotype, no crown", () => {
+    const body = run(off);
     expect(body.querySelector(".govuk-header__logotype")).toBeNull();
     expect(body.querySelector(".govuk-header svg")).toBeNull();
     expect(body.querySelector(".govuk-header__organisation-name")?.textContent).toBe("Ministry of Examples");
@@ -69,14 +73,14 @@ describe("the sign-in page's chrome, run", () => {
   });
 
   it("with the switch off falls back to the service's name, then to OspreyFlow", () => {
-    const serviceOnly = run({ organisation: null });
+    const serviceOnly = run({ ...off, organisation: null });
     expect(serviceOnly.querySelector(".govuk-header__organisation-name")?.textContent).toBe("Prison Intelligence");
     expect(serviceOnly.querySelector(".govuk-header__service-name")).toBeNull(); // one name is drawn once
-    const bare = run({ organisation: null, serviceName: null });
+    const bare = run({ ...off, organisation: null, serviceName: null });
     expect(bare.querySelector(".govuk-header__organisation-name")?.textContent).toBe("OspreyFlow");
     expect(bare.querySelector(".govuk-header__service-name")).toBeNull();
     // The same name for both is one name, not two.
-    expect(run({ organisation: "Prison Intelligence" }).querySelector(".govuk-header__service-name")).toBeNull();
+    expect(run({ ...off, organisation: "Prison Intelligence" }).querySelector(".govuk-header__service-name")).toBeNull();
   });
 
   it("with only a quoted or truthy non-true value is still off", () => {
@@ -98,7 +102,7 @@ describe("the sign-in page's chrome, run", () => {
   it.each(["prison-intelligence.service.gov.uk", "gov.uk"])(
     "with the switch off on %s still draws no crown, no Crown copyright, no licence line and no logotype",
     (host) => {
-      const body = run({}, host);
+      const body = run(off, host);
       expect(body.querySelector(".govuk-footer__crown")).toBeNull();
       expect(body.querySelector(".govuk-footer__licence-logo")).toBeNull();
       expect(body.textContent).not.toMatch(crownly);

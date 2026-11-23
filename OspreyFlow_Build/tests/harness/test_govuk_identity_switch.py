@@ -92,8 +92,9 @@ def test_under_govuk_the_sign_in_theme_is_what_it_was_while_the_switch_is_off() 
         TOKENS, appearance=AppearanceConfig(brand="govuk", phase="beta"), glass_origin=GLASS
     )
     assert "data-govuk-identity" not in off[THEME_SCRIPT]
-    # The settings the harness writes are the script's first line; the script's own text names the key.
-    assert "govukIdentity" not in off[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
+    # Written as false, not left out: the sign-in script reads a settings object with no key as one from before the switch
+    # existed (the identity as it was), so the harness says "off" in words every time (ADR-152 decision 14, I9).
+    assert '"govukIdentity": false' in off[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
 
 
 def test_under_govuk_the_sign_in_theme_is_told_the_switch_when_it_is_on() -> None:
@@ -172,6 +173,49 @@ def test_the_sign_in_theme_with_the_switch_off_sets_no_identity_mark_on_gov_uk()
     assert _marks_set_by_the_theme_script("service.gov.uk", identity=False) == {
         "data-brand": "govuk"
     }
+
+
+def _drawn_by_the_generated_chrome_script(url: str, *, identity: bool) -> dict[str, bool]:
+    """Runs the GOV.UK chrome script exactly as the harness writes it for the deployment (its settings line and the script's
+    own text, from `render_login_theme`, not a copy) in jsdom at `url`, and reads back what it drew."""
+    assert NODE, "node is needed to run the sign-in theme's script"
+    theme = render_login_theme(
+        TOKENS,
+        appearance=AppearanceConfig(brand="govuk", govuk_identity=identity),
+        glass_origin=GLASS,
+    )
+    harness = (
+        f"const {{ JSDOM }} = require({json.dumps(str(CORE / 'node_modules' / 'jsdom'))});"
+        "const dom = new JSDOM('<!doctype html><html><body><main></main></body></html>',"
+        f" {{ url: {json.dumps(url)}, runScripts: 'outside-only' }});"
+        "const d = dom.window.document;"
+        "d.documentElement.setAttribute('data-brand', 'govuk');"
+        f"dom.window.eval({json.dumps(theme[GOVUK_CHROME_SCRIPT])});"
+        "console.log(JSON.stringify({"
+        "logotype: !!d.querySelector('.govuk-header__logotype'),"
+        "crown: !!d.querySelector('.govuk-header__logotype g'),"
+        "footer_crown: !!d.querySelector('.govuk-footer__crown'),"
+        "crown_copyright: /Crown copyright/.test(d.body.textContent)}));"
+    )
+    done = subprocess.run(  # noqa: S603
+        [NODE, "-e", harness], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    return {k: bool(v) for k, v in json.loads(done.stdout).items()}
+
+
+def test_the_generated_sign_in_script_draws_none_of_the_identity_with_the_switch_off_on_gov_uk() -> None:
+    """The shape the script meets in a deployment: the settings the harness wrote, at a gov.uk address, switch off.
+    Planted: the harness leaving the key out (so the script reads it as one from before the switch) turns this red."""
+    assert _drawn_by_the_generated_chrome_script(
+        "https://id.service.gov.uk/realms/osprey/", identity=False
+    ) == {"logotype": False, "crown": False, "footer_crown": False, "crown_copyright": False}
+
+
+def test_the_generated_sign_in_script_draws_the_crown_with_the_switch_on_on_gov_uk() -> None:
+    assert _drawn_by_the_generated_chrome_script(
+        "https://id.service.gov.uk/realms/osprey/", identity=True
+    ) == {"logotype": True, "crown": True, "footer_crown": True, "crown_copyright": True}
 
 
 # ----------------------------------------------- the build: the stylesheet's own stacks follow the address too
