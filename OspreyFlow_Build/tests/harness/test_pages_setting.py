@@ -700,3 +700,214 @@ def test_the_complete_tree_check_is_the_one_function(tmp_path: Path) -> None:
             ref.render_files(config)
     with mock.patch.object(tree_parity, "govuk_tree_state", lambda *a, **k: "partial"):
         assert ref.differences("small", "govuk", ref.render_files(config)) == []
+
+
+# ---- 6. what the page service refuses at start-up (rule 15: the fake must refuse what it does) ----
+
+#: A secret as long as the service wants (`MIN_SECRET_LENGTH`, 32): a stand-in for what `deployment.env`
+#: or the cluster's Secret holds, which the render only ever refers to.
+A_SECRET = "s" * 40
+
+
+def _resolved(shape: str, env: dict[str, str]) -> dict[str, str]:
+    """The variables as the container would see them: a compose `${NAME:?…}` is the env file's value,
+    `${NAME:-default}` its default; a chart's secret reference is the cluster's Secret's value."""
+    seen: dict[str, str] = {}
+    for name, value in env.items():
+        if value.startswith("secret:"):
+            seen[name] = A_SECRET
+        elif value.startswith("config:"):
+            continue  # a chart's config reference: the Valkey address, which this does not check
+        elif name.endswith("_SECRET") and value.startswith("${"):
+            seen[name] = A_SECRET
+        elif value.startswith("${"):
+            seen[name] = (
+                re.sub(r"^\$\{\w+:-(.*)\}$", r"\1", value) if ":-" in value else "valkey.internal"
+            )
+        else:
+            seen[name] = value
+    return seen
+
+
+def _page_service_refuses(shape: str, files: dict[str, bytes]) -> list[str]:
+    """`apps/pages/server/config.ts`'s `loadConfig` refusals that a rendered environment can meet
+    (`sessionSecret`, `publicOrigin`, `oidcSettings`, `conduitAddress`), each named as the service
+    names it: a render that leaves any of them would be a service that throws at start-up, its
+    health check never passing. Empty is an environment the service starts with."""
+    from urllib.parse import urlsplit
+
+    service = pages_service(shape, files)
+    assert service is not None
+    env = _resolved(shape, service["env"])
+    refused: list[str] = []
+
+    def address(name: str) -> Any:
+        raw = env[name]
+        url = urlsplit(raw)
+        if url.scheme not in ("http", "https") or not url.hostname:
+            refused.append(f"{name} must be an address such as https://host:port")
+        elif url.username or url.password or url.query or url.fragment or "?" in raw or "#" in raw:
+            refused.append(f"{name} must not carry a user name, password, query or fragment")
+        return url
+
+    if len(env.get("OSPREY_PAGES_SESSION_SECRET", "")) < 32:
+        refused.append("OSPREY_PAGES_SESSION_SECRET must be at least 32 characters")
+    given = [n for n in ("OSPREY_PAGES_OIDC_ISSUER", "OSPREY_PAGES_CLIENT_ID") if n in env]
+    if "OSPREY_PAGES_CLIENT_SECRET" in env:
+        given.append("OSPREY_PAGES_CLIENT_SECRET")
+    if given:
+        for name in ("OSPREY_PAGES_OIDC_ISSUER", "OSPREY_PAGES_CLIENT_SECRET"):
+            if name not in env:
+                refused.append(f"{name} is required: once any sign-in setting is set, all are")
+        if "OSPREY_PAGES_OIDC_ISSUER" in env:
+            issuer = address("OSPREY_PAGES_OIDC_ISSUER")
+            host = issuer.hostname or ""
+            loopback = host == "localhost" or host == "::1" or re.fullmatch(r"127(\.\d{1,3}){3}", host)
+            if issuer.scheme != "https" and not (issuer.scheme == "http" and loopback):
+                refused.append(
+                    "OSPREY_PAGES_OIDC_ISSUER must be an https address "
+                    "(http only for localhost or another loopback address)"
+                )
+    for name in ("OSPREY_PAGES_PUBLIC_ORIGIN", "OSPREY_PAGES_CONDUIT_URL"):
+        if name in env:
+            address(name)
+    if "OSPREY_PAGES_PUBLIC_ORIGIN" in env:
+        raw = env["OSPREY_PAGES_PUBLIC_ORIGIN"]
+        url = urlsplit(raw)
+        origin = f"{url.scheme}://{url.netloc}"
+        if raw != origin:
+            refused.append("OSPREY_PAGES_PUBLIC_ORIGIN must be the origin alone")
+    elif given or "OSPREY_PAGES_CONDUIT_URL" in env:
+        refused.append("OSPREY_PAGES_PUBLIC_ORIGIN is required")
+    return refused
+
+
+@pytest.mark.parametrize(("shape", "brand"), SHAPE_BRANDS, ids=IDS)
+def test_on_is_an_environment_the_page_service_starts_with(shape: str, brand: str) -> None:
+    """The values, not only the names: with the setting on, what each shape renders for the service
+    passes the refusals of its own `loadConfig` (an `http` issuer that is not loopback, an origin
+    with a path, a short or missing secret). Local-lite on plain HTTP, the demo's own address form,
+    is the shape this caught: its sign-in cannot be given the service, and the service is then
+    started with none of the three sign-in variables (it answers 503 on sign-in, as it did before
+    it was built) rather than with an issuer it refuses."""
+    assert _page_service_refuses(shape, _render(shape, brand, **ON)) == []
+
+
+def _an_http_issuer(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The renderer's old form, as it wrote it: the public identity name over whatever scheme the
+    deployment's own origin has, wherever a sign-in is set up."""
+
+    def planted(config: Any, *, with_sign_in: bool) -> dict[str, str]:
+        from harness.realm import PAGES_CLIENT_ID, PAGES_CLIENT_SECRET_KEY
+        from harness.site import REALM, sites
+
+        environment: dict[str, str] = real(config, with_sign_in=with_sign_in)
+        if with_sign_in:
+            names = sites(config)
+            environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
+            environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
+            environment["OSPREY_PAGES_CLIENT_SECRET"] = "${%s:?set}" % PAGES_CLIENT_SECRET_KEY
+        return environment
+
+    return planted
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_the_start_up_check_is_red_for_an_http_issuer_that_is_not_loopback(brand: str) -> None:
+    """The planted fault takes the shape the renderer wrote: `http://id.<host>/realms/osprey` in
+    local-lite. The check is clean first, red with it (naming the issuer and the rule), clean again."""
+    assert _page_service_refuses("local-lite", _render("local-lite", brand, **ON)) == []
+    with _patched("harness.pages_service", "service_environment", _an_http_issuer):
+        found = _page_service_refuses("local-lite", _render("local-lite", brand, **ON))
+    assert any("OSPREY_PAGES_OIDC_ISSUER must be an https address" in line for line in found), found
+    assert _page_service_refuses("local-lite", _render("local-lite", brand, **ON)) == []
+
+
+@pytest.mark.parametrize("shape", ("small", "cluster"))
+def test_an_https_deployment_is_given_its_sign_in(shape: str) -> None:
+    """Where the issuer is an https address the service accepts, the three sign-in variables are
+    written (compose only: the cluster's chart carries the realm's own, PL9b)."""
+    env = (pages_service(shape, _render(shape, "govuk", **ON)) or {})["env"]
+    if shape == "small":
+        assert env["OSPREY_PAGES_OIDC_ISSUER"].startswith("https://")
+        assert "OSPREY_PAGES_CLIENT_ID" in env and "OSPREY_PAGES_CLIENT_SECRET" in env
+
+
+def test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in() -> None:
+    """All three sign-in variables or none (the service refuses a part): on plain HTTP, none."""
+    env = (pages_service("local-lite", _render("local-lite", "govuk", **ON)) or {})["env"]
+    assert not [name for name in env if name.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))]
+
+
+# ---- 7. a GOV.UK function's path goes to `pages` once the tree has it (decision 7) --------------
+
+
+@contextlib.contextmanager
+def a_partial_govuk_tree(root: Path, routes: list[str]) -> Iterator[None]:
+    """A tree of two functions with a page for each route in `routes` (the one function that has
+    no route yet keeps it partial)."""
+    from scripts import tree_parity
+
+    (root / "FUNCTIONS.yaml").write_text(
+        "functions:\n"
+        "  - id: example\n    route: /studio/example\n    status: planned\n"
+        "  - id: pending\n    route: ''\n    status: planned\n",
+        encoding="utf-8",
+    )
+    listed = "".join(f"  - {route}\n" for route in routes)
+    (root / "routes.yaml").write_text(f"routes:\n{listed}", encoding="utf-8")
+    with (
+        mock.patch.object(tree_parity, "FUNCTIONS", root / "FUNCTIONS.yaml"),
+        mock.patch.object(tree_parity, "ROUTE_LIST", root / "routes.yaml"),
+        mock.patch.object(tree_parity, "EXCEPTIONS", root / "PARITY_EXCEPTIONS.yaml"),
+    ):
+        assert tree_parity.govuk_tree_state() == tree_parity.PARTIAL
+        yield
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+def test_a_govuk_function_with_its_page_is_routed_to_pages_and_the_rest_stays(
+    shape: str, tmp_path: Path
+) -> None:
+    """Partial tree with one route listed, setting on: that path goes to `pages` (the Caddyfile's
+    matcher, or the Ingress's path) beside the service's own; the workspace is still there; and
+    the same tree with the setting off is the reference."""
+    with a_partial_govuk_tree(tmp_path, ["/studio/example"]):
+        files = _render(shape, "govuk", **ON)
+        routed = pages_paths(shape, files)
+        assert routed >= {"/studio/example"} | OWN_PATHS, routed
+        assert "/" not in routed and has_a_workspace(shape, files)
+        assert on_findings(shape, "govuk", files) == []
+        assert ref.differences(shape, "govuk", _render(shape, "govuk")) == []
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+def test_with_no_function_page_yet_only_the_services_own_paths_go_to_pages(shape: str) -> None:
+    """The tree as the repository has it today (no route list): `pages`' own paths and nothing else."""
+    assert pages_paths(shape, _render(shape, "govuk", **ON)) == OWN_PATHS
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+def test_the_default_brand_reads_no_govuk_route_list(shape: str, tmp_path: Path) -> None:
+    """The route list is the GOV.UK tree's: the default theme's table is the Studio's and the
+    service's own, whatever that list holds."""
+    with a_partial_govuk_tree(tmp_path, ["/studio/example"]):
+        routed = pages_paths(shape, _render(shape, "ospreyflow", **ON))
+    assert routed == OWN_PATHS | STUDIO_PATHS
+
+
+@pytest.mark.parametrize("shape", SHAPES)
+def test_the_route_check_is_red_when_the_listed_path_stays_with_the_workspace(
+    shape: str, tmp_path: Path
+) -> None:
+    """The fault named: the table as it was written before it read the tree's list (own paths
+    only). The same case, with that table planted, fails naming the path."""
+    from harness import pages_service as service
+
+    def own_only(config: Any) -> list[str]:
+        return list(service.OWN_PATHS) if service.enabled(config) else []
+
+    with a_partial_govuk_tree(tmp_path, ["/studio/example"]):
+        with mock.patch.object(service, "route_paths", own_only):
+            routed = pages_paths(shape, _render(shape, "govuk", **ON))
+    assert "/studio/example" not in routed
