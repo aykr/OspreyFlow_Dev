@@ -37,3 +37,7 @@ The new test; `test_reference_render.py`, `test_render.py`, `test_cloud_platform
 ## Out of scope
 
 The GOV.UK or default pages themselves; the page service's image and the release list (PL7d); the identity switch and the typeface (PL7c); any deployment's own `osprey.yaml`; turning the setting on anywhere; the Makefile, `ci.yml`, any `CLAUDE.md`; `apps/workspace`. **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower** (the two minted secrets are existing behaviour: report any new exposure of them, do not change them).
+
+## The owner's ruling on the issuer (23 November 2026, for round 2 and after)
+
+**The page service's issuer check is not weakened** (`apps/pages/server/config.ts`: an http issuer is accepted only on a loopback host; anything else must be https). The fix is in the render: **either** an address the service accepts, **or** a refusal to turn the page service on where HTTPS is not available, said in a plain message. **If neither works, stop and bring it to the owner: do not choose.** This is a security rule: a finding that would need the check changed is stopped and reported, never accepted narrower. Your tests hold the rendered values to what the service refuses at start-up (scheme, loopback, origin-only forms), planted at the shape the renderer writes (rule 15).
