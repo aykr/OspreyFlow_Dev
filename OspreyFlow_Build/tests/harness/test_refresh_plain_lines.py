@@ -584,7 +584,15 @@ def _rebuild_fails(repo: Path, env: str) -> str:  # noqa: F811
 
 
 @pytest.mark.parametrize(
-    "env", ["OSPREY_POSTGRES_PASSWORD=x\n", "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_HOST=\n"]
+    "env",
+    [
+        "OSPREY_POSTGRES_PASSWORD=x\n",
+        "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_HOST=\n",
+        # As Compose reads the file, these set nothing (the lane review's findings on search_rebuild).
+        "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_HOST= # note\n",
+        'OSPREY_POSTGRES_PASSWORD=x\nexport OPENSEARCH_HOST=""\n',
+        "OSPREY_POSTGRES_PASSWORD=x\n# OPENSEARCH_HOST=opensearch\n",
+    ],
 )
 def test_the_rebuild_with_no_opensearch_address_says_to_run_apply(repo: Path, env: str) -> None:  # noqa: F811
     said = _rebuild_fails(repo, env)
@@ -601,6 +609,10 @@ def test_the_rebuild_with_no_opensearch_address_says_to_run_apply(repo: Path, en
     [
         "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_HOST=opensearch\n",
         "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_URL=https://search.example.org\n",
+        # As Compose reads the file, these set an address.
+        "OSPREY_POSTGRES_PASSWORD=x\nexport OPENSEARCH_HOST=opensearch\n",
+        "OSPREY_POSTGRES_PASSWORD=x\n  OPENSEARCH_HOST=opensearch\n",
+        'OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_URL="https://search.example.org" # mine\n',
     ],
 )
 def test_a_rebuild_that_fails_for_another_reason_keeps_its_message(repo: Path, env: str) -> None:  # noqa: F811
@@ -608,6 +620,106 @@ def test_a_rebuild_that_fails_for_another_reason_keeps_its_message(repo: Path, e
     assert "ospreyflow start --build" in said, said
     assert "ospreyflow apply" not in said, said
     assert "exact identifiers" in said
+
+
+# ---- the file as Compose reads it ----------------------------------------------------------------
+# Refresh decides what a deployment.env holds as Compose does (`harness.preflight.ports.
+# read_env_file`): an `export ` prefix and leading space are dropped, a quoted value is taken whole,
+# an unquoted value's ` #` comment is left off. A line Compose reads as setting a key is a line
+# that is there; the render's line is not added beside it, and its value is never replaced.
+
+_FORMS = {
+    "export": "export {key}={value}\n",
+    "export-spaced": "export   {key}={value}\n",
+    "indented": "  {key}={value}\n",
+    "tabbed": "\t{key}={value}\n",
+}
+
+
+def _in_form(text: str, key: str, form: str, value: str | None = None) -> str:
+    """`text` with the line that sets `key` written in `form`, keeping the render's value unless
+    `value` is given."""
+    was = _line(text, key)
+    wanted = _FORMS[form].format(key=key, value=value if value is not None else _value(was))
+    return text.replace(was, wanted)
+
+
+def _value(line: str) -> str:
+    return line.partition("=")[2].rstrip("\n")
+
+
+_THE_RENDERS = [key for key in DEFAULT_KEYS if key not in refresh._MODEL_LINES]
+
+
+@pytest.mark.parametrize("form", _FORMS)
+def test_a_line_compose_reads_as_set_is_not_added_again_nor_changed_and_is_named_if_it_differs(
+    tmp_path: Path, form: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made = _make(tmp_path)
+    key = "OSPREY_HIGHEST_MARKING"
+    held = _in_form(made.full, key, form, "OFFICIAL-edited-77")
+    made.env.write_text(held, encoding="utf-8")
+    refresh.files_up_to_date(made.repo)
+    assert made.after() == held, "the operator's line was added beside, moved or changed"
+    said = capsys.readouterr().out
+    assert key in said and "ospreyflow apply" in said
+    assert "OFFICIAL-edited-77" not in said, "a value was said aloud"
+
+
+@pytest.mark.parametrize("key", _THE_RENDERS)
+def test_an_export_line_with_the_renders_value_is_left_alone_and_not_named(
+    tmp_path: Path, key: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made = _make(tmp_path)
+    held = _in_form(made.full, key, "export")
+    made.env.write_text(held, encoding="utf-8")
+    refresh.files_up_to_date(made.repo)
+    assert made.after() == held
+    assert key not in capsys.readouterr().out
+
+
+def test_a_file_written_wholly_with_export_is_not_added_to_nor_changed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made = _make(tmp_path)
+    held = "".join(
+        f"export {line}"
+        if (key := refresh._the_key(line)) is not None and key not in refresh._MODEL_LINES
+        else line
+        for line in made.full.splitlines(keepends=True)
+    )
+    made.env.write_text(held, encoding="utf-8")
+    refresh.files_up_to_date(made.repo)
+    assert made.after() == held
+    assert "refresh: these settings" not in capsys.readouterr().out
+
+
+def test_a_value_compose_reads_the_same_is_not_named_as_differing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made = _make(tmp_path)
+    key = "OSPREY_HIGHEST_MARKING"
+    was = _line(made.full, key)
+    quoted = f'{key}="{_value(was)}" # a note of mine\n'
+    held = made.full.replace(was, quoted)
+    made.env.write_text(held, encoding="utf-8")
+    refresh.files_up_to_date(made.repo)
+    assert made.after() == held
+    assert key not in capsys.readouterr().out
+
+
+def test_the_last_line_compose_reads_for_a_key_decides_whether_it_differs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    made = _make(tmp_path)
+    key = "OSPREY_HIGHEST_MARKING"
+    held = made.full + f"export {key}=OFFICIAL-later-77\n"
+    made.env.write_text(held, encoding="utf-8")
+    refresh.files_up_to_date(made.repo)
+    assert made.after() == held
+    said = capsys.readouterr().out
+    assert key in said and "OFFICIAL-later-77" not in said
+
 
 
 # ---- the boundary, fail closed -------------------------------------------------------------------
