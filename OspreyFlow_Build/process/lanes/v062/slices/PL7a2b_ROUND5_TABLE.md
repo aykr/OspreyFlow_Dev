@@ -22,7 +22,13 @@
 2. Re-run your own checks and the scan-map check by hand (`unmapped` and `stale`).
 3. **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower.**
 
-## ROUND 9, THE LAST (the owner's `add-round` and rulings, 23 November, about 14:00 UTC): READ THIS FIRST
+## ROUND 10, THE VERY LAST, ONE THING ONLY (the owner's `add-round`, 23 November, about 15:30 UTC): READ THIS FIRST
+
+**Round 9's verifier found one fault (`pages_service.py`, the identity listener).** The listener round 5 added for the identity alias can land on a port the proxy already serves as plain HTTP inside its container (the clean case: a Small with its own certificate and a `ca` whose `public_origin` is `https://<host>:8080`; `identity_listener_port` only checks the port against the proxy's own HTTPS port, never against `PROXY_HTTP_PORT` or the loopback doors). Caddy then refuses the Caddyfile and the front proxy does not start. **Round 10 does this one thing and nothing else:**
+
+**With `pages.enabled` on, the render refuses, in plain words, where the identity listener's port clashes with one the proxy already serves** (its plain-HTTP port, its own HTTPS port where the clash is real, and the loopback doors it publishes), **naming `pages.enabled` and the port.** A red-first case at origin port 8080 with the own certificate, and one for each other port the proxy serves. **Do not touch anything else:** no new checks, no restructuring, no other address form. **If your round finds that a second clash or any other case exists, do not fix it: list it in your report and stop.** The verifier's finding of any case other than this one **holds PL7a2b until PL7f** (the owner's rule).
+
+## ROUND 9 (the owner's `add-round` and rulings, 23 November, about 14:00 UTC)
 
 **Cases A, B, C and D above are closed (C by the refusal, the owner's option A). The one open case after round 8 is case 17: a Small whose `public_origin` carries an explicit default port (for example `https://osprey.example.org:443`) gets an `OSPREY_PAGES_PUBLIC_ORIGIN` the page service refuses at start-up (`apps/pages/server/config.ts`, `publicOrigin()`: `raw !== new URL(raw).origin`; the WHATWG origin drops a default port); the render passes `names.glass` through unchanged and the test's stand-in accepted it.** Fix it in the render: write the origin without a default port, or refuse in plain words. **Three instructions from the owner:**
 
