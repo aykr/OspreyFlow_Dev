@@ -68,10 +68,11 @@ class PageServiceNeedsTrust(ValueError):
 
 
 class PageServiceNeedsCa(ValueError):
-    """The page service is on, and the identity name is one no public authority signs for, served
-    with the organisation's own certificate (`network.tls`) that names no CA: the certificate comes
-    from a private root, which node trusts only where `NODE_EXTRA_CA_CERTS` names it (round 7 of
-    PL7a2b: the service's certificate check is not weakened or switched off)."""
+    """The page service is on, and the identity name is served with the organisation's own
+    certificate (`network.tls`) that names no CA: the certificate may come from a private root,
+    which node trusts only where `NODE_EXTRA_CA_CERTS` names it, and the render cannot tell by the
+    name (rounds 7 and 8 of PL7a2b: the service's certificate check is not weakened or switched
+    off)."""
 
 
 class PageServiceNotOnThisShape(ValueError):
@@ -193,10 +194,10 @@ NEEDS_TRUST = (
 
 #: The words of the fourth refusal, with the identity address in them.
 NEEDS_CA = (
-    "pages.enabled is on, but the identity address {identity} is on a name no public authority "
-    "signs for, and the deployment's own certificate (network.tls) names no CA, so the page "
-    "service has no way to trust it and people could not sign in: give network.tls a ca (the "
-    "organisation's root certificate), or leave pages.enabled off"
+    "pages.enabled is on, but the identity address {identity} is served with the deployment's own "
+    "certificate (network.tls), which names no CA, so the page service cannot tell which root to "
+    "trust for it and people could not sign in: give network.tls a ca (the root certificate that "
+    "signed it; a public authority's root will do), or leave pages.enabled off"
 )
 
 #: The names Caddy signs itself, with its own internal authority, rather than ask a public one
@@ -259,23 +260,22 @@ def refuse_sign_in_without_trust(config: OspreyConfig) -> None:
 
 
 def refuse_sign_in_without_ca(config: OspreyConfig) -> None:
-    """The organisation's own certificate (`network.tls`) on a name no public authority signs for
-    (`caddy_signs_itself`: `.internal`, `.local`, `.home.arpa`, `.localhost`, an IP address) comes
-    from a private root. Node trusts one only where `NODE_EXTRA_CA_CERTS` names it, which
-    `service_environment` does from `network.tls.ca`; with no `ca` the service has no trust for it
-    and the sign-in would fail at sign-in time, so the render refuses, in words. A public name is
-    signed by an authority node already trusts, and is not asked. The service's check is not
-    touched."""
+    """The organisation's own certificate (`network.tls`) with no `ca` is refused, on any name. It
+    may come from a private root, which node trusts only where `NODE_EXTRA_CA_CERTS` names it
+    (`service_environment` does that from `network.tls.ca`); the render cannot tell a private root
+    from a public one by the name (a private authority's name outside the suffixes Caddy keeps for
+    itself, `osprey.intra.example.gov.uk`, looks like any public one) and does not read the
+    certificate, so with no `ca` the sign-in could fail at sign-in time and the render refuses, in
+    words. A certificate signed by a public authority is no worse off: its root is harmless to give.
+    Nothing is trusted that was not named, and the service's check is not touched. (The host tools
+    also trust the deployment's own certificate file, ADR-114 Amendment 33, through OpenSSL's
+    partial-chain flag; whether node does the same for a bare leaf certificate was not measured, so
+    that fallback is not offered to the service.)"""
     from harness.site import sites
 
     names = sites(config)
     tls = config.network.tls
-    if (
-        names.scheme == "https"
-        and tls is not None
-        and not tls.ca
-        and caddy_signs_itself(names.host)
-    ):
+    if names.scheme == "https" and tls is not None and not tls.ca:
         raise PageServiceNeedsCa(NEEDS_CA.format(identity=names.identity))
 
 

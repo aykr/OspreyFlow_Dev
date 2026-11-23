@@ -978,7 +978,13 @@ def test_a_small_on_a_name_the_proxy_signs_itself_is_refused_without_a_certifica
         ("https://osprey.example.org", {"ca": "/etc/ospreyflow/tls/org-root.pem"}),
         ("https://osprey.intra.example.gov.uk", {"ca": "/etc/ospreyflow/tls/org-root.pem"}),
     ],
-    ids=["public", "public-port", "own-with-ca", "public-name-own-with-ca", "private-name-own-with-ca"],
+    ids=[
+        "public",
+        "public-port",
+        "own-with-ca",
+        "public-name-own-with-ca",
+        "private-name-own-with-ca",
+    ],
 )
 def test_a_name_with_a_certificate_the_service_trusts_is_rendered(
     origin: str, own: dict[str, str] | None, brand: str
@@ -1915,7 +1921,9 @@ def test_with_the_shared_key_every_route_to_the_page_service_is_behind_it(brand:
     caddyfile = files["Caddyfile"].decode("utf-8")
     assert "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {" in caddyfile
     assert "reverse_proxy pages:8090" in caddyfile, "the page service is not routed at all"
-    assert pages_service("small", files)["env"]["OSPREY_PAGES_OIDC_ISSUER"].endswith("/realms/osprey")
+    assert pages_service("small", files)["env"]["OSPREY_PAGES_OIDC_ISSUER"].endswith(
+        "/realms/osprey"
+    )
 
 
 def test_with_the_shared_key_a_complete_govuk_tree_is_served_from_inside_the_key(
