@@ -219,7 +219,8 @@ def on_findings(shape: str, brand: str, files: dict[str, bytes], config: Any = N
             found.append("pages reads the whole env file (it needs two secrets, not all of them)")
     wanted = set(OWN_PATHS) | (STUDIO_PATHS if brand == "ospreyflow" else set())
     routed = pages_paths(shape, files)
-    found += [f"no route {path} to pages" for path in sorted(wanted - routed)]
+    # Every path goes to `pages` once a GOV.UK tree is complete (`/`), which covers the rest.
+    found += [f"no route {path} to pages" for path in sorted(wanted - routed) if "/" not in routed]
     if shape in HELM and _values(files).get("pages") != {"enabled": True}:
         found.append("no chart value pages.enabled: true")
     return found
@@ -567,6 +568,10 @@ def test_on_changes_only_the_files_that_name_the_service(shape: str, brand: str)
     allowed = {
         "compose.yaml", "Caddyfile", "versions.lock", "RUNBOOK.md",
         "values.yaml", "images.yaml",
+        # The cloud platform's Terraform: the registry for the image, and the session secret.
+        "terraform/ecr.tf", "terraform/secrets.tf",
+        # The proof of concept's runbooks list the workloads they install.
+        "INSTALL.md", "DECOMMISSION.md",
     }  # fmt: skip
     assert moved <= allowed, f"on moved {sorted(moved - allowed)}"
     assert moved & {"compose.yaml", "values.yaml"}, "on moved neither the compose file nor values"
@@ -575,13 +580,15 @@ def test_on_changes_only_the_files_that_name_the_service(shape: str, brand: str)
 
 
 @pytest.mark.parametrize("shape", HELM)
-def test_on_writes_the_chart_value_and_the_chart_default_is_off(shape: str) -> None:
-    """The chart's own defaults hold `pages.enabled: false` (the one guard form the reference's
-    view reads), so a chart installed with nothing renders no page service, and the renderer's
-    values turn it on."""
+def test_on_writes_the_chart_value_and_the_chart_carries_none_by_default(shape: str) -> None:
+    """The chart's own defaults say nothing of the page service (a chart installed from them
+    renders none, and the reference's view of them is what it was: a `pages:` section added to the
+    defaults would be a second one beside the reference's own plant, `test_reference_render.py`'s
+    `values off`), and the renderer's values hold `pages.enabled: true` with the setting on."""
     default = yaml.safe_load((ref.CHART / "values.yaml").read_text(encoding="utf-8"))
-    assert default["pages"] == {"enabled": False}
+    assert "pages" not in default
     assert _values(_render(shape, "ospreyflow", **ON))["pages"] == {"enabled": True}
+    assert "pages" not in _values(_render(shape, "ospreyflow"))
 
 
 # ---- 4. a fault in each, in the shape the renderer writes, red while off and red while on --------

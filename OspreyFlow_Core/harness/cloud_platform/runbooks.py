@@ -271,7 +271,11 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     if "searchIndex" in values:
         rollouts += "\n" + _SEARCH_REBUILD.rstrip("\n")
     hosts = [r["host"] for r in values["ingress"]["rules"]]
-    glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
+    # The Glass's own host: the workspace's rule, or `pages`' once a complete GOV.UK tree has
+    # removed the workspace (ADR-152 Amendment 3, I22).
+    glass = next(
+        r["host"] for r in values["ingress"]["rules"] if r["service"] in ("workspace", "pages")
+    )
     host = cp.registry.split("/")[0]
     claims = cp.claims
     assert claims is not None  # the render refuses this profile without them

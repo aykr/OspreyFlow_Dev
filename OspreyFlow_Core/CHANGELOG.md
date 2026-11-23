@@ -13,8 +13,11 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 **Settings (ADR-152 Amendment 3).**
 - **`pages.enabled` exists in `osprey.yaml`, and is off.** It says whether a deployment runs the page service, the
-  server-rendered pages. It is `false` unless the owner sets it to `true` in that deployment's own file, and nothing reads
-  it yet: no deployment's rendered files change.
+  server-rendered pages. It is `false` unless the owner sets it to `true` in that deployment's own file, and nothing else
+  turns it on (not a profile, a brand or a release). The renderers now read it: while it is off, or not written, every
+  deployment's rendered files are exactly what they were, in every shape and under each brand, and a value that is not
+  `true` or `false` is refused in words. Turned on, they add the page service, its routes and its settings. A GOV.UK
+  deployment whose tree is complete and where it is off is refused in words (no tree is complete yet).
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any

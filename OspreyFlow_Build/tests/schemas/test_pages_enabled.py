@@ -4,8 +4,8 @@ setting, off by default.
 `pages.enabled` in `osprey.yaml` is a boolean whose default is `false`; a value that is not `true`
 or `false` is refused in words by the same settings validation that refuses an unknown
 `appearance.brand`; a file that omits it validates and is off; an unknown sibling still fails as it
-does for every other section. Slice IS5a adds the entry and reads nothing from it: the renderers
-that will (PL7a2b) and the release switch (PL7d) are theirs.
+does for every other section. Slice IS5a added the entry; the renderers read it since PL7a2b
+(`tests/harness/test_pages_setting.py`); the release switch is PL7d's.
 
 Which test fails if the invariant is broken (rule 12):
 
@@ -18,10 +18,10 @@ Which test fails if the invariant is broken (rule 12):
   call sites use -> `test_the_plain_loader_reads_yes_as_true_and_the_validator_cannot_tell`
   (the fault, on record), `test_the_deployment_loader_refuses_yes_and_on_in_words` (the fix, on
   the YAML text, the shape `harness/render.py` loads), and
-  `test_render_load_config_refuses_yes` (strict xfail until the renderer's own loader is the
-  deployment loader: that file is the owner's)
+  `test_render_load_config_refuses_yes` (the renderer's own loader is the deployment loader
+  since slice PL7a2b)
 * an unknown sibling taken in -> `test_an_unknown_sibling_still_fails`
-* the setting read by anything yet -> `test_nothing_reads_the_setting_yet`
+* the setting read in more than one place -> `test_one_module_reads_the_setting`
 * a render that gains a `pages` block while the file omits the setting (Amendment 3 point 2: off
   or absent means byte for byte unchanged)
   -> `test_an_absent_setting_is_not_in_the_dump_the_renderers_write` and
@@ -139,14 +139,6 @@ def test_the_deployment_loader_reads_the_rest_of_a_file_as_the_plain_one_does() 
         assert load_osprey_yaml(text) == (yaml.safe_load(text) or {}), text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "harness/render.py is the owner's file and still calls yaml.safe_load: wiring "
-        "schemas.deployment.load_osprey_yaml in is the diff the slice's report hands over. "
-        "When it lands this passes, the strict xfail fails, and this marker comes off."
-    ),
-)
 def test_render_load_config_refuses_yes(tmp_path: Path) -> None:
     from harness.render import load_config
 
@@ -171,10 +163,12 @@ def test_an_unknown_sibling_still_fails(raw: dict[str, Any]) -> None:
         OspreyConfig.model_validate(raw)
 
 
-def test_nothing_reads_the_setting_yet() -> None:
-    """The renderers are PL7a2's: until they read it, no file in `harness/` names the setting,
-    so a render cannot differ."""
+def test_one_module_reads_the_setting() -> None:
+    """The renderers read `pages.enabled` through `harness/pages_service.py` (slice PL7a2b) and
+    nowhere else, so what "on" adds is one decision, not several that could disagree."""
     for path in sorted((CORE / "harness").glob("*.py")):
+        if path.name == "pages_service.py":
+            continue
         text = path.read_text(encoding="utf-8")
         assert ".pages.enabled" not in text and "config.pages" not in text, path.name
 

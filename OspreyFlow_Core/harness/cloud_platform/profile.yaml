@@ -23,6 +23,8 @@ group_zero: []
 # ours the render meets with no row here is refused in words.
 ours:
   workspace: {dockerfile: apps/workspace/Dockerfile, context: .}
+  # ADR-152 Amendment 3: the page service, rendered only with `pages.enabled` on.
+  pages: {dockerfile: apps/pages/Dockerfile, context: .}
   api: {dockerfile: services/api/Dockerfile, context: ., build_args: {CONDUIT_JAVA: omitted}}
   ner: {dockerfile: services/ner/Dockerfile, context: .}
   worker: {dockerfile: services/worker/Dockerfile, context: .}
@@ -82,7 +84,8 @@ egress:
   # The managed stores' networks (RDS, ElastiCache): the pods that read a store's details.
   # The search index's rebuild and drift check reach the OpenSearch domain on these networks (3a).
   # The POC seed path's Job (ADR-148 Amendment 14) writes the case store.
-  managed: [api, worker, report-sync, superset, litellm, search-rebuild, search-drift, seed]
+  # The page service (ADR-152 Amendment 3, rendered only when on) keeps its sessions in the cache.
+  managed: [api, worker, report-sync, superset, litellm, search-rebuild, search-drift, seed, pages]
   # Their ports: RDS's PostgreSQL and ElastiCache's (the Terraform's own); the OpenSearch domain's
   # 443 is added when the deployment searches with it.
   managed_ports: [5432, 6379]
@@ -91,6 +94,8 @@ egress:
   # recogniser and the dashboards; a store its own replicas). A workload not rendered is left out.
   paths:
     workspace: [api]
+    # The page service forwards a person's `/v1` calls and live updates to the Conduit (PL10).
+    pages: [api]
     api: [arcadedb, clickhouse, litellm, ner, superset, laurium]
     worker: [arcadedb, clickhouse, ner]
     report-sync: [api]
@@ -126,6 +131,7 @@ egress:
 resources:
   default: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}  # init containers, and any not named
   workspace: {cpu: 100m, memory: 128Mi, memory_limit: 256Mi}
+  pages: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
   api: {cpu: 500m, memory: 2Gi, memory_limit: 4Gi}
   worker: {cpu: 500m, memory: 2Gi, memory_limit: 4Gi}
   report-sync: {cpu: 100m, memory: 256Mi, memory_limit: 512Mi}
