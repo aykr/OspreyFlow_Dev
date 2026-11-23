@@ -52,7 +52,7 @@ from schemas.domain import (
 )
 from schemas.explore import TypeCounts
 
-from .alert_queue import monitoring_queue
+from .alert_queue import monitoring_queue_and_left_out
 from .alerts import AlertStore
 from .explore import ExploreService
 from .held_rows import HeldRowStore
@@ -240,12 +240,32 @@ async def alert_report(
     query's answer, what they name one batched read as the reader (`monitoring_queue`) — from which
     the typology figures (ADR-111) and the monitoring figures (ADR-134 decision 2) are both
     counted, so they cannot disagree about which alerts the reader may see."""
+    figures, _ = await alert_report_and_left_out(
+        alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
+    )
+    return figures
+
+
+async def alert_report_and_left_out(
+    alerts: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    reader: Principal,
+    *,
+    today: date,
+    period_weeks: int = 12,
+) -> tuple[ReportFigures, bool]:
+    """`alert_report`, and whether the queue left any alert out whole because the reader cannot read
+    what it cites: a yes or no, from the queue's own decision (SE8b)."""
     now = datetime.now(UTC)
     start = today - timedelta(weeks=period_weeks)
-    every_kind = await monitoring_queue(alerts, graph, analytics, investigation_id, reader)
+    every_kind, left_out = await monitoring_queue_and_left_out(
+        alerts, graph, analytics, investigation_id, reader
+    )
     typology = [q.alert for q in every_kind if q.kind == "typology"]
     by_week, by_age, outcomes, total = _alert_figures(typology, start=start, now=now)
-    return ReportFigures(
+    figures = ReportFigures(
         period_weeks=period_weeks,
         as_of=today,
         generated_at=now,
@@ -255,6 +275,7 @@ async def alert_report(
         outcomes=outcomes,
         monitoring=_monitoring_figures(every_kind, start=start, now=now, reader_id=reader.id),
     )
+    return figures, left_out
 
 
 async def _customers(graph: GraphPort, reader: Principal) -> list[str]:
@@ -362,11 +383,51 @@ async def case_report(
     period_weeks: int = 12,
     show_held: bool = False,
 ) -> ReportFigures:
-    figures = await alert_report(
+    figures, _ = await case_report_and_withheld(
+        alerts=alerts, graph=graph, analytics=analytics, held=held, compute=compute,
+        explore=explore, ontology=ontology, domains=domains, investigation_id=investigation_id,
+        reader=reader, today=today, period_weeks=period_weeks, show_held=show_held,
+    )  # fmt: skip
+    return figures
+
+
+async def case_report_and_withheld(
+    *,
+    alerts: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    held: HeldRowStore,
+    compute: ComputePort,
+    explore: ExploreService,
+    ontology: OntologySchema,
+    domains: Sequence[str],
+    investigation_id: str,
+    reader: Principal,
+    today: date,
+    period_weeks: int = 12,
+    show_held: bool = False,
+) -> tuple[ReportFigures, bool]:
+    """`case_report`, and whether the reader's figures were lowered by what they may not see (the
+    flag a report's ledger row carries as `withheld`, SE8b): a yes or no, never a count, and read
+    from each figure's own computation, not from a stand-in. It is true when
+
+    - the alert queue left out an alert whole because the reader cannot read what it cites
+      (`monitoring_queue_and_left_out`), which lowers every alert and monitoring figure; or
+    - held rows are shown (`show_held`) and the case holds a row of any status the reader's marking
+      or reach leaves out (`HeldRowStore.left_out_for`, the same clauses as the count).
+
+    **What it cannot say.** The KYC and POLE figures are counted over the whole graph as the reader
+    (`explore.counts`, `list_nodes`), and `GraphPort` gives no answer to what a reader's count left
+    out (that would be a count of what is hidden: rule 7). They add nothing to the flag, so for a
+    case that sends them it is a floor, not a ceiling (SE8b's report names this for the owner)."""
+    figures, left_out = await alert_report_and_left_out(
         alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
     )
     held_figures = None
     if show_held:
+        for status in ("held", "released", "rejected"):
+            if await held.left_out_for(investigation_id, reader, status=status):
+                left_out = True
         held_figures = HeldFigures(
             held=len(await held.list_authorized(investigation_id, reader, status="held")),
             released=len(await held.list_authorized(investigation_id, reader, status="released")),
@@ -388,7 +449,7 @@ async def case_report(
                 "the explore counts carry no computed_at, so the card cannot say when"
             )
         pole = pole_figures(counts, ontology, counted_at=counts.computed_at)
-    return figures.model_copy(update={"held": held_figures, "kyc": kyc, "pole": pole})
+    return figures.model_copy(update={"held": held_figures, "kyc": kyc, "pole": pole}), left_out
 
 
 def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
@@ -447,7 +508,9 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
 __all__ = [
     "ReportLimitExceededError",
     "alert_report",
+    "alert_report_and_left_out",
     "case_report",
+    "case_report_and_withheld",
     "feed_rows",
     "pole_figures",
 ]

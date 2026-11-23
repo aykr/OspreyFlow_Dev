@@ -223,6 +223,26 @@ async def test_held_figures_are_for_editors_only(stores: dict[str, object]) -> N
     assert editor.held is not None and (editor.held.held, editor.held.released) == (1, 0), "SECRET row not counted"
 
 
+async def test_the_held_flag_follows_what_the_reader_may_not_read(
+    stores: dict[str, object],
+) -> None:
+    """SE8b, live (owed: the line's live step is off for builders): the report's ledger flag for its
+    held figures is the real query's answer. A SECRET row in the case is left out of an OFFICIAL
+    editor's count, and `left_out_for` says so; where every row is readable, it says none."""
+    mixed, plain = f"case-{new_id()}", f"case-{new_id()}"
+    for case, classifications in ((mixed, ("OFFICIAL", "SECRET")), (plain, ("OFFICIAL",))):
+        for classification in classifications:
+            await stores["held"].hold([HeldRow(  # type: ignore[attr-defined]
+                id=new_id(), investigation_id=case, recipe_id="r", recipe_version=1, load_id="l", source="s",
+                row_index=0, row={"a": "1"}, rule_id="rule", reason="test", handling=_handling(classification),
+                held_at=datetime.now(UTC), dataset_id=DATASET)])  # fmt: skip
+    reader = Principal(id="editor", clearance="OFFICIAL", org_unit="unit-1", datasets=[DATASET])
+    held = stores["held"]
+    assert await held.left_out_for(mixed, reader, status="held") is True  # type: ignore[attr-defined]
+    assert await held.left_out_for(plain, reader, status="held") is False  # type: ignore[attr-defined]
+    assert await held.left_out_for(mixed, reader, status="released") is False  # type: ignore[attr-defined]
+
+
 async def test_the_kyc_book_is_assessed_as_the_reader(stores: dict[str, object]) -> None:
     case = f"case-{new_id()}"
     async with arcadedb_adapter(ONTOLOGY, SCHEME) as graph:

@@ -144,11 +144,11 @@ async def test_the_report_counts_mine_as_the_reader_it_is_read_as(monkeypatch: o
 
     from schemas.domain import Principal
 
-    async def queue(*_args: object, **_kwargs: object) -> list[QueuedAlert]:
-        return ROWS
+    async def queue(*_args: object, **_kwargs: object) -> tuple[list[QueuedAlert], bool]:
+        return ROWS, False
 
     patch = pytest.MonkeyPatch()
-    patch.setattr(reports, "monitoring_queue", queue)
+    patch.setattr(reports, "monitoring_queue_and_left_out", queue)
     try:
         me = Principal(id="me", clearance="OFFICIAL", org_unit="unit-a")
         other = Principal(id="other", clearance="OFFICIAL", org_unit="unit-a")

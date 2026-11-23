@@ -726,11 +726,17 @@ def _scheme() -> Any:
     return load_uk_le_scheme()
 
 
-async def _the_figures(*args: Any, **kwargs: Any) -> Any:
-    from schemas.domain import ReportFigures
+def _the_figures(lowered: bool = False) -> Any:
+    """`_case_report`'s answer: the figures, and whether they were lowered by what the reader may
+    not see (the figures' own computation says: `reports.case_report_and_withheld`)."""
 
-    return ReportFigures(period_weeks=12, as_of=date(2026, 11, 21), generated_at=NOW,
-                         alerts_total=3)  # fmt: skip
+    async def figures(*args: Any, **kwargs: Any) -> Any:
+        from schemas.domain import ReportFigures
+
+        return ReportFigures(period_weeks=12, as_of=date(2026, 11, 21), generated_at=NOW,
+                             alerts_total=3), lowered  # fmt: skip
+
+    return figures
 
 
 async def _released(**kwargs: Any) -> Any:
@@ -770,7 +776,7 @@ class Case:
 
 def _cases() -> dict[str, Case]:
     base = {"get_handling_scheme": _scheme()}
-    figures = {"_case_report": _the_figures}
+    figures = {"_case_report": _the_figures()}
     config = SimpleNamespace(export_manifest_policy="disclose")
     return {
         "submit_export_route": Case(
@@ -863,6 +869,7 @@ def _call(
     down: bool = False,
     who: Principal = ANALYST,
     params: dict[str, Any] | None = None,
+    lowered: bool = False,
 ) -> Run:
     from fastapi.routing import APIRoute
     from services.api import app as app_module
@@ -892,7 +899,9 @@ def _call(
                     stores.get(call.__name__, object())
                 )  # fmt: skip
         for attr, value in case.patches.items():
-            monkeypatch.setattr(app_module, attr, value)
+            monkeypatch.setattr(
+                app_module, attr, _the_figures(lowered) if attr == "_case_report" else value
+            )
         client = TestClient(app, raise_server_exceptions=False)
         response = client.request(
             case.method, case.path, params=params or case.params, json=case.body,
@@ -951,18 +960,22 @@ def test_a_ledger_that_cannot_be_written_fails_the_export_closed(
 
 
 @pytest.mark.parametrize("route", ["read_report_feed", "read_case_report"])
-@pytest.mark.parametrize("withheld", [True, False])
-def test_the_figures_row_carries_the_real_withheld_flag(
-    route: str, withheld: bool, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("lowered", [True, False])
+@pytest.mark.parametrize("working_set_holds_more", [True, False])
+def test_the_figures_row_says_what_the_figures_computation_says(
+    route: str, lowered: bool, working_set_holds_more: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The feed's figures are counted as their reader (rule 3: an alert the reader cannot see whole
-    is in no total), so a reader below the case's markings gets figures lowered by what they may
-    not see: the flag is the case's own standing sentence (`withheld_for`), never a constant. Red
-    with the old constant: `withheld=False` for a reader who is told something is held back."""
-    run = _call(route, monkeypatch, withheld=withheld)
+    """The row's flag is whether the reader's figures were lowered by what they may not see, as the
+    figures' own computation answers (`_case_report`'s second value), and nothing else. The case's
+    working-set sentence is made to say the opposite in every case here: a route that asked it (the
+    first version did, `withheld_for`, a question about the case's stored set, of which no figure
+    is counted) is red in two of the four combinations, and so is the old constant `False` (red
+    where the figures were lowered). The computation itself, against fakes that drop what a reader
+    may not read, is `test_report_figures_withheld.py`."""
+    run = _call(route, monkeypatch, withheld=working_set_holds_more, lowered=lowered)
     assert run.response.status_code == 200
     (row,) = run.rows
-    assert row["withheld"] is withheld
+    assert row["withheld"] is lowered
 
 
 def test_the_feed_in_json_writes_one_row_too(monkeypatch: pytest.MonkeyPatch) -> None:

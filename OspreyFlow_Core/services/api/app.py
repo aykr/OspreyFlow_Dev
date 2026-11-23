@@ -14814,9 +14814,11 @@ async def _case_report(
     ontology: OntologySchema,
     period_weeks: int,
     analytics: AnalyticsPort,
-) -> ReportFigures:
+) -> tuple[ReportFigures, bool]:
+    """The case's figures as `principal` may see them, and whether they were lowered by what the
+    principal may not see (`reports.case_report_and_withheld`): what the ledger row says."""
     level = await investigations.effective_level(investigation.id, principal)
-    return await reports_module.case_report(
+    return await reports_module.case_report_and_withheld(
         alerts=alerts_store,
         graph=graph,
         analytics=analytics,
@@ -14839,16 +14841,18 @@ async def _record_figures_export(
     kind: Literal["report_feed", "case_report"],
     investigation: Investigation,
     principal: Principal,
-    working_set: WorkingSetService,
+    withheld: bool,
     rows: int,
 ) -> None:
     """The ledger row of the figures leaving the Glass (SE8b): who, which case, when, how many rows,
     and whether the reader's figures were lowered by what they may not see. The figures are
     counted as their reader (rule 3: an alert the reader cannot see whole is in no total), so the
-    flag is the case's own standing sentence for this reader, `withheld_for`, the one every other
-    export carries, and never a constant (the feed wrote `False` for every read before this). A
-    yes or no, never a count. The row is written before the figures are returned; a ledger that
-    cannot be written raises `AuditWriteError` (503) and the figures are not sent."""
+    flag is the figures' own (`_case_report`'s second answer, from the computation that lowered
+    them), never a constant (the feed wrote `False` for every read before this) and never the
+    case's working-set sentence, which asks a different question (what the case's stored set
+    holds), of a set no figure is counted from. A yes or no, never a count. The row is written
+    before the figures are returned; a ledger that cannot be written raises `AuditWriteError`
+    (503) and the figures are not sent."""
     await ledger.record(
         ExportLedgerEntry(
             id=new_id(),
@@ -14858,7 +14862,7 @@ async def _record_figures_export(
             handling_level=principal.clearance,
             exported_at=datetime.now(UTC),
             item_count=rows,
-            withheld=await working_set.withheld_for(investigation.id, principal),
+            withheld=withheld,
             manifest_policy="omit",
             subject_kind="report",
             subject_id=investigation.id,
@@ -14882,7 +14886,6 @@ async def read_case_report(
     ontology: OntologyDep,
     audit: AuditDep,
     export_ledger: ExportLedgerDep,
-    working_set: WorkingSetDep,
     analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
 ) -> ReportFigures:
@@ -14890,14 +14893,14 @@ async def read_case_report(
     held rows only for Editors and above; past its bound, `limit_exceeded` (rule 2). The figures
     are handed to the Glass, which prints and saves them, so the read is in the export ledger as
     the feed's is (the owner's ruling of 21 November 2026)."""
-    figures = await _case_report(
+    figures, withheld = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
         ontology=ontology, period_weeks=weeks, analytics=analytics,
     )  # fmt: skip
     await _record_figures_export(
         export_ledger, kind="case_report", investigation=investigation, principal=principal,
-        working_set=working_set, rows=len(reports_module.feed_rows(figures)),
+        withheld=withheld, rows=len(reports_module.feed_rows(figures)),
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -14926,7 +14929,6 @@ async def read_report_feed(
     ontology: OntologyDep,
     audit: AuditDep,
     export_ledger: ExportLedgerDep,
-    working_set: WorkingSetDep,
     analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
     feed_format: Annotated[Literal["json", "csv"], Query(alias="format")] = "json",
@@ -14934,7 +14936,7 @@ async def read_report_feed(
     """The reporting feed a dashboard pulls (ADR-111 decisions 6 to 8): the same figures as the
     Reports view, as JSON or CSV — figures only. Every read is audited and written to the export
     ledger as metadata (who, which case, when), since the figures leave the Glass."""
-    figures = await _case_report(
+    figures, withheld = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
         ontology=ontology, period_weeks=weeks, analytics=analytics,
@@ -14942,7 +14944,7 @@ async def read_report_feed(
     rows = reports_module.feed_rows(figures)
     await _record_figures_export(
         export_ledger, kind="report_feed", investigation=investigation, principal=principal,
-        working_set=working_set, rows=len(rows),
+        withheld=withheld, rows=len(rows),
     )  # fmt: skip
     await audit.record(
         principal=principal,
