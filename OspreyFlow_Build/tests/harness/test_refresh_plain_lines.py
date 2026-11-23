@@ -473,13 +473,71 @@ def test_a_new_plain_render_line_is_added_after_the_line_it_follows_in_the_rende
     assert _without(made.after(), "OSPREY_PLANTED_THING") == made.before
 
 
-def test_a_new_plain_render_line_with_nothing_before_it_in_the_deployment_is_still_added(
+def test_a_new_plain_render_line_at_the_end_of_the_render_is_added_after_the_line_before_it(
     tmp_path: Path,
 ) -> None:
+    """The line before it in the render is in the deployment: the first branch of `_put_line`.
+    (The branches that hold nothing before it are the two tests below.)"""
     made = _make(tmp_path)
     with _planted("OSPREY_PLANTED_THING=x"):  # at the end of the render
         refresh.files_up_to_date(made.repo)
     assert "OSPREY_PLANTED_THING=x\n" in made.after().splitlines(keepends=True)
+    assert _without(made.after(), "OSPREY_PLANTED_THING") == made.before
+
+
+@pytest.mark.parametrize(
+    "ends_in_newline", [True, False], ids=["newline-ended", "no-final-newline"]
+)
+def test_a_line_added_to_a_deployment_that_holds_no_render_line_goes_at_the_end_and_joins_nothing(
+    tmp_path: Path, ends_in_newline: bool
+) -> None:
+    """The last branch of `_put_line`: no line the render has, before or after, is in the file, so
+    the line goes at the end. Where the file ends without a newline (an operator's last line), the
+    guard ends that line first: without it the added line would be joined onto it, which changes
+    the operator's value (answer 3). Every render key is dropped, so the first line added has
+    nothing to follow, and the plant adds one more line that the deployment lacks as well."""
+    made = _make(tmp_path, drop=tuple(DEFAULT_KEYS))
+    assert not set(DEFAULT_KEYS) & set(_keys(made.before)), "a render line is still in the file"
+    held = made.before if ends_in_newline else made.before.removesuffix("\n")
+    assert held.rstrip("\n").endswith(OPERATOR_LINE.rstrip("\n"))
+    made.env.write_text(held, encoding="utf-8")
+    with _planted("OSPREY_PLANTED_THING=x"):
+        refresh.files_up_to_date(made.repo)
+    after = made.after()
+    # Every line the file held is still there, whole and in order, ahead of what was added.
+    assert after.startswith(held if ends_in_newline else held + "\n"), (
+        "a held line was joined onto, or moved"
+    )
+    lines = after.splitlines(keepends=True)
+    for line in OPERATOR_LINE.splitlines(keepends=True):
+        assert lines.count(line) == 1, f"the operator's line was changed: {line!r}"
+    for line in (APPENDED + HELD_SECRETS).splitlines(keepends=True):
+        assert lines.count(line) == 1, line
+    # ...and what was missing is there, as the render writes it, once each.
+    for key in [*DEFAULT_KEYS, "OSPREY_PLANTED_THING"]:
+        assert sum(1 for line in lines if line.startswith(f"{key}=")) == 1, key
+    assert "OSPREY_PLANTED_THING=x\n" in lines
+
+
+def test_a_line_added_before_the_nearest_line_the_render_has_after_it_when_none_before_is_held(
+    tmp_path: Path,
+) -> None:
+    """The middle branch: nothing before it in the render is in the file, a line after it is. A line
+    planted at the head of the render, ahead of `OSPREY_PROFILE`, goes before the nearest held one
+    and not at the end of the file."""
+    made = _make(tmp_path)
+    real = render_module._render_env
+
+    def planted_first(config: OspreyConfig) -> str:
+        return "OSPREY_PLANTED_THING=x\n" + real(config)
+
+    with mock.patch.object(render_module, "_render_env", planted_first):
+        refresh.files_up_to_date(made.repo)
+    lines = made.after().splitlines(keepends=True)
+    at = lines.index("OSPREY_PLANTED_THING=x\n")
+    assert lines[at + 1].startswith(f"{DEFAULT_KEYS[0]}="), (
+        "not before the nearest held line after it"
+    )
     assert _without(made.after(), "OSPREY_PLANTED_THING") == made.before
 
 
