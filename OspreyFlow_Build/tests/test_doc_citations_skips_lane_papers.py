@@ -28,7 +28,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from tools import doc_citations_check as check
 from tools.layout import BUILD, CORE
 
@@ -194,7 +193,9 @@ def test_the_last_line_of_output_says_how_many_files_were_skipped_on_failure(
     assert "spec/00_ARCHITECTURE.md:1" in captured.err
 
 
-def test_the_count_is_counted_not_written_in(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_count_is_counted_not_written_in(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """Two trees with different numbers of papers print different numbers."""
     one = _tree(tmp_path / "one", {f"{LANE}/slices/a.md": "x\n"})
     three = _tree(
@@ -236,8 +237,10 @@ def test_on_the_real_tree_the_skip_covers_only_the_named_folders() -> None:
     for name in skipped:
         rest = name.removeprefix(f"{LANE}/")
         assert name.startswith(f"{LANE}/"), name
-        assert "/" not in rest or rest.split("/", 1)[0] in {"slices", "backlog"} or rest.startswith(
-            ("slice-line/proposals/", "slice-line/diffs/")
+        assert (
+            "/" not in rest
+            or rest.split("/", 1)[0] in {"slices", "backlog"}
+            or rest.startswith(("slice-line/proposals/", "slice-line/diffs/"))
         ), name
     assert f"{LANE}/slice-line/README.md" in scanned
     assert "process/07_BUILD_PLAN.md" in scanned
