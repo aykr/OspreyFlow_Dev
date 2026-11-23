@@ -340,7 +340,14 @@ function AddEngineForm({
     if (!passed) return onClose(null, null);
     void cancelCheck(api, result.check!)
       .then((view) => onClose(view, `${shown} was not added; its check and key are removed.`))
-      .catch((e: Error) => setRefused({ words: e.message, fields: [] }));
+      .catch((e: Error) => {
+        // A check the Conduit says it no longer holds (404, 410: the 15-minute sweep, or "Cancel the
+        // check" in the Being-checked table, removed it) is already what Cancel asked for: drop it,
+        // so the next Cancel closes the form instead of sending the same failing delete.
+        const gone = e instanceof ModelsRefused && (e.status === 404 || e.status === 410);
+        if (gone) setResult(null);
+        setRefused({ words: e.message, fields: [] });
+      });
   };
 
   // Each refusal tied to the field it is about: a key refused to the key, a model to its job.
