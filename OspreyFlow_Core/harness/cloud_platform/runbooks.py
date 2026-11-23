@@ -119,6 +119,7 @@ def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
             "themselves are the schema `osprey_reports` inside `ospreyflow`, as on Small.\n"
         )
     if config.reporting.sync:
+        # fmt: off
         lines.append(
             "**A dashboard identity**, for each dashboard the report sync fills: once its app registration\n"
             "exists and holds `Dashboard.Read` (*What it needs*), an administrator registers it in\n"
@@ -132,6 +133,7 @@ def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
             'kubectl -n "$NS" rollout status deploy/report-sync --timeout 10m\n'
             "```\n"
         )
+        # fmt: on
     lines.append(
         "**Power BI, if the client uses it** (an option, not a step): Power BI reads the schema\n"
         "`osprey_reports` in `ospreyflow` through a read-only login of its own, made on the managed\n"
