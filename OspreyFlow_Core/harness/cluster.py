@@ -198,7 +198,8 @@ class _Translator:
 #: The Conduit by its own `/healthz`; the Glass by its own page (its `/healthz` is the Conduit's).
 READY_WITHOUT_HEALTHCHECK: dict[str, list[str]] = {
     "api": [
-        "python", "-c",
+        "python",
+        "-c",
         "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=5)",
     ],
     "workspace": ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"],

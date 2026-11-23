@@ -125,7 +125,7 @@ def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
             "Admin › Dashboards by its application id, with a name (the dashboard's, lower case letters,\n"
             "digits and hyphens), its clearance, unit and handling codes: it reads no more than those allow.\n"
             "Then add it to the Terraform's `report_sync_dashboards`, a JSON list, as\n"
-            "`{\"client_id\": \"<its application id>\", \"secret\": \"<its client secret>\"}`, apply, and restart\n"
+            '`{"client_id": "<its application id>", "secret": "<its client secret>"}`, apply, and restart\n'
             "the report sync:\n\n"
             "```bash later\n"
             'kubectl -n "$NS" rollout restart deploy/report-sync\n'

@@ -247,8 +247,11 @@ def entra_settings(config: OspreyConfig) -> dict[str, str]:
         "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
         # ADR-148 Amendment 15: what they hold of each value the administrator sets, at install.
         **(
-            {"OSPREY_FIRST_ADMINISTRATOR_ACCESS": json.dumps(claims.first_administrator_access,
-                                                             sort_keys=True)}  # fmt: skip
+            {
+                "OSPREY_FIRST_ADMINISTRATOR_ACCESS": json.dumps(
+                    claims.first_administrator_access, sort_keys=True
+                )
+            }  # fmt: skip
             if claims.first_administrator_access
             else {}
         ),
@@ -1330,8 +1333,13 @@ def render_cloud_platform(
         # P9's backup and restore pods render beside the workloads; their rows by their names.
         # The seed's row only where its Job is rendered (the poc shape): no store admits a pod of
         # that name elsewhere (ADR-148 Amendment 14).
-        "egress": egress_policy(config, platform, profile, workloads, others=[
-            o for o in profile.egress.others if o != "seed" or _cp(config).shape == "poc"]),
+        "egress": egress_policy(
+            config,
+            platform,
+            profile,
+            workloads,
+            others=[o for o in profile.egress.others if o != "seed" or _cp(config).shape == "poc"],
+        ),
         "ingress": _ingress(config, platform, names, profile, environment),
         # ADR-152 Amendment 3 item 3: the chart's own record that the page service runs here.
         **({"pages": {"enabled": True}} if pages_service.enabled(config) else {}),

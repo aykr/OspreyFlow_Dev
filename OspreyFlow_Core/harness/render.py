@@ -1070,10 +1070,11 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # `/healthz` (a Node image has no `wget`, so the check is Node's own `fetch`); it needs
             # the session store, and the identity provider it signs people in against where there
             # is one.
-            service["environment"] = pages_service.service_environment(
+            pages_environment = pages_service.service_environment(
                 config, with_sign_in=any(other.service == "keycloak" for other in images)
             )
-            signs_in = "OSPREY_PAGES_OIDC_ISSUER" in service["environment"]
+            service["environment"] = pages_environment
+            signs_in = "OSPREY_PAGES_OIDC_ISSUER" in pages_environment
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
                 for dependency in ("valkey", *(("keycloak",) if signs_in else ()))
