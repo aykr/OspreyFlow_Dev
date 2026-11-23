@@ -50,6 +50,8 @@ export interface ModelVersion {
   created_by: string;
   made_live_at?: string | null;
   made_live_by?: string | null;
+  /** The draft's revision: changes on every save and is never one a draft had before. A save and a discard carry it with the version. */
+  revision?: string | null;
 }
 
 export interface ModelRead {
@@ -93,6 +95,8 @@ export function readModel(json: unknown): ModelRead | undefined {
   const live = json["live"] ?? null;
   const draft = json["draft"] ?? null;
   if ((live !== null && !validVersion(live)) || (draft !== null && !validVersion(draft))) return undefined;
+  // A draft the page cannot name the revision of is one it cannot save or discard safely: not drawn as a model.
+  if (draft !== null && revisionOf(draft.revision ?? undefined) === undefined) return undefined;
   return { live, draft };
 }
 
@@ -160,7 +164,6 @@ export const MODEL_WORDS = {
   discardFailed: "The draft could not be discarded just now. Nothing was changed. Try again in a few minutes.",
   openFailed: "The draft could not be opened just now. Nothing was changed. Try again in a few minutes.",
   notUnderstood: "That request was not understood.",
-  noDraftToSave: "There is no draft to save: open one first.",
   saved: (version: number) => `Draft saved as version ${version}. Nothing that runs has changed.`,
   discarded: "Draft discarded. Nothing that runs has changed.",
   opened: (version: number) => `Draft opened as version ${version}.`,
@@ -170,10 +173,19 @@ export const MODEL_WORDS = {
     did === "saved"
       ? `Your copy of the draft was out of date: it is now version ${now}. Nothing was saved. What you typed is kept in the form below; check it against the draft shown, then save again.`
       : `Your copy of the draft was out of date: it is now version ${now}. Nothing was discarded. Check the draft shown, then discard it again if you still mean to.`,
+  /** The version is the same but the draft is not the one read: it was saved again, or discarded and opened again, since. */
+  changedSince: (version: number, did: "saved" | "discarded") =>
+    did === "saved"
+      ? `Your copy of the draft was out of date: it was saved again, or discarded and opened again, after you read it (it is still version ${version}). Nothing was saved. What you typed is kept in the form below; check it against the draft shown, then save again.`
+      : `Your copy of the draft was out of date: it was saved again, or discarded and opened again, after you read it (it is still version ${version}). Nothing was discarded. Check the draft shown, then discard it again if you still mean to.`,
   draftGone: (did: "saved" | "discarded") =>
     did === "saved"
-      ? "Your copy of the draft was out of date: the draft you were looking at is no longer there. Nothing was saved."
+      ? "Your copy of the draft was out of date: the draft you were looking at is no longer there. Nothing was saved. What you typed is kept below; open a draft and enter it again."
       : "Your copy of the draft was out of date: the draft you were looking at is no longer there. Nothing was discarded.",
+  /** What was typed when there is no form to hold it (no draft now, or one that is another person's): kept on the page, not lost. */
+  keptHeading: "What you typed",
+  keptIntro: "This is what you typed, kept here so it is not lost. Nothing of it was saved.",
+  keptLine: (label: string, value: string) => `Version of the ${label} pack: ${value.trim() === "" ? "left out" : value}`,
   /** A Conduit's refusal that is not the store's own words: the page's sentence, with no body of the Conduit's in it. */
   refusedWith: (what: string, status: number) => `${what} was refused (${status}).`,
 } as const;
@@ -254,6 +266,11 @@ export function packsFrom(typed: Record<string, string>): { packs: Record<string
     packs[pack.name] = Number(text);
   }
   return { packs };
+}
+
+/** A revision a form carried: the token the Conduit made (letters, digits, hyphen and underscore, 1 to 64), else undefined. */
+export function revisionOf(text: string | undefined): string | undefined {
+  return text !== undefined && /^[A-Za-z0-9_-]{1,64}$/.test(text) ? text : undefined;
 }
 
 /** A version number a form carried: a whole number of 1 or more, else undefined (a request the page did not make). */

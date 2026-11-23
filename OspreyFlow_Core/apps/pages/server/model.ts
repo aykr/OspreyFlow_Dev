@@ -14,9 +14,11 @@
  * draw the model (a right not held, a dataset the Conduit no longer opens, one no case of the person's loads into, one that does
  * not exist), draws no row or count it was not sent, and never echoes a dataset's id.
  *
- * A save and a discard carry the version the person's copy was read at, in a hidden field, and the page hands the Conduit that
- * very number: the Conduit's store refuses a draft that is no longer that version, and the page says the copy was out of date,
- * shows the draft as it now is and keeps what the person typed. The page does not decide for the Conduit: a stale request is
+ * A save and a discard carry the version and the revision the person's copy was read at, in hidden fields, and the page hands the
+ * Conduit those very values: the version alone cannot tell two copies of one draft apart (a save keeps it, and a draft discarded and
+ * opened again takes it again), so the revision, which changes on every save and is never reused, is carried with it. The Conduit's
+ * store refuses a draft that is no longer that copy, and the page says the copy was out of date, shows the draft as it now is
+ * and keeps what the person typed (in the form, or listed where the draft is gone or is not theirs). The page does not decide for the Conduit: a stale request is
  * sent and refused there. Only the draft's creator is offered the forms (the page compares the draft's creator with the person's
  * own id, as words about who may act), and the Conduit refuses anyone else's request all the same.
  *
@@ -30,11 +32,13 @@ import type { PageModule } from "./pages.js";
 import { context, loadFrame, one } from "./studio.js";
 import type { Frame } from "./studio.js";
 import { refusalWords } from "./views/studioWords.js";
-import { MODEL_WORDS, PACK_FIELDS, packsFrom, pinsOf, readModel, storeWords, typeRows, versionOf, whenWords } from "./views/modelWords.js";
+import { MODEL_WORDS, PACK_FIELDS, packsFrom, pinsOf, readModel, revisionOf, storeWords, typeRows, versionOf, whenWords } from "./views/modelWords.js";
 import type { ModelRead, ModelVersion, TypeRow } from "./views/modelWords.js";
 
 interface DraftView {
   version: number;
+  /** The revision the copy is read at: a hidden field of each form, sent with the version. */
+  revision: string;
   held: string;
   builtOn: string;
   caption: string;
@@ -57,7 +61,12 @@ export type ModelView =
   | { kind: "none" }
   | { kind: "refused" }
   | { kind: "unreadable" }
-  | { kind: "model"; draft: DraftView | null; live: LiveView | null };
+  | { kind: "model"; draft: DraftView | null; live: LiveView | null; kept: KeptLine[] };
+
+/** One thing the person typed that no form on the page holds now (the draft is gone, or is another person's). */
+interface KeptLine {
+  text: string;
+}
 
 interface Shown {
   view: ModelView;
@@ -85,6 +94,7 @@ function draftView(frame: Frame, draft: ModelVersion, typed: Record<string, stri
   const pins = pinsOf(draft.packs);
   return {
     version: draft.version,
+    revision: draft.revision ?? "",
     held: MODEL_WORDS.held(draft.version, draft.created_by, whenWords(draft.created_at)),
     builtOn: MODEL_WORDS.builtOn(draft.packs),
     caption: MODEL_WORDS.draftCaption(frame.datasetName),
@@ -98,6 +108,10 @@ function draftView(frame: Frame, draft: ModelVersion, typed: Record<string, stri
       value: typed?.[pack.field] ?? pins[pack.field] ?? "",
     })),
   };
+}
+
+function keptLines(typed: Record<string, string>): KeptLine[] {
+  return PACK_FIELDS.filter((pack) => typed[pack.field] !== undefined).map((pack) => ({ text: MODEL_WORDS.keptLine(pack.label, typed[pack.field] as string) }));
 }
 
 function liveView(frame: Frame, live: ModelVersion): LiveView {
@@ -124,11 +138,15 @@ async function showModel(frame: Frame, typed?: Record<string, string>): Promise<
   if (reply !== undefined && reply.status >= 400 && reply.status < 500) return { view: { kind: "refused" }, status: 403, read: undefined };
   const read = reply?.status === 200 ? readModel(reply.json) : undefined;
   if (read === undefined) return { view: { kind: "unreadable" }, status: 502, read: undefined };
+  const draft = read.draft === null ? null : draftView(frame, read.draft, typed);
   return {
     view: {
       kind: "model",
-      draft: read.draft === null ? null : draftView(frame, read.draft, typed),
+      draft,
       live: read.live === null ? null : liveView(frame, read.live),
+      // What was typed is drawn back into the save form; where there is no form (no draft, or one that is not theirs) it is
+      // listed, so a save that could not be made never loses what the person typed.
+      kept: typed !== undefined && (draft === null || !draft.mine) ? keptLines(typed) : [],
     },
     status: 200,
     read,
@@ -193,13 +211,15 @@ const typedPins = (fields: Record<string, string>): Record<string, string> =>
  * among the store's), then the store's own. The page asked the Conduit with the person's version and it refused there; this only
  * reads the draft as it is now to say what changed.
  */
-function conflictWords(did: "saved" | "discarded", expected: number, body: unknown): (fresh: ModelRead | undefined) => string {
+function conflictWords(did: "saved" | "discarded", expected: number, revision: string, body: unknown): (fresh: ModelRead | undefined) => string {
   return (fresh) => {
     const store = storeWords(409, body, "The draft");
     if (fresh === undefined) return store;
     const current = fresh.draft;
     if (current === null) return `${MODEL_WORDS.draftGone(did)} ${store}`;
     if (current.version !== expected) return `${MODEL_WORDS.outOfDate(current.version, did)} ${store}`;
+    // The same version is not the same draft: a save keeps the number, and a draft discarded and opened again takes it again.
+    if (current.revision !== revision) return `${MODEL_WORDS.changedSince(current.version, did)} ${store}`;
     return store;
   };
 }
@@ -261,20 +281,21 @@ async function modelPost(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  // Both the others carry the version the person's copy was read at: a form that does not is not one the page made.
+  // Both the others carry the version and the revision the person's copy was read at: a form that does not is not one the page made.
   const expected = versionOf(fields["expected_version"]);
-  if (expected === undefined) {
+  const revision = revisionOf(fields["expected_revision"]);
+  if (expected === undefined || revision === undefined) {
     await finish(req, res, frame, { status: 400, problem: MODEL_WORDS.notUnderstood });
     return;
   }
 
   if (action === "discard") {
-    const reply = await ask(conduit, { method: "DELETE", path: draftPath(datasetId), query: { expected_version: expected } });
+    const reply = await ask(conduit, { method: "DELETE", path: draftPath(datasetId), query: { expected_version: expected, expected_revision: revision } });
     const outcome = outcomeOf(reply);
     if (outcome === "ok") await finish(req, res, frame, { notice: MODEL_WORDS.discarded });
     else if (outcome === "refused") refused(req, res, frame);
     else if (outcome === "ended") await finish(req, res, frame, { status: 401, problem: refusalWords(401, undefined, "") });
-    else if (outcome === "conflict") await finish(req, res, frame, { status: 409, problem: conflictWords("discarded", expected, reply?.json) });
+    else if (outcome === "conflict") await finish(req, res, frame, { status: 409, problem: conflictWords("discarded", expected, revision, reply?.json) });
     else if (outcome === "other") await finish(req, res, frame, { status: reply?.status ?? 400, problem: MODEL_WORDS.refusedWith("The draft", reply?.status ?? 400) });
     else await finish(req, res, frame, { status: 502, problem: MODEL_WORDS.discardFailed });
     return;
@@ -298,14 +319,18 @@ async function modelPost(req: Request, res: Response): Promise<void> {
     await finish(req, res, frame, { status: 502, problem: MODEL_WORDS.saveFailed, typed });
     return;
   }
-  if (read.draft === null) {
-    await finish(req, res, frame, { status: 409, problem: MODEL_WORDS.noDraftToSave });
-    return;
-  }
+  // No draft now is the most out-of-date copy there is: the save is sent all the same, the Conduit refuses it (there is no draft
+  // to save into), and the page says the copy was out of date and keeps what was typed. The page decides nothing for the Conduit.
   const reply = await ask(conduit, {
     method: "PUT",
     path: draftPath(datasetId),
-    json: { packs: given.packs, extensions: read.draft.extensions, reference_lists: read.draft.reference_lists, expected_version: expected },
+    json: {
+      packs: given.packs,
+      extensions: read.draft?.extensions ?? [],
+      reference_lists: read.draft?.reference_lists ?? [],
+      expected_version: expected,
+      expected_revision: revision,
+    },
   });
   const outcome = outcomeOf(reply);
   if (outcome === "ok") {
@@ -313,7 +338,7 @@ async function modelPost(req: Request, res: Response): Promise<void> {
     await finish(req, res, frame, { notice: MODEL_WORDS.saved(typeof saved === "number" ? saved : expected) });
   } else if (outcome === "refused") refused(req, res, frame);
   else if (outcome === "ended") await finish(req, res, frame, { status: 401, problem: refusalWords(401, undefined, ""), typed });
-  else if (outcome === "conflict") await finish(req, res, frame, { status: 409, problem: conflictWords("saved", expected, reply?.json), typed });
+  else if (outcome === "conflict") await finish(req, res, frame, { status: 409, problem: conflictWords("saved", expected, revision, reply?.json), typed });
   else if (outcome === "other") await finish(req, res, frame, { status: reply?.status ?? 400, problem: MODEL_WORDS.refusedWith("The draft", reply?.status ?? 400), typed });
   else await finish(req, res, frame, { status: 502, problem: MODEL_WORDS.saveFailed, typed });
 }

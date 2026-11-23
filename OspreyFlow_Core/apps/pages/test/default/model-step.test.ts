@@ -51,6 +51,8 @@ const NO_LIVE = "This dataset has no live domain model yet: it uses the POLE cor
 const NO_TYPES = "This version adds no types of its own: it is the POLE core with its packs.";
 /** Content nobody but a reader with the right may see: no refusal's words may carry it. */
 const SECRET = "Zebra";
+/** The revision a seeded draft is read at (the Conduit's `revision`: it changes on every save and is never reused). */
+const REV = "rev-seed";
 
 // ------------------------------------------------------------------------------------------------ what the Conduit holds
 
@@ -90,6 +92,7 @@ function model(over: Partial<FakeModel> = {}): FakeModel {
     made_live_at: null,
     made_live_by: null,
     reverted_from: null,
+    revision: REV,
     ...over,
   };
 }
@@ -328,7 +331,7 @@ describe("the Model step (Scenario MS)", () => {
     expect(save?.buttons).toEqual(["Save draft"]);
     // The person's copy was read at version 2; meanwhile their draft was made live and a later one opened (version 3).
     w.conduit.models.set(DATASET, { live: model({ state: "live", made_live_at: OPENED, made_live_by: ME }), draft: model({ version: 3, packs: { fibo: 1 }, extensions: [VESSEL, FLAG_STATE] }) });
-    const stale = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", pack_fibo: "", pack_niem: "7", pack_stix: "" });
+    const stale = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_fibo: "", pack_niem: "7", pack_stix: "" });
     expect(stale.status).toBe(409);
     // The Conduit was sent the version of the copy, not one the page read for itself, and refused it in the store's words.
     const put = w.conduit.calls.filter((c) => c.method === "PUT");
@@ -346,7 +349,7 @@ describe("the Model step (Scenario MS)", () => {
     // Nothing was changed in the Conduit.
     expect(w.conduit.models.get(DATASET)?.draft?.packs).toEqual({ fibo: 1 });
     // The same form sent again with the version it now carries saves, and the typed pins are the draft's.
-    const again = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "3", pack_fibo: "", pack_niem: "7", pack_stix: "" });
+    const again = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "3", expected_revision: REV, pack_fibo: "", pack_niem: "7", pack_stix: "" });
     expect(again.status).toBe(200);
     expect(w.conduit.models.get(DATASET)?.draft?.packs).toEqual({ niem: 7 });
     expect(textOf(placeOf(again.text))).toContain("Draft saved as version 3. Nothing that runs has changed.");
@@ -357,7 +360,7 @@ describe("the Model step (Scenario MS)", () => {
 
   it("MS9: a pin that is not a whole number is refused in words with nothing sent, and what was typed is kept; a draft that is gone says so", async () => {
     const w = await mine();
-    const bad = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", pack_fibo: "two", pack_niem: "3", pack_stix: "" });
+    const bad = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_fibo: "two", pack_niem: "3", pack_stix: "" });
     expect(bad.status).toBe(422);
     expect(alertOf(bad.text)).toContain("The version of the Financial fraud and AML (FIBO) pack must be a whole number of 1 or more, or blank.");
     expect(typed(bad.text, "pack_fibo")).toBe("two");
@@ -368,13 +371,90 @@ describe("the Model step (Scenario MS)", () => {
       expect(textOf(placeOf(res.text))).toContain("That request was not understood.");
     }
     expect(w.conduit.calls.filter((c) => c.method === "PUT")).toEqual([]);
-    // Nothing to save into: the draft was discarded elsewhere.
+    // A form that is not the page's own, with a revision missing or not one the Conduit makes, is sent nowhere.
+    for (const revision of [undefined, "", "has space", "x".repeat(65), "<b>"]) {
+      const fields: Record<string, string> = { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "3" };
+      if (revision !== undefined) fields["expected_revision"] = revision;
+      const res = await w.post("/studio/model", fields);
+      expect(res.status, String(revision)).toBe(400);
+      expect(textOf(placeOf(res.text))).toContain("That request was not understood.");
+    }
+    expect(w.conduit.calls.filter((c) => c.method === "PUT" || c.method === "DELETE")).toEqual([]);
+  });
+
+  it("MS9: a save after the draft was discarded elsewhere, the most out-of-date copy there is, is sent, refused by the Conduit, and says the copy is out of date and keeps what was typed", async () => {
+    const w = await mine();
     w.conduit.models.set(DATASET, { live: live(), draft: null });
-    const gone = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "4" });
+    const gone = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_fibo: "", pack_niem: "4", pack_stix: "5" });
     expect(gone.status).toBe(409);
-    expect(alertOf(gone.text)).toContain("There is no draft to save: open one first.");
-    expect(typed(gone.text, "pack_niem")).toBeUndefined();
-    expect(w.conduit.calls.filter((c) => c.method === "PUT")).toEqual([]);
+    // The page did not decide for the Conduit: the save was sent, with the copy's own version and revision, and refused there.
+    const put = w.conduit.calls.filter((c) => c.method === "PUT");
+    expect(put).toHaveLength(1);
+    expect(JSON.parse(put[0]?.body ?? "{}")).toMatchObject({ expected_version: 2, expected_revision: REV, packs: { niem: 4, stix: 5 } });
+    const said = alertOf(gone.text);
+    expect(said).toContain("Your copy of the draft was out of date: the draft you were looking at is no longer there. Nothing was saved.");
+    expect(said).toContain("there is no draft to save: open one first");
+    // What was typed is on the page, not lost, though there is no form to hold it; no save form is offered, a draft is opened by its own.
+    const place = textOf(placeOf(gone.text));
+    expect(place).toContain("What you typed");
+    expect(place).toContain("Version of the Crime case analysis (NIEM) pack: 4");
+    expect(place).toContain("Version of the Cyber threat analytics (STIX 2.1) pack: 5");
+    expect(place).toContain(NO_DRAFT);
+    expect(formFor(gone.text, "save")).toBeUndefined();
+    expect(formFor(gone.text, "open")?.buttons).toEqual(["Open a draft"]);
+    expect(w.conduit.models.get(DATASET)?.draft).toBeNull();
+    // A page drawn afresh has nothing kept: only the save that was refused lists what was typed.
+    expect(textOf(placeOf((await w.get(PATH)).text))).not.toContain("What you typed");
+  });
+
+  it("MS9: a second save from a copy read before the first (the draft's version unchanged) is refused, says the copy is out of date and keeps what was typed", async () => {
+    const w = await mine();
+    const first = formFor((await w.get(PATH)).text, "save");
+    expect(first?.hidden["expected_version"]).toBe("2");
+    expect(first?.hidden["expected_revision"]).toBe(REV);
+    // The same copy in two tabs: the first saves, and the draft is still version 2.
+    const one = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_fibo: "", pack_niem: "5", pack_stix: "" });
+    expect(one.status).toBe(200);
+    const after = w.conduit.models.get(DATASET)?.draft;
+    expect(after?.version).toBe(2);
+    expect(after?.revision).not.toBe(REV);
+    const second = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_fibo: "", pack_niem: "8", pack_stix: "" });
+    expect(second.status).toBe(409);
+    const puts = w.conduit.calls.filter((c) => c.method === "PUT").map((c) => JSON.parse(c.body ?? "{}") as Record<string, unknown>);
+    expect(puts.map((p) => p["expected_revision"])).toEqual([REV, REV]);
+    expect(alertOf(second.text)).toContain("Your copy of the draft was out of date: it was saved again, or discarded and opened again, after you read it (it is still version 2). Nothing was saved.");
+    expect(alertOf(second.text)).toContain("read it again before changing it");
+    // The first tab's work is not overwritten, and what the second typed is in the form, which now carries the draft's own revision.
+    expect(w.conduit.models.get(DATASET)?.draft?.packs).toEqual({ niem: 5 });
+    expect(typed(second.text, "pack_niem")).toBe("8");
+    expect(formFor(second.text, "save")?.hidden["expected_revision"]).toBe(after?.revision);
+  });
+
+  it("MS10: a discard from a copy read before the draft was discarded and opened again at the same version is refused, and the new draft is still there", async () => {
+    const w = await mine();
+    const form = formFor((await w.get(PATH)).text, "discard");
+    expect(form?.hidden["expected_revision"]).toBe(REV);
+    // Discarded and opened again elsewhere: the same version number (the live version did not move), another draft.
+    w.conduit.models.set(DATASET, { live: live(), draft: model({ revision: "rev-opened-again" }) });
+    const stale = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV });
+    expect(stale.status).toBe(409);
+    expect(w.conduit.calls.filter((c) => c.method === "DELETE").map((c) => [c.query.get("expected_version"), c.query.get("expected_revision")])).toEqual([["2", REV]]);
+    expect(alertOf(stale.text)).toContain("Your copy of the draft was out of date: it was saved again, or discarded and opened again, after you read it (it is still version 2). Nothing was discarded.");
+    expect(w.conduit.models.get(DATASET)?.draft?.revision).toBe("rev-opened-again");
+    expect(formFor(stale.text, "discard")?.hidden["expected_revision"]).toBe("rev-opened-again");
+  });
+
+  it("MS9: a save refused because the draft is now another person's still says the copy is out of date, tells nothing of the draft's content, and keeps what was typed", async () => {
+    const w = await mine();
+    w.conduit.models.set(DATASET, { live: live(), draft: model({ created_by: ELSE, revision: "rev-bobs", extensions: [ext({ name: SECRET, pole_class: "person", identifiers: ["secret_id"] })] }) });
+    const res = await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_niem: "6" });
+    expect(res.status).toBe(409);
+    expect(alertOf(res.text)).toContain("Your copy of the draft was out of date");
+    expect(alertOf(res.text)).toContain(`only ${ELSE} can save into, replace or discard it`);
+    expect(alertOf(res.text)).not.toContain(SECRET);
+    expect(formFor(res.text, "save")).toBeUndefined();
+    expect(textOf(placeOf(res.text))).toContain("Version of the Crime case analysis (NIEM) pack: 6");
+    expect(w.conduit.models.get(DATASET)?.draft?.packs).toEqual({ niem: 3 });
   });
 
   it("MS10: a discard carries the version the copy was read at; a stale one is refused and the draft is still there; a current one discards", async () => {
@@ -383,7 +463,7 @@ describe("the Model step (Scenario MS)", () => {
     expect(discard?.hidden["expected_version"]).toBe("2");
     expect(discard?.buttons).toEqual(["Discard draft"]);
     w.conduit.models.set(DATASET, { live: live(), draft: model({ version: 3 }) });
-    const stale = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2" });
+    const stale = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV });
     expect(stale.status).toBe(409);
     const deleted = w.conduit.calls.filter((c) => c.method === "DELETE");
     expect(deleted.map((c) => c.query.get("expected_version"))).toEqual(["2"]);
@@ -391,7 +471,7 @@ describe("the Model step (Scenario MS)", () => {
     expect(alertOf(stale.text)).toContain("read it again before changing it");
     expect(w.conduit.models.get(DATASET)?.draft?.version).toBe(3);
     expect(formFor(stale.text, "discard")?.hidden["expected_version"]).toBe("3");
-    const current = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "3" });
+    const current = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "3", expected_revision: REV });
     expect(current.status).toBe(200);
     expect(w.conduit.models.get(DATASET)?.draft).toBeNull();
     expect(textOf(placeOf(current.text))).toContain("Draft discarded. Nothing that runs has changed.");
@@ -424,8 +504,8 @@ describe("the Model step (Scenario MS)", () => {
     expect(formFor(page.text, "discard")).toBeUndefined();
     // The forms are only words about who may act: the Conduit refuses a forged request all the same (rules 3 and 4).
     for (const fields of [
-      { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "9" } as Record<string, string>,
-      { case: CASE_ID, action: "discard", expected_version: "2" },
+      { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_niem: "9" } as Record<string, string>,
+      { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV },
       { case: CASE_ID, action: "open" },
     ]) {
       const res = await w.post("/studio/model", fields);
@@ -476,8 +556,8 @@ describe("the Model step (Scenario MS)", () => {
     }
     // A save, a discard and an open by a person without the right, or for a dataset not theirs, are refused in the same words and write nothing.
     for (const fields of [
-      { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "9" } as Record<string, string>,
-      { case: CASE_ID, action: "discard", expected_version: "2" },
+      { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_niem: "9" } as Record<string, string>,
+      { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV },
       { case: CASE_ID, action: "open" },
     ]) {
       for (const who of [noRight, gone]) {
@@ -490,7 +570,7 @@ describe("the Model step (Scenario MS)", () => {
       }
     }
     // A request that names a case the person does not hold is the same sentence as for any other reason, and asks for nothing written.
-    const elsewhere = await w.post("/studio/model", { case: "case-not-mine", action: "discard", expected_version: "2" });
+    const elsewhere = await w.post("/studio/model", { case: "case-not-mine", action: "discard", expected_version: "2", expected_revision: REV });
     expect(textOf(placeOf(elsewhere.text))).toContain(REFUSED);
     expect(w.conduit.calls.filter((c) => c.method === "DELETE")).toEqual([]);
     // (The frame's own switch form carries the case id the person's request named, as it does for every Studio page; no dataset's id is echoed.)
@@ -515,12 +595,12 @@ describe("the Model step (Scenario MS)", () => {
     // A save that failed says so, changes nothing and keeps what was typed; so does a discard and an open.
     const saving = await mine();
     saving.conduit.failing.add("/model/draft");
-    const failedSave = await saving.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "5" });
+    const failedSave = await saving.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_niem: "5" });
     expect(failedSave.status).toBe(502);
     expect(alertOf(failedSave.text)).toContain(SAVE_FAILED);
     expect(typed(failedSave.text, "pack_niem")).toBe("5");
     expect(saving.conduit.models.get(DATASET)?.draft?.packs).toEqual({ niem: 3 });
-    const failedDiscard = await saving.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2" });
+    const failedDiscard = await saving.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV });
     expect(failedDiscard.status).toBe(502);
     expect(alertOf(failedDiscard.text)).toContain("The draft could not be discarded just now. Nothing was changed. Try again in a few minutes.");
     expect(saving.conduit.models.get(DATASET)?.draft?.version).toBe(2);
@@ -543,14 +623,14 @@ describe("the Model step (Scenario MS)", () => {
   it("MS13: the store's words are shown as text and only when the Conduit says they are a model refusal; any other 409 says nothing of its own", async () => {
     const w = await mine();
     w.conduit.nextModelRefusal = "<b>bold</b> <script>run()</script> words";
-    const escaped = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2" });
+    const escaped = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV });
     expect(escaped.status).toBe(409);
     expect(alertOf(escaped.text)).toContain("<b>bold</b> <script>run()</script> words");
     expect(placeOf(escaped.text)).not.toContain("<b>bold</b>");
     expect(escaped.text).not.toMatch(/<script>run\(\)/);
     // A 409 that is not the store's (another code) says nothing of its own: the page's sentence, with the Conduit's words nowhere.
     w.conduit.nextOtherConflict = "Internal words about owners and keys";
-    const other = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2" });
+    const other = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV });
     expect(other.status).toBe(409);
     expect(alertOf(other.text)).toContain("The draft was refused (409).");
     expect(echoProblems(other.text, ["Internal words", "owner_needed"])).toEqual([]);
@@ -584,7 +664,7 @@ describe("the Model step (Scenario MS)", () => {
 
   it("MS15: the word is Pipeline, never recipe, anywhere a person reads, whatever the page is saying", async () => {
     const w = await mine();
-    const stale = (): Promise<{ text: string }> => w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "1", pack_niem: "3" });
+    const stale = (): Promise<{ text: string }> => w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "1", expected_revision: REV, pack_niem: "3" });
     const pages = [await w.get(PATH), await stale(), await w.get(`${PATH}&dataset=no-such-dataset`), await w.post("/studio/model", { case: CASE_ID, action: "nonsense" })];
     w.conduit.failing.add("/model");
     pages.push(await w.get(PATH));
@@ -596,7 +676,7 @@ describe("the Model step (Scenario MS)", () => {
   it("MS16: the Conduit is asked as the person, with their bearer and nothing of the browser's; a post needs its token; signed out is sent to sign-in; the Model place is a link to this page", async () => {
     const w = await mine();
     await w.get(PATH).set("X-CSRF-Token", w.signed.csrf).set("Origin", "https://evil.test");
-    await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", pack_niem: "3" });
+    await w.post("/studio/model", { case: CASE_ID, action: "save", expected_version: "2", expected_revision: REV, pack_niem: "3" });
     const asked = w.conduit.calls.map((c) => `${c.method} ${c.path}`);
     expect(asked).toContain(`GET /v1/datasets/${DATASET}/model`);
     expect(asked).toContain(`PUT /v1/datasets/${DATASET}/model/draft`);
@@ -611,7 +691,7 @@ describe("the Model step (Scenario MS)", () => {
     // A post with no token, or a wrong one, is refused and asks the Conduit nothing; it changes nothing.
     const before = w.conduit.calls.length;
     for (const csrf of [false, "not-the-token"] as const) {
-      const res = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2" }, csrf);
+      const res = await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "2", expected_revision: REV }, csrf);
       expect(res.status, String(csrf)).toBe(403);
       expect(res.text).not.toContain("<table");
     }
@@ -656,7 +736,7 @@ describe("the Model step (Scenario MS)", () => {
     expect(placeOf(res.text)).not.toMatch(/<input\b(?![^>]*type="hidden")(?![^>]*type="text")/i);
     expect(res.text).toMatch(/<form method="get" action="\/studio\/model"/);
     expect(res.text).not.toMatch(/Content-Security-Policy[^>]*unsafe-inline/i);
-    for (const refused of [await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "9" }), await w.get(`${PATH}&dataset=no-such-dataset`)]) {
+    for (const refused of [await w.post("/studio/model", { case: CASE_ID, action: "discard", expected_version: "9", expected_revision: REV }), await w.get(`${PATH}&dataset=no-such-dataset`)]) {
       expect(controlProblems(refused.text)).toEqual([]);
     }
   });

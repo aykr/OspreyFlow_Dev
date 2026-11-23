@@ -16,6 +16,14 @@
 </table>
 {% else %}<p>{{ empty }}</p>
 {% endif %}{% endmacro %}
+{% macro kept(lines, words) %}{% if lines | length %}<section aria-labelledby="kept-heading">
+<h4 id="kept-heading">{{ words.keptHeading }}</h4>
+<p>{{ words.keptIntro }}</p>
+<ul>
+{% for line in lines %}<li>{{ line.text }}</li>
+{% endfor %}</ul>
+</section>
+{% endif %}{% endmacro %}
 {% block place %}
 {% if problem %}<p role="alert">{{ problem }}</p>{% endif %}
 {% if mv.kind == "model" %}
@@ -37,6 +45,7 @@
 <input type="hidden" name="case" value="{{ f.caseId }}">
 <input type="hidden" name="action" value="save">
 <input type="hidden" name="expected_version" value="{{ mv.draft.version }}">
+<input type="hidden" name="expected_revision" value="{{ mv.draft.revision }}">
 <fieldset>
 <legend>{{ modelWords.packsLegend }}</legend>
 {% for pack in mv.draft.packs %}<p>
@@ -51,13 +60,16 @@
 <input type="hidden" name="case" value="{{ f.caseId }}">
 <input type="hidden" name="action" value="discard">
 <input type="hidden" name="expected_version" value="{{ mv.draft.version }}">
+<input type="hidden" name="expected_revision" value="{{ mv.draft.revision }}">
 <button type="submit" class="btn">{{ modelWords.discard }}</button>
 </form>
 {% else %}
 <p class="caption">{{ mv.draft.notYours }}</p>
+{{ kept(mv.kept, modelWords) }}
 {% endif %}
 {% else %}
 <p>{{ modelWords.noDraft }}</p>
+{{ kept(mv.kept, modelWords) }}
 <form method="post" action="/studio/model">
 <input type="hidden" name="_csrf" value="{{ csrfToken }}">
 <input type="hidden" name="case" value="{{ f.caseId }}">

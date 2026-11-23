@@ -102,6 +102,8 @@ export interface FakeModel {
   made_live_at: string | null;
   made_live_by: string | null;
   reverted_from: number | null;
+  /** The draft's revision: changes on every save and is never one a draft had before (`TargetModel.revision`). */
+  revision: string;
 }
 
 /** A dataset's live version and open draft, either of which may be none. */
@@ -119,7 +121,14 @@ export const MODEL_WORDS = {
     `the domain model has an in-progress draft (version ${version}) by ${by}, opened ${opened}: only ${by} can save into, replace or discard it. Ask ${by} to make it live or discard it in Studio › Model, then open your own`,
   stale: (meant: number, now: number, opened: string) =>
     `you meant your draft's version ${meant}, but your draft is now version ${now}, opened ${opened}: read it again before changing it`,
+  /** The same version, but the draft was saved again or discarded and opened again since the copy was read. */
+  outOfDate: (version: number, opened: string) =>
+    `your copy of the draft (version ${version}, opened ${opened}) is out of date: the draft was saved again, or discarded and opened again, since you read it: read it again before changing it`,
 };
+
+let revisions = 0;
+/** A revision the draft has not had before, as the store makes one (a random token there, a counter here). */
+export const freshRevision = (): string => `rev-${++revisions}`;
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -393,10 +402,12 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
           made_live_at: null,
           made_live_by: null,
           reverted_from: null,
+          revision: freshRevision(),
         };
         return json(res, 201, state.draft);
       }
       let expected: number | undefined;
+      let expectedRevision: string | undefined;
       let content: { packs?: unknown; extensions?: unknown; reference_lists?: unknown } = {};
       if (method === "PUT") {
         let parsed: unknown;
@@ -411,7 +422,7 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
         const given = parsed as Record<string, unknown>;
         const problems: unknown[] = [];
         for (const key of Object.keys(given)) {
-          if (!["packs", "extensions", "reference_lists", "expected_version"].includes(key)) {
+          if (!["packs", "extensions", "reference_lists", "expected_version", "expected_revision"].includes(key)) {
             problems.push({ type: "extra_forbidden", loc: ["body", key], msg: "Extra inputs are not permitted" });
           }
         }
@@ -436,8 +447,13 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
         if (lists !== undefined && (!Array.isArray(lists) || lists.some((id) => typeof id !== "string"))) {
           problems.push({ type: "list_type", loc: ["body", "reference_lists"], msg: "Input should be a valid list of strings" });
         }
+        const revision = given["expected_revision"];
+        if (revision !== undefined && revision !== null && (typeof revision !== "string" || revision === "" || revision.length > 64)) {
+          problems.push({ type: "string_too_short", loc: ["body", "expected_revision"], msg: "Input should be a string of 1 to 64 characters" });
+        }
         if (problems.length > 0) return json(res, 422, { detail: problems });
         expected = version as number;
+        if (typeof revision === "string") expectedRevision = revision;
         content = { packs: given["packs"] ?? {}, extensions: given["extensions"] ?? [], reference_lists: given["reference_lists"] ?? [] };
       } else {
         const asked = target.searchParams.get("expected_version");
@@ -446,6 +462,11 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
           return json(res, 422, { detail: [{ type: "int_parsing", loc: ["query", "expected_version"], msg: "Input should be a valid integer, greater than or equal to 1" }] });
         }
         expected = Number(asked);
+        const revision = target.searchParams.get("expected_revision");
+        if (revision !== null) {
+          if (revision === "" || revision.length > 64) return json(res, 422, { detail: [{ type: "string_too_short", loc: ["query", "expected_revision"], msg: "Input should be a string of 1 to 64 characters" }] });
+          expectedRevision = revision;
+        }
       }
       const draft = state.draft;
       if (fake.nextOtherConflict !== undefined) {
@@ -463,13 +484,15 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
       // The creator first, then the version: the store's own order. The words name who holds it and none of what is in it.
       if (draft.created_by !== me) return refuse(MODEL_WORDS.notCreator(draft.version, draft.created_by, opened));
       if (expected !== draft.version) return refuse(MODEL_WORDS.stale(expected, draft.version, opened));
+      // The version alone cannot tell two copies of one draft apart (a save keeps it; a discard and a new draft reuse it).
+      if (expectedRevision !== undefined && expectedRevision !== draft.revision) return refuse(MODEL_WORDS.outOfDate(draft.version, opened));
       if (method === "DELETE") {
         state.draft = null;
         res.writeHead(204);
         res.end();
         return;
       }
-      state.draft = { ...draft, packs: content.packs as Record<string, number>, extensions: content.extensions as Record<string, unknown>[], reference_lists: content.reference_lists as string[] };
+      state.draft = { ...draft, revision: freshRevision(), packs: content.packs as Record<string, number>, extensions: content.extensions as Record<string, unknown>[], reference_lists: content.reference_lists as string[] };
       return json(res, 200, state.draft);
     }
     return json(res, 404, { detail: "Not Found" });

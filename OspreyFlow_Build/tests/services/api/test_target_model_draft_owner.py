@@ -352,6 +352,136 @@ async def test_a_second_writers_link_type_acceptance_still_appends_to_the_draft(
     assert [e.name for e in got.extensions] == ["BRIBED"] and got.created_by == "alice-1"
 
 
+# --- the draft's revision: a copy is stale when the draft changed under the same version ---------
+
+
+def _revision_of(world: SimpleNamespace, person: str = "alice") -> tuple[int, str]:
+    """The version and revision a person's copy carries, as the page reads them."""
+    read = world.client.get(
+        f"/v1/datasets/{DATASET}/model", headers={"Authorization": f"Bearer {person}"}
+    )
+    assert read.status_code == 200, read.text
+    draft = read.json()["draft"]
+    assert isinstance(draft["revision"], str) and draft["revision"], draft
+    return draft["version"], draft["revision"]
+
+
+def _call_at(
+    world: SimpleNamespace, method: str, person: str, body: Any, copy: tuple[int, str]
+) -> Any:
+    """A save or discard as the page sends it: the version and the revision its copy was read at."""
+    version, revision = copy
+    return world.client.request(
+        method,
+        f"/v1/datasets/{DATASET}/model/draft",
+        json={**body, "expected_version": version, "expected_revision": revision}
+        if method == "PUT" else None,
+        params={"expected_version": version, "expected_revision": revision}
+        if method == "DELETE" else None,
+        headers={"Authorization": f"Bearer {person}"},
+    )  # fmt: skip
+
+
+async def test_a_second_save_from_a_copy_read_before_the_first_is_refused(
+    world: SimpleNamespace,
+) -> None:
+    """Two tabs: both read the draft at version 1; the first saves; the second's copy is out of
+    date even though the draft's version is still 1. Red with the revision unchanged by a save
+    (the version alone cannot tell the two copies apart)."""
+    assert _call(world, "POST", "alice").status_code == 201
+    tab_a = _revision_of(world)
+    tab_b = _revision_of(world)
+    assert tab_a == tab_b
+    first = _call_at(world, "PUT", "alice", _content({"fibo": 1}), tab_a)
+    assert first.status_code == 200, first.text
+    assert first.json()["version"] == tab_a[0]  # a save never changes the version
+    assert first.json()["revision"] != tab_a[1]  # but it does change the revision
+    before = await _held(world)
+    for method, body in (("PUT", _content({"niem": 1})), ("DELETE", None)):
+        answer = _call_at(world, method, "alice", body, tab_b)
+        assert answer.status_code == 409, (method, answer.text)
+        assert answer.json()["error"] == "model_refused"
+        words = answer.json()["detail"]
+        assert "out of date" in words and "read it again" in words
+        assert "fibo" not in words and "niem" not in words  # the words carry none of the content
+        # Nothing was saved over the first tab's work, and nothing was discarded.
+        assert await _held(world) == before
+    assert _actions(world) == ["open_model_draft", "save_model_draft"]
+    # Control: the copy the first save returned is the current one, and saves and discards.
+    current = (first.json()["version"], first.json()["revision"])
+    assert _call_at(world, "PUT", "alice", _content({"fibo": 2}), current).status_code == 200
+
+
+async def test_a_copy_read_before_a_discard_and_a_new_draft_is_refused(
+    world: SimpleNamespace,
+) -> None:
+    """The draft is discarded and opened again at the same live version: the same version number,
+    a different draft. A copy of the first is out of date. Red with the revision derived from the
+    version (or reused after a discard)."""
+    assert _call(world, "POST", "alice").status_code == 201
+    old = _revision_of(world)
+    assert _call_at(world, "DELETE", "alice", None, old).status_code == 204
+    assert _call(world, "POST", "alice").status_code == 201
+    new = _revision_of(world)
+    assert new[0] == old[0]  # the same version number again
+    assert new[1] != old[1]  # never the same revision
+    before = await _held(world)
+    for method, body in (("PUT", _content({"niem": 1})), ("DELETE", None)):
+        answer = _call_at(world, method, "alice", body, old)
+        assert answer.status_code == 409, (method, answer.text)
+        assert "out of date" in answer.json()["detail"]
+        assert await _held(world) == before
+    # Discarded and opened again many times, a revision is never one seen before.
+    seen = {old[1], new[1]}
+    for _ in range(5):
+        assert _call_at(world, "DELETE", "alice", None, _revision_of(world)).status_code == 204
+        assert _call(world, "POST", "alice").status_code == 201
+        seen.add(_revision_of(world)[1])
+    assert len(seen) == 7
+
+
+async def test_a_link_type_acceptance_makes_a_copy_read_before_it_stale() -> None:
+    """`add_extension` writes into the draft too (ADR-143 decision 9), so a creator's copy read
+    before is stale: their save would otherwise be made over an acceptance they have not seen."""
+    store = InMemoryTargetModelStore(core_types=CORE_TYPES_FOR_TESTS)
+    alice, bob = PEOPLE["alice"], PEOPLE["bob"]
+    opened = await store.open_draft(DATASET, alice)
+    assert opened.revision
+    await store.add_extension(DATASET, "BRIBED", "link_type", bob)
+    changed = await store.draft(DATASET)
+    assert changed is not None and changed.revision and changed.revision != opened.revision
+    with pytest.raises(TargetModelRefused, match="out of date"):
+        await store.save_draft(
+            DATASET, TargetModelDraftInput(packs={"niem": 1}), alice,
+            expected_version=opened.version, expected_revision=opened.revision,
+        )  # fmt: skip
+    assert await store.draft(DATASET) == changed
+
+
+async def test_the_revision_is_checked_after_the_creator_and_is_optional_at_the_store() -> None:
+    """Another person is told who holds the draft whatever revision they send (the creator check
+    first, so the revision is never an oracle for a draft that is not theirs); a caller that sends
+    none (the import path confirms a version alone) is checked against the version alone."""
+    store = InMemoryTargetModelStore(core_types=CORE_TYPES_FOR_TESTS)
+    alice, bob = PEOPLE["alice"], PEOPLE["bob"]
+    draft = await store.open_draft(DATASET, alice)
+    for revision in (draft.revision, "not-the-revision"):
+        with pytest.raises(TargetModelRefused, match="alice-1") as refused:
+            await store.save_draft(
+                DATASET, TargetModelDraftInput(packs={"niem": 1}), bob,
+                expected_version=draft.version, expected_revision=revision,
+            )  # fmt: skip
+        assert "out of date" not in str(refused.value)
+        with pytest.raises(TargetModelRefused, match="alice-1"):
+            await store.discard_draft(
+                DATASET, bob, expected_version=draft.version, expected_revision=revision
+            )
+    saved = await store.save_draft(
+        DATASET, TargetModelDraftInput(packs={"niem": 1}), alice, expected_version=draft.version
+    )
+    assert saved.packs == {"niem": 1}
+
+
 # --- the import path, unchanged -----------------------------------------------------------------
 
 

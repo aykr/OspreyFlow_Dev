@@ -24,6 +24,7 @@ export type CreatedAt = string;
 export type PrincipalId = string;
 export type MadeLiveAt = string | null;
 export type RevertedFrom = number | null;
+export type Revision = string | null;
 
 /**
  * `GET /v1/datasets/{dataset_id}/model`: the live version and the open draft, each `None` when
@@ -49,6 +50,7 @@ export interface TargetModel {
   made_live_at?: MadeLiveAt;
   made_live_by?: PrincipalId | null;
   reverted_from?: RevertedFrom;
+  revision?: Revision;
 }
 export interface Packs {
   [k: string]: number;

@@ -19,6 +19,12 @@ decision 1).
 - **A type's matching rule names a field a reference can find**
   (`_refuse_a_rule_a_reference_cannot_use`): one of its identifiers or one of its indexed
   properties, and no other.
+- **A copy of the draft is known by its version and its revision** (`TargetModel.revision`): the
+  version alone cannot tell two copies of one draft apart (a save keeps it, and a draft discarded
+  and opened again at the same live version takes it again), so every open and every write into
+  the draft makes a new revision, never one the draft had before, and a save or a discard that
+  carries the revision it was read at is refused when the draft's is another
+  (`refuse_a_write_to_a_draft`).
 - **A revert is a new draft, never a rewrite**: reverting to version N while N+1 is live makes the
   draft N+2, a copy of N (`reverted_from = N`); N itself is untouched.
 
@@ -30,6 +36,7 @@ Amendment 6).
 from __future__ import annotations
 
 import json
+import uuid
 from collections.abc import Iterable, Sequence
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -92,14 +99,27 @@ def _refuse_a_second_draft(draft: TargetModel | None) -> None:
         )
 
 
+def _new_revision() -> str:
+    """A revision no draft has had before: a random token, never reused after a discard."""
+    return uuid.uuid4().hex
+
+
 def refuse_a_write_to_a_draft(
-    draft: TargetModel, principal: Principal, *, expected_version: int | None = None
+    draft: TargetModel,
+    principal: Principal,
+    *,
+    expected_version: int | None = None,
+    expected_revision: str | None = None,
 ) -> None:
     """A save into, replace of or discard of `draft` is its creator's alone (C186), and is refused
     before anything is changed otherwise, in words naming who holds it (as `held_draft_problem`
     says it for an import) and never what is in it. Where a version is given (a store argument,
     as an import confirms `replace_own_draft`), a draft that is no longer that version is refused
-    too, so a stale write is not made over a draft opened again since."""
+    too, so a stale write is not made over a draft opened again since; and where a revision is
+    given (the Studio page always gives one), a draft that is a different copy at the same version
+    (saved again, or discarded and opened again, since) is refused in words that carry nothing of
+    it. The creator check is first, so neither the version nor the revision is ever an oracle for
+    a draft that is not the person's."""
     opened = draft.created_at.strftime("%d %B %Y at %H:%M UTC")
     if draft.created_by != principal.id:
         raise TargetModelRefused(
@@ -112,6 +132,12 @@ def refuse_a_write_to_a_draft(
         raise TargetModelRefused(
             f"you meant your draft's version {expected_version}, but your draft is now version "
             f"{draft.version}, opened {opened}: read it again before changing it"
+        )
+    if expected_revision is not None and expected_revision != draft.revision:
+        raise TargetModelRefused(
+            f"your copy of the draft (version {draft.version}, opened {opened}) is out of date: "
+            "the draft was saved again, or discarded and opened again, since you read it: read it "
+            "again before changing it"
         )
 
 
@@ -214,6 +240,7 @@ def _reverted(
         dataset_id=to.dataset_id, version=version, state="draft", packs=dict(to.packs),
         extensions=[*to.extensions, *later], reference_lists=list(to.reference_lists),
         created_at=now, created_by=principal.id, reverted_from=to.version,
+        revision=_new_revision(),
     )  # fmt: skip
 
 
@@ -229,9 +256,15 @@ class TargetModelStore(Protocol):
         principal: Principal,
         *,
         expected_version: int | None = None,
+        expected_revision: str | None = None,
     ) -> TargetModel: ...
     async def discard_draft(
-        self, dataset_id: str, principal: Principal, *, expected_version: int | None = None
+        self,
+        dataset_id: str,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
+        expected_revision: str | None = None,
     ) -> None: ...
     async def make_live(
         self, dataset_id: str, version: int, principal: Principal
@@ -263,12 +296,13 @@ def _first_or_copy(dataset_id: str, live: TargetModel | None, principal: Princip
     now = datetime.now(UTC)
     if live is None:
         return TargetModel(
-            dataset_id=dataset_id, version=1, state="draft", created_at=now, created_by=principal.id
-        )
+            dataset_id=dataset_id, version=1, state="draft", created_at=now,
+            created_by=principal.id, revision=_new_revision(),
+        )  # fmt: skip
     return live.model_copy(
         update={"version": live.version + 1, "state": "draft", "created_at": now,
                 "created_by": principal.id, "made_live_at": None, "made_live_by": None,
-                "reverted_from": None}
+                "reverted_from": None, "revision": _new_revision()}
     )  # fmt: skip
 
 
@@ -307,29 +341,39 @@ class InMemoryTargetModelStore:
         principal: Principal,
         *,
         expected_version: int | None = None,
+        expected_revision: str | None = None,
     ) -> TargetModel:
         draft = await self.draft(dataset_id)
         if draft is None:
             raise TargetModelRefused("there is no draft to save: open one first")
-        refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
+        refuse_a_write_to_a_draft(
+            draft, principal, expected_version=expected_version, expected_revision=expected_revision
+        )
         return await self._written(dataset_id, draft, given)
 
     async def _written(
         self, dataset_id: str, draft: TargetModel, given: TargetModelDraftInput
     ) -> TargetModel:
         _checked(await self.live(dataset_id), draft, given, self._core)
-        saved = draft.model_copy(update=_fields_of(given))
+        saved = draft.model_copy(update={**_fields_of(given), "revision": _new_revision()})
         held = self._of(dataset_id)
         held[held.index(draft)] = saved
         return saved
 
     async def discard_draft(
-        self, dataset_id: str, principal: Principal, *, expected_version: int | None = None
+        self,
+        dataset_id: str,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
+        expected_revision: str | None = None,
     ) -> None:
         draft = await self.draft(dataset_id)
         if draft is None:
             raise TargetModelRefused("there is no draft to discard")
-        refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
+        refuse_a_write_to_a_draft(
+            draft, principal, expected_version=expected_version, expected_revision=expected_revision
+        )
         self._of(dataset_id).remove(draft)
 
     async def make_live(
@@ -384,8 +428,14 @@ CREATE TABLE IF NOT EXISTS target_models (
     made_live_at TIMESTAMPTZ,
     made_live_by TEXT,
     reverted_from INTEGER,
+    revision TEXT,
     PRIMARY KEY (dataset_id, version)
 );
+ALTER TABLE target_models ADD COLUMN IF NOT EXISTS revision TEXT;
+UPDATE target_models
+    SET revision = md5(dataset_id || ':' || version::text || ':' || random()::text
+                       || ':' || clock_timestamp()::text)
+    WHERE revision IS NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS target_models_one_live
     ON target_models (dataset_id) WHERE state = 'live';
 CREATE UNIQUE INDEX IF NOT EXISTS target_models_one_draft
@@ -394,7 +444,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS target_models_one_draft
 
 _COLUMNS = (
     "dataset_id, version, state, content, created_at, created_by, made_live_at, made_live_by, "
-    "reverted_from"
+    "reverted_from, revision"
 )
 
 
@@ -407,6 +457,7 @@ def _row(row: Any) -> TargetModel:
         reference_lists=content.get("reference_lists", []), created_at=row["created_at"],
         created_by=row["created_by"], made_live_at=row["made_live_at"],
         made_live_by=row["made_live_by"], reverted_from=row["reverted_from"],
+        revision=row["revision"],
     )  # fmt: skip
 
 
@@ -476,9 +527,10 @@ class PostgresTargetModelStore:
     async def _insert(self, conn: Any, model: TargetModel) -> None:
         await conn.execute(
             f"INSERT INTO target_models ({_COLUMNS}) VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, "
-            "$8, $9)",
+            "$8, $9, $10)",
             model.dataset_id, model.version, model.state, _content(model), model.created_at,
             model.created_by, model.made_live_at, model.made_live_by, model.reverted_from,
+            model.revision,
         )  # fmt: skip
 
     async def open_draft(self, dataset_id: str, principal: Principal) -> TargetModel:
@@ -496,22 +548,30 @@ class PostgresTargetModelStore:
         principal: Principal,
         *,
         expected_version: int | None = None,
+        expected_revision: str | None = None,
     ) -> TargetModel:
+        revision = _new_revision()
         async with self._pool.acquire() as conn, conn.transaction():
             await self._locked(conn, dataset_id)
             draft = await self._in(conn, dataset_id, "draft")
             if draft is None:
                 raise TargetModelRefused("there is no draft to save: open one first")
-            refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
+            refuse_a_write_to_a_draft(
+                draft,
+                principal,
+                expected_version=expected_version,
+                expected_revision=expected_revision,
+            )
             _checked(await self._in(conn, dataset_id, "live"), draft, given, self._core)
             await conn.execute(
-                "UPDATE target_models SET content = $3::jsonb "
+                "UPDATE target_models SET content = $3::jsonb, revision = $4 "
                 "WHERE dataset_id = $1 AND version = $2 AND state = 'draft'",
                 dataset_id,
                 draft.version,
                 _content(given),
+                revision,
             )
-        return draft.model_copy(update=_fields_of(given))
+        return draft.model_copy(update={**_fields_of(given), "revision": revision})
 
     async def add_extension(
         self, dataset_id: str, name: str, kind: ExtensionKind, principal: Principal
@@ -528,24 +588,36 @@ class PostgresTargetModelStore:
                 await self._insert(conn, draft)
             given = _added(draft, name, kind)
             _checked(live, draft, given, self._core)
+            revision = _new_revision()
             await conn.execute(
-                "UPDATE target_models SET content = $3::jsonb "
+                "UPDATE target_models SET content = $3::jsonb, revision = $4 "
                 "WHERE dataset_id = $1 AND version = $2 AND state = 'draft'",
                 dataset_id,
                 draft.version,
                 _content(given),
+                revision,
             )
-        return draft.model_copy(update=_fields_of(given))
+        return draft.model_copy(update={**_fields_of(given), "revision": revision})
 
     async def discard_draft(
-        self, dataset_id: str, principal: Principal, *, expected_version: int | None = None
+        self,
+        dataset_id: str,
+        principal: Principal,
+        *,
+        expected_version: int | None = None,
+        expected_revision: str | None = None,
     ) -> None:
         async with self._pool.acquire() as conn, conn.transaction():
             await self._locked(conn, dataset_id)
             draft = await self._in(conn, dataset_id, "draft")
             if draft is None:
                 raise TargetModelRefused("there is no draft to discard")
-            refuse_a_write_to_a_draft(draft, principal, expected_version=expected_version)
+            refuse_a_write_to_a_draft(
+                draft,
+                principal,
+                expected_version=expected_version,
+                expected_revision=expected_revision,
+            )
             await conn.execute(
                 "DELETE FROM target_models "
                 "WHERE dataset_id = $1 AND version = $2 AND state = 'draft'",

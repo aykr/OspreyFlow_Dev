@@ -24,6 +24,7 @@ export type CreatedAt = string;
 export type PrincipalId = string;
 export type MadeLiveAt = string | null;
 export type RevertedFrom = number | null;
+export type Revision = string | null;
 
 /**
  * One version of a dataset's domain model (R3, R12).
@@ -40,6 +41,7 @@ export interface TargetModel {
   made_live_at?: MadeLiveAt;
   made_live_by?: PrincipalId | null;
   reverted_from?: RevertedFrom;
+  revision?: Revision;
 }
 export interface Packs {
   [k: string]: number;

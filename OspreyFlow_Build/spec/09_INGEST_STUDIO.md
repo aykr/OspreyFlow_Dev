@@ -304,10 +304,14 @@ decision records, the prototype's Model step and the owner's rulings of 21 and 2
   in a sentence, since they are the ontology's. Who holds the draft and since when is said in a sentence. A version with no types
   of its own, no draft and no live model are each said in words, with no table.
 - **What it does.** A draft is opened, saved and discarded by native forms with a button each, carrying the anti-forgery token, the
-  case and, for a save and a discard, the **expected version**: the version the person's copy was read at, in a hidden field. The
-  page hands the Conduit that very number, the Conduit's store refuses a draft that is no longer that version, and **a stale one is
-  refused**: the page says the copy was out of date and what the draft is now, shows the draft as it now is and keeps what the
-  person typed. Save edits the starter packs' pinned versions; the type form's editing, reference lists and Make live are later
+  case and, for a save and a discard, the **expected version** and the **expected revision**: the version and the revision the person's
+  copy was read at, in hidden fields. The version alone cannot tell two copies of one draft apart (a save keeps it, and a draft
+  discarded and opened again at the same live version takes it again), so the draft also carries a revision, a token the store makes
+  when the draft is opened and changes on every save and never repeats. The page hands the Conduit those very values, the Conduit's
+  store refuses a draft that is no longer that copy, and **a stale one is refused**, whether the draft was made live and opened again,
+  saved again, or discarded and opened again: the page says the copy was out of date and what the draft is now, shows the draft as it
+  now is and keeps what the person typed (in the save form, or listed where there is no draft, or the draft is another person's, to
+  hold it). A save from a copy of a draft that is gone is sent like any other and refused by the Conduit. Save edits the starter packs' pinned versions; the type form's editing, reference lists and Make live are later
   slices of this build.
 - **Who may act.** A draft is saved into, replaced and discarded by **only its creator** (C186; ADR-152 X5): the page offers the forms to
   the creator and says who holds the draft to anyone else, and the Conduit refuses anyone else's request all the same, in words

@@ -128,6 +128,12 @@ class TargetModel(BaseModel):
     made_live_by: PrincipalId | None = None
     #: The version a revert copied, for a draft made by *Revert*; `None` otherwise.
     reverted_from: int | None = Field(default=None, ge=1)
+    #: Which copy of the draft this is: an opaque token the store makes when the draft is opened and
+    #: changes on every save, and never one a draft had before. The version alone cannot tell two
+    #: copies of one draft apart (a save keeps it; a draft discarded and opened again at the same
+    #: live version takes it again), so a save and a discard carry both (ADR-152 X5). `None` only
+    #: for a row written past the store.
+    revision: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class TargetModelDraftInput(BaseModel):
@@ -150,9 +156,15 @@ class TargetModelDraftSave(TargetModelDraftInput):
     save made over a draft that is no longer that version is refused in the store's words, and a
     body with no version is refused too, so a client that does not send one cannot skip the
     check. A separate model, not a field of the input, so the callers that build the input
-    directly are not given a version they could set and have nothing read."""
+    directly are not given a version they could set and have nothing read.
+
+    `expected_revision` is the revision the same copy was read at (`TargetModel.revision`): where it
+    is sent, a draft that was saved again, or discarded and opened again, since is refused too, even
+    at the same version, which a version alone cannot tell. The Studio page always sends it; it is
+    optional here so a caller that holds only a version (its check is the version's) still works."""
 
     expected_version: int = Field(ge=1)
+    expected_revision: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 #: ADR-140 Amendment 9 decision 3: a `screening` list is screened against; a `reference` list is

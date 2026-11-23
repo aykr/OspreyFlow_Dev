@@ -70,6 +70,7 @@ const draft = (over: Partial<FakeModel> = {}): FakeModel => ({
   made_live_at: null,
   made_live_by: null,
   reverted_from: null,
+  revision: "rev-seed",
   ...over,
 });
 

@@ -11845,13 +11845,19 @@ async def save_dataset_model_draft(
     """Saves the draft as given, confirming the version the person's copy was read at (the body's
     `expected_version`, required: a body with none is 422, so a client that sends none cannot skip
     the check). A draft that is no longer that version is refused 409 `model_refused` in the
-    store's words, and nothing is changed (ADR-152 X5). An extension removed rather than retired,
-    a POLE core type named as one, or a matching rule naming a field a reference cannot find, is
-    refused (409), and so is a save by anyone but the draft's creator (409 `model_refused`, naming
-    who holds it, before anything is changed; C186): the creator check comes before the version
-    check. Nothing that runs changes."""
+    store's words, and nothing is changed (ADR-152 X5). So is a draft at that version that is
+    another copy, when the body's `expected_revision` (the Studio page always sends it) is not the
+    draft's: it was saved again, or discarded and opened again, since the copy was read. An
+    extension removed rather than retired, a POLE core type named as one, or a matching rule
+    naming a field a reference cannot find, is refused (409), and so is a save by anyone but the
+    draft's creator (409 `model_refused`, naming who holds it, before anything is changed; C186):
+    the creator check comes before the version check. Nothing that runs changes."""
     draft = await models.save_draft(
-        dataset_id, body, principal, expected_version=body.expected_version
+        dataset_id,
+        body,
+        principal,
+        expected_version=body.expected_version,
+        expected_revision=body.expected_revision,
     )
     await _audit_model(audit, principal, "save_model_draft", dataset_id, draft.version)
     return draft
@@ -11868,14 +11874,21 @@ async def discard_dataset_model_draft(
     models: TargetModelsDep,
     audit: AuditDep,
     expected_version: Annotated[int, Query(ge=1)],
+    expected_revision: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> None:
     """Discards the draft, confirming the version the person's copy was read at (the query's
     `expected_version`, required: a request with none is 422). A draft that is no longer that
     version is refused 409 `model_refused` in the store's words, with the draft still there
-    (ADR-152 X5); the route no longer reads the draft and confirms its own version, which
-    confirmed nothing the client held. Its creator's alone (409 `model_refused` for anyone else,
-    naming who holds it, with the draft still there; C186)."""
-    await models.discard_draft(dataset_id, principal, expected_version=expected_version)
+    (ADR-152 X5), and so is another copy at that version when the query's `expected_revision` (the
+    Studio page always sends it) is not the draft's. The route no longer reads the draft and
+    confirms its own version, which confirmed nothing the client held. Its creator's alone (409
+    `model_refused` for anyone else, naming who holds it, with the draft still there; C186)."""
+    await models.discard_draft(
+        dataset_id,
+        principal,
+        expected_version=expected_version,
+        expected_revision=expected_revision,
+    )
     await _audit_model(audit, principal, "discard_model_draft", dataset_id, expected_version)
 
 

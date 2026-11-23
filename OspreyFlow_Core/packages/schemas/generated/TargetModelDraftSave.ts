@@ -18,6 +18,7 @@ export type Indexed = boolean;
 export type Extensions = ModelExtension[];
 export type ReferenceLists = string[];
 export type ExpectedVersion = number;
+export type ExpectedRevision = string | null;
 
 /**
  * `PUT /v1/datasets/{dataset_id}/model/draft`: the draft as the editor leaves it, and the
@@ -26,12 +27,18 @@ export type ExpectedVersion = number;
  * body with no version is refused too, so a client that does not send one cannot skip the
  * check. A separate model, not a field of the input, so the callers that build the input
  * directly are not given a version they could set and have nothing read.
+ *
+ * `expected_revision` is the revision the same copy was read at (`TargetModel.revision`): where it
+ * is sent, a draft that was saved again, or discarded and opened again, since is refused too, even
+ * at the same version, which a version alone cannot tell. The Studio page always sends it; it is
+ * optional here so a caller that holds only a version (its check is the version's) still works.
  */
 export interface TargetModelDraftSave {
   packs?: Packs;
   extensions?: Extensions;
   reference_lists?: ReferenceLists;
   expected_version: ExpectedVersion;
+  expected_revision?: ExpectedRevision;
 }
 export interface Packs {
   [k: string]: number;
