@@ -58,6 +58,7 @@ pre{background:var(--dark,#101314);color:var(--on-dark,#E8ECED);padding:18px 20p
 .btn.quiet{border-color:transparent;text-decoration:underline;padding-left:6px;padding-right:6px}
 .band{padding:60px 0} .band.tint{background:var(--ground-2,#E8ECED)}
 .intro{font-size:1.1rem;color:var(--ink-2,#4B4E4E);max-width:46em;margin-top:-.4em}
+.intent{font-size:1.1rem;color:var(--ink-2,#4B4E4E);max-width:46em}
 .cards{display:grid;gap:18px;margin-top:22px} .c3{grid-template-columns:repeat(3,1fr)} .c4{grid-template-columns:repeat(4,1fr)}
 .card{background:var(--surface,#FFFFFF);border:1px solid var(--line,#CED2D2);border-top:3px solid var(--accent,#8A6318);padding:20px 20px 16px;border-radius:3px}
 .card h3{margin-top:0} .card p{margin:.4em 0;color:var(--ink-2,#4B4E4E);font-size:.97rem} .more{font-weight:600}
