@@ -34,6 +34,13 @@ chosen model before anything that uses it starts (`harness.model_downloads`), an
 proxy when its table changed. Nothing else in those files is touched, and no secret changes. The
 Glass's `/deployment.json` (`glass.json`, no secret in it) is written as the checkout renders it.
 
+A plain line `harness.render._render_env` writes for the deployment's own `osprey.yaml` and its
+`deployment.env` lacks is added, as the render writes it and where it puts it (D216; a deployment
+rendered before the line existed otherwise kept lacking it). A line that is there is never
+changed: a key whose value differs from the render's is named (never its value) with the command
+that would bring it to the render's, `ospreyflow apply`. No secret is written, and a line the
+render does not emit (an operator's, or one `apply` appends) stays.
+
 Before its `up`, a deployment whose stores' data is not yet in their named volumes has the
 volumes added to `compose.yaml` and the data moved there once (`harness.store_volumes`, ADR-114
 Amendment 35); the old volumes are kept. A refused move puts every file this wrote back as it was
@@ -69,7 +76,7 @@ from harness import (
     update,
     upgrade_stamp,
 )
-from harness.apply import _compose, release_registry
+from harness.apply import _SECRET_KEY, _compose, release_registry
 from harness.atomic import replace_whole
 from harness.keycloak_theme import (
     THEME_DIRECTORY,
@@ -80,6 +87,7 @@ from harness.keycloak_theme import (
     render_login_theme,
     write_login_theme,
 )
+from harness.preflight.ports import parse_env_line
 from harness.profiles import postgres_connections_up_to_date
 from harness.render import (
     STATE_CONTAINER_PATH,
@@ -313,6 +321,145 @@ def _models_up_to_date(directory: Path) -> bool:
         proxy_path.write_text(routing, encoding="utf-8")
         return True
     return False
+
+
+#: The one render line a deployment keeps whatever the checkout renders: its release is the one it
+#: was rendered with (`harness.apply._keep_the_version`, `harness.fresh_only`). Refresh moves it by
+#: its own step (`_release_up_to_date`), so it is never named as differing.
+_KEPT_RELEASE = "OSPREY_RELEASE_VERSION"
+
+
+def _the_render_writes(directory: Path) -> list[str] | None:
+    """The lines `harness.render._render_env` writes for the deployment's own `osprey.yaml`, each
+    with its newline, comments and blank lines in place; None where no `osprey.yaml` is beside the
+    deployment (nothing says what its render would be). `_render_env` is a pure function of the
+    configuration, so no render is run and no secret is minted. The function is looked up on its
+    module when this runs, so the one a test patches is the one used."""
+    from harness import render as the_render
+
+    config_path = directory / "osprey.yaml"
+    if not config_path.is_file():
+        return None
+    services = (yaml.safe_load((directory / "compose.yaml").read_text(encoding="utf-8")) or {}).get(
+        "services", {}
+    )
+    config = _like_the_deployment(load_config(config_path), services, directory)
+    return the_render._render_env(config).splitlines(keepends=True)
+
+
+def _the_key(line: str) -> str | None:
+    """The key a line sets **as Compose reads the file** (`harness.preflight.ports.parse_env_line`:
+    `export KEY=v` and an indented `KEY=v` set `KEY`; a comment sets nothing). A line Compose reads
+    as setting a key is a line that is there, so refresh neither adds the render's beside it nor
+    changes it."""
+    parsed = parse_env_line(line)
+    return parsed[0] if parsed else None
+
+
+def _value_of(line: str) -> str:
+    """The value Compose reads from the line: no quotes, no trailing ` #` comment."""
+    parsed = parse_env_line(line)
+    return parsed[1] if parsed else ""
+
+
+def _may_be_added(key: str) -> bool:
+    """Whether a render line is one refresh may write. **Never decided by what the name says is
+    plain** (the owner's answer 1 of 23 November 2026): a key is only ever refused here, in the one
+    direction that cannot do harm. A name `_SECRET_KEY` matches is never written, though no render
+    line is one (`tests/harness/test_refresh_plain_lines.py` fails closed if one ever is), and the
+    model lines are `_models_up_to_date`'s."""
+    return key not in _MODEL_LINES and not _SECRET_KEY.search(key)
+
+
+def _put_line(lines: list[str], wanted: list[str], at: int) -> list[str]:
+    """`lines` with `wanted[at]` put where the render has it: after the nearest line before it in
+    the render that `lines` holds (and after the comments the render puts between the two, where
+    `lines` has them too), else before the nearest one after it, else at the end."""
+    held = {key: i for i, line in enumerate(lines) if (key := _the_key(line)) is not None}
+    for before in range(at - 1, -1, -1):
+        key = _the_key(wanted[before])
+        if key is not None and key in held:
+            between = wanted[before + 1 : at]
+            place = held[key] + 1
+            if lines[place : place + len(between)] == between:
+                place += len(between)
+            break
+    else:
+        for after in range(at + 1, len(wanted)):
+            key = _the_key(wanted[after])
+            if key is not None and key in held:
+                place = held[key]
+                break
+        else:
+            place = len(lines)
+    new = list(lines)
+    if place == len(new) and new and not new[-1].endswith("\n"):
+        new[-1] += "\n"  # the file ended without one: the line before is ended, not joined
+    new.insert(place, wanted[at])
+    return new
+
+
+def _plain_lines_added(directory: Path) -> None:
+    """D216: a plain line `_render_env` writes for this deployment's `osprey.yaml` that the
+    deployment's `deployment.env` lacks is added, as the render writes it, where the render puts it;
+    every other line is as it was, byte for byte. **A line that is there is never changed** (what
+    differs is named by `_plain_lines_differing`), a line the render does not emit (an operator's,
+    one `apply` appends) stays, and no secret is written (`_may_be_added`). Where the render writes
+    a line only under a setting (ClickHouse, OpenSearch), it is added only where `osprey.yaml` has
+    the setting, since it is the render of that file that is read. Edited in the staged copy, as
+    the model lines are."""
+    wanted = _the_render_writes(directory)
+    if wanted is None:
+        return
+    env_path = directory / "deployment.env"
+    lines = env_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    updated = lines
+    for at, line in enumerate(wanted):
+        key = _the_key(line)
+        if key is None or not _may_be_added(key):
+            continue
+        if not any(_the_key(held) == key for held in updated):
+            updated = _put_line(updated, wanted, at)
+    if updated != lines:
+        env_path.write_text("".join(updated), encoding="utf-8")
+
+
+def _plain_lines_differing(directory: Path) -> list[str]:
+    """The keys of the lines `deployment.env` holds with a value other than the render's, in the
+    render's order: names only, never a value. Not the release version (a deployment's own), not a
+    model line (`_models_up_to_date` writes those), not a secret."""
+    wanted = _the_render_writes(directory)
+    if wanted is None:
+        return []
+    held: dict[str, str] = {}
+    for line in (
+        (directory / "deployment.env").read_text(encoding="utf-8").splitlines(keepends=True)
+    ):
+        if (key := _the_key(line)) is not None:
+            held[key] = _value_of(line)  # the last, as Compose reads it
+    return [
+        key
+        for line in wanted
+        if (key := _the_key(line)) is not None
+        and key != _KEPT_RELEASE
+        and _may_be_added(key)
+        and key in held
+        and held[key] != _value_of(line)
+    ]
+
+
+def _tell_what_differs(directory: Path, keys: list[str]) -> None:
+    """Said on stdout, before the JSON `--files-only` ends with (`update` reads its last line)."""
+    if not keys:
+        return
+    print(
+        "refresh: these settings in deployment.env are not what this checkout's render writes, "
+        f"and refresh does not change a setting that is there: {', '.join(keys)}. They are kept as "
+        "they are. If you did not set them yourself, run "
+        f"`ospreyflow apply{_named(directory)}` to bring them to the render's (it keeps every "
+        "secret).",
+        flush=True,
+    )
 
 
 def _build_context(services: dict) -> str:
@@ -834,6 +981,7 @@ def _files_up_to_date_staged(directory: Path, repo_root: Path) -> dict[str, bool
             elif path.name in _STAGED_FOLDERS and path.is_dir():
                 shutil.copytree(path, stage / path.name, symlinks=True)
         changed = _files_up_to_date_in(stage, repo_root)
+        differing = _plain_lines_differing(stage)
         missing = _unset_required(stage)
         if missing:
             gateway = any(name in _GATEWAY_SECRETS for name in missing)
@@ -887,6 +1035,7 @@ def _files_up_to_date_staged(directory: Path, repo_root: Path) -> dict[str, bool
                 shutil.copytree(path, directory / path.name, symlinks=True, dirs_exist_ok=True)
             elif path.is_dir():
                 (directory / path.name).mkdir(exist_ok=True)
+        _tell_what_differs(directory, differing)
         return changed
     finally:
         shutil.rmtree(stage, ignore_errors=True)
@@ -906,6 +1055,9 @@ def _mounted_files(directory: Path) -> set[str]:
 
 def _files_up_to_date_in(directory: Path, repo_root: Path) -> dict[str, bool]:
     theme_changed = _theme_changed(directory, repo_root)
+    # First, so a line the model lines and the release lines follow in the render is back before
+    # they are written, and they are put after it (each of those steps places by the line before).
+    _plain_lines_added(directory)
     proxy_changed = _models_up_to_date(directory)
     _new_services_added(directory)
     _pins_moved(directory)
@@ -1033,6 +1185,16 @@ def _search_index_rebuilt(
     try:
         run(search_rebuild.rebuild_argv(compose))
     except RefreshFailed as failed:
+        if search_rebuild.sets_no_address(compose_file.parent / "deployment.env"):
+            # Running this again mends nothing: the Conduit has no address for OpenSearch and
+            # reaches for `localhost:9200`. Only `apply` writes the setting (D216).
+            raise RefreshFailed(
+                f"The stack is up and the sign-in accounts registered, but the search index could "
+                f"not be rebuilt from the graph ({failed}): deployment.env sets neither "
+                f"OPENSEARCH_URL nor OPENSEARCH_HOST, so the Conduit has no address for "
+                f"OpenSearch, and search answers only exact identifiers until it does. Run "
+                f"`ospreyflow apply{_named(compose_file.parent)}` to write the setting."
+            ) from failed
         raise RefreshFailed(
             f"The stack is up and the sign-in accounts registered, but the search index could not "
             f"be rebuilt from the graph ({failed}), so search answers only exact identifiers until "

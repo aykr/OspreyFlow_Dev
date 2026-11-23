@@ -1,0 +1,77 @@
+# The plain `deployment.env` lines `harness.render._render_env` may emit: the keys a human has judged to hold
+# a name, a path, a port, an address or a choice, and never a credential (PL14, D216).
+#
+# **Who may add to this file: a human, who has read what the new render line holds and judged the key plain.**
+# Not the builder of the change that adds the render line, on that builder's word alone; the owner (or
+# whoever he names) reads the line and the value the render writes for it, then adds the key here in the same
+# change. `scripts/refresh.py` adds a missing line to a deployment only from what `_render_env` emits, and
+# `tests/harness/test_refresh_plain_lines.py` fails closed when a key the render emits is not on this list or
+# matches the secret name test (`_SECRET_KEY` in `harness/apply.py`). A key that holds a secret is never
+# added here: it belongs in `harness.apply`'s minted lines, which refresh never touches.
+#
+# One key per line; a line that starts with `#` and a blank line are comments.
+# First list, 23 November 2026: every key the render emits for the five shapes (local-lite, small, cluster,
+# cloud-platform, cloud-platform-poc) under both brands and each setting that adds a line (ClickHouse,
+# OpenSearch, mail, organisation sign-in, connectors, grading file, hosted fallback, engines, reporting,
+# the worker, Laurium, resources, a graph port). Written by the builder of PL14a; to be read by the owner.
+ANALYTICS_DB_PATH
+CLICKHOUSE_HOST
+CLICKHOUSE_HTTP_PORT
+CLICKHOUSE_USER
+CORS_ALLOWED_ORIGINS
+OIDC_AUDIENCE
+OPENSEARCH_HOST
+OPENSEARCH_PORT
+OSPREY_ANALYTICS_ENGINE
+OSPREY_API_PORT
+OSPREY_ARCADEDB_HEAP
+OSPREY_ARCADEDB_PORT
+OSPREY_BACKUP_ROOT
+OSPREY_CONNECTOR_PRIVATE
+OSPREY_CONNECTOR_SECRETS
+OSPREY_DASHBOARDS_ORIGIN
+OSPREY_DATA_ROOT
+OSPREY_EMBEDDING_MODEL
+OSPREY_EXTRACTION_ENGINE
+OSPREY_EXTRACTION_MODEL
+OSPREY_GLASS_ORIGIN
+OSPREY_GRADING_GRADES
+OSPREY_GRADING_SCHEME
+OSPREY_GRAPH_STORE
+OSPREY_HANDLING_SCHEME
+OSPREY_HIGHEST_MARKING
+OSPREY_HOSTED_FALLBACK
+OSPREY_HOTLIST_AUDIENCE
+OSPREY_HOTLIST_AUDIENCE_EDITABLE
+OSPREY_IDENTITY_ORIGIN
+OSPREY_IDENTITY_PROVIDER
+OSPREY_INGEST_ROOT
+OSPREY_JOB_WORKER
+OSPREY_LAURIUM_URL
+OSPREY_MODEL_DEFAULTS
+OSPREY_MODEL_ENGINES
+OSPREY_MODELS_LOCAL_ONLY
+OSPREY_ONTOLOGY
+OSPREY_ORGANISATION_SIGN_IN
+OSPREY_POST_INGEST_RESOLUTION
+OSPREY_PROFILE
+OSPREY_REAL_DATA_EXCEPTIONS
+OSPREY_RELEASE_VERSION
+OSPREY_SEARCH_BACKEND
+OSPREY_SEARCH_INDEX_ALIAS
+OSPREY_SENDABLE_HANDLING_CODES
+OSPREY_SIGN_IN_EMAIL
+OSPREY_STAGING_ROOT
+OSPREY_STATE_DIR
+OSPREY_TRANSCRIPTION_MODEL
+OSPREY_VISION_MODEL
+REPORT_MART_READER
+REPORT_SYNC_CONDUIT_URL
+REPORT_SYNC_INTERVAL_SECONDS
+REPORT_SYNC_TOKEN_URL
+SUPERSET_GLASS_ORIGIN
+SUPERSET_IDP_INTERNAL
+SUPERSET_IDP_PUBLIC
+SUPERSET_INTERNAL_URL
+SUPERSET_PUBLIC_ORIGIN
+SUPERSET_RATELIMIT_STORAGE
