@@ -98,21 +98,46 @@ def workspace_removed(config: OspreyConfig) -> bool:
 
 def route_paths(config: OspreyConfig) -> list[str]:
     """The paths the front door sends to `pages` while the workspace still serves the rest: the
-    service's own, and the Studio's on the default theme. Empty while the setting is off. (A GOV.UK
-    function's path joins them once its tree has it: `apps/pages/tree-govuk/routes.yaml` is
-    that tree's list, and the renderer reads no second one; none is rendered until the first
-    function has its page.)"""
+    service's own, the Studio's on the default theme, and on the GOV.UK theme each function's path
+    once its tree has it (decision 7: `apps/pages/tree-govuk/routes.yaml` is that tree's list,
+    read through `scripts.tree_parity.govuk_tree_routes`; none is rendered until the first function
+    has its page). Empty while the setting is off."""
     if not enabled(config):
         return []
     paths = list(OWN_PATHS)
     if config.appearance.brand != "govuk":
-        paths = [*STUDIO_PATHS, *paths]
+        return [*STUDIO_PATHS, *paths]
+    from scripts import tree_parity
+
+    for route in tree_parity.govuk_tree_routes():
+        path = route.rstrip("/") or "/"
+        if path not in paths:
+            paths.append(path)
     return paths
 
 
 def caddy_matcher(paths: list[str]) -> str:
-    """The front proxy's named `path` matcher for `paths`: each path and everything under it."""
-    return "@pages path " + " ".join(f"{path} {path}/*" for path in paths)
+    """The front proxy's named `path` matcher for `paths`: each path and everything under it (the
+    root, `/`, being every path, is `/*`: a `//*` would match nothing)."""
+    return "@pages path " + " ".join(
+        "/ /*" if path == "/" else f"{path} {path}/*" for path in paths
+    )
+
+
+def _service_accepts_issuer(issuer: str) -> bool:
+    """`apps/pages/server/config.ts`'s `oidcSettings` refuses an issuer that is not `https`, bar an
+    `http` one whose host is exactly loopback (`localhost`, `[::1]`, `127.x.x.x`). A local-lite
+    deployment on plain HTTP has its identity on a `.localhost` name that is not that, so the three
+    sign-in variables are left out there, together (the service refuses one without the others):
+    its sign-in then answers 503, as it did before it was built, rather than the service refusing
+    to start. Making sign-in work on plain HTTP is a change to the service, not to the render."""
+    import re
+    from urllib.parse import urlsplit
+
+    url = urlsplit(issuer)
+    host = url.hostname or ""
+    loopback = host in ("localhost", "::1") or re.fullmatch(r"127(\.\d{1,3}){3}", host)
+    return url.scheme == "https" or (url.scheme == "http" and bool(loopback))
 
 
 def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str, str]:
@@ -142,8 +167,9 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
         "VALKEY_TLS": "${VALKEY_TLS:-false}",
         "VALKEY_PASSWORD": "${VALKEY_PASSWORD:-}",
     }
-    if with_sign_in:
-        environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
+    issuer = f"{names.identity}/realms/{REALM}"
+    if with_sign_in and _service_accepts_issuer(issuer):
+        environment["OSPREY_PAGES_OIDC_ISSUER"] = issuer
         environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
         environment["OSPREY_PAGES_CLIENT_SECRET"] = refer % PAGES_CLIENT_SECRET_KEY
     return environment

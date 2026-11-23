@@ -551,8 +551,13 @@ def test_on_reaches_the_service_by_its_own_variables_and_by_name(shape: str, bra
     assert "PINNED_" not in secret and "token" not in secret.lower()
     if shape in COMPOSE:
         assert secret.startswith("${OSPREY_PAGES_SESSION_SECRET:?"), secret
-        assert env["OSPREY_PAGES_CLIENT_SECRET"].startswith("${OSPREY_PAGES_CLIENT_SECRET:?")
-        assert env["OSPREY_PAGES_OIDC_ISSUER"].endswith("/realms/osprey")
+        if shape == "local-lite":
+            # Plain HTTP: no issuer the service accepts, so none of the three sign-in variables
+            # (`test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in`).
+            assert "OSPREY_PAGES_CLIENT_SECRET" not in env
+        else:
+            assert env["OSPREY_PAGES_CLIENT_SECRET"].startswith("${OSPREY_PAGES_CLIENT_SECRET:?")
+            assert env["OSPREY_PAGES_OIDC_ISSUER"].endswith("/realms/osprey")
     else:
         assert secret == "secret:OSPREY_PAGES_SESSION_SECRET", secret
 
@@ -762,7 +767,9 @@ def _page_service_refuses(shape: str, files: dict[str, bytes]) -> list[str]:
         if "OSPREY_PAGES_OIDC_ISSUER" in env:
             issuer = address("OSPREY_PAGES_OIDC_ISSUER")
             host = issuer.hostname or ""
-            loopback = host == "localhost" or host == "::1" or re.fullmatch(r"127(\.\d{1,3}){3}", host)
+            loopback = (
+                host == "localhost" or host == "::1" or re.fullmatch(r"127(\.\d{1,3}){3}", host)
+            )
             if issuer.scheme != "https" and not (issuer.scheme == "http" and loopback):
                 refused.append(
                     "OSPREY_PAGES_OIDC_ISSUER must be an https address "
@@ -836,7 +843,9 @@ def test_an_https_deployment_is_given_its_sign_in(shape: str) -> None:
 def test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in() -> None:
     """All three sign-in variables or none (the service refuses a part): on plain HTTP, none."""
     env = (pages_service("local-lite", _render("local-lite", "govuk", **ON)) or {})["env"]
-    assert not [name for name in env if name.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))]
+    assert not [
+        name for name in env if name.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))
+    ]
 
 
 # ---- 7. a GOV.UK function's path goes to `pages` once the tree has it (decision 7) --------------
