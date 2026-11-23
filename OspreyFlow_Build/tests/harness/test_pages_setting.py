@@ -766,59 +766,65 @@ def _resolved(shape: str, env: dict[str, str]) -> dict[str, str]:
     return seen
 
 
-def _page_service_refuses(shape: str, files: dict[str, bytes]) -> list[str]:
-    """`apps/pages/server/config.ts`'s `loadConfig` refusals that a rendered environment can meet
-    (`sessionSecret`, `publicOrigin`, `oidcSettings`, `conduitAddress`), each named as the service
-    names it: a render that leaves any of them would be a service that throws at start-up, its
-    health check never passing. Empty is an environment the service starts with."""
-    from urllib.parse import urlsplit
+#: The service's own settings code, run as it is (round 9: the owner's instruction that the part's
+#: tests run the page service's real check, not a stand-in; round 8's fault got through because a
+#: Python stand-in compared `url.netloc` and accepted `:443`, which the real check refuses).
+PAGES_CONFIG_TS = ref.CORE / "apps" / "pages" / "server" / "config.ts"
+#: A small node entry: reads a JSON list of environments on stdin, calls the service's real
+#: `loadConfig` with each (it takes the environment it is given, and reads no other), and prints the
+#: message of the error it throws, or null. Node strips the types itself (`--experimental-strip-types`).
+_NODE_ENTRY = """
+import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
+const { loadConfig } = await import(pathToFileURL(process.env.PAGES_CONFIG_TS).href);
+const cases = JSON.parse(readFileSync(0, "utf8"));
+const verdicts = cases.map((env) => {
+  try {
+    loadConfig(env);
+    return null;
+  } catch (error) {
+    return String(error.message);
+  }
+});
+console.log(JSON.stringify(verdicts));
+"""
 
+
+def _real_start_up_check(environments: list[dict[str, str]]) -> list[str | None]:
+    """What `apps/pages/server/config.ts`'s `loadConfig` says to each environment: `None` where the
+    service starts, its own message where it throws. It is run, never emulated; where node is not
+    to be had the test fails (it never passes without having asked the service)."""
+    import json
+    import os
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    assert node is not None, (
+        "node is needed: these tests run the page service's real config.ts (round 9), not a stand-in"
+    )
+    done = subprocess.run(
+        [node, "--experimental-strip-types", "--input-type=module", "-e", _NODE_ENTRY],
+        input=json.dumps(environments),
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PAGES_CONFIG_TS": str(PAGES_CONFIG_TS)},
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stderr
+    verdicts = json.loads(done.stdout)
+    assert len(verdicts) == len(environments)
+    return verdicts
+
+
+def _page_service_refuses(shape: str, files: dict[str, bytes]) -> list[str]:
+    """What the page service's real `loadConfig` throws for the environment this render gives it, as
+    the container would see it: empty is an environment the service starts with."""
     service = pages_service(shape, files)
     assert service is not None
-    env = _resolved(shape, service["env"])
-    refused: list[str] = []
-
-    def address(name: str) -> Any:
-        raw = env[name]
-        url = urlsplit(raw)
-        if url.scheme not in ("http", "https") or not url.hostname:
-            refused.append(f"{name} must be an address such as https://host:port")
-        elif url.username or url.password or url.query or url.fragment or "?" in raw or "#" in raw:
-            refused.append(f"{name} must not carry a user name, password, query or fragment")
-        return url
-
-    if len(env.get("OSPREY_PAGES_SESSION_SECRET", "")) < 32:
-        refused.append("OSPREY_PAGES_SESSION_SECRET must be at least 32 characters")
-    given = [n for n in ("OSPREY_PAGES_OIDC_ISSUER", "OSPREY_PAGES_CLIENT_ID") if n in env]
-    if "OSPREY_PAGES_CLIENT_SECRET" in env:
-        given.append("OSPREY_PAGES_CLIENT_SECRET")
-    if given:
-        for name in ("OSPREY_PAGES_OIDC_ISSUER", "OSPREY_PAGES_CLIENT_SECRET"):
-            if name not in env:
-                refused.append(f"{name} is required: once any sign-in setting is set, all are")
-        if "OSPREY_PAGES_OIDC_ISSUER" in env:
-            issuer = address("OSPREY_PAGES_OIDC_ISSUER")
-            host = issuer.hostname or ""
-            loopback = (
-                host == "localhost" or host == "::1" or re.fullmatch(r"127(\.\d{1,3}){3}", host)
-            )
-            if issuer.scheme != "https" and not (issuer.scheme == "http" and loopback):
-                refused.append(
-                    "OSPREY_PAGES_OIDC_ISSUER must be an https address "
-                    "(http only for localhost or another loopback address)"
-                )
-    for name in ("OSPREY_PAGES_PUBLIC_ORIGIN", "OSPREY_PAGES_CONDUIT_URL"):
-        if name in env:
-            address(name)
-    if "OSPREY_PAGES_PUBLIC_ORIGIN" in env:
-        raw = env["OSPREY_PAGES_PUBLIC_ORIGIN"]
-        url = urlsplit(raw)
-        origin = f"{url.scheme}://{url.netloc}"
-        if raw != origin:
-            refused.append("OSPREY_PAGES_PUBLIC_ORIGIN must be the origin alone")
-    elif given or "OSPREY_PAGES_CONDUIT_URL" in env:
-        refused.append("OSPREY_PAGES_PUBLIC_ORIGIN is required")
-    return refused
+    [verdict] = _real_start_up_check([_resolved(shape, service["env"])])
+    return [] if verdict is None else [verdict]
 
 
 @pytest.mark.parametrize(("shape", "brand"), ON_SHAPE_BRANDS, ids=ON_IDS)
@@ -915,7 +921,12 @@ def test_local_lite_over_https_is_refused_in_words(brand: str) -> None:
 
 
 def _small(
-    brand: str, origin: str, own: dict[str, str] | None = None, *, access_key: bool = False
+    brand: str,
+    origin: str,
+    own: dict[str, str] | None = None,
+    *,
+    access_key: bool = False,
+    pages: bool = True,
 ) -> Any:
     """A small deployment at `origin`, the page service on, with the organisation's own certificate
     when `own` is given (its optional `ca` in it), and the shared key (`network.access_key`) when
@@ -933,7 +944,7 @@ def _small(
     if access_key:
         raw["network"]["access_key"] = True
     raw["appearance"] = {**raw.get("appearance", {}), "brand": brand}
-    raw["pages"] = {"enabled": True}
+    raw["pages"] = {"enabled": pages}
     return OspreyConfig.model_validate(raw)
 
 
@@ -1141,36 +1152,61 @@ def test_the_start_up_check_is_red_for_an_http_issuer_that_is_not_loopback(brand
     assert _page_service_refuses("small", _render("small", brand, **_on("small"))) == []
 
 
-def _loopback_issuer_accepted(issuer: str) -> bool:
-    from urllib.parse import urlsplit
+#: A valid environment for the service, bar what a case changes: every value a case does not name
+#: is one the service accepts (shown by `test_the_real_check_accepts_a_clean_environment_and_says_why`).
+CLEAN_ENVIRONMENT = {
+    "OSPREY_PAGES_SESSION_SECRET": A_SECRET,
+    "OSPREY_PAGES_PUBLIC_ORIGIN": "https://osprey.example.org",
+    "OSPREY_PAGES_OIDC_ISSUER": "https://id.osprey.example.org/realms/osprey",
+    "OSPREY_PAGES_CLIENT_ID": "osprey-pages",
+    "OSPREY_PAGES_CLIENT_SECRET": A_SECRET,
+}
 
-    url = urlsplit(issuer)
-    host = url.hostname or ""
-    loopback = host in ("localhost", "::1") or re.fullmatch(r"127(\.\d{1,3}){3}", host)
-    return url.scheme == "https" or (url.scheme == "http" and bool(loopback))
+
+def _real_accepts_issuers(issuers: list[str]) -> list[bool]:
+    verdicts = _real_start_up_check(
+        [{**CLEAN_ENVIRONMENT, "OSPREY_PAGES_OIDC_ISSUER": issuer} for issuer in issuers]
+    )
+    return [verdict is None for verdict in verdicts]
 
 
-@pytest.mark.parametrize(
-    ("issuer", "accepted"),
-    [
-        ("https://id.osprey.example.org/realms/osprey", True),
-        ("http://localhost:8081/realms/osprey", True),
-        ("http://127.0.0.1:8081/realms/osprey", True),
-        ("http://127.1.2.3/realms/osprey", True),
-        ("http://id.reference.ospreyflow.localhost:8081/realms/osprey", False),
-        ("http://keycloak:8080/realms/osprey", False),
-        ("http://127.0.0.1.example.org/realms/osprey", False),
-        ("ftp://id.osprey.example.org/realms/osprey", False),
-    ],
-)
-def test_the_rule_the_render_applies_is_the_services_own(issuer: str, accepted: bool) -> None:
-    """Held to what `apps/pages/server/config.ts` refuses (scheme, then loopback by name or by the
-    `127.x.x.x` form): the render's rule gives the same answer as the emulated start-up check for
-    each address, so the two cannot drift. An address with a loopback look-alike host is not one."""
+#: (issuer, whether the service accepts it, whether the render's own rule is exactly as strict).
+#: `127.1` is the one the render is stricter on: the service's URL parser turns it into 127.0.0.1.
+ISSUERS = [
+    ("https://id.osprey.example.org/realms/osprey", True, True),
+    ("HTTPS://ID.OSPREY.EXAMPLE.ORG/realms/osprey", True, True),
+    ("https://id.osprey.example.org:9443/realms/osprey", True, True),
+    ("http://localhost:8081/realms/osprey", True, True),
+    ("http://LOCALHOST:8081/realms/osprey", True, True),
+    ("http://127.0.0.1:8081/realms/osprey", True, True),
+    ("http://127.1.2.3/realms/osprey", True, True),
+    ("http://[::1]:8081/realms/osprey", True, True),
+    ("http://127.1/realms/osprey", True, False),
+    ("http://id.reference.ospreyflow.localhost:8081/realms/osprey", False, True),
+    ("http://keycloak:8080/realms/osprey", False, True),
+    ("http://127.0.0.1.example.org/realms/osprey", False, True),
+    ("http://[::2]/realms/osprey", False, True),
+    ("http://10.0.0.1/realms/osprey", False, True),
+    ("ftp://id.osprey.example.org/realms/osprey", False, True),
+    ("id.osprey.example.org/realms/osprey", False, True),
+]
+
+
+@pytest.mark.parametrize(("issuer", "accepted", "same"), ISSUERS)
+def test_the_rule_the_render_applies_is_the_services_own(
+    issuer: str, accepted: bool, same: bool
+) -> None:
+    """Held to what `apps/pages/server/config.ts` really does with each address (round 9: run, not
+    emulated): the render's rule never accepts an address the service refuses, and is exactly as
+    strict everywhere but the one form its parser widens. A loopback look-alike host is not one."""
     import harness.pages_service as the_service
 
-    assert _loopback_issuer_accepted(issuer) is accepted
-    assert the_service.service_accepts_issuer(issuer) is accepted
+    [real] = _real_accepts_issuers([issuer])
+    assert real is accepted
+    rule = the_service.service_accepts_issuer(issuer)
+    assert not (rule and not real), "the render accepts an issuer the service refuses"
+    if same:
+        assert rule is accepted
 
 
 def _drop_the_sign_in(real: Callable[..., Any]) -> Callable[..., Any]:
@@ -2139,3 +2175,352 @@ def test_the_route_check_is_red_when_the_listed_path_stays_with_the_workspace(
         with mock.patch.object(service, "route_paths", own_only):
             routed = pages_paths(shape, _render(shape, "govuk", **_on(shape)))
     assert "/studio/example" not in routed
+
+
+# ---- 11. Round 9: the page service's real start-up check, and every value the render passes ------
+#
+# The owner's three instructions of 23 November 2026, for the last round of "sign-in cannot work and
+# the render does not say so":
+#
+# 1. every origin form `config.ts` refuses gets a case, rendered, red first and then green;
+# 2. the tests run the service's real check (`_real_start_up_check`: node runs `config.ts` itself),
+#    so a value the real check refuses cannot be accepted by a Python stand-in: the stand-in that
+#    compared `url.netloc` is gone, and the render's own rule is held to the real one below;
+# 3. every value the render passes is checked against every check `config.ts` makes
+#    (`VALUES`, and `test_every_variable_the_render_passes_has_a_row`).
+
+ORG_CA = "/etc/ospreyflow/tls/org-root.pem"
+#: The words every origin refusal starts with and ends with: the setting, the address, the way out.
+THE_ORIGIN_WORDS = re.compile(
+    r"^pages\.enabled is on, but network\.public_origin .+ so people could not sign in: .+, "
+    r"or leave pages\.enabled off$"
+)
+
+
+def test_the_real_check_accepts_a_clean_environment_and_says_why() -> None:
+    """The entry is shown to work both ways before anything is concluded from it (rule 15): a clean
+    environment starts, and the one thing wrong in each of these is named by the service itself."""
+    wrong = [
+        {**CLEAN_ENVIRONMENT, "OSPREY_PAGES_PUBLIC_ORIGIN": "https://osprey.example.org:443"},
+        {**CLEAN_ENVIRONMENT, "OSPREY_PAGES_SESSION_SECRET": "short"},
+        {**CLEAN_ENVIRONMENT, "OSPREY_PAGES_OIDC_ISSUER": "http://id.osprey.example.org/realms/o"},
+    ]
+    clean, port, short, http = _real_start_up_check([CLEAN_ENVIRONMENT, *wrong])
+    assert clean is None
+    assert port is not None and "must be the origin alone" in port
+    assert short is not None and "at least 32 characters" in short
+    assert http is not None and "must be an https address" in http
+
+
+#: `OSPREY_PAGES_PUBLIC_ORIGIN` as written, each against what `publicOrigin()` and `addressSetting`
+#: really do: (form, the real check refuses it, the words it says). The forms a deployment's
+#: `network.public_origin` can come to as the render writes them are the rows of `ORIGIN_FORMS`.
+RAW_ORIGINS = [
+    ("https://osprey.example.org", False, ""),
+    ("https://osprey.example.org:9443", False, ""),
+    ("http://localhost:8080", False, ""),
+    ("https://[::1]:8443", False, ""),
+    ("https://osprey.example.org:443", True, "must be the origin alone"),
+    ("http://osprey.example.org:80", True, "must be the origin alone"),
+    ("https://osprey.example.org/", True, "must be the origin alone"),
+    ("https://osprey.example.org/app", True, "must be the origin alone"),
+    ("https://osprey.example.org?x=1", True, "must not carry a query or a fragment"),
+    ("https://osprey.example.org#x", True, "must not carry a query or a fragment"),
+    ("https://osprey.example.org?", True, "must not carry a query or a fragment"),
+    ("https://user:pw@osprey.example.org", True, "must not carry a user name or password"),
+    ("https://Osprey.Example.org", True, "must be the origin alone"),
+    ("HTTPS://osprey.example.org", True, "must be the origin alone"),
+    ("https://::1:8443", True, "must be an address such as"),
+    ("https://id.10.1.2.3", True, "must be an address such as"),
+    ("https://id.0x7f.1", True, "must be an address such as"),
+    ("https://bücher.example", True, "must be the origin alone"),
+    ("https://exa%6dple.org", True, "must be the origin alone"),
+    ("https://osprey.example.org:99999", True, "must be an address such as"),
+    ("https://osprey.example.org:https", True, "must be an address such as"),
+    ("https://os prey.example.org", True, "must be an address such as"),
+    ("ftp://osprey.example.org", True, "must begin with http:// or https://"),
+    ("osprey.example.org", True, "must be an address such as"),
+    ("https://", True, "must be an address such as"),
+]
+
+
+@pytest.mark.parametrize(("raw", "refused", "words"), RAW_ORIGINS)
+def test_the_real_check_refuses_each_origin_form_it_is_said_to(
+    raw: str, refused: bool, words: str
+) -> None:
+    """The list of what `config.ts` refuses in an origin, run against `config.ts` itself: this is
+    the table the render's cases are drawn from, and a row that is wrong fails here, not silently."""
+    [verdict] = _real_start_up_check([{**CLEAN_ENVIRONMENT, "OSPREY_PAGES_PUBLIC_ORIGIN": raw}])
+    assert (verdict is not None) is refused, verdict
+    if refused:
+        assert verdict is not None and words in verdict
+
+
+#: What a `network.public_origin` can be written as, and what the render does with it with the page
+#: service on, in a Small with the organisation's own certificate and its CA (so that no trust refusal
+#: is the answer): (id, origin, outcome, the origin the service is given, whether the service itself
+#: would refuse the value the render passes unguarded).
+#:
+#: * "rendered": the render writes the origin as the service's own `URL.origin` writes it, and the
+#:   real check accepts it (the host is lower-cased, and a path, query, fragment or user name is not
+#:   part of an origin, so it is not written: `harness.site.sites`).
+#: * "refused": the render refuses, in words, naming `network.public_origin` and the way out: the
+#:   service would not start on it (or, where marked, the render is stricter than the service needs).
+#: * "elsewhere": refused before the page service by the settings validation or by `sites`, with
+#:   the setting off as well (not this slice's, and unchanged).
+ORIGIN_FORMS = [
+    ("plain", "https://osprey.example.org", "rendered", "https://osprey.example.org", False),
+    (
+        "port",
+        "https://osprey.example.org:9443",
+        "rendered",
+        "https://osprey.example.org:9443",
+        False,
+    ),
+    ("one-label", "https://osprey", "rendered", "https://osprey", False),
+    ("empty-port", "https://osprey.example.org:", "rendered", "https://osprey.example.org", False),
+    ("port-zero", "https://osprey.example.org:0", "rendered", "https://osprey.example.org", False),
+    (
+        "port-zeros",
+        "https://osprey.example.org:09443",
+        "rendered",
+        "https://osprey.example.org:9443",
+        False,
+    ),
+    ("upper-host", "https://OSPREY.Example.ORG", "rendered", "https://osprey.example.org", False),
+    (
+        "userinfo",
+        "https://user:pw@osprey.example.org",
+        "rendered",
+        "https://osprey.example.org",
+        False,
+    ),
+    ("path", "https://osprey.example.org/app", "rendered", "https://osprey.example.org", False),
+    ("query", "https://osprey.example.org?x=1", "rendered", "https://osprey.example.org", False),
+    ("fragment", "https://osprey.example.org#x", "rendered", "https://osprey.example.org", False),
+    ("default-port", "https://osprey.example.org:443", "refused", None, True),
+    ("default-port-zeros", "https://osprey.example.org:0443", "refused", None, True),
+    ("default-port-userinfo", "https://user:pw@osprey.example.org:443", "refused", None, True),
+    ("ipv4", "https://10.1.2.3", "refused", None, True),
+    ("ipv4-port", "https://10.1.2.3:9443", "refused", None, True),
+    ("ipv4-decimal", "https://2130706433", "refused", None, True),
+    ("ipv4-hex", "https://0x7f.1", "refused", None, True),
+    ("ipv6", "https://[::1]:8443", "refused", None, True),
+    ("ipv6-plain", "https://[2001:db8::1]", "refused", None, True),
+    ("non-ascii", "https://bücher.example", "refused", None, True),
+    ("percent", "https://exa%6dple.org", "refused", None, True),
+    ("number-last", "https://osprey.example.123", "refused", None, True),
+    ("hex-last", "https://osprey.0x1", "refused", None, True),
+    ("space", "https://os prey.example.org", "refused", None, True),
+    ("backslash", "https://osprey.example.org\\app", "refused", None, True),
+    ("punycode", "https://xn--bcher-kva.example", "refused", None, False),
+    ("trailing-dot", "https://osprey.example.org.", "refused", None, False),
+    ("empty-label", "https://osprey..example.org", "refused", None, False),
+    ("underscore", "https://my_host.example.org", "refused", None, False),
+    ("trailing-slash", "https://osprey.example.org/", "elsewhere", None, False),
+    ("port-too-big", "https://osprey.example.org:65536", "elsewhere", None, False),
+    ("port-text", "https://osprey.example.org:https", "elsewhere", None, False),
+    ("port-sign", "https://osprey.example.org:-1", "elsewhere", None, False),
+    ("upper-scheme", "HTTPS://osprey.example.org", "elsewhere", None, False),
+    ("other-scheme", "ftp://osprey.example.org", "elsewhere", None, False),
+    ("no-scheme", "osprey.example.org", "elsewhere", None, False),
+]
+ORIGIN_IDS = [form[0] for form in ORIGIN_FORMS]
+REFUSED_FORMS = [form for form in ORIGIN_FORMS if form[2] == "refused"]
+
+
+def _small_files(brand: str, origin: str, *, pages: bool) -> dict[str, bytes] | ValueError:
+    """The small deployment at `origin`, rendered; the refusal itself where it is refused."""
+    try:
+        return _compose_files(_small(brand, origin, {"ca": ORG_CA}, pages=pages))
+    except ValueError as refused:
+        return refused
+
+
+def _cluster_files(origin: str, *, pages: bool) -> dict[str, bytes] | ValueError:
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    raw = ref.raw_config("cluster")
+    raw["network"]["public_origin"] = origin
+    raw["pages"] = {"enabled": pages}
+    try:
+        artefacts = render(OspreyConfig.model_validate(raw), resolver=ref.resolver).artefacts
+    except ValueError as refused:
+        return refused
+    return {n: t.encode("utf-8") if isinstance(t, str) else t for n, t in artefacts.items()}
+
+
+def _what_the_render_gave(shape: str, files: dict[str, bytes]) -> tuple[str, str, str | None]:
+    """The origin and the issuer the service was given, and what its real check says to the lot."""
+    service = pages_service(shape, files)
+    assert service is not None
+    env = service["env"]
+    [verdict] = _real_start_up_check([_resolved(shape, env)])
+    return env["OSPREY_PAGES_PUBLIC_ORIGIN"], env["OSPREY_PAGES_OIDC_ISSUER"], verdict
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize(
+    ("name", "origin", "outcome", "given", "refused"), ORIGIN_FORMS, ids=ORIGIN_IDS
+)
+def test_every_origin_form_is_given_to_the_service_as_it_accepts_it_or_refused_in_words(
+    name: str, origin: str, outcome: str, given: str | None, refused: bool, brand: str
+) -> None:
+    """Each form is rendered with the page service on, and what comes out is held to the service's
+    real check: either a value it starts with (the origin, and the issuer made from the same host and
+    port), or the render's own refusal in words, never a value the service throws on. With the
+    setting off the same form is the reference's business and is not refused by this slice."""
+    on = _small_files(brand, origin, pages=True)
+    off = _small_files(brand, origin, pages=False)
+    if outcome == "elsewhere":
+        assert isinstance(on, ValueError) and isinstance(off, ValueError), name
+        assert not type(on).__name__.startswith("PageService"), on
+        return
+    assert not isinstance(off, ValueError), f"{name}: off must not be refused: {off}"
+    if outcome == "refused":
+        assert isinstance(on, ValueError), f"{name}: rendered a value the service refuses"
+        assert type(on).__name__ == "PageServiceNeedsAnOrigin", on
+        assert THE_ORIGIN_WORDS.match(str(on)), str(on)
+        assert "pw" not in str(on), "a credential in the origin must not be printed"
+        return
+    assert not isinstance(on, ValueError), f"{name}: {on}"
+    public, issuer, verdict = _what_the_render_gave("small", on)
+    assert verdict is None, f"{name}: the service refuses what the render gave it: {verdict}"
+    assert public == given
+    identity = given.replace("https://", "https://id.", 1)  # type: ignore[union-attr]
+    assert issuer == f"{identity}/realms/osprey"
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize(
+    ("name", "origin", "outcome", "given", "refused"),
+    REFUSED_FORMS,
+    ids=[f[0] for f in REFUSED_FORMS],
+)
+def test_the_refusal_is_the_only_thing_between_a_form_and_a_service_that_cannot_start(
+    name: str, origin: str, outcome: str, given: str | None, refused: bool, brand: str
+) -> None:
+    """A planted fault at the shape the renderer writes (rule 15): the render's refusal taken out,
+    so the form reaches the service's environment as the renderer wrote it before round 9. Where
+    the row says the service refuses it, the real check refuses that environment (and so the
+    refusal is what keeps a service that cannot start from being rendered); where it does not, the
+    refusal is the render being stricter than it need be, and the real check says so."""
+    with _patched(
+        "harness.pages_service", "refuse_an_origin_the_service_refuses", _no_refusal_at_all
+    ):
+        files = _small_files(brand, origin, pages=True)
+    assert not isinstance(files, ValueError), f"{name}: another refusal stands in the way: {files}"
+    _public, _issuer, verdict = _what_the_render_gave("small", files)
+    assert (verdict is not None) is refused, f"{name}: {verdict}"
+
+
+def _no_refusal_at_all(real: Callable[..., Any]) -> Callable[..., Any]:
+    def planted(config: Any) -> None:
+        return None
+
+    return planted
+
+
+@pytest.mark.parametrize(
+    ("origin", "outcome"),
+    [
+        ("https://osprey.example.org", "rendered"),
+        ("https://osprey.example.org:9443", "rendered"),
+        ("https://osprey.example.org:443", "refused"),
+        ("https://10.1.2.3", "refused"),
+    ],
+)
+def test_the_cluster_shape_holds_the_same_origin_rule(origin: str, outcome: str) -> None:
+    """The rule is in the one function both shapes call: a cluster, its chart's values."""
+    on = _cluster_files(origin, pages=True)
+    if outcome == "refused":
+        assert isinstance(on, ValueError), "rendered a value the service refuses"
+        assert type(on).__name__ in ("PageServiceNeedsAnOrigin", "PageServiceNeedsTrust"), on
+        return
+    assert not isinstance(on, ValueError), on
+    public, _issuer, verdict = _what_the_render_gave("cluster", on)
+    assert verdict is None, verdict
+    assert public == origin
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_a_cluster_at_a_default_port_is_refused_in_words(brand: str) -> None:
+    """Not the trust refusal's: a public name, so the origin rule is the one that answers."""
+    on = _cluster_files("https://osprey.example.org:443", pages=True)
+    assert isinstance(on, ValueError)
+    assert type(on).__name__ == "PageServiceNeedsAnOrigin"
+    assert "port 443" in str(on)
+
+
+# ---- 11a. every value the render passes, against every check config.ts makes -------------------
+
+#: Each variable the render gives the service, and for each the check `config.ts` makes at start-up,
+#: planted: (a value the check refuses, the words it says). `None` for a variable `config.ts` makes
+#: no check on (the service's own default is used where it is not given, or it is not read there).
+VALUES: dict[str, tuple[str, str] | None] = {
+    "OSPREY_PAGES_TREE": None,
+    "OSPREY_PAGES_PORT": ("70000", "OSPREY_PAGES_PORT must be at most 65535"),
+    "OSPREY_PAGES_PUBLIC_ORIGIN": ("https://osprey.example.org:443", "must be the origin alone"),
+    "OSPREY_PAGES_CONDUIT_URL": ("http://api:9001/v1", "with no path"),
+    "OSPREY_PAGES_SESSION_SECRET": ("short", "at least 32 characters"),
+    "OSPREY_PAGES_OIDC_ISSUER": (
+        "http://id.osprey.example.org/realms/o",
+        "must be an https address",
+    ),
+    "OSPREY_PAGES_CLIENT_ID": ("osprey pages", "must not hold a space"),
+    "OSPREY_PAGES_CLIENT_SECRET": ("short", "at least 32 characters"),
+    "VALKEY_HOST": None,
+    "VALKEY_PORT": ("x", "VALKEY_PORT must be a whole number"),
+    "VALKEY_TLS": None,
+    "VALKEY_PASSWORD": None,
+    # Node's own, read when the process starts, not by `config.ts`: the CA the organisation signs with.
+    "NODE_EXTRA_CA_CERTS": None,
+}
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", ON_SHAPES)
+def test_every_variable_the_render_passes_has_a_row(shape: str, brand: str) -> None:
+    """A variable the render adds that `VALUES` does not list fails here: it is asked, with the
+    value it would need, whether `config.ts` checks it, before it is let through."""
+    service = pages_service(shape, _render(shape, brand, **_on(shape)))
+    assert service is not None
+    assert set(service["env"]) <= set(VALUES), sorted(set(service["env"]) - set(VALUES))
+
+
+@pytest.mark.parametrize(("variable", "check"), [(k, v) for k, v in VALUES.items() if v])
+def test_each_check_config_ts_makes_on_a_value_the_render_passes_is_real(
+    variable: str, check: tuple[str, str]
+) -> None:
+    """The row is a fact about the real check, not a belief about it: the bad value is refused with
+    those words, while the render's own value for that variable (`test_on_is_an_environment_*`) is
+    not."""
+    bad, words = check
+    env = {**CLEAN_ENVIRONMENT, "OSPREY_PAGES_CONDUIT_URL": "http://api:9001", variable: bad}
+    [verdict] = _real_start_up_check([env])
+    assert verdict is not None and words in verdict, verdict
+
+
+@pytest.mark.parametrize("shape", ON_SHAPES)
+def test_every_secret_the_deployment_mints_is_one_the_real_check_accepts(shape: str) -> None:
+    """The two minted values, as `apply` (Lite and Small) and the cluster's install make them: each
+    long enough, and made to start the service with the rest of the render's own environment."""
+    from harness import apply as the_apply
+
+    if shape == "small":
+        pairs = dict(
+            line.split("=", 1) for line in the_apply.pages_secret_lines().strip().splitlines()
+        )
+    else:
+        config, values = _chart("ospreyflow", **ON)
+        pairs = {k: v for k, v in _install(config, values).items() if k in PAGES_SECRETS}
+    assert set(pairs) == set(PAGES_SECRETS)
+    env = {
+        **CLEAN_ENVIRONMENT,
+        "OSPREY_PAGES_CLIENT_SECRET": pairs["OSPREY_PAGES_CLIENT_SECRET"],
+        "OSPREY_PAGES_SESSION_SECRET": pairs["OSPREY_PAGES_SESSION_SECRET"],
+    }
+    [verdict] = _real_start_up_check([env])
+    assert verdict is None, verdict
