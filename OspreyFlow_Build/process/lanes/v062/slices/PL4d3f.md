@@ -12,6 +12,12 @@
 4. **Run both tests twenty times in a row** on the Mac, once with the machine idle and once under load (for example beside a second `npm run build`), and say the counts. **Every run is green.** The race half must also pass when the Mac is busy, which is when it failed.
 5. Run the whole file, `ruff check` and `ruff format --check` on it, the scan-map check for any new test that walks a folder (none expected), and the citation check.
 
+## Round 2 (the conductor, 23 November 2026, 22:35 UTC): one gap in the new test
+
+**The verifier found one gap, in the new acceptance test only.** Its message check can never fail: `npm run build` prints its own script line (`node scripts/sync_govuk_assets.mjs && vite build`) to the same log on every run, so a search for `sync_govuk_assets` matches whatever made build A fail. If A failed for another reason (for example the preload's own `pl4d3f: no release for …` error after 120 seconds on a loaded machine), the test would count it as a collision.
+
+**Do this and nothing else:** in the new test `test_forcing_the_second_build_into_the_first_ones_sync_step_collides_every_time`, make the collision check **specific**: assert that A's failure is the shared-tree collision itself (the error text from the sync step's own `rmSync`/`cpSync`/`readdirSync` of `public/assets/govuk`: for example an `ENOENT`, `ENOTEMPTY` or `EEXIST` naming that folder, **not** the npm script echo), and assert that the log does **not** contain the preload's `no release` error. Red first: show it fails on a build A that exits non-zero for another reason (plant it at the real shape: A's preload times out, or A fails after the hold for a reason that is not the collision). **The renamed case's own assertion (the message check on `ENOENT|ENOTEMPTY|EEXIST|sync_govuk_assets`) stays exactly as the brief said, unloosened and unstrengthened: do not touch it.** No other change.
+
 ## Never merge another part's unmerged tip (the owner, 23 November 2026)
 
 **Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. If your part needs another part's change that has not merged, stop and tell the conductor.
