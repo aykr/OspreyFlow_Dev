@@ -131,6 +131,8 @@ def pages_service(shape: str, files: dict[str, bytes]) -> dict[str, Any] | None:
             "image": found["image"],
             "env": {k: str(v) for k, v in (found.get("environment") or {}).items()},
             "env_file": "env_file" in found,
+            "egress": "egress" in found.get("networks", []),
+            "volumes": list(found.get("volumes", [])),
         }
     workloads = {w["name"]: w for w in _values(files).get("workloads", [])}
     found = workloads.get("pages")
@@ -140,6 +142,8 @@ def pages_service(shape: str, files: dict[str, bytes]) -> dict[str, Any] | None:
         "image": found["image"],
         "env": _named(found.get("env")),
         "env_file": bool(found.get("envFrom")),
+        "egress": bool(found.get("egress")),
+        "volumes": [],
         "ports": [p["port"] for p in found.get("ports", [])],
     }
 
@@ -830,14 +834,27 @@ def test_the_start_up_check_is_red_for_an_http_issuer_that_is_not_loopback(brand
     assert _page_service_refuses("local-lite", _render("local-lite", brand, **ON)) == []
 
 
+@pytest.mark.parametrize("brand", BRANDS)
 @pytest.mark.parametrize("shape", ("small", "cluster"))
-def test_an_https_deployment_is_given_its_sign_in(shape: str) -> None:
+def test_an_https_deployment_is_given_its_sign_in(shape: str, brand: str) -> None:
     """Where the issuer is an https address the service accepts, the three sign-in variables are
-    written (compose only: the cluster's chart carries the realm's own, PL9b)."""
+    written, the secret by reference and never a value, in the compose shape and the cluster's
+    chart alike. (The cloud platform's people sign in with the organisation's own: it holds none,
+    `test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service`.)"""
+    env = (pages_service(shape, _render(shape, brand, **ON)) or {})["env"]
+    assert env["OSPREY_PAGES_OIDC_ISSUER"] == "https://id.osprey.example.org/realms/osprey"
+    assert env["OSPREY_PAGES_CLIENT_ID"] == "osprey-pages"
+    reference = env["OSPREY_PAGES_CLIENT_SECRET"]
+    assert reference in (
+        "secret:OSPREY_PAGES_CLIENT_SECRET",
+        "${OSPREY_PAGES_CLIENT_SECRET:?set in the deployment env file}",
+    ), reference
+
+
+@pytest.mark.parametrize("shape", ("cloud-platform", "cloud-platform-poc"))
+def test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service(shape: str) -> None:
     env = (pages_service(shape, _render(shape, "govuk", **ON)) or {})["env"]
-    if shape == "small":
-        assert env["OSPREY_PAGES_OIDC_ISSUER"].startswith("https://")
-        assert "OSPREY_PAGES_CLIENT_ID" in env and "OSPREY_PAGES_CLIENT_SECRET" in env
+    assert not [n for n in env if n.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))]
 
 
 def test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in() -> None:
@@ -846,6 +863,221 @@ def test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in() -> None:
     assert not [
         name for name in env if name.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))
     ]
+
+
+# ---- 6b. the sign-in it is given can be completed ---------------------------------------------
+#
+# The service fetches its issuer itself, at sign-in (`apps/pages/server/oidc.ts`: `discovery`), and
+# the issuer is the public identity name (`https://id.<host>/realms/osprey`: openid-client checks
+# the discovery document's `issuer` against the address it asked, so the internal Keycloak address
+# the Conduit uses is not one the service can be given). On the internal network, which has no
+# route out, nothing answers to that name: so a service given an issuer is on `egress` too, as the
+# Conduit is when the managed Postgres is outside. Measured here as the render's own words about
+# the networks, not against a running stack: nobody has signed in through it on a real one (PL9a).
+
+
+def _sign_in_findings(shape: str, files: dict[str, bytes]) -> list[str]:
+    service = pages_service(shape, files)
+    if service is None or "OSPREY_PAGES_OIDC_ISSUER" not in service["env"]:
+        return []
+    if service["egress"]:
+        return []
+    return [
+        "OSPREY_PAGES_OIDC_ISSUER names the public identity address and `pages` is on the "
+        "internal network alone: no route to it, so sign-in cannot complete"
+    ]
+
+
+def _pages_on_the_internal_network_alone(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The renderer's old placement, as it wrote it: `networks: [osprey]` for `pages`."""
+
+    def planted(config: Any, services: dict[str, Any]) -> None:
+        real(config, services)
+        services["pages"]["networks"] = ["osprey"]
+
+    return planted
+
+
+@pytest.mark.parametrize(("shape", "brand"), SHAPE_BRANDS, ids=IDS)
+def test_a_service_given_an_issuer_can_reach_it(shape: str, brand: str) -> None:
+    assert _sign_in_findings(shape, _render(shape, brand, **ON)) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", ("small", "cluster"))
+def test_the_sign_in_reach_check_is_red_for_a_service_on_the_internal_network_alone(
+    shape: str, brand: str
+) -> None:
+    assert pages_service(shape, _render(shape, brand, **ON))["env"]["OSPREY_PAGES_OIDC_ISSUER"]
+    with _patched("harness.render", "_place_on_networks", _pages_on_the_internal_network_alone):
+        found = _sign_in_findings(shape, _render(shape, brand, **ON))
+    assert any("OSPREY_PAGES_OIDC_ISSUER" in line and "internal network" in line for line in found)
+    assert _sign_in_findings(shape, _render(shape, brand, **ON)) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_a_service_with_no_issuer_and_no_managed_cache_stays_on_the_internal_network(
+    brand: str,
+) -> None:
+    """Egress is for what needs it (ADR-114 Amendment 7): local-lite has no issuer the service
+    accepts and a cache of its own, so `pages` is given no route out."""
+    service = pages_service("local-lite", _render("local-lite", brand, **ON))
+    assert service is not None and service["egress"] is False
+
+
+CA_ON_THE_HOST = "/etc/ospreyflow/tls/org-root.pem"
+
+
+def _small_with_its_own_certificate(brand: str, **tls: str) -> dict[str, Any]:
+    """The `pages` service of a small deployment on the organisation's own certificate, rendered
+    directly (nothing staged, no key read)."""
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    raw = ref.raw_config("small")
+    raw["network"]["tls"] = {
+        "certificate": "/etc/ospreyflow/tls/osprey.crt",
+        "key": "/etc/ospreyflow/tls/osprey.key",
+        **tls,
+    }
+    raw["pages"] = {"enabled": True}
+    config = OspreyConfig.model_validate(raw)
+    compose = yaml.safe_load(render(config, resolver=ref.resolver).artefacts["compose.yaml"])
+    return dict(compose["services"]["pages"])
+
+
+def _ca_findings(service: dict[str, Any]) -> list[str]:
+    """Where the organisation's CA is mounted into `pages` and where node is told to read it."""
+    from harness import pages_service as service_module
+
+    mounted = [v for v in service.get("volumes", []) if v.startswith(f"{CA_ON_THE_HOST}:")]
+    named = service["environment"].get("NODE_EXTRA_CA_CERTS")
+    wanted = service_module.CA_IN_SERVICE
+    found = []
+    if mounted != [f"{CA_ON_THE_HOST}:{wanted}:ro"]:
+        found.append(f"the organisation's CA is not mounted read-only at {wanted}")
+    if named != wanted:
+        found.append("NODE_EXTRA_CA_CERTS does not name the mounted CA")
+    return found
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_the_service_trusts_the_organisations_ca_it_signs_in_through(brand: str) -> None:
+    """As Keycloak's truststore is given `network.tls.ca` (ADR-114 Amendment 33 decision 4): the
+    service's own discovery, keys and token request go to the identity name, whose certificate is
+    the organisation's. Without a CA nothing is mounted and nothing named."""
+    assert _ca_findings(_small_with_its_own_certificate(brand, ca=CA_ON_THE_HOST)) == []
+    without = _small_with_its_own_certificate(brand)
+    assert "NODE_EXTRA_CA_CERTS" not in without["environment"]
+    assert not without.get("volumes")
+
+
+def test_the_ca_check_is_red_for_a_service_that_is_not_told_to_read_it() -> None:
+    from harness import pages_service as service_module
+
+    def without_the_variable(real: Callable[..., Any]) -> Callable[..., Any]:
+        def planted(config: Any, **kwargs: Any) -> dict[str, str]:
+            environment: dict[str, str] = real(config, **kwargs)
+            environment.pop("NODE_EXTRA_CA_CERTS", None)
+            return environment
+
+        return planted
+
+    with _patched("harness.pages_service", "service_environment", without_the_variable):
+        found = _ca_findings(_small_with_its_own_certificate("govuk", ca=CA_ON_THE_HOST))
+    assert found == ["NODE_EXTRA_CA_CERTS does not name the mounted CA"], found
+    assert service_module.CA_IN_SERVICE
+
+
+# ---- 6c. the cluster's install makes the secrets the pod names --------------------------------
+
+
+def _chart(brand: str, **settings: Any) -> tuple[Any, dict[str, Any]]:
+    """The cluster's configuration and its rendered chart values (rendered before any plant, so a
+    plant in the install's own code is not also a plant in the chart)."""
+    return ref.config_for("cluster", brand, **settings), _values(
+        _render("cluster", brand, **settings)
+    )
+
+
+def _install(config: Any, values: dict[str, Any], kept: dict[str, str] | None = None) -> Any:
+    """The cluster install's Secret for the chart's own `secrets` section
+    (`harness.cluster_install.secret_values`, which the installer writes through)."""
+    from harness import cluster_install
+
+    return cluster_install.secret_values(
+        config,
+        values=values,
+        environ={"OSPREY_POSTGRES_PASSWORD": "given-for-the-managed-server"},
+        kept=kept or {},
+    )
+
+
+PAGES_SECRETS = ("OSPREY_PAGES_CLIENT_SECRET", "OSPREY_PAGES_SESSION_SECRET")
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_a_cluster_install_with_the_setting_on_makes_every_secret_the_pod_names(brand: str) -> None:
+    config, values = _chart(brand, **ON)
+    pairs = _install(config, values)
+    named = {
+        entry["secret"]
+        for workload in values["workloads"]
+        if workload["name"] == "pages"
+        for entry in workload["env"]
+        if "secret" in entry
+    }
+    assert set(PAGES_SECRETS) <= named
+    assert named <= set(pairs), sorted(named - set(pairs))
+    first, second = (pairs[name] for name in PAGES_SECRETS)
+    # The service refuses a session secret under 32 characters; each is made as `apply` makes Lite's.
+    assert len(first) >= 32 and len(second) >= 32 and first != second
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_a_secret_the_cluster_already_holds_is_kept(brand: str) -> None:
+    held = {name: f"held-{name.lower()}-" + "x" * 30 for name in PAGES_SECRETS}
+    config, values = _chart(brand, **ON)
+    pairs = _install(config, values, held)
+    assert {name: pairs[name] for name in PAGES_SECRETS} == held
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_a_cluster_install_with_the_setting_off_makes_neither(brand: str) -> None:
+    config, values = _chart(brand)
+    pairs = _install(config, values)
+    assert not [name for name in PAGES_SECRETS if name in pairs]
+    assert not [name for name in PAGES_SECRETS if name in values["secrets"]["keys"]]
+
+
+def test_the_cluster_install_check_is_red_when_the_two_are_not_minted() -> None:
+    """The planted fault takes the shape the install wrote: `pages_secret_lines` giving no line, so
+    the Secret lacks what the chart names, and the install says so in words."""
+    from harness.cluster_install import ClusterInstallFailed
+
+    config, values = _chart("govuk", **ON)
+    _install(config, values)
+    with mock.patch("harness.apply.pages_secret_lines", lambda: ""):
+        with pytest.raises(ClusterInstallFailed, match="OSPREY_PAGES_CLIENT_SECRET"):
+            _install(config, values)
+    _install(config, values)
+
+
+def test_the_cluster_install_check_is_red_when_the_condition_is_the_wrong_way_round() -> None:
+    """With the condition inverted, the setting on makes none (the install fails) and the setting
+    off makes both (a Secret holding what no chart names): each shown."""
+    from harness import pages_service as service_module
+    from harness.cluster_install import ClusterInstallFailed
+
+    on_config, on_values = _chart("govuk", **ON)
+    off_config, off_values = _chart("govuk")
+    real = service_module.enabled
+    with mock.patch.object(service_module, "enabled", lambda config: not real(config)):
+        with pytest.raises(ClusterInstallFailed, match="OSPREY_PAGES_"):
+            _install(on_config, on_values)
+        pairs = _install(off_config, off_values)
+    assert [name for name in PAGES_SECRETS if name in pairs] == list(PAGES_SECRETS)
 
 
 # ---- 7. a GOV.UK function's path goes to `pages` once the tree has it (decision 7) --------------
