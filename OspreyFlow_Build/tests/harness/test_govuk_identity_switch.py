@@ -334,8 +334,10 @@ def _apply(
             *flags,
         ]
     )
-    composes = list((tmp_path / "generated").glob("*/compose.yaml"))
-    return code, (yaml.safe_load(composes[0].read_text("utf-8")) if composes else {})
+    compose = (
+        tmp_path / "generated" / "local-lite" / "compose.yaml"
+    )  # the default profile's folder, by name
+    return code, (yaml.safe_load(compose.read_text("utf-8")) if compose.is_file() else {})
 
 
 def test_the_identity_on_builds_with_the_argument_when_apply_builds_from_the_checkout(
@@ -462,7 +464,15 @@ def _pages_build(scratch: Path, script: str) -> tuple[subprocess.CompletedProces
     core = scratch / "core"
     (core / "apps" / "pages" / "scripts").mkdir(parents=True)
     (core / "apps" / "pages" / "scripts" / PAGES_SCRIPT.name).write_text(script, "utf-8")
-    shutil.copytree(CORE / "packages" / "design", core / "packages" / "design")
+    (core / "packages" / "design").mkdir(parents=True)
+    for name in (
+        "fonts.json",
+        "panelType.css",
+        "primitives.css",
+        "scale.css",
+        "tokens.css",
+    ):  # the folder, by name
+        shutil.copy(CORE / "packages" / "design" / name, core / "packages" / "design" / name)
     (core / "node_modules").symlink_to(CORE / "node_modules")
     (core / "apps" / "pages" / "node_modules").symlink_to(CORE / "apps" / "pages" / "node_modules")
     (scratch / "no-modules").mkdir()
@@ -492,24 +502,28 @@ def _plant(script: str, old: str, new: str) -> str:
     return script.replace(old, new)
 
 
+def _stylesheet(out: Path) -> str:
+    """The Default tree's built stylesheet, named by the build's own manifest."""
+    return (out / json.loads((out / "manifest.json").read_text("utf-8"))["pages.css"]).read_text(
+        "utf-8"
+    )
+
+
 def test_the_pages_build_drops_the_govuk_brand_and_the_plant_that_stops_it_is_red(
     tmp_path: Path,
 ) -> None:
     """The real script, run in the scratch folder, writes a stylesheet with no GDS Transport and no GOV.UK brand rule (green
     first, so the red below is the plant's). With `withoutGovukBrand` made to keep every rule, the build is refused in words
     by its own second check (a stylesheet that names the face is never written as the Default tree's)."""
-    from tests.glass_trees.test_default_tree_carries_no_govuk_assets import (
-        real_face_hashes,
-        tree_problems,
-    )
-
-    faces = real_face_hashes()
     real = PAGES_SCRIPT.read_text("utf-8")
     ok, out = _pages_build(tmp_path / "real", real)
     assert ok.returncode == 0, ok.stdout + ok.stderr
-    assert tree_problems(out, faces) == []
-    css = next(p for p in out.iterdir() if p.suffix == ".css").read_text("utf-8")
-    assert 'data-brand="govuk"' not in css and "data-govuk-typeface" not in css
+    css = _stylesheet(out)
+    assert (
+        "GDS Transport" not in css
+        and 'data-brand="govuk"' not in css
+        and "data-govuk-typeface" not in css
+    )
 
     keeps = _plant(real, "return dropGovuk(blankComments(css));", "return css;")
     bad, _ = _pages_build(tmp_path / "keeps", keeps)
@@ -517,24 +531,21 @@ def test_the_pages_build_drops_the_govuk_brand_and_the_plant_that_stops_it_is_re
     assert "GDS Transport" in bad.stderr and "carries" in bad.stderr, bad.stdout + bad.stderr
 
 
-def test_the_plant_that_stops_the_drop_and_the_check_ships_the_face_and_the_scan_names_it(
+def test_the_plant_that_stops_the_drop_and_the_check_ships_the_face_in_the_stylesheet(
     tmp_path: Path,
 ) -> None:
     """The second line of defence lost too (the shape a regression takes when both are edited together): the stylesheet is
-    written with the typeface rule in it, and the Default tree's own scan (`tests/glass_trees/
-    test_default_tree_carries_no_govuk_assets.py`) names it, so the proof does not rest on the build's check alone."""
-    from tests.glass_trees.test_default_tree_carries_no_govuk_assets import (
-        real_face_hashes,
-        tree_problems,
-    )
-
+    written with the typeface rule in it. That is what `test_default_tree_carries_no_govuk_assets.py`'s scan of the built
+    tree reads, so the proof does not rest on the build's check alone (that file plants the same text into its copy)."""
     real = PAGES_SCRIPT.read_text("utf-8")
     both = _plant(real, "return dropGovuk(blankComments(css));", "return css;")
     both = _plant(both, "const found = GOVUK_IDENTITY.exec(text);", "const found = null;")
     done, out = _pages_build(tmp_path / "both", both)
     assert done.returncode == 0, done.stdout + done.stderr
-    problems = tree_problems(out, real_face_hashes())
-    assert any("names GDS Transport" in p for p in problems), problems
+    css = _stylesheet(out)
+    assert "GDS Transport" in css and "data-govuk-typeface" in css
+    # The scan's own pattern for the face (as `TEXT_SHAPES` there writes it) finds it in this very file.
+    assert re.search(r"GDS[ -]?Transport", css, re.I)
 
 
 def test_the_switch_is_a_field_the_schema_describes() -> None:

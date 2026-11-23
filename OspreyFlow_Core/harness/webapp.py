@@ -722,8 +722,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"harness: {problem}", file=sys.stderr)
         return 2
     print(
-        "harness: sign-in required (an osprey-admin account); "
-        "the identity provider must be running"
+        "harness: sign-in required (an osprey-admin account); the identity provider must be running"
         if enforced
         else "harness: no realm rendered yet, so this console is open (loopback only)"
     )
