@@ -13,6 +13,8 @@ from pathlib import Path
 
 import yaml
 
+from harness.preflight.ports import read_env_file
+
 #: The two settings either of which tells the Conduit where OpenSearch is (`OPENSEARCH_URL` first).
 ADDRESS_SETTINGS = ("OPENSEARCH_URL", "OPENSEARCH_HOST")
 
@@ -26,19 +28,17 @@ def renders_opensearch(compose_file: Path) -> bool:
 
 def sets_no_address(env_file: Path) -> bool:
     """Whether the deployment's `deployment.env` sets neither `OPENSEARCH_URL` nor `OPENSEARCH_HOST`
-    to anything but blanks, as the Conduit reads them (`services.search_index.run`'s `configured`):
+    to anything but blanks, as Compose reads the file the Conduit's environment is made from
+    (`harness.preflight.ports.read_env_file`: an `export ` prefix, quotes and a trailing ` #`
+    comment are not part of a value; `services.search_index.run`'s `configured` then reads it):
     the rebuild then reaches for `localhost:9200`, where nothing answers, and running it again
     mends nothing, since the missing thing is the setting, which `ospreyflow apply` writes (D216).
     No value is returned. A file that cannot be read is not said to lack the setting."""
     try:
-        text = env_file.read_text(encoding="utf-8")
+        held = read_env_file(env_file)
     except OSError:
         return False
-    for line in text.splitlines():
-        key, sep, value = line.partition("=")
-        if sep and key.strip() in ADDRESS_SETTINGS and value.strip().strip("'\""):
-            return False
-    return True
+    return not any(held.get(name, "").strip() for name in ADDRESS_SETTINGS)
 
 
 def rebuild_argv(compose: Sequence[str]) -> list[str]:

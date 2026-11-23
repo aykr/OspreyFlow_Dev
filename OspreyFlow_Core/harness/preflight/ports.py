@@ -115,28 +115,36 @@ def deployment_environ(context: PreflightContext) -> dict[str, str]:
     return {**values, **os.environ}
 
 
+def parse_env_line(raw: str) -> tuple[str, str] | None:
+    """One line of an env file as Compose reads it: `(name, value)`, or None for a blank line, a
+    whole-line comment or a line that sets nothing. Surrounding space is dropped, an `export `
+    prefix is dropped, a value in one matching pair of quotes is taken whole, and an unquoted
+    value's ` #` comment is left off."""
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        return None
+    if line.startswith("export "):
+        line = line[len("export ") :].lstrip()
+    name, sep, value = line.partition("=")
+    if not sep or not name.strip():
+        return None
+    quoted = value.strip()
+    if len(quoted) >= 2 and quoted[0] == quoted[-1] and quoted[0] in "'\"":
+        value = quoted[1:-1]
+    else:
+        # The comment's space is looked for before the value is stripped: `X= # note` is
+        # empty, as Compose reads it, not "# note" (the lane review of the carries, item 9).
+        value = re.split(r"\s#", value, maxsplit=1)[0].strip()
+    return name.strip(), value
+
+
 def read_env_file(path: Path) -> dict[str, str]:
-    """An env file as Compose reads it, for what a published port's value can be: whole-line
-    comments and blank lines skipped, an `export ` prefix dropped, a value in one matching pair of
-    quotes taken whole, and an unquoted value's ` #` comment left off."""
+    """An env file as Compose reads it, for what a published port's value can be (`parse_env_line`
+    for each line; the last line that sets a name wins)."""
     values: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export ") :].lstrip()
-        name, sep, value = line.partition("=")
-        if not sep or not name.strip():
-            continue
-        quoted = value.strip()
-        if len(quoted) >= 2 and quoted[0] == quoted[-1] and quoted[0] in "'\"":
-            value = quoted[1:-1]
-        else:
-            # The comment's space is looked for before the value is stripped: `X= # note` is
-            # empty, as Compose reads it, not "# note" (the lane review of the carries, item 9).
-            value = re.split(r"\s#", value, maxsplit=1)[0].strip()
-        values[name.strip()] = value
+        if (parsed := parse_env_line(raw)) is not None:
+            values[parsed[0]] = parsed[1]
     return values
 
 

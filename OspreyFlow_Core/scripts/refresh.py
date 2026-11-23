@@ -87,6 +87,7 @@ from harness.keycloak_theme import (
     render_login_theme,
     write_login_theme,
 )
+from harness.preflight.ports import parse_env_line
 from harness.profiles import postgres_connections_up_to_date
 from harness.render import (
     STATE_CONTAINER_PATH,
@@ -322,9 +323,6 @@ def _models_up_to_date(directory: Path) -> bool:
     return False
 
 
-#: A `deployment.env` line that sets a variable (a comment or a blank line is not one).
-_ASSIGNMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=")
-
 #: The one render line a deployment keeps whatever the checkout renders: its release is the one it
 #: was rendered with (`harness.apply._keep_the_version`, `harness.fresh_only`). Refresh moves it by
 #: its own step (`_release_up_to_date`), so it is never named as differing.
@@ -350,12 +348,18 @@ def _the_render_writes(directory: Path) -> list[str] | None:
 
 
 def _the_key(line: str) -> str | None:
-    found = _ASSIGNMENT.match(line)
-    return found.group(1) if found else None
+    """The key a line sets **as Compose reads the file** (`harness.preflight.ports.parse_env_line`:
+    `export KEY=v` and an indented `KEY=v` set `KEY`; a comment sets nothing). A line Compose reads
+    as setting a key is a line that is there, so refresh neither adds the render's beside it nor
+    changes it."""
+    parsed = parse_env_line(line)
+    return parsed[0] if parsed else None
 
 
 def _value_of(line: str) -> str:
-    return line.partition("=")[2].rstrip("\r\n")
+    """The value Compose reads from the line: no quotes, no trailing ` #` comment."""
+    parsed = parse_env_line(line)
+    return parsed[1] if parsed else ""
 
 
 def _may_be_added(key: str) -> bool:

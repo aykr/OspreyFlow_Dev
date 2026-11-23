@@ -648,7 +648,18 @@ def _value(line: str) -> str:
     return line.partition("=")[2].rstrip("\n")
 
 
-_THE_RENDERS = [key for key in DEFAULT_KEYS if key not in refresh._MODEL_LINES]
+#: Keys the older steps of `refresh` write with their own plain-prefix reader, before this slice's
+#: step runs (the model lines and the line they follow, `_models_up_to_date`; the release, the state
+#: folder and the post-ingest switch, `_release_up_to_date`). Not this slice's: it adds and names,
+#: and leaves them to those steps. A gap, reported.
+_OLDER_STEPS = {
+    *refresh._MODEL_LINES,
+    refresh._BEFORE_MODELS.rstrip("="),
+    "OSPREY_RELEASE_VERSION",
+    "OSPREY_STATE_DIR",
+    "OSPREY_POST_INGEST_RESOLUTION",
+}
+_THE_RENDERS = [key for key in DEFAULT_KEYS if key not in _OLDER_STEPS]
 
 
 @pytest.mark.parametrize("form", _FORMS)
@@ -684,7 +695,7 @@ def test_a_file_written_wholly_with_export_is_not_added_to_nor_changed(
     made = _make(tmp_path)
     held = "".join(
         f"export {line}"
-        if (key := refresh._the_key(line)) is not None and key not in refresh._MODEL_LINES
+        if (key := refresh._the_key(line)) is not None and key not in _OLDER_STEPS
         else line
         for line in made.full.splitlines(keepends=True)
     )
@@ -694,14 +705,14 @@ def test_a_file_written_wholly_with_export_is_not_added_to_nor_changed(
     assert "refresh: these settings" not in capsys.readouterr().out
 
 
+@pytest.mark.parametrize("written", ['{key}="{value}"\n', "{key}={value} # a note of mine\n"])
 def test_a_value_compose_reads_the_same_is_not_named_as_differing(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, written: str, capsys: pytest.CaptureFixture[str]
 ) -> None:
     made = _make(tmp_path)
     key = "OSPREY_HIGHEST_MARKING"
     was = _line(made.full, key)
-    quoted = f'{key}="{_value(was)}" # a note of mine\n'
-    held = made.full.replace(was, quoted)
+    held = made.full.replace(was, written.format(key=key, value=_value(was)))
     made.env.write_text(held, encoding="utf-8")
     refresh.files_up_to_date(made.repo)
     assert made.after() == held
@@ -719,7 +730,6 @@ def test_the_last_line_compose_reads_for_a_key_decides_whether_it_differs(
     assert made.after() == held
     said = capsys.readouterr().out
     assert key in said and "OFFICIAL-later-77" not in said
-
 
 
 # ---- the boundary, fail closed -------------------------------------------------------------------
