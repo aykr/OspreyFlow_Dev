@@ -99,6 +99,9 @@ describe("under the GOV.UK brand with the identity switch off", () => {
     );
     expect(container.querySelector(".govuk-header__logotype")).toBeNull();
     expect(container.querySelector(".govuk-header")!.textContent).toContain("Ministry of Examples");
+    // ADR-152 decision 14: "the department's name and logo with the service name": both, the service's after.
+    expect(container.querySelector(".govuk-header__organisation-name")!.textContent).toBe("Ministry of Examples");
+    expect(container.querySelector(".govuk-header__service-name")!.textContent).toBe("Prison Intelligence");
     expect(container.querySelector(".govuk-footer__crown")).toBeNull();
     expect(container.textContent).not.toMatch(/Crown copyright|Open Government Licence/);
     expect(screen.queryByRole("link", { name: /GOV\.UK/ })).toBeNull();

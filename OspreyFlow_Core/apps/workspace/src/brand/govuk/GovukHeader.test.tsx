@@ -6,7 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { applyBrand } from "@ospreyflow/glass-shared";
-import { GovukHeader } from "./GovukHeader";
+import { GovukHeader, governmentHeaderNames } from "./GovukHeader";
 
 afterEach(() => {
   cleanup();
@@ -64,6 +64,43 @@ describe("GovukHeader", () => {
       expect(container.querySelector("a")).toBeNull();
       cleanup();
     }
+  });
+
+  // ADR-152 decision 14: "the department's name and logo with the service name". A finding of round 3: the header drew
+  // `organisation ?? serviceName`, so the service name was dropped whenever both were set.
+  it("with the switch off draws the service's name beside the organisation's, each in its own element", () => {
+    applyBrand("govuk");
+    const { container } = render(<GovukHeader name="Ministry of Examples" serviceName="Prison Intelligence" />);
+    expect(container.querySelector(".govuk-header__organisation-name")!.textContent).toBe("Ministry of Examples");
+    expect(container.querySelector(".govuk-header__service-name")!.textContent).toBe("Prison Intelligence");
+    expect(container.querySelector(".govuk-header__logotype")).toBeNull();
+    expect(container.querySelector("a")).toBeNull();
+  });
+
+  it("draws no service-name element when there is no service name", () => {
+    applyBrand("govuk");
+    const { container } = render(<GovukHeader name="Ministry of Examples" />);
+    expect(container.querySelector(".govuk-header__service-name")).toBeNull();
+  });
+
+  it("with the switch on draws no name at all (the GOV.UK logo is the header, as ADR-132 Amendment 5 left it)", () => {
+    applyBrand("govuk", true);
+    const { container } = render(<GovukHeader name="Ministry of Examples" serviceName="Prison Intelligence" />);
+    expect(container.textContent).toBe("GOV.UK");
+  });
+
+  it("names the organisation first, the service after it, one name once, OspreyFlow when there is none", () => {
+    expect(governmentHeaderNames("Ministry of Examples", "Prison Intelligence")).toEqual({
+      name: "Ministry of Examples",
+      serviceName: "Prison Intelligence",
+    });
+    expect(governmentHeaderNames(null, "Prison Intelligence")).toEqual({ name: "Prison Intelligence", serviceName: null });
+    expect(governmentHeaderNames("Ministry of Examples", null)).toEqual({ name: "Ministry of Examples", serviceName: null });
+    expect(governmentHeaderNames("Prison Intelligence", "Prison Intelligence")).toEqual({
+      name: "Prison Intelligence",
+      serviceName: null,
+    });
+    expect(governmentHeaderNames(null, null)).toEqual({ name: "OspreyFlow", serviceName: null });
   });
 
   it("keys the logotype on the switch, not on the brand alone (I9)", () => {

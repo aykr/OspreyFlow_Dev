@@ -60,14 +60,21 @@ describe("the sign-in page's chrome, run", () => {
     expect(body.querySelector(".govuk-header__logotype")).toBeNull();
     expect(body.querySelector(".govuk-header svg")).toBeNull();
     expect(body.querySelector(".govuk-header__organisation-name")?.textContent).toBe("Ministry of Examples");
+    // ADR-152 decision 14: the department's name with the service name, as `GovukHeader.tsx` draws them.
+    expect(body.querySelector(".govuk-header__service-name")?.textContent).toBe("Prison Intelligence");
     expect(body.querySelector(".govuk-footer__crown")).toBeNull();
     expect(body.textContent).not.toMatch(/Crown copyright|Open Government Licence/);
   });
 
   it("with the switch off falls back to the service's name, then to OspreyFlow", () => {
-    expect(run({ organisation: null }).querySelector(".govuk-header__organisation-name")?.textContent).toBe("Prison Intelligence");
+    const serviceOnly = run({ organisation: null });
+    expect(serviceOnly.querySelector(".govuk-header__organisation-name")?.textContent).toBe("Prison Intelligence");
+    expect(serviceOnly.querySelector(".govuk-header__service-name")).toBeNull(); // one name is drawn once
     const bare = run({ organisation: null, serviceName: null });
     expect(bare.querySelector(".govuk-header__organisation-name")?.textContent).toBe("OspreyFlow");
+    expect(bare.querySelector(".govuk-header__service-name")).toBeNull();
+    // The same name for both is one name, not two.
+    expect(run({ organisation: "Prison Intelligence" }).querySelector(".govuk-header__service-name")).toBeNull();
   });
 
   it("with only a quoted or truthy non-true value is still off", () => {
