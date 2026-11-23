@@ -435,6 +435,23 @@ def require_subject(entry: ExportLedgerEntry) -> None:
         )
 
 
+#: The ledger read (`ExportLedgerStore.list_all`), with its one condition on a row that has no case
+#: (SE8b; rules 3 and 7). A dataset's release is written with no case, so the case-scoped reach
+#: that governs every other row cannot place it; the row names the dataset by id (and its highest
+#: marking), and a reader who may not know the dataset exists must not learn it from here. The
+#: condition is in the `WHERE`, as the access rule is everywhere else: `$1` is true for a reader
+#: who already names every dataset (the administrator's own listing, `GET /v1/admin/datasets`, and
+#: the Conduit's unlimited work), `$2` is the datasets the reader reads. A row of any other kind,
+#: and every row of a case, is read as before, by the role alone. A reader of the ledger with
+#: neither (the compliance role by itself) gets no dataset's row at all, and no sign that one was
+#: left out: failing closed until the owner gives that role a reach of its own.
+NO_CASE_DATASET_ROWS_SQL = (
+    "SELECT * FROM export_ledger WHERE ("
+    "subject_kind IS DISTINCT FROM 'dataset' OR investigation_id IS NOT NULL "
+    "OR $1::boolean OR subject_id = ANY($2::text[])) ORDER BY exported_at DESC"
+)
+
+
 class ExportLedgerStore:
     """**Deliberately not `investigations`-scoped and not `owning_unit`-filtered** — ADR-047's own
     Gap 2 reasoning: the ledger's entire value to compliance is that it is readable by someone who
@@ -496,10 +513,13 @@ class ExportLedgerStore:
         by-design exemption `06_DECISIONS.md` ADR-038's own addendum already establishes for
         `evaluate_hotlists_for_entry` — gated by role instead, checked explicitly below, not by the
         query's own `WHERE` clause."""
-        if Right.READ_EXPORT_LEDGER not in rights_for(principal.roles):
+        rights = rights_for(principal.roles)
+        if Right.READ_EXPORT_LEDGER not in rights:
             raise ComplianceRoleRequiredError(principal.id)
+        reader_names_every_dataset = Right.ADMINISTER_SYSTEM in rights or principal.datasets is None
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch("SELECT * FROM export_ledger ORDER BY exported_at DESC")
+            rows = await conn.fetch(NO_CASE_DATASET_ROWS_SQL, reader_names_every_dataset,
+                                    list(principal.datasets or []))  # fmt: skip
         return [
             ExportLedgerEntry(
                 id=row["id"],

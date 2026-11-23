@@ -611,8 +611,20 @@ class FakePool:
         self.rows.append({c: row.get(c) for c in self._not_null} | row)
 
     async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
+        """The ledger read, with the one condition Postgres would apply: where the SQL carries the
+        no-case dataset clause (`export.NO_CASE_DATASET_ROWS_SQL`), a row of no case about a
+        dataset is kept only for a reader who names every dataset (`$1`) or reads that dataset
+        (`$2`). A read whose SQL lacks the clause gets every row, as Postgres would give it."""
         assert sql.startswith("SELECT * FROM export_ledger")
-        return list(reversed(self.rows))
+        rows = list(reversed(self.rows))
+        if "subject_kind IS DISTINCT FROM 'dataset'" not in sql:
+            return rows
+        names_every, reads = args
+        return [
+            r for r in rows
+            if r["subject_kind"] != "dataset" or r["investigation_id"] is not None
+            or names_every or r["subject_id"] in reads
+        ]  # fmt: skip
 
 
 async def test_the_fake_refuses_a_no_case_row_when_the_case_is_required() -> None:
@@ -990,9 +1002,11 @@ def test_the_feed_in_json_writes_one_row_too(monkeypatch: pytest.MonkeyPatch) ->
 
 async def test_a_no_case_row_reaches_only_a_reader_of_the_ledger() -> None:
     """Rule 4 and the owner's rule 3 and 7: the one read of the ledger is the role's, and a no-case
-    row is read as every row is. It carries ids and no name, so what the role learns is that a
-    person exported a release of dataset `ds-1`; a person without the role learns nothing, not even
-    that the ledger holds a row."""
+    row is read as every row is, by the role. It carries ids and no name. A reader of the ledger
+    who may name every dataset (the administrator: `GET /v1/admin/datasets`) learns that a person
+    exported a release of dataset `ds-1`; a person without the role learns nothing, not even that
+    the ledger holds a row. Who else may learn of a dataset's release is
+    `test_a_dataset_release_row_reaches_only_a_reader_who_may_know_the_dataset`."""
     from services.api.export import ComplianceRoleRequiredError, ExportLedgerEntry
 
     pool = FakePool()
@@ -1002,7 +1016,7 @@ async def test_a_no_case_row_reaches_only_a_reader_of_the_ledger() -> None:
         handling_level=None, exported_at=NOW, item_count=2, withheld=False, manifest_policy="omit",
         subject_kind="dataset", subject_id=DATASET,
     ))  # fmt: skip
-    (entry,) = await store.list_all(COMPLIANCE)
+    (entry,) = await store.list_all(COMPLIANCE.model_copy(update={"datasets": []}))
     assert (entry.investigation_id, entry.subject_kind, entry.subject_id) == (
         None,
         "dataset",
@@ -1017,6 +1031,82 @@ async def test_a_no_case_row_reaches_only_a_reader_of_the_ledger() -> None:
         await store.list_all(NOBODY)
     with pytest.raises(ComplianceRoleRequiredError):
         await store.list_all(ANALYST)
+
+
+COMPLIANCE_ONLY = Principal(id="compliance-2", clearance="OFFICIAL", org_unit="unit-9",
+                            roles=["compliance"], datasets=[])  # fmt: skip
+
+
+def _release(row_id: str, dataset: str) -> Any:
+    from services.api.export import ExportLedgerEntry
+
+    return ExportLedgerEntry(
+        id=row_id, investigation_id=None, principal_id=ANALYST.id,
+        artefact_kind="dataset_release", handling_level="OFFICIAL", exported_at=NOW, item_count=2,
+        withheld=False, manifest_policy="omit", subject_kind="dataset", subject_id=dataset,
+    )  # fmt: skip
+
+
+async def _ledger_of_three_kinds(pool: FakePool) -> Any:
+    """A release of `ds-1`, a rule file and a case's report, the three a reader may be shown."""
+    from services.api.export import ExportLedgerEntry
+
+    store = _store(pool)
+    await store.record(_release("rel-1", DATASET))
+    await store.record(ExportLedgerEntry(
+        id="rule-1", investigation_id=None, principal_id=ANALYST.id, artefact_kind="rule_file",
+        handling_level=None, exported_at=NOW, item_count=1, withheld=False, manifest_policy="omit",
+        subject_kind="rule", subject_id="rule-a",
+    ))  # fmt: skip
+    await store.record(ExportLedgerEntry(
+        id="case-1", investigation_id="case-1", principal_id=ANALYST.id, artefact_kind="report",
+        handling_level="OFFICIAL", exported_at=NOW, item_count=2, withheld=False,
+        manifest_policy="omit", subject_kind="report", subject_id="r-1",
+    ))  # fmt: skip
+    return store
+
+
+async def _seen(store: Any, reader: Principal) -> set[str]:
+    return {e.id for e in await store.list_all(reader)}
+
+
+async def test_a_dataset_release_row_reaches_only_a_reader_who_may_know_the_dataset() -> None:
+    """Rules 3 and 7, the finding of the round before: the ledger read must not reveal a dataset
+    the reader has no right to. The row of a release has no case, so no case's reach places it;
+    it is kept by the reader's own: the administrator, who names every dataset already, and a
+    reader of the dataset itself (`principal.datasets`). The compliance role by itself, and a
+    reader of other datasets only, are given no release row, and nothing says one was left out. A
+    rule file's row and a case's row are read by the role alone, as before. The route's own
+    principal outside a case carries `datasets=[]`, never `None`, so every reader here does."""
+    store = await _ledger_of_three_kinds(FakePool())
+    admin = COMPLIANCE.model_copy(update={"datasets": []})
+    assert await _seen(store, admin) == {"rel-1", "rule-1", "case-1"}
+    assert await _seen(store, COMPLIANCE_ONLY) == {"rule-1", "case-1"}
+    other = COMPLIANCE_ONLY.model_copy(update={"datasets": ["ds-other"]})
+    assert await _seen(store, other) == {"rule-1", "case-1"}
+    reader = COMPLIANCE_ONLY.model_copy(update={"datasets": [DATASET]})
+    assert await _seen(store, reader) == {"rel-1", "rule-1", "case-1"}
+
+
+async def test_the_release_row_is_left_out_in_the_query_not_after_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rule 15, at the shape the store really sends: the condition is in the `WHERE`, with the
+    reader's reach as its parameters (rule 3: not applied after retrieval). Planted: the read as it
+    was before this round (no condition) shows the compliance role a release of `ds-1`: red here.
+    The real query is Postgres's, so the same case is run live (owed:
+    `test_export.py::test_a_release_row_is_left_out_of_the_read_of_a_reader_who_may_not_know_it`)."""
+    from services.api import export
+
+    store = await _ledger_of_three_kinds(FakePool())
+    assert "rel-1" not in await _seen(store, COMPLIANCE_ONLY)
+    for fragment in ("WHERE", "subject_kind IS DISTINCT FROM 'dataset'", "$1::boolean",
+                     "subject_id = ANY($2::text[])"):  # fmt: skip
+        assert fragment in export.NO_CASE_DATASET_ROWS_SQL
+    monkeypatch.setattr(
+        export, "NO_CASE_DATASET_ROWS_SQL", "SELECT * FROM export_ledger ORDER BY exported_at DESC"
+    )
+    assert "rel-1" in await _seen(store, COMPLIANCE_ONLY), "the fake must show the old read red"
 
 
 async def test_the_store_refuses_a_row_that_says_nothing_of_what_it_concerns() -> None:

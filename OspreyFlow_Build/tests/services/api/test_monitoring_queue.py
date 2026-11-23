@@ -307,6 +307,45 @@ async def test_an_alert_of_a_dataset_the_case_does_not_read_is_not_queued(stores
     assert await _queued_ids(alerts, "c", owner) == []
 
 
+async def test_left_out_by_reach_is_true_exactly_when_the_reach_drops_an_alert(
+    stores: Any,
+) -> None:
+    """SE8b, live (owed where the line's live step is off for builders): the flag a report's ledger
+    row takes from `AlertStore.left_out_by_reach` is the real query's answer, not a fake's. Two
+    alerts of the reader's own, one on `ds-1` and one on `ds-other`: a reader of `ds-1` alone has
+    one taken out of the queue by reach, so the flag is true and the queue lists one; a reader of
+    both, or with no limit, loses none; a reader whose alerts are all on their dataset loses none.
+    Red with the count read from the filtered query alone (the flag then never true), and with the
+    reach clause's parameter at the wrong position (Postgres refuses it)."""
+    _, alerts = stores
+    owner = _person()
+    case = f"case-{new_id()}"
+    inside = _alert(f"monitor:{new_id()}", owner, team=owner.org_unit, referent_node_ids=["n-1"],
+                    dataset_id="ds-1")  # fmt: skip
+    outside = _alert(f"monitor:{new_id()}", owner, team=owner.org_unit, referent_node_ids=["n-2"],
+                     dataset_id="ds-other")  # fmt: skip
+    await alerts.save(inside)
+    await alerts.save(outside)
+
+    narrow = owner.model_copy(update={"datasets": ["ds-1"]})
+    assert {r.alert.id for r in await alerts.list_queue(case, narrow)} == {inside.id}
+    assert await alerts.left_out_by_reach(case, narrow) is True
+
+    wide = owner.model_copy(update={"datasets": ["ds-1", "ds-other"]})
+    assert {r.alert.id for r in await alerts.list_queue(case, wide)} == {inside.id, outside.id}
+    assert await alerts.left_out_by_reach(case, wide) is False
+    unlimited = owner.model_copy(update={"datasets": None})
+    assert await alerts.left_out_by_reach(case, unlimited) is False
+
+    nothing = owner.model_copy(update={"datasets": []})
+    assert await alerts.left_out_by_reach(case, nothing) is True
+
+    quiet = _person()
+    await alerts.save(_alert(f"monitor:{new_id()}", quiet, team=quiet.org_unit,
+                             referent_node_ids=["n-3"], dataset_id="ds-1"))  # fmt: skip
+    assert await alerts.left_out_by_reach(case, quiet) is False
+
+
 async def test_a_scheduled_runs_notice_is_never_queued(stores: Any) -> None:
     _, alerts = stores
     owner = _person()

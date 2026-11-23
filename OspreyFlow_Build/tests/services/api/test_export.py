@@ -950,6 +950,41 @@ async def test_an_export_with_no_case_round_trips_with_its_subject(ledger) -> No
         await conn.close()
 
 
+async def test_a_release_row_is_left_out_of_the_read_of_a_reader_who_may_not_know_it(
+    ledger,
+) -> None:
+    """SE8b, live (owed where the line's live step is off for builders): the real query keeps a
+    no-case dataset row from a ledger reader whose reach leaves the dataset out. The compliance role
+    alone, and a reader of another dataset, are given the rule file's row and not the release's;
+    the administrator, and a reader of the dataset, are given both. Red with the
+    condition removed."""
+    dataset = f"ds-{new_id()}"
+    release = ExportLedgerEntry(
+        id=new_id(), investigation_id=None, principal_id=ANALYST.id,
+        artefact_kind="dataset_release", handling_level="OFFICIAL", exported_at=datetime.now(UTC),
+        item_count=2, withheld=False, manifest_policy="omit", subject_kind="dataset",
+        subject_id=dataset,
+    )  # fmt: skip
+    rule = release.model_copy(update={
+        "id": new_id(), "artefact_kind": "rule_file", "handling_level": None,
+        "subject_kind": "rule", "subject_id": f"rule-{new_id()}",
+    })  # fmt: skip
+    await ledger.record(release)
+    await ledger.record(rule)
+
+    async def seen(reader: Principal) -> set[str]:
+        return {e.id for e in await ledger.list_all(reader)} & {release.id, rule.id}
+
+    compliance = COMPLIANCE.model_copy(update={"datasets": []})
+    assert await seen(compliance) == {rule.id}
+    assert await seen(compliance.model_copy(update={"datasets": ["ds-other"]})) == {rule.id}
+    reads_it = compliance.model_copy(update={"datasets": [dataset]})
+    assert await seen(reads_it) == {release.id, rule.id}
+    admin = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-9",
+                      roles=["osprey-admin"], datasets=[])  # fmt: skip
+    assert await seen(admin) == {release.id, rule.id}
+
+
 _PRE_SE8B_SHAPE = """
 CREATE TABLE {table} (
     id TEXT PRIMARY KEY,
