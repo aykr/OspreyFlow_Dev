@@ -588,7 +588,7 @@ def _rebuild_fails(repo: Path, env: str) -> str:  # noqa: F811
     [
         "OSPREY_POSTGRES_PASSWORD=x\n",
         "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_HOST=\n",
-        # As Compose reads the file, these set nothing (the lane review's findings on search_rebuild).
+        # As Compose reads the file, these set nothing (a finding on search_rebuild).
         "OSPREY_POSTGRES_PASSWORD=x\nOPENSEARCH_HOST= # note\n",
         'OSPREY_POSTGRES_PASSWORD=x\nexport OPENSEARCH_HOST=""\n',
         "OSPREY_POSTGRES_PASSWORD=x\n# OPENSEARCH_HOST=opensearch\n",
