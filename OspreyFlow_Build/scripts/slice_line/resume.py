@@ -35,11 +35,17 @@
                    (b) a check the slice did not write that fails identically on main's own tree in    holds the limits;
                    the same worktree shape (the check is removed from the slice's row, recorded),     run_seat.py tries
                    or (a) main having moved under the slice (main merges into the branch cleanly and   it after a red stop
-                   the slice's own acceptance and checks are unchanged). Never: an accept, a refreeze
-                   that changes what is tested, a stop naming a key, a credential or a security rule,
-                   a stop at the eighth round, a stop on a verifier's findings. Each clearance is
-                   logged (self-clear-<time>.json in the slice's folder; self-clears.tsv, which the
-                   board prints for the conductor's morning report)
+                   the slice's own acceptance and checks are unchanged), or (c) a red stop that is the
+                   scan map's alone, whose rows main now has (the conductor wrote them since). Only on
+                   the owner's standing permission (standing.tsv: clear-line-stops per-day <N> <date>),
+                   N a day (his file 012, A2). Never: an accept, a refreeze that changes what is
+                   tested, a stop naming a key, a credential or a security rule, a stop at the eighth
+                   round, a stop on a verifier's findings, any red in the slice's own acceptance or its
+                   own tests (its acceptance, its uncommitted work, its lint, a test it wrote or
+                   changed), a slice the owner has parked. Each clearance is logged (self-clear-<time>
+                   .json in the slice's folder, with the red stop's lines; self-clears.tsv, which the
+                   board prints for the conductor's morning report; owner-changes.tsv, which the
+                   budget counts)
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -732,6 +738,66 @@ def owners_alone(slice_id: str, frozen: dict, st: dict, rec: Path, stop: str, ti
                       + ": a refreeze changes what is tested and is the owner's alone. Nothing changed.")
 
 
+#: The owner's standing permission for the line to clear a stop whose cause is the line's (his file 012, A2; common.py).
+CLS = "clear-line-stops"
+#: The Stop hook's scan-map red (stop_check.py), and the tests it names.
+SCAN_RED = "RED: scan map:"
+SCAN_NAMES = re.compile(r"on main\): (.+?)\. Say so", re.S)
+
+
+def red_lines(rec: Path) -> list[str]:
+    return [str(x) for x in (c.read_json(rec / "red_stop.json") or {}).get("last") or []]
+
+
+def own_red(frozen: dict, rec: Path, tip: str) -> str:
+    """Where a red of the stop is the slice's own ('' when none is): its acceptance red, its own work uncommitted, the
+    lint of the files its branch changed, or a failing test in a file it wrote or changed or that is its acceptance's
+    (his file 012, A2: never cleared when any red is in the part's own acceptance or its own tests)."""
+    last = red_lines(rec)
+    for x in last:
+        head = x.split("\n", 1)[0]
+        if head.startswith("RED: acceptance"):
+            return "its acceptance is red"
+        if head.startswith("RED: uncommitted"):
+            return "its own work is uncommitted"
+        if head.startswith(("RED: ruff", "RED: eslint")):
+            return f"the lint of the files its branch changed is red ({head[5:].split(' (', 1)[0]})"
+    main = c.git(["rev-parse", "main"], c.REPO)
+    base = c.git(["merge-base", main, tip], c.REPO, check=False) or frozen["base"]
+    own = set(dry_run.acceptance_files(frozen)) | set(c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).split())
+    acceptance = frozen.get("acceptance") or ""
+    for i in dry_run.failing_ids("\n".join(last)):
+        path = dry_run.id_path(i)
+        if Path(path).name in acceptance or any(f == path or f.endswith("/" + path) or path.endswith("/" + f) for f in own):
+            return f"{i} is in a test the slice wrote or changed, or its acceptance's"
+    return ""
+
+
+def cause_c(slice_id: str, rec: Path, wt: Path) -> tuple[str, list[str]]:
+    """Why a scan-map red whose rows the conductor has since written is not the cause ('' when it is), and the tests
+    it named: every red in the red stop is the scan map's (a new test that walks a folder with no row, which a builder
+    cannot add), and main's map (main's committed scan_map.tsv beside the installed copy, and scan_rows/<ID>.tsv on main)
+    now has a row for each test it named, read as the Stop hook reads them: a row not yet committed does not count."""
+    last = red_lines(rec)
+    if not last or any(not x.startswith(SCAN_RED) for x in last):
+        return "the red stop is not the scan map alone", []
+    names = sorted({n.strip() for x in last for m in SCAN_NAMES.finditer(x) for n in m.group(1).split(",") if n.strip()})
+    if not names:
+        return "the scan-map red names no test", []
+    import scan_select
+    import stop_check
+    installed = c.DATA / "bin" / "scan_map.tsv"  # the Stop hook's own reading: the installed copy and main's, never a
+    table = (scan_select.entries(installed) if installed.is_file() else []) + stop_check.main_map(str(wt))  # row uncommitted
+    rows = subprocess.run(["git", "show", f"main:{stop_check.SCAN_ROWS}{slice_id}.tsv"], cwd=str(wt), capture_output=True,
+                          text=True)
+    if rows.returncode == 0:
+        table += scan_select.load(rows.stdout)
+    missing = scan_select.unmapped(wt / "OspreyFlow_Build", table, only=set(names))
+    if missing:
+        return f"main still has no scan-map row for {', '.join(missing)}", []
+    return "", names
+
+
 def cause_a(slice_id: str, frozen: dict, wt: Path, tip: str) -> str:
     """Why main having moved under the slice is not the cause ('' when it is): main has commits the branch lacks; they
     merge into it cleanly; they change none of the slice's own acceptance files; and the line has not cleared this
@@ -849,6 +915,19 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
                       "within the rounds limit, or for a conflict). Nothing changed.")
     tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
     owners_alone(slice_id, frozen, st, rec, stop, tip)
+    grant, why = c.standing_grant(CLS)  # the owner's file 012, A2: on his standing permission, within its budget
+    if not grant:
+        raise Refused(f"{slice_id}'s stop waits for the owner's line: the line clears a stop itself only on his standing "
+                      f"permission ({CLS}), and {why}. Nothing changed.")
+    if c.parked(slice_id):
+        raise Refused(f"the owner has parked {slice_id} ({c.parked(slice_id)} in resume.tsv): the line never clears its "
+                      "stop. Nothing changed.")
+    mine = own_red(frozen, rec, tip)
+    if mine:
+        raise Refused(f"{slice_id}'s red stop is its own ({mine}): the line never clears a red in the slice's own "
+                      "acceptance or its own tests. It waits for the owner's line. Nothing changed.")
+    red = c.read_json(rec / "red_stop.json") or {}
+    use = f"; on the owner's standing permission ({CLS}), use {grant['used'] + 1} of {grant['per_day']} today"
     log = c.DATA / "dry-runs" / f"{slice_id}-self-clear-{int(time.time())}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     why_b, removal = cause_b(slice_id, frozen, st, rec, tip, log) if stop == "red" else ("not a red stop", {})
@@ -870,9 +949,19 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         said = back_to_building(slice_id, wt)
         what = (f"removed {removed} from the checks (a check the slice did not write, failing identically on main's "
                 f"own tree; committed {sha[:10]}; the acceptance unchanged); red stop at {tip[:10]} cleared; building, "
-                f"round {st.get('round', 1)} unchanged")
-        c.log_self_clear(slice_id, "red", "b", what)
+                f"round {st.get('round', 1)} unchanged{use}")
+        c.log_standing_use(slice_id, CLS, "self-clear", "red", "b", what, {"red_stop": red})
         return [f"{slice_id}: cleared by the line (cause b): {what}.", *said]
+    why_c, names = cause_c(slice_id, rec, wt) if stop == "red" else ("not a red stop", [])
+    if not why_c:
+        (rec / "red_stop.json").unlink()
+        (rec / "red_stops").unlink(missing_ok=True)
+        said = back_to_building(slice_id, wt)
+        what = (f"the red stop at {tip[:10]} was the scan map's alone, and main now has the row for {', '.join(names)} "
+                f"(written since by the conductor; a builder cannot add one); cleared; building, round "
+                f"{st.get('round', 1)} unchanged{use}")
+        c.log_standing_use(slice_id, CLS, "self-clear", "red", "c", what, {"red_stop": red})
+        return [f"{slice_id}: cleared by the line (cause c): {what}.", *said]
     why_a = cause_a(slice_id, frozen, wt, tip)
     if not why_a:
         main = c.git(["rev-parse", "main"], c.REPO)
@@ -885,10 +974,11 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         (rec / "red_stops").unlink(missing_ok=True)
         said = back_to_building(slice_id, wt)
         what = (f"main {main} merged into the branch (clean; the slice's acceptance and checks unchanged); {stop} stop "
-                f"at {tip[:10]} cleared; building, round {st.get('round', 1)} unchanged")
-        c.log_self_clear(slice_id, stop, "a", what)
+                f"at {tip[:10]} cleared; building, round {st.get('round', 1)} unchanged{use}")
+        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})
         return [f"{slice_id}: cleared by the line (cause a): {what}.", *said]
-    raise Refused(f"{slice_id}'s stop is not one the line clears: not (b): {why_b}; not (a): {why_a}. It waits for the "
+    raise Refused(f"{slice_id}'s stop is not one the line clears: not (b): {why_b}; not (c): {why_c}; not (a): {why_a}. "
+                  "It waits for the "
                   "owner's line, as before. Nothing changed.")
 
 

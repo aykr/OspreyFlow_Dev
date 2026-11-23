@@ -415,11 +415,12 @@ def standing_today() -> list[dict]:
     return out
 
 
-def log_standing_use(slice_id: str, name: str, action: str, stop: str, cause: str, what: str) -> dict:
+def log_standing_use(slice_id: str, name: str, action: str, stop: str, cause: str, what: str,
+                     extra: dict | None = None) -> dict:
     """One use of a standing permission: its row in owner-changes.tsv (what the budget counts) and in self-clears.tsv
     (what the board prints, in one sentence: what the line did and why)."""
     log_owner_change(slice_id, action, f"standing.tsv {name}: {what}")
-    return log_self_clear(slice_id, stop, cause, what)
+    return log_self_clear(slice_id, stop, cause, what, extra)
 
 
 def standing_rule() -> tuple[dict | None, str]:
@@ -460,14 +461,14 @@ SELF_CLEARS = DATA / "self-clears.tsv"
 SELF_CLEAR_COLUMNS = ("at", "slice", "stop", "cause", "what")
 
 
-def log_self_clear(slice_id: str, stop: str, cause: str, what: str) -> dict:
+def log_self_clear(slice_id: str, stop: str, cause: str, what: str, extra: dict | None = None) -> dict:
     row = {"at": now(), "slice": slice_id, "stop": stop, "cause": cause, "what": what}
     SELF_CLEARS.parent.mkdir(parents=True, exist_ok=True)
     if not SELF_CLEARS.exists():
         SELF_CLEARS.write_text("\t".join(SELF_CLEAR_COLUMNS) + "\n")
     with SELF_CLEARS.open("a") as fh:
         fh.write("\t".join(str(row[k]).replace("\t", " ").replace("\n", " ") for k in SELF_CLEAR_COLUMNS) + "\n")
-    write_json(rec_dir(slice_id) / f"self-clear-{row['at'].replace(':', '')}-{os.urandom(3).hex()}.json", row)
+    write_json(rec_dir(slice_id) / f"self-clear-{row['at'].replace(':', '')}-{os.urandom(3).hex()}.json", {**row, **(extra or {})})
     return row
 
 

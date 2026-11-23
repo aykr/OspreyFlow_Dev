@@ -315,7 +315,7 @@ M = [
  ("resume.py", '        dry_run.builder_shaped(tree)\n', '', "cause_b_a_check"),
  ("resume.py", '    if subprocess.run(["git", "merge-base", "--is-ancestor", main, tip], cwd=str(c.REPO)).returncode == 0:', '    if False:', "neither_cause"),
  ("resume.py", '    if files is None or files:\n', '    if files is None:\n', "merge_cleanly"),
- ("resume.py", '        c.log_self_clear(slice_id, stop, "a", what)\n', '', "log_lists_every_clearance"),
+ ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})\n', '', "log_lists_every_clearance"),
  ("board.py", '        for line in self_clear_lines():\n            print(line)\n', '', "board_prints_it"),
  ("run_seat.py", '        return 0 if self_clear(slice_id) else 1', '        return 1', "run_seat_tries_the_clearance"),
  # LINE_FIXES_5_BRIEF.md, B: the checks proved in the slice's own worktree before it starts
@@ -589,6 +589,21 @@ M = [
  ("resume.py", '        "evidence": f"owner-changes.tsv: standing.tsv {RAR}"}, *(gate.get("findings") or [])]})', '        "evidence": ""}][:0] + (gate.get("findings") or [])})', "round_after_refusal_gives_one_round"),
  ("resume.py", '    c.log_standing_use(slice_id, RAR, "send-back", "refused", RAR, what)', '    c.log_self_clear(slice_id, "refused", RAR, what)', "round_after_refusal_gives_one_round or round_after_refusal_at_its_budget or never_twice"),
  ("board.py", '        for line in standing_lines():\n            print(line)', '        pass', "round_after_refusal_gives_one_round or round_after_refusal_at_its_budget"),
+ # the owner's file 012, A2: the line's own clearances on his standing permission, never the part's own red
+ ("resume.py", '    grant, why = c.standing_grant(CLS)  # the owner\'s file 012, A2: on his standing permission, within its budget\n    if not grant:', '    grant, why = {"used": 0, "per_day": 10}, ""\n    if False:', "clear_line_stops_off_or_unclear or clear_line_stops_at_its_budget"),
+ ("resume.py", '    if c.parked(slice_id):\n        raise Refused(f"the owner has parked', '    if False:\n        raise Refused(f"the owner has parked', "clear_line_stops_never_for_a_slice_the_owner_parked"),
+ ("resume.py", '    if mine:\n        raise Refused(', '    if False:\n        raise Refused(', "clear_line_stops_never_clears_a_red_in_the_parts_own"),
+ ("resume.py", '        if head.startswith("RED: acceptance"):\n', '        if False:\n', "clear_line_stops_never_clears_a_red_in_the_parts_own"),
+ ("resume.py", '        if head.startswith("RED: uncommitted"):\n', '        if False:\n', "clear_line_stops_never_clears_a_red_in_the_parts_own"),
+ ("resume.py", '        if head.startswith(("RED: ruff", "RED: eslint")):\n', '        if False:\n', "clear_line_stops_never_clears_a_red_in_the_parts_own"),
+ ("resume.py", '        if Path(path).name in acceptance or any(f == path', '        if False and any(f == path', "clear_line_stops_never_clears_a_red_in_the_parts_own"),
+ ("resume.py", '    if not last or any(not x.startswith(SCAN_RED) for x in last):\n', '    if not last:\n', "clear_line_stops_cause_c_never_beside_another_red"),
+ ("resume.py", '    if missing:\n        return f"main still has no scan-map row', '    if False:\n        return f"main still has no scan-map row', "clear_line_stops_cause_c_a_scan_map_red"),
+ ("resume.py", ' + stop_check.main_map(str(wt))  # row uncommitted', '  # row uncommitted', "clear_line_stops_cause_c_a_scan_map_red"),
+ ("resume.py", '    table = (scan_select.entries(installed) if installed.is_file() else [])', '    table = scan_select.entries()', "clear_line_stops_cause_c_a_scan_map_red"),
+ ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", "red", "c", what, {"red_stop": red})', '        c.log_self_clear(slice_id, "red", "c", what)', "clear_line_stops_cause_c_a_scan_map_red"),
+ ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})', '        c.log_self_clear(slice_id, stop, "a", what)', "clear_line_stops_each_use or clear_line_stops_at_its_budget"),
+ ("common.py", '{**row, **(extra or {})})', 'row)', "clear_line_stops_each_use"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
