@@ -296,6 +296,56 @@ def test_the_switch_means_nothing_under_the_ospreyflow_brand_in_the_build() -> N
     }
 
 
+# ----- the image is per deployment as the switch is: round 4's finding. Every deployment built from source tagged its
+# workspace image `osprey/workspace:local`, so a switch-on build and a default build shared one tag, and whichever was
+# built last was what a start that does not rebuild ran: the default deployment served the face's files, or the GOV.UK
+# one fell back to arial in silence.
+
+
+def _workspace_image(appearance: dict[str, object], **components: object) -> str:
+    config = OspreyConfig.model_validate(
+        {"components": {"source_path": ".", **components}, "appearance": appearance}
+    )
+    images = service_images(config, build_context="../../..")
+    return str(compose_services(config, images)["workspace"]["image"])
+
+
+def test_a_default_deployment_and_one_with_the_identity_on_never_share_a_workspace_image_tag() -> None:
+    default = _workspace_image({"brand": "govuk"})
+    switched_on = _workspace_image({"brand": "govuk", "govuk_identity": True})
+    assert default == "osprey/workspace:local"  # what it was: a default deployment renders byte for byte as before
+    assert switched_on != default
+    # Every other deployment on the machine that is not GOV.UK with the switch on keeps the default's tag, wherever the
+    # switch is written (under the other brand it means nothing: ADR-152 decision 14).
+    assert _workspace_image({"brand": "ospreyflow", "govuk_identity": True}) == default
+    assert _workspace_image({}) == default
+
+
+def test_the_other_images_of_a_deployment_with_the_identity_on_keep_their_tags() -> None:
+    def tags(appearance: dict[str, object]) -> dict[str, str]:
+        config = OspreyConfig.model_validate(
+            {"components": {"source_path": "."}, "appearance": appearance}
+        )
+        images = service_images(config, build_context="../../..")
+        return {k: str(v["image"]) for k, v in compose_services(config, images).items()}
+
+    on, off = tags({"brand": "govuk", "govuk_identity": True}), tags({"brand": "govuk"})
+    assert {k for k in on if on[k] != off[k]} == {"workspace"}
+
+
+def test_a_cloud_platform_pushes_the_workspace_with_the_identity_on_under_its_own_tag() -> None:
+    """The images a cloud platform's registry holds are named by commit alone: two deployments sharing a registry would
+    share `workspace:<commit>` too."""
+
+    def target(**appearance: object) -> str:
+        return next(
+            str(i["target"]) for i in _images_plan(**appearance) if "/workspace:" in str(i["target"])
+        )
+
+    assert target(brand="govuk", govuk_identity=True) != target(brand="govuk")
+    assert target(brand="ospreyflow", govuk_identity=True) == target(brand="govuk")
+
+
 # ----- the switch on, by every route that decides whether the workspace is built: the file is read first, the build
 # is settled after it, so the refusal cannot be the schema's (a finding of round 3: it refused `--build` from a checkout).
 

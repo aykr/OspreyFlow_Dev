@@ -681,6 +681,19 @@ def _workspace_build(out: Path) -> dict:
     return yaml.safe_load((out / "compose.yaml").read_text())["services"]["workspace"]["build"]
 
 
+def _workspace_image(out: Path) -> str:
+    import yaml
+
+    return yaml.safe_load((out / "compose.yaml").read_text())["services"]["workspace"]["image"]
+
+
+def _workspace_lock_tag(out: Path) -> str:
+    import yaml
+
+    rows = yaml.safe_load((out / "versions.lock").read_text())["images"]
+    return next(r["tag"] for r in rows if r["service"] == "workspace")
+
+
 def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_built_from_source(
     repo: Path,
 ) -> None:
@@ -692,6 +705,10 @@ def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_bui
     refresh.refresh(repo, run=Recorder(), register=Registrar())
 
     assert _workspace_build(out)["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
+    # Round 4: the image is per deployment as the switch is, so the stanza's tag and the lock's row move with the argument
+    # (the tag the default build holds would otherwise be rebuilt over, or run, by a deployment that wants the other).
+    assert _workspace_image(out) == "osprey/workspace:local-govuk"
+    assert _workspace_lock_tag(out) == "local-govuk"
 
 
 def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators_own(
@@ -715,6 +732,8 @@ def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators
     refresh.refresh(repo, run=Recorder(), register=Registrar())
 
     assert _workspace_build(out)["args"] == {"OPERATOR_ARG": "kept"}
+    assert _workspace_image(out) == "osprey/workspace:local"
+    assert _workspace_lock_tag(out) == "local"
 
 
 def test_a_deployment_with_the_identity_off_keeps_a_workspace_build_with_no_args_as_it_was(
