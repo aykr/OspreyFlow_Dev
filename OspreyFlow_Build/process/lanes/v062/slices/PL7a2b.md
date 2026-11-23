@@ -1,0 +1,39 @@
+# Slice PL7a2b · PL7 · The page service in deployments is a deployment setting, off by default: the four renderers read `pages.enabled`; off renders exactly the reference, on adds the service (ADR-152 Amendment 3)
+
+- **Build id:** PL7 (ADR-152 Amendment 3, items 1 to 5, in `OspreyFlow_Build/spec/06_DECISIONS.md` about lines 41728 to 41756; decision 7's route table and `OSPREY_PAGES_TREE`; invariant I22). **The owner's rulings of 21 November 2026 (the setting is off by default and turned on per deployment by the owner) and of 23 November 2026 (`RULINGS.md`): the protected GOV.UK demo is a running deployment, which this slice does not touch (it renders nothing different while the setting is off, and nobody sets it on); main does not reach the demo; the part is built and merged.**
+- **Dial setting:** balanced
+- **Rounds limit:** the dial's (8)
+- **After:** PL7a2a (merged: the reference render, `OspreyFlow_Build/tests/harness/test_reference_render.py` and `OspreyFlow_Build/tests/fixtures/reference_render/`).
+- **Status of this brief:** written by the conductor on 23 November 2026; re-read every line named.
+
+## The one open question, and how this brief settles it (the conductor's reading; the owner may overrule)
+
+**The two sentences, both from what is already accepted:**
+1. Amendment 3 item 2: *"With the setting off or absent, every renderer produces exactly the files it produced before this amendment, in each of the four shapes (local-lite, small, cluster, cloud-platform), under each brand: no `pages` service, no route to it in the front proxy, no secret or `OSPREY_PAGES_*` variable for it, no value in the cloud-platform chart."*
+2. What the code has done since PL9a (`OspreyFlow_Core/harness/apply.py`, `pages_secret_lines`, called at about line 1456), under ADR-152 decision 4 ("its secret kept in `deployment.env` across re-renders (`keep_existing_secrets`)"): *"The page service's two secrets, minted here on every render and then replaced by the values the deployment already holds … Written into `deployment.env`."* The merged reference render pins them: `OspreyFlow_Build/tests/fixtures/reference_render/{local-lite,small}-{govuk,ospreyflow}/deployment.env` hold `OSPREY_PAGES_CLIENT_SECRET` and `OSPREY_PAGES_SESSION_SECRET`.
+
+**The conflict:** "no secret or `OSPREY_PAGES_*` variable" read literally means the off render must drop two lines every render already writes, which breaks "exactly the files it produced before", the reference render PL7a2a merged, and the `osprey-pages` client registration (`harness/register_sign_in.py` about line 268).
+
+**Settled within the amendment's words, as the conductor reads them:** the first clause is the operative one ("exactly the files it produced before … byte for byte", and the amendment's own test is "the reference render fails if any renderer's output differs while the setting is off"). The list after the colon says that **this amendment adds nothing** for the page service while off; it does not say to remove what PL9a already writes. **So: the two minted secrets, and every other line today's render holds, stay exactly as the reference pins them, off or on. This slice adds no secret and no `OSPREY_PAGES_*` variable while the setting is off.** If the builder finds the reference render holds anything else named for pages that the list forbids, it stops and says so (the owner then rules; do not change the reference to make the list true). A one-sentence correction of item 2's list ("no secret or variable beyond the two PL9a mints") is for the owner to decide whether to make; the conductor drafts it as a diff in `slice-line/proposals/` if he asks. This slice does not wait for it.
+
+## What (in this order; each red first, planted faults in the shape the renderer writes, rule 15)
+
+1. **The setting, `pages.enabled`:** a boolean in `osprey.yaml`'s settings, default `false`; a value that is not `true` or `false` refused in words by the same settings validation that refuses an unknown `appearance.brand` (find it; say where). Nothing else turns it on (not a profile, a brand or a release). Say in the report which file holds the schema and where the default lives.
+2. **Off or absent:** all four renderers' output equals the reference **byte for byte** (`test_reference_render.py` stays green untouched: it is the invariant). **Do not edit the reference fixtures** except through the regenerate command, and only if a diff is deliberate and explained; a changed fixture while the setting is off is the failure this slice exists to prevent.
+3. **On:** in all four shapes the render adds the `pages` service, its route table for the deployment's brand (decision 7's table, unchanged), its secrets as they already exist, and its `OSPREY_PAGES_*` variables, including `OSPREY_PAGES_TREE` passed from `appearance.brand` as decision 7 says. Read how the chart already guards pages blocks (`{{- if .Values.pages.enabled }}`: PL7a2a's off-view reads exactly that form) and keep to that one guard form.
+4. **The cutover (item 4):** a GOV.UK deployment whose derived tree state is complete (`harness` derives it: PL7a1) with the setting off is **refused in words**: "the GOV.UK tree is complete, so the workspace would be removed, and the page service is not enabled for this deployment". With it on, I22 applies as written.
+5. **Tests, `OspreyFlow_Build/tests/harness/test_pages_setting.py` (new, pure, red first on main because the setting does not exist):** the validation refuses a non-boolean and names the setting; off equals the reference in all four shapes; on holds the service, route and variables in all four shapes; **a plant per shape of each of: a `pages` service block in the compose file, a studio handle in the front proxy's configuration and a chart value, each failing the off case; and the same three missing failing the on case**; the complete GOV.UK tree with the setting off is refused in exactly the words above, and with the setting on renders without the workspace. **Planted faults take the shape the renderer writes** (call the renderer with a patched function, or copy to `tmp_path`; never edit the real renderer in a test).
+6. **Say it once (item 5):** the release notes' paragraph and one sentence in the guides where they name the page service: "`pages.enabled` exists and is off." Find the documents; if a document test would fail, run it.
+7. **Report:** the settings schema file; where the default is; the renderers changed and how each reads the setting; the four shapes, on and off, with the byte-equality shown; the cases added; **the state of the secrets question above (the reference's `deployment.env` untouched)**.
+
+## Acceptance test
+
+`OspreyFlow_Build/tests/harness/test_pages_setting.py` (new, pure, red first). **Say which folders it walks and which fixtures it reads** (it reads `OspreyFlow_Build/tests/fixtures/reference_render/`; the render helpers it imports may glob: say so). **A new test that walks a folder needs its scan-map row on main before the hook lets the builder stop; a builder cannot add it. If the hook asks for a row, STOP and say which test and which folders in your report; the conductor writes it.**
+
+## Checks (pure; store ports pinned to 9)
+
+The new test; `test_reference_render.py`, `test_render.py`, `test_cloud_platform_render.py`, `test_doc_citations_check.py`; `ruff check .` in `OspreyFlow_Core`; ruff format on files changed. **No `tests/test_layout.py`.**
+
+## Out of scope
+
+The GOV.UK or default pages themselves; the page service's image and the release list (PL7d); the identity switch and the typeface (PL7c); any deployment's own `osprey.yaml`; turning the setting on anywhere; the Makefile, `ci.yml`, any `CLAUDE.md`; `apps/workspace`. **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower** (the two minted secrets are existing behaviour: report any new exposure of them, do not change them).
