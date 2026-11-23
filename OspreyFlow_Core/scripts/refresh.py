@@ -83,9 +83,9 @@ from harness.keycloak_theme import (
 from harness.profiles import postgres_connections_up_to_date
 from harness.render import (
     GOVUK_IMAGE_TAG_SUFFIX,
-    GovukIdentityNeedsABuild,
     STATE_CONTAINER_PATH,
     STORE_VOLUMES,
+    GovukIdentityNeedsABuild,
     _render_compose,
     _render_versions_lock,
     load_config,
@@ -667,9 +667,9 @@ def _pins_moved(directory: Path) -> None:
     # looked "moved" to a registry image that does not exist (ADR-111 Amendment 4's refresh).
     config = _like_the_deployment(config, services, directory)
     images = service_images(config, build_context=_build_context(services))
-    # The refusal `render()` makes, said here too because this pass does not go through it: a deployment
-    # that pulls the release's images has no way to pass the switch, and its workspace image would be
-    # moved to a `-govuk` tag no release publishes (PL7c round 5). Raised before anything is changed.
+    # The refusal `render()` makes, said here too, as this pass does not go through it: a deployment
+    # that pulls the release's images cannot pass the switch, and its workspace image would be moved
+    # to a `-govuk` tag no release publishes (PL7c round 5). Raised before anything is changed.
     if wants_govuk_identity(config) and not any(
         i.service == "workspace" and i.building for i in images
     ):
