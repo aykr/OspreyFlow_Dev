@@ -40,3 +40,12 @@ Any other check; the allowlist's contents; the product; the protected files (the
 ## Never merge another part's unmerged tip (the owner, 23 November 2026)
 
 **Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.
+
+## Round 2 (23 November 2026, the conductor): two errors in this brief, found by the verifier
+
+**Both findings are the conductor's errors in the brief, not yours.** The brief said the guides under `OspreyFlow_Core/docs/` and the slice line's scripts folder are "still checked". **They are not: the check never scans `docs/` (its search roots are spec, process, tools, apps, services, packages, scripts and harness), and the root `scripts` resolves to the product folder's `scripts`, so the slice line's own scripts folder under the Build folder is never scanned either.** Do this and nothing else:
+
+1. **Drop the case that plants a broken citation in a guide under `docs/`** (it cannot fail: the check does not read it). **Do not widen the check.** Say in the test file's docstring, in one short paragraph, that the guides under `OspreyFlow_Core/docs/` and the slice line's scripts folder sit outside this gate before and after this change.
+2. **Replace the "still checked" case that uses the slice line's scripts folder** with a path in a folder the real check really scans on the real tree (for example one under the product folder's `scripts/` or the Build folder's `tools/`), so the tree in the case has the shape the check sees. **Check that shape against the real tree: the new case's folder must be one the check's own scan reports as scanned.**
+3. **One new case on the real tree:** a folder the check does scan and that is not a lane paper (take one from the check's own scan) is reported as scanned, so the "still checked" list in the test is anchored to the real tree.
+4. No change to the check itself, the skip, the count it reports, or any other file. Re-run your checks and the scan-map check once.
