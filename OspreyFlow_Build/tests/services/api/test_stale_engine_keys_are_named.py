@@ -89,6 +89,7 @@ from services.api.model_admin import (
     ModelAdminRefused,
     ModelSettings,
     ModelSettingsFile,
+    credential_name,
     gateway_model_name,
 )
 
@@ -695,13 +696,30 @@ def test_a_route_not_named_is_red() -> None:
 
 async def test_the_sweep_does_not_remove_an_unsaved_adds_token(site: Site) -> None:
     """The text says the 15-minute sweep removes only a check's own key, so it does not remove the
-    token of an Add that could not be saved. Driven: the check lapses, the sweep runs (the held
-    check is gone and its credential with it), and the engine's token is still on the gateway."""
+    token of an Add that could not be saved. Driven, with each step asserted so the test cannot pass
+    on an empty record: the refused Add leaves its check held and the check's credential on the
+    gateway; the check lapses and the sweep removes both (and says so in the audit); and the
+    engine's token is still on the gateway."""
     name = await unsaved_add(site)
     assert token_left(site, name)
+    holder = site.process()
+    await holder.start()
+    # The plant: before the sweep, the record holds the check and the gateway holds its credential
+    # (the typed key, read as the gateway itself reads it, never shown).
+    assert [c.provider.name for c in holder.settings.checks.values()] == [name], (
+        "the refused Add left no check held, so the sweep below would show nothing"
+    )
+    assert site.gateway.credential(credential_name(name)) == site.typed, (
+        "the refused Add left no credential of the check on the gateway"
+    )
+    await finished(holder)
     site.now += timedelta(minutes=16)
     sweeper = site.process()
     await sweeper.sweep_checks()
     await finished(sweeper)
-    assert not sweeper.settings.checks, "the plant: the sweep ran and removed the lapsed check"
+    assert not sweeper.settings.checks, "the sweep ran and removed the lapsed check"
+    assert site.gateway.credential(credential_name(name)) is None, (
+        "the sweep removed the lapsed check's credential"
+    )
+    assert any(e.action == "engine_check_expired" and e.engine == name for e in site.audit.entries)
     assert token_left(site, name), "the sweep removed the engine's token, so the text is wrong"

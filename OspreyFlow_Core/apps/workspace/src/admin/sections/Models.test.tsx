@@ -358,6 +358,35 @@ describe("Models", () => {
     expect(sent.filter((s) => s.method === "DELETE")).toEqual([]);
   });
 
+  // Round 4: Cancel after the Conduit no longer holds the check (the 15-minute sweep, or "Cancel the
+  // check" in the Being-checked table, removed it). It is what Cancel asked for, so the form drops
+  // the check and shows the Conduit's words; the next Cancel closes it and sends no second delete.
+  it.each([
+    [404, "There is no check of that name."],
+    [410, "This check is more than 15 minutes old, so its key was removed."],
+  ])("when Cancel is refused because the check is gone (%i), the next Cancel closes the form and sends no second delete", async (status, words) => {
+    const sent = stub((path, init) =>
+      path === "/v1/admin/models/checks" ? { status: 200, body: PASSED }
+        : path === "/v1/admin/models/checks/chk-1" && init?.method === "DELETE"
+          ? { status, body: { detail: { error: "model_admin_refused", detail: words } } }
+          : listed(LISTED)(path, init),
+    );
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini-3.8-flash" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    await screen.findByRole("button", { name: "Add the engine" });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect((await screen.findByRole("alert")).textContent).toContain(words);
+    expect(sent.filter((s) => s.method === "DELETE").map((s) => s.path)).toEqual(["/v1/admin/models/checks/chk-1"]);
+    // The check is no longer held here: the form asks for a new check and Cancel now closes it.
+    expect(screen.queryByRole("button", { name: "Add the engine" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("form", { name: /Add an engine/ })).toBeNull());
+    expect(sent.filter((s) => s.method === "DELETE")).toHaveLength(1);
+    expect(document.body.innerHTML).not.toContain(PLANTED);
+  });
+
   it("shows a check waiting for Add as being checked, never as an engine, and cancels it", async () => {
     const HELD = { ...LISTED, checks: [{ id: "chk-9", engine: "openai", label: "OpenAI", by: "admin-1", at: "2026-11-15T12:00:00Z", expires_at: "2026-11-15T12:15:00Z" }] };
     const sent = stub((path, init) => (path === "/v1/admin/models/checks/chk-9" ? { status: 200, body: LISTED } : listed(HELD)(path, init)));
