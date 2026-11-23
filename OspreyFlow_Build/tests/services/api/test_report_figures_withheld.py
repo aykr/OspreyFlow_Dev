@@ -14,10 +14,17 @@ plant both directions:
 - figures whole but the case's working set holds material the reader may not view -> the flag is
   false (red against the first version);
 - an alert left out only by a status filter is not withheld from the reader;
-- an alert on a dataset outside the reader's reach, which the store's query drops before the queue
-  sees it (the second verifier's finding: the flag read only from the queue's loop said false for
-  figures the reach had lowered): the flag is true, from `AlertStore.left_out_by_reach`, whose own
-  query is held to `list_queue`'s scope.
+- an alert on a dataset the case does not read, which the store's query drops before the queue sees
+  it: **not** the reader's rights, so the flag stays false (the owner's ruling of 23 November 2026,
+  option A: in a case route `principal.datasets` is the case's read set, `scope_to_case`, and an
+  owned or team monitor or hotlist alert raised on another dataset is not a figure of this case;
+  round 5 recorded it as withheld, the false record this file now plants);
+- an alert on the borrowed read-only layer of a case made from another, which `readable_of_case`
+  drops when the reader holds no level on the original case: the reader's rights, so the flag is
+  true, from `AlertStore.left_out_on_borrowed_layer`; with a level held, false. These two run the
+  **real** `AlertStore` and the real `queue_scope` SQL over `_PostgresRefusingPool` (DuckDB, which
+  refuses a statement whose placeholders and parameters disagree, an unknown column, a gap in the
+  numbering, as Postgres does), the principal and the borrowed layer set by the real `scope_to_case`.
 
 Held rows: the real `HeldRowStore.left_out_for` is Postgres (its live counterpart is
 `test_reports.py::test_the_held_flag_follows_what_the_reader_may_not_read`, owed), so here it is
@@ -31,18 +38,20 @@ file.
 from __future__ import annotations
 
 import contextlib
+import json
+import re
 from collections.abc import AsyncIterator
-from datetime import date
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from services.api import reports
-from services.api.alerts import AlertStore, QueueRow
+from services.api.alerts import _COLUMNS, AlertStore
 from services.api.held_rows import HeldRowStore
 
 from ontology.handling import load_uk_le_scheme
-from schemas.domain import Principal
+from schemas.domain import Alert, AlertMode, Principal
 from tests.services.api.test_alert_evidence_withheld import (
     CASE,
     OVER_LINK,
@@ -87,44 +96,14 @@ class _Held:
         return status == "held" and any(c != "OFFICIAL" for c in self.rows)
 
 
-class _ReachStore(Store):
-    """The alert store for a reader whose dataset reach is `reach`: like the real one, its queue
-    never returns an alert on another dataset (the dropped row reaches no loop), and
-    `left_out_by_reach` says whether it dropped any. Both answers come from the one filter, as the
-    real store's come from one scope."""
-
-    def __init__(
-        self, alerts: list[Any], datasets: dict[str, str | None], reach: list[str]
-    ) -> None:
-        super().__init__(alerts)
-        self._datasets, self._reach = datasets, reach
-
-    def _in_reach(self, alert: Any) -> bool:
-        where = self._datasets.get(alert.id)
-        return where is None or where in self._reach
-
-    async def list_queue(
-        self, investigation_id: str, reader: Principal, **_: object
-    ) -> list[QueueRow]:
-        return [q for q in await super().list_queue(investigation_id, reader)
-                if self._in_reach(q.alert)]  # fmt: skip
-
-    async def left_out_by_reach(self, investigation_id: str, reader: Principal) -> bool:
-        return any(not self._in_reach(a) for a in self.alerts)
-
-
 async def _report(
     hidden: set[str],
     alerts: list[Any],
     *,
     held: _Held | None = None,
     show_held: bool = False,
-    datasets: dict[str, str | None] | None = None,
-    reach: list[str] | None = None,
 ) -> tuple[Any, bool]:
     store, graph, analytics, _ = _world(hidden, alerts)
-    if reach is not None:
-        store = _ReachStore(alerts, datasets or {}, reach)
     return await reports.case_report_and_withheld(
         alerts=store, graph=_EmptyGraph(graph), analytics=analytics,  # type: ignore[arg-type]
         held=held or _Held([]),  # type: ignore[arg-type]
@@ -144,21 +123,192 @@ async def test_figures_lowered_by_what_the_reader_cannot_read_say_so() -> None:
     assert whole_flag is False, "nothing hidden: the flag is not a constant `True` either"
 
 
-async def test_figures_lowered_by_the_readers_dataset_reach_say_so() -> None:
-    """An alert on a dataset the reader's reach does not include is dropped by the store's query,
-    so it is in no figure and never reaches the queue's loop: the flag says it all the same. Red
-    with the flag read only from the loop (the shape the first fix had: `left_out` false)."""
-    on_other = {"v2": "ds-other"}
-    shown, flag = await _report(set(), [V1, V2], datasets=on_other, reach=["ds-mine"])
-    whole, whole_flag = await _report(
-        set(), [V1, V2], datasets=on_other, reach=["ds-mine", "ds-other"]
+# --- the real alert store over a pool that refuses what Postgres refuses ----------------------------
+
+
+class _Refused(Exception):
+    """What Postgres answers a statement it cannot run (bind count, unknown column, ...)."""
+
+
+class _PostgresRefusingPool:
+    """`asyncpg.Pool`'s `acquire()` over DuckDB, which runs the store's own SQL (`queue_scope`, the
+    kind, shared and routed expressions) as written. It refuses what the database would: a statement
+    whose `$n` placeholders are not exactly `$1..$n` for the arguments given (Postgres: "bind
+    message supplies N parameters, but prepared statement requires M", or "could not determine data
+    type of parameter $k" for a gap), and a column the table does not have. It answers any other
+    statement by running it, never with a canned value."""
+
+    def __init__(self) -> None:
+        import duckdb
+
+        self._db = duckdb.connect()
+        columns = [c.strip() for c in _COLUMNS.split(",")] + ["handlings", "cited_handlings"]
+        self._columns = columns
+        self._db.execute("CREATE TABLE alerts (" + ", ".join(f"{c} TEXT" for c in columns) + ")")
+        self._db.execute("CREATE TABLE hotlists (id TEXT, audience TEXT)")
+        self._db.execute(
+            "CREATE TABLE alert_repoint_records (id TEXT, links TEXT, alert_nodes TEXT, "
+            "referents TEXT, recorded_at TEXT, held_open BOOLEAN, applied BOOLEAN)"
+        )
+        self.statements: list[str] = []
+
+    def put(self, alert: Alert) -> None:
+        row = {c: None for c in self._columns} | {
+            "id": alert.id, "rule_id": alert.rule_id, "owner_id": alert.owner_id,
+            "mode": alert.mode.value, "referent_node_ids": json.dumps(alert.referent_node_ids),
+            "investigation_id": alert.investigation_id, "created_at": alert.created_at.isoformat(),
+            "dataset_id": alert.dataset_id, "typology": alert.typology, "team": alert.team,
+            "status": "open",
+        }  # fmt: skip
+        names = ", ".join(row)
+        marks = ", ".join(f"${i + 1}" for i in range(len(row)))
+        self._db.execute(f"INSERT INTO alerts ({names}) VALUES ({marks})", list(row.values()))
+
+    def acquire(self) -> _PostgresRefusingPool:
+        return self
+
+    async def __aenter__(self) -> _PostgresRefusingPool:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        return None
+
+    def _run(self, sql: str, args: tuple[Any, ...]) -> list[dict[str, Any]]:
+        numbers = sorted({int(n) for n in re.findall(r"\$(\d+)", sql)})
+        if numbers != list(range(1, len(args) + 1)):
+            raise _Refused(f"placeholders {numbers} for {len(args)} arguments: {sql[:80]}")
+        self.statements.append(sql)
+        cursor = self._db.execute(sql, list(args))
+        names = [d[0] for d in cursor.description]
+        rows = [dict(zip(names, r, strict=True)) for r in cursor.fetchall()]
+        for row in rows:
+            if isinstance(row.get("created_at"), str):
+                row["created_at"] = datetime.fromisoformat(row["created_at"])
+        return rows
+
+    async def fetch(self, sql: str, *args: Any) -> list[dict[str, Any]]:
+        return self._run(sql, args)
+
+    async def fetchrow(self, sql: str, *args: Any) -> dict[str, Any] | None:
+        rows = self._run(sql, args)
+        return rows[0] if rows else None
+
+    async def fetchval(self, sql: str, *args: Any) -> Any:
+        rows = self._run(sql, args)
+        return next(iter(rows[0].values())) if rows else None
+
+
+class _CaseDatasets:
+    """The dataset store `scope_to_case` asks: a case made from another reads `reads`, the layer it
+    borrows read-only being `borrowed`, the layer of the original case `original`."""
+
+    def __init__(self, reads: list[str], borrowed: str | None, original: str | None) -> None:
+        self._reads, self._borrowed, self._original = reads, borrowed, original
+
+    async def ids_of_case(self, investigation_id: str) -> list[str]:
+        return list(self._reads)
+
+    async def layer_of_case(self, investigation_id: str) -> str | None:
+        return None
+
+    async def read_only_layer_of(self, investigation_id: str) -> str | None:
+        return self._borrowed
+
+    async def case_of_layer(self, layer: str) -> str | None:
+        return self._original
+
+
+def _mine(name: str, dataset: str) -> Alert:
+    """A monitor alert the reader owns, raised in another case, on `dataset`: it reaches this case's
+    queue through its owner (`queue_scope`), as every owned alert does, and is cut by dataset."""
+    return Alert(id=name, rule_id=f"monitor:{name}", owner_id=READER.id, mode=AlertMode.FULL,
+                 referent_node_ids=["n-a"], investigation_id="case-elsewhere", dataset_id=dataset,
+                 team=READER.org_unit, created_at=datetime(2026, 11, 7, 9, 0, tzinfo=UTC))  # fmt: skip
+
+
+async def _as_the_route(
+    alerts: list[Alert], *, reads: list[str], borrowed: str | None = None, holds: bool = False
+) -> tuple[Any, bool, list[str]]:
+    """What a Reports route does for `READER` in `CASE`: the principal scoped to the case's read set
+    by the real `scope_to_case` (so `principal.datasets` is that set and the borrowed layer is
+    noted for the request), then the real `case_report_and_withheld` and the real queue over the
+    real `AlertStore`. Returns the figures, the flag and the ids the reader's queue lists."""
+    from services.api import alert_queue
+    from services.api.dataset_scope import scope_to_case, set_case_datasets
+
+    pool = _PostgresRefusingPool()
+    for alert in alerts:
+        pool.put(alert)
+    store = AlertStore(pool, None)  # type: ignore[arg-type]
+    _, graph, analytics, _ = _world(set(), [])
+
+    async def holds_a_level(principal: Principal, investigation_id: str) -> bool:
+        return holds
+
+    try:
+        reader = await scope_to_case(
+            READER, CASE, _CaseDatasets(reads, borrowed, "case-original"),  # type: ignore[arg-type]
+            holds_a_level=holds_a_level,
+        )  # fmt: skip
+        figures, flag = await reports.case_report_and_withheld(
+            alerts=store, graph=_EmptyGraph(graph), analytics=analytics,  # type: ignore[arg-type]
+            held=_Held([]),  # type: ignore[arg-type]
+            compute=None, explore=None, ontology=None,  # type: ignore[arg-type]
+            domains=["fibo"], investigation_id=CASE, reader=reader, today=TODAY, show_held=False,
+        )  # fmt: skip
+        shown = await alert_queue.monitoring_queue(store, graph, analytics, CASE, reader)  # type: ignore[arg-type]
+    finally:
+        set_case_datasets(None)
+    return figures, flag, [q.alert.id for q in shown]
+
+
+async def test_an_owned_alert_on_a_dataset_the_case_does_not_read_is_not_withheld() -> None:
+    """Case 7 (round 4), the verifier's planted shape: the reader owns two monitor alerts, one on a
+    dataset this case reads and one on another dataset (raised in another case). Their principal's
+    `datasets` is the case's read set, so the second never reaches this case's queue: it is not a
+    figure of this case and the reader's rights lowered nothing. Red on the round-5 tip
+    (`left_out_by_reach` read the case's scope as the reader's rights and said true)."""
+    figures, flag, shown = await _as_the_route(
+        [_mine("m-here", "ds-1"), _mine("m-there", "ds-other")], reads=["ds-1"]
     )
-    assert shown.alerts_total == whole.alerts_total - 1, "the figures were lowered"
+    assert shown == ["m-here"], "the alert on the other dataset is in no figure of this case"
+    assert flag is False
+
+
+async def test_an_alert_on_the_borrowed_layer_is_withheld_from_a_reader_with_no_level_on_the_original() -> (
+    None
+):
+    """The reader's rights, the one refusal in a case's read set (`readable_of_case`): a case made
+    from another reads the original's layer only for a reader who holds a level on the original.
+    Without one the layer is left out of `principal.datasets` and the alert on it, which the reader
+    owns, is in no figure: the flag says so. With a level it is in the figures and the flag is
+    false. Both over the real store, so the SQL that takes it out is the one that runs."""
+    alerts = [_mine("m-here", "ds-1"), _mine("m-borrowed", "ds-borrowed")]
+    reads = ["ds-1", "ds-borrowed"]
+    _, flag, shown = await _as_the_route(alerts, reads=reads, borrowed="ds-borrowed", holds=False)
+    assert shown == ["m-here"], "the figures were lowered"
     assert flag is True
-    assert whole_flag is False, "every alert in reach: nothing lowered, not a constant `True`"
-    # an alert naming no dataset stays in reach (the store keeps it, `reach_clause`)
-    _, none_flag = await _report(set(), [V1, V2], datasets={"v2": None}, reach=["ds-mine"])
-    assert none_flag is False
+
+    _, flag, shown = await _as_the_route(alerts, reads=reads, borrowed="ds-borrowed", holds=True)
+    assert sorted(shown) == ["m-borrowed", "m-here"]
+    assert flag is False, "the reader holds a level on the original: nothing was left out"
+
+
+async def test_the_borrowed_layer_and_another_datasets_alert_are_told_apart() -> None:
+    """Both at once, no level held: the alert on the borrowed layer sets the flag; the same case
+    with only the other dataset's alert (the borrowed layer holding none) does not. The flag follows
+    the reader's rights, not how many alerts the case's scope dropped."""
+    reads = ["ds-1", "ds-borrowed"]
+    _, only_other, _ = await _as_the_route(
+        [_mine("m-here", "ds-1"), _mine("m-there", "ds-other")],
+        reads=reads, borrowed="ds-borrowed", holds=False,
+    )  # fmt: skip
+    assert only_other is False
+    _, both, _ = await _as_the_route(
+        [_mine("m-there", "ds-other"), _mine("m-borrowed", "ds-borrowed")],
+        reads=reads, borrowed="ds-borrowed", holds=False,
+    )  # fmt: skip
+    assert both is True
 
 
 async def test_whole_figures_are_not_withheld_whatever_the_working_set_holds() -> None:
@@ -275,42 +425,39 @@ async def test_left_out_for_is_false_when_the_reader_may_read_every_row() -> Non
     assert await store.left_out_for(CASE, reader) is False
 
 
-# --- the alert store's own query for the reach flag ----------------------------------------------
+# --- the alert store's own question: the borrowed layer ------------------------------------------
 
 
-@pytest.mark.parametrize("datasets", [["ds-1"], []])
-async def test_alerts_left_out_by_reach_is_asked_with_the_scope_and_reach_of_the_queue(
-    datasets: list[str],
+@pytest.mark.parametrize(
+    ("datasets", "borrowed"),
+    [
+        (None, "ds-borrowed"),  # no dataset limit: nothing is left out of the read set
+        (["ds-1", "ds-borrowed"], "ds-borrowed"),  # the reader reads it
+        (["ds-1"], None),  # the case borrows no layer: the case's scope is not the reader's rights
+    ],
+)
+async def test_left_out_on_the_borrowed_layer_costs_no_query_when_nothing_was_refused(
+    datasets: list[str] | None, borrowed: str | None
 ) -> None:
-    """The flag is counted over the same scope as `list_queue`, beside the same scope with the reach
-    clause: both read the one `queue_scope`, so a looser flag query cannot say 'nothing left out'
-    about alerts the queue drops. Red if the flag's scope or bound values drift from the queue's."""
+    pool = _PostgresRefusingPool()
+    store = AlertStore(pool, None)  # type: ignore[arg-type]
     reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1", datasets=datasets)
-    conn = _Conn()
-    store = AlertStore(_Pool(conn), None)  # type: ignore[arg-type]
-    await store.list_queue(CASE, reader)
-    assert await store.left_out_by_reach(CASE, reader) is True
-    (listing_sql, listing_args), (flag_sql, flag_args) = conn.calls
-    scope = listing_sql.split("FROM alerts WHERE true", 1)[1].split(" ORDER BY")[0]
-    reach = " AND (dataset_id = ANY($7::text[]) OR dataset_id IS NULL)"
-    assert scope.endswith(reach), listing_sql
-    assert f"FROM alerts WHERE true{scope.removesuffix(reach)}" in flag_sql
-    assert f"FILTER (WHERE true{reach})" in flag_sql
-    assert flag_args == listing_args, "the same case, reader, teams, datasets and reach"
+    assert await store.left_out_on_borrowed_layer(CASE, reader, borrowed) is False
+    assert pool.statements == []
 
 
-async def test_a_reader_with_no_dataset_limit_loses_nothing_to_reach_and_costs_no_query() -> None:
-    conn = _Conn()
-    store = AlertStore(_Pool(conn), None)  # type: ignore[arg-type]
-    reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1")
-    assert reader.datasets is None
-    assert await store.left_out_by_reach(CASE, reader) is False
-    assert conn.calls == []
-
-
-async def test_alerts_left_out_by_reach_is_false_when_the_reach_drops_none() -> None:
-    conn = _Conn()
-    conn.answer = {"every": 3, "readable": 3}
-    store = AlertStore(_Pool(conn), None)  # type: ignore[arg-type]
-    reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1", datasets=["ds-1"])
-    assert await store.left_out_by_reach(CASE, reader) is False
+async def test_left_out_on_the_borrowed_layer_asks_with_the_scope_of_the_queue() -> None:
+    """The question is put over `queue_scope` as `list_queue` puts it (the reader's own alerts and
+    their team's, never another's), with the borrowed layer as the one added condition: another
+    person's alert on that layer, which the reader could never see, says nothing to them."""
+    pool = _PostgresRefusingPool()
+    store = AlertStore(pool, None)  # type: ignore[arg-type]
+    reader = Principal(id="reader-1", clearance="OFFICIAL", org_unit="unit-1", datasets=["ds-1"])
+    stranger = _mine("theirs", "ds-borrowed").model_copy(
+        update={"owner_id": "someone-else", "team": "unit-9"}
+    )
+    pool.put(stranger)
+    assert await store.left_out_on_borrowed_layer(CASE, reader, "ds-borrowed") is False
+    pool.put(_mine("mine", "ds-borrowed"))
+    assert await store.left_out_on_borrowed_layer(CASE, reader, "ds-borrowed") is True
+    assert await store.left_out_on_borrowed_layer(CASE, reader, "ds-other") is False
