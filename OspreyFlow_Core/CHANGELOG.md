@@ -18,6 +18,8 @@ update. Work not yet in a release is listed under *Unreleased*.
   deployment's rendered files are exactly what they were, in every shape and under each brand, and a value that is not
   `true` or `false` is refused in words. Turned on, they add the page service, its routes and its settings. A GOV.UK
   deployment whose tree is complete and where it is off is refused in words (no tree is complete yet).
+  Turning it on where the deployment is served over plain HTTP (a local-lite one) is also refused in words: the page
+  service signs people in only through an `https` identity address, so serve it over HTTPS or leave the setting off.
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any

@@ -1126,15 +1126,17 @@ def test_the_alias_widens_nothing_the_deployment_reaches_out_to(shape: str, bran
 def test_the_page_service_in_a_chart_is_given_no_route_out_but_the_managed_cache(
     shape: str, brand: str
 ) -> None:
-    """A chart's page service is off `egress` unless a feature the deployment configures needs it:
-    the managed Valkey outside the cluster (`egress_needs`, the one line that names the service).
-    Its issuer is not one: with no managed cache it has none (held on the compose shapes, which
-    have no managed cache, by `test_the_alias_widens_nothing_the_deployment_reaches_out_to`).
+    """A chart's page service is on `egress` for the one feature the deployment configures that
+    needs it: the managed Valkey outside the cluster (`egress_needs`, the one line that names the
+    service), which every chart shape has (the cloud platform's derived cluster configuration
+    names its ElastiCache). Its issuer is not a reason (the compose shapes, which have no managed
+    cache, hold it off `egress`: `test_the_alias_widens_nothing_the_deployment_reaches_out_to`).
     The cloud platform's per-workload policy is not touched by this slice."""
-    config = ref.config_for(shape, brand, **_on(shape))
     service = pages_service(shape, _render(shape, brand, **_on(shape)))
     assert service is not None
-    assert service["egress"] is (config.external.valkey is not None)
+    if shape == "cluster":
+        assert ref.config_for(shape, brand, **_on(shape)).external.valkey is not None
+    assert service["egress"] is True
 
 
 NETWORK_PLANTS = [

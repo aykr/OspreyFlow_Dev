@@ -1542,15 +1542,19 @@ def egress_needs(config: OspreyConfig) -> set[str]:
 
 def _place_on_networks(config: OspreyConfig, services: dict[str, Any]) -> None:
     reaching_out = egress_needs(config)
+    for name, service in services.items():
+        service["networks"] = ["osprey", "egress"] if name in reaching_out else ["osprey"]
     pages = services.get(pages_service.SERVICE)
     if pages is not None and "OSPREY_PAGES_OIDC_ISSUER" in pages.get("environment", {}):
         # The page service fetches its issuer itself, at sign-in, and the issuer is the public
-        # identity name (openid-client checks the document's `issuer` against the address it
-        # asked, so the Conduit's internal Keycloak address is not one it can be given). Nothing
-        # on the internal network answers to that name: the service reaches it as the browser does.
-        reaching_out = reaching_out | {pages_service.SERVICE}
-    for name, service in services.items():
-        service["networks"] = ["osprey", "egress"] if name in reaching_out else ["osprey"]
+        # identity name (openid-client checks the discovery document's `issuer` against the address
+        # it asked, so the Conduit's internal Keycloak address is not one it can be given). The
+        # service stays on the internal network alone (ADR-114 Amendment 7: no route out; not
+        # `egress_needs`): the proxy answers to the identity name inside `osprey`, by an alias.
+        services["proxy"]["networks"] = {
+            "osprey": {"aliases": [pages_service.identity_alias(config)]},
+            "egress": {},
+        }
 
 
 #: Keycloak's role and database on the deployment's Postgres, made before Keycloak starts and run at

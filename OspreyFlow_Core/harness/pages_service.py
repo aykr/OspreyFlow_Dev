@@ -55,6 +55,11 @@ STUDIO_PATHS = ("/studio",)
 CA_IN_SERVICE = "/etc/ssl/organisation-ca.pem"
 
 
+class PageServiceNeedsHttps(ValueError):
+    """The page service is on, and its sign-in has no address the service accepts: the identity
+    address is neither https nor loopback (the owner's ruling of 23 November 2026)."""
+
+
 class PageServiceNotEnabled(ValueError):
     """A GOV.UK deployment whose tree is complete would lose its workspace with nothing to take its
     place (ADR-152 Amendment 3 item 4)."""
@@ -130,13 +135,18 @@ def caddy_matcher(paths: list[str]) -> str:
     )
 
 
-def _service_accepts_issuer(issuer: str) -> bool:
+#: The words of the second refusal, with the identity address in them.
+NEEDS_HTTPS = (
+    "pages.enabled is on, but the identity address {identity} is neither https nor a loopback "
+    "address, and the page service does not sign people in over plain HTTP: serve the identity "
+    "address over HTTPS (network.public_origin on https), or leave pages.enabled off"
+)
+
+
+def service_accepts_issuer(issuer: str) -> bool:
     """`apps/pages/server/config.ts`'s `oidcSettings` refuses an issuer that is not `https`, bar an
-    `http` one whose host is exactly loopback (`localhost`, `[::1]`, `127.x.x.x`). A local-lite
-    deployment on plain HTTP has its identity on a `.localhost` name that is not that, so the three
-    sign-in variables are left out there, together (the service refuses one without the others):
-    its sign-in then answers 503, as it did before it was built, rather than the service refusing
-    to start. Making sign-in work on plain HTTP is a change to the service, not to the render."""
+    `http` one whose host is exactly loopback (`localhost`, `[::1]`, `127.x.x.x`). That check is not
+    weakened: the render holds itself to it, here, and refuses where it cannot meet it."""
     import re
     from urllib.parse import urlsplit
 
@@ -146,15 +156,37 @@ def _service_accepts_issuer(issuer: str) -> bool:
     return url.scheme == "https" or (url.scheme == "http" and bool(loopback))
 
 
+def refuse_sign_in_without_https(config: OspreyConfig) -> None:
+    """The page service is given its sign-in (all three variables) or it is not turned on: a
+    deployment whose identity address is neither https nor loopback (local-lite on plain HTTP: a
+    `.localhost` name is not loopback by the service's own rule) has no address to give it, and is
+    refused in plain words rather than rendered with a service whose sign-in cannot work."""
+    from harness.site import REALM, sites
+
+    names = sites(config)
+    if not service_accepts_issuer(f"{names.identity}/realms/{REALM}"):
+        raise PageServiceNeedsHttps(NEEDS_HTTPS.format(identity=names.identity))
+
+
+def identity_alias(config: OspreyConfig) -> str:
+    """The identity name (`id.<host>`) the proxy answers to on the internal network `osprey`, so the
+    page service reaches its issuer there with no route out (the owner's ruling of 23 November 2026:
+    ADR-114 Amendment 7, `egress_needs` not widened for the service)."""
+    from harness.site import sites
+
+    return f"id.{sites(config).host}"
+
+
 def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str, str]:
     """The page service's own variables, as the compose file and a chart's workload carry them.
 
     The two secrets are **references** to the env file's names (`${NAME:?…}`), never values: the
     file is `deployment.env`, mode 600, and the cluster's Secret, where each is minted once. No
     other secret reaches the service. `with_sign_in` is whether the deployment runs the identity
-    provider the service signs in against: the cloud platform's people sign in with the
-    organisation's own (PL9b), so its service holds no client of ours and answers sign-in as it
-    did before it was built."""
+    provider the service signs in against: where it does, the service is given **all three** sign-in
+    variables or the render refuses (`refuse_sign_in_without_https`), never fewer. The cloud
+    platform's people sign in with the organisation's own (PL9b), so its service holds no client of
+    ours and answers sign-in as it did before it was built."""
     from harness.realm import PAGES_CLIENT_ID, PAGES_CLIENT_SECRET_KEY, PAGES_SESSION_SECRET_KEY
     from harness.site import REALM, sites
 
@@ -173,9 +205,9 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
         "VALKEY_TLS": "${VALKEY_TLS:-false}",
         "VALKEY_PASSWORD": "${VALKEY_PASSWORD:-}",
     }
-    issuer = f"{names.identity}/realms/{REALM}"
-    if with_sign_in and _service_accepts_issuer(issuer):
-        environment["OSPREY_PAGES_OIDC_ISSUER"] = issuer
+    if with_sign_in:
+        refuse_sign_in_without_https(config)
+        environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
         environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
         environment["OSPREY_PAGES_CLIENT_SECRET"] = refer % PAGES_CLIENT_SECRET_KEY
         tls = config.network.tls
