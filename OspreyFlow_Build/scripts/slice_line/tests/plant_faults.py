@@ -545,6 +545,16 @@ M = [
  # the owner's file 010: the stop on an account near its limit at 95%
  ("common.py", 'NEAR_LIMIT = 0.95  #', 'NEAR_LIMIT = 0.90  #', "below_95_percent_a_new_slice_starts"),
  ("common.py", 'NEAR_LIMIT = 0.95  #', 'NEAR_LIMIT = 0.96  #', "at_or_above_95_percent"),
+ # the owner's word of 22 November 2026 (SE9): send-back takes a verified slice, on the owner's line only
+ ("resume.py", '            if phase == "verified":  # on the owner\'s line only', '            if False:  # on the owner\'s line only', "sends_a_verified_slice_back"),
+ ("resume.py", '        tag = authority(slice_id, "send-back")\n    except Refused', '        tag = f"resume.tsv {today()} send-back"\n    except Refused', "without_the_owners_line"),
+ ("resume.py", '    if rnd >= limit:\n        try:\n            more = authority(slice_id, "add-round")', '    if False:\n        try:\n            more = authority(slice_id, "add-round")', "past_the_limit"),
+ ("resume.py", '    if more:\n        c.log_owner_change(', '    if False:\n        c.log_owner_change(', "past_the_limit"),
+ ("resume.py", '    c.log_owner_change(slice_id, "send-back", f"{tag}: a verified', '    (lambda *a: None)(slice_id, "send-back", f"{tag}: a verified', "one_line_one_use"),
+ ("resume.py", '"verdict": "findings", "passes": [], "findings": [finding, *kept],', '"verdict": "findings", "passes": [], "findings": [finding],', "already_at_the_tip"),
+ ("resume.py", '"verdict": "findings", "passes": [], "findings": [finding, *kept],', '"verdict": "pass", "passes": [], "findings": [finding, *kept],', "sends_a_verified_slice_back"),
+ ("resume.py", '    said = back_to_building(slice_id, wt, round=new_round, rounds_limit=new_limit)', '    said = back_to_building(slice_id, wt, rounds_limit=new_limit)', "sends_a_verified_slice_back"),
+ ("resume.py", '    if new_round >= c.TABLE_ROUND and not (c.REPO / table).is_file():', '    if False:', "rounds_table"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

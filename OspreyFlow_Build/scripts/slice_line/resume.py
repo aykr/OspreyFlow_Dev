@@ -8,6 +8,9 @@
   clear-stop       a slice stopped on red checks: its red-stop records removed, back to building       owner's line
   send-back        a slice the merge gate refused goes back with the gate's findings, its round        none within the
                    advanced (past its rounds limit it needs the owner's add-round line as well)        limit
+                   a verified slice goes back too, on the owner's send-back line only (a finding the  owner's line
+                   owner does not accept narrower), its round advanced; past the limit the add-round  (and add-round
+                   line as well. A findings record newer than the tip's pass tells the builder why    past the limit)
   correct-command  the conductor's own malformed command, corrected and proved on main (ruling 3)      none: the code
                                                                                                         holds the limits
   accept           a slice stopped at its rounds limit with a verifier's findings for its exact tip    owner's line
@@ -194,6 +197,53 @@ def back_to_building(slice_id: str, wt: Path, **kw) -> list[str]:
     copy = c.deliver_rulings(wt)
     said.append(f"main's rulings are at {copy}" if copy else "main's rulings could not be copied into the worktree")
     return said
+
+
+def send_back_verified(slice_id: str, wt: Path, st: dict, rnd: int, limit: int) -> list[str]:
+    """A verified slice back to its builder, on the owner's line `<slice> send-back <date>` alone (22 November 2026,
+    SE9: a finding the owner does not accept narrower, at a tip a second verifier passed). The round advances by one.
+    The line does not raise the rounds limit: past it, the owner's add-round line is needed as well, as for a refused
+    slice's send-back, and both are used. Neither line is used on a refusal. The builder is told why it is back by a
+    findings record newer than the tip's pass (verify-gate-*, the line's own records, never a verifier's)."""
+    try:
+        tag = authority(slice_id, "send-back")
+    except Refused as e:
+        raise Refused(f"{slice_id} is verified, not refused by the merge gate: a verified slice goes back only on the "
+                      f"owner's line. {e}") from None
+    more = None
+    if rnd >= limit:
+        try:
+            more = authority(slice_id, "add-round")
+        except Refused as e:
+            raise Refused(f"{slice_id} is at its rounds limit (round {rnd} of {limit}): the owner's send-back line "
+                          f"does not raise it; the add-round line does. {e} The send-back line is not used.") from None
+    new_round, new_limit = rnd + 1, limit + (1 if more else 0)
+    tip = st.get("tip") or c.git(["rev-parse", "HEAD"], wt)
+    said = back_to_building(slice_id, wt, round=new_round, rounds_limit=new_limit)
+    table = f"{c.V062_REL}/slices/{slice_id}_ROUND{new_round}_TABLE.md"
+    finding = {"file": table if new_round >= c.TABLE_ROUND else f"{c.V062_REL}/slices/{slice_id}.md",
+               "what": (f"This slice was verified at {tip[:10]} and sent back by the owner (resume.tsv, {today()}): a "
+                        "finding at that tip stands that the owner does not accept narrower, whatever a verifier's "
+                        "pass said. This round's work is " +
+                        (f"in the scout's table for round {new_round} ({table})." if new_round >= c.TABLE_ROUND else
+                         "in the brief and in what the conductor gives you from the owner.")),
+               "evidence": f"owner-changes.tsv: {tag}"}
+    head = c.git(["rev-parse", "HEAD"], wt)
+    f = c.rec_dir(slice_id) / f"verify-gate-{tip}.json"
+    kept = [*((c.read_json(f) or {}).get("findings") or []),
+            *(((c.read_json(c.rec_dir(slice_id) / f"verify-gate-{head}.json") or {}).get("findings") or [])
+              if head != tip else [])]
+    c.write_json(f, {"slice": slice_id, "commit": tip, "verdict": "findings", "passes": [], "findings": [finding, *kept],
+                     "note": "written by resume.py: a verified slice sent back by the owner; not a verifier session",
+                     "at": c.now()})
+    c.log_owner_change(slice_id, "send-back", f"{tag}: a verified slice sent back at {tip[:10]}; round {rnd} -> "
+                                              f"{new_round}" + ("" if more else f", limit {limit} unchanged"))
+    if more:
+        c.log_owner_change(slice_id, "send-back", f"{more}: past the limit; limit {limit} -> {new_limit}")
+    if new_round >= c.TABLE_ROUND and not (c.REPO / table).is_file():
+        said.append(f"no round from {c.TABLE_ROUND} on starts without its table: {table} is not on main yet.")
+    return [f"{slice_id}: a verified slice back to the builder on the owner's line, round {new_round} of {new_limit}.",
+            *said]
 
 
 # ------------------------------------------------------------------ slices.tsv: one row's frozen columns
@@ -862,6 +912,8 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             return [f"{slice_id}: red stop cleared; building.", *said]
 
         if action == "send-back":
+            if phase == "verified":  # on the owner's line only (22 November 2026, SE9)
+                return send_back_verified(slice_id, wt, st, rnd, limit)
             if phase != "refused":
                 raise Refused(f"{slice_id} was not refused by the merge gate (phase {phase}).")
             if st.get("refused_for") == "records":  # the line's own fault: no round is spent on it
