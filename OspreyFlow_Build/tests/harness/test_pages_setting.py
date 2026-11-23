@@ -850,6 +850,12 @@ THE_TRUST_WORDS = (
     "could not sign in: give the deployment an address with a certificate the page service trusts "
     "(a public name, or network.tls on a Small), or leave pages.enabled off"
 )
+THE_CA_WORDS = (
+    "pages.enabled is on, but the identity address {identity} is on a name no public authority "
+    "signs for, and the deployment's own certificate (network.tls) names no CA, so the page "
+    "service has no way to trust it and people could not sign in: give network.tls a ca (the "
+    "organisation's root certificate), or leave pages.enabled off"
+)
 LOCAL_LITE_HTTPS = {"network": {"public_origin": "https://reference.ospreyflow.localhost:8443"}}
 HTTPS_IDENTITY = "https://id.reference.ospreyflow.localhost:8443"
 PLAIN_HTTP_IDENTITY = "http://id.reference.ospreyflow.localhost:8081"
@@ -964,9 +970,9 @@ def test_a_small_on_a_name_the_proxy_signs_itself_is_refused_without_a_certifica
         ("https://osprey.example.org", None),
         ("https://osprey.example.org:9443", None),
         ("https://osprey.internal", {"ca": "/etc/ospreyflow/tls/org-root.pem"}),
-        ("https://osprey.internal", {}),
+        ("https://osprey.example.org", {}),
     ],
-    ids=["public", "public-port", "own-with-ca", "own-without-ca"],
+    ids=["public", "public-port", "own-with-ca", "public-name-own-certificate"],
 )
 def test_a_name_with_a_certificate_the_service_trusts_is_rendered(
     origin: str, own: dict[str, str] | None, brand: str
@@ -1001,6 +1007,12 @@ def _trust_findings(files: dict[str, bytes]) -> list[str]:
             f"{host} is signed by the proxy's own internal authority, "
             "which the service does not trust"
         ]
+    if internal and "NODE_EXTRA_CA_CERTS" not in service["env"]:
+        # A certificate of the organisation's on a name no public authority signs for comes from a
+        # private root, which node trusts only where NODE_EXTRA_CA_CERTS names it.
+        return [
+            f"{host} is served with a private certificate and the service is given no CA for it"
+        ]
     return []
 
 
@@ -1014,6 +1026,54 @@ def test_the_trust_check_is_red_for_a_service_given_the_proxys_own_authority(bra
     with _patched("harness.pages_service", "refuse_sign_in_without_trust", _no_trust_refusal):
         found = _trust_findings(_compose_files(config))
     assert any("internal authority" in line for line in found), found
+    own = _small(brand, "https://osprey.internal", {"ca": "/etc/ospreyflow/tls/org-root.pem"})
+    assert _trust_findings(_compose_files(own)) == []
+
+
+INTERNAL_NAMES = [
+    "https://osprey.internal",
+    "https://osprey.local:9443",
+    "https://localhost",
+    "https://10.1.2.3",
+    "https://osprey.home.arpa",
+]
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("origin", INTERNAL_NAMES)
+def test_a_small_on_a_private_name_with_its_own_certificate_and_no_ca_is_refused(
+    origin: str, brand: str
+) -> None:
+    """No public authority signs for these names, so the organisation's certificate on one comes
+    from a private root, which node trusts only where `NODE_EXTRA_CA_CERTS` names it: with
+    `network.tls` and no `ca`, the sign-in would fail at sign-in time. Refused at render time in
+    exactly these words, by a `ValueError` of its own kind. With a `ca` it renders (the next test
+    and `test_a_name_with_a_certificate_the_service_trusts_is_rendered`); off it is the reference
+    (the setting is off in the reference's own cases)."""
+    from urllib.parse import urlsplit
+
+    own = {"ca": "/etc/ospreyflow/tls/org-root.pem"}
+    with pytest.raises(ValueError) as refused:
+        _compose_files(_small(brand, origin, {}))
+    parts = urlsplit(origin)
+    identity = f"https://id.{parts.hostname}" + (f":{parts.port}" if parts.port else "")
+    assert str(refused.value) == THE_CA_WORDS.format(identity=identity)
+    assert type(refused.value).__name__ == "PageServiceNeedsCa"
+    assert pages_service("small", _compose_files(_small(brand, origin, own))) is not None
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_the_ca_trust_check_is_red_for_a_private_certificate_with_no_ca(brand: str) -> None:
+    """The planted fault takes the shape the renderer writes: the refusal taken out, so a Small on
+    an `.internal` name with `network.tls` and no `ca` is rendered with the issuer, the proxy's
+    `tls /certs/` line and no `NODE_EXTRA_CA_CERTS`. The check reads the files and names it; it is
+    clean for the same Small with a `ca`."""
+    config = _small(brand, "https://osprey.internal", {})
+    with _patched("harness.pages_service", "refuse_sign_in_without_ca", _no_trust_refusal):
+        files = _compose_files(config)
+    found = _trust_findings(files)
+    assert any("no CA for it" in line for line in found), found
+    assert "\ttls /certs/" in files["Caddyfile"].decode("utf-8")
     own = _small(brand, "https://osprey.internal", {"ca": "/etc/ospreyflow/tls/org-root.pem"})
     assert _trust_findings(_compose_files(own)) == []
 
