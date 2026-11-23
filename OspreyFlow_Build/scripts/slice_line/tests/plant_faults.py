@@ -555,6 +555,13 @@ M = [
  ("resume.py", '"verdict": "findings", "passes": [], "findings": [finding, *kept],', '"verdict": "pass", "passes": [], "findings": [finding, *kept],', "sends_a_verified_slice_back"),
  ("resume.py", '    said = back_to_building(slice_id, wt, round=new_round, rounds_limit=new_limit)', '    said = back_to_building(slice_id, wt, rounds_limit=new_limit)', "sends_a_verified_slice_back"),
  ("resume.py", '    if new_round >= c.TABLE_ROUND and not (c.REPO / table).is_file():', '    if False:', "rounds_table"),
+ # the owner's file 011: the runner's own result shape (run 97dc976c7be6d175), read as the runner gives it
+ ("server_gate.py", '    if result.get("slice") == slice_id and result.get("tip") == tip and "tree" in result:\n        return own_run(result)', '    if False:\n        return own_run(result)', "real_result_reads or switch_on_a_green_for_the_macs_tree or same_green_is_agree"),
+ ("server_gate.py", '"main": result.get("main") if i == 0 else None,', '"main": None,', "real_result_reads"),
+ ("server_gate.py", '            base_tree = below.get("tree")', '            base_tree = None', "stacked_above_another"),
+ ("server_gate.py", '    i = pos - 1 if isinstance(pos, int) and pos >= 1 else 0', '    i = 0', "stacked_above_another"),
+ ("server_gate.py", '        i = None  # the stack does not place', '        pass  # the stack does not place', "does_not_place"),
+ ("server_gate.py", '"index": i if i is not None else -1,', '"index": i if i is not None else 0,', "does_not_place"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
