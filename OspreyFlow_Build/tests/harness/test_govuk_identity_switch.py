@@ -13,14 +13,21 @@ text a person writes: `yes`, `on`, a quoted `"true"`, a number), not a hand-writ
 from __future__ import annotations
 
 import json
+import os
+import re
+import shutil
+import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
 from harness.keycloak_theme import (
     GOVUK_CHROME_SCRIPT,
     THEME_SCRIPT,
+    read_theme_script,
     render_login_theme,
 )
+from harness.render import compose_services, service_images
 from harness.site import render_glass_settings
 from pydantic import ValidationError
 from tools.layout import CORE
@@ -32,7 +39,7 @@ GLASS = "http://glass.example.test:8081"
 
 
 def _told(raw: dict[str, object]) -> dict[str, object]:
-    config = OspreyConfig.model_validate({"appearance": raw})
+    config = OspreyConfig.model_validate({"components": {"source_path": "."}, "appearance": raw})
     return dict(json.loads(render_glass_settings(config))["appearance"])
 
 
@@ -88,14 +95,162 @@ def test_under_govuk_the_sign_in_theme_is_told_the_switch_when_it_is_on() -> Non
     assert '"govukIdentity": true' in theme[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
 
 
-def test_the_typeface_is_in_one_rule_that_needs_the_switch() -> None:
+def test_the_typeface_is_in_one_rule_that_needs_the_switch_and_the_address() -> None:
     """tokens.css, which the sign-in theme's stylesheet carries whole: GDS Transport named only where
-    `data-govuk-identity="on"` is, so a page without the switch can never ask for it."""
-    import re
-
+    `data-govuk-typeface="on"` is, which is set only with the switch on AND on a gov.uk address (GDS Transport's licence:
+    ADR-152 Amendment 2 item 3, `fonts.json` `only_when` and `only_on`). The marker's own behaviour is proved below for the
+    sign-in theme's script and in `brand.test.tsx` for the Glass."""
     code = re.sub(r"/\*.*?\*/", "", TOKENS, flags=re.S)
     rules = [m.group(1).strip() for m in re.finditer(r"([^{}]+)\{[^}]*GDS Transport[^}]*\}", code)]
-    assert rules == ['[data-brand="govuk"][data-govuk-identity="on"]']
+    assert rules == ['[data-brand="govuk"][data-govuk-typeface="on"]']
+
+
+NODE = shutil.which("node")
+
+
+def _marks_set_by_the_theme_script(hostname: str, *, identity: bool = True) -> dict[str, str]:
+    """Runs the sign-in theme's own GOV.UK prefix (the lines the harness writes before the theme script's) in node with a
+    page at `hostname`, and returns the attributes it put on <html>. The prefix is the generated text, not a copy of it."""
+    assert NODE, "node is needed to run the sign-in theme's script"
+    theme = render_login_theme(
+        TOKENS,
+        appearance=AppearanceConfig(brand="govuk", govuk_identity=identity),
+        glass_origin=GLASS,
+    )
+    prefix = theme[THEME_SCRIPT].split(read_theme_script(), 1)[0]
+    assert prefix.startswith('document.documentElement.setAttribute("data-brand", "govuk");')
+    harness = (
+        "const set = {};"
+        f"globalThis.window = {{ location: {{ hostname: {json.dumps(hostname)} }} }};"
+        "globalThis.document = { documentElement: { setAttribute: (k, v) => { set[k] = v; } } };"
+        f"{prefix}\nconsole.log(JSON.stringify(set));"
+    )
+    done = subprocess.run(  # noqa: S603
+        [NODE, "-e", harness], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    return dict(json.loads(done.stdout))
+
+
+@pytest.mark.parametrize("host", ["service.gov.uk", "gov.uk", "Service.GOV.UK", "service.gov.uk."])
+def test_the_sign_in_theme_draws_the_typeface_on_a_gov_uk_address_with_the_switch_on(host: str) -> None:
+    assert _marks_set_by_the_theme_script(host) == {
+        "data-brand": "govuk",
+        "data-govuk-identity": "on",
+        "data-govuk-typeface": "on",
+    }
+
+
+@pytest.mark.parametrize("host", ["id.other.example.test", "localhost", "notgov.uk", "service.gov.uk.example.test", ""])
+def test_the_sign_in_theme_draws_no_typeface_off_gov_uk_with_the_switch_on(host: str) -> None:
+    """The case the I9 row names and the first round missed: the switch on at an address that is not gov.uk."""
+    assert _marks_set_by_the_theme_script(host) == {"data-brand": "govuk", "data-govuk-identity": "on"}
+
+
+def test_the_sign_in_theme_with_the_switch_off_sets_no_identity_mark_on_gov_uk() -> None:
+    assert _marks_set_by_the_theme_script("service.gov.uk", identity=False) == {"data-brand": "govuk"}
+
+
+# ----------------------------------------------- the build: the stylesheet's own stacks follow the address too
+
+SYNC = CORE / "apps" / "workspace" / "scripts" / "sync_govuk_assets.mjs"
+PACKAGE_CSS = CORE / "node_modules" / "govuk-frontend" / "dist" / "govuk" / "govuk-frontend.min.css"
+
+
+def _node_json(script: str) -> dict[str, object]:
+    assert NODE
+    done = subprocess.run(  # noqa: S603
+        [NODE, "--input-type=module", "-e", script], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    return dict(json.loads(done.stdout))
+
+
+def _gated_stylesheet() -> dict[str, object]:
+    return _node_json(
+        f"import {{ gateTypefaceOnTheAddress }} from {json.dumps(SYNC.as_uri())};"
+        "import { readFileSync } from 'node:fs';"
+        f"const r = gateTypefaceOnTheAddress(readFileSync({json.dumps(str(PACKAGE_CSS))}, 'utf8'));"
+        "console.log(JSON.stringify({ stacks: r.stacks, css: r.css }));"
+    )
+
+
+def test_a_build_with_the_switch_on_names_the_typeface_at_the_head_of_no_stack() -> None:
+    """GOV.UK Frontend's own components write `font-family:GDS Transport,arial,sans-serif`; left as it is, the switch on at
+    any address would draw the face in them. Each stack must instead ask for `--govuk-typeface`, which only the
+    gov.uk-address marker defines."""
+    raw = PACKAGE_CSS.read_text("utf-8")
+    assert len(re.findall(r"font-family:GDS Transport,", raw)) > 10, "the package's stacks moved: update the build step"
+    done = _gated_stylesheet()
+    css = str(done["css"])
+    assert done["stacks"] == len(re.findall(r"font-family:GDS Transport,", raw))
+    assert "font-family:GDS Transport," not in css
+    assert "font-family:var(--govuk-typeface,)arial,sans-serif" in css
+    # The face is still declared (the rules are what the marker's variable names), and nothing defines the variable here.
+    assert "@font-face" in css and "--govuk-typeface:" not in css
+
+
+def _sync_in_scratch(scratch: Path, script: str) -> subprocess.CompletedProcess[str]:
+    """The sync step, as text given, run with the switch on in a scratch copy of the workspace folder (as
+    `test_default_build_holds_no_gds_transport.py` runs it), with `node_modules` linked so the package resolves."""
+    assert NODE
+    app = scratch / "apps" / "workspace"
+    (app / "scripts").mkdir(parents=True)
+    (app / "scripts" / SYNC.name).write_text(script, "utf-8")
+    (scratch / "node_modules").symlink_to(CORE / "node_modules")
+    env = {**os.environ, "OSPREY_GOVUK_IDENTITY": "1"}
+    return subprocess.run(  # noqa: S603
+        [NODE, str(Path("scripts") / SYNC.name)], cwd=app, env=env, capture_output=True, text=True, timeout=120, check=False
+    )
+
+
+def test_the_build_step_is_red_when_a_stack_is_left_naming_the_face(tmp_path: Path) -> None:
+    """Rule 15: the real script, with the gating made to leave every stack as the package wrote it (the way a build would
+    ship if the gating were lost), run with the switch on: it must refuse, not write a stylesheet that draws GDS Transport
+    at every address. The same script, as it is, is shown to run green first, so the red is the plant's."""
+    real = SYNC.read_text("utf-8")
+    ok = _sync_in_scratch(tmp_path / "real", real)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    written = (tmp_path / "real" / "apps" / "workspace" / "public" / "assets" / "govuk" / "govuk-frontend.css").read_text("utf-8")
+    assert "font-family:GDS Transport," not in written and "var(--govuk-typeface,)" in written
+    planted, n = re.subn(
+        r"export function gateTypefaceOnTheAddress\(css\) \{.*?\n\}\n",
+        "export function gateTypefaceOnTheAddress(css) { return { css, stacks: 1 }; }\n",
+        real,
+        flags=re.S,
+    )
+    assert n == 1, "the script has no `gateTypefaceOnTheAddress` function the plant can replace: update this test"
+    bad = _sync_in_scratch(tmp_path / "planted", planted)
+    assert bad.returncode != 0 and "did not rewrite cleanly" in bad.stderr, bad.stdout + bad.stderr
+
+
+# --------------------------------------------------------------- the renderer and the schema: what the switch reaches
+
+
+def _workspace_build(appearance: dict[str, object], **components: object) -> dict[str, object]:
+    config = OspreyConfig.model_validate(
+        {"components": {"source_path": ".", **components}, "appearance": appearance}
+    )
+    return dict(compose_services(config, service_images(config, build_context="../../.."))["workspace"]["build"])
+
+
+def test_the_switch_means_nothing_under_the_ospreyflow_brand_in_the_build() -> None:
+    """ADR-152 decision 14: it means nothing under `ospreyflow`, so the image a deployment of that brand builds holds no
+    GDS Transport either, whatever the switch says."""
+    assert "args" not in _workspace_build({"brand": "ospreyflow", "govuk_identity": True})
+    assert _workspace_build({"brand": "ospreyflow", "govuk_identity": True}) == _workspace_build({"brand": "ospreyflow"})
+    assert _workspace_build({"brand": "govuk", "govuk_identity": True})["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
+
+
+def test_a_deployment_that_pulls_the_releases_images_cannot_turn_the_identity_on() -> None:
+    """The release's images are default builds: with no build there is nowhere to pass the switch, so it is refused in
+    words and not left to fall back to arial in silence."""
+    with pytest.raises(ValidationError, match=r"govuk_identity: true needs components.source_path"):
+        OspreyConfig.model_validate({"appearance": {"brand": "govuk", "govuk_identity": True}})
+    # Off, or under the other brand (where it means nothing), a pulled deployment is as it was.
+    OspreyConfig.model_validate({"appearance": {"brand": "govuk"}})
+    OspreyConfig.model_validate({"appearance": {"brand": "ospreyflow", "govuk_identity": True}})
+    OspreyConfig.model_validate({"components": {"source_path": "."}, "appearance": {"brand": "govuk", "govuk_identity": True}})
 
 
 def test_the_switch_is_a_field_the_schema_describes() -> None:

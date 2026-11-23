@@ -1042,7 +1042,11 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
             stanza: dict[str, Any] = dict(entry.build_stanza())
-            if entry.service == "workspace" and config.appearance.govuk_identity:
+            if (
+                entry.service == "workspace"
+                and config.appearance.brand == "govuk"
+                and config.appearance.govuk_identity
+            ):
                 # ADR-152 decision 14 (the owner's ruling of 21 November 2026): GDS Transport's
                 # files are in the workspace's bundle only for a deployment whose GOV.UK
                 # identity switch is on. Off, no `args` key is written, so a deployment that

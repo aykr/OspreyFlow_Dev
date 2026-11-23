@@ -18,6 +18,7 @@ import {
   brandTitle,
   currentBrand,
   currentGovukIdentity,
+  currentGovukTypeface,
   identityFromUrl,
   GOVUK_STYLESHEET,
   loadBrandStylesheet,
@@ -190,7 +191,10 @@ describe("an address on gov.uk (ADR-132 Amendment 7)", () => {
 describe("the GOV.UK identity switch", () => {
   const stylesheet = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");
 
-  afterEach(() => document.documentElement.removeAttribute("data-govuk-identity"));
+  afterEach(() => {
+    document.documentElement.removeAttribute("data-govuk-identity");
+    document.documentElement.removeAttribute("data-govuk-typeface");
+  });
 
   it("is off unless the deployment says a real true", () => {
     expect(PLAIN_APPEARANCE.govukIdentity).toBe(false);
@@ -203,16 +207,40 @@ describe("the GOV.UK identity switch", () => {
   });
 
   it("is put on the page only under the GOV.UK brand, and taken off with it", () => {
-    applyBrand("govuk", true);
+    applyBrand("govuk", true, "service.gov.uk");
     expect(currentGovukIdentity()).toBe(true);
     expect(document.documentElement.getAttribute("data-govuk-identity")).toBe("on");
-    applyBrand("govuk");
+    applyBrand("govuk", false, "service.gov.uk");
     expect(currentGovukIdentity()).toBe(false);
     expect(document.documentElement.hasAttribute("data-govuk-identity")).toBe(false);
-    // It means nothing under ospreyflow: asked for, it is not set.
-    applyBrand("ospreyflow", true);
-    expect(currentGovukIdentity()).toBe(false);
-    expect(document.documentElement.hasAttribute("data-govuk-identity")).toBe(false);
+    expect(document.documentElement.hasAttribute("data-govuk-typeface")).toBe(false);
+    // It means nothing under ospreyflow: asked for, it is not set, on a gov.uk address or off one.
+    for (const host of ["service.gov.uk", "other.example.test"]) {
+      applyBrand("ospreyflow", true, host);
+      expect(currentGovukIdentity()).toBe(false);
+      expect(document.documentElement.hasAttribute("data-govuk-identity")).toBe(false);
+      expect(document.documentElement.hasAttribute("data-govuk-typeface")).toBe(false);
+    }
+  });
+
+  // GDS Transport's licence: services on GOV.UK domains only (fonts.json `only_on`), so the switch alone is not enough.
+  it("draws the typeface only with the switch on AND on a gov.uk address", () => {
+    const typeface = () => document.documentElement.getAttribute("data-govuk-typeface");
+    applyBrand("govuk", true, "service.gov.uk");
+    expect(typeface()).toBe("on");
+    expect(currentGovukTypeface()).toBe(true);
+    applyBrand("govuk", true, "gov.uk");
+    expect(typeface()).toBe("on");
+    // The switch on, at an address that is not gov.uk (a lookalike included): the identity is on, the typeface is not.
+    for (const host of ["other.example.test", "localhost", "notgov.uk", "service.gov.uk.example.com", ""]) {
+      applyBrand("govuk", true, host);
+      expect(currentGovukIdentity(), host).toBe(true);
+      expect(typeface(), host).toBeNull();
+      expect(currentGovukTypeface(), host).toBe(false);
+    }
+    // On a gov.uk address with the switch off: no typeface either.
+    applyBrand("govuk", false, "service.gov.uk");
+    expect(typeface()).toBeNull();
   });
 
   it("is chosen by the address only in a development build", () => {
@@ -227,9 +255,10 @@ describe("the GOV.UK identity switch", () => {
     const brandBlock = /\[data-brand="govuk"\]\s*\{[^}]*\}/.exec(stylesheet)![0];
     expect(brandBlock).toContain("--ui:arial,sans-serif");
     expect(brandBlock).not.toContain("GDS Transport");
-    // The one rule that names it carries both attributes, so no rule without the switch can reach it.
+    // The one rule that names it needs the typeface marker, which `applyBrand` sets only with the switch on AND on a
+    // gov.uk address (the test above), so no rule without both can reach it.
     const code = stylesheet.replace(/\/\*[\s\S]*?\*\//g, "");
     const rules = [...code.matchAll(/([^{}]+)\{[^}]*GDS Transport[^}]*\}/g)].map((m) => m[1]!.trim());
-    expect(rules).toEqual(['[data-brand="govuk"][data-govuk-identity="on"]']);
+    expect(rules).toEqual(['[data-brand="govuk"][data-govuk-typeface="on"]']);
   });
 });

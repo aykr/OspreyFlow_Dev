@@ -93,14 +93,30 @@ export function currentGovukIdentity(): boolean {
   return root.getAttribute("data-brand") === "govuk" && root.getAttribute("data-govuk-identity") === "on";
 }
 
+/** Whether the page is drawing the GOV.UK typeface now: under `govuk`, with the switch on, on a gov.uk address. GDS
+ * Transport is licensed for services on GOV.UK domains only (`packages/design/fonts.json`: `only_when`, `only_on`), so
+ * both conditions are in the page's own markers: the CSS names the face only under `data-govuk-typeface="on"`. */
+export function currentGovukTypeface(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.documentElement.getAttribute("data-govuk-typeface") === "on" && currentGovukIdentity();
+}
+
 /** Puts `brand` on the page, and the GOV.UK identity switch with it: `govukIdentity` counts only under `govuk` (it means
- * nothing under `ospreyflow`), and the attribute is absent otherwise. Call `applyTheme` after it: under `govuk` it holds
- * the page light. */
-export function applyBrand(brand: Brand, govukIdentity = false): void {
+ * nothing under `ospreyflow`), and the attribute is absent otherwise. `data-govuk-typeface` is the switch **and** a
+ * gov.uk address (`hostname`: the page's own), so with the switch on at any other address the page draws no GDS
+ * Transport (ADR-152 Amendment 2 item 3). Call `applyTheme` after it: under `govuk` it holds the page light. */
+export function applyBrand(
+  brand: Brand,
+  govukIdentity = false,
+  hostname = typeof window === "undefined" ? "" : window.location.hostname,
+): void {
   const root = document.documentElement;
   root.setAttribute("data-brand", brand);
-  if (brand === "govuk" && govukIdentity) root.setAttribute("data-govuk-identity", "on");
+  const identity = brand === "govuk" && govukIdentity;
+  if (identity) root.setAttribute("data-govuk-identity", "on");
   else root.removeAttribute("data-govuk-identity");
+  if (identity && isGovUkHost(hostname)) root.setAttribute("data-govuk-typeface", "on");
+  else root.removeAttribute("data-govuk-typeface");
 }
 
 /** The page title: under `govuk` the GOV.UK form, "<service> – GOV.UK"; otherwise unchanged. */

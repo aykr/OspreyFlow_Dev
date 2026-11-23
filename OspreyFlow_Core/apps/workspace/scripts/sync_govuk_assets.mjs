@@ -61,6 +61,23 @@ export function withoutGdsTransport(css) {
   return { css: out, faces };
 }
 
+/** The family named at the head of a font stack, as the package writes every one of them. */
+const STACK_HEAD = /(font-family:)GDS Transport,/g;
+
+/** For a build with the identity on: the face is named only in the `@font-face` rules and `--govuk-typeface`, never at the
+ * head of a stack. Each stack becomes `font-family:var(--govuk-typeface,)arial,sans-serif`: the variable is defined only
+ * by `[data-govuk-typeface="on"]` (`packages/design/tokens.css`), which the page carries only with the switch on and on
+ * a gov.uk address (GDS Transport's licence, ADR-152 Amendment 2 item 3), so at any other address the package's own
+ * components draw in arial, as `--ui` does. Returns the CSS and the number of stacks changed. */
+export function gateTypefaceOnTheAddress(css) {
+  let stacks = 0;
+  const out = css.replace(STACK_HEAD, (_all, head) => {
+    stacks += 1;
+    return `${head}var(--govuk-typeface,)`;
+  });
+  return { css: out, stacks };
+}
+
 /** Number of `url(/assets/` occurrences that do not begin `url(/assets/govuk/`. */
 function strayCount(css) {
   return css.split(PREFIX).length - 1 - (css.split(REWRITTEN).length - 1);
@@ -120,17 +137,18 @@ function main() {
     console.log(`sync_govuk_assets: identity off, stylesheet only (govuk-frontend ${pkg.version}, ${faces} face rules removed)`);
     return;
   }
-  const { css, count } = rewriteAssetUrls(raw);
-  if (count === 0 || strayCount(css) > 0) {
+  const { css: rewritten, count } = rewriteAssetUrls(raw);
+  const { css, stacks } = gateTypefaceOnTheAddress(rewritten);
+  if (count === 0 || strayCount(css) > 0 || stacks === 0 || /font-family:GDS Transport,/.test(css)) {
     console.error(
       `sync_govuk_assets: govuk-frontend ${pkg.version} stylesheet did not rewrite cleanly ` +
-        `(${count} rewritten, ${strayCount(css)} un-rewritten url(/assets/ remaining). ` +
+        `(${count} rewritten, ${strayCount(css)} un-rewritten url(/assets/ remaining, ${stacks} font stacks gated on the address). ` +
         "The package has moved its asset URLs; update this script.",
     );
     process.exit(1);
   }
-  writeStylesheet(target, css, pkg.version, "");
-  console.log(`sync_govuk_assets: ${copied} files copied, ${count} URLs rewritten (govuk-frontend ${pkg.version})`);
+  writeStylesheet(target, css, pkg.version, "the typeface gated on a gov.uk address");
+  console.log(`sync_govuk_assets: ${copied} files copied, ${count} URLs rewritten, ${stacks} font stacks gated (govuk-frontend ${pkg.version})`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main();

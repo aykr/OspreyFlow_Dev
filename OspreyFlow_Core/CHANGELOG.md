@@ -21,10 +21,13 @@ update. Work not yet in a release is listed under *Unreleased*.
   (GDS Transport, licensed for services on GOV.UK domains only) now show only when a deployment turns it on. **A deployment
   under `appearance.brand: govuk` that does not set it will look different after it updates:** the header names the
   organisation in place of the GOV.UK logo, the type is Arial, and the footer carries no crown. To keep today's look, set
-  `govuk_identity: true` under `appearance:` in that deployment's own `osprey.yaml`. A default build of the Glass no longer
-  holds GDS Transport's files; a deployment built from source (`components.source_path`) with the switch on gets them. The
-  release's own images are default builds, so a deployment that pulls them shows the fallback type until a later release
-  carries the face for it.
+  `govuk_identity: true` under `appearance:` in that deployment's own `osprey.yaml`, and build from source (below). The
+  typeface also needs a gov.uk address: with the switch on at any other address the crown stays off and the type is Arial,
+  because GDS Transport's licence is for services on GOV.UK domains. A default build of the Glass no longer holds GDS
+  Transport's files; the renderer passes the switch to the workspace's build only for `brand: govuk` with it on. **Turning it
+  on needs `components.source_path` (a deployment built from source):** the release's own images are default builds, so a
+  deployment that pulls them is refused in words (`appearance.govuk_identity: true needs components.source_path`) until a
+  release carries a build with the face for it.
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any
