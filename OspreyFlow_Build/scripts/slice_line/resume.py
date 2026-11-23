@@ -28,6 +28,9 @@
                    a started slice's seat moves to another account the owner's accounts.yaml names,   <ID> move-seat
                    signed in and not stopped, while none of its seats runs: state.json's account or  <seat> <account>
                    verifier_account is rewritten, and nothing else (no record, finding or round)      <YYYY-MM-DD>
+  retire           a part that will not merge (the owner applied its change himself: SE8d, 22 November)  owner's line
+                   is retired: a record (retired.json) the board reads, and the part is no longer shown
+                   or counted; nothing else changes (its branch, worktree and records stay)
   undo-seat-failure  a verifier call that was refused, written before seat failures existed as the    owner's line
                    finding "no verdict returned" (CO2, 19 November 2026): the record becomes a
                    seat_failure record, the round goes back by one, the phase to verifying
@@ -73,7 +76,7 @@ import dry_run  # noqa: E402
 import merge_slice as ms  # noqa: E402
 import run_seat as rs  # noqa: E402
 
-ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat",
+ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat", "retire",
            "undo-seat-failure", "self-clear")
 #: What run_seat.py wrote, before 1f, for a verifier session whose call was refused (CO2, 19 November 2026).
 NO_VERDICT = "no verdict returned"
@@ -663,6 +666,29 @@ def undo_seat_failure(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[
             f"{rnd - 1}, verifying. The conductor runs run_seat.py verifier {slice_id} once its account is clear."]
 
 
+# ------------------------------------------------------------------ retire: a part that will not merge
+
+
+def retire(slice_id: str) -> list[str]:
+    """A part retired on the owner's line `<slice> retire <date>` (the conductor's paper, item 3, 23 November 2026):
+    retired.json in its records folder, which the board reads to leave it out of the status file and the counts. A
+    merged part is never retired (its merge stands); a part already retired is refused. Nothing else changes."""
+    rec = c.rec_dir(slice_id)
+    try:
+        c.slice_row(slice_id)
+    except (Exception, SystemExit):  # noqa: BLE001 -- no row, or a row that cannot be read: nothing to retire
+        raise Refused(f"{slice_id} has no row in {c.SLICES_REL}: nothing to retire. Nothing changed.") from None
+    if (rec / "merged.json").exists():
+        raise Refused(f"{slice_id} has merged: a merged part is never retired. Nothing changed.")
+    if (rec / "retired.json").exists():
+        raise Refused(f"{slice_id} is already retired. Nothing changed.")
+    tag = authority(slice_id, "retire")
+    phase = (c.read_json(rec / "state.json") or {}).get("phase") or "not started"
+    c.write_json(rec / "retired.json", {"slice": slice_id, "line": tag, "phase_was": phase, "at": c.now()})
+    c.log_owner_change(slice_id, "retire", f"{tag}: retired at phase {phase}; no longer shown or counted")
+    return [f"{slice_id}: retired on the owner's line (it was {phase}); the board no longer shows or counts it."]
+
+
 # ------------------------------------------------------------------ self-clear: the line clears a stop itself (A)
 
 
@@ -987,7 +1013,7 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
 #: worktree and, for refreeze and self-clear's cause (b), the slice's own row of slices.tsv, committed under the records
 #: lock and landed beneath the merge's tested result as any records commit is. The others (correct-command, move-seat),
 #: and any action on the slice being merged, wait for it.
-DURING_MERGE = ("add-round", "clear-stop", "send-back", "accept", "refreeze", "undo-seat-failure", "self-clear")
+DURING_MERGE = ("add-round", "clear-stop", "send-back", "accept", "refreeze", "undo-seat-failure", "self-clear", "retire")
 #: The slice a running merge is merging, while this action goes on beside it (set by locks()); None otherwise.
 MERGE_RUNNING: str | None = None
 
@@ -1031,6 +1057,8 @@ def locks(slice_id: str, action: str) -> list:
 def act(slice_id: str, action: str, standing_only: bool = False, args: list[str] | tuple[str, ...] = ()) -> list[str]:
     held = locks(slice_id, action)
     try:
+        if action == "retire":  # needs no worktree, nor even a start: a row the owner will not have merged
+            return retire(slice_id)
         frozen = frozen_of(slice_id)
         if action == "move-seat":  # touches state.json's one key only: a builder at work in the worktree is no matter
             return move_seat(slice_id, args)

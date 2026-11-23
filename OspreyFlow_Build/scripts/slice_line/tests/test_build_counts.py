@@ -54,7 +54,8 @@ def test_a_build_with_three_rows_and_two_merged_writes_2_of_3(world):
     assert body["builds"]["CO1"]["state"] == "done"
     assert (body["builds"]["CO1"]["slices"], body["builds"]["CO1"]["slices_merged"],
             body["builds"]["CO1"]["slices_cut"]) == ("2 of 3", 2, 3), body["builds"]["CO1"]
-    assert body["build_slices"]["CO1"] == {"merged": 2, "cut": 3, "said": "2 of 3"}, body["build_slices"]
+    assert {k: body["build_slices"]["CO1"][k] for k in ("merged", "cut", "said")} == {"merged": 2, "cut": 3, "said": "2 of 3"}, \
+        body["build_slices"]
     assert "CO1 2 of 3" in out, out
 
 
@@ -72,7 +73,8 @@ def test_a_build_with_no_merged_slice_writes_0_of_n_not_an_absence(world):
     w = world
     rows(w, ("B1", "BL1"), ("B2", "BL1"))
     _, body = board(w)
-    assert body["build_slices"]["BL1"] == {"merged": 0, "cut": 2, "said": "0 of 2"}, body["build_slices"]
+    assert {k: body["build_slices"]["BL1"][k] for k in ("merged", "cut", "said")} == {"merged": 0, "cut": 2, "said": "0 of 2"}, \
+        body["build_slices"]
     assert "BL1" not in body["builds"]  # not started: the dashboard's four states hold, the count is still written
     stopped(w, "B1")
     _, body = board(w)

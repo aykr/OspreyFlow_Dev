@@ -1,0 +1,13 @@
+{
+ "phase": "building",
+ "round": 5,
+ "rounds_limit": 8,
+ "setting": "balanced",
+ "track": "2",
+ "account": "sol",
+ "verifier_account": "sol",
+ "started": "2026-11-23T06:29:38Z",
+ "slot": 18,
+ "updated": "2026-11-23T10:29:22Z",
+ "tip": "563b47613de123168222ba3459648b6613ca415c"
+}
