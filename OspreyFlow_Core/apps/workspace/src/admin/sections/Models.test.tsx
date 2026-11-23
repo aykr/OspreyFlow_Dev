@@ -301,6 +301,57 @@ describe("Models", () => {
     expect(sent.find((s) => s.path === "/v1/admin/models/checks/chk-1")!.method).toBe("DELETE");
   });
 
+  // Round 2, fault 2: a refused Add that leaves the check held (a models file that cannot be written,
+  // a gateway that fails) must leave Cancel able to remove the check and its key. The Conduit holds
+  // the check until the 15 minutes pass, and this form is the administrator's only way to end it now.
+  it.each([
+    ["a models file that cannot be written (500)", { status: 500, body: {} }],
+    ["a gateway that fails (502)", { status: 502, body: { detail: { error: "gateway_unavailable", detail: "The model gateway did not answer. Nothing was added: the check and its key are still held." } } }],
+  ])("after a refused Add (%s), Cancel still sends the delete and shows the check removed", async (_why, refusal) => {
+    const sent = stub((path, init) =>
+      path === "/v1/admin/models/checks" ? { status: 200, body: PASSED }
+        : path === "/v1/admin/models/checks/chk-1/add" ? refusal
+          : path === "/v1/admin/models/checks/chk-1" ? { status: 200, body: LISTED }
+            : listed(LISTED)(path, init),
+    );
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini-3.8-flash" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add the engine" }));
+    await screen.findByRole("alert");
+    // The check is still held, so the form still says so and still offers to end it.
+    expect(sent.filter((s) => s.method === "DELETE")).toEqual([]);
+    const cancel = screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement;
+    expect(cancel.disabled).toBe(false);
+    fireEvent.click(cancel);
+    await screen.findByText(/was not added; its check and key are removed/);
+    const deletes = sent.filter((s) => s.method === "DELETE");
+    expect(deletes.map((d) => d.path)).toEqual(["/v1/admin/models/checks/chk-1"]);
+    expect(screen.queryByRole("form", { name: /Add an engine/ })).toBeNull();
+    expect(document.body.innerHTML).not.toContain(PLANTED);
+  });
+
+  it("after a refused Add for a check the Conduit no longer holds (404, 410), asks for a new check and sends no delete", async () => {
+    const sent = stub((path, init) =>
+      path === "/v1/admin/models/checks" ? { status: 200, body: PASSED }
+        : path === "/v1/admin/models/checks/chk-1/add"
+          ? { status: 410, body: { detail: { error: "model_admin_refused", detail: "This check is more than 15 minutes old, so its key was removed. Check the key again, then add the engine." } } }
+          : listed(LISTED)(path, init),
+    );
+    await openAdd();
+    fireEvent.change(screen.getByLabelText("Extraction and Ask: model name"), { target: { value: "gemini-3.8-flash" } });
+    fireEvent.change(screen.getByLabelText(/^Key/), { target: { value: PLANTED } });
+    fireEvent.click(screen.getByRole("button", { name: "Check" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Add the engine" }));
+    expect((await screen.findByRole("alert")).textContent).toMatch(/more than 15 minutes old/);
+    expect(screen.queryByRole("button", { name: "Add the engine" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Check" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Check" })).toBeNull());
+    expect(sent.filter((s) => s.method === "DELETE")).toEqual([]);
+  });
+
   it("shows a check waiting for Add as being checked, never as an engine, and cancels it", async () => {
     const HELD = { ...LISTED, checks: [{ id: "chk-9", engine: "openai", label: "OpenAI", by: "admin-1", at: "2026-11-15T12:00:00Z", expires_at: "2026-11-15T12:15:00Z" }] };
     const sent = stub((path, init) => (path === "/v1/admin/models/checks/chk-9" ? { status: 200, body: LISTED } : listed(HELD)(path, init)));
@@ -484,6 +535,35 @@ describe("Models", () => {
     expect(JSON.parse(puts[0]!.body)).toMatchObject({ provider: { name: "gemini", api_base: "https://proxy.example.org/v1" }, key: PLANTED });
     expect(document.body.innerHTML).not.toContain(PLANTED);
     expect(document.body.innerHTML).not.toMatch(/key was removed/);
+  });
+
+  // Round 2, the test gap: the edit form's key field is emptied once sent, so after a refusal (the
+  // form stays open) no field and no attribute of the page holds what was typed.
+  it("empties the edit form's key field after a refusal, and the typed key is in no attribute of the page", async () => {
+    const words = "The key was refused at the new address. Nothing was changed: Gemini keeps its models, address and key.";
+    const sent = stub((path, init) =>
+      path === "/v1/admin/models" ? { status: 200, body: SET }
+        : path === "/v1/admin/models/engines/gemini" && init?.method === "PUT" ? { status: 422, body: { detail: { error: "model_admin_refused", detail: words } } }
+          : undefined,
+    );
+    render(<Models api={{ apiBaseUrl: "http://api", bearerToken: "t" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Edit Gemini" }));
+    fireEvent.change(screen.getByLabelText(/^Address/), { target: { value: "https://proxy.example.org/v1" } });
+    const key = screen.getByLabelText(/^Key for the new address/) as HTMLInputElement;
+    fireEvent.change(key, { target: { value: PLANTED } });
+    expect(key.value).toBe(PLANTED); // typed, so the check below can fail
+    fireEvent.click(screen.getByRole("button", { name: "Check and save" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Nothing was changed");
+    expect(JSON.parse(editPuts(sent)[0]!.body)).toMatchObject({ key: PLANTED });
+    // The form is still open, and its field is empty: in the DOM property and in the attribute React mirrors.
+    const after = screen.getByLabelText(/^Key for the new address/) as HTMLInputElement;
+    expect(after.value).toBe("");
+    for (const element of Array.from(document.querySelectorAll("*"))) {
+      for (const attribute of Array.from(element.attributes)) {
+        expect(attribute.value, `${element.tagName} ${attribute.name}`).not.toContain(PART);
+      }
+    }
+    expect(document.title + location.href + document.body.textContent).not.toContain(PART);
   });
 
   it("checks a changed model name with no key asked, and saves a label alone as before", async () => {
