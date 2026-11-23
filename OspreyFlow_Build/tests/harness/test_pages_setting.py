@@ -72,7 +72,12 @@ OFF = {"pages": {"enabled": False}}
 #: The render refuses, in words, both ways (`test_turning_the_service_on_over_plain_http_is_*`,
 #: `test_local_lite_over_https_is_*`), so every case that needs the service *on* is one of
 #: `ON_SHAPES`, and local-lite's "on" is that refusal.
-ON_SHAPES = ("small", "cluster", "cloud-platform", "cloud-platform-poc")
+#: The cloud platform (development and the proof of concept) is refused too: the page service has no
+#: sign-in there yet (the owner's ruling of 23 November 2026, case C: ADR-148 Amendment 23 item 1
+#: needs the chart's egress to the identity provider and the page service's own Entra registration,
+#: a part of its own). `test_turning_the_service_on_for_the_cloud_platform_is_refused_in_words`.
+ON_SHAPES = ("small", "cluster")
+CLOUD_SHAPES = ("cloud-platform", "cloud-platform-poc")
 ON_COMPOSE = ("small",)
 
 
@@ -611,7 +616,7 @@ def test_on_changes_only_the_files_that_name_the_service(shape: str, brand: str)
     assert all(on[name] == stored[name] for name in chart), "on moved a chart file (off view)"
 
 
-@pytest.mark.parametrize("shape", HELM)
+@pytest.mark.parametrize("shape", ("cluster",))
 def test_on_writes_the_chart_value_and_the_chart_carries_none_by_default(shape: str) -> None:
     """The chart's own defaults say nothing of the page service (a chart installed from them
     renders none, and the reference's view of them is what it was: a `pages:` section added to the
@@ -1093,10 +1098,11 @@ def _drop_the_sign_in(real: Callable[..., Any]) -> Callable[..., Any]:
 def _sign_in_variable_findings(shape: str, files: dict[str, bytes]) -> list[str]:
     """No render of the page service in a shape that runs the identity provider holds fewer than the
     three sign-in variables (the service refuses one without the others, and with none its sign-in
-    answers 503). The cloud platform runs none of ours: its people sign in with the organisation's
-    (`test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service`)."""
+    answers 503). Asked of every shape, the cloud platform's two included: a render of the page
+    service there with fewer than three is the finding (it is refused instead:
+    `test_turning_the_service_on_for_the_cloud_platform_is_refused_in_words`)."""
     service = pages_service(shape, files)
-    if service is None or shape in ("cloud-platform", "cloud-platform-poc"):
+    if service is None:
         return []
     held = [name for name in SIGN_IN_VARIABLES if name in service["env"]]
     if len(held) == len(SIGN_IN_VARIABLES):
@@ -1131,8 +1137,7 @@ def test_the_sign_in_variables_check_is_red_for_a_service_given_none(
 def test_an_https_deployment_is_given_its_sign_in(shape: str, brand: str) -> None:
     """Where the issuer is an https address the service accepts, the three sign-in variables are
     written, the secret by reference and never a value, in the compose shape and the cluster's
-    chart alike. (The cloud platform's people sign in with the organisation's own: it holds none,
-    `test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service`.)"""
+    chart alike. (The cloud platform has no sign-in for the page service yet, and is refused.)"""
     env = (pages_service(shape, _render(shape, brand, **_on(shape))) or {})["env"]
     assert env["OSPREY_PAGES_OIDC_ISSUER"] == "https://id.osprey.example.org/realms/osprey"
     assert env["OSPREY_PAGES_CLIENT_ID"] == "osprey-pages"
@@ -1143,10 +1148,64 @@ def test_an_https_deployment_is_given_its_sign_in(shape: str, brand: str) -> Non
     ), reference
 
 
-@pytest.mark.parametrize("shape", ("cloud-platform", "cloud-platform-poc"))
-def test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service(shape: str) -> None:
-    env = (pages_service(shape, _render(shape, "govuk", **_on(shape))) or {})["env"]
-    assert not [n for n in env if n.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))]
+THE_CLOUD_WORDS = (
+    "pages.enabled is on, but the page service cannot run on the cloud-platform shape yet: people "
+    "would have no way to sign in to it there (the chart gives it no egress to the identity "
+    "provider, and it has no registration with the organisation's Entra ID: ADR-148 Amendment 23). "
+    "Leave pages.enabled off for this deployment until the page service is offered on the "
+    "cloud-platform shape"
+)
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", CLOUD_SHAPES)
+def test_turning_the_service_on_for_the_cloud_platform_is_refused_in_words(
+    shape: str, brand: str
+) -> None:
+    """The owner's ruling of 23 November 2026 (case C, option A): the cloud platform, development
+    and the proof of concept, with the setting on, is refused in exactly these words (the setting,
+    the shape, why, what to do), by a `ValueError` of its own kind. Nothing is rendered: no page
+    service without its three sign-in variables, in any shape."""
+    config = ref.config_for(shape, brand, **ON)
+    with pytest.raises(ValueError) as refused:
+        ref.render_files(config)
+    assert str(refused.value) == THE_CLOUD_WORDS
+    assert type(refused.value).__name__ == "PageServiceNotOnThisShape"
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", CLOUD_SHAPES)
+def test_the_cloud_refusal_is_for_the_setting_on_alone(shape: str, brand: str) -> None:
+    """Off, written or absent, is the reference (nothing is refused); the refusal is not a general
+    dislike of the shape."""
+    assert ref.differences(shape, brand, _render(shape, brand, **OFF)) == []
+    assert ref.differences(shape, brand, _render(shape, brand)) == []
+
+
+def _no_cloud_refusal(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The round-5 renderer, as it wrote it: the cloud platform rendered with the page service on
+    and nothing said (the refusal taken out; the render is the renderer's own)."""
+
+    def planted(config: Any) -> None:
+        return None
+
+    return planted
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", CLOUD_SHAPES)
+def test_the_cloud_check_is_red_for_a_render_that_holds_a_service_without_its_sign_in(
+    shape: str, brand: str
+) -> None:
+    """With the refusal taken out the cloud platform renders the page service with none of the three
+    sign-in variables (the chart has no identity provider of ours and no egress to Entra ID), which
+    the same sign-in check every other shape is held to reports; with the refusal in, there is no
+    render to hold at all."""
+    with _patched("harness.pages_service", "refuse_on_cloud_platform", _no_cloud_refusal):
+        found = _sign_in_variable_findings(shape, _render(shape, brand, **ON))
+    assert found and "0 of the three sign-in variables" in found[0], found
+    with pytest.raises(ValueError, match="cannot run on the cloud-platform shape"):
+        _render(shape, brand, **ON)
 
 
 # ---- 6b. the sign-in it is given is reached without a route out ---------------------------------
@@ -1328,7 +1387,7 @@ def test_the_alias_widens_nothing_the_deployment_reaches_out_to(shape: str, bran
 
 
 @pytest.mark.parametrize("brand", BRANDS)
-@pytest.mark.parametrize("shape", ("cluster", "cloud-platform", "cloud-platform-poc"))
+@pytest.mark.parametrize("shape", ("cluster",))
 def test_the_page_service_in_a_chart_is_given_no_route_out_but_the_managed_cache(
     shape: str, brand: str
 ) -> None:
