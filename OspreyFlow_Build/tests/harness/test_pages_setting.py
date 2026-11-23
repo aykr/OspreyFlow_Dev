@@ -1095,6 +1095,13 @@ def test_a_small_with_its_own_certificate_and_no_ca_is_refused(origin: str, bran
     identity = f"https://id.{parts.hostname}" + (f":{parts.port}" if parts.port else "")
     assert str(refused.value) == THE_CA_WORDS.format(identity=identity)
     assert type(refused.value).__name__ == "PageServiceNeedsCa"
+    if origin == "https://10.1.2.3":
+        # With a CA given, an IP address is still no name for the identity provider: the service's
+        # own parser refuses `id.10.1.2.3` (round 9: `test_every_origin_form_*`, the `ipv4` row).
+        with pytest.raises(ValueError, match="ends in a number") as no_name:
+            _compose_files(_small(brand, origin, own))
+        assert type(no_name.value).__name__ == "PageServiceNeedsAnOrigin"
+        return
     assert pages_service("small", _compose_files(_small(brand, origin, own))) is not None
 
 
@@ -2451,7 +2458,7 @@ def test_a_cluster_at_a_default_port_is_refused_in_words(brand: str) -> None:
     on = _cluster_files("https://osprey.example.org:443", pages=True)
     assert isinstance(on, ValueError)
     assert type(on).__name__ == "PageServiceNeedsAnOrigin"
-    assert "port 443" in str(on)
+    assert "the port :443" in str(on)
 
 
 # ---- 11a. every value the render passes, against every check config.ts makes -------------------

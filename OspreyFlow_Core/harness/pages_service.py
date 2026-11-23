@@ -20,6 +20,10 @@ effect, small and cluster: the compose file, the chart's values):
 * the route table for the deployment's brand (`route_paths`): the Studio's paths on the default
   theme, `pages`' own paths on both, and every path once the GOV.UK tree is complete (I22), when
   there is no workspace service and no route to one;
+* an origin and an issuer the service starts with (`origin_problem`, round 9): both are made from
+  `network.public_origin`'s host and port, and the render refuses, in words, a form `config.ts`
+  would throw on (a port the scheme already uses, an IP address, a name that is not plain ASCII
+  DNS). `tests/harness/test_pages_setting.py` runs `config.ts` itself against every value;
 * `OSPREY_PAGES_TREE`, from `appearance.brand` (`default` or `govuk`), and the rest of the
   service's variables (`service_environment`).
 
@@ -28,6 +32,8 @@ asked when the render runs, never a second reading of it and never recorded.
 """
 
 from __future__ import annotations
+
+import re
 
 from schemas.deployment import OspreyConfig, Profile
 
@@ -73,6 +79,12 @@ class PageServiceNeedsCa(ValueError):
     which node trusts only where `NODE_EXTRA_CA_CERTS` names it, and the render cannot tell by the
     name (rounds 7 and 8 of PL7a2b: the service's certificate check is not weakened or switched
     off)."""
+
+
+class PageServiceNeedsAnOrigin(ValueError):
+    """The page service is on, and `network.public_origin` is written in a form the service refuses
+    to start on, or cannot make its identity address from (round 9 of PL7a2b: a default port, an IP
+    address, a name that is not plain ASCII DNS)."""
 
 
 class PageServiceNotOnThisShape(ValueError):
@@ -209,7 +221,6 @@ def service_accepts_issuer(issuer: str) -> bool:
     """`apps/pages/server/config.ts`'s `oidcSettings` refuses an issuer that is not `https`, bar an
     `http` one whose host is exactly loopback (`localhost`, `[::1]`, `127.x.x.x`). That check is not
     weakened: the render holds itself to it, here, and refuses where it cannot meet it."""
-    import re
     from urllib.parse import urlsplit
 
     url = urlsplit(issuer)
@@ -228,6 +239,82 @@ def refuse_sign_in_without_https(config: OspreyConfig) -> None:
     names = sites(config)
     if not service_accepts_issuer(f"{names.identity}/realms/{REALM}"):
         raise PageServiceNeedsHttps(NEEDS_HTTPS.format(identity=names.identity))
+
+
+#: The words of the fifth refusal, with what is wrong and what to write in it.
+NEEDS_ORIGIN = (
+    "pages.enabled is on, but network.public_origin {problem}, and the page service refuses to "
+    "start on an address written that way, so people could not sign in: {fix}, or leave "
+    "pages.enabled off"
+)
+
+_LABEL = r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+_DNS_NAME = re.compile(rf"{_LABEL}(?:\.{_LABEL})*", re.ASCII)
+#: A last label the service's URL parser reads as a number (decimal, or `0x` and hex digits), which
+#: makes the whole host an IPv4 address to it, whatever the labels before: `id.<host>` is then no
+#: name.
+_NUMBER_LAST = re.compile(r"[0-9]+|0[xX][0-9a-fA-F]*")
+
+
+def origin_problem(config: OspreyConfig) -> tuple[str, str] | None:
+    """What is wrong with `network.public_origin` for the page service, as (the problem, what to
+    write), or None where the values the render makes from it are ones the service starts with.
+
+    The render writes `OSPREY_PAGES_PUBLIC_ORIGIN` and `OSPREY_PAGES_OIDC_ISSUER` from the one host
+    and port (`harness.site.sites`: `scheme://[id.]host[:port]`), and `config.ts` (`publicOrigin`,
+    `oidcSettings`) accepts a value only where it is exactly what its URL parser makes of it:
+
+    * a port the scheme already uses (`:443` on https): the parser drops it, so the origin the
+      service is given is not its own `URL.origin`. Not rewritten here (the identity provider's own
+      `iss` may or may not carry the port: not measured): refused, naming the port;
+    * a host that is not a plain ASCII DNS name, lower case, letters, digits and hyphens between
+      dots (so no IP address in any form, which has no `id.` name; no bracketed IPv6; no non-ASCII,
+      percent-encoded or punycode name; no trailing dot; no last label the parser reads as a
+      number). This is stricter than the service in a few forms (a punycode name, a trailing dot,
+      an underscore): a host nobody could be sure of is refused, in words.
+
+    A user name, path, query or fragment is not part of what `sites` writes, a host's capitals are
+    lowered by it, and a port outside 0 to 65535 or not a number is refused by `sites` itself, with
+    the setting off as well: none of those reaches the service."""
+    from urllib.parse import urlsplit
+
+    from harness.site import sites
+
+    names = sites(config)
+    default = 443 if names.scheme == "https" else 80
+    written = urlsplit(config.network.public_origin.rstrip("/")).port
+    if written == default:
+        return (
+            f"carries the port :{default}, which {names.scheme} already uses when none is written",
+            f"write it without the port (for example {names.scheme}://{names.host})",
+        )
+    host = names.host
+    reason = None
+    if not _DNS_NAME.fullmatch(host):
+        reason = "is not a plain ASCII DNS name (letters, digits and hyphens between dots)"
+    elif _NUMBER_LAST.fullmatch(host.rsplit(".", 1)[-1]):
+        reason = "ends in a number, which makes it an IP address to the page service"
+    elif any(label.startswith("xn--") for label in host.split(".")):
+        reason = "is a punycode name"
+    if reason is not None:
+        return (
+            f"names the host {host!r}, which {reason}",
+            "give the deployment a DNS name written in lower case ASCII "
+            "(for example https://osprey.example.org), not an IP address",
+        )
+    return None
+
+
+def refuse_an_origin_the_service_refuses(config: OspreyConfig) -> None:
+    """The page service is given an origin and an issuer it starts with, or it is not turned on
+    (`origin_problem`): the owner's third instruction of round 9, that a sign-in which cannot work
+    is said so by the render, at render time, in words naming the setting. The service's own check
+    is not touched. Off is the reference, and a form refused elsewhere (a bad port, a missing
+    scheme) is refused as it always was."""
+    found = origin_problem(config)
+    if found is not None:
+        problem, fix = found
+        raise PageServiceNeedsAnOrigin(NEEDS_ORIGIN.format(problem=problem, fix=fix))
 
 
 def caddy_signs_itself(host: str) -> bool:
@@ -341,6 +428,10 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
         refuse_sign_in_without_https(config)
         refuse_sign_in_without_trust(config)
         refuse_sign_in_without_ca(config)
+    # The origin is checked by the service whether or not sign-in is given (the live-updates proxy
+    # compares an upgrade's `Origin` with it), and the issuer is made from the same host and port.
+    refuse_an_origin_the_service_refuses(config)
+    if with_sign_in:
         environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
         environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
         environment["OSPREY_PAGES_CLIENT_SECRET"] = refer % PAGES_CLIENT_SECRET_KEY
