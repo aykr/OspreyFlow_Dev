@@ -35,3 +35,24 @@ Rule 15: shown red against a fault planted in the page's own template, then gree
 | each pipeline's row header made a tab stop (`tabindex="0"` on the `th`) | DK1 and DO1 (two extra stops, "th: Calls" and "th: Visits") | both |
 
 Green run, 22 November 2026: 2 passed (Chromium).
+
+## The Model step (slice IS2a, 23 November 2026)
+
+`studio-model.spec.ts`: MK1 to MK3 with scripts and MO1 to MO3 with scripts switched off, in the same runner (no new job). MK1 and
+MO1 read the page by Tab alone, in its own order (the frame's stops, then the three pack fields, Save draft and Discard draft), and
+read the draft's types by their roles (a table named by its caption, five column headers, a row header and four cells for the
+type). MK2 and MO2 type a pin and save it with Enter on Save draft, then discard the draft with Enter on Discard draft, each
+carried out by the fake Conduit (the draft's own type is still there after the save). MK3 and MO3 save after the draft changed
+since the page was read: the page says the copy was out of date and the typed pin is still in the field.
+
+Rule 15: shown red against a fault planted in the page's own template, then green again.
+
+| Planted fault (restored after) | Red | Green after |
+| --- | --- | --- |
+| each type's row header made a tab stop (`tabindex="0"` on the `th`) | all six (an extra stop in the tab order, and the Tab count to Save draft is off by one in the others) | all six |
+| Save draft made a `type="button"` instead of a submit | MK2, MK3, MO2, MO3 (Enter saves nothing) | all six |
+
+A first attempt typed the pin with `Control+A`, which on macOS moves to the start of the line, so "9" was inserted before the
+"3": the cases now use `ControlOrMeta+A`.
+
+Green run, 23 November 2026: 6 passed (Chromium).
