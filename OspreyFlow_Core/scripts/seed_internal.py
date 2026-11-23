@@ -523,9 +523,7 @@ def seed_internal(
     if (dataset == "public") != (public_id is not None):
         raise SeedRefused("--public-id goes with the dataset public, and public needs it")
     if public_id is not None:
-        spec, public_args, case_domains = _public_dataset(
-            spec, public_id, case_domains, repo_root
-        )
+        spec, public_args, case_domains = _public_dataset(spec, public_id, case_domains, repo_root)
     if repair_strays and restore_missing:
         raise SeedRefused("--repair-strays and --restore-missing are run one at a time")
     if apply and not (repair_strays or restore_missing):

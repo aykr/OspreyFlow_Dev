@@ -27,7 +27,7 @@ All under `process/lanes/v062/`, and nothing else:
 
 ## Acceptance test
 
-`OspreyFlow_Build/tests/test_doc_citations_check.py` (extended; the new cases red first on main). **Say which folders it walks** (a scan row is written from that if it is a new walker).
+`OspreyFlow_Build/tests/test_doc_citations_skips_lane_papers.py` (**new**, red first on main: it does not exist; the new cases for the skipped folders and the skipped count live in this file; **the existing `test_doc_citations_check.py` stays in the checks and stays green**; the owner's rule that the acceptance command must fail on main, 23 November 2026: the first row named the whole existing test file, which already passes). **Say which folders it walks** (a scan row is written from that if it is a new walker; a builder cannot add it).
 
 ## Checks (pure; store ports pinned to 9)
 

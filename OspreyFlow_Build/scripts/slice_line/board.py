@@ -65,6 +65,10 @@ def entry(state: str, *, track: str = "", branch: str = "", note: str = "", evid
 
 NOTE_HEAD = re.compile(r"^# Early warning: \S+ at [0-9a-f]{8}: (GREEN|RED|NO RESULT|REFUSED)\s*$", re.M)
 NOTE_TEST = re.compile(r"^\s+- test `([^`]+)`", re.M)
+NOTE_RESULT = re.compile(r"^- Result: \S+(?: \((.+)\))?\s*$", re.M)
+NOTE_MAIN = re.compile(r"^- Main: `([0-9a-f]{7,40})`", re.M)
+NOTE_WRITTEN = re.compile(r"^- Written: (\S+)", re.M)
+NOTE_SPATIAL = re.compile(r"^- DuckDB's spatial extension: (.+)$", re.M)
 
 
 def server_view(sid: str, st: dict, rec: Path, merged: dict | None) -> dict | None:
@@ -96,18 +100,32 @@ def server_view(sid: str, st: dict, rec: Path, merged: dict | None) -> dict | No
         except OSError:
             text = ""
         m = NOTE_HEAD.search(text)
-        if m:
-            out["state"] = {"GREEN": "green", "RED": "red"}.get(m.group(1), "no result")
+        if m:  # the conductor's paper, items 3, 4 and 6: the run's own words, its main, and whether its red was the server's
+            out["state"] = {"GREEN": "green", "RED": "red"}.get(m.group(1), "no verdict")
             t = NOTE_TEST.search(text)
             if out["state"] == "red" and t:
                 out["test"] = t.group(1)
+            for key, rx in (("words", NOTE_RESULT), ("main", NOTE_MAIN), ("written", NOTE_WRITTEN)):
+                found = rx.search(text)
+                if found and found.group(1):
+                    out[key] = found.group(1)
+            spatial = NOTE_SPATIAL.search(text)
+            if out["state"] == "red" and spatial and not spatial.group(1).startswith("installed"):
+                out["state"], out["words"] = "no verdict", f"the server's DuckDB extension failed: {spatial.group(1)}"
+                out.pop("test", None)
+            if out.get("main"):
+                out["on_main"] = c.git(["rev-parse", "main"], c.REPO).startswith(out["main"])
     again = c.read_json(rec / "server-again.json") or {}
     if again.get("tip") == tip:
         out["again"] = again.get("because") or "run it on the server again"
     rerun = c.read_json(server_gate.rerun_record(sid, out["run_id"])) if out["run_id"] else None
     if rerun and rerun.get("tip") == tip:
         out["rerun"] = rerun.get("result")
-    out["said"] = f"server {out['state']}" + (f": {out['test']}" if out.get("test") else "")
+    out["said"] = f"server {out['state']}" + (f": {out['test']}" if out.get("test") else "") + (
+        f" ({out['words']}" + (f", {out['written']}" if out.get("written") else "") + ")"
+        if out["state"] == "no verdict" and out.get("words") else "") + (
+        f" on {out['main'][:10]}, main has moved: not counted" if out["state"] == "green" and out.get("on_main") is False
+        else "")
     if out.get("rerun"):
         out["said"] += f"; rerun on the Mac: {out['rerun']}"
     elif out["state"] == "red":
@@ -226,7 +244,8 @@ def compute(slices: list[dict]) -> tuple[list[dict], dict, list[str]]:
             sid = s.get("id", "?")
             problems.append(f"{sid}: its records could not be read ({type(e).__name__}: {e}); skipped, nothing written")
             rows.append({"slice": sid, "build": s.get("build", ""), "what": s.get("what", ""),
-                         "state": "records unreadable", "from": "reported to the owner", "track": "", "account": ""})
+                         "state": "records unreadable", "from": "reported to the owner", "track": "", "account": "",
+                         "part": "unreadable"})
     return rows, builds, problems
 
 
@@ -234,6 +253,8 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     """One slice's row and status entry, from its records; a bad record is skipped and reported (record())."""
     sid, build = s["id"], s["build"]
     rec = c.rec_dir(sid)
+    if (rec / "retired.json").exists():  # retired on the owner's line (resume.py retire): not shown, not counted
+        return
     st = record(rec / "state.json", problems, sid) or {}
     frozen = record(rec / "frozen.json", problems, sid) or {}
     branch = frozen.get("branch") or s.get("branch") or f"lane/slice-{sid}"
@@ -241,6 +262,8 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     tip = c.git(["rev-parse", branch], c.REPO, check=False) if branch_exists(branch) else ""
     verify = record(rec / f"verify-{tip}.json", problems, sid) if tip else None
     tests = record(rec / f"tests-{tip}.json", problems, sid) if tip else None
+    accepted = record(rec / f"accepted-{tip}.json", problems, sid) if tip else None  # accepted narrower for this tip
+    passed = bool(tip and ((verify or {}).get("verdict") == "pass" or accepted))  # verified, by a pass or the owner's word
     track = str(st.get("track") or s.get("track") or "")
     account = st.get("account", "")
     if not account and track:
@@ -274,6 +297,12 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         pass  # the merge record and the verifier's pass speak for it
     elif st.get("phase") == "stopped":
         state, note, source = "stopped", st.get("note", ""), "stop record"
+    elif st.get("phase") == "refused" and st.get("refused_for") == "gate" and not st.get("refused_tests") and passed:
+        # the conductor's paper, items 5, 10, 11: the gate named no test of the part's (a full disk, the line's own rerun
+        # in the wrong folder): the part is verified and its merge is run again; it never needs its builder
+        cause = st.get("last_refusal_cause") or str(st.get("note") or "").split(";")[0] or "its own run"
+        state, source = "verifying", "merge refusal naming no test of the part's"
+        note = f"verified; the Mac's gate failed ({cause}), not this part's tests: run its merge again"
     elif st.get("phase") == "refused":  # the dashboard knows four states: a refused slice waits as a stopped one
         state, source = "stopped", "merge refusal"
         note = (f"refused by the gate: {st.get('refused_tests', 0)} tests" if st.get("refused_for") == "gate"
@@ -282,14 +311,25 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         if cause and (st.get("last_merge_refusal") or "") >= (st.get("refused_at") or "~"):
             head, _, rest = note.partition("; ")
             note = f"{head} ({cause}); {rest}"
-    elif tip and verify and verify.get("verdict") == "pass":
-        state, note, source = "verifying", "verifier passed; waiting for the merge script", "verifier record"
+    elif passed:
+        state, source = "verifying", "verifier record" if not accepted else "the owner's acceptance"
+        note = ("verifier passed; waiting for the merge script" if not accepted else
+                "verified, accepted narrower" + (" on the standing line" if accepted.get("by") == "standing" else "")
+                + "; waiting for the merge script")
     elif tip and tests and tests.get("green"):
         state, note, source = "verifying", "checks green; verifier pending", "test record"
     elif branch_exists(branch) and (st or not frozen):
         state, source = "building", "branch exists, not green yet"
         if st.get("round", 1) > 1:
             note = f"round {st['round']} after the verifier's findings"
+    seats = {str(r.get("seat")): r for r in c.running_seats(sid)}  # items 2 and 13: a seat at work now
+    if state != "done" and "verifier" in seats and not passed:
+        state, source = "verifying", "running seat record"
+        note = f"its verifier is running (since {seats['verifier'].get('at', '?')})"
+    elif state in (None, "building") and "builder" in seats:
+        state, source = "building", "running seat record"
+        note = f"its builder is running (since {seats['builder'].get('at', '?')})" + (
+            f", round {st['round']}" if st.get("round", 1) > 1 else "")
     sf = st.get("seat_failure")
     if isinstance(sf, dict) and state in ("building", "verifying"):  # a refused call: no verdict, never findings
         note = (f"seat failed: the {sf.get('seat')}'s call on {sf.get('account')} was refused "
@@ -313,8 +353,8 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
             builds_entry = None
     if state and build not in ids:
         problems.append(f"{sid}: build id {build or '(none)'} is not in the plan: reported to the owner, not written")
-    elif state and builds_entry:
-        builds[build] = builds_entry
+    elif state and builds_entry and rank(builds_entry) <= rank(builds.get(build)):
+        builds[build] = builds_entry  # item 9: the build's entry is its most pressing slice's, never just the last row's
     if progress:
         shown = progress["said"][:60]
     elif waiting:
@@ -337,7 +377,45 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
     view = server_view(sid, st, rec, merged if state == "done" else None) if state else None
     rows.append({"slice": sid, "build": build, "what": s["what"], "state": shown,
                  "from": source, "track": kw["track"], "account": kw["account"], "merged": state == "done",
-                 "server": (view or {}).get("said")})
+                 "server": (view or {}).get("said"), "server_view": view,
+                 **part_of(state, st, passed, progress, seats, note, view, waiting)})
+
+
+#: Each part's own state in status.js's list (the owner's file 014; the conductor's paper, 23 November): merged, merging,
+#: verified, verifying, building, stopped, not started (and unreadable, when its records cannot be read).
+PART_STATES = ("merged", "merging", "verified", "verifying", "building", "stopped", "not started")
+#: How pressing a build's entry is, most first: a merge running, a stop for the owner, a part at work, done.
+RANKS = {"merging": 0, "stopped": 1, "verifying": 2, "building": 3, "done": 4}
+
+
+def rank(entry: dict | None) -> int:
+    if not entry:
+        return 9
+    return RANKS["merging"] if entry.get("progress") else RANKS.get(entry.get("state"), 8)
+
+
+def part_of(state: str | None, st: dict, passed: bool, progress: dict | None, seats: dict, note: str,
+            view: dict | None, waiting: dict | None) -> dict:
+    """One part's own state for build_slices[<build>]["list"], in the board's words, with what it is waiting for: read
+    in the order the conductor's paper gives (a merge record, a merge in progress, a pass or the owner's acceptance, a
+    running seat, a stop or a refusal with its cause in words)."""
+    if state == "done":  # the merge record the board accepts
+        return {"part": "merged", "part_said": "merged", "waiting_for": ""}
+    if progress:
+        return {"part": "merging", "part_said": progress.get("said") or "merging", "waiting_for": ""}
+    if state == "stopped":
+        return {"part": "stopped", "part_said": note,
+                "waiting_for": "the conductor (your line is in)" if waiting else "you"}
+    if state == "verifying" and (passed or st.get("phase") == "verified"):
+        srv = (view or {}).get("state")
+        return {"part": "verified", "part_said": note,
+                "waiting_for": "a merge run again" if "run its merge again" in note else
+                "the server" if srv in ("running", "none") else "the merge slot"}
+    if state == "verifying":
+        return {"part": "verifying", "part_said": note, "waiting_for": "" if "verifier" in seats else "a seat"}
+    if state == "building":
+        return {"part": "building", "part_said": note or "building", "waiting_for": "" if "builder" in seats else "a seat"}
+    return {"part": "not started", "part_said": "", "waiting_for": "its turn"}
 
 
 def slice_counts(rows: list[dict], ids: set) -> dict:
@@ -348,12 +426,44 @@ def slice_counts(rows: list[dict], ids: set) -> dict:
     for r in rows:
         if r["build"] not in ids:
             continue  # reported to the owner already, never written
-        d = out.setdefault(r["build"], {"merged": 0, "cut": 0})
+        d = out.setdefault(r["build"], {"merged": 0, "cut": 0, "list": []})
         d["cut"] += 1
         d["merged"] += 1 if r.get("merged") else 0
+        part = {"id": r["slice"], "what": r.get("what", ""), "state": r.get("part") or "not started",
+                "said": r.get("part_said") or "", "waiting_for": r.get("waiting_for") or ""}
+        if r.get("server_view"):  # the same object builds[<build>].server carries, for this part
+            part["server"] = r["server_view"]
+        d["list"].append(part)  # in the order of slices.tsv (the owner's file 014)
     for d in out.values():
         d["said"] = f"{d['merged']} of {d['cut']}"
     return out
+
+
+#: Each build's parts at the moment it last had every part merged (the conductor's paper, item 7), beside the records.
+BUILDS_SEEN = "builds-seen.json"
+
+
+def moved_back(counts: dict) -> list[str]:
+    """For each build that once had every cut part merged and has a part cut since that has not merged: that build's
+    counts say so (`moved_back`: the new parts), so a falling "N of M" says why. The parts of a build with all merged
+    are kept in BUILDS_SEEN; written only when that changes. The board's lines, one per build moved back."""
+    f = c.DATA / BUILDS_SEEN
+    seen = c.read_json(f) or {}
+    said, changed = [], False
+    for build, d in sorted(counts.items()):
+        ids = [x["id"] for x in d.get("list") or []]
+        if d["cut"] and d["merged"] == d["cut"]:
+            if seen.get(build) != ids:
+                seen[build], changed = ids, True
+            continue
+        done_then = seen.get(build)
+        new = [x["id"] for x in d.get("list") or [] if done_then and x["id"] not in done_then and x["state"] != "merged"]
+        if new:
+            d["moved_back"] = new
+            said.append(f"{build} moved back: {', '.join(new)} cut since it was done")
+    if changed:
+        c.write_json(f, seen)
+    return said
 
 
 def owed_list(problems: list[str]) -> list[dict]:
@@ -378,8 +488,25 @@ def applied_diffs() -> list[dict]:
 
 def self_clear_lines(rows: list[dict] | None = None) -> list[str]:
     """Each stop the line cleared itself, one line each: the time, the slice, the stop, the cause, what it did."""
-    return [f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: {r['what']}"
+    return [(f"a round given by the line: {r['slice']} (a merge refusal, standing permission {r['cause']}) at {r['at']}: "
+             if r["cause"] == "round-after-refusal" else
+             f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: ") + r["what"]
             for r in (c.self_clears() if rows is None else rows)]
+
+
+def standing_lines(rows: list[dict] | None = None) -> list[str]:
+    """The owner's standing permissions today (his file 012), one line each: on or off, uses of the day's budget, and,
+    at the budget, that the line gives no more today."""
+    out = []
+    for r in (c.standing_today() if rows is None else rows):
+        if not r["on"]:
+            out.append(f"standing permission {r['name']}: off ({r['why']})" + (f"; {r['used']} used today" if r["used"] else ""))
+        elif r["at_budget"]:
+            out.append(f"standing permission {r['name']}: AT ITS BUDGET, {r['used']} of {r['per_day']} used today (UTC): "
+                       "the line gives no more today; the owner's own line is needed")
+        else:
+            out.append(f"standing permission {r['name']}: on, {r['used']} of {r['per_day']} used today (UTC)")
+    return out
 
 
 def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None,
@@ -398,7 +525,7 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
                            "slices_cut": counts[k]["cut"]} if k in counts else {})} for k, v in builds.items()}
     body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
             "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"},
-            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}
+            "self_clears": c.self_clears(), "standing_today": c.standing_today(), "build_slices": counts, "approved_diffs": applied_diffs()}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -476,6 +603,7 @@ def main() -> int:
         slices = []
     rows, builds, problems = compute(slices)
     counts = slice_counts(rows, c.plan_ids())
+    back = moved_back(counts)
     owed = owed_list(problems)
     ci = c.main_ci()
     path = write_status(builds, owed=owed, ci=ci, counts=counts)
@@ -513,6 +641,8 @@ def main() -> int:
         if by_cause:  # the owner's file 005: the next pattern is seen after two refusals, not five
             print("merge refusals by cause: " + ", ".join(f"{k} {v}" for k, v in by_cause.items()))
         print("slices merged of those cut, per build: " + ", ".join(f"{b} {d['said']}" for b, d in sorted(counts.items())))
+        for line in back:
+            print(line)
         for acct in sorted({r['account'] for r in rows if r['account']} | {"default", "sol"}):
             near, stop = c.near_limit(acct), c.account_stop(acct)
             if near or stop:
@@ -525,6 +655,8 @@ def main() -> int:
         for r in fixed:
             print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         for line in self_clear_lines():
+            print(line)
+        for line in standing_lines():
             print(line)
         pending = c.DATA / "push.pending"
         if pending.exists():

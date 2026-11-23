@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ospreyflow
+description: OspreyFlow on Kubernetes (Enterprise) — its values are rendered by `harness.render` from osprey.yaml (05_DEPLOYMENT.md §3b).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

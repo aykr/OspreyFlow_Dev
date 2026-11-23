@@ -78,11 +78,38 @@ def fetch(rid: str | None) -> dict | None:
     return None
 
 
+def own_run(result: dict) -> dict:
+    """The runner's own shape (the owner's file 011, 23 November 2026; run 97dc976c7be6d175): a slice's whole result at
+    the top level, its place in a stack as `position` of `of` within `group` (the stack's run ids, in order), and
+    `stack` the members as bare {slice, tip}, a slice run alone included. Stacked above others, the tree main must be
+    is the tree of the run below it, fetched by its own id and checked to be that member; anything missing or not
+    matching leaves base_tree None, and nothing counts."""
+    stack = [x for x in result.get("stack") or [] if isinstance(x, dict)]
+    pos, group = result.get("position"), result.get("group")
+    i = pos - 1 if isinstance(pos, int) and pos >= 1 else 0
+    if stack and (i >= len(stack) or (stack[i].get("slice"), stack[i].get("tip")) != (result["slice"], result["tip"])):
+        i = None  # the stack does not place this run where its position says
+    base_tree = None
+    if i and isinstance(group, list) and len(group) > i and isinstance(group[i - 1], str):
+        below = fetch(group[i - 1])
+        if below and below.get("state") == "done" and (below.get("slice"), below.get("tip")) == \
+                (stack[i - 1].get("slice"), stack[i - 1].get("tip")):
+            base_tree = below.get("tree")
+    k = i or 0
+    return {**result, "index": i if i is not None else -1, "main": result.get("main") if i == 0 else None,
+            "base_tree": base_tree,
+            "below": [x.get("slice") for x in stack[:k]],
+            "above": [(x.get("slice"), x.get("tip")) for x in stack[k + 1:]] if i is not None else []}
+
+
 def element(result: dict | None, slice_id: str, tip: str) -> dict | None:
     """This slice's part of a result: the result itself for a single slice, or its element of a stack; None when the
     result is not for this slice at this tip."""
     if not isinstance(result, dict):
         return None
+    if result.get("slice") == slice_id and result.get("tip") == tip and \
+            any(k in result for k in ("tree", "position", "group")):  # the runner's own shape, a run with no tree too
+        return own_run(result)
     if isinstance(result.get("stack"), list):  # item 3: main+A, main+A+B, ... run at once, in this order
         stack = [e for e in result["stack"] if isinstance(e, dict)]
         for i, e in enumerate(stack):
@@ -105,11 +132,52 @@ def failing_names(e: dict) -> tuple[list[str], list[str]]:
     return tests, bare
 
 
+#: The early warning's log of each run it started or polled (early_warning.RUNS): where to ask, never the answer.
+EW_RUNS = c.DATA / "early-warning" / "runs.jsonl"
+#: How many older runs of the same slice and tip are asked about when the newest ended without a verdict.
+OLDER_RUNS = 4
+VERDICTS = ("pass", "fail")
+
+
+def has_verdict(e: dict | None) -> bool:
+    return bool(e) and e.get("state") == "done" and e.get("verdict") in VERDICTS
+
+
+def older_runs(slice_id: str, tip: str, newest: str | None) -> list[str]:
+    """The ids of the slice's earlier runs at this tip, newest first (EW_RUNS), the note's own left out. Only a shortcut:
+    element() is what refuses a run of another slice or tip."""
+    try:
+        lines = EW_RUNS.read_text().splitlines()
+    except OSError:
+        return []
+    ids: list[str] = []
+    for ln in reversed(lines):
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        rid = r.get("id") if isinstance(r, dict) else None
+        if r.get("slice") == slice_id and r.get("tip") == tip and isinstance(rid, str) and RUN_ID.match(rid) \
+                and rid != newest and rid not in ids:
+            ids.append(rid)
+    return ids[:OLDER_RUNS]
+
+
 def server_result(slice_id: str, tip: str) -> tuple[str | None, dict | None]:
     """(run id, this slice's element) as fetched; (rid, None) when the note names a run that cannot be fetched or is
-    not for this slice at this tip."""
+    not for this slice at this tip. When the note's run finished with no verdict (an error: SE6c, 23 November 2026,
+    run f8394584d97477d3, "nothing was run", sent again after its stack's own run), the newest earlier run of the slice
+    at this tip that has one is read instead, and the element says which run had none: an error never hides a verdict,
+    and the older run must still be the same candidate as the Mac's (same_candidate)."""
     rid = run_id(slice_id, tip)
-    return rid, element(fetch(rid), slice_id, tip)
+    e = element(fetch(rid), slice_id, tip)
+    if not e or e.get("state") != "done" or has_verdict(e):
+        return rid, e
+    for older in older_runs(slice_id, tip, rid):
+        o = element(fetch(older), slice_id, tip)
+        if has_verdict(o):
+            return older, {**o, "newer_without_verdict": {"id": rid, "verdict": e.get("verdict"), "words": e.get("words")}}
+    return rid, e
 
 
 def is_red(e: dict | None) -> bool:
@@ -162,6 +230,9 @@ def same_candidate(e: dict | None, base: str, tip: str, tree: str) -> str | None
     on others, main exactly the tree the server ran it on), the same slice tip and the same candidate tree hash."""
     if not e:
         return "no result from the server for this slice at this tip"
+    if e.get("state") == "done" and e.get("verdict") not in VERDICTS:  # an error: nothing was run, no candidate
+        return (f"the server's run {e.get('id')} ended without a verdict ({e.get('verdict')}: "
+                f"{str(e.get('words') or 'no words')[:160]})")
     if e.get("index"):  # stacked: main must be exactly the tree the server ran it on (those below landed as tested)
         if c.git(["rev-parse", base + "^{tree}"], c.REPO) != e.get("base_tree"):
             return (f"stacked on {', '.join(e.get('below') or [])}: main is not the tree the server ran it on (one "

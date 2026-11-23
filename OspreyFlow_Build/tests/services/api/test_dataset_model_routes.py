@@ -61,8 +61,11 @@ HIDDEN = {"case-hidden": ["comp-hidden"]}
 MODEL_ROUTES = [
     ("GET", "/model", None),
     ("POST", "/model/draft", None),
-    ("PUT", "/model/draft", {"packs": {}, "extensions": [], "reference_lists": []}),
-    ("DELETE", "/model/draft", None),
+    (
+        "PUT", "/model/draft",
+        {"packs": {}, "extensions": [], "reference_lists": [], "expected_version": 1},
+    ),
+    ("DELETE", "/model/draft?expected_version=1", None),
     ("GET", "/model/impact", None),
     ("POST", "/model/make-live", {"version": 1}),
     ("POST", "/model/revert", {"version": 1}),
@@ -241,7 +244,7 @@ def test_make_live_flags_and_pauses_exactly_the_pipelines_writing_a_change(
     _call(world, "POST", "/v1/datasets/ds-a/model/make-live", {"version": 1}, "engineer")
     assert world.recipes.paused == []  # bare POLE to bare POLE changes nothing
     _call(world, "POST", "/v1/datasets/ds-a/model/draft", None, "engineer")
-    fibo = {"packs": {"fibo": 1}, "extensions": [], "reference_lists": []}
+    fibo = {"packs": {"fibo": 1}, "extensions": [], "reference_lists": [], "expected_version": 2}
     saved = _call(world, "PUT", "/v1/datasets/ds-a/model/draft", fibo, "engineer")
     assert saved.status_code == 200, saved.text
     impact = _call(world, "GET", "/v1/datasets/ds-a/model/impact", None, "engineer").json()

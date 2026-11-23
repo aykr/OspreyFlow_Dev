@@ -249,6 +249,87 @@ before ADR-120 is not flagged blind: it is stamped once with each pack's last ve
 record (NIEM 2, FIBO 1, STIX 1), so the NIEM bump to version 3 flags exactly the recipes naming
 NIEM or writing its types.
 
+### 1.2 The dataset map (slice IS3, 22 November 2026; ADR-140 Amendment 22 items 1 and 8; ADR-141 Amendment 2)
+
+The dataset map is the Studio page that shows one dataset and the pipelines that load it. It is a server-rendered page of the
+`pages` service (`/studio/dataset-map`, in the Studio's frame: its dataset switch, readiness strip and five places), built first
+for the Default tree. **There is no React dataset map to copy**, so its scenario (`08_ACCEPTANCE_SCENARIOS.md`, Scenario DM) is
+written from the ADR text, the prototype's Pipelines list and the owner's ruling of 21 November 2026, not from a screen.
+
+- **What it shows.** A table with a caption ("Pipelines loading" and the dataset's name) and four columns: Pipeline, Status, Version
+  and Stages, with one row for each pipeline that loads the dataset, the pipeline's name as the row's header. The status and the
+  stage names are the Studio's own words (a published pipeline is "deployed", a flagged one "needs attention"; a stage is its kind
+  in words: Domain model, Source, Map, Load and the rest). The stages are listed in the order the pipeline canvas would lay them
+  out (by the longest path from a stage nothing feeds), so the table reads as the canvas does from left to right. Rows are sorted by
+  pipeline name, and the page says so. A previous version of a pipeline is not listed.
+- **It is read-only.** The page has no form of its own, no button and no link beyond the frame's. It is complete with scripts off,
+  and it needs no script at all. A dataset no pipeline loads says "No pipeline loads this dataset yet."
+- **What it never shows.** No "runs after" column, no hint of an order, no empty column and no line between pipelines: the
+  order pipelines run in is set on this map by a person and stored with the dataset (ADR-140 Amendment 22 item 8; ADR-141
+  Amendment 2 point 6), which is **IS6's**, and IS6 adds the column when it stores the order. The page shows a "runs after" column
+  only when the order is stored: until then there is nothing for it to show, and an empty column or a suggestion nothing backs is
+  worse than none (the owner's ruling of 21 November 2026). The Studio's Map step (row template and field bindings) is another
+  page (IS4m).
+- **Access.** The page reads the case's pipelines as the person, through the Conduit, which reads them through the case's datasets
+  and refuses a person without Edit pipelines. The table holds only the pipelines of the dataset it is open on: a pipeline of
+  another dataset, or one placed in none, is not a row, and no count of what is left out is drawn. A person without the right, a
+  case the Conduit no longer opens, a dataset none of their cases loads into and a dataset that does not exist all read the same
+  words, with no row, no count and no pipeline's name anywhere in the page (rules 3 and 7). A read that failed says so and is never
+  drawn as an empty table (rule 2).
+- **The model.** The page says that every pipeline that loads the dataset maps into its domain model, on 1 Model. The Model place is
+  not yet a page of this service, so it is named and not linked; when it is, the name becomes a link.
+- **Keyboard (rule 13).** The page adds no action beyond links, and each link is a native tab stop; nothing needs a handler, no tab
+  stop is above 0, and every control (the frame's switch) has its label. Scenario DM's DM12 proves it.
+- **The GOV.UK tree's page** is its own later build. This section is the Default tree's.
+
+### 1.3 The Model step (slice IS2a, 23 November 2026; ADR-140 Amendment 22 items 1, 3 and 4; ADR-152 decisions 6, 7, 12 and 13; X5 and X7)
+
+The Model step is the Studio page that shows one dataset's domain model and lets a person open, save and discard its draft. It is a
+server-rendered page of the `pages` service (`/studio/model`, in the Studio's frame: its dataset switch, readiness strip and five
+places, the first of which now links to it), built first for the Default tree. **There is no React Model step to copy**
+(`ModelTab.tsx` is a sentence and a placeholder), so its scenario (`08_ACCEPTANCE_SCENARIOS.md`, Scenario MS) is written from the
+decision records, the prototype's Model step and the owner's rulings of 21 and 23 November 2026, not from a screen.
+
+- **What a type record carries.** An entity type the dataset's model adds carries its class (one of the five POLE classes), its
+  identifiers and its matching rule: the rule for when two records are the same, which lives on the type record and not on each
+  pipeline's element (ADR-140 Amendment 22 item 3; the owner, 21 November). The matching rule names a field and what to do on a
+  match, `reference` (use the record held) or `create` (make a new one each time), the two values the matching code knows; the
+  field must be one of the type's identifiers or one of its indexed properties, because a lookup finds a record by those and no
+  others, and the Conduit refuses any other. A property record names its type, its value type and whether it is indexed. The
+  class, identifiers and properties are the ontology's own (`EntityTypeDef`, `PropertyDef`); the matching rule is new, and is
+  carried by the draft's entity-type extension (`ModelExtension`).
+- **What it shows.** The dataset's name; the draft's types as a table, and the live version's as another beside it, each with a
+  caption and the columns Type, Class, Identifiers, Matching rule and Properties, one row for each type with its name as the row's
+  header, and each property drawn in its type's row with whether it is indexed, in words. The POLE core and the packs are named
+  in a sentence, since they are the ontology's. Who holds the draft and since when is said in a sentence. A version with no types
+  of its own, no draft and no live model are each said in words, with no table.
+- **What it does.** A draft is opened, saved and discarded by native forms with a button each, carrying the anti-forgery token, the
+  case and, for a save and a discard, the **expected version** and the **expected revision**: the version and the revision the person's
+  copy was read at, in hidden fields. The version alone cannot tell two copies of one draft apart (a save keeps it, and a draft
+  discarded and opened again at the same live version takes it again), so the draft also carries a revision, a token the store makes
+  when the draft is opened and changes on every save and never repeats. The page hands the Conduit those very values, the Conduit's
+  store refuses a draft that is no longer that copy, and **a stale one is refused**, whether the draft was made live and opened again,
+  saved again, or discarded and opened again: the page says the copy was out of date and what the draft is now, shows the draft as it
+  now is and keeps what the person typed (in the save form, or listed where there is no draft, or the draft is another person's, to
+  hold it). A save from a copy of a draft that is gone is sent like any other and refused by the Conduit. Save edits the starter packs' pinned versions; the type form's editing, reference lists and Make live are later
+  slices of this build.
+- **Who may act.** A draft is saved into, replaced and discarded by **only its creator** (C186; ADR-152 X5): the page offers the forms to
+  the creator and says who holds the draft to anyone else, and the Conduit refuses anyone else's request all the same, in words
+  that name who holds it and none of what is in it. The check is the store's and comes before the version check.
+- **Access.** The page reads and writes as the person, through the Conduit, which refuses a person without `edit_target_model` and
+  a dataset their cases do not read. A person without the right, a dataset no case of theirs loads into, one the Conduit no
+  longer opens and one that does not exist all read the same words, with no table, no form, no count, no type's name and no
+  dataset's id anywhere in the page (rules 3 and 7). Only the store's own words are shown for a refusal of a write; any other
+  answer is the page's own sentence.
+- **Failures.** A read or a write that failed is said in an alert (`role="alert"`), with the words from the page's own words module,
+  and is never drawn as an empty model (rule 2): what was typed is kept and nothing is said to have changed.
+- **Scripts off, and keyboard (rule 13).** The page works with scripts off: the lists are tables and the actions are forms. It adds
+  no action beyond links and forms, and each control is a native tab stop with its label; nothing needs a handler, and no tab stop
+  is above 0. Scenario MS's MS14 and MS17 prove it.
+- **The word is Pipeline.** The page says Pipeline and never "recipe" (ADR-140 Amendment 9 decision 1), and domain model and never
+  "target model".
+- **The GOV.UK tree's page** is its own later build. This section is the Default tree's.
+
 ## 2. Stage 1 — Connect
 
 Connectors are **profiles**, following the same pattern as map providers (ADR-016): a validated

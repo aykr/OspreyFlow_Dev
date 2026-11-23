@@ -7,7 +7,14 @@
   add-round        a slice stopped at its rounds limit gets one more round                             owner's line
   clear-stop       a slice stopped on red checks: its red-stop records removed, back to building       owner's line
   send-back        a slice the merge gate refused goes back with the gate's findings, its round        none within the
-                   advanced (past its rounds limit it needs the owner's add-round line as well)        limit
+                   advanced (past its rounds limit it needs the owner's add-round line as well, or     limit
+                   his standing permission, standing.tsv: round-after-refusal per-day <N> <date>:     (or his standing
+                   one round for the refusal's named cause alone, once; never the same cause twice,   permission past
+                   a finding naming a key, a credential or a security rule, a slice stopped for red   it)
+                   checks or one he has parked (`<slice> park <date>` in resume.tsv); N a day)
+                   a verified slice goes back too, on the owner's send-back line only (a finding the  owner's line
+                   owner does not accept narrower), its round advanced; past the limit the add-round  (and add-round
+                   line as well. A findings record newer than the tip's pass tells the builder why    past the limit)
   correct-command  the conductor's own malformed command, corrected and proved on main (ruling 3)      none: the code
                                                                                                         holds the limits
   accept           a slice stopped at its rounds limit with a verifier's findings for its exact tip    owner's line
@@ -21,6 +28,9 @@
                    a started slice's seat moves to another account the owner's accounts.yaml names,   <ID> move-seat
                    signed in and not stopped, while none of its seats runs: state.json's account or  <seat> <account>
                    verifier_account is rewritten, and nothing else (no record, finding or round)      <YYYY-MM-DD>
+  retire           a part that will not merge (the owner applied its change himself: SE8d, 22 November)  owner's line
+                   is retired: a record (retired.json) the board reads, and the part is no longer shown
+                   or counted; nothing else changes (its branch, worktree and records stay)
   undo-seat-failure  a verifier call that was refused, written before seat failures existed as the    owner's line
                    finding "no verdict returned" (CO2, 19 November 2026): the record becomes a
                    seat_failure record, the round goes back by one, the phase to verifying
@@ -28,11 +38,17 @@
                    (b) a check the slice did not write that fails identically on main's own tree in    holds the limits;
                    the same worktree shape (the check is removed from the slice's row, recorded),     run_seat.py tries
                    or (a) main having moved under the slice (main merges into the branch cleanly and   it after a red stop
-                   the slice's own acceptance and checks are unchanged). Never: an accept, a refreeze
-                   that changes what is tested, a stop naming a key, a credential or a security rule,
-                   a stop at the eighth round, a stop on a verifier's findings. Each clearance is
-                   logged (self-clear-<time>.json in the slice's folder; self-clears.tsv, which the
-                   board prints for the conductor's morning report)
+                   the slice's own acceptance and checks are unchanged), or (c) a red stop that is the
+                   scan map's alone, whose rows main now has (the conductor wrote them since). Only on
+                   the owner's standing permission (standing.tsv: clear-line-stops per-day <N> <date>),
+                   N a day (his file 012, A2). Never: an accept, a refreeze that changes what is
+                   tested, a stop naming a key, a credential or a security rule, a stop at the eighth
+                   round, a stop on a verifier's findings, any red in the slice's own acceptance or its
+                   own tests (its acceptance, its uncommitted work, its lint, a test it wrote or
+                   changed), a slice the owner has parked. Each clearance is logged (self-clear-<time>
+                   .json in the slice's folder, with the red stop's lines; self-clears.tsv, which the
+                   board prints for the conductor's morning report; owner-changes.tsv, which the
+                   budget counts)
 
 Every action takes the merge lock (no merge runs meanwhile), refuses a worktree with uncommitted changes (one agent
 per worktree), brings main's RULINGS.md into the worktree as an untracked, ignored copy (never a commit on the
@@ -60,7 +76,7 @@ import dry_run  # noqa: E402
 import merge_slice as ms  # noqa: E402
 import run_seat as rs  # noqa: E402
 
-ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat",
+ACTIONS = ("refreeze", "add-round", "clear-stop", "send-back", "correct-command", "accept", "move-seat", "retire",
            "undo-seat-failure", "self-clear")
 #: What run_seat.py wrote, before 1f, for a verifier session whose call was refused (CO2, 19 November 2026).
 NO_VERDICT = "no verdict returned"
@@ -194,6 +210,133 @@ def back_to_building(slice_id: str, wt: Path, **kw) -> list[str]:
     copy = c.deliver_rulings(wt)
     said.append(f"main's rulings are at {copy}" if copy else "main's rulings could not be copied into the worktree")
     return said
+
+
+def send_back_verified(slice_id: str, wt: Path, st: dict, rnd: int, limit: int) -> list[str]:
+    """A verified slice back to its builder, on the owner's line `<slice> send-back <date>` alone (22 November 2026,
+    SE9: a finding the owner does not accept narrower, at a tip a second verifier passed). The round advances by one.
+    The line does not raise the rounds limit: past it, the owner's add-round line is needed as well, as for a refused
+    slice's send-back, and both are used. Neither line is used on a refusal. The builder is told why it is back by a
+    findings record newer than the tip's pass (verify-gate-*, the line's own records, never a verifier's)."""
+    try:
+        tag = authority(slice_id, "send-back")
+    except Refused as e:
+        raise Refused(f"{slice_id} is verified, not refused by the merge gate: a verified slice goes back only on the "
+                      f"owner's line. {e}") from None
+    more = None
+    if rnd >= limit:
+        try:
+            more = authority(slice_id, "add-round")
+        except Refused as e:
+            raise Refused(f"{slice_id} is at its rounds limit (round {rnd} of {limit}): the owner's send-back line "
+                          f"does not raise it; the add-round line does. {e} The send-back line is not used.") from None
+    new_round, new_limit = rnd + 1, limit + (1 if more else 0)
+    tip = st.get("tip") or c.git(["rev-parse", "HEAD"], wt)
+    said = back_to_building(slice_id, wt, round=new_round, rounds_limit=new_limit)
+    table = f"{c.V062_REL}/slices/{slice_id}_ROUND{new_round}_TABLE.md"
+    finding = {"file": table if new_round >= c.TABLE_ROUND else f"{c.V062_REL}/slices/{slice_id}.md",
+               "what": (f"This slice was verified at {tip[:10]} and sent back by the owner (resume.tsv, {today()}): a "
+                        "finding at that tip stands that the owner does not accept narrower, whatever a verifier's "
+                        "pass said. This round's work is " +
+                        (f"in the scout's table for round {new_round} ({table})." if new_round >= c.TABLE_ROUND else
+                         "in the brief and in what the conductor gives you from the owner.")),
+               "evidence": f"owner-changes.tsv: {tag}"}
+    head = c.git(["rev-parse", "HEAD"], wt)
+    f = c.rec_dir(slice_id) / f"verify-gate-{tip}.json"
+    kept = [*((c.read_json(f) or {}).get("findings") or []),
+            *(((c.read_json(c.rec_dir(slice_id) / f"verify-gate-{head}.json") or {}).get("findings") or [])
+              if head != tip else [])]
+    c.write_json(f, {"slice": slice_id, "commit": tip, "verdict": "findings", "passes": [], "findings": [finding, *kept],
+                     "note": "written by resume.py: a verified slice sent back by the owner; not a verifier session",
+                     "at": c.now()})
+    c.log_owner_change(slice_id, "send-back", f"{tag}: a verified slice sent back at {tip[:10]}; round {rnd} -> "
+                                              f"{new_round}" + ("" if more else f", limit {limit} unchanged"))
+    if more:
+        c.log_owner_change(slice_id, "send-back", f"{more}: past the limit; limit {limit} -> {new_limit}")
+    if new_round >= c.TABLE_ROUND and not (c.REPO / table).is_file():
+        said.append(f"no round from {c.TABLE_ROUND} on starts without its table: {table} is not on main yet.")
+    return [f"{slice_id}: a verified slice back to the builder on the owner's line, round {new_round} of {new_limit}.",
+            *said]
+
+
+#: The owner's standing permission for one more round after a merge refusal (his file 012, A1; common.py).
+RAR = "round-after-refusal"
+
+
+def refusal_cause(rec: Path, tip: str) -> list[str]:
+    """The refusal's cause as the gate recorded it: the file of each failing test or target its findings name, or []
+    when a finding names none (a red with no name: the cause is not recorded)."""
+    files = [str(f.get("file") or "").strip() for f in (c.read_json(rec / f"verify-gate-{tip}.json") or {}).get("findings") or []]
+    return sorted(set(files)) if files and all(files) else []
+
+
+def given_before(rec: Path) -> list[dict]:
+    """Each round the permission gave this slice before, with the cause it was given for."""
+    return [c.read_json(f) or {} for f in sorted(rec.glob(f"{RAR}-*.json"))]
+
+
+def red_stopped(slice_id: str, rec: Path) -> str:
+    """How the slice is known to have been stopped for red checks (the Stop hook's six red stops), or '': a red stop
+    now, or one cleared by the owner's line, a corrected command or the line itself."""
+    if (rec / "red_stop.json").exists():
+        return "a red stop now"
+    for r in c.owner_changes():
+        if r["slice"] == slice_id and r["action"] in ("clear-stop", "correct-command"):
+            return f"{r['action']} at {r['at']}"
+    for r in c.self_clears():
+        if r["slice"] == slice_id and r["stop"] == "red":
+            return f"cleared by the line at {r['at']}"
+    return ""
+
+
+def round_after_refusal(slice_id: str, wt: Path, st: dict, rec: Path, rnd: int, limit: int, no_line: str) -> list[str]:
+    """One more round past the rounds limit after a merge refusal, on the owner's standing permission (standing.tsv:
+    round-after-refusal per-day <N> <date>) in place of his add-round line, to fix the refusal's named cause alone,
+    once for that refusal. Never: the same cause a second time for the slice; a finding naming a key, a credential or
+    a security rule; a slice stopped for red checks; a slice the owner has parked; past the day's budget. Refused in
+    words, with nothing changed, otherwise."""
+    tip = st.get("tip") or c.git(["rev-parse", "HEAD"], wt)
+
+    def refuse(why: str):
+        raise Refused(f"{no_line} The standing permission {RAR} does not give it: {why}. Nothing changed.")
+
+    grant, why = c.standing_grant(RAR)
+    if not grant:
+        refuse(why)
+    if c.parked(slice_id):
+        refuse(f"the owner has parked {slice_id} ({c.parked(slice_id)} in resume.tsv)")
+    red = red_stopped(slice_id, rec)
+    if red:
+        refuse(f"{slice_id} has been stopped for red checks ({red}): its rounds are the owner's")
+    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))  # the self-clear's word check, unchanged
+    if hit:
+        refuse(f"the refusal names a key, a credential or a security rule ({hit.group(0)!r} in its findings)")
+    cause = refusal_cause(rec, tip)
+    if not cause:
+        refuse("the gate's record names no failing test or target for this refusal (its cause is not recorded)")
+    for before in given_before(rec):
+        same = sorted(set(before.get("cause") or []) & set(cause))
+        if same:
+            refuse(f"it gave {slice_id} a round for the same cause before ({', '.join(same)}, at {before.get('at')}): "
+                   "a second time is the owner's")
+    new_round, new_limit = rnd + 1, limit + 1
+    said = back_to_building(slice_id, wt, rounds_limit=new_limit, round=new_round)
+    named = ", ".join(cause)
+    f = rec / f"verify-gate-{tip}.json"
+    gate = c.read_json(f) or {}
+    c.write_json(f, {**gate, "findings": [{
+        "file": cause[0],
+        "what": (f"This round ({new_round} of {new_limit}) is given by the owner's standing permission for this merge "
+                 f"refusal alone ({RAR}): fix only the cause the gate names below ({named}) and change nothing else. "
+                 "If the same cause is red again, the slice goes to the owner."),
+        "evidence": f"owner-changes.tsv: standing.tsv {RAR}"}, *(gate.get("findings") or [])]})
+    c.write_json(rec / f"{RAR}-{tip}.json", {"slice": slice_id, "tip": tip, "cause": cause, "round": new_round,
+                                            "rounds_limit": new_limit, "at": c.now()})
+    what = (f"one more round after the merge refusal at {tip[:10]}, for its named cause alone ({named}), without the "
+            f"owner's add-round line; round {rnd} -> {new_round}, limit {limit} -> {new_limit}; use {grant['used'] + 1} "
+            f"of {grant['per_day']} today")
+    c.log_standing_use(slice_id, RAR, "send-back", "refused", RAR, what)
+    return [f"{slice_id}: back to the builder on the owner's standing permission ({RAR}): {what}.", *said]
 
 
 # ------------------------------------------------------------------ slices.tsv: one row's frozen columns
@@ -523,6 +666,29 @@ def undo_seat_failure(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[
             f"{rnd - 1}, verifying. The conductor runs run_seat.py verifier {slice_id} once its account is clear."]
 
 
+# ------------------------------------------------------------------ retire: a part that will not merge
+
+
+def retire(slice_id: str) -> list[str]:
+    """A part retired on the owner's line `<slice> retire <date>` (the conductor's paper, item 3, 23 November 2026):
+    retired.json in its records folder, which the board reads to leave it out of the status file and the counts. A
+    merged part is never retired (its merge stands); a part already retired is refused. Nothing else changes."""
+    rec = c.rec_dir(slice_id)
+    try:
+        c.slice_row(slice_id)
+    except (Exception, SystemExit):  # noqa: BLE001 -- no row, or a row that cannot be read: nothing to retire
+        raise Refused(f"{slice_id} has no row in {c.SLICES_REL}: nothing to retire. Nothing changed.") from None
+    if (rec / "merged.json").exists():
+        raise Refused(f"{slice_id} has merged: a merged part is never retired. Nothing changed.")
+    if (rec / "retired.json").exists():
+        raise Refused(f"{slice_id} is already retired. Nothing changed.")
+    tag = authority(slice_id, "retire")
+    phase = (c.read_json(rec / "state.json") or {}).get("phase") or "not started"
+    c.write_json(rec / "retired.json", {"slice": slice_id, "line": tag, "phase_was": phase, "at": c.now()})
+    c.log_owner_change(slice_id, "retire", f"{tag}: retired at phase {phase}; no longer shown or counted")
+    return [f"{slice_id}: retired on the owner's line (it was {phase}); the board no longer shows or counts it."]
+
+
 # ------------------------------------------------------------------ self-clear: the line clears a stop itself (A)
 
 
@@ -596,6 +762,66 @@ def owners_alone(slice_id: str, frozen: dict, st: dict, rec: Path, stop: str, ti
         raise Refused(f"{slice_id}'s frozen commands differ from main's row ({', '.join(moved) or 'none yet'})"
                       + (f" and the owner's refreeze line is waiting ({'; '.join(waiting)})" if waiting else "")
                       + ": a refreeze changes what is tested and is the owner's alone. Nothing changed.")
+
+
+#: The owner's standing permission for the line to clear a stop whose cause is the line's (his file 012, A2; common.py).
+CLS = "clear-line-stops"
+#: The Stop hook's scan-map red (stop_check.py), and the tests it names.
+SCAN_RED = "RED: scan map:"
+SCAN_NAMES = re.compile(r"on main\): (.+?)\. Say so", re.S)
+
+
+def red_lines(rec: Path) -> list[str]:
+    return [str(x) for x in (c.read_json(rec / "red_stop.json") or {}).get("last") or []]
+
+
+def own_red(frozen: dict, rec: Path, tip: str) -> str:
+    """Where a red of the stop is the slice's own ('' when none is): its acceptance red, its own work uncommitted, the
+    lint of the files its branch changed, or a failing test in a file it wrote or changed or that is its acceptance's
+    (his file 012, A2: never cleared when any red is in the part's own acceptance or its own tests)."""
+    last = red_lines(rec)
+    for x in last:
+        head = x.split("\n", 1)[0]
+        if head.startswith("RED: acceptance"):
+            return "its acceptance is red"
+        if head.startswith("RED: uncommitted"):
+            return "its own work is uncommitted"
+        if head.startswith(("RED: ruff", "RED: eslint")):
+            return f"the lint of the files its branch changed is red ({head[5:].split(' (', 1)[0]})"
+    main = c.git(["rev-parse", "main"], c.REPO)
+    base = c.git(["merge-base", main, tip], c.REPO, check=False) or frozen["base"]
+    own = set(dry_run.acceptance_files(frozen)) | set(c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).split())
+    acceptance = frozen.get("acceptance") or ""
+    for i in dry_run.failing_ids("\n".join(last)):
+        path = dry_run.id_path(i)
+        if Path(path).name in acceptance or any(f == path or f.endswith("/" + path) or path.endswith("/" + f) for f in own):
+            return f"{i} is in a test the slice wrote or changed, or its acceptance's"
+    return ""
+
+
+def cause_c(slice_id: str, rec: Path, wt: Path) -> tuple[str, list[str]]:
+    """Why a scan-map red whose rows the conductor has since written is not the cause ('' when it is), and the tests
+    it named: every red in the red stop is the scan map's (a new test that walks a folder with no row, which a builder
+    cannot add), and main's map (main's committed scan_map.tsv beside the installed copy, and scan_rows/<ID>.tsv on main)
+    now has a row for each test it named, read as the Stop hook reads them: a row not yet committed does not count."""
+    last = red_lines(rec)
+    if not last or any(not x.startswith(SCAN_RED) for x in last):
+        return "the red stop is not the scan map alone", []
+    names = sorted({n.strip() for x in last for m in SCAN_NAMES.finditer(x) for n in m.group(1).split(",") if n.strip()})
+    if not names:
+        return "the scan-map red names no test", []
+    import scan_select
+    import stop_check
+    installed = c.DATA / "bin" / "scan_map.tsv"  # the Stop hook's own reading: the installed copy and main's, never a
+    table = (scan_select.entries(installed) if installed.is_file() else []) + stop_check.main_map(str(wt))  # row uncommitted
+    rows = subprocess.run(["git", "show", f"main:{stop_check.SCAN_ROWS}{slice_id}.tsv"], cwd=str(wt), capture_output=True,
+                          text=True)
+    if rows.returncode == 0:
+        table += scan_select.load(rows.stdout)
+    missing = scan_select.unmapped(wt / "OspreyFlow_Build", table, only=set(names))
+    if missing:
+        return f"main still has no scan-map row for {', '.join(missing)}", []
+    return "", names
 
 
 def cause_a(slice_id: str, frozen: dict, wt: Path, tip: str) -> str:
@@ -715,6 +941,19 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
                       "within the rounds limit, or for a conflict). Nothing changed.")
     tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
     owners_alone(slice_id, frozen, st, rec, stop, tip)
+    grant, why = c.standing_grant(CLS)  # the owner's file 012, A2: on his standing permission, within its budget
+    if not grant:
+        raise Refused(f"{slice_id}'s stop waits for the owner's line: the line clears a stop itself only on his standing "
+                      f"permission ({CLS}), and {why}. Nothing changed.")
+    if c.parked(slice_id):
+        raise Refused(f"the owner has parked {slice_id} ({c.parked(slice_id)} in resume.tsv): the line never clears its "
+                      "stop. Nothing changed.")
+    mine = own_red(frozen, rec, tip)
+    if mine:
+        raise Refused(f"{slice_id}'s red stop is its own ({mine}): the line never clears a red in the slice's own "
+                      "acceptance or its own tests. It waits for the owner's line. Nothing changed.")
+    red = c.read_json(rec / "red_stop.json") or {}
+    use = f"; on the owner's standing permission ({CLS}), use {grant['used'] + 1} of {grant['per_day']} today"
     log = c.DATA / "dry-runs" / f"{slice_id}-self-clear-{int(time.time())}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     why_b, removal = cause_b(slice_id, frozen, st, rec, tip, log) if stop == "red" else ("not a red stop", {})
@@ -736,9 +975,19 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         said = back_to_building(slice_id, wt)
         what = (f"removed {removed} from the checks (a check the slice did not write, failing identically on main's "
                 f"own tree; committed {sha[:10]}; the acceptance unchanged); red stop at {tip[:10]} cleared; building, "
-                f"round {st.get('round', 1)} unchanged")
-        c.log_self_clear(slice_id, "red", "b", what)
+                f"round {st.get('round', 1)} unchanged{use}")
+        c.log_standing_use(slice_id, CLS, "self-clear", "red", "b", what, {"red_stop": red})
         return [f"{slice_id}: cleared by the line (cause b): {what}.", *said]
+    why_c, names = cause_c(slice_id, rec, wt) if stop == "red" else ("not a red stop", [])
+    if not why_c:
+        (rec / "red_stop.json").unlink()
+        (rec / "red_stops").unlink(missing_ok=True)
+        said = back_to_building(slice_id, wt)
+        what = (f"the red stop at {tip[:10]} was the scan map's alone, and main now has the row for {', '.join(names)} "
+                f"(written since by the conductor; a builder cannot add one); cleared; building, round "
+                f"{st.get('round', 1)} unchanged{use}")
+        c.log_standing_use(slice_id, CLS, "self-clear", "red", "c", what, {"red_stop": red})
+        return [f"{slice_id}: cleared by the line (cause c): {what}.", *said]
     why_a = cause_a(slice_id, frozen, wt, tip)
     if not why_a:
         main = c.git(["rev-parse", "main"], c.REPO)
@@ -751,10 +1000,11 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         (rec / "red_stops").unlink(missing_ok=True)
         said = back_to_building(slice_id, wt)
         what = (f"main {main} merged into the branch (clean; the slice's acceptance and checks unchanged); {stop} stop "
-                f"at {tip[:10]} cleared; building, round {st.get('round', 1)} unchanged")
-        c.log_self_clear(slice_id, stop, "a", what)
+                f"at {tip[:10]} cleared; building, round {st.get('round', 1)} unchanged{use}")
+        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})
         return [f"{slice_id}: cleared by the line (cause a): {what}.", *said]
-    raise Refused(f"{slice_id}'s stop is not one the line clears: not (b): {why_b}; not (a): {why_a}. It waits for the "
+    raise Refused(f"{slice_id}'s stop is not one the line clears: not (b): {why_b}; not (c): {why_c}; not (a): {why_a}. "
+                  "It waits for the "
                   "owner's line, as before. Nothing changed.")
 
 
@@ -763,7 +1013,7 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
 #: worktree and, for refreeze and self-clear's cause (b), the slice's own row of slices.tsv, committed under the records
 #: lock and landed beneath the merge's tested result as any records commit is. The others (correct-command, move-seat),
 #: and any action on the slice being merged, wait for it.
-DURING_MERGE = ("add-round", "clear-stop", "send-back", "accept", "refreeze", "undo-seat-failure", "self-clear")
+DURING_MERGE = ("add-round", "clear-stop", "send-back", "accept", "refreeze", "undo-seat-failure", "self-clear", "retire")
 #: The slice a running merge is merging, while this action goes on beside it (set by locks()); None otherwise.
 MERGE_RUNNING: str | None = None
 
@@ -807,6 +1057,8 @@ def locks(slice_id: str, action: str) -> list:
 def act(slice_id: str, action: str, standing_only: bool = False, args: list[str] | tuple[str, ...] = ()) -> list[str]:
     held = locks(slice_id, action)
     try:
+        if action == "retire":  # needs no worktree, nor even a start: a row the owner will not have merged
+            return retire(slice_id)
         frozen = frozen_of(slice_id)
         if action == "move-seat":  # touches state.json's one key only: a builder at work in the worktree is no matter
             return move_seat(slice_id, args)
@@ -862,6 +1114,8 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             return [f"{slice_id}: red stop cleared; building.", *said]
 
         if action == "send-back":
+            if phase == "verified":  # on the owner's line only (22 November 2026, SE9)
+                return send_back_verified(slice_id, wt, st, rnd, limit)
             if phase != "refused":
                 raise Refused(f"{slice_id} was not refused by the merge gate (phase {phase}).")
             if st.get("refused_for") == "records":  # the line's own fault: no round is spent on it
@@ -880,7 +1134,10 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
                 said = back_to_building(slice_id, wt, round=rnd + 1)
                 c.log_owner_change(slice_id, action, f"standing (within the rounds limit): round {rnd} -> {rnd + 1}")
                 return [f"{slice_id}: back to the builder with the gate's findings, round {rnd + 1} of {limit}.", *said]
-            tag = authority(slice_id, "add-round")
+            try:
+                tag = authority(slice_id, "add-round")
+            except Refused as no_line:  # the owner's file 012, A1: his standing permission in place of the line
+                return round_after_refusal(slice_id, wt, st, rec, rnd, limit, str(no_line))
             said = back_to_building(slice_id, wt, round=rnd + 1, rounds_limit=limit + 1)
             c.log_owner_change(slice_id, action, f"{tag}: past the limit; round {rnd} -> {rnd + 1}, limit {limit} -> {limit + 1}")
             return [f"{slice_id}: back to the builder with the gate's findings, round {rnd + 1} of {limit + 1}.", *said]

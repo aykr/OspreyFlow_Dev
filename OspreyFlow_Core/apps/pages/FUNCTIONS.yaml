@@ -26,14 +26,14 @@ functions:
     name: "Studio: Model step, domain model text"
     where: "apps/workspace/src/ingest/studio/ModelTab.tsx (20, a placeholder: \"thin until phase 5\", :1), packages/glass-shared/src/ingest/studio/packs.ts"
     slice: "IS2"
-    scenario: ""
+    scenario: "MS1, MS2, MS3, MS4, MS5, MS6, MS7, MS8, MS9, MS10, MS11, MS12, MS13, MS14, MS15, MS16, MS17, MS18, MS19"
     route: ""
     status: "planned"
   - id: studio-model-proposals
     name: "Studio: Model step, proposed link types"
     where: "apps/workspace/src/linktypes/ModelProposals.tsx, packages/glass-shared/src/linktypes/modelProposalsApi.ts, mounted apps/workspace/src/ingest/IngestStudio.tsx:20,219 (shares packages/glass-shared/src/linktypes/http.ts 53 and packages/glass-shared/src/linktypes/linkTypesApi.ts 171)"
     slice: "IS2"
-    scenario: ""
+    scenario: "MS1, MS2, MS3, MS4, MS5, MS6, MS7, MS8, MS9, MS10, MS11, MS12, MS13, MS14, MS15, MS16, MS17, MS18, MS19"
     route: ""
     status: "planned"
   # B11 names it by its wording only.
@@ -79,7 +79,7 @@ functions:
     name: "Studio: dataset map"
     where: "does not exist (no file; grep -ri \"dataset map\" apps/workspace/src/ finds only \"dataset maps\" in a ModelTab sentence)"
     slice: "IS3"
-    scenario: ""
+    scenario: "DM1, DM2, DM3, DM4, DM5, DM6, DM7, DM8, DM9, DM10, DM11, DM12, DM13, DM14"
     route: ""
     status: "planned"
   - id: studio-pipeline-canvas

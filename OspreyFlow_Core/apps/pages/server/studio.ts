@@ -42,6 +42,7 @@ import {
   stripItems,
   studioDatasets,
   whyNot,
+  workspaceStudioHref,
 } from "./views/studioWords.js";
 import type { CaseListing, Pipeline, Plan, PlanView, Run, Source, StudioPlace } from "./views/studioWords.js";
 
@@ -56,7 +57,7 @@ interface Studio {
 const studioOf = (req: Request): Studio => req.app.locals["studio"] as Studio;
 
 /** A query or form value that is one string, else undefined: an array or an object is not what a page's own form sends. */
-function one(value: unknown): string | undefined {
+export function one(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
@@ -69,9 +70,9 @@ interface NeedsYou {
 }
 
 /** Everything the frame draws, read as the person. */
-interface Frame {
+export interface Frame {
   path: string;
-  place: StudioPlace | "frame";
+  place: StudioPlace | "frame" | "dataset-map";
   caseId: string | null;
   conduit: Conduit | undefined;
   /** The words for a case list that could not be read (or for a session that has ended); null when it was read. */
@@ -85,11 +86,18 @@ interface Frame {
   openingNote: string | null;
   rights: ReadonlySet<string> | null;
   roles: string[] | null;
+  /** The person's own principal id (`GET /v1/me`), which a draft's creator is compared with to say whether the forms are theirs to use; null when it could not be read (the Conduit decides all the same). */
+  meId: string | null;
   proposed: number;
   needsUnread: boolean;
   strip: string[] | null;
   /** The pipelines read that did not work: a refusal says it is refused (a note, not an alert: it is the person's rights, not a fault), a failing Conduit says to try again (an alert); null when read. */
   pipelinesProblem: { words: string; refused: boolean } | null;
+  /**
+   * What the Conduit answered for the case's pipelines (the registry), kept for a page that draws them (the dataset map, slice
+   * IS3): its status, and its list when it was read (200 and a list). `null` until the strip has been read.
+   */
+  registry: { status: number; list: Pipeline[] | undefined } | null;
   /** `opensModel` is the dataset the workspace is asked to open Model on when the link is followed (the Model place only). */
   tabs: { id: string; label: string; href: string; current: boolean; opensModel: string | null }[];
   reminder: { text: string; tip: string; href: string; opensModel: string | null } | null;
@@ -142,7 +150,7 @@ function unavailable(res: Response, status = 503): void {
  * Reads what the frame draws for `caseId` and answers a dataset switch. Returns the frame, or `"sent"` when it has already
  * answered (a switch to another case is a redirect; the service being unreachable is a page of words).
  */
-async function loadFrame(
+export async function loadFrame(
   req: Request,
   res: Response,
   options: { path: string; place: Frame["place"]; caseId: string | undefined; wantsDataset?: string; opening?: string },
@@ -169,10 +177,12 @@ async function loadFrame(
     openingNote: null,
     rights: null,
     roles: null,
+    meId: null,
     proposed: 0,
     needsUnread: false,
     strip: null,
     pipelinesProblem: null,
+    registry: null,
     tabs: [],
     reminder: null,
   };
@@ -200,12 +210,14 @@ async function loadFrame(
   const rights = rightsList ? new Set(rightsList.filter((r): r is string => typeof r === "string")) : null;
   const rolesList = asList((meRaw as { roles?: unknown } | undefined)?.roles);
   const roles = rolesList ? rolesList.filter((r): r is string => typeof r === "string") : null;
+  const meId = typeof (meRaw as { id?: unknown } | undefined)?.id === "string" ? (meRaw as { id: string }).id : null;
   const needs = needsOf(needsRaw);
   const frame: Frame = {
     ...empty,
     conduit,
     rights,
     roles,
+    meId,
     needsUnread: needs === undefined,
     casesProblem: cases !== undefined ? null : casesReply?.status === 401 ? refusalWords(401, undefined, "") : STUDIO_WORDS.casesUnreadable,
   };
@@ -239,11 +251,19 @@ async function loadFrame(
     label: place.id === "model" && frame.proposed > 0 ? `${place.label} · ${frame.proposed} proposed` : place.label,
     href: placeHref(place, caseId),
     current: place.id === frame.place,
-    opensModel: place.id === "model" ? frame.datasetId : null,
+    // Model asks the workspace to open on it only while Model is not a page of this service (slice IS2a: it is).
+    opensModel: place.id === "model" && place.path === null ? frame.datasetId : null,
   }));
   const model = PLACES[0];
   if (frame.proposed > 0 && frame.place !== "model" && model) {
-    frame.reminder = { text: NEEDS_YOU_WORDS.reminder(frame.proposed), tip: NEEDS_YOU_WORDS.reminderTip, href: placeHref(model, caseId), opensModel: frame.datasetId };
+    frame.reminder = {
+      text: NEEDS_YOU_WORDS.reminder(frame.proposed),
+      tip: NEEDS_YOU_WORDS.reminderTip,
+      // The proposed link types are decided in the workspace's Model tab until the proposals are a page of this service (a later
+      // slice), so the reminder goes there and asks it to open on Model (owner's ruling, 20 November: the Needs-you jump is rebuilt).
+      href: workspaceStudioHref(caseId),
+      opensModel: frame.datasetId,
+    };
   }
   return frame;
 }
@@ -255,6 +275,7 @@ async function readStrip(frame: Frame, conduit: Conduit, caseId: string, dataset
     readWithStatus(conduit, v1("datasets", datasetId, "sources")),
   ]);
   const registry = asList(registryReply.json) as Pipeline[] | undefined;
+  frame.registry = { status: registryReply.status, list: registry };
   const sources = (asList(sourcesReply.json) as Source[] | undefined) ?? "unreadable";
   const runs: Record<string, Run[]> = {};
   let runsUnread = false;
@@ -285,7 +306,7 @@ async function readStrip(frame: Frame, conduit: Conduit, caseId: string, dataset
 // ------------------------------------------------------------------------------------------------- the templates
 
 /** What every Studio template draws: the frame's parts, and the anti-forgery token for its forms. */
-function context(req: Request, frame: Frame, extra: Record<string, unknown>): Record<string, unknown> {
+export function context(req: Request, frame: Frame, extra: Record<string, unknown>): Record<string, unknown> {
   return {
     page: "studio",
     csrfToken: req.session.auth?.csrfToken,

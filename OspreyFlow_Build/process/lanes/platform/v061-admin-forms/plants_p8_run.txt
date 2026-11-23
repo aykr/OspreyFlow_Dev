@@ -1,0 +1,3 @@
+P8 plant: the typed key kept in sessionStorage on Check ->   1 failed
+P8 plant: the key in the check request's address ->   1 failed
+P8 plant: the typed key kept in localStorage on Check ->   1 failed

@@ -67,10 +67,7 @@ EXPECTED_FUNCTIONS = 47
 # The list may only shrink: a new function with none fails the test. A slice that writes a scenario removes
 # the id here and fills the row's `scenario`.
 KNOWN_WITHOUT_SCENARIO = {
-    "studio-model-text",
-    "studio-model-proposals",
     "studio-screening-lists",
-    "studio-dataset-map",
     "studio-pipeline-canvas",
     "studio-preview",
     "studio-checks",
@@ -320,9 +317,11 @@ def test_a_scripts_off_line_is_never_read_as_a_full_exception() -> None:
 
 def test_a_row_with_a_route_has_a_scenario() -> None:
     functions_doc, exceptions_doc = planted()
-    row = next(r for r in functions_doc["functions"] if r["id"] == "studio-dataset-map")
-    row["route"] = "/studio/dataset-map"
-    assert any("studio-dataset-map has a route but no scenario" in p for p in check(functions_doc, exceptions_doc))
+    # A function that has no scenario yet (the dataset map had none until slice IS3 wrote its own).
+    row = next(r for r in functions_doc["functions"] if r["id"] == "studio-pipeline-canvas")
+    assert row["scenario"] == ""
+    row["route"] = "/studio/pipeline-canvas"
+    assert any("studio-pipeline-canvas has a route but no scenario" in p for p in check(functions_doc, exceptions_doc))
     row["scenario"] = "B13"
     assert check(functions_doc, exceptions_doc) == []
 

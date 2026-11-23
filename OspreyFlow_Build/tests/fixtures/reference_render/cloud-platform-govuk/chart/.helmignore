@@ -1,0 +1,3 @@
+# The sync tool on the owner's machine adds Icon\r files; they are not part of the chart.
+Icon?
+.DS_Store

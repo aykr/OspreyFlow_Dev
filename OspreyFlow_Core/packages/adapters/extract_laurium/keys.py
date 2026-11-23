@@ -12,10 +12,9 @@ Laurium's service a **scoped virtual key** for each call and never the master ke
   alone (never empty: an empty `models` is every model, measured), and no admin right.
 
 Its own label (`osprey-service:laurium`) keeps it apart from any engine's key, even an engine
-named `laurium`. It is tagged `metadata.osprey_service`, not `osprey_engine`, so the engines'
-stale-key sweep (`ModelAdmin.revoke_stale_engine_keys`) leaves it alone. It is made at the
-Conduit's start, and every older Laurium key deleted, by `laurium_at_start` (P12 part 2, through
-`services.api.laurium_start`).
+named `laurium`. It is tagged `metadata.osprey_service`, not `osprey_engine`, so an engine's key and
+Laurium's are never taken for one another. It is made at the Conduit's start, and every older
+Laurium key deleted, by `laurium_at_start` (P12 part 2, through `services.api.laurium_start`).
 """
 
 from __future__ import annotations
@@ -75,8 +74,7 @@ async def delete_laurium_key(gateway: httpx.AsyncClient, master: str) -> None:
         )
 
 
-#: As the engines' sweep reads the gateway's keys (`ModelAdmin.revoke_stale_engine_keys`): at most
-#: 100 a page (measured), every page read before anything is deleted.
+#: At most 100 keys a page (measured), every page read before anything is deleted.
 _KEY_PAGE = 100
 _MAX_KEY_PAGES = 100
 

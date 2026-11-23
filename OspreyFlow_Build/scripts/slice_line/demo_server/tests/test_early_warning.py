@@ -89,14 +89,14 @@ def test_a_second_run_sends_only_what_is_new_and_a_full_bundle_when_the_server_h
     assert early(w, "S1").returncode == 0
     held = json.loads((w["data"] / "early-warning/held.json").read_text())["main"]
     assert held == out(["git", "rev-parse", "main"], w["repo"])
-    assert early(w, "S1").returncode == 0
+    assert early(w, "S1", "--again").returncode == 0  # the same candidate: asked for again (never sent twice)
     second = w["tmp"] / "sent-1.bundle"
     v = sh(["git", "bundle", "verify", str(second)], w["repo"])
     assert b"requires" in v.stdout + v.stderr and b"requires 0" not in v.stdout + v.stderr  # built on what it holds
     heads = out(["git", "bundle", "list-heads", str(second)], w["repo"])
     assert "refs/heads/main" in heads and "refs/heads/lane/slice-S1" in heads
     sh(["rm", "-rf", str(w["remote"] / "data/source.git")], w["tmp"])  # the server lost its copy
-    p = early(w, "S1")
+    p = early(w, "S1", "--again")
     assert p.returncode == 0, p.stdout + p.stderr
     third, fourth = w["tmp"] / "sent-2.bundle", w["tmp"] / "sent-3.bundle"
     assert third.exists() and fourth.exists()  # refused for its prerequisites, then sent in full
@@ -170,7 +170,7 @@ def test_the_note_says_in_one_line_what_happened_to_duckdbs_spatial_extension(wo
     gate(w, exit=0, duckdb_spatial={"status": "installed", "version": "1.5.6", "platform": "linux_amd64",
          "sha256": "ab" * 32})
     note(w).unlink()
-    early(w, "S1")
+    early(w, "S1", "--again")
     assert "- DuckDB's spatial extension: installed (DuckDB 1.5.6, linux_amd64, sha256 abababababababab…)" in \
         note(w).read_text().splitlines()
 

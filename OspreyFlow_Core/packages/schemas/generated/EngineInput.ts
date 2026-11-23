@@ -21,7 +21,7 @@ export type PrivacyContract = boolean;
  */
 export type ContractReference = string | null;
 /**
- * ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
+ * ADR-135 Amendments 4, 7 and 14: provider (a hosted provider LiteLLM knows by name), gateway (your organisation's own OpenAI-compatible AI gateway, at api_base; on every profile) or, at profile: cloud-platform only, bedrock (Amazon Bedrock in London). Default: provider.
  */
 export type Kind = "provider" | "gateway" | "bedrock";
 /**
@@ -32,12 +32,17 @@ export type Auth = ("key" | "iam_role") | null;
  * Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock.
  */
 export type Region = string | null;
+export type Key = string | null;
 
 /**
- * An engine added or edited. Validated as `ModelProviderConfig` is.
+ * `PUT /v1/admin/models/engines/{name}`: an engine edited, validated as `ModelProviderConfig`
+ * is, with its key where the address changed or the key is changed with it; a changed model,
+ * address or key is checked before it is saved (ADR-135 Amendment 14, the owner's ruling 19).
+ * Read by hand, so a refusal never echoes the key. An engine is added only from a check.
  */
 export interface EngineInput {
   provider: ModelProviderConfig;
+  key?: Key;
 }
 /**
  * A client's own model provider (ADR-114 decision 11, Amendment 6 point 4; ADR-135), reached

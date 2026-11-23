@@ -150,6 +150,175 @@ async def test_a_login_that_can_write_is_refused(nomis: asyncpg.Connection) -> N
         await read_sql(_settings(WRITER), READ, secret=PASSWORD, connect=_no_tls)
 
 
+# --- the probe beside a schema the login cannot use (SE6c) ---------------------------------------
+# The read-only probe asks about every table of the database. Asked by a name built from the schema
+# and the table, Postgres refuses a schema the login has no USAGE on, so any database that held one
+# (SE6b's `osprey_report_control` is one) refused a good login with a database error. Asked by OID
+# it does not. These cases make such a schema themselves, so they are red on their own at main (not
+# only after SE6b's live files have run), and they prove the probe is as strict as it was: a login
+# that can write a table of any schema, including one it cannot use, or that owns a table, or is a
+# superuser, is still refused with the same words.
+
+LOCKED = "nomis_replica_locked"
+HIDDEN_WRITER, OWNER, SUPER, GROUP = (
+    "osprey_fixture_hidden_writer",
+    "osprey_fixture_owner",
+    "osprey_fixture_super",
+    "osprey_fixture_group",
+)
+
+
+async def _lock_a_schema(conn: asyncpg.Connection) -> None:
+    """A schema, with a table in it, that neither fixture login may use."""
+    await conn.execute(f"""
+        DROP SCHEMA IF EXISTS {LOCKED} CASCADE;
+        CREATE SCHEMA {LOCKED};
+        CREATE TABLE {LOCKED}.control (id integer PRIMARY KEY, note text);
+        CREATE TABLE {LOCKED}.parted (id integer, note text) PARTITION BY RANGE (id);
+        CREATE TABLE {LOCKED}.parted_1 PARTITION OF {LOCKED}.parted FOR VALUES FROM (0) TO (100);
+    """)
+
+
+@pytest.fixture
+async def locked(nomis: asyncpg.Connection) -> AsyncIterator[asyncpg.Connection]:
+    try:
+        await _lock_a_schema(nomis)
+        yield nomis
+    finally:
+        await nomis.execute(f"DROP SCHEMA IF EXISTS {LOCKED} CASCADE")
+        for role in (HIDDEN_WRITER, OWNER, SUPER, GROUP):
+            if await nomis.fetchval("SELECT 1 FROM pg_roles WHERE rolname = $1", role):
+                await nomis.execute(f"DROP OWNED BY {role}; DROP ROLE {role}")
+
+
+async def _as(user: str) -> asyncpg.Connection:
+    """The fixture's own login, signed in directly, to show what Postgres says to it."""
+    dsn = PostgresConfig.from_env()
+    return await asyncpg.connect(
+        host="localhost", port=dsn.port, user=user, password=PASSWORD, database=dsn.database,
+        ssl=False,
+    )  # fmt: skip
+
+
+async def test_a_schema_the_reader_cannot_use_does_not_stop_the_reader_being_checked(
+    locked: asyncpg.Connection,
+) -> None:
+    # The precondition, as Postgres itself says it: asked by name, the reader is refused the schema
+    # (the fault's own words); asked by OID, it is not. If the fixture's schema were one the reader
+    # may use, the cases below would pass at main having shown nothing.
+    reader = await _as(READER)
+    try:
+        with pytest.raises(asyncpg.InsufficientPrivilegeError, match=f"schema {LOCKED}"):
+            await reader.fetchval(
+                f"SELECT has_table_privilege(current_user, '{LOCKED}.control', 'INSERT')"
+            )
+        by_oid = await reader.fetchval(
+            "SELECT has_table_privilege(current_user, c.oid, 'INSERT') FROM pg_class c "
+            "JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = $1 AND c.relname = 'control'",
+            LOCKED,
+        )
+        assert by_oid is False
+    finally:
+        await reader.close()
+    checked = await check_sql_connection(_settings(), secret=PASSWORD, connect=_no_tls)
+    assert checked.ok, checked.words
+    got = await read_sql(_settings(), READ, secret=PASSWORD, connect=_no_tls)
+    assert [r["booking_id"] for r in got.rows] == ["1", "2", "3"]
+    writer = await check_sql_connection(_settings(WRITER), secret=PASSWORD, connect=_no_tls)
+    assert not writer.ok and "read-only login only" in writer.words
+
+
+#: How a login comes to be able to write a table of the schema it cannot use, and which table.
+WRITES_HIDDEN = {
+    "granted to the login": ("GRANT INSERT ON {t} TO {w}", "control"),
+    "granted to PUBLIC": ("GRANT UPDATE ON {t} TO PUBLIC", "control"),
+    "granted to a group the login is in": (
+        f"CREATE ROLE {GROUP}; GRANT DELETE ON {{t}} TO {GROUP}; GRANT {GROUP} TO {{w}}",
+        "control",
+    ),
+    "a partitioned table, granted to the login": ("GRANT TRUNCATE ON {t} TO {w}", "parted"),
+}
+
+
+@pytest.mark.parametrize("how", list(WRITES_HIDDEN))
+async def test_a_login_that_can_write_a_table_in_a_schema_it_cannot_use_is_refused(
+    locked: asyncpg.Connection, how: str
+) -> None:
+    grant, table = WRITES_HIDDEN[how]
+    await locked.execute(f"""
+        CREATE ROLE {HIDDEN_WRITER} LOGIN PASSWORD '{PASSWORD}';
+        GRANT USAGE ON SCHEMA nomis_replica_fixture TO {HIDDEN_WRITER};
+        GRANT SELECT ON nomis_replica_fixture.visit_bookings TO {HIDDEN_WRITER};
+        {grant.format(t=f"{LOCKED}.{table}", w=HIDDEN_WRITER)};
+    """)
+    assert not await locked.fetchval(
+        f"SELECT has_schema_privilege('{HIDDEN_WRITER}', '{LOCKED}', 'USAGE')"
+    )
+    tested = await check_sql_connection(_settings(HIDDEN_WRITER), secret=PASSWORD, connect=_no_tls)
+    assert not tested.ok and "read-only login only" in tested.words, tested.words
+    with pytest.raises(ConnectorRefused, match="read-only login only"):
+        await read_sql(_settings(HIDDEN_WRITER), READ, secret=PASSWORD, connect=_no_tls)
+
+
+async def _what_the_probe_counts(settings: SqlConnectionSettings) -> dict[str, Any]:
+    """The probe's own three answers for a login, as the connector asks them."""
+    from services.ingest.connectors.sql_connector import _WRITES, _open
+
+    conn = await _open(settings, PASSWORD, _no_tls)
+    try:
+        return dict(await conn.fetchrow(_WRITES))
+    finally:
+        await conn.close()
+
+
+@pytest.mark.parametrize("where", ["usable", "locked"])
+async def test_a_login_that_owns_a_table_is_refused_by_that_alone(
+    locked: asyncpg.Connection, where: str
+) -> None:
+    """An owner holds every right on its own table, so the write check would refuse it too: the
+    owner gives its rights up first, and only the probe's `owned` count is left to refuse it
+    (red when that branch is taken out, which the write check alone does not catch). The table is
+    in a schema it can use, or in the one it cannot."""
+    schema = "nomis_replica_fixture" if where == "usable" else LOCKED
+    await locked.execute(f"""
+        CREATE ROLE {OWNER} LOGIN PASSWORD '{PASSWORD}';
+        GRANT USAGE ON SCHEMA nomis_replica_fixture TO {OWNER};
+        CREATE TABLE {schema}.owned_by_login (id integer);
+        ALTER TABLE {schema}.owned_by_login OWNER TO {OWNER};
+        REVOKE ALL ON {schema}.owned_by_login FROM {OWNER};
+    """)
+    if where == "locked":
+        assert not await locked.fetchval(
+            f"SELECT has_schema_privilege('{OWNER}', '{LOCKED}', 'USAGE')"
+        )
+    counted = await _what_the_probe_counts(_settings(OWNER))
+    assert counted == {"superuser": False, "owned": 1, "writable": 0}, counted
+    tested = await check_sql_connection(_settings(OWNER), secret=PASSWORD, connect=_no_tls)
+    assert not tested.ok and "read-only login only" in tested.words, tested.words
+    with pytest.raises(ConnectorRefused, match="read-only login only"):
+        await read_sql(_settings(OWNER), READ, secret=PASSWORD, connect=_no_tls)
+
+
+async def test_a_superuser_is_refused_by_that_alone(locked: asyncpg.Connection) -> None:
+    """A superuser may write every table, so the write check would refuse it too wherever there is
+    a table: in a database with no table of its own, only the probe's `superuser` answer is left."""
+    empty = "nomis_replica_empty"
+    await locked.execute(f"CREATE ROLE {SUPER} LOGIN SUPERUSER PASSWORD '{PASSWORD}'")
+    await locked.execute(f"DROP DATABASE IF EXISTS {empty} WITH (FORCE)")
+    await locked.execute(f"CREATE DATABASE {empty}")
+    try:
+        settings = _settings(SUPER).model_copy(update={"database": empty})
+        counted = await _what_the_probe_counts(settings)
+        assert counted == {"superuser": True, "owned": 0, "writable": 0}, counted
+        tested = await check_sql_connection(settings, secret=PASSWORD, connect=_no_tls)
+        assert not tested.ok and "read-only login only" in tested.words, tested.words
+        with pytest.raises(ConnectorRefused, match="read-only login only"):
+            await read_sql(settings, READ, secret=PASSWORD, connect=_no_tls)
+    finally:
+        await locked.execute(f"DROP DATABASE IF EXISTS {empty} WITH (FORCE)")
+
+
 async def test_visit_bookings_is_read_incrementally_and_a_refresh_reads_only_new_rows(
     nomis: asyncpg.Connection, tmp_path: Path
 ) -> None:

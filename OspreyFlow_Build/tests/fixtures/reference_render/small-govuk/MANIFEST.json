@@ -1,0 +1,74 @@
+{
+  "files": [
+    {
+      "path": "Caddyfile",
+      "sha256": "469dac9e2e3b31f1e5dedcd019ff9a42d9caf0c738508e060aac33e1c57c6546",
+      "size": 634
+    },
+    {
+      "path": "RUNBOOK.md",
+      "sha256": "c3602448f3e9c9f621adb4dda1e16432beaf5a8f8f154104e38976783728d799",
+      "size": 2670
+    },
+    {
+      "path": "compose.yaml",
+      "sha256": "df0e48cc47535a2871004bf7d7e5d306981825ba44d097d26020797e1d53c4be",
+      "size": 15246
+    },
+    {
+      "path": "deployment.env",
+      "sha256": "954b103fd5030865e0f58bb1cd932f176aa8142e2f58f703adb3221f7cb46f3d",
+      "size": 2996
+    },
+    {
+      "path": "glass.json",
+      "sha256": "96170451c6cc763ebe26f5e38764e061da69b9c7a7f8038f9d73245e7a5fa409",
+      "size": 396
+    },
+    {
+      "path": "keycloak-theme/osprey/login/messages/messages_en.properties",
+      "sha256": "141dc674b351f12da21e6599dfc8c8e2643171e0d253e7e472c504276a42ad05",
+      "size": 1025
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/css/osprey.css",
+      "sha256": "e1731376ac365b18c68bec11171e8e63026980634f544b3af3c65c23ed026181",
+      "size": 8672
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/js/govuk-chrome.js",
+      "sha256": "8d650ac5c60cf979956115863322430ddc6c9b737bc17b56a9d35d762f254157",
+      "size": 13590
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/js/osprey-sign-in.js",
+      "sha256": "3dacc48af2c6e7717588c098941808c13338b443173b34b00c648cdeb1756bcd",
+      "size": 6832
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/js/osprey-theme.js",
+      "sha256": "6e99116cc0eecc97005dbb3d4c68abf8340dd38dd1fa40e7ebee65595673994f",
+      "size": 5022
+    },
+    {
+      "path": "keycloak-theme/osprey/login/theme.properties",
+      "sha256": "1c9d29715051c86b07322aaa606b20195fb9b412cb9743b56b4306b1f08bffb2",
+      "size": 108
+    },
+    {
+      "path": "litellm.yaml",
+      "sha256": "47fbd331aedea7e211f9df7d63b564f72db467a41e872d69fd51ed0a4f43abf8",
+      "size": 866
+    },
+    {
+      "path": "realm.json",
+      "sha256": "42dc057e482739377f16b46afabf085e7c6365a7be2c324f84789ec48d31d4a5",
+      "size": 8351
+    },
+    {
+      "path": "versions.lock",
+      "sha256": "658cb73f865aecd5fafae6214961e5cc38ab213b41dddaedcb49e1dfd62cb396",
+      "size": 2903
+    }
+  ]
+}

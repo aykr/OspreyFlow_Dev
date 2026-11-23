@@ -1,0 +1,35 @@
+plant 1: A(3): a refused model's answer echoes the typed name
+  -k 'said_by_its_job or model_name_box': RED (3 failed, 1 passed, 26 deselected, 1 warning in 5.24s)
+plant 2: A(1): the audit records each typed name, not the job
+  -k 'said_by_its_job': RED (1 failed, 29 deselected, 1 warning in 4.73s)
+plant 3: A(2): any model name taken (ruling 23's shape removed)
+  -k 'taken_only_if_it_looks_like_one': RED (6 failed, 1 passed, 23 deselected, 1 warning in 4.87s)
+plant 4: A: a UUID taken as a model name
+  -k 'taken_only_if_it_looks_like_one': RED (1 failed, 6 passed, 23 deselected, 1 warning in 4.99s)
+plant 5: B: a key sent as a job's name is named back
+  -k 'key_shaped_field_name': RED (1 failed, 2 passed, 27 deselected, 1 warning in 4.83s)
+plant 6: B: an extra field answered by its own name, not in fixed words
+  -k 'key_shaped_field_name': RED (2 failed, 1 passed, 27 deselected, 1 warning in 4.87s)
+plant 7: C: a validator's words in place of the field's fixed words
+  -k 'fixed_words_never_the_validator': RED (4 failed, 26 deselected, 1 warning in 4.84s)
+plant 8: D/P3: a failed gateway call logged with its body
+  -k 'unexpected_transport_error': RED (1 failed, 1 passed, 28 deselected, 1 warning in 4.77s)
+plant 9: D/P3: a check's key left when its call fails unexpectedly
+  -k 'unexpected_transport_error': RED (1 failed, 1 passed, 28 deselected, 1 warning in 4.70s)
+plant 10: P4: a refusal logged with the key in its traceback (exc_info)
+  -k 'appears_nowhere_it_must_not or odd_shaped': RED (4 failed, 54 deselected, 1 warning in 4.77s)
+plant 11: P4: the key printed to the process's own output
+  -k 'appears_nowhere_it_must_not or odd_shaped': RED (4 failed, 54 deselected, 1 warning in 4.99s)
+plant 12: P5: the key left in a temporary beside the models file
+  -k 'appears_nowhere_it_must_not or odd_shaped': RED (4 failed, 54 deselected, 1 warning in 4.75s)
+plant 13: P6: model_keys set prints the key it set
+  -k 'set_from_the_variable': RED (1 failed, 3 deselected in 2.45s)
+plant 14: P7: ospreyflow models key passes the key as an argument
+  -k 'refused_key_is_in_no_output': RED (1 failed, 15 deselected in 0.51s)
+plant 15: P9: a key body refused with pydantic's own words (the input in them)
+  -k 'not_sent_as_text': RED (3 failed, 27 deselected, 1 warning in 4.65s)
+plant 16: P9: a key in the address read past
+  -k 'in_the_address': RED (1 failed, 29 deselected, 1 warning in 4.83s)
+plant 17: 25: the check's key handed over before its record is written
+  -k 'stopped_after_its_key': RED (1 failed, 29 deselected, 1 warning in 4.67s)
+17/17 red

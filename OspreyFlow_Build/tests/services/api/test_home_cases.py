@@ -220,7 +220,9 @@ def test_only_a_person_may_answer_for_a_dataset(world: SimpleNamespace) -> None:
         answer = _make_live(world, owners)
         assert answer.status_code == 409, answer.text
         assert "never a service account" in answer.json()["detail"]
-        world.client.delete("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
+        world.client.delete(
+            "/v1/datasets/ds-a/model/draft", params={"expected_version": 1}, headers=_as("engineer")
+        )
     assert world.datasets.homes == {}
 
 
@@ -287,7 +289,9 @@ def test_a_later_make_live_asks_nothing_and_makes_no_second_home_case(
     assert _make_live(world, {"people": ["eng-1"]}).status_code == 200
     again = _make_live(world, {"people": ["eng-1"]}, version=2)
     assert again.status_code == 409 and "already has its owners" in again.json()["detail"]
-    world.client.delete("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
+    world.client.delete(
+        "/v1/datasets/ds-a/model/draft", params={"expected_version": 2}, headers=_as("engineer")
+    )
     assert _make_live(world, None, version=2).status_code == 200
     assert len(world.datasets.homes) == 1
     assert len([e for e in world.audit.entries if e["action"] == "make_home_case"]) == 1
@@ -468,7 +472,7 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
         world.client.post("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
         world.client.put(
             "/v1/datasets/ds-a/model/draft",
-            json={"packs": {"niem": 3}, "extensions": [], "reference_lists": []},
+            json={"packs": {"niem": 3}, "extensions": [], "reference_lists": [], "expected_version": 1},
             headers=_as("engineer"),
         )
         first = world.client.post(
@@ -490,7 +494,10 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
         world.client.post("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
         world.client.put(
             "/v1/datasets/ds-a/model/draft",
-            json={"packs": {"niem": 3, "fibo": 1}, "extensions": [], "reference_lists": []},
+            json={
+                "packs": {"niem": 3, "fibo": 1}, "extensions": [], "reference_lists": [],
+                "expected_version": 2,
+            },
             headers=_as("engineer"),
         )
         second = world.client.post(

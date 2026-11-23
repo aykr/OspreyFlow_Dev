@@ -1,7 +1,7 @@
 """Item 4 of the owner's file 004 (22 November 2026): the switch is the owner's, off as built (test_server_slot.py shows
 it), and the shadow is on from the first day: the Mac runs its whole gate as now, the server's result for the same
 candidate is recorded beside it, agree or differ, for every merge; the owner turns counting on after the number of
-agreements he names. A comparison is made only for the same candidate (main tip, slice tip, tree hash).
+agreements the owner names. A comparison is made only for the same candidate (main tip, slice tip, tree hash).
 """
 from __future__ import annotations
 

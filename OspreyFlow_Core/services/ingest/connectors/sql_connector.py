@@ -40,6 +40,14 @@ STATEMENT_TIMEOUT_MS = "60000"
 #: A type the server's catalogue names: words, and a size in brackets.
 _TYPE = re.compile(r"^[a-z][a-z0-9 _]*(\(\d+(,\s*\d+)?\))?(\[\])?$")
 
+# Each table is asked about by its OID (`pg_class.oid`), never by a name built from its schema and
+# its table: Postgres looks a name up by schema, and refuses a schema the login has no USAGE on
+# (`permission denied for schema <name>`), so a read-only login on a database that holds one (SE6b's
+# `osprey_report_control` is one) would be refused with a database error instead of being checked.
+# An OID looks no schema up, so the same question is asked of every table of every schema, usable
+# or not (SE6c; `test_sql_connector_probe_shape.py` and the live cases of
+# `test_sql_connector_live.py`). The tables and the schemas left out are the ones `pg_tables` left
+# out before: partitioned tables are in, the catalogue and `information_schema` are not.
 _WRITES = """
 SELECT
   (SELECT rolsuper FROM pg_roles WHERE rolname = current_user) AS superuser,
@@ -47,11 +55,10 @@ SELECT
     WHERE c.relowner = (SELECT oid FROM pg_roles WHERE rolname = current_user)
       AND c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
       AND n.nspname NOT LIKE 'pg_temp%') AS owned,
-  (SELECT count(*) FROM pg_tables
-    WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+  (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema')
       AND has_table_privilege(
-        current_user, quote_ident(schemaname) || '.' || quote_ident(tablename),
-        'INSERT, UPDATE, DELETE, TRUNCATE')) AS writable
+        current_user, c.oid, 'INSERT, UPDATE, DELETE, TRUNCATE')) AS writable
 """
 
 

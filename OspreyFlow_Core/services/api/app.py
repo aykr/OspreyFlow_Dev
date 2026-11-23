@@ -266,6 +266,7 @@ from schemas.dataset_model import (
     RevertModelInput,
     TargetModel,
     TargetModelDraftInput,
+    TargetModelDraftSave,
 )
 from schemas.domain import (
     Alert,
@@ -399,6 +400,8 @@ from schemas.model import OfferedEngines
 from schemas.model_admin import (
     ConnectionTestResult,
     DefaultsInput,
+    EngineCheckInput,
+    EngineCheckResult,
     EngineInput,
     KeyInput,
     LimitsInput,
@@ -771,6 +774,7 @@ from .identity_admin import (
     DashboardExistsError,
     IdentityAdmin,
     IdentityAdminRefused,
+    NoSuchDashboard,
     PeopleDirectory,
     PersonActionRefused,
     PersonExistsError,
@@ -956,7 +960,7 @@ from .recipe_run import (
 from .recipe_runs import External, RecipeRun, RecipeRunStore, RunTrigger
 from .release_notice import read_update_notice
 from .release_version import deployment_version, release_version
-from .report_freshness import ReportFreshness
+from .report_freshness import MartUnreachable, ReportFreshness
 from .reports import ReportLimitExceededError
 from .resolution import ManualAssertionRequest, SetThresholdRequest, ThresholdResponse
 from .resolution_job_status import ResolutionJobStatus
@@ -11836,17 +11840,28 @@ async def open_dataset_model_draft(
 @app.put("/v1/datasets/{dataset_id}/model/draft", dependencies=_CHANGES_THE_MODEL)
 async def save_dataset_model_draft(
     dataset_id: StudioDatasetDep,
-    body: TargetModelDraftInput,
+    body: TargetModelDraftSave,
     principal: PrincipalDep,
     models: TargetModelsDep,
     audit: AuditDep,
 ) -> TargetModel:
-    """Saves the draft as given; an extension removed rather than retired, or a POLE core type
-    named as one, is refused (409), and so is a save by anyone but the draft's creator (409
-    `model_refused`, naming who holds it, before anything is changed; C186). Nothing that runs
-    changes. The body carries no version, so this route confirms none: the creator check is the
-    store's, and a stale save is refused where a version is passed (the import's)."""
-    draft = await models.save_draft(dataset_id, body, principal)
+    """Saves the draft as given, confirming the version the person's copy was read at (the body's
+    `expected_version`, required: a body with none is 422, so a client that sends none cannot skip
+    the check). A draft that is no longer that version is refused 409 `model_refused` in the
+    store's words, and nothing is changed (ADR-152 X5). So is a draft at that version that is
+    another copy, when the body's `expected_revision` (the Studio page always sends it) is not the
+    draft's: it was saved again, or discarded and opened again, since the copy was read. An
+    extension removed rather than retired, a POLE core type named as one, or a matching rule
+    naming a field a reference cannot find, is refused (409), and so is a save by anyone but the
+    draft's creator (409 `model_refused`, naming who holds it, before anything is changed; C186):
+    the creator check comes before the version check. Nothing that runs changes."""
+    draft = await models.save_draft(
+        dataset_id,
+        body,
+        principal,
+        expected_version=body.expected_version,
+        expected_revision=body.expected_revision,
+    )
     await _audit_model(audit, principal, "save_model_draft", dataset_id, draft.version)
     return draft
 
@@ -11857,16 +11872,27 @@ async def save_dataset_model_draft(
     dependencies=_CHANGES_THE_MODEL,
 )
 async def discard_dataset_model_draft(
-    dataset_id: StudioDatasetDep, principal: PrincipalDep, models: TargetModelsDep, audit: AuditDep
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    models: TargetModelsDep,
+    audit: AuditDep,
+    expected_version: Annotated[int, Query(ge=1)],
+    expected_revision: Annotated[str | None, Query(min_length=1, max_length=64)] = None,
 ) -> None:
-    """Discards the draft: its creator's alone (409 `model_refused` for anyone else, naming who
-    holds it, with the draft still there; C186)."""
-    draft = await models.draft(dataset_id)
+    """Discards the draft, confirming the version the person's copy was read at (the query's
+    `expected_version`, required: a request with none is 422). A draft that is no longer that
+    version is refused 409 `model_refused` in the store's words, with the draft still there
+    (ADR-152 X5), and so is another copy at that version when the query's `expected_revision` (the
+    Studio page always sends it) is not the draft's. The route no longer reads the draft and
+    confirms its own version, which confirmed nothing the client held. Its creator's alone (409
+    `model_refused` for anyone else, naming who holds it, with the draft still there; C186)."""
     await models.discard_draft(
-        dataset_id, principal, expected_version=draft.version if draft is not None else None
+        dataset_id,
+        principal,
+        expected_version=expected_version,
+        expected_revision=expected_revision,
     )
-    version = draft.version if draft is not None else 0
-    await _audit_model(audit, principal, "discard_model_draft", dataset_id, version)
+    await _audit_model(audit, principal, "discard_model_draft", dataset_id, expected_version)
 
 
 async def _model_impact(
@@ -18188,11 +18214,21 @@ async def register_dashboard_route(
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
     handling_scheme: HandlingSchemeDep,
+    freshness: ReportFreshnessDep,
     audit: AuditDep,
 ) -> RegisteredDashboard:
     """A dashboard identity (ADR-111 decision 7). Its clearance may not exceed the registering
     administrator's own — otherwise registering a dashboard would be a way to read above one's
-    clearance (rule 3). The secret is in this answer only."""
+    clearance (rule 3). The secret is in this answer only.
+
+    A name removed here earlier carries a removal stamp in the reporting mart that hides its rows
+    (`remove_dashboard_route`). This registration, once the identity provider has accepted the name,
+    is the one act that lifts it, and it takes the earlier identity's rows out first: a pull never
+    lifts it, because an identity whose removal failed at the provider looks to a pull exactly like
+    one registered again. A refused registration (the provider holds the name) lifts nothing. If the
+    mart cannot be reached for this, the registration is undone at the provider (no secret was given
+    to anyone) and refused in words; if it cannot be undone either, the identity stays listed with
+    its Remove button and its rows stay hidden."""
     order = list(handling_scheme.classification)
     if body.clearance not in order:
         raise UnknownRoleError(f"{body.clearance} is not a classification of this deployment")
@@ -18207,10 +18243,41 @@ async def register_dashboard_route(
         body.name, clearance=body.clearance, org_unit=body.org_unit,
         application_id=body.application_id,
     )  # fmt: skip
+    client_id = made.dashboard.client_id
+    registered: dict[str, object] = {
+        "client_id": client_id, "clearance": body.clearance, "org_unit": body.org_unit,
+    }  # fmt: skip
+    try:
+        rows_cleared = await freshness.reopen(client_id)
+    except MartUnreachable as unreachable:
+        logger.warning("register_dashboard: the mart refused to lift the stamp: %s", unreachable)
+        undone = True
+        try:
+            await identity_admin.delete_dashboard(client_id)
+        except Exception as failed:
+            undone = False
+            logger.warning("register_dashboard: %s could not be undone: %s", client_id, failed)
+        await audit.record(principal=principal, action="register_dashboard",
+                           resolved_query={**registered, "rows_cleared": False, "undone": undone},
+                           result_cardinality=0 if undone else 1)  # fmt: skip
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "reporting_mart_unreachable",
+                "message": (
+                    f"The reporting mart could not be reached, so {client_id} was not registered. "
+                    "Nothing was changed: register it again when the mart is back."
+                    if undone
+                    else f"The reporting mart could not be reached, and {client_id}, registered at "
+                    "the identity provider, could not be undone. It is listed, and none of its "
+                    "figures will show: remove it, then register it again."
+                ),
+            },
+        ) from unreachable
+    if rows_cleared:
+        registered["rows_cleared"] = True
     await audit.record(principal=principal, action="register_dashboard",
-                       resolved_query={"client_id": made.dashboard.client_id,
-                                       "clearance": body.clearance, "org_unit": body.org_unit},
-                       result_cardinality=1)  # fmt: skip
+                       resolved_query=registered, result_cardinality=1)  # fmt: skip
     return made
 
 
@@ -18224,22 +18291,105 @@ async def remove_dashboard_route(
     principal: PrincipalDep,
     identity_admin: IdentityAdminDep,
     investigations: InvestigationsDep,
+    freshness: ReportFreshnessDep,
     audit: AuditDep,
 ) -> Response:
     """Removed, and every case grant its account holds revoked with it (ADR-148 Amendment 10), so a
     dashboard registered again later finds no level waiting. The grants go first, while the
     registration still names the account: if that fails, the dashboard stays registered and removing
-    it again revokes; if the removal then fails, it holds no level and is removed again. One not
-    registered revokes nothing and is refused by the identity provider's own answer. The audit row
-    counts the grants revoked; it never names their cases."""
-    accounts = [d.account_id for d in await identity_admin.list_dashboards()
-                if d.client_id == client_id]  # fmt: skip
+    it again revokes. The audit row counts the grants revoked; it never names their cases.
+
+    Its figures go from the reporting mart with it (ADR-111 Amendment 2, backlog N19): Superset's
+    Admin and Alpha read the whole mart, and `report-sync` prunes only against a list nothing here
+    updates. The removal is made in one order, so that no step's failure leaves a removed identity's
+    rows readable:
+
+    1. **Stamp**, in a transaction of its own, before the identity provider is called and never
+       undone with a later step. From the stamp on a reader sees none of the identity's rows and
+       every write refuses it. If the mart cannot be reached for this, nothing has been removed:
+       503, still registered, removing it again tries again.
+    2. **The identity provider deletes it.** If that fails the identity is still registered, so
+       still listed with its Remove button; its rows stay hidden; the refusal is in words (under
+       `message`, which the Admin screen shows) and removing it again is idempotent. The identity
+       provider saying it holds no such identity is a finished step when the mart holds rows of it
+       (a removal whose purge never ran), and its own refusal when it holds none: Keycloak raises
+       `NoSuchDashboard` and Entra `PersonActionRefused("no_such_dashboard")`, and both are read.
+    3. **The rows are purged** from every table the sync writes. A failure here is a logged and
+       audited warning, not a 503: the identity is gone and no button is left to retry, the rows are
+       hidden already, and the next `report-sync` pass deletes them.
+
+    Whichever step fails after the stamp, the removal is audited once, and the row names what
+    completed."""
+    registered = [d for d in await identity_admin.list_dashboards() if d.client_id == client_id]
     revoked = [
         case
-        for account in accounts
-        for case in await investigations.revoke_everywhere(account, by=principal)
+        for d in registered
+        for case in await investigations.revoke_everywhere(d.account_id, by=principal)
     ]
-    await identity_admin.delete_dashboard(client_id)
+    done = ["case_grants_revoked"]
+    # An identity the provider does not list and the mart holds no row of is a mistyped id: nothing
+    # is stamped for it, and the provider's own refusal is answered.
+    try:
+        known = bool(registered) or await freshness.holds_rows(client_id)
+        if known and await freshness.stamp(client_id):
+            done.append("rows_hidden")
+    except MartUnreachable as unreachable:
+        logger.warning("remove_dashboard: the mart refused the stamp: %s", unreachable)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "reporting_mart_unreachable",
+                "message": (
+                    f"The reporting mart could not be reached, so {client_id} was not removed and "
+                    "its figures are still there. Its case grants have been revoked and it is "
+                    "still registered: removing it again will try again."
+                ),
+            },
+        ) from unreachable
+    refusal: Exception | None = None
+    try:
+        await identity_admin.delete_dashboard(client_id)
+    except (NoSuchDashboard, PersonActionRefused) as refused:
+        if not known or getattr(refused, "error", "no_such_dashboard") != "no_such_dashboard":
+            refusal = refused
+        # else: the provider holds no such identity and the mart still holds its rows, so the
+        # removal is finished below.
+    except Exception as failed:
+        refusal = failed
+    if refusal is not None:
+        if "rows_hidden" not in done:
+            raise refusal  # nothing was stamped: the provider's own refusal, as it has always been
+        await audit.record(principal=principal, action="remove_dashboard",
+                           resolved_query={"client_id": client_id, "grants_revoked": len(revoked),
+                                           "mart_confirmed": False, "completed": done},
+                           result_cardinality=1)  # fmt: skip
+        if not isinstance(refusal, (IdentityAdminRefused, PersonActionRefused)):
+            raise refusal
+        raise HTTPException(
+            status_code=409 if isinstance(refusal, PersonActionRefused) else 502,
+            detail={
+                "error": getattr(refusal, "error", "identity_provider_refused"),
+                "message": (
+                    f"{client_id} could not be removed at the identity provider ({refusal}). It "
+                    "is still registered and listed, and its figures are hidden in the reporting "
+                    "mart from now on. Remove it again to finish."
+                ),
+            },
+        ) from refusal
+    done.append("identity_removed")
+    try:
+        await freshness.purge(client_id)
+    except MartUnreachable as unreachable:
+        logger.warning(
+            "remove_dashboard: %s is removed at the identity provider but the mart did not purge "
+            "its rows; they are hidden from every reader and the next report-sync pass deletes "
+            "them: %s", client_id, unreachable,
+        )  # fmt: skip
+        await audit.record(principal=principal, action="remove_dashboard",
+                           resolved_query={"client_id": client_id, "grants_revoked": len(revoked),
+                                           "mart_confirmed": False, "completed": done},
+                           result_cardinality=1)  # fmt: skip
+        return Response(status_code=204)
     await audit.record(principal=principal, action="remove_dashboard",
                        resolved_query={"client_id": client_id, "grants_revoked": len(revoked)},
                        result_cardinality=1)  # fmt: skip
@@ -20468,25 +20618,23 @@ async def models_admin_history_route(admin: ModelAdminDep) -> ModelAdminHistory:
     return ModelAdminHistory(entries=await admin.history())
 
 
-@app.post("/v1/admin/models/engines", dependencies=_MANAGE_MODELS)
-async def models_admin_add_engine_route(
-    request: Request, principal: PrincipalDep, admin: ModelAdminDep
-) -> ModelsAdminView:
-    body = await _model_admin_body(request, EngineInput)
-    try:
-        await admin.add_engine(principal.id, body.provider)
-    except model_admin_module.ModelAdminRefused as refused:
-        raise _model_admin_refused(refused) from None
-    return admin.view()
-
-
 @app.put("/v1/admin/models/engines/{name}", dependencies=_MANAGE_MODELS)
 async def models_admin_edit_engine_route(
     name: str, request: Request, principal: PrincipalDep, admin: ModelAdminDep
 ) -> ModelsAdminView:
-    body = await _model_admin_body(request, EngineInput)
+    # The body read here and refused in fixed words, as the check's is (the owner's review, Fix B):
+    # a field name that was sent is never echoed, nor a validator's own words (Fix C).
+    _no_query(request, "model_admin_refused")
+    raw = await request.body()
     try:
-        await admin.edit_engine(principal.id, name, body.provider)
+        body = EngineInput.model_validate_json(raw)
+    except ValidationError as invalid:
+        raise HTTPException(
+            status_code=422,
+            detail=_engine_refusal(raw, invalid, "model_admin_refused", _EDIT_BODY_REFUSED),
+        ) from None
+    try:
+        await admin.edit_engine(principal.id, name, body.provider, body.key)
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
     return admin.view()
@@ -20518,6 +20666,17 @@ async def models_admin_defaults_route(
 _KEY_BODY_REFUSED = (
     'Send the key as JSON, {"key": "…"}, at most 4096 characters. Nothing was changed.'
 )
+_KEY_IN_THE_ADDRESS = (
+    "Send the key in the request's body, never in the address: an address is logged and kept by "
+    "every hop. Nothing was changed."
+)
+
+
+def _no_query(request: Request, error: str) -> None:
+    """The owner's review, P9: the routes that take a key take nothing in the address, so a key put
+    there is refused in fixed words, never read, whatever the body holds."""
+    if request.url.query:
+        raise HTTPException(status_code=422, detail={"error": error, "detail": _KEY_IN_THE_ADDRESS})
 
 
 @app.put("/v1/admin/models/engines/{name}/key", dependencies=_MANAGE_MODELS)
@@ -20526,6 +20685,7 @@ async def models_admin_set_key_route(
 ) -> ModelsAdminView:
     """Write-only. The body is read here rather than by FastAPI, whose validation errors carry the
     input back; a body that is not `{"key": "…"}` is refused in fixed words."""
+    _no_query(request, "key_refused")
     try:
         key = KeyInput.model_validate_json(await request.body()).key
     except ValueError:
@@ -20590,6 +20750,91 @@ async def models_admin_test_route(
         return await admin.test(principal.id, name)
     except model_admin_module.ModelAdminRefused as refused:
         raise _model_admin_refused(refused) from None
+
+
+_CHECK_BODY_REFUSED = (
+    'Send the engine and its key as JSON, {"provider": {…}, "key": "…"}, the key at most 4096 '
+    "characters. Nothing was checked."
+)
+
+
+_EDIT_BODY_REFUSED = (
+    'Send the engine as JSON, {"provider": {…}}, with "key": "…" where its address or key changes, '
+    "the key at most 4096 characters. Nothing was changed."
+)
+
+
+def _engine_refusal(
+    raw: bytes, invalid: ValidationError, error: str, refused: str
+) -> dict[str, object]:
+    """ADR-135 Amendment 14 point 5, and the owner's review (Fixes B and C): each refused field
+    named from a fixed list (`provider.api_base`, `provider.roles.extraction` …) with that field's
+    fixed words, so the form says them at that field; never a field name or a value that was sent,
+    nor a validator's own words, which may quote what was sent in another form. A body that is not
+    the route's shape at all, or names a field not on the list, is answered in `refused`'s words."""
+    try:
+        json.loads(raw)
+    except ValueError:
+        return {"error": error, "detail": refused}
+    errors = invalid.errors(include_input=False, include_context=False, include_url=False)
+    fields: list[dict[str, str]] = []
+    for e in errors:
+        if not e["loc"] or e["type"] in ("extra_forbidden", "json_invalid"):
+            return {"error": error, "detail": refused}
+        named = model_admin_module.refused_field(e["loc"], str(e.get("msg", "")))
+        if named is None:
+            return {"error": error, "detail": refused}
+        fields.append({"field": named[0], "words": named[1]})
+    if not fields:
+        return {"error": error, "detail": refused}
+    then = refused.rsplit(". ", 1)[-1]  # "Nothing was checked." or "Nothing was changed."
+    words = " ".join(f["words"] for f in fields) + " " + then
+    return {"error": error, "detail": words, "fields": fields}
+
+
+@app.post("/v1/admin/models/checks", dependencies=_MANAGE_MODELS)
+async def models_admin_check_route(
+    request: Request, principal: PrincipalDep, admin: ModelAdminDep
+) -> EngineCheckResult:
+    """ADR-135 Amendment 14: the key and each typed model proved before **Add**. The body is read
+    here rather than by FastAPI, whose validation errors carry the input back, so neither the key
+    nor any other value of a refused body is echoed."""
+    _no_query(request, "check_refused")
+    raw = await request.body()
+    try:
+        body = EngineCheckInput.model_validate_json(raw)
+    except ValidationError as invalid:  # a body that is not JSON at all is one too
+        raise HTTPException(
+            status_code=422,
+            detail=_engine_refusal(raw, invalid, "check_refused", _CHECK_BODY_REFUSED),
+        ) from None
+    try:
+        return await admin.check(principal.id, body.provider, body.key)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+
+
+@app.post("/v1/admin/models/checks/{check_id}/add", dependencies=_MANAGE_MODELS)
+async def models_admin_add_checked_route(
+    check_id: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    """**Add**: the engine made from a passed check; the key is never sent again."""
+    try:
+        await admin.add_checked(principal.id, check_id)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
+
+
+@app.delete("/v1/admin/models/checks/{check_id}", dependencies=_MANAGE_MODELS)
+async def models_admin_cancel_check_route(
+    check_id: str, principal: PrincipalDep, admin: ModelAdminDep
+) -> ModelsAdminView:
+    try:
+        await admin.cancel_check(principal.id, check_id)
+    except model_admin_module.ModelAdminRefused as refused:
+        raise _model_admin_refused(refused) from None
+    return admin.view()
 
 
 @app.get("/v1/models/engines")

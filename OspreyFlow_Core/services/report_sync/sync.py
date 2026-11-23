@@ -7,7 +7,8 @@ ledger; the mart holds only what that identity may see. The token is renewed bef
 refused token is a failure said in words, the rows left with their last good pull — never refreshed
 from anywhere else. **One pull per slot across every instance:** each (dashboard, case, slot) is
 claimed with Valkey `SET NX`, as the KYC sweep claims its day. A dashboard no longer configured is
-pruned from the mart.
+pruned from the mart, and every identity removed in the Admin (stamped) is purged from it: a purge
+the Conduit could not finish is finished by the next pass.
 
 The feed is pulled as CSV — the flat rows the Conduit's own `reports.feed_rows` produces — so the
 mart cannot disagree with the Reports view.
@@ -22,10 +23,11 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+import asyncpg
 import httpx
 from valkey.asyncio import Valkey
 
-from .mart import FigureRow, Mart
+from .mart import DashboardRemoved, FigureRow, Mart
 
 
 class SyncRefused(Exception):
@@ -98,9 +100,21 @@ def parse_feed(text: str) -> list[FigureRow]:
     ]
 
 
+def _removed(board: Dashboard, summary: Summary) -> None:
+    """Said in words; the caller has already counted the pull as failed."""
+    summary.failures.append(
+        f"{board.client_id}: removed in the Admin, so nothing was written for it. If the identity "
+        "provider still lists it, its removal did not finish there: remove it again"
+    )
+
+
 async def _pull_dashboard(
     board: Dashboard, mart: Mart, valkey: Valkey, slot: int, summary: Summary
 ) -> None:
+    # A stamped (removed) identity is never written for, whenever this pull began
+    # (`DashboardRemoved`): a pull already running cannot put back what the Admin removed, and one
+    # that begins after the stamp, with a working secret because the identity provider has not yet
+    # deleted the identity, cannot lift the stamp either.
     tokens = TokenSource(board.token_url, board.client_id, board.secret, scope=board.scope)
     http = httpx.AsyncClient(base_url=board.conduit_url, timeout=60.0)
     try:
@@ -111,8 +125,13 @@ async def _pull_dashboard(
         except SyncRefused as refused:
             summary.failed += 1
             summary.failures.append(f"{board.client_id}: {refused}")
-            for case_id in [p["case_id"] for p in await mart.pulls(board.client_id)]:
-                await mart.record_failure(board.client_id, case_id, str(refused), datetime.now(UTC))
+            try:
+                for case_id in [p["case_id"] for p in await mart.pulls(board.client_id)]:
+                    await mart.record_failure(
+                        board.client_id, case_id, str(refused), datetime.now(UTC)
+                    )
+            except DashboardRemoved:
+                _removed(board, summary)
             return
         if listed.status_code != 200:
             summary.failed += 1
@@ -145,10 +164,18 @@ async def _pull_dashboard(
                     datetime.now(UTC),
                 )
                 summary.pulled += 1
+            except DashboardRemoved:
+                summary.failed += 1
+                _removed(board, summary)
+                return
             except (SyncRefused, httpx.HTTPError, ValueError, KeyError) as e:
                 summary.failed += 1
                 summary.failures.append(f"{board.client_id} / {case_name}: {e}")
-                await mart.record_failure(board.client_id, case_id, str(e), datetime.now(UTC))
+                try:
+                    await mart.record_failure(board.client_id, case_id, str(e), datetime.now(UTC))
+                except DashboardRemoved:
+                    _removed(board, summary)
+                    return
     finally:
         await tokens.aclose()
         await http.aclose()
@@ -159,7 +186,25 @@ async def sync_once(
 ) -> Summary:
     """One pass over every configured dashboard; `slot` names the period being claimed."""
     summary = Summary()
-    await mart.prune([d.client_id for d in dashboards])
+    try:
+        await mart.prune([d.client_id for d in dashboards])
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+        # Said, never swallowed: the rows of a dashboard no longer configured may still be there.
+        # The pass goes on, so the others' pulls are not lost to it, and the next pass tries again.
+        summary.failed += 1
+        summary.failures.append(
+            f"the rows of removed dashboards could not be pruned from the reporting mart: {e}"
+        )
+    try:
+        await mart.purge_removed()
+    except (asyncpg.PostgresError, asyncpg.InterfaceError, OSError) as e:
+        # The identities removed in the Admin are hidden from a reader by their stamp already, so a
+        # purge that fails costs nothing but time; it is said, never swallowed, and the next pass
+        # tries again. Nobody has to do anything.
+        summary.failed += 1
+        summary.failures.append(
+            f"the rows of removed identities could not be purged from the reporting mart: {e}"
+        )
     for board in dashboards:
         await _pull_dashboard(board, mart, valkey, slot, summary)
     return summary

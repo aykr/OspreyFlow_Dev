@@ -1,0 +1,69 @@
+{
+  "files": [
+    {
+      "path": "Caddyfile",
+      "sha256": "a3b833e8eb7670c746d0413e188635d3c0481e005df67930a898b25114f06b40",
+      "size": 560
+    },
+    {
+      "path": "RUNBOOK.md",
+      "sha256": "c3602448f3e9c9f621adb4dda1e16432beaf5a8f8f154104e38976783728d799",
+      "size": 2670
+    },
+    {
+      "path": "compose.yaml",
+      "sha256": "df0e48cc47535a2871004bf7d7e5d306981825ba44d097d26020797e1d53c4be",
+      "size": 15246
+    },
+    {
+      "path": "deployment.env",
+      "sha256": "954b103fd5030865e0f58bb1cd932f176aa8142e2f58f703adb3221f7cb46f3d",
+      "size": 2996
+    },
+    {
+      "path": "glass.json",
+      "sha256": "dc136ae15bb7061da9cc728613c811333412082140849d6865c801726f5c3b4b",
+      "size": 370
+    },
+    {
+      "path": "keycloak-theme/osprey/login/messages/messages_en.properties",
+      "sha256": "9ac16d07a4ba35217669202fc9977c89d6c68e3be4268b8be8cd197dfa528193",
+      "size": 1114
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/css/osprey.css",
+      "sha256": "f5cb675bff1002530515b4cc6503653937eb57a0c66a2cfa558a37581d4ed93a",
+      "size": 8465
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/js/osprey-sign-in.js",
+      "sha256": "3dacc48af2c6e7717588c098941808c13338b443173b34b00c648cdeb1756bcd",
+      "size": 6832
+    },
+    {
+      "path": "keycloak-theme/osprey/login/resources/js/osprey-theme.js",
+      "sha256": "9f7e7a0e019371043b6a26694e7b4580cbca0903e64062ffc6ac0b1c869ae4ae",
+      "size": 4960
+    },
+    {
+      "path": "keycloak-theme/osprey/login/theme.properties",
+      "sha256": "3c9eeb872f0763bafad51a551e48bf5acdb96cc9cd850ba9ab30cecb387be154",
+      "size": 89
+    },
+    {
+      "path": "litellm.yaml",
+      "sha256": "47fbd331aedea7e211f9df7d63b564f72db467a41e872d69fd51ed0a4f43abf8",
+      "size": 866
+    },
+    {
+      "path": "realm.json",
+      "sha256": "42dc057e482739377f16b46afabf085e7c6365a7be2c324f84789ec48d31d4a5",
+      "size": 8351
+    },
+    {
+      "path": "versions.lock",
+      "sha256": "658cb73f865aecd5fafae6214961e5cc38ab213b41dddaedcb49e1dfd62cb396",
+      "size": 2903
+    }
+  ]
+}

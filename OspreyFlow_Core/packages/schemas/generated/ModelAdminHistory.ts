@@ -12,7 +12,10 @@ export type Action =
   | "key_removed"
   | "key_moved"
   | "connection_tested"
-  | "limits_changed";
+  | "limits_changed"
+  | "engine_checked"
+  | "engine_check_cancelled"
+  | "engine_check_expired";
 export type Engine = string | null;
 export type Outcome = string;
 export type Entries = ModelAdminEntry[];

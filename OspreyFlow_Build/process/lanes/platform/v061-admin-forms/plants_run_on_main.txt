@@ -1,0 +1,43 @@
+plant 1: Add after a refused check goes ahead
+  -k 'refused_without_a_passed_check': RED (1 failed, 27 deselected, 1 warning in 21.31s)
+plant 2: a refused check keeps its key in the gateway
+  -k 'leaves_nothing_in_the_gateway': RED (2 failed, 26 deselected, 1 warning in 4.55s)
+plant 3: a check lives for ever
+  -k 'not_added_in_15_minutes': RED (1 failed, 27 deselected, 1 warning in 4.47s)
+plant 4: a checked model's entry is left in the gateway
+  -k 'offers_nothing_until_add': RED (1 failed, 27 deselected, 1 warning in 4.40s)
+plant 5: a refused body is echoed back
+  -k 'appears_nowhere': RED (1 failed, 1 passed, 26 deselected, 1 warning in 4.55s)
+plant 6: a refused field's words not fixed (the validator's own)
+  -k 'refused_field_is_named': RED (1 failed, 3 passed, 24 deselected, 1 warning in 4.42s)
+plant 7: a key pasted into the label is taken
+  -k 'appears_nowhere': RED (2 failed, 26 deselected, 1 warning in 4.46s)
+plant 8: Cancel leaves the key in the gateway
+  -k 'cancel_removes': RED (1 failed, 27 deselected, 1 warning in 4.46s)
+plant 9: a lapsed check's key kept until someone asks (no sweep at start)
+  -k 'sweep_runs_by_itself': RED (1 failed, 27 deselected, 1 warning in 5.53s)
+plant 10: an add route beside the check's
+  -k 'no_route_adds': RED (1 failed, 27 deselected, 1 warning in 4.49s)
+plant 11: a key pasted into a model name is checked
+  -k 'pasted_into_a_model_name': RED (1 failed, 27 deselected, 1 warning in 4.41s)
+plant 12: the key recorded as set by whoever pressed Add
+  -k 'recorded_as_set_by': RED (1 failed, 27 deselected, 1 warning in 4.41s)
+plant 13: a refused job not named, only the roles
+  -k 'refused_field_is_named': RED (2 failed, 2 passed, 24 deselected, 1 warning in 4.53s)
+plant 14: the key handed to the gateway before the render's refusal
+  -k 'render_did_not_make': RED (1 failed, 8 passed, 116 deselected, 1 warning in 5.50s)
+plant 15: an edited model saved unchecked
+  -k 'edited_model_name_is_checked': RED (1 failed, 27 deselected, 1 warning in 4.46s)
+plant 16: a moved address saved without its key
+  -k 'changed_address_takes_its_key': RED (1 failed, 27 deselected, 1 warning in 4.48s)
+plant 17: a new key replaces the held one unchecked
+  -k 'new_key_is_checked_before': RED (1 failed, 27 deselected, 1 warning in 4.65s)
+plant 18: an edit's check leaves its key in the gateway
+  -k 'new_key_is_checked_before': RED (1 failed, 27 deselected, 1 warning in 4.55s)
+plant 19: a key pasted into the label taken on an edit
+  -k 'through_an_edit': RED (1 failed, 27 deselected, 1 warning in 4.59s)
+plant 20: each check under the engine's own name
+  -k 'corrected_key': RED (1 failed, 27 deselected, 1 warning in 4.62s)
+plant 21: a check's key left unrecorded when its save fails
+  -k 'record_cannot_be_saved': RED (1 failed, 29 deselected, 1 warning in 4.61s)
+21/21 red

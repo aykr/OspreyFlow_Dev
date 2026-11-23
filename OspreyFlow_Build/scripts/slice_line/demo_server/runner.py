@@ -56,6 +56,16 @@ REFUSALS = WORK / "refusals.log"
 #: summary account reads nothing of data/. install.sh makes them; without them nothing is handed over.
 HANDOFF = HERE.parent / "handoff"
 SUMMARIES = HERE.parent / "summaries"
+#: 015: the summary's model and the jobs never overlap. The model's helper listens on a loopback port in the range the
+#: job's shield leaves open, so a job starting beside it is refused, and one running beside it could reach it. Each job
+#: holds this lock shared for its whole run; the summary asks the model only while it holds it alone, and lets it go
+#: once the model is unloaded. A starting job waits for that, at most SUMMARY_WAIT_SECONDS (two asks and the unload).
+MODEL_LOCK = HANDOFF / "model.lock"
+SUMMARY_WAIT_SECONDS = 15 * 60
+#: A breach is checked again for this long before the run is refused: a helper Ollama is closing may still listen
+#: for a moment after it says the model is gone. Nothing has run while it waits.
+SHIELD_SETTLE_SECONDS = 30
+_HELD = []  # the job's own hold on MODEL_LOCK, kept open until the job's process ends
 KEEP_JOBS = 40  # 009: a result is kept until the merge has asked for it by id, for several slices at once
 
 #: merge_slice.py's OFFLINE_PORTS: an offline run reaches no store.
@@ -435,6 +445,43 @@ def reachable(family: int, addr: str, port: int) -> bool:
             return False
 
 
+def wait_for_the_summary(log: Path) -> None:
+    """Hold MODEL_LOCK shared for the job's run (015), waiting while a summary holds the model. No lock (no summary
+    installed): nothing to wait for. Past SUMMARY_WAIT_SECONDS the job goes on, and its shield check decides."""
+    try:
+        fd = os.open(str(MODEL_LOCK), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return
+    t0 = time.monotonic()
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            break
+        except OSError:
+            if time.monotonic() - t0 >= SUMMARY_WAIT_SECONDS:
+                os.close(fd)
+                with log.open("a") as fh:
+                    fh.write("\n$ (the summary still held the model after %d s; going on to the shield check)\n"
+                             % SUMMARY_WAIT_SECONDS)
+                return
+            time.sleep(2)
+    _HELD.append(fd)
+    waited = time.monotonic() - t0
+    if waited >= 1:
+        with log.open("a") as fh:
+            fh.write("\n$ (waited %d s for the summary to unload its model)\n" % waited)
+
+
+def settled_breaches() -> list:
+    """shield_breaches(), checked again for SHIELD_SETTLE_SECONDS while it finds any: only a breach that stays counts."""
+    end = time.monotonic() + SHIELD_SETTLE_SECONDS
+    while True:
+        found = shield_breaches()
+        if not found or time.monotonic() >= end:
+            return found
+        time.sleep(3)
+
+
 def shield_breaches() -> list:
     """The ports another account listens on that this account can reach: [] while the shield holds. Run inside every
     job before anything else; a breach refuses the run (the owner's ruling: no code under test reaches the demo)."""
@@ -546,8 +593,13 @@ def build_env(tree: Path, job: Path, lane: str = GATE_LANES[0]) -> dict:
 #: DuckDB's spatial extension, fetched once over HTTPS (the shield refuses the plain HTTP DuckDB's own INSTALL uses:
 #: run fc4d450f6f238ae2) for the DuckDB the tree locked, kept in the runner's cache, installed into the job's home by
 #: DuckDB itself from that file and loaded (DuckDB checks the extension's signature on load). Its SHA-256 is recorded.
+#: Three jobs run at once and share the cache, so each writes only files of its own there (015): a fetch into its own
+#: part file, put in place whole; the unpacked extension in its own folder, removed once loaded. A shared unpacked file
+#: was truncated by the next job's unpack while the first installed it (runs 1c7525d175792ee0 and d7ce43cd986f60e3:
+#: "file too small to be a valid DuckDB extension"). A cached download that does not unpack is dropped, so the next
+#: run fetches it again instead of every run failing on it.
 DUCKDB_SPATIAL = r"""
-import duckdb, gzip, hashlib, json, os, sys, urllib.error, urllib.request
+import duckdb, gzip, hashlib, json, os, shutil, sys, tempfile, urllib.error, urllib.request, zlib
 #: A client name of our own: the extension host refuses Python's default one with 403 (run fb4aa131a68d8fb4).
 AGENT = "osprey-early-warning"
 cache = sys.argv[1]
@@ -564,22 +616,40 @@ try:
     gz = os.path.join(folder, "spatial.duckdb_extension.gz")
     stage = "fetch"
     if not os.path.exists(gz):
-        ask = urllib.request.Request(url, headers={"User-Agent": AGENT})
-        with urllib.request.urlopen(ask, timeout=120) as answer, open(gz + ".part", "wb") as out:
-            out.write(answer.read())
-        os.replace(gz + ".part", gz)
+        fd, part = tempfile.mkstemp(prefix="spatial.", suffix=".part", dir=folder)
+        try:
+            ask = urllib.request.Request(url, headers={"User-Agent": AGENT})
+            with urllib.request.urlopen(ask, timeout=120) as answer, os.fdopen(fd, "wb") as out:
+                out.write(answer.read())
+            os.replace(part, gz)
+        finally:
+            if os.path.exists(part):
+                os.remove(part)
     stage = "unpack"
-    ext = gz[:-3]
-    with gzip.open(gz) as packed, open(ext, "wb") as out:
-        out.write(packed.read())
-    with open(gz, "rb") as fh:
-        said["sha256"] = hashlib.sha256(fh.read()).hexdigest()
-    stage = "install"
-    con = duckdb.connect()
-    con.install_extension(ext)
-    stage = "load"
-    con.load_extension("spatial")
-    said["status"] = "installed"
+    own = tempfile.mkdtemp(prefix="spatial.", dir=folder)
+    try:
+        ext = os.path.join(own, "spatial.duckdb_extension")
+        with open(gz, "rb") as fh:
+            packed = fh.read()
+        try:
+            data = gzip.decompress(packed)
+        except (OSError, EOFError, zlib.error):
+            try:
+                os.remove(gz)
+            except OSError:
+                pass  # another job dropped it first
+            raise
+        with open(ext, "wb") as out:
+            out.write(data)
+        said["sha256"] = hashlib.sha256(packed).hexdigest()
+        stage = "install"
+        con = duckdb.connect()
+        con.install_extension(ext)
+        stage = "load"
+        con.load_extension("spatial")
+        said["status"] = "installed"
+    finally:
+        shutil.rmtree(own, ignore_errors=True)
 except Exception as e:  # noqa: BLE001 - said, with its stage and reason, for the note
     said["stage"] = stage
     if isinstance(e, urllib.error.HTTPError):
@@ -809,7 +879,8 @@ def run_job(jid: str) -> int:
               "not_run": {"targets": [], "test_files": [], "docker_skipped": [], "mac_only": [], "live_step": ""},
               "client_names": "not run (no client-name list on this machine)"}
     try:
-        breaches = shield_breaches()
+        wait_for_the_summary(log)
+        breaches = settled_breaches()
         if breaches:
             raise Stop("error", "the shield does not hold: this account reached %d port(s) another account listens on "
                        "(%s); nothing was run" % (len(breaches), ", ".join(breaches[:10])))
@@ -920,6 +991,8 @@ def prune_jobs() -> None:
             pass
     if HANDOFF.is_dir():  # a hand-over goes once its summary is made, or its job is gone
         for d in HANDOFF.iterdir():
+            if not d.is_dir() or d.is_symlink():
+                continue  # model.lock (015), and anything not a hand-over
             if (SUMMARIES / (d.name + ".json")).exists() or not (JOBS / d.name).is_dir():
                 shutil.rmtree(str(d), ignore_errors=True)
 

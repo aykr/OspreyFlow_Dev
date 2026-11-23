@@ -135,6 +135,43 @@ def a_slice_red_on_its_own(w):
     return wt
 
 
+#: A check main brought in broken, then fixed on main (what cause (a) is for since the owner's file 012: main moved
+#: under a slice red on a check that is not its own).
+BROKEN = "def test_main_is_broken():\n    assert False, 'broken on main'\n"
+FIXED = "def test_main_is_broken():\n    assert True\n"
+MAIN_CHECKS = f"true && {PYTEST} tests/test_main_broken.py && echo checked"
+MAIN_ID = "tests/test_main_broken.py::test_main_is_broken"
+#: The owner's standing permission for the line's own clearances (his file 012, A2): on for every case here.
+PERMISSION = f"clear-line-stops\tper-day\t10\t{TODAY}\n"
+
+
+@pytest.fixture(autouse=True)
+def permission(world):
+    (world["repo"] / V062 / "standing.tsv").write_text(PERMISSION)
+
+
+def red_on_mains_check(w):
+    """S1 red on a check main brought in broken (taken in by its builder; the Stop hook's six stops; its own acceptance
+    green), then main fixes it: cause (a)."""
+    set_row(w, checks=MAIN_CHECKS)
+    commit_main(w, {"tests/test_main_broken.py": FIXED}, "test: main's check")
+    p, wt = started(w)
+    assert p.returncode == 0, p.stdout + p.stderr
+    (wt / "accept.sh").write_text("exit 0\n")
+    sh("git add accept.sh && git commit -qm 'feat: S1'", wt, w["env"])
+    commit_main(w, {"tests/test_main_broken.py": BROKEN}, "test: main's check, broken")
+    sh("git merge -q --no-edit main", wt, w["env"])  # the builder takes main in, and with it the broken check
+    red_six_times(w, wt)
+    last = json.loads((w["data"] / "records/S1/red_stop.json").read_text())["last"]
+    assert len(last) == 1 and last[0].startswith("RED: checks") and MAIN_ID in last[0], last
+    commit_main(w, {"tests/test_main_broken.py": FIXED}, "fix: main's check")
+    return wt
+
+
+def red_again_on_mains_check(w, wt):
+    red_stop(w, wt, f"RED: checks (exit 1): {MAIN_CHECKS}\nFAILED {MAIN_ID} - AssertionError: broken on main")
+
+
 def clears(w):
     f = w["data"] / "self-clears.tsv"
     return [dict(zip(f.read_text().splitlines()[0].split("\t"), ln.split("\t")))
@@ -188,25 +225,26 @@ def test_cause_b_a_check_the_slice_did_not_write_failing_identically_on_main_is_
     assert (row1["slice"], row1["stop"], row1["cause"]) == ("S1", "red", "b") and LAYOUT_ID in row1["what"], row1
     (rec,) = list((w["data"] / "records/S1").glob("self-clear-*.json"))
     assert json.loads(rec.read_text())["cause"] == "b"
-    assert changes(w) == []  # no owner's line was used
+    assert [r[2] for r in changes(w)] == ["self-clear"] and changes(w)[0][3].startswith("standing.tsv clear-line-stops:")
+    assert "use 1 of 10 today" in row1["what"]  # no owner's line was used: his standing permission, counted
     assert stop_gate(w, wt) is None  # the builder's next stop: green on the narrowed checks
     assert json.loads((w["data"] / f"records/S1/tests-{sh('git rev-parse HEAD', wt).stdout.strip()}.json").read_text())["green"]
 
 
 def test_cause_a_main_moved_under_the_slice_is_merged_in_and_the_stop_cleared_once_per_move(world):
     w = world
-    wt = a_slice_red_on_its_own(w)
+    wt = red_on_mains_check(w)
     main = sh("git rev-parse main", w["repo"]).stdout.strip()
     p = resume(w, "S1", "self-clear")
     assert p.returncode == 0, p.stdout + p.stderr
     assert "cleared by the line (cause a)" in p.stdout, p.stdout
     assert sh(["git", "merge-base", "--is-ancestor", main, "HEAD"], wt, check=False).returncode == 0  # main is in
-    assert frozen(w)["checks"] == CHECKS and "history" not in frozen(w)  # nothing about what is tested changed
+    assert frozen(w)["checks"] == MAIN_CHECKS and "history" not in frozen(w)  # nothing about what is tested changed
     st = state(w)
     assert st["phase"] == "building" and st["round"] == 1, st
     (row1,) = clears(w)
     assert (row1["stop"], row1["cause"]) == ("red", "a") and main in row1["what"], row1
-    red_six_times(w, wt)  # red again on its own work, main where it was: not cleared again
+    red_again_on_mains_check(w, wt)  # red again, main where it was: not cleared again
     before, heads = snapshot(w), (sh("git rev-parse HEAD", wt).stdout, sh("git rev-parse main", w["repo"]).stdout)
     p = resume(w, "S1", "self-clear")
     assert said_refused(p, "main has not moved", "not one the line clears"), p.stdout + p.stderr
@@ -215,9 +253,9 @@ def test_cause_a_main_moved_under_the_slice_is_merged_in_and_the_stop_cleared_on
 
 def test_the_log_lists_every_clearance_and_the_board_prints_it(world):
     w = world
-    wt = a_slice_red_on_its_own(w)
+    wt = red_on_mains_check(w)
     assert resume(w, "S1", "self-clear").returncode == 0
-    red_six_times(w, wt)
+    red_again_on_mains_check(w, wt)
     commit_main(w, {f"{V062}/notes.md": "another note\n"})  # main moves again: a second clearance
     p = resume(w, "S1", "self-clear")
     assert p.returncode == 0, p.stdout + p.stderr
@@ -237,10 +275,11 @@ def test_a_red_stop_with_neither_cause_waits_for_the_owner(world):
     wt = layout_slice(w)
     (wt / "accept.sh").write_text("exit 1\n")
     sh("git add accept.sh && git commit -qm 'test: red'", wt, w["env"])
-    red_six_times(w, wt)  # main has not moved; the acceptance is red: the slice's own red
+    red_six_times(w, wt)  # main has not moved; a check the slice did not write, red in its worktree alone
+    red_stop(w, wt, f"RED: checks (exit 1): {CHECKS}\nFAILED {MAIN_ID} - AssertionError: no")
     before, heads = snapshot(w), (sh("git rev-parse HEAD", wt).stdout, sh("git rev-parse main", w["repo"]).stdout)
     p = resume(w, "S1", "self-clear")
-    assert said_refused(p, "not one the line clears", "not (b)", "not (a)", "main has not moved"), p.stdout + p.stderr
+    assert said_refused(p, "not one the line clears", "not (b)", "not (c)", "not (a)", "main has not moved"), p.stdout + p.stderr
     unchanged(w, wt, before, heads)
 
 
@@ -249,7 +288,7 @@ def test_a_red_stop_with_neither_cause_waits_for_the_owner(world):
 
 def test_a_stop_at_the_eighth_round_is_never_cleared_by_the_line(world):
     w = world
-    wt = a_slice_red_on_its_own(w)  # cause (a) holds
+    wt = red_on_mains_check(w)  # cause (a) holds
     set_state(w, round=8, rounds_limit=8)
     before, heads = snapshot(w), (sh("git rev-parse HEAD", wt).stdout, sh("git rev-parse main", w["repo"]).stdout)
     p = resume(w, "S1", "self-clear")
@@ -263,7 +302,7 @@ def test_a_stop_at_the_eighth_round_is_never_cleared_by_the_line(world):
                          ids=["key", "credential", "security-rule"])
 def test_a_stop_naming_a_key_a_credential_or_a_security_rule_is_never_cleared_by_the_line(world, words):
     w = world
-    wt = a_slice_red_on_its_own(w)  # cause (a) holds
+    wt = red_on_mains_check(w)  # cause (a) holds
     red_stop(w, wt, f"RED: acceptance (exit 1): sh accept.sh\n{words}")
     before, heads = snapshot(w), (sh("git rev-parse HEAD", wt).stdout, sh("git rev-parse main", w["repo"]).stdout)
     p = resume(w, "S1", "self-clear")
@@ -275,8 +314,9 @@ def test_a_security_word_in_the_echoed_command_alone_does_not_hold_a_stop(world)
     """The red stop echoes the whole command (PL4d3c's names test_design_tokens_location.py): only the failure lines
     are read, or no real slice could ever be cleared."""
     w = world
-    wt = a_slice_red_on_its_own(w)
-    red_stop(w, wt, acceptance_red("sh accept.sh tests/test_design_tokens_location.py"))
+    wt = red_on_mains_check(w)
+    red_stop(w, wt, f"RED: checks (exit 1): {MAIN_CHECKS} tests/test_design_tokens_location.py\nFAILED {MAIN_ID} - "
+                    "AssertionError: broken on main")
     p = resume(w, "S1", "self-clear")
     assert p.returncode == 0 and "cause a" in p.stdout, p.stdout + p.stderr
 
@@ -284,10 +324,10 @@ def test_a_security_word_in_the_echoed_command_alone_does_not_hold_a_stop(world)
 @pytest.mark.parametrize("how", ["row-changed", "line-waiting"])
 def test_a_refreeze_that_changes_what_is_tested_is_never_the_lines(world, how):
     w = world
-    wt = a_slice_red_on_its_own(w)  # cause (a) holds
+    wt = red_on_mains_check(w)  # cause (a) holds
     if how == "row-changed":  # the conductor's new checks on main, waiting on the owner's refreeze
         tsv = w["repo"] / V062 / "slices.tsv"
-        commit_main(w, {f"{V062}/slices.tsv": tsv.read_text().replace(f"\t{CHECKS}\n", "\ttrue\n")})
+        commit_main(w, {f"{V062}/slices.tsv": tsv.read_text().replace(f"\t{MAIN_CHECKS}\n", "\ttrue\n")})
     else:
         owner_line(w, f"S1\trefreeze\t{TODAY}")
     before, heads = snapshot(w), (sh("git rev-parse HEAD", wt).stdout, sh("git rev-parse main", w["repo"]).stdout)
@@ -332,6 +372,16 @@ def test_a_stop_with_a_finding_of_fault_in_behaviour_is_not_cleared(world, kinds
     unchanged(w, wt, before, heads)
 
 
+def cause_b_says(w):
+    """Cause (b)'s own judgement of S1's red stop, asked directly: since the owner's file 012 the line refuses a red in
+    the part's own acceptance or tests before (b) is reached, so (b)'s own guards are asked here, not through it."""
+    code = (f"import sys, json, time; sys.path.insert(0, {str(w['lines'])!r}); import common as c, resume; "
+            "rec = c.rec_dir('S1'); frozen = c.read_json(rec / 'frozen.json'); st = c.state('S1'); "
+            "tip = c.git(['rev-parse', frozen['branch']], c.REPO); log = c.DATA / 'cause-b.log'; "
+            "print(resume.cause_b('S1', frozen, st, rec, tip, log)[0])")
+    return sh([w["py"], "-c", code], w["repo"], w["env"]).stdout
+
+
 def test_cause_b_never_removes_the_acceptance_test(world):
     """The acceptance is red first, on main too: identical on main, and still never removed."""
     w = world
@@ -341,9 +391,10 @@ def test_cause_b_never_removes_the_acceptance_test(world):
     red_stop(w, wt, f"RED: checks (exit 1): {CHECKS}\nFAILED {LAYOUT_ID} - AssertionError: still at the root")
     p = resume(w, "S1", "self-clear")
     out = p.stdout + p.stderr
-    assert "the acceptance is never removed" in out or "cause a" in out, out
+    assert "the acceptance is never removed" in out or "cause a" in out or "its acceptance's" in out, out
     assert frozen(w)["checks"] == CHECKS  # never narrowed: (a) may merge main in, (b) never removes the acceptance's test
     assert all(r["cause"] != "b" for r in clears(w))
+    assert "the acceptance is never removed" in cause_b_says(w)   # (b)'s own guard, not only the line's earlier one
 
 
 def test_cause_b_never_removes_a_check_the_slice_changed(world):
@@ -355,9 +406,10 @@ def test_cause_b_never_removes_a_check_the_slice_changed(world):
     red_six_times(w, wt)
     p = resume(w, "S1", "self-clear")
     out = p.stdout + p.stderr
-    assert "in a file the slice wrote or changed" in out or "cause a" in out, out
+    assert "in a file the slice wrote or changed" in out or "cause a" in out or "a test the slice wrote or changed" in out, out
     assert frozen(w)["checks"] == CHECKS  # never removed: (a) may merge main in, (b) never narrows it
     assert all(r["cause"] != "b" for r in clears(w))
+    assert "in a file the slice wrote or changed" in cause_b_says(w)   # (b)'s own guard, not only the line's earlier one
 
 
 def test_cause_b_needs_the_same_failure_on_mains_own_tree(world):
@@ -388,12 +440,12 @@ def test_run_seat_tries_the_clearance_itself_after_a_red_stop(world):
     cause (a) it is cleared and logged, with no line from anyone; with neither cause it stays stopped for the owner."""
     from test_seat_failure import builder_done, run_seat
     w = world
-    wt = a_slice_red_on_its_own(w)
+    wt = red_on_mains_check(w)
     set_state(w, phase="building")  # the session that met the sixth red stop is the one run_seat.py launches
     p, _ = run_seat(w, "builder", [builder_done()])
     assert p.returncode == 0 and "STOPPED S1" in p.stdout and "cleared by the line (cause a)" in p.stdout, p.stdout
     assert state(w)["phase"] == "building" and [r["cause"] for r in clears(w)] == ["a"]
-    red_six_times(w, wt)
+    red_again_on_mains_check(w, wt)
     set_state(w, phase="building")
     p, _ = run_seat(w, "builder", [builder_done("b-2")])
     assert p.returncode == 1 and "not cleared by the line" in p.stdout, p.stdout
@@ -404,9 +456,8 @@ def test_cause_a_needs_main_to_merge_cleanly(world):
     w = world
     wt = layout_slice(w)
     (wt / "README.md").write_text("the slice's\n")
-    (wt / "accept.sh").write_text("exit 1\n")
-    sh("git add -A . ':!OspreyFlow_Core/osprey.yaml' && git commit -qm 'feat: S1, red'", wt, w["env"])
-    red_six_times(w, wt)
+    sh("git add -A . ':!OspreyFlow_Core/osprey.yaml' && git commit -qm 'feat: S1'", wt, w["env"])
+    red_stop(w, wt, f"RED: checks (exit 1): {CHECKS}\nFAILED {MAIN_ID} - AssertionError: broken on main")
     commit_main(w, {"README.md": "main's\n"})
     before, heads = snapshot(w), (sh("git rev-parse HEAD", wt).stdout, sh("git rev-parse main", w["repo"]).stdout)
     p = resume(w, "S1", "self-clear")
