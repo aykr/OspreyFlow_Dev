@@ -177,26 +177,96 @@ def test_the_last_line_of_output_says_how_many_files_were_skipped_on_success(
     )
 
 
-def test_the_last_line_of_output_says_how_many_files_were_skipped_on_failure(
-    tmp_path: Path, capfd: pytest.CaptureFixture[str]
-) -> None:
-    """On failure too, and still last: after the list of broken citations, not before it."""
-    root = _tree(
-        tmp_path,
+#: Runs a copy of the check (or the real file) against a throwaway tree, the way the Makefile does:
+#: a separate process, the Build folder on `PYTHONPATH`, the product folder as the working folder.
+_RUNNER = (
+    "import importlib.util, sys\n"
+    "from pathlib import Path\n"
+    "spec = importlib.util.spec_from_file_location('check_under_test', sys.argv[1])\n"
+    "module = importlib.util.module_from_spec(spec)\n"
+    "spec.loader.exec_module(module)\n"
+    "raise SystemExit(module.main(Path(sys.argv[2])))\n"
+)
+
+
+def _run_merged(check_file: Path, root: Path) -> subprocess.CompletedProcess[str]:
+    """One stream, as a person reads it: stderr merged into stdout. `-u` so each stream is written
+    as the program writes it; a pipe would otherwise hold stdout back until exit and show the
+    count line last whatever order the program printed it in."""
+    return subprocess.run(
+        [sys.executable, "-u", "-c", _RUNNER, str(check_file), str(root)],
+        cwd=CORE,
+        env={**os.environ, "PYTHONPATH": str(BUILD)},
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+
+
+def _assert_count_line_is_last_after_the_list(merged: str, expected_count: int) -> None:
+    lines = merged.strip().splitlines()
+    count_line = (
+        f"citation-check: skipped {expected_count} files "
+        "(the slice line's working papers under process/lanes/v062/)"
+    )
+    assert lines[-1] == count_line, merged
+    assert lines.count(count_line) == 1, merged
+    listed = [i for i, line in enumerate(lines) if "spec/00_ARCHITECTURE.md:1" in line]
+    assert listed, merged
+    assert listed[0] < len(lines) - 1, merged
+
+
+def _failing_tree(root: Path) -> Path:
+    return _tree(
+        root,
         {
             **{path: BROKEN for path in SKIPPED_PAPERS},
             "spec/00_ARCHITECTURE.md": BROKEN,
         },
     )
 
-    assert check.main(root) == 1
 
-    captured = capfd.readouterr()
-    assert captured.out.strip().splitlines()[-1] == (
-        f"citation-check: skipped {len(SKIPPED_PAPERS)} files "
-        "(the slice line's working papers under process/lanes/v062/)"
+def test_the_last_line_of_output_says_how_many_files_were_skipped_on_failure(
+    tmp_path: Path,
+) -> None:
+    """On failure too, and still last: after the list of broken citations, not before it. Run as a
+    subprocess with stderr merged into stdout (what `make citation-check` shows), because read
+    apart the two streams cannot show their order."""
+    root = _failing_tree(tmp_path)
+
+    result = _run_merged(Path(check.__file__), root)
+
+    assert result.returncode == 1, result.stdout
+    _assert_count_line_is_last_after_the_list(result.stdout, len(SKIPPED_PAPERS))
+
+
+def test_the_order_case_goes_red_when_the_count_line_is_printed_before_the_list(
+    tmp_path: Path,
+) -> None:
+    """Rule 15: the case above can fail. A copy of the check (never the real file) prints the
+    count line first, as the real call site would if its `print` moved above the stderr block, and
+    the same assertion rejects it."""
+    source = Path(check.__file__).read_text(encoding="utf-8")
+    count_call = "        print(_skipped_line(root))\n        return 1\n"
+    assert source.count(count_call) == 1, (
+        "the failure branch's count line is not where this expects"
     )
-    assert "spec/00_ARCHITECTURE.md:1" in captured.err
+    list_start = '        print(\n            f"doc-citations-check: {len(broken)} citation(s)'
+    assert source.count(list_start) == 1
+    planted = source.replace(count_call, "        return 1\n").replace(
+        list_start, "        print(_skipped_line(root))\n" + list_start
+    )
+    copy = tmp_path / "copy" / "doc_citations_check_copy.py"
+    copy.parent.mkdir()
+    copy.write_text(planted, encoding="utf-8")
+    root = _failing_tree(tmp_path / "tree")
+
+    result = _run_merged(copy, root)
+
+    assert result.returncode == 1, result.stdout
+    with pytest.raises(AssertionError):
+        _assert_count_line_is_last_after_the_list(result.stdout, len(SKIPPED_PAPERS))
 
 
 def test_the_count_is_counted_not_written_in(
