@@ -35,3 +35,13 @@ The two acceptance tests; `npm run lint`, `npm run typecheck`, `npm test --works
 ## Out of scope
 
 Any change to `services/api` (AD1a's); AD1c's items; a clearing route for stale engine tokens (the owner ruled none); rendering or deployment changes; the protected files.
+
+## Round 2 (23 November 2026, the conductor, on the owner's rulings)
+
+The round-1 verifier named two faults and a gap in a test. **All three concern an engine's key, so each is closed here and none is accepted narrower.**
+
+1. **Fault 1, the fourth route (the owner: option A).** The test found a real fourth route that leaves an engine's access token on the gateway: an Add whose record cannot be saved. **Keep it in `ROUTES` as a named route** (not only as a plant), and make the specification text name it. **Use exactly this sentence, in place of the three-route sentence now in the specification (06_DECISIONS.md, the passage that begins "An engine's access token on the gateway is therefore not removed when the engine leaves the record any other way"):** "...when the deployment is switched to local-only, when a models file is restored, when a re-render drops an engine, **or when an Add whose record cannot be saved is undone (the engine's token is put on the gateway before the record is saved, and the undo withdraws the entries and not the token; the 15-minute sweep removes only a check's own key, so it does not remove this token; AD1c closes the route)**." The test fails if the text and `ROUTES` disagree in either direction. **The owner has not yet approved the wording of the added clause: if it changes, the conductor sends the new wording and you change only that clause.** The code fix is **AD1c's** (`slices/AD1c.md`), not this slice's: change nothing under `services/api`.
+2. **Fault 2 (fixed in this part, the owner).** After a refused Add, **Cancel must still remove the check and its key.** Today the form drops the passed check (`setResult(null)`) after the Conduit refuses, so `passed` becomes false and Cancel closes without sending `DELETE /checks/{id}` or reloading the view. Keep the passed check when the refusal leaves the check held; Cancel sends the delete and reloads "Being checked". A test drives a refused Add (a 500 for an unwritable file, and a gateway failure) in the screen and proves Cancel sends the delete.
+3. **The gap in a test (the owner: fix it).** **A typed key does not stay in the edit form's field after a refusal, and a test proves it:** a refused edit that carried a key; the field is empty afterwards and the typed text is in no attribute of the page. Red first against line 137's removal.
+
+Report which tests were red first, and the sentence as you wrote it.
