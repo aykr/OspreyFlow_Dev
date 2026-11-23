@@ -425,7 +425,43 @@ def scanned_files(core: Path = CORE) -> list[tuple[Path, str]]:
         path = core / name
         if path.is_file():
             files.append((path, "python" if name.endswith(".py") else "javascript"))
+        elif moved_sign_in_file(core, name) is None:
+            raise ThemeScanError(
+                f"the sign-in theme file {name} is not under {core}, and no file of that name is "
+                f"in a theme folder ({THEMES_DIR}/<name>/) either: a renamed or moved file must "
+                "not go unread. Name its new place in SIGN_IN_FILES, or move it into its theme's "
+                "folder"
+            )
     return files
+
+
+def moved_sign_in_file(core: Path, name: str) -> Path | None:
+    """Where the named sign-in file now is, when it has moved into a theme folder
+    (`packages/themes/<theme>/<its own file name>`, ADR-152 Am. 4 item 2); else None. A file
+    there is already read by the walk of `THEMES_DIR` (Python and scripts are read as strings
+    inside a theme folder), so a move is not a loss of sight; a file of that name anywhere else is
+    not a move."""
+    root = core / THEMES_DIR
+    if not root.is_dir():
+        return None
+    for here, dirs, names in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in PRUNED)
+        if Path(name).name in names:
+            path = Path(here) / Path(name).name
+            if _home(path.relative_to(core).as_posix()) is not None:
+                return path
+    return None
+
+
+def sign_in_files_read(core: Path = CORE) -> list[str]:
+    """The named sign-in files as the success line names them: where each was actually read."""
+    named: list[str] = []
+    for name in SIGN_IN_FILES:
+        if (core / name).is_file():
+            named.append(name)
+        elif (moved := moved_sign_in_file(core, name)) is not None:
+            named.append(f"{name} (moved to {moved.relative_to(core).as_posix()})")
+    return named
 
 
 def _read(path: Path, how: str) -> list[RawFinding]:
@@ -580,7 +616,8 @@ def main(
         return 1
     print(
         f"theme-rule-check: scanned {len(scanned_files(core))} files in "
-        f"{', '.join(SCAN_ROOTS)} and {', '.join(SIGN_IN_FILES)}; {len(findings)} theme rule(s) "
+        f"{', '.join(SCAN_ROOTS)} and {', '.join(sign_in_files_read(core))}; "
+        f"{len(findings)} theme rule(s) "
         "outside a theme folder, all on the allowlist (it only shrinks)"
     )
     return 0
