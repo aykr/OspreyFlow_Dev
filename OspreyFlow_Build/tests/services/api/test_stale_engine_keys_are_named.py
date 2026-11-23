@@ -238,7 +238,7 @@ async def finished(*admins: ModelAdmin) -> None:
         await admin.close()
 
 
-# --- the three routes, each driven through the start-up path (`start`, which runs `_reconcile`) ---
+# --- the four routes, each driven through the start-up path (`start`, which runs `_reconcile`) ---
 
 
 @dataclass(frozen=True)
@@ -565,7 +565,7 @@ def test_the_words_name_exactly_the_routes_that_leave_a_token() -> None:
 
 
 def test_the_specification_still_names_the_one_route_with_no_clearing_at_all() -> None:
-    """Row N6, the changed master key, stays named beside the three."""
+    """Row N6, the changed master key, stays named beside the four."""
     spec, _, _ = words_as_they_are()
     assert "What has no route (open row N6" in plain(spec)
 
@@ -591,9 +591,9 @@ def test_the_false_sentence_in_a_guide_is_red(claim: str) -> None:
     assert problems and all("an administration guide" in p for p in problems), problems
 
 
-def test_the_claim_with_the_three_cases_beside_it_is_not_red() -> None:
+def test_the_claim_with_the_four_cases_beside_it_is_not_red() -> None:
     """The check reads what is said, not the sentence's mere presence: a text that says it and
-    names each of the three beside it is as true as the corrected one."""
+    names each of the four beside it is as true as the corrected one."""
     spec, sibling, guides = words_as_they_are()
     beside = (
         "a guide",
@@ -613,7 +613,7 @@ def test_a_route_named_that_no_driver_shows_is_red(dropped: str) -> None:
 
 @pytest.mark.parametrize("taken", [r.phrase for r in ROUTES])
 def test_a_case_taken_out_is_red(taken: str) -> None:
-    """Plant 3: one of the three cases removed from the text, in the specification and then in the
+    """Plant 3: one of the four cases removed from the text, in the specification and then in the
     docstring; each is red for that case, naming it."""
     spec, sibling, guides = words_as_they_are()
     cut_from = re.compile(rf",?\s*(?:or\s+)?{re.escape(taken)}")

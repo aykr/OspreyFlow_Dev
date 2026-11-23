@@ -30,6 +30,7 @@ export class ModelsRefused extends Error {
   constructor(
     message: string,
     readonly fields: RefusedField[] = [],
+    readonly status: number | null = null,
   ) {
     super(message);
   }
@@ -45,7 +46,7 @@ async function ask<T>(api: ModelsApi, path: string, init: RequestInit = {}): Pro
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
     const detail = body.detail as { detail?: string; fields?: RefusedField[] } | undefined;
-    if (typeof detail?.detail === "string") throw new ModelsRefused(detail.detail, detail.fields ?? []);
+    if (typeof detail?.detail === "string") throw new ModelsRefused(detail.detail, detail.fields ?? [], response.status);
     if (response.status === 403) throw new Error("Your account does not hold the right to manage models.");
     throw new Error(`Models could not complete that (${response.status}).`);
   }

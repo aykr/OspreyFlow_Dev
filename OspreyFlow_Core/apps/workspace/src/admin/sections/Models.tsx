@@ -327,7 +327,11 @@ function AddEngineForm({
         onAdded(view, `${shown} is added and offered to analysts for cases whose data may leave this deployment.`),
       )
       .catch((e: Error) => {
-        setResult(null);
+        // The Conduit holds the check (and its key at the gateway) after any refusal but one that
+        // says it is gone (404, 410): keep it, so Cancel can still send the delete and show the
+        // check removed. A check the Conduit says it no longer holds is dropped, to be made again.
+        const gone = e instanceof ModelsRefused && (e.status === 404 || e.status === 410);
+        if (gone) setResult(null);
         setRefused({ words: e.message, fields: [] });
       })
       .finally(() => setBusy(null));
