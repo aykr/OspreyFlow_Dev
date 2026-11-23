@@ -440,7 +440,7 @@ def render_login_theme(
     if not govuk:
         return files
     assert appearance is not None
-    settings = {
+    settings: dict[str, object] = {
         "serviceName": appearance.service_name,
         "organisation": appearance.organisation,
         "phase": appearance.phase,
