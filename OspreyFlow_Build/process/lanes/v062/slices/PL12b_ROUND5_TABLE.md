@@ -1,0 +1,23 @@
+# PL12b: every open case before round 5 (23 November 2026, 06:10 UTC; the conductor, from the four verifier records)
+
+**The owner's rule (21 November 2026): no round from 5 on starts without a table of every open case.** Rounds 5 to 8 are judged against this table. **The table lists nine cases raised in rounds 1 to 4; seven are closed, two are open, and a third is the conductor's to close, not yours.** Each round so far has closed what the verifier named and the next verifier has found a new case in the same tool: round 5 closes **exactly the two open cases below and adds nothing else**.
+
+| # | Case | Raised in | Kind | Status at `7a68a77141` |
+| --- | --- | --- | --- | --- |
+| 1 | `tools/theme_rule_check.py` about line 424: if one of the two named sign-in files (`harness/keycloak_theme.py`, `harness/govuk_chrome.js`) is missing, the check skips it with no error, and its success line (about lines 581 to 585) still names the constant list, not the files actually read. `govuk_chrome.js` has no allowlist entry, so if it is renamed or moved outside `packages/themes/`, a GOV.UK rule put into it later is never seen and the gate passes. Latent today (both files exist). | Round 4 | **Fault in behaviour** | **OPEN: fix this round.** Refuse a missing named file with `ThemeScanError`, **unless the file now sits under `packages/themes/<name>/`** (the move Amendment 4 item 2 plans; say in the report how you decided that); the success line names only the files actually read. **Red first:** a test that removes (or renames) each of the two files in a `tmp_path` copy and asserts the refusal, and one that moves `govuk_chrome.js` under `packages/themes/govuk/` and asserts it is read there and the check stays green. |
+| 2 | `tests/glass_trees/test_theme_rules.py` about line 296: no test shows `load_allowlist` refuses a bad file. Every case writes its allowlist through `_write_allowlist`, which is always well formed, so removing the count-line refusal, or making a malformed entry get skipped, leaves every test green; the "only shrinks" invariant rests on that line. | Round 4 | Gap in a test | **OPEN: fix this round.** Cases, each red against a planted fault in `load_allowlist` and green after: a first line that is not `count: N`; a non-numeric count; an entry without exactly three tab-separated fields; an empty file. Each asserts `ThemeScanError` (or `main` returning 1) and names the line. |
+| 3 | The scan row for the test (`scan_rows/PL12b.tsv`, on main) lists `OspreyFlow_Core/packages/themes/`, a folder that does not exist, so the merge would refuse it (`scan_select.stale`); it also omits `OspreyFlow_Core/.gitignore`, which two cases read. | Round 3 | Fault in behaviour | **Closed in the branch** (`7a68a77`: the row names folders that exist; the round-4 verifier did not repeat it). **Main's copy is the conductor's file: the conductor replaces it with the branch's row after the merge now running. Do not touch `scan_rows/` in this round.** |
+| 4 | The `@property` branch (about line 280) is not exercised. | Round 3 | Gap in a test | Closed `7a68a77`; not repeated in round 4. |
+| 5 | `.js`, `.mjs`, `.ts` files in a theme folder are read as strings (about line 422) and no test plants one there. | Round 3 | Gap in a test | Closed `7a68a77`; not repeated in round 4. |
+| 6 | `_generated` skipped every `assets/govuk` folder and pruned any `dist` at any depth, hiding committed GOV.UK files. | Round 2 | Fault in behaviour | Closed `e0bb7d8`; not repeated in rounds 3 or 4. |
+| 7 | A grouping at-rule's own prelude (`@scope (.govuk-header) { ... }`) was never read for a theme name. | Round 2 | Fault in behaviour | Closed `e0bb7d8`; not repeated. |
+| 8 | No test showed `packages/glass-shared/src`, `apps/harness/src` or `apps/workspace/scripts` dropped from the scan roots, or a missing root, was caught. | Round 2 | Gap in a test | Closed `e0bb7d8`; not repeated. |
+| 9 | The ratchet's `held < recorded` branch was hidden behind the ceiling branch, so no test failed if it was removed. | Round 1 | Gap in a test | Closed in round 2; not repeated. |
+
+## What you do in round 5
+
+1. Close cases 1 and 2, red first, planted faults at the shape the code really sees (rule 15). **Nothing else:** no new checks of your own, no restructuring of the tool, no change to the allowlist, the count or the scan row.
+2. Re-run your own checks and the scan-map check by hand (`scan_select.unmapped` and `scan_select.stale` both).
+3. Report: the two cases, how each was shown red, and the files changed.
+
+**A verifier's new finding in round 5 that is not one of these two is judged on its merits: a fault in behaviour is fixed in round 6; a gap in a test goes to the owner's standing accept (from round 3 on) when it is only a gap.**
