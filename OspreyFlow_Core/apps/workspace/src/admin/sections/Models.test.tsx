@@ -304,9 +304,15 @@ describe("Models", () => {
   // Round 2, fault 2: a refused Add that leaves the check held (a models file that cannot be written,
   // a gateway that fails) must leave Cancel able to remove the check and its key. The Conduit holds
   // the check until the 15 minutes pass, and this form is the administrator's only way to end it now.
+  // The refusals are planted in the shape the Conduit sends (`_model_admin_refused`: `detail.error`
+  // and `detail.detail`, so the screen reads a `ModelsRefused` with its status), not an empty body.
+  // Only 404 and 410 mean the check is gone; a 422 (an engine of the same name added meanwhile, the
+  // change interrupted) leaves the check and its key held, so Cancel must still send the delete.
   it.each([
-    ["a models file that cannot be written (500)", { status: 500, body: {} }],
-    ["a gateway that fails (502)", { status: 502, body: { detail: { error: "gateway_unavailable", detail: "The model gateway did not answer. Nothing was added: the check and its key are still held." } } }],
+    ["a models file that cannot be written (500)", { status: 500, body: { detail: { error: "model_admin_refused", detail: "The models file could not be written; the change was not saved." } } }],
+    ["an engine of that name added meanwhile (422)", { status: 422, body: { detail: { error: "model_admin_refused", detail: "There is already an engine of that name; nothing was added." } } }],
+    ["a change interrupted (422)", { status: 422, body: { detail: { error: "model_admin_refused", detail: "The change was interrupted and was not saved." } } }],
+    ["a gateway that fails (502)",{ status: 502, body: { detail: { error: "gateway_unavailable", detail: "The model gateway did not answer. Nothing was added: the check and its key are still held." } } }],
   ])("after a refused Add (%s), Cancel still sends the delete and shows the check removed", async (_why, refusal) => {
     const sent = stub((path, init) =>
       path === "/v1/admin/models/checks" ? { status: 200, body: PASSED }

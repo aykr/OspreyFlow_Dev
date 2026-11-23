@@ -47,9 +47,11 @@ beside them. **No clearing route is built (the owner's ruling).**
    that is driven (`test_the_sweep_does_not_remove_an_unsaved_adds_token`).
 
 **The keys.** Every key is made at run time (the owner's rules): none is written in this file. After
-every route nothing the test provokes (the log, the audit, the models file, the view, the routes)
-holds the master key, the typed key or the token
-(`test_no_route_puts_a_key_in_a_log_an_answer_or_the_audit`).
+every route nothing the test provokes (the log, the audit, the models file, the view, the routes,
+the check's whole answer and the words of the refused Add) holds the master key, the typed key, the
+client gateway's token or the engine's token
+(`test_no_route_puts_a_key_in_a_log_an_answer_or_the_audit`). The answers are read too, and a key
+planted in one is seen (`test_a_key_in_an_answer_is_seen`).
 
 **Which test fails if each statement is violated (rule 12)**
 
@@ -148,6 +150,9 @@ class Site:
         self.processes: list[ModelAdmin] = []
         #: The check's 15 minutes run on this clock, which a test moves.
         self.now = datetime(2026, 11, 23, 9, 0, tzinfo=UTC)
+        #: Every answer a route provoked, in the words a person is shown: the check's whole answer
+        #: and the words of a refusal. `shown` reads them with the log and the audit.
+        self.answers: list[str] = []
 
     def process(
         self, *, local_only: bool = False, declared: tuple[dict[str, object], ...] = ()
@@ -187,6 +192,7 @@ class Site:
         checked = await admin.check(
             ADMIN, ModelProviderConfig.model_validate(KEYED), SecretStr(self.typed)
         )
+        self.answers.append(checked.model_dump_json())
         assert checked.ok and checked.check, checked.words
         await admin.add_checked(ADMIN, checked.check)
 
@@ -220,6 +226,7 @@ class Site:
         return " ".join(
             [
                 caplog.text,
+                *self.answers,
                 json.dumps([e.model_dump(mode="json") for e in self.audit.entries]),
                 admin.settings.model_dump_json(),
                 admin.view().model_dump_json(),
@@ -248,6 +255,8 @@ class Route:
 
     phrase: str
     leave: Callable[[Site], Awaitable[str]]
+    #: The route makes a check (and so provokes an answer to read); a re-render is a start-up alone.
+    answers: bool = True
 
 
 async def local_only(site: Site) -> str:
@@ -304,6 +313,7 @@ async def unsaved_add(site: Site) -> str:
     checked = await admin.check(
         ADMIN, ModelProviderConfig.model_validate(KEYED), SecretStr(site.typed)
     )
+    site.answers.append(checked.model_dump_json())
     assert checked.ok and checked.check, checked.words
     real = admin._file.save
 
@@ -313,8 +323,10 @@ async def unsaved_add(site: Site) -> str:
         real(settings)
 
     admin._file.save = cannot_save  # type: ignore[method-assign]
-    with pytest.raises(ModelAdminRefused):
+    with pytest.raises(ModelAdminRefused) as refused:
         await admin.add_checked(ADMIN, checked.check)
+    # The refusal's own words are an answer a person is shown (the Conduit sends them as they are).
+    site.answers.append(refused.value.words)
     await finished(admin)
     return "gemini"
 
@@ -322,7 +334,7 @@ async def unsaved_add(site: Site) -> str:
 ROUTES = (
     Route("when the deployment is switched to local-only", local_only),
     Route("when a models file is restored", restored),
-    Route("when a re-render drops an engine", re_rendered),
+    Route("when a re-render drops an engine", re_rendered, answers=False),
     Route("when an Add whose record cannot be saved is undone", unsaved_add),
 )
 
@@ -461,14 +473,48 @@ async def test_no_route_puts_a_key_in_a_log_an_answer_or_the_audit(
     watcher = site.process()
     await watcher.start()
     await finished(watcher)
-    shown = site.shown(watcher, caplog)
-    for what, secret in (
-        ("the master key", site.master),
-        ("the typed key", site.typed),
-        ("the client gateway's token", site.client_token),
-        ("the engine's access token", token),
-    ):
-        assert secret not in shown, f"{route.phrase}: {what} reached a log, an answer or the audit"
+    assert bool(site.answers) == route.answers, "the plant: the route's answers are read"
+    assert leaked(site, watcher, caplog, token) == [], route.phrase
+
+
+def leaked(
+    site: Site, admin: ModelAdmin, caplog: pytest.LogCaptureFixture, token: str
+) -> list[str]:
+    """Which of the four run-time secrets reached a log, an answer or the audit."""
+    shown = site.shown(admin, caplog)
+    return [
+        f"{what} reached a log, an answer or the audit"
+        for what, secret in (
+            ("the master key", site.master),
+            ("the typed key", site.typed),
+            ("the client gateway's token", site.client_token),
+            ("the engine's access token", token),
+        )
+        if secret in shown
+    ]
+
+
+@pytest.mark.parametrize("secret", ["master", "typed", "client_token", "token"])
+async def test_a_key_in_an_answer_is_seen(
+    site: Site, caplog: pytest.LogCaptureFixture, secret: str
+) -> None:
+    """Rule 15, for the answers: the words of the refused Add (the route's own answer) and the
+    check's answer are read, so a secret in either turns the test red. Each of the four is planted
+    in turn in the refusal's words, as `ModelAdminRefused` carries them."""
+    name = await unsaved_add(site)
+    [token] = site.tokens(name)
+    watcher = site.process()
+    await watcher.start()
+    await finished(watcher)
+    assert leaked(site, watcher, caplog, token) == [], "the plant: nothing leaks before the plant"
+    planted = {
+        "master": site.master,
+        "typed": site.typed,
+        "client_token": site.client_token,
+        "token": token,
+    }[secret]
+    site.answers[-1] += f" (the gateway said: {planted})"
+    assert len(leaked(site, watcher, caplog, token)) == 1
 
 
 # --- half 2: the words name exactly those routes --------------------------------------------------
