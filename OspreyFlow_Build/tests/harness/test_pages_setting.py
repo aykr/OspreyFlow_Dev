@@ -986,7 +986,8 @@ def test_the_ca_check_is_red_for_a_service_that_is_not_told_to_read_it() -> None
 
     with _patched("harness.pages_service", "service_environment", without_the_variable):
         found = _ca_findings(_small_with_its_own_certificate("govuk", ca=CA_ON_THE_HOST))
-    assert found == ["NODE_EXTRA_CA_CERTS does not name the mounted CA"], found
+    # The mount follows the variable (both are written, or neither), so both findings are reported.
+    assert "NODE_EXTRA_CA_CERTS does not name the mounted CA" in found, found
     assert service_module.CA_IN_SERVICE
 
 

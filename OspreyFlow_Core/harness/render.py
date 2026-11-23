@@ -1075,6 +1075,13 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             )
             service["environment"] = pages_environment
             signs_in = "OSPREY_PAGES_OIDC_ISSUER" in pages_environment
+            if "NODE_EXTRA_CA_CERTS" in pages_environment:
+                # The organisation's own CA, read-only, where node is told to look (as Keycloak's
+                # truststore is given it, below): the identity name's certificate is theirs.
+                assert config.network.tls is not None and config.network.tls.ca
+                service["volumes"] = [
+                    f"{config.network.tls.ca}:{pages_service.CA_IN_SERVICE}:ro",
+                ]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
                 for dependency in ("valkey", *(("keycloak",) if signs_in else ()))
@@ -1535,6 +1542,13 @@ def egress_needs(config: OspreyConfig) -> set[str]:
 
 def _place_on_networks(config: OspreyConfig, services: dict[str, Any]) -> None:
     reaching_out = egress_needs(config)
+    pages = services.get(pages_service.SERVICE)
+    if pages is not None and "OSPREY_PAGES_OIDC_ISSUER" in pages.get("environment", {}):
+        # The page service fetches its issuer itself, at sign-in, and the issuer is the public
+        # identity name (openid-client checks the document's `issuer` against the address it
+        # asked, so the Conduit's internal Keycloak address is not one it can be given). Nothing
+        # on the internal network answers to that name: the service reaches it as the browser does.
+        reaching_out = reaching_out | {pages_service.SERVICE}
     for name, service in services.items():
         service["networks"] = ["osprey", "egress"] if name in reaching_out else ["osprey"]
 

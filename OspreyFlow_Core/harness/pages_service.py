@@ -28,7 +28,7 @@ asked when the render runs, never a second reading of it and never recorded.
 
 from __future__ import annotations
 
-from schemas.deployment import OspreyConfig
+from schemas.deployment import OspreyConfig, Profile
 
 #: The compose service's name, the chart's workload's, and the front proxy's upstream host.
 SERVICE = "pages"
@@ -47,6 +47,12 @@ OWN_PATHS = ("/session", "/assets/pages")
 #: The Studio's paths, on the default theme (decision 7: "on the default theme, the Studio's paths
 #: (`/studio/…`)"). On the GOV.UK theme a function's path goes to `pages` once its tree has it.
 STUDIO_PATHS = ("/studio",)
+
+
+#: Where the organisation's CA (`network.tls.ca`) is mounted into the service, read-only, and what
+#: node's `NODE_EXTRA_CA_CERTS` names: the service's discovery, key set and token request go to the
+#: identity name, whose certificate is the organisation's. Node keeps its own roots beside it.
+CA_IN_SERVICE = "/etc/ssl/organisation-ca.pem"
 
 
 class PageServiceNotEnabled(ValueError):
@@ -172,4 +178,7 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
         environment["OSPREY_PAGES_OIDC_ISSUER"] = issuer
         environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
         environment["OSPREY_PAGES_CLIENT_SECRET"] = refer % PAGES_CLIENT_SECRET_KEY
+        tls = config.network.tls
+        if config.profile is Profile.SMALL and tls is not None and tls.ca:
+            environment["NODE_EXTRA_CA_CERTS"] = CA_IN_SERVICE
     return environment
