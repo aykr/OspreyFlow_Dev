@@ -1,0 +1,43 @@
+# SE6c step 5 (green, with the fix), 23 November 2026
+# Throwaway containers of this slice's own: postgres:16 (tmpfs data, 127.0.0.1:57432), valkey/valkey:8 (57379), arcadedata/arcadedb:26.10.1 (tmpfs, 57480); lease: slice-SE6c on stack b (held, stack not started)
+# A fresh database (se6c_green), one pytest invocation, not dropped between: SE6b's live files first (they make osprey_report_control), then the connector's whole live file
+# commit: 54c4d50
+$ pytest -c ../OspreyFlow_Build/pytest.ini -q --tb=short -rf tests/services/report_sync/test_report_sync.py tests/services/api/test_report_freshness.py tests/connectors/test_sql_connector_live.py
+============================= test session starts ==============================
+platform darwin -- Python 3.12.14, pytest-9.1.1, pluggy-1.7.0
+port guard: on (ports 2480, 5432, 80, 8080 and 8081 on this machine are refused)
+rootdir: /Users/ayankar/dev/osprey-wt/slice-SE6c/OspreyFlow_Build
+configfile: pytest.ini
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 46 items
+
+../OspreyFlow_Build/tests/services/report_sync/test_report_sync.py ..... [ 10%]
+.............                                                            [ 39%]
+../OspreyFlow_Build/tests/services/api/test_report_freshness.py ....     [ 47%]
+../OspreyFlow_Build/tests/connectors/test_sql_connector_live.py ........ [ 65%]
+................                                                         [100%]
+
+--------------------- 40 unmarked test(s) reached a store ----------------------
+tests/connectors/test_sql_connector_live.py::test_a_login_that_can_write_a_table_in_a_schema_it_cannot_use_is_refused[a partitioned table, granted to the login]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_login_that_can_write_a_table_in_a_schema_it_cannot_use_is_refused[granted to PUBLIC]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_login_that_can_write_a_table_in_a_schema_it_cannot_use_is_refused[granted to a group the login is in]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_login_that_can_write_a_table_in_a_schema_it_cannot_use_is_refused[granted to the login]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_login_that_can_write_is_refused: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_login_that_owns_a_table_is_refused_by_that_alone[locked]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_login_that_owns_a_table_is_refused_by_that_alone[usable]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_row_past_the_byte_cap_is_never_held[incremental]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_row_past_the_byte_cap_is_never_held[whole]: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_schema_the_reader_cannot_use_does_not_stop_the_reader_being_checked: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_server_without_tls_is_refused: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_sql_sources_refreshed_file_loads_only_new_rows: ArcadeDB on port 57480, Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_superuser_is_refused_by_that_alone: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_table_far_past_the_byte_cap_stops_at_the_cap_not_at_a_scan_of_it: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_watermark_on_a_time_reads_past_its_value: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_a_write_in_the_connectors_session_is_refused_by_the_server: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_refusals_are_refused_in_words: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_the_byte_cap_counts_bytes_not_characters: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_the_exit_visit_bookings_is_registered_and_refreshed_through_the_routes: Postgres on port 57432
+tests/connectors/test_sql_connector_live.py::test_the_read_counts_the_file_s_bytes_where_the_database_counts_fewer: Postgres on port 57432
+… and 20 more (set OSPREY_STORE_MARK_REPORT for the whole list)
+============================= 46 passed in 12.49s ==============================
