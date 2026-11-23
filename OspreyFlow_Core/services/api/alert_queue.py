@@ -674,20 +674,23 @@ async def _close(
             action="approve" if proposed_by is not None else "close",
             disposition=disposition, disposition_reason=reason,
         ), alert)  # fmt: skip
-    return _as_shown(await store.set_queue_triage(
-        alert_id,
-        investigation_id,
-        member,
-        expect_status=expect,
-        status="closed",
-        assignee=alert.assignee or member.id,
-        disposition=disposition,
-        disposition_reason=reason,
-        decided_by=member.id,
-        # No node here: the close's record owns the node's rename (to the newest revision the graph
-        # holds, after any re-mark), and writing the confirmed node back would undo it.
-        close_proposed_by=proposed_by,
-    ), alert)
+    return _as_shown(
+        await store.set_queue_triage(
+            alert_id,
+            investigation_id,
+            member,
+            expect_status=expect,
+            status="closed",
+            assignee=alert.assignee or member.id,
+            disposition=disposition,
+            disposition_reason=reason,
+            decided_by=member.id,
+            # No node here: the close's record owns the node's rename (to the newest revision the
+            # graph holds, after any re-mark), and writing the confirmed node back would undo it.
+            close_proposed_by=proposed_by,
+        ),
+        alert,
+    )
 
 
 class AssignmentRefused(Exception):

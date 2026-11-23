@@ -70,9 +70,7 @@ def handling_sql(
     Returns three bound values; the caller passes `principal.org_unit` as the fourth, at the call
     itself, so the principal is seen in the query (ADR-041's gate)."""
     order = scheme.classification
-    allowed = (
-        order[: order.index(principal.clearance) + 1] if principal.clearance in order else []
-    )
+    allowed = order[: order.index(principal.clearance) + 1] if principal.clearance in order else []
     restricted = sorted(
         c for c, d in scheme.handling_codes.items() if d.dissemination == "restricted"
     )
@@ -136,8 +134,13 @@ async def _without_finding_words(conn: asyncpg.Connection, held: list[HeldRow]) 
     except asyncpg.UndefinedTableError:
         names = {}
     return [
-        h.model_copy(update={"reason": f"it matched “{names[h.rule_id]}”" if h.rule_id in names
-                             else "it matched the rule"})  # fmt: skip
+        h.model_copy(
+            update={
+                "reason": f"it matched “{names[h.rule_id]}”"
+                if h.rule_id in names
+                else "it matched the rule"
+            }
+        )  # fmt: skip
         if h.reason.startswith(_OLD_MATCH_REASON)
         else h
         for h in held
