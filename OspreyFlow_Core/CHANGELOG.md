@@ -21,8 +21,14 @@ update. Work not yet in a release is listed under *Unreleased*.
   Turning it on where the page service could not sign people in is also refused in words, rather than rendered with a
   sign-in that fails: where the identity address is plain HTTP (a local-lite one), and where it is served with a
   certificate from the front proxy's own internal authority (a `.localhost`, `.local` or `.internal` name, or an IP
-  address, with no `network.tls`), which the page service does not trust. Serve the identity address over HTTPS with a
-  certificate it trusts (a public name, or the organisation's own on a Small), or leave the setting off. On a Small
+  address, with no `network.tls`), which the page service does not trust, and where the organisation's own certificate
+  is on such a name and `network.tls` names no `ca` (the page service has no way to trust a private root it is not
+  given). Serve the identity address over HTTPS with a certificate it trusts (a public name, or the organisation's own
+  on a Small, with its `ca` where the name is a private one), or leave the setting off. **The cloud-platform shape
+  (development and the proof of concept) is refused too, with the setting on:** the page service has no sign-in there
+  yet (the chart gives it no egress to the identity provider, and it has no registration with the organisation's
+  Entra ID: ADR-148 Amendment 23), so leave `pages.enabled` off for those deployments until the page service is
+  offered on that shape. On a Small
   the front proxy also listens, inside its container, at the address's own port for the identity name, so the page
   service reaches its sign-in without a route out of the deployment.
 
