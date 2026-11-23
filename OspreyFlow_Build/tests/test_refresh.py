@@ -663,6 +663,63 @@ def test_a_deployment_built_from_source_moves_its_gateway_to_the_one_we_build(re
     assert set(secrets_before.splitlines()) <= set(env_after)
 
 
+def _workspace_built_with(repo: Path, *, identity: bool) -> Path:
+    """A deployment built from source (`apply --build`: the copied `osprey.yaml` carries no `source_path`, the mode is
+    read from the Conduit's own `build`) whose compose file was rendered with the GOV.UK identity switch as given."""
+    import yaml
+
+    out = _gateway_before_pl13b(repo, from_source=True)
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+    config["appearance"] = {"brand": "govuk", "govuk_identity": identity}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+    return out
+
+
+def _workspace_build(out: Path) -> dict:
+    import yaml
+
+    return yaml.safe_load((out / "compose.yaml").read_text())["services"]["workspace"]["build"]
+
+
+def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_built_from_source(repo: Path) -> None:
+    """A finding of PL7c's round 3: `_pins_moved` skipped every service that already had a `build`, so the new argument
+    never reached the stanza, the default image was rebuilt and the type fell back to arial in silence."""
+    out = _workspace_built_with(repo, identity=True)
+    assert "args" not in _workspace_build(out)  # as the render before the switch left it
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    assert _workspace_build(out)["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
+
+
+def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators_own(repo: Path) -> None:
+    import yaml
+
+    out = _workspace_built_with(repo, identity=True)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "OSPREY_GOVUK_IDENTITY" in _workspace_build(out)["args"]
+    document = yaml.safe_load((out / "compose.yaml").read_text())
+    document["services"]["workspace"]["build"]["args"]["OPERATOR_ARG"] = "kept"
+    text = (out / "compose.yaml").read_text()
+    (out / "compose.yaml").write_text(text[: text.index("\nname:") + 1] + yaml.safe_dump(document, sort_keys=False))
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+    config["appearance"] = {"brand": "govuk", "govuk_identity": False}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    assert _workspace_build(out)["args"] == {"OPERATOR_ARG": "kept"}
+
+
+def test_a_deployment_with_the_identity_off_keeps_a_workspace_build_with_no_args_as_it_was(repo: Path) -> None:
+    out = _workspace_built_with(repo, identity=False)
+    before = (out / "compose.yaml").read_text()
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "args" not in _workspace_build(out)
+    assert "OSPREY_GOVUK_IDENTITY" not in (out / "compose.yaml").read_text()
+    assert before.count("workspace") == (out / "compose.yaml").read_text().count("workspace")
+
+
 def test_moving_the_gateway_twice_changes_nothing_the_second_time(repo: Path) -> None:
     out = _gateway_before_pl13b(repo, from_source=True)
     refresh.refresh(repo, run=Recorder(), register=Registrar())

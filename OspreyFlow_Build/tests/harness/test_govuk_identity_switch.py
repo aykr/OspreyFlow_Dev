@@ -242,15 +242,133 @@ def test_the_switch_means_nothing_under_the_ospreyflow_brand_in_the_build() -> N
     assert _workspace_build({"brand": "govuk", "govuk_identity": True})["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
 
 
-def test_a_deployment_that_pulls_the_releases_images_cannot_turn_the_identity_on() -> None:
-    """The release's images are default builds: with no build there is nowhere to pass the switch, so it is refused in
-    words and not left to fall back to arial in silence."""
-    with pytest.raises(ValidationError, match=r"govuk_identity: true needs components.source_path"):
-        OspreyConfig.model_validate({"appearance": {"brand": "govuk", "govuk_identity": True}})
-    # Off, or under the other brand (where it means nothing), a pulled deployment is as it was.
-    OspreyConfig.model_validate({"appearance": {"brand": "govuk"}})
-    OspreyConfig.model_validate({"appearance": {"brand": "ospreyflow", "govuk_identity": True}})
-    OspreyConfig.model_validate({"components": {"source_path": "."}, "appearance": {"brand": "govuk", "govuk_identity": True}})
+# ----- the switch on, by every route that decides whether the workspace is built: the file is read first, the build
+# is settled after it, so the refusal cannot be the schema's (a finding of round 3: it refused `--build` from a checkout).
+
+GOVUK_ON = "appearance:\n  brand: govuk\n  govuk_identity: true\n"
+
+
+def _apply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *flags: str, osprey_yaml: str = GOVUK_ON
+) -> tuple[int, dict[str, object]]:
+    """The real `harness.apply.main` over a written `osprey.yaml` (no `components.source_path`, as the CLI's own config is),
+    with the preflight, the compose commands and the steps that need a running deployment stood in for, so nothing
+    reaches Docker. Returns the exit code and the compose file it wrote (empty when it wrote none)."""
+    from types import SimpleNamespace
+
+    from harness import apply
+    from harness.preflight.result import passed
+
+    monkeypatch.setattr(apply, "_run", lambda *_a, **_k: "")
+    monkeypatch.setattr(apply, "answer_localhost_with_loopback", lambda: None)
+    monkeypatch.setattr(apply, "ALL_CHECKS", [SimpleNamespace(check=lambda _c: passed("ports"))])
+    monkeypatch.setattr(apply, "uploads_ready", lambda _f: "ready")
+    monkeypatch.setattr(apply, "stores_moved", lambda _f, _h: SimpleNamespace(services=[]))
+    monkeypatch.setattr(apply, "wait_for_health", lambda _f, **_k: {"api": "healthy"})
+    monkeypatch.setattr(apply, "move_model_keys_into_gateway", lambda _f: "none")
+    monkeypatch.setattr(apply, "_wait_for_models", lambda _f, _c: "none")
+    monkeypatch.setattr(apply, "grant_service_account_roles", lambda **_k: None)
+    config = tmp_path / "osprey.yaml"
+    config.write_text(osprey_yaml, encoding="utf-8")
+    assert "source_path" not in osprey_yaml
+    code = apply.main(
+        ["--config", str(config), "--out-root", str(tmp_path / "generated"), "--skip-verify", *flags]
+    )
+    composes = list((tmp_path / "generated").glob("*/compose.yaml"))
+    return code, (yaml.safe_load(composes[0].read_text("utf-8")) if composes else {})
+
+
+def test_the_identity_on_builds_with_the_argument_when_apply_builds_from_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`start --build` runs `harness.apply --build` over a config with no `source_path`: the validator that refused this at
+    load (before the flag was applied) made the switch unusable on the CLI's own build route."""
+    code, compose = _apply(tmp_path, monkeypatch, "--build")
+    assert code == 0
+    assert compose["services"]["workspace"]["build"]["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
+
+
+def test_the_identity_off_builds_with_no_argument_when_apply_builds_from_the_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code, compose = _apply(tmp_path, monkeypatch, "--build", osprey_yaml="appearance:\n  brand: govuk\n")
+    assert code == 0
+    assert "args" not in compose["services"]["workspace"]["build"]
+
+
+def test_the_identity_on_with_the_releases_images_is_refused_in_words_and_nothing_is_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The release's images are default builds: with no build there is nowhere to pass the switch, so apply says so, at
+    the render, and writes nothing, and does not leave the type to fall back to arial in silence."""
+    code, compose = _apply(tmp_path, monkeypatch, "--no-build")
+    said = capsys.readouterr()
+    assert code != 0 and compose == {}
+    assert "appearance.govuk_identity is on" in said.out + said.err
+    assert "pulls the workspace image" in said.out + said.err
+
+
+def test_the_file_with_the_identity_on_and_no_source_path_still_loads() -> None:
+    """The schema reads the file as written; whether the image is built is settled later (`--build`, the CLI's install, a
+    cloud platform's own build), so it cannot refuse here."""
+    config = OspreyConfig.model_validate({"appearance": {"brand": "govuk", "govuk_identity": True}})
+    assert config.appearance.govuk_identity is True
+
+
+def test_a_render_that_pulls_the_workspace_refuses_the_identity_in_words() -> None:
+    from harness.render import GovukIdentityNeedsABuild, render
+
+    pulled = OspreyConfig.model_validate({"appearance": {"brand": "govuk", "govuk_identity": True}})
+    with pytest.raises(GovukIdentityNeedsABuild, match="pulls the workspace image"):
+        render(pulled, allow_unpinned=True)
+    # Off, or under the other brand (where it means nothing), a pulled render is as it was.
+    render(OspreyConfig.model_validate({"appearance": {"brand": "govuk"}}), allow_unpinned=True)
+    render(
+        OspreyConfig.model_validate({"appearance": {"brand": "ospreyflow", "govuk_identity": True}}),
+        allow_unpinned=True,
+    )
+
+
+def test_a_cluster_that_pulls_the_releases_images_refuses_the_identity() -> None:
+    """Enterprise pulls the release's images by digest: nothing to pass the switch to."""
+    from harness.render import GovukIdentityNeedsABuild, render
+
+    from tests.harness.test_cluster_render import AWS, _resolver, cluster_config
+
+    config = cluster_config(AWS, appearance={"brand": "govuk", "govuk_identity": True})
+    with pytest.raises(GovukIdentityNeedsABuild, match="pulls the workspace image"):
+        render(config, resolver=_resolver)
+    # The same cluster with the switch off renders, so the refusal is the switch's.
+    render(cluster_config(AWS, appearance={"brand": "govuk"}), resolver=_resolver)
+
+
+def _images_plan(**appearance: object) -> list[dict[str, object]]:
+    """A cloud platform's image plan (`images.yaml`, which `ospreyflow images push` follows), from its own fixture."""
+    from tools.cp_policy_check import FIXTURES, _resolver
+
+    from harness.render import render
+
+    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw["appearance"] = {**raw.get("appearance", {}), **appearance}
+    config = OspreyConfig.model_validate(raw)
+    plan = yaml.safe_load(render(config, resolver=_resolver).artefacts["images.yaml"])
+    return list(plan["images"])
+
+
+def test_a_cloud_platform_builds_the_workspace_with_the_argument_when_the_identity_is_on() -> None:
+    """A cloud platform builds ours itself (`images push`, from the profile's build arguments) and refuses
+    `components.source_path`, so the argument has to come with the plan, not from the compose file's `build`."""
+    workspace = next(i for i in _images_plan(brand="govuk", govuk_identity=True) if "/workspace:" in str(i["target"]))
+    assert workspace["build_args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
+    # Only the workspace's: no other image of ours is told.
+    others = [i for i in _images_plan(brand="govuk", govuk_identity=True) if "/workspace:" not in str(i["target"])]
+    assert all("OSPREY_GOVUK_IDENTITY" not in dict(i.get("build_args", {})) for i in others)
+
+
+@pytest.mark.parametrize("appearance", [{"brand": "govuk"}, {"brand": "ospreyflow", "govuk_identity": True}, {}])
+def test_a_cloud_platform_builds_the_default_workspace_when_the_identity_is_off(appearance: dict[str, object]) -> None:
+    workspace = next(i for i in _images_plan(**appearance) if "/workspace:" in str(i["target"]))
+    assert "OSPREY_GOVUK_IDENTITY" not in dict(workspace.get("build_args", {}))
 
 
 def test_the_switch_is_a_field_the_schema_describes() -> None:
