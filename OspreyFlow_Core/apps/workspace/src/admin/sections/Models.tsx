@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import type {
   AdminEngine,
+  CatalogueEntry,
+  EngineCheckResult,
   ModelAdminEntry,
   ModelsAdminView,
 } from "../../../../../packages/schemas/generated";
@@ -14,7 +16,9 @@ type ModelProviderConfig = AdminEngine["provider"];
 import { Button, Checkbox, Input, Select } from "../../design/primitives";
 import "./Models.css";
 import {
-  addEngine,
+  addChecked,
+  cancelCheck,
+  checkEngine,
   editEngine,
   readHistory,
   readModels,
@@ -25,9 +29,12 @@ import {
   setKey,
   setLimits,
   testConnection,
+  ModelsRefused,
   type ModelsApi,
+  type RefusedField,
 } from "@ospreyflow/glass-shared";
 import { LimitsForm, ModelsUsage, limitsInWords } from "../../models/ModelsUsage";
+import { engineOptionText } from "../../models/engines";
 
 /** The jobs an engine outside the deployment may take. Embeddings never leave it (ADR-135). */
 const JOBS = [
@@ -36,8 +43,6 @@ const JOBS = [
   { role: "transcription", label: "Transcription" },
 ] as const;
 const ALL_JOBS = [...JOBS, { role: "embedding", label: "Embeddings" }] as const;
-// `bedrock` is LiteLLM's Bedrock provider by its key on every profile but cloud-platform, where Bedrock is its own kind.
-const PROVIDERS = ["gemini", "openai", "anthropic", "azure", "bedrock"];
 const KEY_WORDS: Record<AdminEngine["key_state"], string> = {
   set: "Key set",
   none: "No key",
@@ -63,20 +68,6 @@ interface Draft {
   api_base: string;
   privacy_contract: boolean;
   contract_reference: string;
-}
-
-const EMPTY: Draft = { kind: "provider", auth: "key", name: "gemini", label: "", roles: {}, api_base: "", privacy_contract: false, contract_reference: "" };
-
-/** A kind chosen in the add form: its name, sign-in and address as that kind takes them. */
-function withKind(draft: Draft, kind: Kind): Draft {
-  if (kind === "bedrock") return { ...draft, kind, auth: "iam_role", name: "bedrock", api_base: "" };
-  if (kind === "gateway") return { ...draft, kind, auth: "key", name: "" };
-  return { ...draft, kind, auth: "key", name: "gemini" };
-}
-
-/** The kinds the deployment's profile takes (ADR-135 Amendment 7): a provider alone where the view says none. */
-function kindsOf(view: ModelsAdminView): Kind[] {
-  return (view.engine_kinds as Kind[] | undefined) ?? ["provider"];
 }
 
 /** How an engine of `kind` signs in: Bedrock by the gateway's own IAM role, any other by its key or token. */
@@ -106,7 +97,7 @@ function providerOf(draft: Draft): ModelProviderConfig {
     api_base: draft.kind === "bedrock" ? null : draft.api_base.trim() || null,
     privacy_contract: draft.privacy_contract,
     contract_reference: draft.privacy_contract ? draft.contract_reference.trim() || null : null,
-    // A provider is sent as before Amendment 4; only the cloud-platform profile's two kinds name theirs.
+    // A provider is sent as before Amendment 4; only the other two kinds name theirs.
     ...(draft.kind === "provider" ? {} : { kind: draft.kind, auth: authFor(draft.kind) }),
   };
 }
@@ -115,74 +106,48 @@ function when(at: string | null | undefined): string {
   return at ? new Date(at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "";
 }
 
-/** The engine form: add (a provider name chosen) or edit (the name fixed). */
+/** The edit form: an engine's label, models, address and agreement; its name and kind are fixed. */
 function EngineForm({
   initial,
-  editing,
-  kinds,
+  keyless,
   onSave,
   onCancel,
 }: {
   initial: Draft;
-  editing: boolean;
-  /** The kinds this deployment's profile takes (ADR-135 Amendment 7): a provider alone but on cloud-platform. */
-  kinds: Kind[];
-  onSave: (draft: Draft) => void;
+  /** Signed in by the gateway's own IAM role: no key is ever asked (ADR-135 Amendment 4). */
+  keyless: boolean;
+  /** `checked`: a changed model name or address, which the Conduit checks before saving. */
+  onSave: (draft: Draft, key: string | null, checked: boolean) => void;
   onCancel: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(initial);
-  const id = editing ? `edit-${initial.name}` : "add-engine";
-  // The kind is shown only where the profile offers more than a provider, or for an engine of another kind.
-  const offersKinds = kinds.length > 1 || draft.kind !== "provider";
+  // Write-only, as the add form's: never filled, cleared once sent.
+  const [key, setKeyText] = useState("");
+  const id = `edit-${initial.name}`;
+  // The owner's ruling 19: a changed model name or address is checked with one small call before it
+  // is saved, and a changed address takes its key with it (a key is never sent where it was not
+  // entered for). A label or an agreement changed alone asks nothing.
+  const moved = draft.api_base.trim() !== initial.api_base.trim();
+  const held = new Set(Object.values(initial.roles).map((m) => m.trim()));
+  const checked = moved || Object.values(draft.roles).some((m) => m.trim() !== "" && !held.has(m.trim()));
+  const askKey = moved && !keyless;
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    onSave(draft);
+    const typed = askKey ? key : null;
+    setKeyText("");
+    onSave(draft, typed, checked);
   };
   return (
-    <form className="admin-models-form" aria-label={editing ? `Edit ${initial.name}` : "Add an engine"} onSubmit={submit}>
-      {offersKinds && <label htmlFor={`${id}-kind`}>Kind of engine</label>}
-      {!offersKinds ? null : editing ? (
-        // An engine's kind is fixed once added: another kind is another processor (ADR-135 Am 2, 4).
-        <Input id={`${id}-kind`} value={KINDS.find((k) => k.kind === draft.kind)?.label ?? draft.kind} readOnly aria-readonly="true" />
-      ) : (
-        <Select id={`${id}-kind`} value={draft.kind} onChange={(e) => setDraft(withKind(draft, e.target.value as Kind))}>
-          {KINDS.filter((k) => kinds.includes(k.kind)).map((k) => (
-            <option key={k.kind} value={k.kind}>
-              {k.label}
-            </option>
-          ))}
-        </Select>
+    <form className="admin-models-form" aria-label={`Edit ${initial.name}`} onSubmit={submit}>
+      {draft.kind !== "provider" && (
+        <>
+          <label htmlFor={`${id}-kind`}>Kind of engine</label>
+          {/* An engine's kind is fixed once added: another kind is another processor (ADR-135 Am 2, 4). */}
+          <Input id={`${id}-kind`} value={KINDS.find((k) => k.kind === draft.kind)?.label ?? draft.kind} readOnly aria-readonly="true" />
+        </>
       )}
       <label htmlFor={`${id}-name`}>{draft.kind === "provider" ? "Provider" : "Engine name"}</label>
-      {editing || draft.kind === "bedrock" ? (
-        <Input id={`${id}-name`} value={draft.name} readOnly aria-readonly="true" />
-      ) : draft.kind === "gateway" ? (
-        <Input
-          id={`${id}-name`}
-          value={draft.name}
-          placeholder="lower-case, such as our_gateway"
-          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-        />
-      ) : (
-        <Select id={`${id}-name`} value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}>
-          {PROVIDERS.filter((p) => p !== "bedrock" || !kinds.includes("bedrock")).map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </Select>
-      )}
-      {draft.kind === "gateway" && (
-        <p className="label" style={{ margin: 0 }}>
-          Signs in by a token, entered next and kept by the model gateway alone. Signing in by an IAM role waits for
-          your gateway&apos;s owners to say how it accepts one.
-        </p>
-      )}
-      {draft.kind === "bedrock" && (
-        <p className="label" style={{ margin: 0 }}>
-          Signs in by the gateway&apos;s own IAM role in London (eu-west-2); no key is kept, and no other region is used.
-        </p>
-      )}
+      <Input id={`${id}-name`} value={draft.name} readOnly aria-readonly="true" />
       <label htmlFor={`${id}-label`}>Label analysts see</label>
       <Input id={`${id}-label`} value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })} />
       {JOBS.map((job) => (
@@ -204,6 +169,25 @@ function EngineForm({
           <Input id={`${id}-base`} value={draft.api_base} onChange={(e) => setDraft({ ...draft, api_base: e.target.value })} />
         </>
       )}
+      {askKey && (
+        <>
+          <label htmlFor={`${id}-key`}>
+            Key for the new address (not shown, never sent back): a key is never sent where it was not entered for
+          </label>
+          <Input
+            id={`${id}-key`}
+            type="password"
+            autoComplete="new-password"
+            data-1p-ignore="true"
+            data-lpignore="true"
+            data-bwignore="true"
+            data-form-type="other"
+            spellCheck={false}
+            value={key}
+            onChange={(e) => setKeyText(e.target.value)}
+          />
+        </>
+      )}
       <label className="admin-models-check">
         <Checkbox
           checked={draft.privacy_contract}
@@ -221,11 +205,309 @@ function EngineForm({
           />
         </>
       )}
+      {checked && (
+        <p className="label" style={{ margin: 0 }}>
+          A changed model name or address is checked with one small call before it is saved: nothing changes unless it
+          answers.
+        </p>
+      )}
       <div className="admin-models-actions">
-        <Button type="submit" variant="primary">
-          {editing ? "Save the engine" : "Add the engine"}
+        <Button type="submit" variant="primary" disabled={askKey && key.trim() === ""}>
+          {checked ? "Check and save" : "Save the engine"}
         </Button>
         <Button type="button" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** The form's fields a refusal can be tied to. */
+type Field = "label" | "address" | "key" | "reference" | `job-${string}`;
+/** The form's field for a field the Conduit's rules named (`RefusedField.field`). */
+function formField(named: string): Field | null {
+  if (named === "provider.api_base") return "address";
+  if (named === "provider.label") return "label";
+  if (named === "provider.contract_reference") return "reference";
+  if (named === "key") return "key";
+  const job = /^provider\.roles\.(\w+)$/.exec(named);
+  return job ? `job-${job[1]}` : null;
+}
+/** The fields a refusal in the check's own fixed words is about (`model_admin.py`'s `check`). */
+function wordsFields(words: string, jobs: string[]): Field[] {
+  if (words.startsWith("The label")) return ["label"];
+  if (words.startsWith("The agreement reference")) return ["reference"];
+  if (words.startsWith("Give the key")) return ["key"];
+  if (words.startsWith("A model name looks like a key")) return jobs.map((j) => `job-${j}` as Field);
+  return [];
+}
+
+/**
+ * The add form (ADR-135 Amendment 14, the owner's first slice): a provider chosen from this
+ * deployment's list, its label filled, its own address shown (asked for where it has none, none for
+ * Bedrock), only its jobs, each model typed with a current example, its key in a write-only field,
+ * and what analysts will see. **Check** proves the key and each model by one call in the gateway;
+ * only a passed check can be added, and **Add** sends the check, never the key.
+ */
+function AddEngineForm({
+  api,
+  providers,
+  onAdded,
+  onClose,
+}: {
+  api: ModelsApi;
+  providers: CatalogueEntry[];
+  onAdded: (view: ModelsAdminView, words: string) => void;
+  onClose: (view: ModelsAdminView | null, words: string | null) => void;
+}) {
+  const [chosen, setChosen] = useState(providers[0]?.id ?? "");
+  const entry = providers.find((p) => p.id === chosen) ?? providers[0];
+  const [label, setLabel] = useState(entry?.label ?? "");
+  const [changing, setChanging] = useState(false);
+  const [address, setAddress] = useState("");
+  const [roles, setRoles] = useState<Record<string, string>>({});
+  // The key is held in this field's state alone until Check sends it, then emptied: never stored.
+  const [key, setKeyText] = useState("");
+  const [contract, setContract] = useState(false);
+  const [reference, setReference] = useState("");
+  const [result, setResult] = useState<EngineCheckResult | null>(null);
+  const [refused, setRefused] = useState<{ words: string; fields: RefusedField[] } | null>(null);
+  const [busy, setBusy] = useState<"checking" | "adding" | null>(null);
+  if (!entry) return null;
+  const id = "add-engine";
+  const passed = result?.ok === true && result.check !== null;
+  const shown = label.trim() || entry.label;
+
+  const choose = (next: string) => {
+    const picked = providers.find((p) => p.id === next);
+    setChosen(next);
+    setLabel(picked?.label ?? "");
+    setChanging(false);
+    setAddress("");
+    setRoles({});
+    // A key is never sent to a provider or an address it was not typed for (Amendment 2).
+    setKeyText("");
+    setResult(null);
+    setRefused(null);
+  };
+  /** The model as the provider names it: the prefix is the form's business, taken off if typed. Not
+   * for your own gateway, whose prefix is only LiteLLM's way to it and whose own names may hold it. */
+  const bare = (model: string) =>
+    entry.kind === "gateway" ? model.trim() : model.trim().replace(new RegExp(`^${entry.prefix}/`), "");
+  const engine = (): ModelProviderConfig => ({
+    name: entry.id,
+    // The label the preview shows is the label sent: left empty, the provider's own.
+    label: shown,
+    roles: Object.fromEntries(
+      entry.jobs.map((job) => [job, bare(roles[job] ?? "")] as const).filter(([, model]) => model !== ""),
+    ),
+    api_base: entry.address_asked || changing ? address.trim() || null : null,
+    privacy_contract: contract,
+    contract_reference: contract ? reference.trim() || null : null,
+    ...(entry.kind === "provider" ? {} : { kind: entry.kind, auth: entry.key ? "key" : "iam_role" }),
+  });
+  const check = (event: FormEvent) => {
+    event.preventDefault();
+    const typed = entry.key ? key : null;
+    setKeyText(""); // cleared once sent, whatever the answer
+    setResult(null);
+    setRefused(null);
+    setBusy("checking");
+    void checkEngine(api, engine(), typed)
+      .then(setResult)
+      .catch((e: Error) => setRefused({ words: e.message, fields: e instanceof ModelsRefused ? e.fields : [] }))
+      .finally(() => setBusy(null));
+  };
+  const add = () => {
+    if (!passed) return;
+    setBusy("adding");
+    void addChecked(api, result.check!)
+      .then((view) =>
+        onAdded(view, `${shown} is added and offered to analysts for cases whose data may leave this deployment.`),
+      )
+      .catch((e: Error) => {
+        // The Conduit holds the check (and its key at the gateway) after any refusal but one that
+        // says it is gone (404, 410): keep it, so Cancel can still send the delete and show the
+        // check removed. A check the Conduit says it no longer holds is dropped, to be made again.
+        const gone = e instanceof ModelsRefused && (e.status === 404 || e.status === 410);
+        if (gone) setResult(null);
+        setRefused({ words: e.message, fields: [] });
+      })
+      .finally(() => setBusy(null));
+  };
+  const cancel = () => {
+    if (!passed) return onClose(null, null);
+    void cancelCheck(api, result.check!)
+      .then((view) => onClose(view, `${shown} was not added; its check and key are removed.`))
+      .catch((e: Error) => {
+        // A check the Conduit says it no longer holds (404, 410: the 15-minute sweep, or "Cancel the
+        // check" in the Being-checked table, removed it) is already what Cancel asked for: drop it,
+        // so the next Cancel closes the form instead of sending the same failing delete.
+        const gone = e instanceof ModelsRefused && (e.status === 404 || e.status === 410);
+        if (gone) setResult(null);
+        setRefused({ words: e.message, fields: [] });
+      });
+  };
+
+  // Each refusal tied to the field it is about: a key refused to the key, a model to its job.
+  const fieldOf = (job: string): Field => `job-${job}`;
+  const errors = new Map<Field, string>();
+  for (const m of result?.ok === false ? result.models : []) {
+    if (m.ok) continue;
+    if (m.outcome === "key_refused" || m.outcome === "gateway_token") errors.set("key", m.words);
+    else if (m.outcome === "model_not_offered" || m.outcome === "model_not_enabled")
+      for (const r of m.roles) errors.set(fieldOf(r), m.words);
+  }
+  if (refused) {
+    for (const named of refused.fields) {
+      const at = formField(named.field);
+      if (at) errors.set(at, named.words);
+    }
+    const filled = entry.jobs.filter((j) => (roles[j] ?? "").trim() !== "");
+    for (const at of wordsFields(refused.words, filled)) errors.set(at, refused.words);
+  }
+  const errorId = (f: Field) => `${id}-${f}-error`;
+  const tied = (f: Field, hint?: string) => ({
+    "aria-invalid": errors.has(f) ? (true as const) : undefined,
+    "aria-describedby": [hint, errors.has(f) ? errorId(f) : null].filter(Boolean).join(" ") || undefined,
+  });
+  const error = (f: Field) =>
+    errors.has(f) ? (
+      <p id={errorId(f)} className="admin-models-error">
+        {errors.get(f)}
+      </p>
+    ) : null;
+  const jobLabel = (job: string) => JOBS.find((j) => j.role === job)?.label ?? job;
+  // What the analysts' engine list shows for it (`engineOptionText`), so the preview cannot drift from it.
+  const preview = engineOptionText({ name: entry.id, label: shown, roles: [], default_for: [], privacy_contract: contract });
+
+  return (
+    <form className="admin-models-form" aria-label="Add an engine" autoComplete="off" onSubmit={check}>
+      <fieldset disabled={passed || busy !== null} className="admin-models-fieldset">
+        <label htmlFor={`${id}-provider`}>Provider</label>
+        <Select id={`${id}-provider`} value={entry.id} onChange={(e) => choose(e.target.value)}>
+          {providers.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </Select>
+        {entry.note && (
+          <p className="label" style={{ margin: 0 }}>
+            {entry.note}
+          </p>
+        )}
+        <label htmlFor={`${id}-label`}>Label analysts see</label>
+        <Input id={`${id}-label`} value={label} onChange={(e) => setLabel(e.target.value)} {...tied("label")} />
+        {error("label")}
+        {entry.address && !changing && (
+          <div className="admin-models-row">
+            <span className="label" id={`${id}-address-shown`}>
+              Address: {entry.address}
+            </span>
+            <Button type="button" aria-label={`Change the address of ${entry.label}`} onClick={() => setChanging(true)}>
+              Change
+            </Button>
+          </div>
+        )}
+        {(entry.address_asked || changing) && (
+          <>
+            <label htmlFor={`${id}-address`}>
+              {entry.address_asked ? "Address (https://)" : "Address of the gateway in front of it (https://)"}
+            </label>
+            <Input id={`${id}-address`} value={address} onChange={(e) => setAddress(e.target.value)} {...tied("address")} />
+            {error("address")}
+          </>
+        )}
+        <p className="label" id={`${id}-jobs-hint`} style={{ margin: 0 }}>
+          Type each model&apos;s name as {entry.label} gives it. A job left empty uses this deployment&apos;s own model.
+        </p>
+        {entry.jobs.map((job) => (
+          <div key={job} className="admin-models-row">
+            <label htmlFor={`${id}-${job}`}>{jobLabel(job)}: model name</label>
+            <Input
+              id={`${id}-${job}`}
+              value={roles[job] ?? ""}
+              placeholder={entry.example ? `such as ${entry.example}` : undefined}
+              spellCheck={false}
+              onChange={(e) => setRoles({ ...roles, [job]: e.target.value })}
+              {...tied(fieldOf(job), `${id}-jobs-hint`)}
+            />
+            {error(fieldOf(job))}
+          </div>
+        ))}
+        {entry.key && (
+          <>
+            <label htmlFor={`${id}-key`}>
+              {entry.kind === "gateway" ? "Token" : "Key"} (sent once to the model gateway, never shown again)
+            </label>
+            {/* Never filled or saved by the browser: `new-password` is the value browsers honour on a
+                password field (they ignore `off` there), and the password managers' own opt-outs. */}
+            <Input
+              id={`${id}-key`}
+              type="password"
+              autoComplete="new-password"
+              data-1p-ignore="true"
+              data-lpignore="true"
+              data-bwignore="true"
+              data-form-type="other"
+              spellCheck={false}
+              value={key}
+              onChange={(e) => setKeyText(e.target.value)}
+              {...tied("key")}
+            />
+            {error("key")}
+          </>
+        )}
+        <label className="admin-models-check">
+          <Checkbox checked={contract} onChange={(e) => setContract(e.target.checked)} /> Under a privacy contract (a
+          data-processing agreement covering this key)
+        </label>
+        {contract && (
+          <>
+            <label htmlFor={`${id}-reference`}>The agreement&apos;s reference, in words</label>
+            <Input
+              id={`${id}-reference`}
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              {...tied("reference")}
+            />
+            {error("reference")}
+          </>
+        )}
+      </fieldset>
+      <p className="admin-models-preview" id={`${id}-preview`}>
+        Analysts will see: <strong>{preview}</strong>. It is offered only for cases whose data may leave this deployment.
+      </p>
+      {/* One live region at a time: the busy words replace the check's, never stand beside them. */}
+      {busy && <p role="status">{busy === "checking" ? "Checking…" : "Adding…"}</p>}
+      {result && !busy && (
+        <div role={result.ok ? "status" : "alert"} className="admin-models-result">
+          <p style={{ margin: 0 }}>{result.words}</p>
+          {result.models.length > 1 && (
+            <ul>
+              {/* By job, in the Conduit's words: no typed model name comes back to be shown (ruling 22). */}
+              {result.models.map((m) => (
+                <li key={m.roles.join(",")}>{m.words}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      {refused && <p role="alert">{refused.words}</p>}
+      <div className="admin-models-actions">
+        {passed ? (
+          <Button type="button" variant="primary" onClick={add} disabled={busy !== null}>
+            Add the engine
+          </Button>
+        ) : (
+          <Button type="submit" variant="primary" disabled={busy !== null || (entry.key && key.trim() === "")}>
+            Check
+          </Button>
+        )}
+        {/* Not while a check is out: it could pass after the form closed, its key unseen here. */}
+        <Button type="button" onClick={cancel} disabled={busy !== null}>
           Cancel
         </Button>
       </div>
@@ -251,11 +533,20 @@ function KeyForm({ engine, onSend, onCancel }: { engine: AdminEngine; onSend: (k
       <Input
         id={`key-${name}`}
         type="password"
-        autoComplete="off"
+        autoComplete="new-password"
+        data-1p-ignore="true"
+        data-lpignore="true"
+        data-bwignore="true"
+        data-form-type="other"
         spellCheck={false}
         value={key}
         onChange={(e) => setKeyText(e.target.value)}
       />
+      <p className="label" style={{ margin: 0 }}>
+        {engine.key_state === "set"
+          ? "The new key is checked against each of the engine's models before it replaces the one held: a key the provider refuses changes nothing."
+          : "The key is checked against each of the engine's models before it is kept: a key the provider refuses is not kept."}
+      </p>
       <div className="admin-models-actions">
         <Button type="submit" variant="primary" disabled={key.trim() === ""}>
           {engine.key_state === "set" ? "Rotate the key" : "Set the key"}
@@ -345,8 +636,8 @@ export function Models({ api }: { api: ModelsApi }) {
               Settings come from {view.source}.
             </p>
             {/* ADR-135 Amendments 5, 8 and 9: chosen at set-up on the cloud-platform profile (the one that
-                offers Laurium, and the gateway kind), shown, not changed here. */}
-            {(view.engine_kinds ?? []).includes("gateway") && (
+                offers Laurium, and the only one offering Bedrock), shown, not changed here. */}
+            {(view.engine_kinds ?? []).includes("bedrock") && (
               <p className="label" style={{ margin: "0.5rem 0 0" }}>
                 Extraction engine: {view.extraction_engine === "laurium" ? "Laurium" : "OspreyFlow Deep read"}, chosen
                 at set-up: change it in osprey.yaml, re-render, and have the platform team apply it.
@@ -459,20 +750,14 @@ export function Models({ api }: { api: ModelsApi }) {
                   <EngineForm
                     key={open.name}
                     initial={draftOf(engine.provider)}
-                    editing
-                    kinds={kindsOf(view)}
+                    keyless={engine.key_state === "iam_role"}
                     onCancel={() => setOpen(null)}
-                    onSave={(draft) => {
-                      const hadKey = engine.key_state === "set";
-                      const next = providerOf(draft);
-                      const moved = (engine.provider.api_base ?? "") !== (next.api_base ?? "");
+                    onSave={(draft, key, checked) =>
                       act(
-                        editEngine(api, next),
-                        hadKey && moved
-                          ? `${draft.name} is saved. Its address changed, so its key was removed: a key is never sent to an address it was not entered for. Enter the key again.`
-                          : `${draft.name} is saved.`,
-                      );
-                    }}
+                        editEngine(api, providerOf(draft), key ?? undefined),
+                        checked ? `${draft.label || draft.name} is checked and saved.` : `${draft.name} is saved.`,
+                      )
+                    }
                   />
                 ) : null;
               })()}
@@ -487,7 +772,7 @@ export function Models({ api }: { api: ModelsApi }) {
                     onSend={(key) =>
                       act(
                         setKey(api, engine.provider.name, key),
-                        `${engine.provider.label ?? engine.provider.name}: the key is set. It is kept by the model gateway and never shown again.`,
+                        `${engine.provider.label ?? engine.provider.name}: checked, the key is set. It is kept by the model gateway and never shown again.`,
                       )
                     }
                   />
@@ -511,20 +796,48 @@ export function Models({ api }: { api: ModelsApi }) {
                   />
                 ) : null;
               })()}
+            {(view.checks ?? []).length > 0 && (
+              <table className="table" aria-label="Being checked">
+                <thead>
+                  <tr>
+                    <th>Being checked</th>
+                    <th>Checked by</th>
+                    <th>Add it before</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(view.checks ?? []).map((held) => (
+                    <tr key={held.id}>
+                      <td>
+                        {held.label} <span className="label">({held.engine})</span>
+                        <div className="label">Passed its check; not offered to analysts until it is added.</div>
+                      </td>
+                      <td>{held.by}</td>
+                      <td>{when(held.expires_at)}</td>
+                      <td className="admin-models-actions">
+                        <Button
+                          aria-label={`Cancel the check of ${held.label}`}
+                          onClick={() =>
+                            act(cancelCheck(api, held.id), `${held.label} was not added; its check and key are removed.`)
+                          }
+                        >
+                          Cancel the check
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
             {open?.kind === "add" ? (
-              <EngineForm
-                initial={EMPTY}
-                editing={false}
-                kinds={kindsOf(view)}
-                onCancel={() => setOpen(null)}
-                onSave={(draft) => {
-                  const added = providerOf(draft);
-                  act(
-                    addEngine(api, added),
-                    added.auth === "iam_role"
-                      ? `${added.name} is added. It signs in by the gateway's own IAM role: no key is needed.`
-                      : `${added.name} is added. Enter its key next.`,
-                  );
+              <AddEngineForm
+                api={api}
+                providers={view.providers ?? []}
+                onAdded={(next, words) => shown(next, words)}
+                onClose={(next, words) => {
+                  if (next && words) shown(next, words);
+                  else setOpen(null);
                 }}
               />
             ) : (

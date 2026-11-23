@@ -5,6 +5,10 @@
 // `?open=add`, `?open=key` and `?open=limits` draw the forms open; `?local=1` a local-only deployment;
 // `?usage=chosen` the usage's own days drawn; `?usage=fail` the gateway not giving its usage.
 // Usage and limits (ADR-135 Amendment 3) are answered from the same in-memory record.
+// ADR-135 Amendment 14: the add form's provider list and the check before Add. A key containing
+// "refuse" is refused; any other passes. `held=1` draws a passed check waiting for Add;
+// `check=passed` or `check=refused` fills the add form and checks it; `kind=<provider id>` chooses
+// that provider in the add form. The key is never kept here, nor in `modelsSent`.
 import { createRoot } from "react-dom/client";
 
 import "../../../packages/design/tokens.css";
@@ -16,6 +20,10 @@ import { applyHarnessBrand } from "./brandHarness";
 await applyHarnessBrand();
 
 const params = new URLSearchParams(location.search);
+// A synthetic key, made when the page loads (the owner's rules for keys): never written in a file.
+// The harness refuses a key that contains "refuse".
+const aKey = (mark = "") =>
+  `sk-${mark}${Array.from(crypto.getRandomValues(new Uint8Array(12)), (b) => b.toString(16).padStart(2, "0")).join("")}`;
 type Engine = {
   provider: { name: string; label: string | null; roles: Record<string, string>; api_base: string | null;
               privacy_contract: boolean; contract_reference: string | null; kind?: string; auth?: string | null };
@@ -41,6 +49,21 @@ if (params.get("iam")) {
                  key_state: "iam_role", key_set_at: null, key_set_by: null, default_for: [] });
 }  // prettier-ignore
 let defaults: Record<string, string> = {};
+// The providers each profile offers (`services/api/model_catalogue.py`), Bedrock on the cloud platform alone.
+const ALL3 = ["extraction", "vision", "transcription"];
+const providers = [
+  { id: "gemini", label: "Google Gemini", kind: "provider", address: "https://generativelanguage.googleapis.com", address_asked: false, key: true, example: "gemini-3.8-flash", jobs: ALL3, prefix: "gemini", note: "" },
+  { id: "openai", label: "OpenAI", kind: "provider", address: "https://api.openai.com", address_asked: false, key: true, example: "gpt-6.1-sol", jobs: ALL3, prefix: "openai", note: "" },
+  { id: "anthropic", label: "Anthropic", kind: "provider", address: "https://api.anthropic.com", address_asked: false, key: true, example: "claude-sonnet-5-5", jobs: ["extraction", "vision"], prefix: "anthropic", note: "" },
+  { id: "azure", label: "Azure OpenAI", kind: "provider", address: null, address_asked: true, key: true, example: null, jobs: ALL3, prefix: "azure", note: "Give your Azure OpenAI resource's address, and each deployment's name." },
+  ...(params.get("cloud") ? [{ id: "bedrock", label: "Amazon Bedrock", kind: "bedrock", address: null, address_asked: false, key: false, example: "amazon.nova-pro-v1:0", jobs: ["extraction", "vision"], prefix: "bedrock", note: "Amazon Bedrock is reached by this deployment's own role, in London only: no key and no address." }] : []),
+  { id: "gateway", label: "Another provider or your own gateway", kind: "gateway", address: null, address_asked: true, key: true, example: null, jobs: ALL3, prefix: "openai", note: "Give its address (https://…). Its models are named, and each is checked by one call." },
+];  // prettier-ignore
+type Held = { id: string; provider: Engine["provider"]; at: string };
+const held: Held[] = params.get("held")
+  ? [{ id: "chk-held", provider: { name: "anthropic", label: "Anthropic", roles: { extraction: "claude-sonnet-5-5" }, api_base: null, privacy_contract: false, contract_reference: null }, at: "2026-11-15T12:00:00Z" }]
+  : [];  // prettier-ignore
+let checks = 0;
 const history = [
   { at: "2026-11-08T09:00:00Z", by: "admin-1", action: "key_set", engine: "gemini", changes: {}, outcome: "done" },
 ];
@@ -58,17 +81,32 @@ const view = () => ({
   sendable_handling_codes: ["O"],
   source: "models file",
   // ADR-135 Amendment 7 decision 1: `cloud=1` is the cloud-platform profile, which offers the two kinds.
-  engine_kinds: params.get("cloud") ? ["provider", "gateway", "bedrock"] : ["provider"],
+  // Amendment 14: your own gateway on every profile, Bedrock on the cloud platform alone.
+  engine_kinds: params.get("cloud") ? ["provider", "gateway", "bedrock"] : ["provider", "gateway"],
   // ADR-135 Amendment 9: `engine=laurium`, the extraction engine the render chose (read-only).
   extraction_engine: params.get("engine") === "laurium" ? "laurium" : "deep_read",
+  providers,
+  checks: held.map((h) => ({ id: h.id, engine: h.provider.name, label: h.provider.label ?? h.provider.name, by: "admin-1", at: h.at, expires_at: "2026-11-15T12:15:00Z" })),
 });
 
+// The check's answer by job, as the Conduit's is (the owner's ruling 22): never the typed name.
+const JOB_WORDS: Record<string, string> = { extraction: "Extraction and Ask", vision: "Image description", transcription: "Transcription", embedding: "Embeddings" };
+const jobOf = (provider: Engine["provider"], model: string) =>
+  Object.keys(provider.roles).filter((r) => provider.roles[r] === model).map((r) => JOB_WORDS[r] ?? r).join(", ");
+
+const urls: string[] = [];
+(window as unknown as { modelsUrls: string[] }).modelsUrls = urls;
+
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  // P8 (the owner's key review): every address asked, whole, so a test can say none holds a key.
+  urls.push(String(input));
   const path = new URL(String(input)).pathname.replace("/v1/admin/models", "");
   const method = init?.method ?? "GET";
   asked.push(`${method} ${path || "/"}`);
   const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
-  if (init?.body && !path.endsWith("/key")) sentBodies.push({ request: `${method} ${path || "/"}`, body });
+  // Never a key: a key's own PUT is not recorded, and a check's body is recorded without its key.
+  const { key: typedKey, ...kept } = body as { key?: string } & Record<string, unknown>;
+  if (init?.body && !path.endsWith("/key")) sentBodies.push({ request: `${method} ${path || "/"}`, body: kept });
   const reply = (status: number, value: unknown) => new Response(JSON.stringify(value), { status });
   if (path === "/history") return reply(200, { entries: history });
   if (path === "/usage" && params.get("usage") === "fail") {
@@ -88,10 +126,27 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     });
   }  // prettier-ignore
   if (path === "" && method === "GET") return reply(200, view());
-  if (path === "/engines" && method === "POST") {
-    // ADR-135 Amendment 4: an engine signed in by the gateway's own IAM role has no key to set.
+  if (path === "/checks" && method === "POST") {
     const provider = body.provider as Engine["provider"];
-    engines.push({ provider, key_state: provider.auth === "iam_role" ? "iam_role" : "none", key_set_at: null, key_set_by: null, default_for: [] });
+    const models = [...new Set(Object.values(provider.roles))];
+    if (String(typedKey ?? "").includes("refuse")) {
+      return reply(200, { engine: provider.name, ok: false, check: null, words: "The provider refused the key. Nothing was kept: correct it and check again.",
+        models: models.map((model) => ({ roles: Object.keys(provider.roles).filter((r) => provider.roles[r] === model), outcome: "key_refused", ok: false, words: `${jobOf(provider, model)}: The provider refused the key.` })) });
+    }  // prettier-ignore
+    const id = `chk-${++checks}`;
+    held.push({ id, provider, at: "2026-11-15T12:00:00Z" });
+    return reply(200, { engine: provider.name, ok: true, check: id, words: "The key and every model answered. Add the engine within 15 minutes to offer it to analysts.",
+      models: models.map((model) => ({ roles: Object.keys(provider.roles).filter((r) => provider.roles[r] === model), outcome: "ok", ok: true, words: `${jobOf(provider, model)}: Connected: the engine answered.` })) });
+  }  // prettier-ignore
+  const checkMatch = /^\/checks\/([^/]+)(\/add)?$/.exec(path);
+  if (checkMatch) {
+    const pending = held.find((h) => h.id === decodeURIComponent(checkMatch[1]));
+    if (!pending) return reply(404, { detail: { detail: "There is no such check. Check the key and models again." } });
+    held.splice(held.indexOf(pending), 1);
+    if (checkMatch[2]) {
+      const iam = pending.provider.auth === "iam_role";
+      engines.push({ provider: pending.provider, key_state: iam ? "iam_role" : "set", key_set_at: iam ? null : "2026-11-15T12:00:00Z", key_set_by: iam ? null : "admin-1", default_for: [] });
+    }  // prettier-ignore
     return reply(200, view());
   }
   if (path === "/defaults") {
@@ -108,6 +163,20 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     engine.limits = body.limits as Engine["limits"];
     return reply(200, view());
   }
+  // The owner's ruling 19, as the Conduit refuses: a key containing "refuse" fails its check and
+  // changes nothing; a changed address without its key is refused.
+  const shown = engine.provider.label ?? engine.provider.name;
+  if (method === "PUT" && String(typedKey ?? "").includes("refuse")) {
+    const kept = match[2] === "/key" ? "the key it holds" : "its models, address and key";
+    return reply(422, { detail: { error: "model_admin_refused", detail: `The provider refused the key. Nothing was changed: ${shown} keeps ${kept}.` } });
+  }
+  if (method === "PUT" && !match[2]) {
+    const next = body.provider as Engine["provider"];
+    if ((next.api_base ?? "") !== (engine.provider.api_base ?? "") && next.auth !== "iam_role" && !typedKey) {
+      return reply(422, { detail: { error: "model_admin_refused", detail: `${shown}'s address changed: give its key with it. Nothing was changed.` } });
+    }
+    if (typedKey) Object.assign(engine, { key_state: "set", key_set_at: "2026-11-15T12:00:00Z", key_set_by: "admin-1" });
+  }  // prettier-ignore
   if (match[2] === "/key") {
     // The key is never kept here either: only that one was sent.
     if (method === "PUT") Object.assign(engine, { key_state: "set", key_set_at: "2026-11-08T10:00:00Z", key_set_by: "admin-1" });
@@ -141,7 +210,8 @@ if (params.get("usage") === "chosen") {
 
 const open = params.get("open");
 if (open) {
-  const name = open === "add" ? "Add an engine" : open === "limits" ? "Set limits for Gemini" : "Enter key for OpenAI";
+  const name =
+    open === "add" ? "Add an engine" : open === "limits" ? "Set limits for Gemini" : open === "edit" ? "Edit Gemini" : "Enter key for OpenAI";
   for (let i = 0; i < 40; i++) {
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.getAttribute("aria-label") === name);
     if (button) {
@@ -150,10 +220,10 @@ if (open) {
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  // `kind=bedrock` or `kind=gateway`: the add form with that kind of engine chosen (ADR-135 Am 4).
+  // `kind=bedrock` or `kind=gateway`: the add form with that provider chosen (ADR-135 Am 4, Am 14).
   const kind = params.get("kind");
   for (let i = 0; kind && i < 40; i++) {
-    const select = document.getElementById("add-engine-kind") as HTMLSelectElement | null;
+    const select = document.getElementById("add-engine-provider") as HTMLSelectElement | null;
     if (select) {
       Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, kind);
       select.dispatchEvent(new Event("change", { bubbles: true }));
@@ -161,4 +231,28 @@ if (open) {
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
+}
+
+// `open=edit&moved=1`: Gemini's address changed in its edit form, so its key is asked with it and the
+// edit is checked before it is saved (the owner's ruling 19), for the axe scan of that state.
+if (open === "edit" && params.get("moved") === "1") {
+  for (let i = 0; i < 40 && !document.getElementById("edit-gemini-base"); i++) await new Promise((r) => setTimeout(r, 50));
+  const field = document.getElementById("edit-gemini-base") as HTMLInputElement;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, "https://proxy.example.org/v1");
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+// `check=passed` or `check=refused`: the add form filled and checked, for the axe scan of each answer.
+const checkState = params.get("check");
+if (open === "add" && checkState) {
+  const set = (id: string, value: string) => {
+    const field = document.getElementById(id) as HTMLInputElement;
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  for (let i = 0; i < 40 && !document.getElementById("add-engine-key"); i++) await new Promise((r) => setTimeout(r, 50));
+  set("add-engine-extraction", "gemini-3.8-flash");
+  set("add-engine-key", checkState === "refused" ? aKey("refuse-") : aKey());
+  await new Promise((r) => setTimeout(r, 50));
+  (document.querySelector('form[aria-label="Add an engine"]') as HTMLFormElement).requestSubmit();
 }
