@@ -1679,8 +1679,10 @@ withheld flag, for every export the Conduit makes: a report, assessment or pack 
 Reports view's figures, a dataset release and a rule file. A ledger row is written before the artefact is
 returned, and a row that cannot be written fails the export with a 503, as the audit writer does. A report's
 withheld flag is true when the reader's rights lowered one of its alert or held figures: an alert the queue left out
-because the reader cannot read what it cites, an alert the reader's dataset reach took out of the query, or (for an
-editor's held figures) a held row their marking or reach leaves out; the KYC and POLE figures add nothing to it. `GET /v1/exports`
+because the reader cannot read what it cites, an alert on the layer a case borrows read-only from its original case when the
+reader holds no level on that original (the one refusal in a case's read set that is the reader's own rights), or (for an
+editor's held figures) a held row their marking or reach leaves out; the KYC and POLE figures add nothing to it. The case's own dataset scope is not the reader's rights and sets nothing: an
+owned or team monitor or hotlist alert raised on a dataset the case does not read is not a figure of that case. `GET /v1/exports`
 reads them all by its one right, as it reads every case's, with one condition on a row that has no case:
 a dataset's release row is in the read only for a reader who may know the dataset, the condition being in the query's
 `WHERE`. At `GET /v1/exports` that reader is the administrator alone, who lists every dataset: the route takes the plain

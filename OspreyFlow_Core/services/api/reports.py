@@ -54,6 +54,7 @@ from schemas.explore import TypeCounts
 
 from .alert_queue import monitoring_queue_and_left_out
 from .alerts import AlertStore
+from .dataset_scope import read_only_layer
 from .explore import ExploreService
 from .held_rows import HeldRowStore
 from .kyc import assess
@@ -258,16 +259,22 @@ async def alert_report_and_left_out(
 ) -> tuple[ReportFigures, bool]:
     """`alert_report`, and whether the reader's rights left any alert out of its figures: a yes or
     no (SE8b). True when the queue left one out whole because the reader cannot read what it cites
-    (the queue's own decision), or when the reader's dataset reach removed one from the query
-    (`AlertStore.left_out_by_reach`: ADR-099 Amendment 3)."""
+    (the queue's own decision), or when the case borrows another case's layer read-only and the
+    reader, holding no level on the original, has it left out of their read set, with an alert of
+    theirs on it (`AlertStore.left_out_on_borrowed_layer`). **Not** the case's own dataset scope:
+    an alert on a dataset the case does not read is not one of its figures, and sets nothing (the
+    owner's ruling of 23 November 2026, option A)."""
     now = datetime.now(UTC)
     start = today - timedelta(weeks=period_weeks)
     every_kind, left_out = await monitoring_queue_and_left_out(
         alerts, graph, analytics, investigation_id, reader
     )
-    # An alert on a dataset outside the reader's reach never reaches the queue's loop (the store's
-    # query drops it), so the loop cannot say it was left out: ask the store, with the same scope.
-    left_out = left_out or await alerts.left_out_by_reach(investigation_id, reader)
+    # An alert on the borrowed layer, which the reader's read set leaves out for want of a level on
+    # the original case, never reaches the queue's loop (the store's query drops it), so the loop
+    # cannot say it was left out: ask the store, with the same scope.
+    left_out = left_out or await alerts.left_out_on_borrowed_layer(
+        investigation_id, reader, read_only_layer()
+    )
     typology = [q.alert for q in every_kind if q.kind == "typology"]
     by_week, by_age, outcomes, total = _alert_figures(typology, start=start, now=now)
     figures = ReportFigures(
@@ -417,8 +424,9 @@ async def case_report_and_withheld(
     from each figure's own computation, not from a stand-in. It is true when
 
     - the alert queue left out an alert whole because the reader cannot read what it cites
-      (`monitoring_queue_and_left_out`), or the reader's dataset reach took an alert out of the
-      query (`AlertStore.left_out_by_reach`), either of which lowers every alert and monitoring
+      (`monitoring_queue_and_left_out`), or the reader holds no level on the original case of a
+      layer this case borrows read-only and an alert of theirs on it was left out of their read set
+      (`AlertStore.left_out_on_borrowed_layer`), either of which lowers every alert and monitoring
       figure; or
     - held rows are shown (`show_held`) and the case holds a row of any status the reader's marking
       or reach leaves out (`HeldRowStore.left_out_for`, the same clauses as the count).

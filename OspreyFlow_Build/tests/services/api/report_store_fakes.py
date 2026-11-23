@@ -1,9 +1,9 @@
 """A stand-in for the part of the alert store the report's `withheld` flag asks about (SE8b).
 
-`AlertStore.left_out_by_reach` is true when the reader's dataset reach takes an alert out of the
-queue. It is false for a reader with no dataset limit, so a test whose reader has none can say so
-with this, and a test of the flag with a limit uses a store that drops the alert and says so from
-the one filter (`test_report_figures_withheld._ReachStore`).
+`AlertStore.left_out_on_borrowed_layer` is true when the reader's rights leave a borrowed layer out
+of their read set and an alert of theirs is on it. It is false for a reader with no dataset limit or
+a case that borrows no layer, so a test whose reader has none can say so with this; a test of the
+flag itself runs the real store (`test_report_figures_withheld._PostgresRefusingPool`).
 """
 
 from __future__ import annotations
@@ -12,7 +12,9 @@ from typing import Any
 
 
 class UnlimitedReachAlerts:
-    """An alert store for a reader with no dataset limit: reach removes nothing."""
+    """An alert store for a reader whose rights leave out no borrowed layer."""
 
-    async def left_out_by_reach(self, investigation_id: str, reader: Any) -> bool:
+    async def left_out_on_borrowed_layer(
+        self, investigation_id: str, reader: Any, borrowed: str | None
+    ) -> bool:
         return False

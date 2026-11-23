@@ -351,8 +351,8 @@ def queue_scope(
     drawn item it cites lives in that case's layer.
 
     `with_reach=False` leaves the dataset reach clause (and its parameter) off, for the one caller
-    that counts what the reach alone removes (`AlertStore.left_out_by_reach`, SE8b); no read of
-    alerts for a reader ever passes it."""
+    that asks about the borrowed layer alone (`AlertStore.left_out_on_borrowed_layer`, SE8b); no
+    read of alerts for a reader ever passes it."""
     case, me, unit, teams, authored, datasets = (f"${position + i}" for i in range(6))
     reach, extra = reach_clause(principal, position + 6) if with_reach else ("", [])
     watch = "typology IS NULL AND rule_id NOT LIKE 'analyst:%' AND rule_id NOT LIKE 'drawn_watch:%'"
@@ -1099,18 +1099,24 @@ class AlertStore:
             )
         return [_row_to_queue_row(row) for row in rows]
 
-    async def left_out_by_reach(self, investigation_id: str, principal: Principal) -> bool:
-        """Whether the reader's dataset reach (ADR-099 Amendment 3, `reach_clause`) takes any alert
-        out of the queue that `list_queue` would otherwise return for them in this case: a yes or
-        no, never a count (rule 7). An alert on a dataset outside `principal.datasets` never
-        reaches `alert_queue.monitoring_queue_and_left_out`'s loop, so the flag read there cannot
-        see it, yet every alert and monitoring figure is lower for it (SE8b: what a report's ledger
-        row says as `withheld`). The same scope as `list_queue` (`queue_scope`), counted beside the
-        same scope with the reach clause applied, in one query, so the two cannot be asked
-        differently. A reader with no dataset limit (`datasets` is `None`) loses nothing to reach
-        and costs no query."""
-        reach, reach_params = reach_clause(principal, 7)
-        if not reach:
+    async def left_out_on_borrowed_layer(
+        self, investigation_id: str, principal: Principal, borrowed: str | None
+    ) -> bool:
+        """Whether the reader's own rights took an alert out of the queue by leaving the borrowed
+        layer out of their read set: a yes or no, never a count (rule 7). A case made from another
+        borrows the original case's layer read-only, and `readable_of_case` leaves it out of
+        `principal.datasets` unless the reader holds a level on the original: that refusal is the
+        one thing in a case's read set that is the reader's rights (the owner's ruling of 23
+        November 2026, SE8b, option A). An alert on any other dataset the case does not read is
+        **not** this: `principal.datasets` in a case route is the case's read set, not the reader's
+        own rights, and an alert the reader owns on another dataset is not a figure of this case.
+
+        So the answer is true only when `borrowed` (the request's read-only layer,
+        `dataset_scope.read_only_layer`) is a layer the principal's set leaves out, and an alert the
+        queue would hold for them (the same `queue_scope`, without its reach clause) is on it. A
+        reader with no dataset limit, a case that borrows nothing, or a reader who reads the layer
+        loses nothing to it and costs no query."""
+        if borrowed is None or principal.datasets is None or borrowed in principal.datasets:
             return False
         scope, extra = queue_scope(
             principal,
@@ -1120,14 +1126,12 @@ class AlertStore:
             with_reach=False,
         )
         async with self._pool.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT count(*) AS every,"
-                f" count(*) FILTER (WHERE true{reach}) AS readable"
-                f" FROM alerts WHERE true{scope}",
+            found = await conn.fetchval(
+                f"SELECT EXISTS (SELECT 1 FROM alerts WHERE dataset_id = ${len(extra) + 1}{scope})",
                 *extra,
-                *reach_params,
+                borrowed,
             )
-        return row is not None and row["every"] > row["readable"]
+        return found is True
 
     async def case_of(self, alert_id: str) -> str | None:
         """The case an alert was raised in (`investigation_id`), or `None` for an id no alert holds

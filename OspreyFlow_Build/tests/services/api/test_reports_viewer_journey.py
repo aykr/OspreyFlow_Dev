@@ -132,8 +132,10 @@ class _Nothing:
     async def record(self, *args: object, **kwargs: object) -> None:
         return None
 
-    async def left_out_by_reach(self, investigation_id: str, reader: Any) -> bool:
-        """The alert store's reach flag, for a reader with no dataset limit."""
+    async def left_out_on_borrowed_layer(
+        self, investigation_id: str, reader: Any, borrowed: str | None
+    ) -> bool:
+        """The alert store's borrowed-layer flag, for a reader whose rights leave out none."""
         return False
 
     async def chosen_of_case(self, investigation_id: str) -> list[Any]:
