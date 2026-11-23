@@ -1,0 +1,89 @@
+{
+  "files": [
+    {
+      "path": "chart/.helmignore",
+      "sha256": "58316c6d9c894109e156af051116e168b036cfec41675f230c00457f1d7f3e48",
+      "size": 106
+    },
+    {
+      "path": "chart/Chart.yaml",
+      "sha256": "504f4620cd250cdbe58f7c9d5a2e57bace9e96abedee570032614cf6514ec7ea",
+      "size": 226
+    },
+    {
+      "path": "chart/templates/NOTES.txt",
+      "sha256": "40aacfd1ead13562909d51963d19c68ecc1e64944c6bfd7b06254c3c817a97d2",
+      "size": 467
+    },
+    {
+      "path": "chart/templates/_helpers.tpl",
+      "sha256": "158e4ef278055283a1c4deea1db41d63e27205799ea66e8d8b1b69108985d1f9",
+      "size": 7290
+    },
+    {
+      "path": "chart/templates/backups.yaml",
+      "sha256": "49b7461c4e2f3087fc58d85c30432d1435df52ed713d20fc8639ef57aab6f200",
+      "size": 16306
+    },
+    {
+      "path": "chart/templates/configmaps.yaml",
+      "sha256": "9ced39ec220a4209311efc6141ac664ba1417e8f1a2e63e60872d313c29f54cb",
+      "size": 608
+    },
+    {
+      "path": "chart/templates/ingress.yaml",
+      "sha256": "0ab444fc3024c90ca406584ce9fbbd649e5cece9a4a9e1546cfec93c251e28bc",
+      "size": 2146
+    },
+    {
+      "path": "chart/templates/jobs.yaml",
+      "sha256": "f077b8e3e9d7ca4dc73e6257f9b082c36c70ee2c3a0e42a7cae7d4ef8017860b",
+      "size": 751
+    },
+    {
+      "path": "chart/templates/networkpolicies.yaml",
+      "sha256": "b6179532c249684b7830f6c594da9cdb6143d8a59ed650b0a08e8d046635bf87",
+      "size": 6866
+    },
+    {
+      "path": "chart/templates/searchindex.yaml",
+      "sha256": "0a2be909d45e140c295d0f4a45f94d3194f9351877173a0f8fca4679a339d29a",
+      "size": 2721
+    },
+    {
+      "path": "chart/templates/seed.yaml",
+      "sha256": "d5488b2035b50bed3b4b01414c6141d85947c6d642fbb5c72b08e4cd993759db",
+      "size": 2702
+    },
+    {
+      "path": "chart/templates/services.yaml",
+      "sha256": "5d157853b1e1ae045c32bdc1f05a5aa62d1029fb2f6d819a5ef44ca2aa83459d",
+      "size": 1417
+    },
+    {
+      "path": "chart/templates/storage.yaml",
+      "sha256": "05e70abdd3bf21c7208bcdc5c94955c18309d90e007c537b462d2b8453050790",
+      "size": 1626
+    },
+    {
+      "path": "chart/templates/workloads.yaml",
+      "sha256": "29f815a0eee6c114e3700d868d578c80aafcd5e82a5daac5d20e53006eae6e68",
+      "size": 2196
+    },
+    {
+      "path": "chart/values.yaml",
+      "sha256": "7dabb6903d87032f0c10f6d514148c8192dfd07c8fb1bf0b14c08bc00c9019a8",
+      "size": 2691
+    },
+    {
+      "path": "values.yaml",
+      "sha256": "62de0242ed7c23672300772094cb165d8d5091fbddef09f7ca8afd7e62db2f4a",
+      "size": 73208
+    },
+    {
+      "path": "versions.lock",
+      "sha256": "4cc1691109b4dd92a67f984b7739a010b46afe97a922cf83aae0ed3e2c3e1248",
+      "size": 3723
+    }
+  ]
+}

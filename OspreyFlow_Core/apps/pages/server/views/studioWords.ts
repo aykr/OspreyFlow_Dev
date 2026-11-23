@@ -141,6 +141,13 @@ export function modelInWords(packs: readonly string[] | undefined): string {
 
 export interface Pipeline {
   recipe_id?: string;
+  /** The pipeline's name, as the Studio shows it. */
+  label?: string;
+  version?: number;
+  /** The dataset it loads into; `null` for one made before datasets were stamped (the dataset map leaves it out). */
+  dataset_id?: string | null;
+  /** The recipe as a graph of stages; `null` for one kept without (a version 1 recipe). */
+  pipeline?: { nodes?: { id: string; kind: string }[]; edges?: { source: string; target: string }[] } | null;
   status?: string;
   source_location?: string | null;
   verified_at?: string | null;

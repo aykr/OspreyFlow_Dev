@@ -76,6 +76,12 @@ class IdentityAdminRefused(Exception):
     """The identity provider refused or could not be reached; said in words, never swallowed."""
 
 
+class NoSuchDashboard(IdentityAdminRefused):
+    """The identity provider holds no dashboard identity of that name (never registered, or
+    already deleted). Told apart from its other refusals because a removal whose first attempt
+    deleted the identity and then failed in the mart is finished by removing it again."""
+
+
 class PersonActionRefused(Exception):
     """An Admin -> People action OspreyFlow refuses, before the identity provider is changed
     (ADR-112 Amendment 3): `error` is the answer's code, `words` what the administrator reads."""
@@ -690,8 +696,13 @@ class IdentityAdmin:
         }  # fmt: skip
 
     async def _uuid(self, client_id: str) -> str | None:
-        found = (await self._call("GET", "/clients", params={"clientId": client_id})).json()
-        exact = [c for c in found if c.get("clientId") == client_id]
+        answer = await self._call("GET", "/clients", params={"clientId": client_id})
+        if answer.status_code != 200:
+            # An error page is not a list of clients: said in words, never iterated.
+            raise IdentityAdminRefused(
+                f"the identity provider did not look the dashboard up ({answer.status_code})"
+            )
+        exact = [c for c in answer.json() if c.get("clientId") == client_id]
         return str(exact[0]["id"]) if exact else None
 
     async def _identity(self, client: dict[str, Any]) -> DashboardIdentity:
@@ -761,13 +772,22 @@ class IdentityAdmin:
             raise UnknownRoleError(f"{client_id} is not a dashboard identity")
         uuid = await self._uuid(client_id)
         if uuid is None:
-            raise IdentityAdminRefused("no such dashboard")
-        await self._call("DELETE", f"/clients/{uuid}")
+            raise NoSuchDashboard("no such dashboard")
+        gone = await self._call("DELETE", f"/clients/{uuid}")
+        if gone.status_code == 404:
+            # It went between the lookup and this call: the provider holds no such dashboard.
+            raise NoSuchDashboard("no such dashboard")
+        if gone.status_code not in (200, 204):
+            # Only the realm's own "done" is a removal (as `remove person` reads it): a 5xx or a 409
+            # leaves the dashboard registered with its working secret, and says so.
+            raise IdentityAdminRefused(
+                f"the identity provider did not remove the dashboard ({gone.status_code})"
+            )
 
 
 __all__ = [
     "CONDUIT_ACCOUNTS", "DashboardExistsError", "DashboardIdentity", "IdentityAdmin",
-    "IdentityAdminRefused", "OrganisationArrival", "PersonAccount", "PersonActionRefused",
-    "RegisteredDashboard",
+    "IdentityAdminRefused", "NoSuchDashboard", "OrganisationArrival", "PersonAccount",
+    "PersonActionRefused", "RegisteredDashboard",
     "UnknownRoleError", "allowed_role",
 ]  # fmt: skip

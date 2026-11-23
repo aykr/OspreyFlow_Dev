@@ -1,0 +1,62 @@
+# The chart is generic: every workload, file and setting comes from the values `harness.render`
+# writes for `profile: cluster` (deploy/generated/cluster/values.yaml). Installed with nothing but
+# these defaults it creates nothing, rather than a deployment nobody configured.
+
+secrets:
+  # The Kubernetes Secret every workload reads; created by the install, never by the chart.
+  name: ospreyflow-secrets
+  keys: []
+  defaults: {}
+
+storage:
+  # Each store's own volumes (ReadWriteOnce); empty means the cluster's default class.
+  className: ""
+  # The shared volume (ReadWriteMany): ingest, tiles, the recipes repository, model weights and
+  # the proxy's certificates. EFS on EKS, Azure Files on AKS.
+  sharedClassName: ""
+  sharedSize: 200Gi
+  # ReadWriteOnce on a platform with no shared class (ADR-148, `profile: cloud-platform`), the one
+  # claim's mounters then placed on one node (`sharedAffinity`).
+  sharedAccessMode: ReadWriteMany
+  # Shared folders on claims of their own, `ospreyflow-<name>` (ADR-148 Amendment 5, the poc
+  # shape's Ingest root): each `{name, size}`, mounted where a workload's shared folder names it.
+  claims: []
+
+imagePullSecrets: []
+
+# Lite's deployment.env: what every owned service reads that is not a secret.
+environment: {}
+
+# Configuration files, mounted from one ConfigMap.
+files: {}
+
+workloads: []
+jobs: []
+
+# ---- ADR-148: what `profile: cloud-platform` alone sets. Empty here, so a cluster's render is
+# unchanged. A workload of that profile may also carry `resources`, `supplementalGroups`,
+# `scratch`, `serviceAccountName`, `terminationGracePeriodSeconds`, `sharedAffinity` and
+# `disruptionBudget` (harness/cloud_platform/__init__.py).
+
+# One numeric non-root user and group for every pod, `{user: 10001, group: 10001}`; empty: each
+# image's own user (`runAs` on a workload).
+podSecurity: {}
+
+networkPolicy:
+  # The policy letting a pod that reaches a configured service out anywhere; false where the
+  # platform's own egress policies (`egress`, below) decide instead.
+  openEgress: true
+
+# Calico's two egress policies, the allow (`dnsNamespace`, `managedNets`, `hosts`: each `{host,
+# nets}`) before the deny; empty: neither is rendered.
+egress: {}
+
+# ADR-148 decision 13 (Amendment 7): the scheduled backups of ArcadeDB and ClickHouse (and the
+# claims of their own) to the backups bucket by their own roles, and a restore when `restore.set`
+# names a set (templates/backups.yaml has the shape). Empty: none of it is rendered.
+backups: {}
+
+# The platform's Ingress in place of Caddy: `className`, `annotations`, `rules` (each `{host,
+# service, port, paths}`), `controllerNamespace` and an optional `tlsSecret`.
+ingress:
+  enabled: false

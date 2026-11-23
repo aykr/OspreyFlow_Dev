@@ -54,6 +54,13 @@ Needs-you reminder, the five places as links); a page fills its `place` block. T
   first place, Pipelines (a difference, listed in `spec/08`).
 - **An upload page** says `upload: true` in its `PageModule`; its handler reads the form with `server/upload.ts`, which checks the
   anti-forgery token as the form's first part before any file is read.
+- **The dataset map** (slice IS3) is `/studio/dataset-map?case=<case>[&dataset=<dataset>]`: a read-only table of the pipelines that
+  load one dataset (pipeline, status, version, stages), in the same frame, so the frame's dataset switch works from it. Its route is
+  `server/datasetMap.ts`, its words and table rows `server/views/datasetMapWords.ts`, its template `tree-default/studio/dataset-map.njk`.
+  It reads the case's recipe registry as the person and draws only the rows of the open dataset; every reason it cannot draw the table
+  (a right not held, a case or dataset that is not the person's, a dataset that does not exist) is one sentence. It has no column for
+  the order pipelines run in: that is slice IS6's, drawn only once the order is stored (`spec/09_INGEST_STUDIO.md` section 1.2,
+  `spec/08_ACCEPTANCE_SCENARIOS.md` Scenario DM). Nothing links to it yet: the frame's places are IS5a's, and the Pipelines place is IS4's.
 - **The keyboard runner** is `apps/pages/keyboard/` (`npm run test:keyboard --workspace apps/pages`): Playwright against this
   service started in the test with a fake Conduit, with scripts and without. `@playwright/test` is a dev dependency of this
   workspace at the same version as the others'. The root `tsconfig.json` compiles the cases (`npm run typecheck`), and the job that

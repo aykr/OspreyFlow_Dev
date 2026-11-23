@@ -78,11 +78,37 @@ def fetch(rid: str | None) -> dict | None:
     return None
 
 
+def own_run(result: dict) -> dict:
+    """The runner's own shape (the owner's file 011, 23 November 2026; run 97dc976c7be6d175): a slice's whole result at
+    the top level, its place in a stack as `position` of `of` within `group` (the stack's run ids, in order), and
+    `stack` the members as bare {slice, tip}, a slice run alone included. Stacked above others, the tree main must be
+    is the tree of the run below it, fetched by its own id and checked to be that member; anything missing or not
+    matching leaves base_tree None, and nothing counts."""
+    stack = [x for x in result.get("stack") or [] if isinstance(x, dict)]
+    pos, group = result.get("position"), result.get("group")
+    i = pos - 1 if isinstance(pos, int) and pos >= 1 else 0
+    if stack and (i >= len(stack) or (stack[i].get("slice"), stack[i].get("tip")) != (result["slice"], result["tip"])):
+        i = None  # the stack does not place this run where its position says
+    base_tree = None
+    if i and isinstance(group, list) and len(group) > i and isinstance(group[i - 1], str):
+        below = fetch(group[i - 1])
+        if below and below.get("state") == "done" and (below.get("slice"), below.get("tip")) == \
+                (stack[i - 1].get("slice"), stack[i - 1].get("tip")):
+            base_tree = below.get("tree")
+    k = i or 0
+    return {**result, "index": i if i is not None else -1, "main": result.get("main") if i == 0 else None,
+            "base_tree": base_tree,
+            "below": [x.get("slice") for x in stack[:k]],
+            "above": [(x.get("slice"), x.get("tip")) for x in stack[k + 1:]] if i is not None else []}
+
+
 def element(result: dict | None, slice_id: str, tip: str) -> dict | None:
     """This slice's part of a result: the result itself for a single slice, or its element of a stack; None when the
     result is not for this slice at this tip."""
     if not isinstance(result, dict):
         return None
+    if result.get("slice") == slice_id and result.get("tip") == tip and "tree" in result:
+        return own_run(result)
     if isinstance(result.get("stack"), list):  # item 3: main+A, main+A+B, ... run at once, in this order
         stack = [e for e in result["stack"] if isinstance(e, dict)]
         for i, e in enumerate(stack):

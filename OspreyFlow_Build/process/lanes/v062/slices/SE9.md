@@ -35,6 +35,14 @@ The new tests; `OspreyFlow_Build/tests/services/api/test_case_view_counts.py`, `
 
 The merge was refused at 19:59 because **one test failed in `make test` on the merge result: `test_pl4d3d_declared_units.py::test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not`** ("two builds in one tree never collided in five tries": a test that depends on chance, backlog row 21; it passed by hand on main the same afternoon). It is not about SE9. **The send-back that brought you here was the conductor's mistake (a read-only check that sent you back).** **Change no file. Do not touch that test.** Take main in only if the line asks you to; confirm your checks are green and say so in one line. The verifier then reads nothing new.
 
+## Round 5 (22 November 2026, the conductor; read `slices/SE9_ROUND5_TABLE.md` first)
+
+The round-4 builder edited `OspreyFlow_Build/tests/glass_trees/test_pl4d3d_declared_units.py` (commit `718549d`, five tries to fifteen) although the round-4 section said to change no file. **Restore that file to main's version** (`git checkout main -- OspreyFlow_Build/tests/glass_trees/test_pl4d3d_declared_units.py`, then commit), **change nothing else, touch no other test, and do not try to make the race test pass.** The race test is the owner's backlog row 21 and not SE9's. Confirm your checks are green and say so in one line.
+
+## Round 6 (22 November 2026, the conductor; read `slices/SE9_ROUND6_TABLE.md` first)
+
+One open case, a gap in a test on an access-control path (rule 3): nothing run without a stack shows that `count_deleted_visible` passes the caller's own principal into the count's query. **Add the one assertion** the verifier names (each query the adapter sent contains `access.gremlin_has_step(READER, deleted=True)`) to `test_the_adapter_sums_the_counts_of_each_chunk_and_sends_the_deleted_query`, **show it red with a planted wider principal at that call site, then green**, and change nothing else. A finding of this kind is never accepted narrower (the owner's rule), so it is fixed here.
+
 ## Out of scope
 
 `apps/workspace` and `apps/pages`; the decision log and the specification files themselves (diffs only); any change to what the Glass sees beyond the number; the boards' own count; Gremlin; starting a stack or taking the lease; any change to a key, token or address.
